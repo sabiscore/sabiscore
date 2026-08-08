@@ -5,9 +5,9 @@
   "feature_count": 68,
   "holdout_samples": 296,
   "holdout_season": "2425",
-  "log_loss": 1.0918396716765646,
+  "log_loss": 1.0918396716765644,
   "responsive_features": 22,
   "rps": 0.23346907377864365,
-  "trained_at": "2026-08-08T16:43:34.938667",
+  "trained_at": "2026-08-08T19:57:13.580660",
   "training_samples": 1756
 }

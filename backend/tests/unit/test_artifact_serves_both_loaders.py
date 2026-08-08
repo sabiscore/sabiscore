@@ -90,3 +90,65 @@ def test_request_path_still_serves_the_same_artifact(league: str):
     )
     assert result.model_version != "fallback"
     assert abs((result.home_win + result.draw + result.away_win) - 1.0) < 1e-3
+
+
+@pytest.mark.parametrize("league", _LEAGUES)
+def test_meta_head_carries_no_sklearn_version_coupling(league: str):
+    """Artifacts are built on a different library stack than they are served on.
+
+    Production runs scikit-learn 1.3.2 (Python 3.11); these artifacts are built
+    on 1.8. scikit-learn only guarantees pickle compatibility within one version:
+    a LogisticRegression fitted on 1.8 deserialises fine under 1.3.2 but dies in
+    predict_proba, which reads `self.multi_class` — an attribute 1.8 stopped
+    setting. That raise happens inside the strict startup check, so the release
+    cannot deploy at all.
+
+    The meta head must therefore be a type this repository owns, not an sklearn
+    estimator. Base learners are exempt: they were verified to load and score
+    under the production versions.
+    """
+    path = _artifact(league)
+    if not path.exists():
+        pytest.skip("artifact not present in this checkout")
+
+    from src.core.meta_model import SoftmaxMetaModel
+
+    meta = SabiScoreEnsemble.load_model(str(path)).meta_model
+    assert isinstance(meta, SoftmaxMetaModel), (
+        f"{path.name} meta_model is {type(meta).__module__}.{type(meta).__name__}; "
+        "an sklearn estimator here re-introduces the cross-version unpickle failure"
+    )
+    assert not type(meta).__module__.startswith("sklearn")
+
+
+def test_softmax_meta_model_matches_sklearn_output():
+    """The hand-rolled head must reproduce what sklearn would have returned —
+    it carries sklearn's fitted coefficients, so any drift is a bug here."""
+    pytest.importorskip("sklearn")
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+
+    from src.core.meta_model import SoftmaxMetaModel
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(200, 9))
+    y = rng.integers(0, 3, size=200)
+    fitted = LogisticRegression(max_iter=1000, random_state=42).fit(X, y)
+
+    ported = SoftmaxMetaModel.from_sklearn(fitted)
+    np.testing.assert_allclose(
+        ported.predict_proba(X), fitted.predict_proba(X), rtol=1e-9, atol=1e-9
+    )
+
+
+def test_softmax_meta_model_rejects_a_meta_feature_count_mismatch():
+    """Silent truncation here would mis-weight base models rather than fail."""
+    import numpy as np
+
+    from src.core.meta_model import SoftmaxMetaModel
+
+    meta = SoftmaxMetaModel(
+        coef=np.zeros((3, 9)), intercept=np.zeros(3), classes=np.array([0, 1, 2])
+    )
+    with pytest.raises(ValueError, match="expected 9 meta features"):
+        meta.predict_proba(np.zeros((1, 6)))

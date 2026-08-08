@@ -330,6 +330,8 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
     from sklearn.linear_model import LogisticRegression
     from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
+    from src.core.meta_model import SoftmaxMetaModel
+
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     oof = pd.DataFrame()
     for name, model in models.items():
@@ -340,9 +342,16 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
 
     # multinomial is the default for multiclass in sklearn >= 1.5; the explicit
     # multi_class kwarg was removed in 1.8.
-    meta = LogisticRegression(max_iter=1000, random_state=42)
-    meta.fit(oof, y_train)
-    return meta
+    fitted = LogisticRegression(max_iter=1000, random_state=42)
+    fitted.fit(oof, y_train)
+
+    # The fitted estimator is NOT what gets pickled. Production runs
+    # scikit-learn 1.3.2 against artifacts built here on 1.8, and 1.3.2's
+    # LogisticRegression.predict_proba reads self.multi_class — an attribute 1.8
+    # no longer sets — so the unpickled estimator raises AttributeError inside
+    # the strict startup check and the release fails to deploy. Carry the fitted
+    # coefficients across in a type this repo owns instead.
+    return SoftmaxMetaModel.from_sklearn(fitted, feature_names=list(oof.columns))
 
 
 def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]:
