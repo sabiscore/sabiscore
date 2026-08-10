@@ -19,6 +19,7 @@ paths = [
   '''package-lock\.json''',
   '''node_modules/''',
   '''\.venv/''',
+  '''\.venv-ml/''',
   '''(^|/)\.env$''',
   '''(^|/)\.env(\.[a-z]+)?\.local$''',
   '''(^|/)backend/\.env$''',

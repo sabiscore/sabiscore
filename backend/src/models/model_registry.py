@@ -3,26 +3,38 @@ Model Registry with MLflow Integration
 Manages model versioning, tracking, and deployment lifecycle
 """
 
-import joblib
+import importlib
 import json
 import logging
 import math
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import joblib
 import numpy as np
 import pandas as pd
 
+from ..core.redaction import redact_text
+
 logger = logging.getLogger(__name__)
 
-# Optional MLflow imports (graceful degradation if not installed)
-try:
-    import mlflow
-    import mlflow.sklearn
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    logger.warning("MLflow not installed. Model tracking disabled.")
-    MLFLOW_AVAILABLE = False
+
+def _load_mlflow() -> Any | None:
+    """Import MLflow only when experiment tracking is explicitly configured.
+
+    Settlement validation imports this module in the API process. Eagerly importing
+    MLflow adds a large optional dependency tree to that hot path even when tracking
+    is disabled, and import-time warnings made an optional training component look
+    like a production readiness failure.
+    """
+
+    try:
+        module = importlib.import_module("mlflow")
+        importlib.import_module("mlflow.sklearn")
+        return module
+    except ImportError:
+        return None
 
 
 class ModelRegistry:
@@ -34,7 +46,7 @@ class ModelRegistry:
     - Performance metrics tracking
     - Model comparison and rollback
     - MLflow integration for experiment tracking
-    - Model promotion (staging -> production)
+    - Read-only production lookup; release-manifest promotion is external
     """
     
     def __init__(
@@ -58,15 +70,22 @@ class ModelRegistry:
         self.models_dir = self.registry_path / "models"
         self.models_dir.mkdir(exist_ok=True)
         
-        # MLflow setup
-        if MLFLOW_AVAILABLE and mlflow_tracking_uri:
-            mlflow.set_tracking_uri(mlflow_tracking_uri)
-            mlflow.set_experiment(experiment_name)
-            self.mlflow_enabled = True
-            logger.info(f"MLflow tracking enabled: {mlflow_tracking_uri}")
+        # MLflow is offline/research observability only. The committed active-
+        # generation manifest remains the sole production promotion authority.
+        self._mlflow = None
+        self.mlflow_enabled = False
+        if mlflow_tracking_uri:
+            self._mlflow = _load_mlflow()
+            if self._mlflow is None:
+                logger.warning("MLflow tracking requested but the optional package is unavailable")
+            else:
+                self._mlflow.set_tracking_uri(mlflow_tracking_uri)
+                self._mlflow.set_experiment(experiment_name)
+                self.mlflow_enabled = True
+                # Never log the URI: it may contain userinfo, tokens, or signed query data.
+                logger.info("MLflow experiment tracking enabled")
         else:
-            self.mlflow_enabled = False
-            logger.info("MLflow tracking disabled (local storage only)")
+            logger.debug("MLflow tracking disabled; using local research registry only")
         
         # Load or initialize registry metadata
         self.metadata = self._load_metadata()
@@ -133,27 +152,27 @@ class ModelRegistry:
             self._save_metadata()
             
             # MLflow tracking
-            if self.mlflow_enabled:
-                with mlflow.start_run(run_name=model_id):
+            if self.mlflow_enabled and self._mlflow is not None:
+                with self._mlflow.start_run(run_name=model_id):
                     # Log parameters
-                    mlflow.log_params(params)
+                    self._mlflow.log_params(params)
                     
                     # Log metrics
-                    mlflow.log_metrics(metrics)
+                    self._mlflow.log_metrics(metrics)
                     
                     # Log tags
                     if tags:
-                        mlflow.set_tags(tags)
+                        self._mlflow.set_tags(tags)
                     
                     # Log model
-                    mlflow.sklearn.log_model(model, "model")
+                    self._mlflow.sklearn.log_model(model, "model")
                     
                     logger.info(f"Model logged to MLflow: {model_id}")
             
             return model_id
             
         except Exception as e:
-            logger.error(f"Failed to register model {model_id}: {e}")
+            logger.error("Failed to register model %s: %s", model_id, redact_text(e))
             raise
     
     def get_model(self, model_id: str) -> Any:
@@ -192,27 +211,18 @@ class ModelRegistry:
         return self.get_model(prod_id)
     
     def promote_to_production(self, model_id: str) -> None:
+        """Reject local-registry promotion outside the active-generation release.
+
+        MLflow and this registry may record research or shadow candidates, but a
+        mutable metadata.json file cannot atomically promote the artifact/metadata
+        set consumed by both production loaders. Promotion must update the committed
+        hash-validated active-generation manifest in a reviewed release commit.
         """
-        Promote a model to production
-        
-        Args:
-            model_id: Model to promote
-        """
-        if model_id not in self.metadata['models']:
-            raise ValueError(f"Model {model_id} not found")
-        
-        # Demote current production model to staging
-        current_prod = self.metadata.get('production_model')
-        if current_prod and current_prod in self.metadata['models']:
-            self.metadata['models'][current_prod]['status'] = 'staging'
-        
-        # Promote new model
-        self.metadata['production_model'] = model_id
-        self.metadata['models'][model_id]['status'] = 'production'
-        self.metadata['models'][model_id]['promoted_at'] = datetime.now(timezone.utc).isoformat()
-        
-        self._save_metadata()
-        logger.info(f"Model {model_id} promoted to production")
+
+        raise RuntimeError(
+            "Local ModelRegistry promotion is disabled; promote the complete "
+            "hash-validated active generation through the release workflow"
+        )
     
     def compare_models(
         self,
