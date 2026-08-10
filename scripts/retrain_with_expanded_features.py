@@ -20,7 +20,9 @@ Gate failures exit non-zero without writing artifacts.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import logging
 import math
 import os
 import sys
@@ -43,6 +45,10 @@ from sklearn.metrics import (
     recall_score,
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "backend"))
+logger = logging.getLogger(__name__)
+
 try:
     import xgboost as xgb
     _XGB_AVAILABLE = True
@@ -61,18 +67,12 @@ try:
 except ImportError:
     _CB_AVAILABLE = False
 
-try:
-    import joblib
-    _JOBLIB_AVAILABLE = True
-except ImportError:
-    _JOBLIB_AVAILABLE = False
+_JOBLIB_AVAILABLE = importlib.util.find_spec("joblib") is not None
 
 try:
     from src.models.calibration import (  # type: ignore[import]
         BivariatePoissonDrawOverlay,
         EnsembleDiversityDiagnostics,
-        FittedCalibrator,
-        DiversityReport,
         compare_calibration_methods,
         write_bivariate_poisson_report,
         write_calibration_report,
@@ -81,9 +81,6 @@ try:
     _CALIBRATION_AVAILABLE = True
 except ImportError:
     _CALIBRATION_AVAILABLE = False
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 # ── Env var configuration (mirrors backend/src/core/config.py Sprint 4 vars) ──
 _USE_CATBOOST = os.environ.get("USE_CATBOOST_LEARNER", "false").lower() == "true"
@@ -405,13 +402,13 @@ def _smooth_probabilities(
         np.array([(y_train == c).mean() for c in (0, 1, 2)], dtype=float), 1e-6, None
     )
     priors /= priors.sum()
-    best_ll, best_probs, best_alpha = float("inf"), probs, 0.0
+    best_ll, best_probs = float("inf"), probs
     for alpha in np.linspace(0.0, 0.70, 36):
         candidate = np.clip((1.0 - alpha) * probs + alpha * priors, 1e-6, None)
         candidate /= candidate.sum(axis=1, keepdims=True)
         ll = float(log_loss(y_holdout, candidate, labels=[0, 1, 2]))
         if ll < best_ll:
-            best_ll, best_probs, best_alpha = ll, candidate, float(alpha)
+            best_ll, best_probs = ll, candidate
     return best_probs
 
 

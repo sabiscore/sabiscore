@@ -43,6 +43,13 @@ must prevent model readiness. A rollback is incomplete until both production
 loaders consume the same verified generation and `/api/v1/models/status` reports
 the expected generation, manifest hash, certification state, and release SHA.
 
+MLflow and `ModelRegistry` are research records, not deployment authorities. Do
+not roll back a model by changing an MLflow stage or editing local registry
+metadata. If an optional research dependency causes a workstation failure, remove
+and recreate only the isolated `.venv-ml` from
+`backend/requirements-training.txt`; do not change API runtime dependencies or the
+active-generation manifest.
+
 ## Service-level rollback
 
 ### Backend (FastAPI)

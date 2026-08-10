@@ -397,7 +397,7 @@ def main() -> None:
         f"ece={ece['mean']:.4f}"
     )
     print(f"[baseline_v8] gates={'PASS' if gate_passed else 'FAIL — ' + '; '.join(gate_failures)}")
-    print(f"[baseline_v8] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
+    print("[baseline_v8] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
     print(f"[baseline_v8] report written to {output_path}")
 
     if not gate_passed:

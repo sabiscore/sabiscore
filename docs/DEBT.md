@@ -7,6 +7,25 @@ disguise — say so honestly.
 
 ---
 
+## 17. Offline ML research environment is only partially installed
+
+**Tier:** `NEXT` — trigger: reliable package-index access on a Python 3.11-3.13
+host. **Verified:** 2026-08-10.
+
+`backend/requirements-training.txt` now defines the isolated research stack and
+`backend/scripts/verify_training_stack.py` distinguishes importability from model
+certification. CatBoost 1.2.8 and SHAP 0.49.1 import in the local Python 3.12
+environment. MLflow, Evidently, Great Expectations, XGBoost, LightGBM, and Optuna
+did not complete installation within the bounded network attempts. The environment
+was reconciled to the committed scikit-learn 1.5.2 pin and `pip check` reports no
+broken requirements, but the full requirements set is not yet installed.
+
+**Release impact:** none for the API runtime, which does not require or eagerly
+import this stack. **Model impact:** candidate research, SHAP validation, drift
+work, and MLflow experiment capture remain blocked locally. Installing these
+packages does not permit model promotion; the real-settlement and active-generation
+gates in item 14 still apply.
+
 ## 14. Apex candidate artifacts are quarantined and not certified
 
 **Tier:** `FIX-NOW` before model promotion. **Found:** 2026-08-09.
@@ -64,8 +83,10 @@ Production remains blocked until every step is recorded.
   `The job was not started because your account is locked due to a billing issue.`
   The security, backend, web, Playwright, and model-validation jobs must be
   rerun after billing is resolved; workflow edits must not bypass this gate.
-- Docker Compose configuration passes, but backend and web image builds timed
-  out after 604 and 304 seconds respectively and produced no tagged images.
+- Docker Compose configuration passes. Fresh backend and web image retries ran
+  for more than five and three minutes respectively without producing a current
+  image. The only `sabiscore-backend:verify` tag is dated 2026-07-15 and
+  `sabiscore-web:verify` does not exist.
 - Alembic reports one head (`0006_canonical_league_ids`), but the production
   `upgrade head` connection attempt timed out after 120 seconds, so `check` and
   migration-head proof remain absent.

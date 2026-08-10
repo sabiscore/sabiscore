@@ -3,6 +3,23 @@
 Status: **UNVERIFIED CANDIDATE - NOT PROMOTABLE**
 Last updated: 2026-08-10
 
+## Tooling and promotion authority
+
+- CatBoost may be evaluated only as a shadow candidate. Its presence in a Python
+  environment is not evidence that it improves RPS, calibration, coverage, or
+  serving latency.
+- SHAP explanations require a successfully loaded real model and its exact serving
+  feature vector. An unavailable or invalid explainer is an explicit data gap;
+  mock feature importance is prohibited.
+- MLflow is optional offline experiment observability. It is lazily imported only
+  when configured, its tracking URI is never logged, and it cannot promote a
+  production model.
+- Production promotion is atomic and release-controlled: both loaders consume the
+  committed, hash-validated active-generation manifest. A mutable local registry,
+  MLflow stage, individual artifact copy, or filename change is not promotion.
+- No new model-changing work is permitted until the settlement pipeline is proven
+  to have a non-zero sample of real settled predictions.
+
 ## Intended use
 
 Three-way football outcome forecasting for explicitly supported competitions,

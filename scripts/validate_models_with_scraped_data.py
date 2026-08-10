@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
-    brier_score_loss,
     log_loss,
     precision_recall_fscore_support,
     confusion_matrix,
@@ -28,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data.scrapers import FootballDataEnhancedScraper
 from src.models.ensemble import SabiScoreEnsemble
-from src.services.prediction import PredictionService
 from src.data.transformers import FeatureTransformer
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -415,14 +413,14 @@ class ModelValidator:
         metrics = self.results["performance_metrics"]
         roi = self.results["roi_metrics"]
         
-        print(f"\n📊 Performance Metrics:")
+        print("\n📊 Performance Metrics:")
         print(f"  Overall Accuracy:       {metrics['overall_accuracy']:.1%}")
         print(f"  High-Conf Accuracy:     {metrics['high_conf_accuracy']:.1%}" if metrics['high_conf_accuracy'] else "  High-Conf Accuracy:     N/A")
         print(f"  Very High-Conf Acc:     {metrics['very_high_conf_accuracy']:.1%}" if metrics['very_high_conf_accuracy'] else "  Very High-Conf Acc:     N/A")
         print(f"  Brier Score:            {metrics['brier_score']:.4f}")
         print(f"  F1 Score:               {metrics['f1_score']:.3f}")
         
-        print(f"\n💰 ROI Metrics:")
+        print("\n💰 ROI Metrics:")
         print(f"  Value Bets Found:       {roi['total_value_bets']}")
         print(f"  Value Bet Win Rate:     {roi['value_bet_win_rate']:.1f}%")
         print(f"  ROI:                    {roi['roi_percentage']:.1f}%")

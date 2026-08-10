@@ -57,10 +57,8 @@ sys.path.insert(0, str(_ROOT))
 from backend.src.models.bnn_ensemble import (  # noqa: E402
     BNNEnsembleMember,
     MCDropoutBNN,
-    UncertaintyOutput,
     edl_nll_loss,
 )
-from backend.src.models.feature_registry import CANONICAL_FEATURES_58  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants

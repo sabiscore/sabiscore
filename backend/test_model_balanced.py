@@ -1,7 +1,6 @@
 """Test model predictions with balanced features"""
 import joblib
 import pandas as pd
-import numpy as np
 
 # Load model using joblib (not pickle)
 model_data = joblib.load('../models/epl_ensemble.pkl')
@@ -13,7 +12,7 @@ print(f"Model has {len(feature_columns)} features")
 print(f"Feature columns: {feature_columns[:10]}...")
 
 # Load the full ensemble class to use predict method
-from src.models.ensemble import SabiScoreEnsemble
+from src.models.ensemble import SabiScoreEnsemble  # noqa: E402 - diagnostic script loads data first
 ensemble = SabiScoreEnsemble.load_model('../models/epl_ensemble.pkl')
 
 # Check what the model predicts for perfectly balanced features

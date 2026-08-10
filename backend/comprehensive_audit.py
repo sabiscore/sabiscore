@@ -6,7 +6,6 @@ to verify that production code uses ONLY real data, with mock data
 serving ONLY as emergency fallbacks.
 """
 
-import os
 import re
 from pathlib import Path
 from datetime import datetime

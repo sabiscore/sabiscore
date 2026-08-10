@@ -9,7 +9,6 @@ perform a lightweight smoke test (shape of feature_columns and a dummy predict_p
 """
 import sys
 import json
-import os
 from pathlib import Path
 
 

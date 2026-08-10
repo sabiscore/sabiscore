@@ -24,6 +24,12 @@ Legacy roots such as `apps/api` and `frontend/` are not production deployment ta
 
 Python 3.11 through 3.14 is supported for the API runtime. Python 3.14 uses newer wheel-backed scientific packages; optional CatBoost, SHAP, MLflow, and Great Expectations training extras should run in a Python 3.11-3.13 training environment until their Python 3.14 wheel stacks are dependable.
 
+For offline model research, install `backend/requirements-training.txt` in a
+separate Python 3.11-3.13 virtual environment and run
+`backend/scripts/verify_training_stack.py`. Importability does not certify or
+promote a model; production activation is controlled by the reviewed,
+hash-validated active-generation manifest.
+
 Kafka clients and browser automation packages are treated as optional worker dependencies on Python 3.14/Windows because they otherwise require native toolchains or older `greenlet` pins. The canonical API/provider gateway does not import them at runtime.
 
 Use Node 22 through 24 and pnpm 8 through 11 with this lockfile. Do not run `corepack enable` on Windows unless you have admin rights and intentionally want Corepack shims installed globally.

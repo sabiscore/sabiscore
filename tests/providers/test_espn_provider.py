@@ -25,7 +25,6 @@ import pytest
 from src.providers.espn import (
     Competition,
     EspnProvider,
-    EspnSchemaError,
     ProviderStatus,
     TrustTier,
     espn_slug,

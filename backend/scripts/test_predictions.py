@@ -72,7 +72,7 @@ def test_predictions():
             
             # Display results
             predictions = result['predictions']
-            print(f"\n📊 Predictions:")
+            print("\n📊 Predictions:")
             print(f"   Home Win: {predictions['home_win']:.2%}")
             print(f"   Draw:     {predictions['draw']:.2%}")
             print(f"   Away Win: {predictions['away_win']:.2%}")
@@ -80,14 +80,14 @@ def test_predictions():
             
             # Display value bets
             if result.get('has_edge'):
-                print(f"\n💰 Value Bets:")
+                print("\n💰 Value Bets:")
                 for outcome, edge in result['value_bets'].items():
                     print(f"   {outcome.upper()}")
                     print(f"      Edge: +{edge['edge_pct']:.1f}%")
                     print(f"      Kelly: {edge['kelly_stake_pct']:.1f}%")
                     print(f"      CLV: +{edge['clv_cents']:.1f}¢")
             else:
-                print(f"\n⏸️  No value bets found")
+                print("\n⏸️  No value bets found")
             
         except Exception as e:
             print(f"❌ Error: {e}")

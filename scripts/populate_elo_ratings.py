@@ -7,7 +7,6 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 

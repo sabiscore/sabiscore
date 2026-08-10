@@ -7,6 +7,21 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Replaced the oversized Apex activation prompt with an executable,
+  current-state directive in `docs/APEX_FINAL_PRODUCTION_ACTIVATION_DIRECTIVE.md`.
+  It separates code work from operator gates, makes real settled predictions a
+  hard prerequisite for model-changing work, and keeps master/deployment closed
+  until every required release gate has actually run.
+- Added a dedicated Python 3.11-3.13 offline research dependency set and import
+  verifier. Python 3.12 now selects wheel-backed CatBoost 1.2.8, SHAP 0.49.1,
+  and scikit-learn 1.5.2 rather than incompatible Python 3.11 pins.
+- Removed eager MLflow imports from the model registry, stopped logging tracking
+  URIs, redacted registry errors, and retired mutable local-registry production
+  promotion. The hash-validated active-generation release remains the only
+  production promotion authority.
+- Cleared all 79 repository-wide Ruff findings across legacy diagnostics,
+  deployment utilities, and training scripts without changing model artifacts or
+  prediction policy.
 - Moved public upcoming-fixture reads to cache/PostgreSQL only. Provider fixture
   acquisition remains in the periodic sync service; prediction-free reads and
   web proxies now have explicit deadlines and structured provenance/data-gap
@@ -61,18 +76,26 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   instead of crashing import, but production still requires operator rotation
   and a valid `redis://` or `rediss://` value.
 
-Validation completed locally: backend `1265 passed, 13 skipped`; changed-file
-Ruff passed; mypy improved from the accepted 784-error ceiling to 783 errors;
+Validation completed locally: backend `1268 passed, 13 skipped`; repository-wide
+backend Ruff passed with zero findings; mypy improved from the accepted 784-error
+ceiling to 781 errors;
 frontend ESLint, TypeScript, 19 Vitest files / 123 tests, Next.js 15.5.19
 production build, and 36/36 desktop/mobile Playwright flows passed. The 78-path
 OpenAPI check, scraper tests/manifest, active-artifact verification, current-tree
 Gitleaks, CSP checks, and production Compose configuration also passed. Full
-history still has two unproven-revocation secret findings. Both Docker image
-builds timed out without producing tags; production Alembic upgrade timed out;
+history still has two unproven-revocation secret findings. Fresh Docker retries
+ran for more than five minutes (backend) and three minutes (web) without a
+current image; the only backend verify tag predates this work and no web verify
+tag exists. Production Alembic upgrade remains blocked without a configured URL;
 GitHub jobs are locked by account billing; the exact-SHA Vercel preview correctly
 returns structured bounded gaps and nullable health truth but still has no usable
 paired Render backend; production remains stale; and Redis rotation is
 operator-blocked. No merge or production promotion is permitted.
+
+The isolated Python 3.12 research environment imports CatBoost 1.2.8 and SHAP
+0.49.1, but MLflow and the broader research stack were still network-bound during
+installation. Importability is therefore partial and does not clear any model
+certification or release gate.
 
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 

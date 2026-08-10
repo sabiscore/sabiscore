@@ -43,9 +43,9 @@ async def enrich_recent_matches(days: int = 30):
                 
                 # Update match with enriched data
                 if 'home_xg_l5' in enriched:
-                    print(f"  ✅ Enriched: xG, squad values, tactics")
+                    print("  ✅ Enriched: xG, squad values, tactics")
                 else:
-                    print(f"  ⚠️  Partial enrichment")
+                    print("  ⚠️  Partial enrichment")
                 
             except Exception as e:
                 print(f"  ❌ Error: {e}")

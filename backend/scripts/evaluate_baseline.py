@@ -292,7 +292,7 @@ def main() -> None:
         f"draw_recall={results['draw_recall']:.4f} "
         f"draw_f1={results['draw_f1']:.4f}"
     )
-    print(f"[baseline] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
+    print("[baseline] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
     print(f"[baseline] report written to {output_path}")
 
 

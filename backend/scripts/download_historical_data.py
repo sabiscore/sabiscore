@@ -3,7 +3,6 @@
 Download historical match data from football-data.co.uk
 """
 
-import os
 import requests
 from pathlib import Path
 

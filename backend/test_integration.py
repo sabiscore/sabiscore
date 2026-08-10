@@ -12,7 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 def test_core_functionality():
     """Test core SabiScore functionality"""
     try:
-        from schemas.responses import InsightsResponse, ErrorResponse
+        from schemas.responses import InsightsResponse
         from datetime import datetime
         print("[PASS] Imports successful")
 
@@ -35,11 +35,10 @@ def test_core_functionality():
         print("[PASS] Response creation successful")
 
         # Test JSON serialization
-        json_data = response.model_dump()
+        response.model_dump()
         print("[PASS] JSON dump successful")
 
         # Test datetime serialization
-        import json
         json_str = response.model_dump_json()
         print(f"[PASS] JSON serialization successful, length: {len(json_str)}")
 

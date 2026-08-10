@@ -1,5 +1,4 @@
 from backend.src.models.ensemble import SabiScoreEnsemble
-import os
 
 models_path = r"c:\Users\USR\Documents\SabiScore\models"
 try:

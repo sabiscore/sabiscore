@@ -7,6 +7,18 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 
 ## Fresh Apex activation evidence from 2026-08-10
 
+- The refined production task contract now lives in
+  `docs/APEX_FINAL_PRODUCTION_ACTIVATION_DIRECTIVE.md`. It records the current
+  blockers, real-settlement hard gate, isolated research-tooling rules, and
+  master/deployment acceptance criteria without treating aspirations as evidence.
+- `backend/requirements-training.txt` provides a Python 3.11-3.13 research stack.
+  CatBoost 1.2.8 and SHAP 0.49.1 import in the isolated local Python 3.12
+  environment; MLflow and ancillary packages remain incomplete after bounded
+  network attempts. This is partial importability only and did not change the
+  active generation.
+- `ModelRegistry` no longer imports MLflow when tracking is unconfigured, never
+  logs its URI, redacts registry errors, and rejects mutable local production
+  promotion in favor of the active-generation release manifest.
 - Upcoming fixture reads are now cache/PostgreSQL-first and provider-free on the
   public request path. Prediction-free reads have a five-second backend deadline
   and an eight-second Vercel proxy deadline with structured data gaps.
@@ -44,11 +56,11 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 - Codex discovery validation reports 40 canonical skills and `.agents/skills`
   resolves to `.ai/skills`. A Codex/VS Code restart may be needed to refresh the
   selector after the junction is created.
-- Backend: `1265 passed, 13 skipped` in the final full run. Changed-file Ruff
-  passes. Mypy reports 783 errors in 127 files / 232 checked files, one below the
-  accepted 784-error ceiling; no new typing debt was added. A repository-wide
-  Ruff invocation that includes legacy utility scripts still exposes 33
-  pre-existing script findings.
+- Backend: `1268 passed, 13 skipped` in the final full run. Whole-repository Ruff
+  passes with zero findings after 79 legacy diagnostic, deployment, and training
+  script findings were repaired. Mypy reports 781 errors in 127 files / 232
+  checked files, three
+  below the accepted 784-error ceiling; no new typing debt was added.
 - Frontend: lint, type-check, 19 Vitest files / 123 tests, and the Next.js
   15.5.19 production build passed. Playwright passed 36/36 desktop/mobile tests,
   including route overflow, keyboard, verified-fixture, and decision-state flows.
@@ -56,10 +68,13 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   (`0006_canonical_league_ids`). Production `alembic upgrade head` timed out at
   120 seconds; `alembic check` therefore remains unexecuted. SQLite fallback was
   not used.
-- `docker compose -f docker-compose.prod.yml config --quiet` passed. The Docker
-  daemon responds, but backend and web image builds timed out after 604 and 304
-  seconds and produced no tagged image.
-- Gitleaks scanned the current worktree (~178.21 MB) with no leaks. Full Git
+- `docker compose -f docker-compose.prod.yml config --quiet` passed with non-secret
+  required placeholders, and the Docker 29.6.2 daemon responds. Fresh backend and
+  web image retries ran for more than five and three minutes without a current
+  image. The backend verify tag is an old 2026-07-15 image; no web verify tag exists.
+- Gitleaks scanned the current worktree (~180.87 MB) with no leaks. The ignored
+  `.venv-ml` path is excluded like `.venv` and `node_modules`; its installed
+  third-party package tests are not repository content. Full Git
   history still contains exactly two `backend/.env.example` findings: an old
   `SECRET_KEY` fingerprint at `d604c13` and `API_FOOTBALL_KEY` fingerprint at
   `67ed0ab`. They were not ignored because revocation is not proven.

@@ -7,7 +7,6 @@ Ingestion & enrichment pipeline for SabiScore.
 """
 
 import asyncio
-from typing import Any, Dict
 from .scrapers.understat import fetch_understat_data
 from .scrapers.fbref import fetch_fbref_data
 from .scrapers.transfermarkt import fetch_transfermarkt_data

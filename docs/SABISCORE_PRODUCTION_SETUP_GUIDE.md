@@ -87,6 +87,22 @@ it is not the active Render runtime. Optional training/experiment packages such
 as CatBoost, SHAP, MLflow, and Great Expectations remain Python <3.14 extras
 because they are not required for API boot or provider intelligence.
 
+Create the research environment separately. Python 3.12 selects newer binary
+wheels for CatBoost, SHAP, and scikit-learn while Python 3.11 retains the validated
+production-era pins:
+
+```powershell
+py -3.12 -m venv .venv-ml
+.\.venv-ml\Scripts\python.exe -m pip install --upgrade pip
+.\.venv-ml\Scripts\python.exe -m pip install -r backend\requirements-training.txt
+.\.venv-ml\Scripts\python.exe backend\scripts\verify_training_stack.py
+```
+
+The verifier certifies imports only. Do not configure MLflow in the API runtime or
+interpret successful installation as model certification. Model-changing work
+requires non-zero real settlement evidence and production promotion requires the
+reviewed active-generation manifest release.
+
 Kafka clients and browser automation packages are optional worker dependencies on Python 3.14/Windows and are not part of the canonical API/provider-gateway boot path. Install them in a Python 3.11-3.13 worker environment if Kafka or dynamic browser scraping is explicitly enabled.
 
 Use Node 22 through 24 and pnpm 8 through 11 with the committed `pnpm-lock.yaml`. On Windows, skip `corepack enable` unless running an elevated shell; a user-scoped pnpm install is sufficient.
