@@ -150,3 +150,29 @@ def test_manifest_v2_rejects_unsafe_object_key(workspace_tmp: Path):
 
     with pytest.raises(ManifestValidationError, match="unsafe object_key"):
         validate_manifest(manifest_path, data_root=data_root)
+
+
+def test_manifest_rejects_unsupported_manifest_version(workspace_tmp: Path):
+    data_root = workspace_tmp / "data"
+    payload = data_root / "processed" / "node-scraper" / "fixtures-test.json"
+    _write(payload, "[]\n")
+    manifest_path = _manifest(data_root, payload)
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    body["manifest_version"] = "3.0"
+    manifest_path.write_text(json.dumps(body), encoding="utf-8")
+
+    with pytest.raises(ManifestValidationError, match="unsupported manifest_version"):
+        validate_manifest(manifest_path, data_root=data_root)
+
+
+def test_manifest_rejects_unsupported_adapter_version(workspace_tmp: Path):
+    data_root = workspace_tmp / "data"
+    payload = data_root / "processed" / "node-scraper" / "fixtures-test.json"
+    _write(payload, "[]\n")
+    manifest_path = _manifest(data_root, payload)
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    body["adapter_version"] = "9.9.9"
+    manifest_path.write_text(json.dumps(body), encoding="utf-8")
+
+    with pytest.raises(ManifestValidationError, match="adapter_version is not allowed"):
+        validate_manifest(manifest_path, data_root=data_root)

@@ -7,6 +7,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Added `workflow_dispatch` to `.github/workflows/ci.yml` and a new
+  `scripts/run-canonical-ci.ps1` helper so maintainers can trigger and watch the
+  canonical Linux CI workflow from Windows without relying on POSIX shell parity.
+- Fixed a full-suite-only backend test flake in
+  `backend/tests/unit/test_model_orchestrator_redis_fallback.py` by replacing
+  brittle private-class identity assertions with stable module/name adapter
+  checks; backend suite now runs cleanly at `1292 passed, 13 skipped`.
 - Replaced the oversized Apex activation prompt with an executable,
   current-state directive in `docs/APEX_FINAL_PRODUCTION_ACTIVATION_DIRECTIVE.md`.
   It separates code work from operator gates, makes real settled predictions a

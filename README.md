@@ -118,6 +118,14 @@ make verify
 
 The `verify` target runs the focused secret/provider gates, backend tests, provider CLI doctor, scraper tests, web lint/typecheck/tests, and web build.
 
+Run the canonical Linux CI workflow from this workstation (recommended before release or merge):
+
+```powershell
+pwsh -File scripts/run-canonical-ci.ps1 -Branch master
+```
+
+This dispatches `.github/workflows/ci.yml`, waits for completion, and fails fast when the workflow conclusion is not `success`.
+
 ## Documentation
 
 The authoritative deployment and operations guide is [docs/SABISCORE_PRODUCTION_SETUP_GUIDE.md](docs/SABISCORE_PRODUCTION_SETUP_GUIDE.md).

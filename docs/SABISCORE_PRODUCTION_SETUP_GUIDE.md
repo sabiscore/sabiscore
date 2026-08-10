@@ -287,6 +287,14 @@ Additional deployment gates:
 - Docker Compose config/build validation;
 - Playwright desktop/mobile `/intelligence` smoke where browser tooling is available.
 
+Canonical Linux CI execution (required before release decision):
+
+```powershell
+pwsh -File scripts/run-canonical-ci.ps1 -Branch master
+```
+
+This invokes and watches `.github/workflows/ci.yml` end to end. Treat any non-`success` conclusion as a hard release blocker.
+
 Latest local Phase 1-2 evidence on 2026-07-05:
 - `python -m src.cli providers doctor` and `providers status` passed in offline
   mode with the five-state public contract and no credential values printed.

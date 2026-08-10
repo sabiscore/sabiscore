@@ -6,6 +6,31 @@ import * as safety from "../src/safety.mjs";
 import { writeManifest } from "../src/storage.mjs";
 import { sourceAllowlist } from "../src/config.mjs";
 import { PublicHttpClient } from "../src/http.mjs";
+import { FootballDataAdapter } from "../src/adapters/football-data.mjs";
+
+async function withEnv(overrides, fn) {
+  const previous = new Map();
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined || value === null) {
+      delete process.env[key];
+    } else {
+      process.env[key] = String(value);
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
 
 test("parses football-data CSV and normalizes fixtures", () => {
   const csv = [
@@ -63,6 +88,88 @@ test("source registry exposes policy controls", () => {
   assert.equal(sourceAllowlist.footballData.concurrency, 1);
   assert.equal(sourceAllowlist.footballData.robotsPolicy, "enforce");
   assert.equal(Boolean(sourceAllowlist.footballData.killSwitchEnv), true);
+  assert.equal(sourceAllowlist.footballData.productionActivation, "operator_approval_required");
+});
+
+test("adapter skips when source kill switch is enabled", { concurrency: false }, async () => {
+  const adapter = new FootballDataAdapter({
+    async getText() {
+      throw new Error("getText should not be called when kill switch is active");
+    },
+  });
+
+  const result = await withEnv(
+    { [adapter.source.killSwitchEnv]: "true", APP_ENV: "development" },
+    () => adapter.scrapeLeague({ league: "EPL", leagueCode: "E0", runId: "run", acquiredAt: new Date().toISOString() }),
+  );
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "source_kill_switch_enabled");
+});
+
+test("adapter blocks production scraping until source activation is approved", { concurrency: false }, async () => {
+  const adapter = new FootballDataAdapter({
+    async getText() {
+      throw new Error("getText should not be called when source activation is blocked");
+    },
+  });
+
+  const result = await withEnv(
+    { APP_ENV: "production", [adapter.source.killSwitchEnv]: "false" },
+    () => adapter.scrapeLeague({ league: "EPL", leagueCode: "E0", runId: "run", acquiredAt: new Date().toISOString() }),
+  );
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "source_production_activation_required");
+});
+
+test("adapter blocks unsupported runtime environment", { concurrency: false }, async () => {
+  const adapter = new FootballDataAdapter({
+    async getText() {
+      throw new Error("getText should not be called when environment is unsupported");
+    },
+  });
+  const original = adapter.source;
+  let result;
+  try {
+    adapter.source = { ...original, supportedEnvironments: ["development"] };
+    result = await withEnv(
+      { APP_ENV: "staging", [adapter.source.killSwitchEnv]: "false" },
+      () => adapter.scrapeLeague({ league: "EPL", leagueCode: "E0", runId: "run", acquiredAt: new Date().toISOString() }),
+    );
+  } finally {
+    adapter.source = original;
+  }
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "source_environment_not_supported");
+});
+
+test("adapter blocks unreviewed terms in production even when activation is approved", { concurrency: false }, async () => {
+  const adapter = new FootballDataAdapter({
+    async getText() {
+      throw new Error("getText should not be called when terms are not reviewed");
+    },
+  });
+  const original = adapter.source;
+  let result;
+  try {
+    adapter.source = {
+      ...original,
+      productionActivation: "approved",
+      termsReviewStatus: "pending_review",
+    };
+
+    result = await withEnv(
+      { APP_ENV: "production", [adapter.source.killSwitchEnv]: "false" },
+      () => adapter.scrapeLeague({ league: "EPL", leagueCode: "E0", runId: "run", acquiredAt: new Date().toISOString() }),
+    );
+  } finally {
+    adapter.source = original;
+  }
+
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, "source_terms_not_reviewed");
 });
 
 test("never combines a partial bookmaker book with another bookmaker", () => {

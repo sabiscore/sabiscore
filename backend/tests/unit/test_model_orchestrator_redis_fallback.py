@@ -10,14 +10,23 @@ core/cache.py.
 from src.models.orchestrator import ModelOrchestrator, _InMemoryRedisAdapter
 
 
+def _is_in_memory_adapter(value: object) -> bool:
+    """Avoid brittle class-identity checks across module reloads in full-suite runs."""
+
+    klass = value.__class__
+    return klass.__name__ == "_InMemoryRedisAdapter" and klass.__module__.endswith(
+        "models.orchestrator"
+    )
+
+
 def test_malformed_redis_url_degrades_to_in_memory_adapter():
     orchestrator = ModelOrchestrator(redis_url="not-a-valid-url")
-    assert isinstance(orchestrator.redis, _InMemoryRedisAdapter)
+    assert _is_in_memory_adapter(orchestrator.redis)
 
 
 def test_unreachable_redis_url_degrades_to_in_memory_adapter():
     orchestrator = ModelOrchestrator(redis_url="redis://localhost:1/0")
-    assert isinstance(orchestrator.redis, _InMemoryRedisAdapter)
+    assert _is_in_memory_adapter(orchestrator.redis)
 
 
 def test_redis_fallback_logs_a_redacted_endpoint(caplog):

@@ -5,6 +5,7 @@ Handles training, caching, live calibration, and edge detection
 """
 
 import json
+import logging
 from threading import Lock
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,10 @@ from .leagues.la_liga import LaLigaModel
 from .leagues.bundesliga import BundesligaModel
 from .leagues.serie_a import SerieAModel
 from .leagues.ligue_1 import Ligue1Model
+from ..core.redaction import redact_text, safe_endpoint
+
+
+logger = logging.getLogger(__name__)
 
 
 class _InMemoryRedisAdapter:
@@ -74,12 +79,15 @@ class ModelOrchestrator:
         'eredivisie': 'eredivisie'
     }
     
-    def __init__(self, redis_client: Any | None = None):
-        if redis_client is None:
+    def __init__(self, redis_client: Any | None = None, redis_url: str | None = None):
+        if redis_client is not None:
+            self.redis = redis_client
+        elif redis_url is not None:
+            self.redis = self._connect_redis_url(redis_url) or _InMemoryRedisAdapter()
+        else:
             from ..core.cache import cache
 
-            redis_client = cache.redis_client
-        self.redis = redis_client or _InMemoryRedisAdapter()
+            self.redis = cache.redis_client or _InMemoryRedisAdapter()
         
         # Import additional league models
         from .leagues.championship import ChampionshipModel
@@ -97,6 +105,39 @@ class ModelOrchestrator:
         }
         
         self.live_calibration_cache = {}
+
+    @staticmethod
+    def _connect_redis_url(redis_url: str) -> Any | None:
+        """Build and probe a Redis client from URL, failing closed to in-memory."""
+
+        try:
+            import redis
+            from redis.exceptions import RedisError
+        except Exception as exc:
+            logger.warning(
+                "ModelOrchestrator redis import failed; using in-memory fallback endpoint=%s error=%s",
+                safe_endpoint(redis_url),
+                redact_text(exc),
+            )
+            return None
+
+        try:
+            client = redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+                retry_on_timeout=False,
+            )
+            client.ping()
+            return client
+        except (RedisError, OSError, ValueError) as exc:
+            logger.warning(
+                "ModelOrchestrator redis unavailable; using in-memory fallback endpoint=%s error=%s",
+                safe_endpoint(redis_url),
+                redact_text(exc),
+            )
+            return None
         
     def get_league_key(self, league: str) -> str:
         """Normalize league name to internal key"""
