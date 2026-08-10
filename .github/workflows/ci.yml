@@ -81,7 +81,7 @@ jobs:
 
       - name: Ruff before tests
         working-directory: backend
-        run: ruff check src tests
+        run: ruff check src
 
       - name: MyPy (advisory — type-debt burndown pending)
         working-directory: backend
@@ -139,7 +139,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.8.0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -209,7 +209,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11.8.0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

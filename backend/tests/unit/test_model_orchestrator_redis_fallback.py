@@ -20,6 +20,15 @@ def test_unreachable_redis_url_degrades_to_in_memory_adapter():
     assert isinstance(orchestrator.redis, _InMemoryRedisAdapter)
 
 
+def test_redis_fallback_logs_a_redacted_endpoint(caplog):
+    secret_url = "redis://alice:top-secret@localhost:1/0"
+
+    ModelOrchestrator(redis_url=secret_url)
+
+    assert "top-secret" not in caplog.text
+    assert "redis://localhost:1" in caplog.text
+
+
 def test_in_memory_adapter_supports_league_model_cache_calls():
     adapter = _InMemoryRedisAdapter()
     adapter.setex("k", 60, "v")

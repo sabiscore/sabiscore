@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from src.core.redaction import redact_text, safe_endpoint
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,9 +98,13 @@ class ProductionOrchestrator:
             url = redis_url or "redis://localhost:6379"
             self.redis = redis.from_url(url, decode_responses=True)
             self.redis.ping()
-            logger.info(f"Redis connected: {url}")
-        except Exception as e:
-            logger.warning(f"Redis unavailable ({e}), using DummyRedis")
+            logger.info("Redis connected: %s", safe_endpoint(url))
+        except Exception as exc:
+            logger.warning(
+                "Redis unavailable at %s (%s), using DummyRedis",
+                safe_endpoint(url),
+                redact_text(exc),
+            )
             self.redis = DummyRedis()
     
     @property
