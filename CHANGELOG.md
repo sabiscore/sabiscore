@@ -84,6 +84,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   skips invalidation and the Vercel route returns `503` until both platforms
   have a configured shared `REVALIDATE_SECRET`; route errors no longer echo
   exception details to callers.
+- Hardened two legacy non-production modules against secret foot-guns by
+  removing baked demo API-key defaults (`dev-key-12345` / `demo_key`) and
+  failing closed when keys are missing.
+- Added a small accessibility polish to model metadata cards with explicit
+  per-card `aria-label` values, improving screen-reader announcement clarity.
 
 Validation completed locally: backend `1271 passed, 13 skipped`; repository-wide
 backend Ruff passed with zero findings; mypy improved from the accepted 784-error

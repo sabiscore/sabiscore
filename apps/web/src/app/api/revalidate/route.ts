@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-  } catch (error) {
-    console.error('Revalidation error:', error);
+  } catch {
+    console.error('Revalidation error');
     
     return NextResponse.json(
       { 

@@ -93,10 +93,13 @@ Production remains blocked until every step is recorded.
   historical `backend/.env.example` fingerprints: `generic-api-key:17` at
   `d604c13` and `generic-api-key:10` at `67ed0ab`. Neither may be waived until
   the credential owner supplies dated revocation evidence for that exact value.
-- GitHub required jobs have `runner_id: 0`, no steps, and the annotation
-  `The job was not started because your account is locked due to a billing issue.`
-  The security, backend, web, Playwright, and model-validation jobs must be
-  rerun after billing is resolved; workflow edits must not bypass this gate.
+- Historical required-job runs still include `runner_id: 0` entries with the
+  annotation `The job was not started because your account is locked due to a
+  billing issue.` A newer keep-alive run (`31407327985`) now executes checkout,
+  Python setup, and dependency install, then fails at `Ping backend readiness`.
+  This confirms workflow execution is no longer fully blocked at dispatch, but
+  the required security/backend/web/Playwright/model-validation jobs still
+  lack fresh passing evidence and must be rerun without bypass edits.
 - Docker Compose configuration passes. Fresh backend and web image retries ran
   for more than five and three minutes respectively without producing a current
   image. The only `sabiscore-backend:verify` tag is dated 2026-07-15 and

@@ -42,7 +42,7 @@ class TwitterSentimentAnalyzer:
         api_key: Optional[str] = None,
     ):
         self.redis = redis_client
-        self.api_key = api_key or "demo_key"  # Replace with real API key
+        self.api_key = api_key
         self.cache_ttl = 300  # 5 minutes cache
         
         # Sentiment keywords with weights

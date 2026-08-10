@@ -52,7 +52,11 @@ export function ModelMetadataPanel() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-live="polite">
       {stats.map((stat) => (
-        <div key={stat.label} className="min-h-24 rounded-2xl border border-white/5 bg-slate-900/70 p-4">
+        <div
+          key={stat.label}
+          className="min-h-24 rounded-2xl border border-white/5 bg-slate-900/70 p-4"
+          aria-label={`${stat.label}: ${isError ? "Unavailable" : stat.value}`}
+        >
           <p className="text-[11px] uppercase tracking-widest text-slate-500">{stat.label}</p>
           <p className="mt-1 break-words text-lg font-bold text-white">{isError ? "Unavailable" : stat.value}</p>
         </div>
