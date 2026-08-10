@@ -6,7 +6,6 @@ Run:
 
 from __future__ import annotations
 
-import pytest
 
 from src.connectors.source_registry import (
     build_source_registry,

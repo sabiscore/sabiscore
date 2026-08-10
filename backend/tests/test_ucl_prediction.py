@@ -10,10 +10,9 @@ UCL facts (from ground truth):
 
 from __future__ import annotations
 
-import pytest
 
 from src.core.config import settings
-from src.core.league_config import LEAGUE_BY_ID, allows_low_evidence, get_league_profile
+from src.core.league_config import allows_low_evidence, get_league_profile
 from src.schemas.prediction import LeagueCode
 from src.services.prediction import PredictionService
 
@@ -77,7 +76,6 @@ def test_ucl_candidate_paths_use_generic_model(tmp_path):
     UCL model loading path must include sabiscore_production_v2.joblib.
     We verify by creating a minimal mock settings and inspecting the candidates.
     """
-    service = PredictionService()
     # Reconstruct what _get_ensemble_for_league would look for
     _backend_models = settings.models_path.parent / "backend" / "models"
     ucl_candidates = [

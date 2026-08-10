@@ -1,15 +1,20 @@
 """Odds compatibility service backed by the provider gateway."""
 
 import logging
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.cache import cache_manager
 from ..core.config import settings
 from ..core.league_policy import LeaguePolicyUnavailableError, canonical_league_id
+from ..core.redaction import redact_text
 from ..db.models import Odds
+from ..monitoring.metrics import metrics_collector
 from ..providers.base import ProviderStatus
 from ..providers.the_odds_api import TheOddsAPIProvider
 
@@ -20,9 +25,13 @@ class OddsService:
     """Fetch live odds through the canonical provider gateway."""
     DEFAULT_ODDS = {"source": "unavailable", "reason": "odds_not_verified"}
 
-    def __init__(self, cache_backend: Any = None) -> None:
+    def __init__(
+        self,
+        cache_backend: Any = None,
+        provider: TheOddsAPIProvider | None = None,
+    ) -> None:
         self.cache = cache_backend or cache_manager
-        self.provider = TheOddsAPIProvider(
+        self.provider = provider or TheOddsAPIProvider(
             api_key=settings.the_odds_api_key,
             enabled=settings.enable_the_odds_api_provider,
             live_tests=settings.provider_live_tests,
@@ -51,13 +60,38 @@ class OddsService:
             List of match odds dictionaries
         """
         cache_key = f"live_odds:{competition}:{regions}:{markets}"
+        started_at = time.perf_counter()
         cached = self.cache.get(cache_key)
         if cached:
             logger.info("Cache hit for live odds: %s", competition)
+            metrics_collector.record_provider_outcome(
+                provider="the_odds_api",
+                outcome="cache_hit",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                cache_tier="shared",
+                circuit_state=(
+                    "open"
+                    if getattr(getattr(self.provider, "breaker", None), "open", False)
+                    else "closed"
+                ),
+            )
             return cached
 
         result = await self.provider.odds(
             competition=competition, regions=regions, markets=markets
+        )
+        schema_rejected = "schema" in str(result.error_code or "").casefold()
+        metrics_collector.record_provider_outcome(
+            provider=result.provider,
+            outcome=result.status.value,
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+            cache_tier="none",
+            circuit_state=(
+                "open"
+                if getattr(getattr(self.provider, "breaker", None), "open", False)
+                else "closed"
+            ),
+            schema_rejected=schema_rejected,
         )
         if result.status is not ProviderStatus.VERIFIED:
             logger.warning(
@@ -76,7 +110,7 @@ class OddsService:
         home_team: str,
         away_team: str,
         league: str,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Get odds for a specific match by team names.
         
@@ -109,30 +143,20 @@ class OddsService:
 
         live_odds = await self.fetch_live_odds(competition=competition)
 
-        # Find matching event
-        home_normalized = home_team.lower().replace(" ", "")
-        away_normalized = away_team.lower().replace(" ", "")
+        home_normalized = self._team_key(home_team)
+        away_normalized = self._team_key(away_team)
 
-        for event in live_odds:
-            event_home = event.get("home_team", "").lower().replace(" ", "")
-            event_away = event.get("away_team", "").lower().replace(" ", "")
-
-            # Containment must be checked both ways. The fixture side supplies
-            # provider legal names ("Arsenal FC" -> "arsenalfc") while the odds
-            # board uses short names ("Arsenal" -> "arsenal"), so the one-way test
-            # `home_normalized in event_home` was False for exactly the common
-            # case and no match was ever found.
-            if (
-                (home_normalized in event_home or event_home in home_normalized)
-                and (away_normalized in event_away or event_away in away_normalized)
-                and event_home
-                and event_away
-            ):
-                odds = self._extract_h2h_odds(event)
-                if odds:
-                    # Cache for 5 minutes
-                    self.cache.set(cache_key, odds, ttl=300)
-                    return odds
+        for record in live_odds:
+            if not record.get("coherent") or not record.get("executable"):
+                continue
+            if self._team_key(record.get("home_team", "")) != home_normalized:
+                continue
+            if self._team_key(record.get("away_team", "")) != away_normalized:
+                continue
+            odds = self._coherent_snapshot(record)
+            if odds is not None:
+                self.cache.set(cache_key, odds, ttl=300)
+                return odds
 
         logger.warning("No verified live odds found for %s vs %s", home_team, away_team)
         unavailable = {
@@ -165,40 +189,37 @@ class OddsService:
             await db.commit()
             logger.info("Stored odds snapshot for match %s", match_id)
         except Exception as exc:
-            logger.error("Failed to store odds snapshot: %s", exc)
+            logger.error("Failed to store odds snapshot: %s", redact_text(exc))
             await db.rollback()
 
-    def _extract_h2h_odds(self, event: Dict[str, Any]) -> Optional[Dict[str, float]]:
-        """Extract head-to-head odds from Odds API event."""
-        bookmakers = event.get("bookmakers", [])
-        if not bookmakers:
+    @staticmethod
+    def _team_key(value: object) -> str:
+        key = re.sub(r"[^a-z0-9]", "", str(value).casefold())
+        for suffix in ("footballclub", "soccerclub", "afc", "fc"):
+            if key.endswith(suffix) and len(key) > len(suffix) + 2:
+                return key[: -len(suffix)]
+        return key
+
+    @staticmethod
+    def _coherent_snapshot(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        try:
+            home = float(record["home_odds"])
+            draw = float(record["draw_odds"])
+            away = float(record["away_odds"])
+        except (KeyError, TypeError, ValueError):
             return None
-
-        # Use first bookmaker with h2h market
-        for bookmaker in bookmakers:
-            markets = bookmaker.get("markets", [])
-            for market in markets:
-                if market.get("key") == "h2h":
-                    outcomes = market.get("outcomes", [])
-                    if len(outcomes) >= 2:
-                        odds_dict = {}
-                        for outcome in outcomes:
-                            name = outcome.get("name", "").lower()
-                            price = outcome.get("price")
-                            if "draw" in name or name == "draw":
-                                odds_dict["draw"] = float(price)
-                            elif event.get("home_team", "").lower() in name:
-                                odds_dict["home_win"] = float(price)
-                            elif event.get("away_team", "").lower() in name:
-                                odds_dict["away_win"] = float(price)
-
-                        if {"home_win", "draw", "away_win"}.issubset(odds_dict):
-                            odds_dict["source"] = "odds_api"
-                            odds_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
-                            odds_dict["bookmaker"] = bookmaker.get("title")
-                            return odds_dict
-
-        return None
+        if any(value <= 1.0 for value in (home, draw, away)):
+            return None
+        return {
+            "home_win": home,
+            "draw": draw,
+            "away_win": away,
+            "source": str(record.get("provider") or "the_odds_api"),
+            "timestamp": record.get("captured_at"),
+            "bookmaker": record.get("bookmaker"),
+            "provider_event_id": record.get("provider_event_id"),
+            "bookmaker_last_update": record.get("bookmaker_last_update"),
+        }
 
     async def get_odds_movement(
         self,
@@ -244,9 +265,15 @@ class OddsService:
             return movement
 
         except Exception as exc:
-            logger.error("Failed to retrieve odds movement: %s", exc)
+            logger.error("Failed to retrieve odds movement: %s", redact_text(exc))
             return []
 
 
 # Global instance (lazily initialized on first access)
 odds_service = None
+
+
+def get_odds_service(request: Request) -> OddsService:
+    """Return the lifespan-scoped odds service for production requests."""
+
+    return request.app.state.odds_service

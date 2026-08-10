@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 from src.api.main import app
-from src.schemas.requests import InsightsRequest
 
 client = TestClient(app)
 
@@ -76,6 +75,12 @@ class TestAPIEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "models_loaded" in data
+        assert data["validation_status"] in {"VALIDATED", "UNVERIFIED"}
+        if data["models"]:
+            model = next(iter(data["models"].values()))
+            assert len(model["artifact_sha256"]) == 64
+            assert "served_head" in model
+            assert "feature_count" in model
 
     @patch('src.core.cache.cache.metrics_snapshot')
     def test_cache_metrics(self, mock_metrics):

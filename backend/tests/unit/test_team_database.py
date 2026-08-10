@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from src.data.team_database import (
     TEAM_ELO_RATINGS,

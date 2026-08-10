@@ -85,6 +85,8 @@ class OddsMarketRecord(BaseModel):
     canonical_fixture_id: str | None
     provider: str = "the_odds_api"
     provider_event_id: str
+    home_team: str
+    away_team: str
     bookmaker: str
     market_type: str = "1X2"
     home_odds: float
@@ -202,6 +204,8 @@ class TheOddsAPIProvider(BaseProvider):
 
         for event in raw_events:
             event_id = str(event.get("id", ""))
+            home_team = str(event.get("home_team", "")).strip()
+            away_team = str(event.get("away_team", "")).strip()
             event_commence = self._parse_ts(event.get("commence_time"))
             canonical_id = canonical_lookup.get(event_id)
 
@@ -214,6 +218,8 @@ class TheOddsAPIProvider(BaseProvider):
                 record = self._normalize_bookmaker(
                     event_id=event_id,
                     canonical_fixture_id=canonical_id,
+                    home_team=home_team,
+                    away_team=away_team,
                     bookmaker=str(bm.get("key", "")),
                     bookmaker_last_update=self._parse_ts(bm.get("last_update")),
                     markets=bm.get("markets", []),
@@ -259,6 +265,8 @@ class TheOddsAPIProvider(BaseProvider):
         *,
         event_id: str,
         canonical_fixture_id: str | None,
+        home_team: str,
+        away_team: str,
         bookmaker: str,
         bookmaker_last_update: datetime | None,
         markets: list[dict[str, Any]],
@@ -279,6 +287,8 @@ class TheOddsAPIProvider(BaseProvider):
             return OddsMarketRecord(
                 canonical_fixture_id=canonical_fixture_id,
                 provider_event_id=event_id,
+                home_team=home_team,
+                away_team=away_team,
                 bookmaker=bookmaker,
                 home_odds=0.0,
                 draw_odds=0.0,
@@ -294,23 +304,25 @@ class TheOddsAPIProvider(BaseProvider):
 
         outcomes: dict[str, float] = {}
         for outcome in h2h_market.get("outcomes", []):
-            name = str(outcome.get("name", "")).lower()
+            name = str(outcome.get("name", "")).strip().casefold()
             price = outcome.get("price")
-            if price is not None:
-                outcomes[name] = float(price)
+            try:
+                parsed_price = float(price)
+            except (TypeError, ValueError):
+                continue
+            if parsed_price > 1.0:
+                outcomes[name] = parsed_price
 
-        # The Odds API uses the actual team names for home/away; "Draw" for draw.
-        # We need to map positionally since we don't have canonical team names here.
-        # The orchestrator must use the event's home_team / away_team fields to map.
-        # For simplicity we look for the draw outcome by name and infer H/A.
         draw_odds = outcomes.get("draw") or outcomes.get("tie")
-        non_draw = {k: v for k, v in outcomes.items() if k not in ("draw", "tie")}
-        values = list(non_draw.values())
+        home_odds = outcomes.get(home_team.casefold())
+        away_odds = outcomes.get(away_team.casefold())
 
-        if draw_odds is None or len(values) < 2:
+        if not home_team or not away_team or draw_odds is None or home_odds is None or away_odds is None:
             return OddsMarketRecord(
                 canonical_fixture_id=canonical_fixture_id,
                 provider_event_id=event_id,
+                home_team=home_team,
+                away_team=away_team,
                 bookmaker=bookmaker,
                 home_odds=0.0,
                 draw_odds=0.0,
@@ -324,10 +336,6 @@ class TheOddsAPIProvider(BaseProvider):
                 rejection_reason="incomplete_1x2_outcomes",
             )
 
-        # By convention in The Odds API, the first non-Draw outcome is home.
-        home_odds = values[0]
-        away_odds = values[1]
-
         # Validate overround integrity.
         try:
             overround = (1 / home_odds) + (1 / draw_odds) + (1 / away_odds)
@@ -335,6 +343,8 @@ class TheOddsAPIProvider(BaseProvider):
             return OddsMarketRecord(
                 canonical_fixture_id=canonical_fixture_id,
                 provider_event_id=event_id,
+                home_team=home_team,
+                away_team=away_team,
                 bookmaker=bookmaker,
                 home_odds=home_odds,
                 draw_odds=draw_odds,
@@ -352,6 +362,8 @@ class TheOddsAPIProvider(BaseProvider):
             return OddsMarketRecord(
                 canonical_fixture_id=canonical_fixture_id,
                 provider_event_id=event_id,
+                home_team=home_team,
+                away_team=away_team,
                 bookmaker=bookmaker,
                 home_odds=home_odds,
                 draw_odds=draw_odds,
@@ -368,6 +380,8 @@ class TheOddsAPIProvider(BaseProvider):
         return OddsMarketRecord(
             canonical_fixture_id=canonical_fixture_id,
             provider_event_id=event_id,
+            home_team=home_team,
+            away_team=away_team,
             bookmaker=bookmaker,
             home_odds=round(home_odds, 4),
             draw_odds=round(draw_odds, 4),

@@ -112,6 +112,9 @@ checkpoints/
 !models/*.json
 !backend/models/*_v5_phase7.pkl
 !backend/models/*_v5_phase7_metadata.json
+# Candidate binaries are local training outputs. Commit only their manifest and
+# reports until an atomic, certified generation is approved for promotion.
+backend/models/candidate/*.pkl
 !data/processed/
 !data/processed/*.csv
 data/processed/*.json
@@ -189,6 +192,9 @@ redis-data/
 .env.production.local
 .env.development.local
 .worktrees/
+
+# Codex skill discovery is a local symlink/junction to the canonical .ai source.
+.agents/skills/
 
 # API keys and sensitive config
 *api_key*

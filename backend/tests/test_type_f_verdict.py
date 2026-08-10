@@ -22,7 +22,6 @@ import pytest
 from src.services.intelligence_synthesizer import (
     EnsemblePrediction,
     IntelligenceSynthesizer,
-    OddsEdge,
 )
 from src.data.elo_engine import EloContext
 from src.models.causal_selector import CausalFeatureResult
@@ -329,7 +328,7 @@ class TestDataPropagation:
 # ---------------------------------------------------------------------------
 
 
-from src.services.intelligence_synthesizer import MatchActionability
+from src.services.intelligence_synthesizer import MatchActionability  # noqa: E402
 
 
 def _actionability(

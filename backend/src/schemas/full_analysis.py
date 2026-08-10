@@ -149,10 +149,11 @@ class FullMatchAnalysisResponseSchema(BaseModel):
     stake_permitted: bool
     evidence_quality: EvidenceQualityResponse
     ensemble: FullMatchEnsembleResponse
-    uncertainty: FullMatchUncertaintyResponse
+    uncertainty: Optional[FullMatchUncertaintyResponse]
+    model_drivers: List[str]
     causal_drivers: List[str]
     rl_recommendation: FullMatchRLRecommendationResponse
-    elo_context: FullMatchEloResponse
+    elo_context: Optional[FullMatchEloResponse]
     odds_edge: Optional[FullMatchOddsEdgeResponse]
     narrative: str = Field(max_length=280)
     partial_intelligence: bool
@@ -167,6 +168,13 @@ class FullMatchAnalysisResponseSchema(BaseModel):
     actionability: Optional[MatchActionabilityResponse]
     match_importance_score: Optional[float]
     competition_stage: Optional[str]
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    league: Optional[str] = None
+    kickoff_utc: Optional[datetime] = None
+    fixture_verified: Optional[bool] = None
+    field_availability: Dict[str, bool] = Field(default_factory=dict)
+    unavailable_reasons: Dict[str, str] = Field(default_factory=dict)
     generated_at: datetime
     phase9_candidate_features: Optional[Dict[str, Any]] = None
     phase9_shadow_only: Optional[bool] = None
@@ -202,6 +210,8 @@ class FullMatchAnalysisResponseSchema(BaseModel):
             or self.verdict not in {"ACTIONABLE", "HIGH_CONVICTION"}
             or self.rl_recommendation.abstain
             or self.rl_recommendation.stake_fraction <= 0
+            or self.uncertainty is None
+            or self.fixture_verified is not True
         ):
             raise ValueError("stake_permitted is inconsistent with the verdict gate")
         if not self.stake_permitted:

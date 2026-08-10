@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import time
-
 import pytest
 
 from src.monitoring.metrics import MetricsCollector, monitor_latency, monitor_scraper
@@ -146,7 +143,14 @@ def test_record_model_accuracy_no_alert(mc):
 
 
 def test_record_model_accuracy_brier_alert(mc):
-    mc.record_model_accuracy(brier_score=0.20, accuracy=0.95, league="EPL", model_version="3.0")
+    mc.record_model_accuracy(
+        brier_score=0.20,
+        accuracy=0.95,
+        league="EPL",
+        model_version="3.0",
+        brier_threshold=0.13,
+        accuracy_threshold=0.90,
+    )
     assert len(mc._calibration_drift_alerts) == 1
     alert = mc._calibration_drift_alerts[0]
     assert alert["brier_exceeded"] is True
@@ -154,15 +158,62 @@ def test_record_model_accuracy_brier_alert(mc):
 
 
 def test_record_model_accuracy_accuracy_alert(mc):
-    mc.record_model_accuracy(brier_score=0.10, accuracy=0.80, league="Bundesliga", model_version="3.0")
+    mc.record_model_accuracy(
+        brier_score=0.10,
+        accuracy=0.80,
+        league="Bundesliga",
+        model_version="3.0",
+        brier_threshold=0.13,
+        accuracy_threshold=0.90,
+    )
     assert len(mc._calibration_drift_alerts) == 1
     assert mc._calibration_drift_alerts[0]["accuracy_below"] is True
 
 
 def test_record_model_accuracy_trim_alerts(mc):
     for i in range(55):
-        mc.record_model_accuracy(0.20, 0.80, "EPL", f"v{i}")
+        mc.record_model_accuracy(
+            0.20,
+            0.80,
+            "EPL",
+            f"v{i}",
+            brier_threshold=0.13,
+            accuracy_threshold=0.90,
+        )
     assert len(mc._calibration_drift_alerts) == 50
+
+
+def test_analysis_and_provider_metrics_are_bounded_and_payload_free(mc):
+    mc.record_analysis_state(
+        prediction_available=False,
+        evidence_completeness=1.5,
+        abstention_reason="COHERENT_1X2_MARKET_UNAVAILABLE",
+        calibration_status="UNKNOWN",
+        duration_ms=12.5,
+    )
+    mc.record_provider_outcome(
+        provider="The Odds API",
+        outcome="failed",
+        duration_ms=4.0,
+        cache_tier="memory",
+        circuit_state="open",
+        schema_rejected=True,
+    )
+
+    summary = mc.get_summary()
+    assert summary["counters"]["analysis.prediction.unavailable"] == 1
+    assert summary["histograms"]["analysis.evidence_completeness"]["max"] == 1.0
+    assert summary["counters"]["provider.the_odds_api.schema_rejected"] == 1
+
+
+def test_error_metrics_redact_credentials(mc):
+    mc.record_error(
+        "ProviderError",
+        "redis://user:super-secret-password@example.test:6379/0",
+        {"authorization": "Bearer secret-token"},
+    )
+    assert "super-secret-password" not in mc._errors[0]["message"]
+    assert "secret-token" not in str(mc._errors[0]["context"])
 
 
 # ── get_summary ───────────────────────────────────────────────────────────────

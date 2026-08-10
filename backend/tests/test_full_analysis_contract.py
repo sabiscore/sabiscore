@@ -155,11 +155,17 @@ def test_ucl_high_conviction_is_capped_at_actionable() -> None:
 @pytest.mark.asyncio
 async def test_default_projection_fallback_is_non_actionable(monkeypatch) -> None:
     class FailingProjector:
+        def __init__(self, **_kwargs):
+            pass
+
         async def build_live_feature_vector(self, **_kwargs):
             raise ValueError("fixture unavailable")
 
     class FallbackPredictionEngine:
+        called = False
+
         async def predict(self, **_kwargs):
+            type(self).called = True
             return SimpleNamespace(
                 to_dict=lambda: {
                     "home_win": 0.333,
@@ -176,8 +182,9 @@ async def test_default_projection_fallback_is_non_actionable(monkeypatch) -> Non
 
     payload = await endpoint.get_full_analysis("missing-fixture", league="EPL", db=object())
     parsed = FullMatchAnalysisResponseSchema.model_validate(payload)
-    assert parsed.prediction_status.value == "REDUCED_EVIDENCE_BASELINE"
-    assert parsed.prediction_source.value == "DIAGNOSTIC_BASELINE"
+    assert FallbackPredictionEngine.called is False
+    assert parsed.prediction_status.value == "UNAVAILABLE"
+    assert parsed.prediction_source.value == "NONE"
     assert parsed.probabilities_available is False
     assert parsed.partial_intelligence is True
     assert parsed.stake_permitted is False
@@ -197,6 +204,18 @@ def _fake_live_vector(*, fixture_identity_verified: bool) -> dict:
         "advisory_gaps": [],
         "conflicts": [],
         "fixture_identity_verified": fixture_identity_verified,
+        "elo_context": (
+            endpoint.EloContext(
+                home_elo=1500.0,
+                away_elo=1500.0,
+                elo_difference=0.0,
+                home_elo_trend_5=0.0,
+                away_elo_trend_5=0.0,
+                elo_momentum_cross=0.0,
+            )
+            if fixture_identity_verified
+            else None
+        ),
         "identity_resolution": {
             "home_team_resolved": fixture_identity_verified,
             "away_team_resolved": fixture_identity_verified,
@@ -229,6 +248,9 @@ async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(monkey
     exactly this case. Gating on identity instead must not flag it."""
 
     class FakeProjector:
+        def __init__(self, **_kwargs):
+            pass
+
         async def build_live_feature_vector(self, **_kwargs):
             return _fake_live_vector(fixture_identity_verified=True)
 
@@ -244,6 +266,9 @@ async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(monkey
 @pytest.mark.asyncio
 async def test_elo_gap_flagged_when_identity_unverified(monkeypatch) -> None:
     class FakeProjector:
+        def __init__(self, **_kwargs):
+            pass
+
         async def build_live_feature_vector(self, **_kwargs):
             return _fake_live_vector(fixture_identity_verified=False)
 

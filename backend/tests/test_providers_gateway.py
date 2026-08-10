@@ -244,3 +244,19 @@ def test_redact_text_handles_multiple_sensitive_params():
     redacted = redact_text(text)
     assert "AAA" not in redacted and "BBB" not in redacted
     assert "normal=keep" in redacted
+
+
+def test_redaction_scrubs_dsn_userinfo_and_bearer_tokens():
+    from src.core.redaction import redact_text, redact_url, safe_endpoint
+
+    dsn = "rediss://default:SUPERSECRET@cache.example.com:6379/0"
+    message = f"connection failed for {dsn}; Authorization: Bearer abc.def-123"
+
+    redacted = redact_text(message)
+    assert "SUPERSECRET" not in redacted
+    assert "abc.def-123" not in redacted
+    assert "rediss://[REDACTED]@cache.example.com:6379/0" in redacted
+    assert "Bearer [REDACTED]" in redacted
+
+    assert redact_url(dsn) == "rediss://cache.example.com:6379/0"
+    assert safe_endpoint(dsn) == "rediss://cache.example.com:6379"

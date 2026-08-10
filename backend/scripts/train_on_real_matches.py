@@ -75,11 +75,12 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from src.models.feature_registry import (  # noqa: E402
-    CANONICAL_FEATURES_68,
+    APEX_FEATURES_68,
     DEFAULT_FEATURE_VALUES_68,
     derive_combination_features,
     derive_last5_form_features,
     derive_league_features,
+    derive_apex_market_features,
     derive_temporal_features,
 )
 
@@ -160,6 +161,41 @@ def _parse_date(raw: str) -> Optional[datetime]:
     return None
 
 
+# WP-A: opening 1X2 odds, one fallback tier per bookmaker,
+# clean-schema name paired with its raw-schema equivalent per tier. A given
+# CSV's DictReader.fieldnames only ever contains one name per pair, so the
+# miss on the absent one is just a dict .get() returning None. Bet365 is
+# preferred and Pinnacle is the fallback. Cross-bookmaker averages are
+# excluded because they are not one coherent bookmaker snapshot. Opening
+# lines only — see build_dataset's
+# docstring note for why closing lines are deliberately never read.
+_ODDS_COLUMNS: Tuple[Tuple[str, str, str], ...] = (
+    ("bet365_home", "bet365_draw", "bet365_away"),
+    ("B365H", "B365D", "B365A"),
+    ("pinnacle_home", "pinnacle_draw", "pinnacle_away"),
+    ("PSH", "PSD", "PSA"),
+)
+
+
+def _parse_odds_row(row: dict) -> Optional[Tuple[float, float, float]]:
+    """First COMPLETE (home, draw, away) triple across the tier list, else
+    None. Atomic per tier — never mixes columns from two different
+    bookmakers/tiers for one row, matching the "coherent single-bookmaker
+    snapshot" principle OddsMarketRecord already enforces for live odds."""
+    for h_col, d_col, a_col in _ODDS_COLUMNS:
+        h, d, a = row.get(h_col), row.get(d_col), row.get(a_col)
+        if h in (None, "") or d in (None, "") or a in (None, ""):
+            continue
+        try:
+            prices = (float(h), float(d), float(a))
+            if not all(np.isfinite(price) and price > 1.0 for price in prices):
+                continue
+            return prices
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def load_matches(cache_dir: Path) -> List[dict]:
     """Every parseable finished match, ascending by kickoff."""
     rows: List[dict] = []
@@ -187,6 +223,7 @@ def load_matches(cache_dir: Path) -> List[dict]:
                 rows.append({
                     "league": league, "season": season, "date": date,
                     "home": home, "away": away, "hg": hg, "ag": ag,
+                    "odds": _parse_odds_row(row),
                 })
     rows.sort(key=lambda r: r["date"])
     return rows
@@ -197,10 +234,20 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
 
     History is keyed per (league, team) and updated only AFTER the row is
     emitted, so a match never sees its own result.
+
+    WP-A: the 14 market features are populated from each row's OPENING 1X2
+    price (see _ODDS_COLUMNS) when one was parsed, else left at their
+    registry default like every other unresolved feature. Opening, not
+    closing: live serving fetches odds hours-to-days before kickoff and can
+    never see a closing line for a future fixture, so training on closing
+    prices would teach the model to lean on a systematically more-informed
+    signal than serving can ever supply.
     """
     histories: Dict[str, TeamHistory] = defaultdict(TeamHistory)
     out: Dict[str, dict] = defaultdict(lambda: {"X": [], "y": [], "seasons": [], "dates": []})
     skipped = 0
+    odds_rows = 0
+    total_rows = 0
 
     for m in matches:
         league, hist = m["league"], histories[m["league"]]
@@ -237,11 +284,22 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
                 away_goals_against_avg=features["away_goals_against_avg"],
             ))
 
-            label = 0 if m["hg"] > m["ag"] else 1 if m["hg"] == m["ag"] else 2
-            out[league]["X"].append([features[name] for name in CANONICAL_FEATURES_68])
-            out[league]["y"].append(label)
-            out[league]["seasons"].append(m["season"])
-            out[league]["dates"].append(m["date"])
+            market_features = None
+            if m.get("odds") is not None:
+                try:
+                    market_features = derive_apex_market_features(*m["odds"])
+                except ValueError:
+                    market_features = None
+            total_rows += 1
+
+            if market_features is not None:
+                features.update(market_features)
+                odds_rows += 1
+                label = 0 if m["hg"] > m["ag"] else 1 if m["hg"] == m["ag"] else 2
+                out[league]["X"].append([features[name] for name in APEX_FEATURES_68])
+                out[league]["y"].append(label)
+                out[league]["seasons"].append(m["season"])
+                out[league]["dates"].append(m["date"])
         else:
             skipped += 1
 
@@ -249,6 +307,10 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
         hist.append(m["away"], m["ag"], m["hg"])
 
     logger.info("Rows skipped for insufficient history (both sides need %d): %d", _MIN_HISTORY, skipped)
+    logger.info(
+        "Rows with real market odds: %d/%d (%.0f%%)",
+        odds_rows, total_rows, 100.0 * odds_rows / max(total_rows, 1),
+    )
     return out
 
 
@@ -268,13 +330,28 @@ def multiclass_brier(y_true: np.ndarray, probs: np.ndarray) -> float:
 
 
 def evaluate(y_true: np.ndarray, probs: np.ndarray) -> Dict[str, float]:
-    probs = np.clip(probs, 1e-9, 1.0)
-    probs = probs / probs.sum(axis=1, keepdims=True)
+    probs = np.asarray(probs, dtype=np.float64)
+    if probs.ndim != 2 or probs.shape[1] != 3:
+        raise ValueError(f"expected an (n, 3) probability matrix, got {probs.shape}")
+    if not np.all(np.isfinite(probs)) or np.any(probs < 0.0) or np.any(probs > 1.0):
+        raise ValueError("model emitted non-finite or out-of-bounds probabilities")
+    if not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
+        raise ValueError("model probability rows do not sum to one")
+    confidence = probs.max(axis=1)
+    correct = (probs.argmax(axis=1) == y_true).astype(np.float64)
+    calibration_error = 0.0
+    for lower in np.linspace(0.0, 0.9, 10):
+        mask = (confidence >= lower) & (confidence < lower + 0.1)
+        if mask.any():
+            calibration_error += float(mask.mean()) * abs(
+                float(correct[mask].mean()) - float(confidence[mask].mean())
+            )
     return {
         "accuracy": float((probs.argmax(axis=1) == y_true).mean()),
         "rps": ranked_probability_score(y_true, probs),
         "brier": multiclass_brier(y_true, probs),
-        "log_loss": float(-np.mean(np.log(probs[np.arange(len(y_true)), y_true]))),
+        "log_loss": float(-np.mean(np.log(np.maximum(probs[np.arange(len(y_true)), y_true], 1e-12)))),
+        "calibration_error": calibration_error,
         "n": int(len(y_true)),
     }
 
@@ -289,6 +366,20 @@ def _sensitivity(models: dict, X_ref: np.ndarray) -> int:
     for i in range(X_ref.shape[0]):
         probe = X_ref.copy()
         probe[i] = probe[i] + (abs(probe[i]) * 2.0 + 1.0)
+        if np.abs(predict(probe.reshape(1, -1)) - base).max() > 1e-6:
+            moved += 1
+    return moved
+
+
+def _served_sensitivity(models: dict, meta_model: Any, X_ref: np.ndarray) -> int:
+    def predict(x: np.ndarray) -> np.ndarray:
+        return meta_model.predict_proba(_build_meta_features(models, x))[0]
+
+    base = predict(X_ref.reshape(1, -1))
+    moved = 0
+    for index in range(X_ref.shape[0]):
+        probe = X_ref.copy()
+        probe[index] += abs(probe[index]) * 2.0 + 1.0
         if np.abs(predict(probe.reshape(1, -1)) - base).max() > 1e-6:
             moved += 1
     return moved
@@ -327,23 +418,43 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
     base model overfits hardest.
     """
     import pandas as pd
+    from sklearn.base import clone
     from sklearn.linear_model import LogisticRegression
-    from sklearn.model_selection import StratifiedKFold, cross_val_predict
+    from sklearn.model_selection import TimeSeriesSplit
 
     from src.core.meta_model import SoftmaxMetaModel
 
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    oof = pd.DataFrame()
-    for name, model in models.items():
-        probs = cross_val_predict(model, X_train, y_train, cv=cv, method="predict_proba", n_jobs=1)
-        oof[f"{name}_prob_home"] = probs[:, 0]
-        oof[f"{name}_prob_draw"] = probs[:, 1]
-        oof[f"{name}_prob_away"] = probs[:, 2]
+    if len(X_train) < 300:
+        raise ValueError("at least 300 chronological rows are required for temporal stacking")
+    cv = TimeSeriesSplit(n_splits=5)
+    columns = [
+        f"{name}_prob_{outcome}"
+        for name in models
+        for outcome in ("home", "draw", "away")
+    ]
+    oof_values = np.full((len(X_train), len(columns)), np.nan, dtype=np.float64)
+    for train_index, validation_index in cv.split(X_train):
+        if len(np.unique(y_train[train_index])) != 3:
+            continue
+        offset = 0
+        for model in models.values():
+            fold_model = clone(model)
+            fold_model.fit(X_train[train_index], y_train[train_index])
+            probabilities = fold_model.predict_proba(X_train[validation_index])
+            if list(fold_model.classes_) != [0, 1, 2]:
+                raise ValueError("temporal fold did not produce all three outcome classes")
+            oof_values[validation_index, offset : offset + 3] = probabilities
+            offset += 3
+
+    usable = np.all(np.isfinite(oof_values), axis=1)
+    if usable.sum() < 100:
+        raise ValueError("insufficient expanding-window OOF rows for stacking")
+    oof = pd.DataFrame(oof_values[usable], columns=columns)
 
     # multinomial is the default for multiclass in sklearn >= 1.5; the explicit
     # multi_class kwarg was removed in 1.8.
     fitted = LogisticRegression(max_iter=1000, random_state=42)
-    fitted.fit(oof, y_train)
+    fitted.fit(oof, y_train[usable])
 
     # The fitted estimator is NOT what gets pickled. Production runs
     # scikit-learn 1.3.2 against artifacts built here on 1.8, and 1.3.2's
@@ -354,6 +465,31 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
     return SoftmaxMetaModel.from_sklearn(fitted, feature_names=list(oof.columns))
 
 
+def _fit_temperature(meta_model: Any, meta_features: Any, y_calibration: np.ndarray):
+    """Fit one temperature on a later, untouched chronological slice."""
+
+    from scipy.optimize import minimize_scalar
+    from src.core.meta_model import TemperatureScaledMetaModel
+
+    raw = meta_model.predict_proba(meta_features)
+
+    def objective(temperature: float) -> float:
+        logits = np.log(np.maximum(raw, 1e-12)) / temperature
+        logits -= logits.max(axis=1, keepdims=True)
+        exp = np.exp(logits)
+        probabilities = exp / exp.sum(axis=1, keepdims=True)
+        return float(
+            -np.mean(
+                np.log(np.maximum(probabilities[np.arange(len(y_calibration)), y_calibration], 1e-12))
+            )
+        )
+
+    result = minimize_scalar(objective, bounds=(0.25, 4.0), method="bounded")
+    if not result.success or not np.isfinite(result.x):
+        raise ValueError("temperature calibration failed")
+    return TemperatureScaledMetaModel(meta_model, float(result.x))
+
+
 def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]:
     from lightgbm import LGBMClassifier
     from sklearn.ensemble import RandomForestClassifier
@@ -362,6 +498,7 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
     X = np.asarray(data["X"], dtype=np.float32)
     y = np.asarray(data["y"], dtype=np.int64)
     seasons = np.asarray(data["seasons"])
+    dates = np.asarray(data["dates"], dtype=object)
 
     test_mask = seasons == holdout_season
     if test_mask.sum() < 50 or (~test_mask).sum() < 200:
@@ -369,7 +506,23 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
                        league, int((~test_mask).sum()), int(test_mask.sum()))
         return None
 
-    X_train, y_train = X[~test_mask], y[~test_mask]
+    pretest_seasons = list(dict.fromkeys(seasons[~test_mask].tolist()))
+    pretest_seasons.sort(key=lambda season: max(dates[seasons == season]))
+    if len(pretest_seasons) < 2:
+        logger.warning("  %s: no independent calibration season — skipped", league)
+        return None
+    calibration_season = pretest_seasons[-1]
+    calibration_mask = seasons == calibration_season
+    core_mask = ~test_mask & ~calibration_mask
+    if calibration_mask.sum() < 50 or core_mask.sum() < 300:
+        logger.warning(
+            "  %s: insufficient core/calibration split (core=%d calibration=%d) — skipped",
+            league, int(core_mask.sum()), int(calibration_mask.sum()),
+        )
+        return None
+
+    X_train, y_train = X[core_mask], y[core_mask]
+    X_calibration, y_calibration = X[calibration_mask], y[calibration_mask]
     X_test, y_test = X[test_mask], y[test_mask]
 
     models = {
@@ -389,10 +542,14 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
             objective="multiclass", num_class=3, random_state=42, verbose=-1,
         ),
     }
+    meta_model = _fit_meta_model(models, X_train, y_train)
     for model in models.values():
         model.fit(X_train, y_train)
-
-    meta_model = _fit_meta_model(models, X_train, y_train)
+    meta_model = _fit_temperature(
+        meta_model,
+        _build_meta_features(models, X_calibration),
+        y_calibration,
+    )
 
     probs = np.mean([m.predict_proba(X_test) for m in models.values()], axis=0)
     metrics = evaluate(y_test, probs)
@@ -402,38 +559,55 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
         y_test, meta_model.predict_proba(_build_meta_features(models, X_test))
     )
     metrics["train_n"] = int(len(y_train))
-    metrics["responsive_features"] = _sensitivity(models, X_test[0].copy())
+    metrics["responsive_features"] = _served_sensitivity(models, meta_model, X_test[0].copy())
 
     # Always-predict-home baseline: the bar any real model must clear.
     home_rate = float((y_test == 0).mean())
     prior = np.tile(np.bincount(y_train, minlength=3) / len(y_train), (len(y_test), 1))
     metrics["baseline_accuracy_home"] = home_rate
     metrics["baseline_rps_trainprior"] = ranked_probability_score(y_test, prior)
+    market_columns = [APEX_FEATURES_68.index(name) for name in (
+        "market_prob_home", "market_prob_draw", "market_prob_away"
+    )]
+    metrics["baseline_rps_market"] = ranked_probability_score(y_test, X_test[:, market_columns])
+    metrics["calibration_season"] = calibration_season
 
     logger.info(
         "  %-12s train=%5d test=%4d | avg: acc=%.4f rps=%.4f | stacked: acc=%.4f rps=%.4f "
-        "| home-only %.4f prior-rps %.4f responsive=%d/68",
+        "| home-only %.4f prior-rps %.4f market-rps %.4f responsive=%d/68",
         league, metrics["train_n"], metrics["n"], metrics["accuracy"], metrics["rps"],
         metrics["stacked"]["accuracy"], metrics["stacked"]["rps"],
         metrics["baseline_accuracy_home"], metrics["baseline_rps_trainprior"],
+        metrics["baseline_rps_market"],
         metrics["responsive_features"],
     )
 
     return {
         "models": models,
         "meta_model": meta_model,
-        "feature_columns": list(CANONICAL_FEATURES_68),
+        "feature_columns": list(APEX_FEATURES_68),
         "is_trained": True,
         "model_metadata": {
-            "accuracy": metrics["accuracy"],
-            "brier_score": metrics["brier"],
-            "log_loss": metrics["log_loss"],
-            "rps": metrics["rps"],
+            "accuracy": metrics["stacked"]["accuracy"],
+            "brier_score": metrics["stacked"]["brier"],
+            "log_loss": metrics["stacked"]["log_loss"],
+            "rps": metrics["stacked"]["rps"],
+            "calibration_error": metrics["stacked"]["calibration_error"],
             "trained_at": datetime.now().isoformat(),
-            "feature_count": len(CANONICAL_FEATURES_68),
+            "feature_count": len(APEX_FEATURES_68),
+            "feature_schema_version": "apex_v1_68",
+            "served_head": "stacked_logistic_regression",
+            "validation_status": "UNVERIFIED_CANDIDATE",
             "training_samples": metrics["train_n"],
             "holdout_samples": metrics["n"],
             "holdout_season": holdout_season,
+            "calibration_season": calibration_season,
+            "training_window": {
+                "start": min(dates[core_mask]).date().isoformat(),
+                "end": max(dates[core_mask]).date().isoformat(),
+            },
+            "market_baseline_rps": metrics["baseline_rps_market"],
+            "league_prior_baseline_rps": metrics["baseline_rps_trainprior"],
             "data_source": "football-data.co.uk (real matches)",
             "responsive_features": metrics["responsive_features"],
         },

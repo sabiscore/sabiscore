@@ -91,6 +91,9 @@ class _ValidPredictionEngine:
 
 def _install(monkeypatch, live: dict, *, odds=None):
     class FakeProjector:
+        def __init__(self, **_kwargs):
+            pass
+
         async def build_live_feature_vector(self, **_kwargs):
             return live
 

@@ -21,13 +21,11 @@ from ...schemas.responses import MatchSearchResponse
 from ...core.cache import cache_manager
 from ...core.config import settings
 from ...services.upcoming_match_service import UpcomingMatchService
+from ...services.odds_service import OddsService, get_odds_service
 from ...utils.mock_data import mock_generator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/matches", tags=["matches"])
-
-upcoming_match_service = UpcomingMatchService()
-
 
 @router.get("/upcoming", response_model=MatchListResponse)
 async def get_upcoming_matches(
@@ -35,6 +33,7 @@ async def get_upcoming_matches(
     days_ahead: int = Query(7, ge=1, le=30, description="Number of days to look ahead"),
     limit: int = Query(20, ge=1, le=100, description="Maximum number of matches to return"),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ):
     """
     Get upcoming matches for predictions
@@ -43,6 +42,7 @@ async def get_upcoming_matches(
     Results are cached for 5 minutes to optimize performance.
     """
     try:
+        upcoming_match_service = UpcomingMatchService(odds_service=odds_service)
         # API-first upcoming fixtures with DB fallback
         service_payload = await upcoming_match_service.get_upcoming_matches(
             db=db,

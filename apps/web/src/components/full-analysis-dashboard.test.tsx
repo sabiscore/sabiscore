@@ -38,14 +38,14 @@ describe("reduced-evidence display honesty", () => {
   };
 
   it("hides neutral-default Elo ratings on a reduced-evidence baseline", () => {
-    const { container } = render(<EloContextCard elo={neutralElo} measured={false} />);
+    const { container } = render(<EloContextCard elo={null} />);
     expect(container.textContent).not.toContain("1500");
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
 
   it("shows Elo ratings when the analysis is evidence-backed", () => {
     const { container } = render(
-      <EloContextCard elo={{ ...neutralElo, home_elo: 1712, away_elo: 1588 }} measured />,
+      <EloContextCard elo={{ ...neutralElo, home_elo: 1712, away_elo: 1588 }} />,
     );
     expect(container.textContent).toContain("1712");
     expect(container.textContent).toContain("1588");

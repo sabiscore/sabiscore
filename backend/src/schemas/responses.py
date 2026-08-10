@@ -14,7 +14,7 @@ class CacheMetricsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     # include json encoder and allow use of properties starting with 'model_'
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()}, protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     status: str = Field(..., json_schema_extra={"example": "healthy"})
     database: bool = Field(..., json_schema_extra={"example": True})
@@ -199,7 +199,7 @@ class RLRecommendation(BaseModel):
 
 
 class InsightsResponse(BaseModel):
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     matchup: str = Field(..., json_schema_extra={"example": "Manchester City vs Liverpool"})
     league: str = Field(..., json_schema_extra={"example": "EPL"})
@@ -223,7 +223,7 @@ class InsightsResponse(BaseModel):
     )
 
 class ErrorResponse(BaseModel):
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     detail: str = Field(..., json_schema_extra={"example": "An error occurred"})
     error_code: Optional[str] = Field(None, json_schema_extra={"example": "VALIDATION_ERROR"})

@@ -1,158 +1,96 @@
-# SabiScore Architecture Overview
+# SabiScore Architecture
 
-## System Architecture
+Last verified against the repository: 2026-08-10.
 
-SabiScore is built as a modern web application with a clear separation of concerns:
+## Production boundaries
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend API   │    │   Data Layer    │
-│   (React/Vite)  │◄──►│   (FastAPI)     │◄──►│   (Scrapers)    │
-│                 │    │                 │    │                 │
-│ - Match Search  │    │ - REST Endpoints│    │ - ESPN API      │
-│ - Insights UI   │    │ - Data Validation│    │ - Odds APIs     │
-│ - Charts        │    │ - ML Inference  │    │ - Transfermarkt  │
-│ - Real-time     │    │ - Caching       │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │                        │
-                              ▼                        ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   Database      │    │   ML Models      │
-                       │   (PostgreSQL)  │    │   (Ensemble)     │
-                       │                 │    │                 │
-                       │ - Matches       │    │ - Random Forest  │
-                       │ - Teams         │    │ - XGBoost        │
-                       │ - Predictions   │    │ - LightGBM       │
-                       │ - Odds          │    │ - Meta Model     │
-                       └─────────────────┘    └─────────────────┘
+```text
+Browser
+  -> apps/web (Next.js 15, React 18; UI and validated proxy routes)
+       -> backend/src/api/main.py (FastAPI authority)
+            -> provider registry + one lifespan httpx.AsyncClient
+            -> one request-scoped evidence snapshot
+            -> feature projection -> active model -> evidence/stake gates
+            -> PostgreSQL (Alembic schema authority)
+            -> Redis (cache/rate-limit acceleration; explicit degraded state)
+
+apps/scraper -> open/batch acquisition and raw manifests only
 ```
 
-## Core Components
+The FastAPI backend is the only authority for provider credentials, identity
+reconciliation, evidence provenance/freshness/conflicts, feature construction,
+model inference, calibration/uncertainty, EV, Kelly sizing, verdicts, settlement,
+and persistence. The web application never calls provider hosts or computes an
+official probability, edge, stake, or verdict.
 
-### Backend Architecture
+Legacy `frontend/` and `apps/api/` code is not a production entrypoint.
 
-#### API Layer (`src/api/`)
-- **FastAPI Application**: Main web framework with automatic OpenAPI docs
-- **Pydantic Models**: Request/response validation and serialization
-- **Middleware**: CORS, rate limiting, security headers, logging
-- **Error Handling**: Consistent error responses and logging
+## Evidence and prediction flow
 
-#### Core Systems (`src/core/`)
-- **Configuration**: Environment-based settings management
-- **Database**: SQLAlchemy ORM with PostgreSQL
-- **Cache**: Redis-based caching with TTL management
+1. A stable verified fixture ID is the primary input. A matchup string remains a
+   compatibility path and is explicitly hypothetical/non-executable.
+2. The injected odds service obtains a coherent home/draw/away market from one
+   bookmaker event snapshot. Cross-bookmaker, incomplete, stale, malformed, or
+   schema-drifted records are rejected.
+3. The same snapshot is reused for market features, full analysis, edge, CLV
+   capture, persistence, and the evidence passport.
+4. Feature projection requires explicit availability. Projection failure skips
+   inference; missing inputs are never repaired with zeros, means, or placeholders.
+5. Raw and calibrated probability vectors must be finite, bounded, and sum to one.
+   Invalid output becomes `MODEL_PREDICTION_UNAVAILABLE`.
+6. Full analysis fuses the certified model output with measured uncertainty,
+   resolved Elo, market evidence, league policy, and explicit gaps/conflicts.
+7. Any critical gap, conflict, unavailable uncertainty, unverified fixture, or
+   closed stake gate produces a non-executable verdict and zero public stake.
 
-#### Data Layer (`src/data/`)
-- **Aggregator**: Central data collection and processing
-- **Scrapers**: BeautifulSoup-based web scraping for sports data
-- **Transformers**: Feature engineering and data preprocessing
+Caller-supplied probabilities at `/api/v1/predictions/analyze` are external input,
+not backend certification. They return `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and
+zero stake.
 
-#### ML Models (`src/models/`)
-- **Ensemble Model**: Weighted combination of multiple algorithms
-- **Training Pipeline**: Automated model training and validation
-- **Explainer**: SHAP-based model interpretability
+## Providers and resilience
 
-#### Insights Engine (`src/insights/`)
-- **Engine**: Main insights generation orchestration
-- **Calculators**: Betting math and value calculations
-- **Simulators**: Monte Carlo match outcome simulation
+- One application-lifespan `httpx.AsyncClient` owns provider connection pooling.
+- Providers are constructed by the registry and injected into services.
+- HTTPS/allowlists, quota-aware caching, `Retry-After`, circuit recovery, schema
+  validation, capture time, and provenance are enforced at the gateway boundary.
+- ESPN is keyless, supplementary, and cannot establish executable market evidence.
+- Redis failure is visible and may use bounded memory fallback; invalid URLs must
+  not crash module import. Production readiness still requires a healthy configured
+  cache.
+- Central redaction removes URL userinfo, DSNs, bearer values, API-key query values,
+  and sensitive mapping fields before logs or metrics retain them.
 
-### Frontend Architecture
+## Model governance
 
-#### Core Application (`src/main.tsx`, `src/App.tsx`)
-- **State Management**: TanStack Query coordinates health checks, insights fetches, and background refetch logic
-- **API Integration**: Typed API client (`src/lib/api.ts`) enforces strict response contracts shared with the backend
-- **Error Handling**: React Error Boundary surfaces fatal errors; toast notifications provide user feedback on degraded states
-- **Routing & Layout**: Suspense-powered lazy loading keeps bundle size lean while preserving glassmorphism layout primitives
+Active artifacts live in `backend/models/` and must have matching metadata.
+Unverified generated files live in `backend/models/candidate/`; its manifest is the
+promotion gate. A new generation requires chronological competition splits,
+expanding temporal meta-model folds, a later calibration slice, an untouched final
+evaluation season, exact served-head metrics, train/serve parity, hashes, versions,
+and rollback metadata. Promotion is atomic and retains the last-known-good set.
 
-#### Components & Utilities
-- **Match Selector**: React Hook Form + React Query powered suggestions with automatic league detection
-- **Insights Display**: Null-safe rendering across prediction, betting, and team statistics panels with Chart.js doughnut charts
-- **Error Boundary**: Class-based boundary hardened with `noImplicitOverride`
-- **Testing Utilities**: Jest + Testing Library with global matcher registration in `src/test/setup.ts`
+`/models/status` reports the artifact facts the frontend may display. Missing
+metadata is `UNKNOWN` or `UNVERIFIED`, never inferred from infrastructure health.
 
-#### Styling
-- **Design System**: CSS custom properties and design tokens
-- **Component Styles**: Reusable component-specific styles
-- **Responsive Design**: Mobile-first approach with breakpoints
+## Public product flow
 
-## Data Flow
+The homepage begins with upcoming verified fixtures. Full analysis is the only
+match-page authority for forecast, evidence state, betting verdict, and staking.
+Hypothetical selection is secondary and visibly non-executable. Infrastructure,
+provider, model, and prediction capability are separate indicators; none certifies
+an individual prediction.
 
-### Match Analysis Request Flow
+The API uses `Cache-Control: no-store` for evidence and decision traffic. The web
+proxy validates parameters and bodies and uses `SABISCORE_BACKEND_URL`. The CSP is
+generated per request with a nonce and `strict-dynamic`.
 
-1. **User Input** → Frontend collects match details
-2. **API Request** → Frontend sends request to `/api/v1/insights`
-3. **Data Aggregation** → Backend fetches data from multiple sources
-4. **Feature Engineering** → Raw data transformed into ML features
-5. **Model Inference** → Ensemble model generates predictions
-6. **Insights Generation** → Results combined with betting analysis
-7. **Response** → Structured insights returned to frontend
-8. **UI Rendering** → Results displayed with charts and explanations
+## Persistence and observation
 
-### Caching Strategy
+Alembic is the only schema authority. Existing prediction logs, settled matches,
+and market snapshots support immutable prediction-to-result and CLV joins.
+Operational metrics cover provider outcome/latency, cache tier, circuit state,
+schema rejection, evidence completeness, prediction availability, abstention,
+calibration state, analysis latency, settlement coverage, RPS, Brier, and CLV.
 
-- **API Responses**: 5-minute cache for search results
-- **Match Data**: 1-hour cache for aggregated match data
-- **Model Predictions**: 30-minute cache for repeated requests
-- **Static Assets**: Browser caching with versioning
-
-## Security Measures
-
-### API Security
-- **Rate Limiting**: 60 requests per minute per IP
-- **Input Validation**: Pydantic models prevent malformed data
-- **CORS Policy**: Configured origins for frontend access
-- **Security Headers**: XSS protection, content type options
-
-### Data Protection
-- **Environment Variables**: Sensitive config in `.env`
-- **Database Security**: Connection pooling and prepared statements
-- **Scraping Ethics**: User-Agent headers and rate limiting
-
-## Performance Optimizations
-
-### Backend
-- **Async Processing**: FastAPI async endpoints
-- **Database Indexing**: Optimized queries with proper indexing
-- **Redis Caching**: Frequently accessed data cached
-- **Connection Pooling**: Efficient database connections
-
-### Frontend
-- **Code Splitting**: Dynamic imports for components
-- **Asset Optimization**: Minified CSS/JS with Vite
-- **Lazy Loading**: Charts loaded on demand
-- **Responsive Images**: Optimized for different screen sizes
-
-## Deployment Architecture
-
-### Docker Containers
-- **Backend**: Python/FastAPI container with ML models
-- **Frontend**: Node.js build container with static assets
-- **Database**: PostgreSQL with persistent volumes
-- **Cache**: Redis for session and data caching
-
-### Production Deployment
-- **Orchestration**: Docker Compose for local development
-- **Scaling**: Horizontal scaling with load balancers
-- **Monitoring**: Health checks and logging aggregation
-- **Backup**: Automated database backups
-
-## Development Workflow
-
-### Local Development
-1. **Setup**: `docker-compose up --build`
-2. **Backend**: Hot reload on code changes
-3. **Frontend**: Vite dev server with HMR
-4. **Database**: Persistent data with volume mounts
-
-### Testing Strategy
-- **Unit Tests**: Individual function/component testing
-- **Integration Tests**: API endpoint testing
-- **E2E Tests**: Full user journey testing
-- **Performance Tests**: Load testing and profiling
-
-### CI/CD Pipeline
-- **Automated Testing**: Run all test suites
-- **Code Quality**: Linting and type checking
-- **Security Scanning**: Dependency vulnerability checks
-- **Deployment**: Automated deployment on main branch
+See [ADR 0007](adr/0007-evidence-authority-and-apex-promotion.md),
+[deployment guide](DEPLOYMENT_GUIDE.md), and [rollback instructions](rollback.md).

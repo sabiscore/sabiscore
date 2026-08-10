@@ -25,8 +25,8 @@ import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleG
 // ─── Verdict description copy (Phase 3) ──────────────────────────────────────
 
 const VERDICT_COPY: Record<string, string> = {
-  HIGH_CONVICTION: "All signals align — model, market, and causal drivers agree.",
-  ACTIONABLE: "Positive edge with sufficient certified probability and causal support.",
+  HIGH_CONVICTION: "Verified model, market, and risk gates are aligned.",
+  ACTIONABLE: "Positive edge with sufficient verified model support.",
   SPECULATIVE: "Watchlist only. No stake is permitted without stronger evidence.",
   HOLD: "Model and market are aligned. No edge above threshold.",
   NO_BET: "Verified data is available, but no market currently offers positive value.",
@@ -129,7 +129,7 @@ const HYPE_COPY: Record<string, string[]> = {
   SPECULATIVE: [
     "Watchlist only; no stake is permitted.",
     "Evidence is not sufficient for action.",
-    "Monitor for stronger causal evidence.",
+    "Monitor for stronger model evidence.",
     "Speculative evidence remains non-actionable.",
   ],
   HOLD: [
@@ -281,8 +281,7 @@ function EnhancedMatchHero({
   const away = awayTeam ?? parsedAway;
   const { ensemble } = data;
   const probabilities = presentation.displayedProbabilities;
-  // Absent ratings arrive as a neutral 1500 default — do not render them as measured.
-  const eloMeasured = !presentation.isReducedEvidenceBaseline;
+  const elo = data.elo_context;
 
   const slideIn = (direction: "left" | "right") =>
     prefersReduced
@@ -342,21 +341,21 @@ function EnhancedMatchHero({
         <div>
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Home Elo</p>
           <p className="text-xs font-semibold text-slate-200 tabular-nums">
-            {eloMeasured ? fmt(data.elo_context.home_elo) : "—"}
+            {elo ? fmt(elo.home_elo) : "—"}
           </p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Elo Δ</p>
-          <p className={cn("text-xs font-bold tabular-nums", !eloMeasured ? "text-slate-400" : data.elo_context.elo_difference > 0 ? "text-emerald-400" : data.elo_context.elo_difference < 0 ? "text-rose-400" : "text-slate-400")}>
-            {eloMeasured
-              ? `${data.elo_context.elo_difference >= 0 ? "+" : ""}${fmt(data.elo_context.elo_difference)}`
+          <p className={cn("text-xs font-bold tabular-nums", !elo ? "text-slate-400" : elo.elo_difference > 0 ? "text-emerald-400" : elo.elo_difference < 0 ? "text-rose-400" : "text-slate-400")}>
+            {elo
+              ? `${elo.elo_difference >= 0 ? "+" : ""}${fmt(elo.elo_difference)}`
               : "—"}
           </p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-slate-500">Away Elo</p>
           <p className="text-xs font-semibold text-slate-200 tabular-nums">
-            {eloMeasured ? fmt(data.elo_context.away_elo) : "—"}
+            {elo ? fmt(elo.away_elo) : "—"}
           </p>
         </div>
         <div>
@@ -785,16 +784,16 @@ export function RLCard({
   );
 }
 
-// ─── Causal drivers card ──────────────────────────────────────────────────────
+// ─── Model drivers card ───────────────────────────────────────────────────────
 
-function CausalDriversCard({ drivers }: { drivers: string[] }) {
+function ModelDriversCard({ drivers }: { drivers: string[] }) {
   return (
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
-      <p className="text-xs uppercase tracking-wider text-slate-500">Causal Drivers</p>
+      <p className="text-xs uppercase tracking-wider text-slate-500">Model Drivers</p>
       {drivers.length === 0 ? (
-        <p className="text-sm text-slate-500">No causal data available.</p>
+        <p className="text-sm text-slate-500">No validated model-driver report is available.</p>
       ) : (
-        <ul className="space-y-2" aria-label="Causal feature drivers">
+        <ul className="space-y-2" aria-label="Model feature drivers">
           {drivers.slice(0, 5).map((d, i) => {
             const opacity = Math.max(0.5, 1 - i * 0.1);
             return (
@@ -814,16 +813,8 @@ function CausalDriversCard({ drivers }: { drivers: string[] }) {
 
 // ─── Elo context card ─────────────────────────────────────────────────────────
 
-/**
- * `measured` is false when the analysis ran on a reduced-evidence baseline. The
- * backend fills absent ratings with a neutral 1500 default, so rendering the
- * numbers then would present a placeholder as a measurement.
- */
-export function EloContextCard({ elo, measured }: { elo: FullMatchEloContext; measured: boolean }) {
-  const diff = elo.elo_difference;
-  const diffColor = diff > 50 ? "text-emerald-400" : diff < -50 ? "text-rose-400" : "text-slate-300";
-
-  if (!measured) {
+export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
+  if (!elo) {
     return (
       <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
         <p className="text-xs uppercase tracking-wider text-slate-500">Elo Context</p>
@@ -841,6 +832,9 @@ export function EloContextCard({ elo, measured }: { elo: FullMatchEloContext; me
       </div>
     );
   }
+
+  const diff = elo.elo_difference;
+  const diffColor = diff > 50 ? "text-emerald-400" : diff < -50 ? "text-rose-400" : "text-slate-300";
 
   return (
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
@@ -872,6 +866,17 @@ export function EloContextCard({ elo, measured }: { elo: FullMatchEloContext; me
 // ─── Uncertainty card ─────────────────────────────────────────────────────────
 
 export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty; available: boolean }) {
+  if (!unc) {
+    return (
+      <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
+        <p className="text-xs uppercase tracking-wider text-slate-500">BNN Uncertainty</p>
+        <p className="text-sm font-semibold text-slate-300">Unavailable</p>
+        <p className="text-[11px] text-slate-500">
+          No measured uncertainty is available; no interval or percentage is inferred.
+        </p>
+      </div>
+    );
+  }
   const isLow = unc.confidence_tier === "LOW_EVIDENCE";
   return (
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
@@ -919,8 +924,6 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
               <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
             </Tooltip>
           </span>
-          {/* A credible interval around a prediction that was never produced is
-              not interpretable — the backend still emits a placeholder range. */}
           <span className={cn("font-semibold tabular-nums", available ? "text-slate-200" : "text-slate-500")}>
             {available
               ? `[${pct(unc.credible_interval[0])}, ${pct(unc.credible_interval[1])}]`
@@ -1626,10 +1629,10 @@ function FullAnalysisDashboardInner({
         />
       </div>
 
-      {/* ── Causal · Elo · Uncertainty (3-col) ── */}
+      {/* ── Model drivers · Elo · Uncertainty (3-col) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <CausalDriversCard drivers={data.causal_drivers} />
-        <EloContextCard elo={data.elo_context} measured={!presentation.isReducedEvidenceBaseline} />
+        <ModelDriversCard drivers={data.model_drivers} />
+        <EloContextCard elo={data.elo_context} />
         <UncertaintyCard unc={data.uncertainty} available={presentation.predictionAvailable} />
       </div>
 

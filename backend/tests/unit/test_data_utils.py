@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import pytest
 
 from src.data.utils.deduplication import calculate_season_string, normalize_team_name
 

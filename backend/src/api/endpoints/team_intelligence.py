@@ -27,6 +27,7 @@ from sqlalchemy.orm import selectinload
 from ...db.models import Match, Team
 from ...db.session import get_async_session
 from ...services.upcoming_match_service import UpcomingMatchService
+from ...services.odds_service import OddsService, get_odds_service
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ async def get_team_intelligence(
     upcoming_days: int = Query(
         14, ge=1, le=30, description="Days ahead for upcoming fixture window"
     ),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> TeamIntelligenceResponse:
     """Return rolling form, H2H summary, upcoming fixtures, and form-state verdict for a team."""
 
@@ -247,7 +249,9 @@ async def get_team_intelligence(
     # ── Upcoming fixtures ─────────────────────────────────────────────────────
     upcoming_fixtures: List[UpcomingFixtureSchema] = []
     try:
-        svc = UpcomingMatchService()
+        svc = UpcomingMatchService(
+            odds_service=odds_service if isinstance(odds_service, OddsService) else None
+        )
         payload = await svc.get_upcoming_matches_with_predictions(
             db, league=league_name, days_ahead=upcoming_days, limit=50, include_value_bets=False
         )

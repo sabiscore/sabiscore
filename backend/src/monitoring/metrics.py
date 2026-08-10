@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core.redaction import redact_mapping, redact_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +43,7 @@ class MetricsCollector:
         self._accuracy_scores: List[float] = []
         self._model_versions: Dict[str, str] = {}  # league -> version
         self._calibration_drift_alerts: List[Dict[str, Any]] = []
+        self._model_thresholds: Dict[str, Dict[str, float]] = {}
 
     def increment(self, metric: str, value: int = 1) -> None:
         """Increment a counter metric."""
@@ -73,8 +76,8 @@ class MetricsCollector:
         error_record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "type": error_type,
-            "message": message,
-            "context": context or {},
+            "message": redact_text(message),
+            "context": redact_mapping(context or {}),
         }
         self._errors.append(error_record)
         # Keep only last 100 errors
@@ -134,15 +137,14 @@ class MetricsCollector:
         accuracy: float,
         league: str,
         model_version: str,
+        brier_threshold: Optional[float] = None,
+        accuracy_threshold: Optional[float] = None,
     ) -> None:
         """
-        Track model accuracy metrics per audit requirements.
-        
-        Targets:
-        - Brier score < 0.13
-        - Accuracy > 90%
-        
-        Emits calibration drift alert if thresholds exceeded.
+        Track settled model metrics against explicitly registered thresholds.
+
+        No threshold is inferred. A model registry must supply thresholds that
+        were actually approved for the active artifact.
         """
         self._brier_scores.append(brier_score)
         self._accuracy_scores.append(accuracy)
@@ -154,19 +156,23 @@ class MetricsCollector:
         if len(self._accuracy_scores) > 500:
             self._accuracy_scores = self._accuracy_scores[-500:]
         
-        # Check calibration drift thresholds
-        BRIER_THRESHOLD = 0.13
-        ACCURACY_THRESHOLD = 0.90
-        
-        if brier_score > BRIER_THRESHOLD or accuracy < ACCURACY_THRESHOLD:
+        if brier_threshold is not None or accuracy_threshold is not None:
+            self._model_thresholds[league] = {
+                **({"brier": brier_threshold} if brier_threshold is not None else {}),
+                **({"accuracy": accuracy_threshold} if accuracy_threshold is not None else {}),
+            }
+
+        brier_exceeded = brier_threshold is not None and brier_score > brier_threshold
+        accuracy_below = accuracy_threshold is not None and accuracy < accuracy_threshold
+        if brier_exceeded or accuracy_below:
             alert = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "league": league,
                 "model_version": model_version,
                 "brier_score": brier_score,
                 "accuracy": accuracy,
-                "brier_exceeded": brier_score > BRIER_THRESHOLD,
-                "accuracy_below": accuracy < ACCURACY_THRESHOLD,
+                "brier_exceeded": brier_exceeded,
+                "accuracy_below": accuracy_below,
             }
             self._calibration_drift_alerts.append(alert)
             logger.warning(
@@ -177,6 +183,51 @@ class MetricsCollector:
             # Keep only last 50 alerts
             if len(self._calibration_drift_alerts) > 50:
                 self._calibration_drift_alerts = self._calibration_drift_alerts[-50:]
+
+    def record_analysis_state(
+        self,
+        *,
+        prediction_available: bool,
+        evidence_completeness: float,
+        abstention_reason: str,
+        calibration_status: str,
+        duration_ms: float,
+    ) -> None:
+        """Record bounded, low-cardinality full-analysis production signals."""
+        completeness = min(1.0, max(0.0, float(evidence_completeness)))
+        reason = (abstention_reason or "NONE").upper()[:80]
+        calibration = (calibration_status or "UNKNOWN").upper()[:40]
+        self.increment(
+            "analysis.prediction.available"
+            if prediction_available
+            else "analysis.prediction.unavailable"
+        )
+        self.increment(f"analysis.abstention.{reason}")
+        self.increment(f"analysis.calibration.{calibration}")
+        self.record_histogram("analysis.evidence_completeness", completeness)
+        self.record_timer("analysis.latency", max(0.0, float(duration_ms)))
+
+    def record_provider_outcome(
+        self,
+        *,
+        provider: str,
+        outcome: str,
+        duration_ms: float,
+        cache_tier: str = "none",
+        circuit_state: str = "unknown",
+        schema_rejected: bool = False,
+    ) -> None:
+        """Record provider/cache/circuit outcomes without payloads or credentials."""
+        safe_provider = provider.casefold().replace(" ", "_")[:40]
+        safe_outcome = outcome.casefold().replace(" ", "_")[:40]
+        safe_tier = cache_tier.casefold().replace(" ", "_")[:20]
+        safe_circuit = circuit_state.casefold().replace(" ", "_")[:20]
+        self.increment(f"provider.{safe_provider}.{safe_outcome}")
+        self.increment(f"cache.tier.{safe_tier}")
+        self.increment(f"circuit.{safe_provider}.{safe_circuit}")
+        if schema_rejected and safe_outcome != "schema_rejected":
+            self.increment(f"provider.{safe_provider}.schema_rejected")
+        self.record_timer(f"provider.{safe_provider}.latency", max(0.0, float(duration_ms)))
 
     def get_summary(self) -> Dict[str, Any]:
         """Generate summary statistics for monitoring dashboard."""
@@ -272,6 +323,7 @@ class MetricsCollector:
         if self._brier_scores or self._accuracy_scores:
             model_metrics: Dict[str, Any] = {
                 "model_versions": dict(self._model_versions),
+                "registered_thresholds": dict(self._model_thresholds),
                 "calibration_alerts": len(self._calibration_drift_alerts),
                 "recent_alerts": self._calibration_drift_alerts[-5:],
             }
@@ -284,11 +336,6 @@ class MetricsCollector:
                     "min": min(self._brier_scores),
                     "max": max(self._brier_scores),
                     "p50": sorted_brier[len(sorted_brier) // 2],
-                    "threshold": 0.13,
-                    "below_threshold_pct": (
-                        sum(1 for b in self._brier_scores if b < 0.13) 
-                        / len(self._brier_scores)
-                    ),
                 }
             
             if self._accuracy_scores:
@@ -299,11 +346,6 @@ class MetricsCollector:
                     "min": min(self._accuracy_scores),
                     "max": max(self._accuracy_scores),
                     "p50": sorted_acc[len(sorted_acc) // 2],
-                    "threshold": 0.90,
-                    "above_threshold_pct": (
-                        sum(1 for a in self._accuracy_scores if a >= 0.90) 
-                        / len(self._accuracy_scores)
-                    ),
                 }
             
             summary["model_accuracy"] = model_metrics
@@ -328,6 +370,7 @@ class MetricsCollector:
         self._brier_scores.clear()
         self._accuracy_scores.clear()
         self._model_versions.clear()
+        self._model_thresholds.clear()
         self._calibration_drift_alerts.clear()
         self._last_reset = datetime.now(timezone.utc)
         logger.info("Metrics collector reset")

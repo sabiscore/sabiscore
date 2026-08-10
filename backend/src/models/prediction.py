@@ -39,6 +39,7 @@ import numpy as np
 from ..core.cache import cache_manager
 from ..core.config import settings
 from ..core.league_policy import LeaguePolicyUnavailableError, get_league_policy
+from ..core.redaction import redact_text
 
 # ── Soft import: calibration module (requires scipy / sklearn) ─────────────────
 _apply_calibrator = None
@@ -354,12 +355,19 @@ class PredictionEngine:
                 else:
                     return self._fallback_result(input_dim=expected_dim)
         except Exception as exc:
-            logger.error("PredictionEngine: inference error for %s: %s", league, exc)
+            logger.error(
+                "PredictionEngine: inference error for %s: %s",
+                league,
+                redact_text(exc),
+            )
             return self._fallback_result(input_dim=expected_dim)
 
-        # Normalise
-        row_sum = proba.sum(axis=1, keepdims=True)
-        proba = proba / np.where(row_sum > 0, row_sum, 1.0)
+        if not self._valid_probability_matrix(proba):
+            logger.error(
+                "PredictionEngine: invalid probability simplex for %s; failing closed",
+                league,
+            )
+            return self._fallback_result(input_dim=expected_dim)
 
         model_version = "v6_phase8" if is_dict_artifact else "v5_phase7"
         calibration_method = "none"
@@ -381,8 +389,9 @@ class PredictionEngine:
                         fitted_cal.calibrators,
                         proba,
                     )
-                    row_sum = calibrated.sum(axis=1, keepdims=True)
-                    proba = calibrated / np.where(row_sum > 0, row_sum, 1.0)
+                    if not self._valid_probability_matrix(calibrated):
+                        raise ValueError("calibrator returned an invalid probability simplex")
+                    proba = calibrated
                     calibration_method = str(fitted_cal.method)
                     calibration_applied = True
                     _latency_ms = (time.perf_counter() - _t0) * 1000
@@ -398,7 +407,11 @@ class PredictionEngine:
                         fitted_cal.ece_after.get("mean", 0.0), _latency_ms,
                     )
                 except Exception as exc:
-                    logger.warning("PredictionEngine: calibration failed for %s: %s", league, exc)
+                    logger.warning(
+                        "PredictionEngine: calibration failed for %s: %s",
+                        league,
+                        redact_text(exc),
+                    )
         elif is_dict_artifact and not _CAL_AVAILABLE:
             logger.debug("PredictionEngine: calibration skipped — calibration module unavailable")
 
@@ -414,8 +427,9 @@ class PredictionEngine:
                     if getattr(overlay, "alpha", 0.0) > 0.0:
                         _t0 = time.perf_counter()
                         blended = overlay.apply(proba)
-                        row_sum = blended.sum(axis=1, keepdims=True)
-                        proba = blended / np.where(row_sum > 0, row_sum, 1.0)
+                        if not self._valid_probability_matrix(blended):
+                            raise ValueError("overlay returned an invalid probability simplex")
+                        proba = blended
                         overlay_applied = True
                         _latency_ms = (time.perf_counter() - _t0) * 1000
                         if _span and hasattr(_span, "set_attribute"):
@@ -428,7 +442,11 @@ class PredictionEngine:
                             overlay.alpha, league, _latency_ms,
                         )
                 except Exception as exc:
-                    logger.warning("PredictionEngine: Bivariate Poisson overlay failed for %s: %s", league, exc)
+                    logger.warning(
+                        "PredictionEngine: Bivariate Poisson overlay failed for %s: %s",
+                        league,
+                        redact_text(exc),
+                    )
 
         h, d, a = float(proba[0, 0]), float(proba[0, 1]), float(proba[0, 2])
         confidence = max(0.0, min(1.0, max(h, d, a) - 0.333))
@@ -452,6 +470,15 @@ class PredictionEngine:
         )
 
     @staticmethod
+    def _valid_probability_matrix(probabilities: np.ndarray) -> bool:
+        values = np.asarray(probabilities, dtype=np.float64)
+        if values.shape != (1, 3) or not np.isfinite(values).all():
+            return False
+        if np.any(values < 0.0) or np.any(values > 1.0):
+            return False
+        return bool(np.allclose(values.sum(axis=1), 1.0, atol=1e-6, rtol=0.0))
+
+    @staticmethod
     def _expected_dim_from_bundle(bundle: "_ArtifactBundle", fallback: int) -> int:
         """Infer expected feature count from a dict-artifact bundle."""
         if bundle.feature_columns:
@@ -468,13 +495,13 @@ class PredictionEngine:
         all_probs: List[np.ndarray] = []
         for m in models_dict.values():
             try:
-                p = m.predict_proba(X)
-                if p.shape[1] == 3:
+                p = np.asarray(m.predict_proba(X), dtype=np.float64)
+                if PredictionEngine._valid_probability_matrix(p):
                     all_probs.append(p)
             except Exception:
                 pass
         if not all_probs:
-            return np.array([[0.333, 0.333, 0.334]], dtype=np.float64)
+            raise ValueError("no base learner returned a valid probability simplex")
         return np.mean(all_probs, axis=0)
 
     @staticmethod

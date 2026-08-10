@@ -24,6 +24,7 @@ from src.models.feature_registry import (
     derive_combination_features,
     derive_last5_form_features,
     derive_league_features,
+    derive_market_features,
     derive_temporal_features,
 )
 from src.models.prediction import PredictionEngine
@@ -34,9 +35,18 @@ MATCH_DATE = datetime(2026, 8, 15)
 def _vector(
     *, home_form: float, home_win_rate: float, home_gf: float, home_ga: float,
     away_form: float, away_win_rate: float, away_gf: float, away_ga: float,
+    home_odds: float = 2.38, draw_odds: float = 3.85, away_odds: float = 3.13,
     league: str = "EPL",
 ) -> np.ndarray:
-    """Build a serving-shaped vector via the same helpers the projector uses."""
+    """Build a serving-shaped vector via the same helpers the projector uses.
+
+    home_odds/draw_odds/away_odds default to the same implied split as
+    DEFAULT_FEATURE_VALUES_58's own market_prob_* defaults (~42/26/32) — a
+    neutral market read for callers that don't care about it. WP-A:
+    _DOMINANT_HOME/_DOMINANT_AWAY below now supply odds coherent with the
+    scenario they describe (see the WP-A note there for why that stopped
+    being optional).
+    """
     f = dict(DEFAULT_FEATURE_VALUES_68)
     f.update(derive_last5_form_features(
         home_form, home_win_rate, is_home=True,
@@ -52,19 +62,28 @@ def _vector(
     f["away_goals_for_avg"] = away_gf
     f["away_goals_against_avg"] = away_ga
     f["away_gd_recent"] = away_gf - away_ga
+    f.update(derive_market_features(home_odds, draw_odds, away_odds))
     f.update(derive_temporal_features(MATCH_DATE))
     f.update(derive_league_features(league))
     f.update(derive_combination_features(home_gf, home_ga, away_gf, away_ga))
     return np.array([f[n] for n in CANONICAL_FEATURES_68], dtype=np.float32)
 
 
+# WP-A: market odds now carry real, learned signal (docs/DEBT.md item 13), so
+# a "dominant home side" fixture that leaves them at the same neutral default
+# as a "dominant away side" fixture is no longer internally coherent — real
+# markets would price these two scenarios very differently, and the artifact
+# correctly leans on that price. Odds below match the described scenario: a
+# heavy home favorite / heavy away favorite, mirrored between the two dicts.
 _DOMINANT_HOME = dict(
     home_form=0.93, home_win_rate=0.8, home_gf=2.6, home_ga=0.6,
     away_form=0.20, away_win_rate=0.0, away_gf=0.7, away_ga=2.2,
+    home_odds=1.30, draw_odds=5.50, away_odds=9.00,
 )
 _DOMINANT_AWAY = dict(
     home_form=0.20, home_win_rate=0.0, home_gf=0.7, home_ga=2.2,
     away_form=0.93, away_win_rate=0.8, away_gf=2.6, away_ga=0.6,
+    home_odds=9.00, draw_odds=5.50, away_odds=1.30,
 )
 
 

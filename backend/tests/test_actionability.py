@@ -34,7 +34,6 @@ from src.api.endpoints.full_analysis import (
 )
 from src.services.intelligence_synthesizer import (
     EnsemblePrediction,
-    FullMatchAnalysisResponse,
     IntelligenceSynthesizer,
     MatchActionability,
     OddsEdge,

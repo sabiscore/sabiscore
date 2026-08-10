@@ -15,7 +15,6 @@ from __future__ import annotations
 import sys
 import os
 from datetime import date
-from typing import List
 
 import pytest
 
@@ -25,7 +24,6 @@ from src.api.endpoints.offseason import (
     _compute_status,
     _data_availability,
     _prediction_advisory,
-    router,
 )
 
 

@@ -20,6 +20,7 @@ from ...core.season_calendar import next_season_start
 from ...db.session import get_async_session
 from ...models.feature_registry import active_canonical_features
 from ...services.upcoming_match_service import UpcomingMatchService
+from ...services.odds_service import OddsService, get_odds_service
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,7 @@ async def get_upcoming_matches(
         True, description="Include value bet calculations"
     ),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> UpcomingMatchesResponseSchema:
     """
     Get upcoming football matches with optional ML predictions and value bets.
@@ -262,7 +264,9 @@ async def get_upcoming_matches(
     """
 
     try:
-        service = UpcomingMatchService()
+        service = UpcomingMatchService(
+            odds_service=odds_service if isinstance(odds_service, OddsService) else None
+        )
 
         if include_predictions:
             response = await service.get_upcoming_matches_with_predictions(
@@ -324,12 +328,15 @@ async def get_upcoming_all(
     days: int = Query(7, ge=1, le=14, description="Number of days ahead"),
     limit: int = Query(200, ge=1, le=200, description="Maximum number of fixtures"),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> UpcomingAllResponseSchema:
     """Get merged upcoming fixtures across all configured leagues.
 
     Includes prediction availability and edge summary where present.
     """
-    service = UpcomingMatchService()
+    service = UpcomingMatchService(
+        odds_service=odds_service if isinstance(odds_service, OddsService) else None
+    )
     payload = await service.get_upcoming_matches_with_predictions(
         db,
         league=None,
@@ -387,6 +394,5 @@ async def get_upcoming_all(
         source=str(payload.get("source", "unknown")),
         cache_ttl_seconds=int(payload.get("ttl_seconds", 300)),
     )
-
 
 

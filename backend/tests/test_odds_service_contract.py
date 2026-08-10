@@ -38,13 +38,18 @@ class _StubResult:
 class _StubProvider:
     """Records the kwargs the service actually sends."""
 
-    def __init__(self, status: ProviderStatus = ProviderStatus.UNAVAILABLE):
+    def __init__(
+        self,
+        status: ProviderStatus = ProviderStatus.UNAVAILABLE,
+        records: list | None = None,
+    ):
         self.status = status
+        self.records = records or []
         self.calls: list[Dict[str, Any]] = []
 
     async def odds(self, **kwargs):
         self.calls.append(kwargs)
-        return _StubResult(self.status)
+        return _StubResult(self.status, self.records)
 
 
 class _StubCache:
@@ -111,3 +116,62 @@ async def test_unmappable_league_yields_no_market_and_is_never_coerced_to_epl():
     assert service.provider.calls[0]["competition"] == "NOT_A_LEAGUE", (
         "the league must not be silently rewritten to a supported one"
     )
+
+
+@pytest.mark.asyncio
+async def test_match_lookup_consumes_one_normalized_bookmaker_snapshot():
+    record = {
+        "provider": "the_odds_api",
+        "provider_event_id": "evt-1",
+        "home_team": "Arsenal",
+        "away_team": "Brighton",
+        "bookmaker": "pinnacle",
+        "home_odds": 1.9,
+        "draw_odds": 3.5,
+        "away_odds": 4.4,
+        "captured_at": "2026-08-09T08:00:00Z",
+        "bookmaker_last_update": "2026-08-09T07:59:00Z",
+        "coherent": True,
+        "executable": True,
+    }
+    service = OddsService(cache_backend=_StubCache())
+    service.provider = _StubProvider(ProviderStatus.VERIFIED, [record])
+
+    odds = await service.get_match_odds("Arsenal FC", "Brighton FC", "EPL")
+
+    assert odds["home_win"] == 1.9
+    assert odds["draw"] == 3.5
+    assert odds["away_win"] == 4.4
+    assert odds["bookmaker"] == "pinnacle"
+    assert odds["provider_event_id"] == "evt-1"
+
+
+@pytest.mark.asyncio
+async def test_match_lookup_rejects_cross_fixture_or_incoherent_records():
+    records = [
+        {
+            "home_team": "Arsenal",
+            "away_team": "Chelsea",
+            "home_odds": 1.9,
+            "draw_odds": 3.5,
+            "away_odds": 4.4,
+            "coherent": True,
+            "executable": True,
+        },
+        {
+            "home_team": "Arsenal",
+            "away_team": "Brighton",
+            "home_odds": 1.9,
+            "draw_odds": 3.5,
+            "away_odds": 4.4,
+            "coherent": False,
+            "executable": False,
+        },
+    ]
+    service = OddsService(cache_backend=_StubCache())
+    service.provider = _StubProvider(ProviderStatus.VERIFIED, records)
+
+    odds = await service.get_match_odds("Arsenal", "Brighton", "EPL")
+
+    assert odds["source"] == "unavailable"
+    assert "home_win" not in odds

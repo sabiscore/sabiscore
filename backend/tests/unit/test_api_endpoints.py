@@ -2,10 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime
-import json
 
 # Import the router that aggregates all endpoints
-from src.api import api_router
 from src.api.main import app
 from src.db.session import get_async_session
 

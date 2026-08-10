@@ -329,19 +329,14 @@ class TestPerformance:
     async def test_aggregator_cache_hit(self):
         """Test that caching improves performance."""
         from src.data.aggregator import DataAggregator
-        import time
         
         aggregator = DataAggregator("Arsenal vs Chelsea", "EPL")
         
         # First call - might be slow
-        start = time.time()
         data1 = aggregator.fetch_match_data()
-        first_call = time.time() - start
         
         # Second call - should be cached
-        start = time.time()
         data2 = aggregator.fetch_match_data()
-        second_call = time.time() - start
         
         # Cache hit should be faster
         # (This is a weak assertion since first call might also be fast)

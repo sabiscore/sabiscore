@@ -1,5 +1,5 @@
 """Tests for ML ensemble model."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pandas as pd
 import pytest
 
@@ -39,12 +39,8 @@ def test_ensemble_basic_functionality():
     
     # Test that we can save/load (even if not trained)
     import tempfile
-    import os
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        model_path = os.path.join(tmpdir, "test_model.pkl")
-        metadata_path = os.path.join(tmpdir, "test_model_metadata.json")
-        
         # Mock the joblib and json operations
         with patch("joblib.dump") as mock_dump, \
              patch("json.dump") as mock_json_dump:

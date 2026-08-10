@@ -15,10 +15,9 @@ from src.providers.reconciliation import (
     AUTO_ACCEPT_THRESHOLD,
     REVIEW_THRESHOLD,
     FixtureCandidate,
-    ReconciliationDecision,
     reconcile_fixture,
 )
-from src.providers.the_odds_api import OddsMarketRecord, TheOddsAPIProvider
+from src.providers.the_odds_api import TheOddsAPIProvider
 
 UTC = timezone.utc
 
@@ -235,6 +234,8 @@ def test_normalize_valid_record():
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id="fix-001",
+        home_team=event["home_team"],
+        away_team=event["away_team"],
         bookmaker=bm["key"],
         bookmaker_last_update=p._parse_ts(bm["last_update"]),
         markets=bm["markets"],
@@ -251,12 +252,42 @@ def test_normalize_valid_record():
     assert 1.0 < record.overround < 1.25
 
 
+def test_normalize_maps_teams_by_name_not_outcome_position():
+    p = _provider()
+    from datetime import datetime, timezone
+
+    record = p._normalize_bookmaker(
+        event_id="evt-reordered",
+        canonical_fixture_id=None,
+        home_team="Arsenal",
+        away_team="Chelsea",
+        bookmaker="betfair",
+        bookmaker_last_update=None,
+        markets=[{
+            "key": "h2h",
+            "outcomes": [
+                {"name": "Chelsea", "price": 4.20},
+                {"name": "Draw", "price": 3.40},
+                {"name": "Arsenal", "price": 2.10},
+            ],
+        }],
+        provider_event_timestamp=None,
+        captured_at=datetime.now(timezone.utc),
+    )
+
+    assert record.coherent is True
+    assert record.home_odds == pytest.approx(2.10)
+    assert record.away_odds == pytest.approx(4.20)
+
+
 def test_normalize_missing_h2h_market():
     p = _provider()
     from datetime import datetime, timezone
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
+        home_team="Arsenal",
+        away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
         markets=[{"key": "spreads", "outcomes": []}],  # no h2h
@@ -275,6 +306,8 @@ def test_normalize_incomplete_outcomes():
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
+        home_team="Arsenal",
+        away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
         markets=[{
@@ -299,6 +332,8 @@ def test_normalize_overround_outside_limits():
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
+        home_team="Arsenal",
+        away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
         markets=[{
@@ -325,6 +360,8 @@ def test_normalize_preserves_bookmaker_last_update():
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
+        home_team=event["home_team"],
+        away_team=event["away_team"],
         bookmaker=bm["key"],
         bookmaker_last_update=p._parse_ts(bm["last_update"]),
         markets=bm["markets"],
@@ -342,6 +379,8 @@ def test_canonical_fixture_id_preserved():
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id="canonical-xyz",
+        home_team=event["home_team"],
+        away_team=event["away_team"],
         bookmaker=bm["key"],
         bookmaker_last_update=None,
         markets=bm["markets"],

@@ -21,8 +21,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.models.feature_registry import (
     CANONICAL_FEATURES_58,
-    CANONICAL_FEATURES_65,
-    CANONICAL_FEATURES_68,
     CANONICAL_FEATURES_83,
     CANONICAL_FEATURES_86,
     DEFAULT_FEATURE_VALUES_86,

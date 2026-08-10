@@ -1,10 +1,9 @@
 """Tests for Redis-backed cache with fallback."""
-import time
 from unittest.mock import MagicMock, patch
 import pytest
 import redis
 
-from src.core.cache import RedisCache, CacheMetrics
+from src.core.cache import RedisCache
 
 
 @pytest.fixture
@@ -79,3 +78,19 @@ def test_cache_decorator():
     
     assert test_func(2) == 4  # Should cache
     assert test_func(2) == 4  # Should hit cache
+
+
+def test_malformed_redis_url_degrades_to_memory_without_crashing(monkeypatch):
+    """A bad deployment secret must not prevent the API module from importing."""
+    from src.core.cache import settings
+
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "redis_url", "cache.example.com:6379")
+
+    cache = RedisCache()
+
+    assert cache.redis_client is None
+    assert cache._enabled is False
+    assert cache.metrics.errors == 1
+    assert cache.set("health", {"status": "degraded"}) is True
+    assert cache.get("health") == {"status": "degraded"}

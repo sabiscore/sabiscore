@@ -18,27 +18,12 @@ import {
 } from "lucide-react";
 import { BestBetSpotlight } from "@/components/best-bet-spotlight";
 import { MatchSelector } from "@/components/match-selector";
-import { ReadinessRing } from "@/components/readiness-ring";
+import { ModelMetadataPanel } from "@/components/model-metadata-panel";
+import { PlatformHealthPills } from "@/components/platform-health-pills";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
 
-const HERO_STATS = [
-  { label: "Live Performance", value: "Pending", detail: "Awaiting sufficient labelled production results" },
-  // Corpus size, not a sum of per-model training sets — those overlap, because
-  // Eredivisie is served by a model pooled across all six leagues. Authoritative
-  // sources: the committed backend/data/cache/fd_*.csv row count for this figure,
-  // and each artifact's own model_metadata.training_samples (1,756–10,528) for
-  // the per-model sets. Re-derive both; never copy either forward.
-  { label: "Training Data", value: "12,765", detail: "Real completed matches, six leagues, 2019–2026" },
-  { label: "Model Precision Gate", value: "≤0.21", detail: "Ranked probability score — lower is better" },
-  { label: "Current Model", value: "Phase 7", detail: "Six-league certified artifact set" },
-];
-
-const TRUST_BADGES = [
-  { label: "Competitions", value: "7" },
-  { label: "Evidence-led analysis", value: "Always" },
-  { label: "ML features validated", value: "86" },
-];
+const TRUST_BADGES = ["Verified fixtures first", "Explicit evidence gaps", "Zero stake when blocked"];
 
 const PREMIUM_VALUE_STREAM = [
   {
@@ -57,7 +42,7 @@ const PREMIUM_VALUE_STREAM = [
     title: "CLV + Kelly toolkit",
     description: "Closing-line value, edge quality scoring, and fractional Kelly staking with RL abstention gate.",
     icon: Target,
-    footer: "Calibrated per-bet sizing",
+    footer: "Fail-closed stake gate",
   },
 ] satisfies Array<{ title: string; description: string; icon: LucideIcon; footer: string }>;
 
@@ -69,12 +54,12 @@ const PREMIUM_PILLARS = [
   },
   {
     title: "Model governance",
-    detail: "Certified artifacts with live validation status shown explicitly",
+    detail: "Artifact and validation status appear only when backend metadata confirms them",
     icon: Settings2,
   },
   {
     title: "Value creation",
-    detail: "Quarter-Kelly, CLV, and bankroll tooling in one workflow",
+    detail: "Quarter-Kelly and CLV tooling remains gated by verified evidence",
     icon: WalletCards,
   },
 ] satisfies Array<{ title: string; detail: string; icon: LucideIcon }>;
@@ -113,8 +98,8 @@ const PIPELINE_STEPS = [
   },
   {
     step: "03",
-    label: "Calibrate probabilities",
-    detail: "Certified per-league Phase 7 artifacts produce calibrated 1X2 probabilities when required evidence is available.",
+    label: "Run the active model",
+    detail: "The backend reports the served artifact, feature schema, and calibration state; missing certification stays unavailable.",
     icon: Filter,
   },
   {
@@ -164,7 +149,7 @@ const VERDICT_DEFINITIONS = [
   {
     enum: "ACTIONABLE",
     label: "Good Value",
-    detail: "Calibrated edge confirmed across 2–3 independent providers.",
+    detail: "Positive edge supported by sufficient verified evidence and an open staking gate.",
     className: "border-emerald-500/20 bg-emerald-500/5",
     badge: "text-emerald-300 bg-emerald-900/40",
   },
@@ -185,14 +170,14 @@ const VERDICT_DEFINITIONS = [
 
 // Supported competitions
 const COMPETITIONS = [
-  { name: "Premier League", short: "EPL", calibrated: true },
-  { name: "La Liga", short: "ESP", calibrated: true },
-  { name: "Bundesliga", short: "GER", calibrated: true },
-  { name: "Serie A", short: "ITA", calibrated: true },
-  { name: "Ligue 1", short: "FRA", calibrated: true },
-  { name: "Eredivisie", short: "NED", calibrated: false },
-  { name: "Champions League", short: "UCL", calibrated: false },
-] satisfies Array<{ name: string; short: string; calibrated: boolean }>;
+  { name: "Premier League", short: "EPL" },
+  { name: "La Liga", short: "ESP" },
+  { name: "Bundesliga", short: "GER" },
+  { name: "Serie A", short: "ITA" },
+  { name: "Ligue 1", short: "FRA" },
+  { name: "Eredivisie", short: "NED" },
+  { name: "Champions League", short: "UCL" },
+] satisfies Array<{ name: string; short: string }>;
 
 export default function HomePage() {
   const premiumEnabled = useFeatureFlag(FeatureFlag.PREMIUM_VISUAL_HIERARCHY);
@@ -240,6 +225,17 @@ export default function HomePage() {
 function PremiumHome() {
   return (
     <>
+      <section id="verified-fixtures" className="scroll-mt-28 rounded-[24px] border border-cyan-400/20 bg-slate-950/80 p-3 sm:p-5">
+        <div className="px-2 pb-3 sm:px-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-400">Primary workflow</p>
+          <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">Upcoming verified fixtures</h1>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+            Start from a scheduled fixture with a stable identity. Forecast and market availability remain explicit for every match.
+          </p>
+        </div>
+        <UpcomingMatchesPanel title="Verified fixtures" />
+      </section>
+
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 text-left shadow-[0_35px_80px_rgba(2,6,23,0.6)] sm:p-10">
         <div className="relative grid gap-6 lg:grid-cols-[1.2fr,0.8fr] lg:gap-10">
@@ -252,26 +248,25 @@ function PremiumHome() {
               Edge-first football intelligence for analysts
             </h1>
             <p className="max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              Calibrated probabilities, market context, and bankroll-aware decision support
-              presented in one cohesive surface.
+              Model forecasts, market context, and bankroll-aware decision support appear only
+              when the backend confirms the required evidence.
             </p>
             <div className="flex flex-wrap gap-3">
               {TRUST_BADGES.map((badge) => (
                 <span
-                  key={badge.label}
+                  key={badge}
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-2 text-sm text-slate-200"
                 >
-                  <strong className="text-white">{badge.value}</strong>
-                  <span className="text-slate-400">{badge.label}</span>
+                  {badge}
                 </span>
               ))}
             </div>
             <div className="flex flex-wrap gap-4">
               <Link
-                href="#match-generator"
+                href="#verified-fixtures"
                 className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-6 py-3 text-sm font-semibold text-slate-950 sm:px-8 sm:text-base shadow-[0_10px_35px_rgba(0,212,255,0.35)] transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-cyan-200"
               >
-                Generate match insights
+                Review verified fixtures
               </Link>
               <Link
                 href="/docs"
@@ -285,11 +280,11 @@ function PremiumHome() {
           <div className="grid grid-cols-3 gap-2 lg:hidden">
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
               <p className="text-[9px] uppercase tracking-wider text-slate-500">Model</p>
-              <p className="mt-1 text-sm font-semibold text-white">Phase 7</p>
+              <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
               <p className="text-[9px] uppercase tracking-wider text-slate-500">Training</p>
-              <p className="mt-1 text-sm font-semibold text-white">12,765</p>
+              <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
               <p className="text-[9px] uppercase tracking-wider text-slate-500">Live score</p>
@@ -300,26 +295,20 @@ function PremiumHome() {
           <div className="hidden flex-col gap-6 rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-[0_20px_60px_rgba(3,7,18,0.8)] sm:p-6 lg:flex">
             <div>
               <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Model pulse</p>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {HERO_STATS.map((stat) => (
-                  <div key={stat.label} className="rounded-2xl border border-white/5 bg-slate-900/70 p-4">
-                    <p className="text-[11px] uppercase tracking-widest text-slate-500">{stat.label}</p>
-                    <p className="text-2xl font-bold text-white tabular-nums">{stat.value}</p>
-                    <p className="text-xs text-slate-400">{stat.detail}</p>
-                  </div>
-                ))}
-              </div>
+              <div className="mt-4"><ModelMetadataPanel /></div>
             </div>
 
             <div className="rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3">
               <p className="mb-3 text-[10px] uppercase tracking-[0.24em] text-slate-600">
-                Source readiness
+                Platform status
               </p>
-              <ReadinessRing />
+              <div className="grid gap-2 sm:grid-cols-3">
+                <PlatformHealthPills />
+              </div>
             </div>
 
             <div className="space-y-3">
-              {PREMIUM_PILLARS.map((pillar, idx) => (
+              {PREMIUM_PILLARS.map((pillar) => (
                 <div key={pillar.title} className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <pillar.icon className="h-5 w-5 text-cyan-300" aria-hidden="true" />
@@ -328,9 +317,6 @@ function PremiumHome() {
                       <p className="text-sm text-slate-400">{pillar.detail}</p>
                     </div>
                   </div>
-                  {idx === 0 && (
-                    <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">Always on</span>
-                  )}
                 </div>
               ))}
             </div>
@@ -338,16 +324,20 @@ function PremiumHome() {
         </div>
       </section>
 
-      {/* Match generator — intentionally first after the hero on every viewport. */}
+      {/* Manual matchups remain an explicit non-executable compatibility path. */}
       <section id="match-generator" className="scroll-mt-32">
-        <div className="rounded-[24px] border border-white/10 bg-slate-950/80 p-3 sm:p-5">
-          <div className="px-2 pb-3 sm:px-0">
-            <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Start here</p>
-            <h2 className="mt-1 text-xl font-bold text-white">Generate match intelligence</h2>
-            <p className="mt-1 text-sm text-slate-400">Choose a verified fixture or enter a hypothetical matchup.</p>
+        <details className="group rounded-[24px] border border-amber-500/20 bg-slate-950/80 p-3 sm:p-5">
+          <summary className="flex min-h-11 cursor-pointer items-center justify-between rounded-xl px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+            <span>
+              <span className="block text-xs font-semibold uppercase tracking-[0.24em] text-amber-300">Hypothetical — non-executable</span>
+              <span className="mt-1 block text-lg font-bold text-white">Explore a manual matchup</span>
+            </span>
+            <span aria-hidden="true" className="text-slate-400 transition group-open:rotate-180">⌄</span>
+          </summary>
+          <div className="pt-4">
+            <MatchSelector />
           </div>
-          <MatchSelector />
-        </div>
+        </details>
       </section>
 
       {/* Spotlight + value stream */}
@@ -416,7 +406,7 @@ function PremiumHome() {
       <section className="rounded-[24px] border border-white/10 bg-slate-950/60 p-6 sm:p-8">
         <h2 className="mb-2 text-xl font-bold text-white">Supported competitions</h2>
         <p className="mb-6 text-sm text-slate-400">
-          Seven competitions with independent per-league models and calibration policies.
+          Listed coverage is subject to the active artifact and league policy reported by the backend.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {COMPETITIONS.map((c) => (
@@ -425,12 +415,8 @@ function PremiumHome() {
                 <p className="text-sm font-semibold text-white">{c.name}</p>
                 <p className="text-xs text-slate-500">{c.short}</p>
               </div>
-              <span className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                c.calibrated
-                  ? "bg-emerald-900/40 text-emerald-300"
-                  : "bg-slate-800/60 text-slate-400"
-              }`}>
-                {c.calibrated ? "Calibrated" : "Pending"}
+              <span className="rounded-lg bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Verify status
               </span>
             </div>
           ))}
@@ -448,7 +434,7 @@ function LegacyHome() {
       <section className="space-y-6 text-center animate-fade-in">
         <div className="inline-block rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-2">
           <span className="text-sm font-semibold text-indigo-400">
-            Walk-forward validated | 7 competitions | Evidence-gated verdicts
+            Evidence-gated analysis | Explicit availability | Zero-fabrication
           </span>
         </div>
         <h1 className="bg-gradient-to-r from-slate-100 via-indigo-200 to-purple-200 bg-clip-text text-5xl font-bold leading-tight text-transparent md:text-7xl">
@@ -457,15 +443,15 @@ function LegacyHome() {
           Intelligence Platform
         </h1>
         <p className="mx-auto max-w-3xl text-xl leading-relaxed text-slate-400">
-          Walk-forward validated predictions across 7 competitions.{" "}
-          <span className="font-semibold text-indigo-400">Edge quality scored</span> before every stake.
+          Verified fixtures and backend-reported model evidence.{" "}
+          <span className="font-semibold text-indigo-400">Every stake gate fails closed</span> when evidence is incomplete.
         </p>
         <div className="flex items-center justify-center gap-4 pt-4">
           <Link
             href="/intelligence"
             className="rounded-xl bg-indigo-600 px-8 py-4 font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-105 hover:bg-indigo-500 hover:shadow-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           >
-            See today&apos;s value picks
+            Review verified fixtures
           </Link>
           <Link
             href="/docs"
@@ -476,24 +462,19 @@ function LegacyHome() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-4 animate-fade-in">
-        {HERO_STATS.map((stat) => (
-          <div key={stat.label} className="glass-card space-y-2 p-6 transition-colors hover:bg-slate-900/60">
-            <p className="text-sm uppercase tracking-wider text-slate-400">{stat.label}</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-slate-100 tabular-nums">{stat.value}</p>
-              <span className="text-sm font-semibold text-green-400">{stat.detail}</span>
-            </div>
-          </div>
-        ))}
+      <section className="animate-fade-in">
+        <ModelMetadataPanel />
       </section>
 
       <section className="animate-fade-in">
-        <MatchSelector />
+        <UpcomingMatchesPanel title="Verified Fixtures" />
       </section>
 
       <section className="animate-fade-in">
-        <UpcomingMatchesPanel title="Upcoming Fixtures" />
+        <details className="rounded-2xl border border-amber-500/20 p-4">
+          <summary className="flex min-h-11 cursor-pointer items-center text-amber-200">Hypothetical matchup — non-executable</summary>
+          <div className="pt-4"><MatchSelector /></div>
+        </details>
       </section>
 
       <section className="grid grid-cols-1 gap-8 md:grid-cols-3 animate-fade-in">

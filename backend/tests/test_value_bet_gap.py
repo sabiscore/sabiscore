@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from src.api.endpoints.value_bets import ValueBetListResponse, ValueBetFilter
 

@@ -7,7 +7,7 @@ Coverage:
   PE-4  Probabilities always sum to 1.0 when model returns valid proba (v5 bundle)
   PE-5  Feature schema mismatch: shorter vector fails closed to fallback, never zero-padded
   PE-6  Feature truncation: longer vector truncates with a logged warning
-  PE-7  All probabilities are in [0, 1] after normalisation
+  PE-7  Valid probability simplexes are preserved without repair
   PE-8  calculate_value_bets returns empty list when no outcome has edge >= min_edge_pct
   PE-9  calculate_value_bets identifies a high-edge outcome correctly
   PE-10 calculate_value_bets sets clv_pct=None when closing_odds not supplied
@@ -23,13 +23,12 @@ Coverage:
   PE-20 overlay applied when overlay.alpha > 0
   PE-21 overlay NOT applied when overlay.alpha == 0
   PE-22 _ensemble_predict_dict averages multiple base-learner outputs
-  PE-23 _ensemble_predict_dict fallback when no model returns valid 3-class proba
+  PE-23 _ensemble_predict_dict fails closed when no model returns valid 3-class proba
   PE-24 calibration_applied=False and overlay_applied=False by default
-  PE-25 v6 bundle inference path (models_dict) returns normalised 3-class proba
+  PE-25 v6 bundle inference path (models_dict) returns a valid 3-class simplex
 """
 from __future__ import annotations
 
-import asyncio
 from dataclasses import fields
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
@@ -182,7 +181,7 @@ def test_long_vector_truncated_with_warning(caplog):
     (0.0, 0.0, 1.0),
 ])
 def test_probs_in_unit_interval(proba):
-    """PE-7: All output probabilities are clamped to [0, 1]."""
+    """PE-7: Valid model probabilities are preserved within [0, 1]."""
     engine = PredictionEngine()
     bundle = _make_v5_bundle(proba)
     result = engine._run_inference(bundle, FEATURES_58, "EPL")
@@ -426,15 +425,32 @@ def test_ensemble_predict_dict_averages_models():
 
 # ── PE-23 ─────────────────────────────────────────────────────────────────────
 
-def test_ensemble_predict_dict_fallback_when_no_valid_proba():
-    """PE-23: _ensemble_predict_dict returns [0.333, 0.333, 0.334] fallback when no model cooperates."""
+def test_ensemble_predict_dict_fails_closed_when_no_valid_proba():
+    """PE-23: no valid base learner output is never repaired or fabricated."""
     m = MagicMock()
     m.predict_proba = MagicMock(return_value=np.array([[0.5, 0.5]]))  # only 2 classes
 
-    result = PredictionEngine._ensemble_predict_dict({"m": m}, FEATURES_58.reshape(1, -1))
-    assert result.shape == (1, 3)
-    total = result.sum()
-    assert abs(total - 1.0) < 1e-5
+    with pytest.raises(ValueError, match="no base learner"):
+        PredictionEngine._ensemble_predict_dict({"m": m}, FEATURES_58.reshape(1, -1))
+
+
+@pytest.mark.parametrize(
+    "proba",
+    [
+        (0.60, 0.30, 0.30),
+        (0.60, 0.50, -0.10),
+        (float("nan"), 0.50, 0.50),
+    ],
+)
+def test_invalid_model_probability_simplex_fails_closed(proba):
+    """Invalid model output becomes an explicitly tagged diagnostic fallback."""
+    result = PredictionEngine()._run_inference(
+        _make_v5_bundle(proba),
+        FEATURES_58,
+        "EPL",
+    )
+    assert result.model_version == "fallback"
+    assert result.confidence == 0.0
 
 
 # ── PE-24 ─────────────────────────────────────────────────────────────────────
@@ -453,7 +469,7 @@ def test_prediction_result_defaults_no_calibration():
 # ── PE-25 ─────────────────────────────────────────────────────────────────────
 
 def test_v6_bundle_inference_returns_valid_proba():
-    """PE-25: v6 bundle (models_dict path) returns normalised 3-class proba."""
+    """PE-25: v6 bundle (models_dict path) returns a valid 3-class simplex."""
     bundle = _make_v6_bundle((0.55, 0.25, 0.20), n_features=86)
     engine = PredictionEngine()
     result = engine._run_inference(bundle, FEATURES_86, "EPL")

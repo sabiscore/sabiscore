@@ -9,10 +9,12 @@ from . import api_router
 from .endpoints.monitoring import router as monitoring_router_root
 from .websocket import router as ws_router
 from ..core.config import settings
+from ..core.redaction import redact_text
 from ..core.cache import cache
 from ..core.model_fetcher import DEFAULT_LEAGUES, load_ensemble_per_league
 from ..db.session import init_db, close_db
 from ..providers import build_provider_registry
+from ..services.odds_service import OddsService
 import os
 from datetime import datetime, timezone
 
@@ -48,8 +50,8 @@ def _filter_sentry_event(event, hint):
             }
         if isinstance(value, list):
             return [_redact(item) for item in value]
-        if isinstance(value, str) and any(marker in value.lower() for marker in ("apikey=", "api_key=", "token=", "authorization")):
-            return "[REDACTED]"
+        if isinstance(value, str):
+            return redact_text(value)
         return value
 
     # Skip 404 errors
@@ -160,7 +162,7 @@ async def _background_settlement_sync() -> None:
 _CLV_CAPTURE_INTERVAL_SECONDS = 300
 
 
-async def _background_clv_capture() -> None:
+async def _background_clv_capture(provider) -> None:
     """Genuinely periodic, same shape as settlement sync — must keep polling
     across a matchday, not just seed once at boot."""
     from ..services.clv_capture_service import run_clv_capture_pass
@@ -168,7 +170,7 @@ async def _background_clv_capture() -> None:
     while True:
         await asyncio.sleep(_CLV_CAPTURE_INTERVAL_SECONDS)
         try:
-            await run_clv_capture_pass()
+            await run_clv_capture_pass(provider=provider)
         except Exception:
             logger.exception("Background CLV capture failed")
 
@@ -200,6 +202,10 @@ async def lifespan(app: FastAPI):
         limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
     )
     app.state.provider_registry = build_provider_registry(http_client=app.state.http_client)
+    app.state.odds_service = OddsService(
+        cache_backend=app.state.cache,
+        provider=app.state.provider_registry.get("the_odds_api"),
+    )
 
     # Initialize async database
     try:
@@ -220,7 +226,9 @@ async def lifespan(app: FastAPI):
 
     # Periodic CLV capture: closing 1X2 snapshot per fixture near kickoff.
     # Same handle-stored/cancel-on-shutdown shape as settlement, above.
-    app.state.clv_capture_task = asyncio.create_task(_background_clv_capture())
+    app.state.clv_capture_task = asyncio.create_task(
+        _background_clv_capture(app.state.provider_registry.get("the_odds_api"))
+    )
 
     # Strict model initialization (blocking) - startup must fail if models are unavailable.
     try:

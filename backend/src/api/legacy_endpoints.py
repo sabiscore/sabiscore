@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 import logging
 import time
 import json
+import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 from pydantic import ValidationError
@@ -308,7 +309,7 @@ async def generate_insights(
 
 @router.get("/models/status")
 async def model_status(league: Optional[str] = None):
-    """Return model training metadata sourced from the models directory."""
+    """Return authoritative active-artifact metadata without optimistic defaults."""
 
     cache_key = f"model-status:{league or '*'}"
     cached = cache.get(cache_key)
@@ -316,12 +317,7 @@ async def model_status(league: Optional[str] = None):
         return cached
 
     try:
-        metadata_file = settings.models_path / "models_metadata.json"
-        if metadata_file.exists():
-            with metadata_file.open("r", encoding="utf-8") as fh:
-                metadata = json.load(fh)
-        else:
-            metadata = _fallback_model_metadata()
+        metadata = _active_model_metadata()
 
         if league:
             league_key = league.upper()
@@ -331,7 +327,7 @@ async def model_status(league: Optional[str] = None):
             response = {"models_loaded": True, "league": league_key, **league_meta}
         else:
             response = {
-                "models_loaded": bool(list(Path(settings.models_path).glob("*_ensemble.pkl"))),
+                "models_loaded": bool(metadata.get("models")),
                 **metadata,
             }
 
@@ -345,19 +341,74 @@ async def model_status(league: Optional[str] = None):
         raise _http_error(500, "Failed to get model status", "MODEL_STATUS_ERROR") from exc
 
 
-def _fallback_model_metadata() -> Dict[str, Any]:
-    """Construct metadata summary when models_metadata.json is missing."""
-    models = {}
-    for model_file in Path(settings.models_path).glob("*_ensemble_metadata.json"):
-        try:
-            with model_file.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            league_key = model_file.stem.replace("_ensemble_metadata", "").upper()
-            models[league_key] = data
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("Failed to read metadata file %s: %s", model_file, exc)
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
+
+def _active_model_metadata() -> Dict[str, Any]:
+    """Summarize artifacts the prediction engine can actually discover.
+
+    Missing governance fields remain ``UNKNOWN``/``UNVERIFIED``. A training
+    report or filename alone is never treated as certification evidence.
+    """
+
+    models: Dict[str, Any] = {}
+    seen: set[str] = set()
+    for model_dir in (Path(settings.phase7_models_path), Path(settings.models_path)):
+        if not model_dir.exists():
+            continue
+        for metadata_file in sorted(model_dir.glob("*_ensemble_*_metadata.json")):
+            try:
+                stem = metadata_file.stem
+                league_slug, version = stem.split("_ensemble_", 1)
+                version = version.removesuffix("_metadata")
+                league_key = league_slug.upper()
+                if league_key in seen:
+                    continue
+                artifact_file = metadata_file.with_name(
+                    metadata_file.name.removesuffix("_metadata.json") + ".pkl"
+                )
+                if not artifact_file.is_file():
+                    continue
+                with metadata_file.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if not isinstance(data, dict):
+                    continue
+                models[league_key] = {
+                    "active_version": version,
+                    "feature_schema_version": data.get("feature_schema_version"),
+                    "feature_count": data.get("feature_count"),
+                    "training_corpus_samples": data.get("training_samples"),
+                    "training_window": data.get("training_window"),
+                    "holdout_season": data.get("holdout_season"),
+                    "served_head": data.get("served_head", "UNKNOWN"),
+                    "calibration_status": data.get("calibration_status", "UNKNOWN"),
+                    "validation_status": data.get("validation_status", "UNVERIFIED"),
+                    "artifact_type": artifact_file.suffix.lstrip("."),
+                    "artifact_sha256": _sha256(artifact_file),
+                    "metrics": {
+                        key: data.get(key)
+                        for key in ("rps", "brier_score", "log_loss", "accuracy", "holdout_samples")
+                    },
+                    "trained_at": data.get("trained_at"),
+                    "data_source": data.get("data_source"),
+                }
+                seen.add(league_key)
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                logger.warning("Failed to inspect model metadata %s: %s", metadata_file, exc)
+
+    versions = sorted({item["active_version"] for item in models.values()})
     return {
+        "active_version": versions[0] if len(versions) == 1 else None,
+        "validation_status": (
+            "VALIDATED"
+            if models and all(item["validation_status"] == "VALIDATED" for item in models.values())
+            else "UNVERIFIED"
+        ),
         "last_updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "models": models,
     }

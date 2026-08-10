@@ -22,9 +22,11 @@ from src.models.feature_registry import (
     COMBINATION_FEATURES,
     LEAGUE_ONEHOT_FEATURES,
     LEAGUE_RATE_FEATURES,
+    MARKET_FEATURES_14,
     TEMPORAL_FEATURES,
     derive_combination_features,
     derive_league_features,
+    derive_market_features,
     derive_temporal_features,
 )
 
@@ -33,7 +35,7 @@ def test_every_derived_name_is_a_real_canonical_feature():
     """A typo here would silently write a key the artifact never reads."""
     for name in (
         *TEMPORAL_FEATURES, *LEAGUE_ONEHOT_FEATURES,
-        *LEAGUE_RATE_FEATURES, *COMBINATION_FEATURES,
+        *LEAGUE_RATE_FEATURES, *COMBINATION_FEATURES, *MARKET_FEATURES_14,
     ):
         assert name in CANONICAL_FEATURES_58, name
 
@@ -107,3 +109,16 @@ def test_combination_features_match_transformer_arithmetic():
     assert out["combined_defense_weakness"] == pytest.approx(2.6)
     assert out["home_attack_vs_away_defense"] == pytest.approx(0.4)
     assert out["away_attack_vs_home_defense"] == pytest.approx(0.4)
+
+
+def test_market_features_match_transformer_arithmetic():
+    """WP-A: pins derive_market_features() against the same de-vig/EV formula
+    FeatureTransformer._project_to_canonical_features() (data/transformers.py)
+    has always used, for the same (2.0, 3.0, 4.0) odds triple — the train/serve
+    consistency this file exists to guard."""
+    out = derive_market_features(2.0, 3.0, 4.0)
+    assert out["market_prob_home"] == pytest.approx(6 / 13)
+    assert out["market_prob_draw"] == pytest.approx(4 / 13)
+    assert out["market_prob_away"] == pytest.approx(3 / 13)
+    assert out["ev_home"] == pytest.approx(out["ev_draw"])
+    assert out["ev_draw"] == pytest.approx(out["ev_away"])

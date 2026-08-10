@@ -14,6 +14,7 @@ from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
 from ...services.upcoming_match_service import UpcomingMatchService
+from ...services.odds_service import OddsService, get_odds_service
 
 router = APIRouter(tags=["performance"])
 
@@ -45,8 +46,11 @@ async def value_bet_scan(
     days: int = Query(7, ge=1, le=14),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> ValueBetScanResponse:
-    service = UpcomingMatchService()
+    service = UpcomingMatchService(
+        odds_service=odds_service if isinstance(odds_service, OddsService) else None
+    )
     payload = await service.get_upcoming_matches_with_predictions(
         db,
         league=None,

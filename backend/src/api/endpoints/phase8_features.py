@@ -40,6 +40,7 @@ from ...models.feature_registry import (
     PHASE8_FEATURES_18,
 )
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
+from ...services.odds_service import OddsService, get_odds_service
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,7 @@ async def get_phase8_features(
     match_id: str,
     league: str = Query(default="EPL", description="League slug (EPL, La Liga, …)"),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> Phase8FeaturesResponse:
     phase8_enabled = _is_phase8_enabled()
 
@@ -237,7 +239,9 @@ async def get_phase8_features(
     per_feature_source: Dict[str, str] = {}
 
     try:
-        feature_projector = UpcomingMatchFeatureProjector()
+        feature_projector = UpcomingMatchFeatureProjector(
+            odds_service=odds_service if isinstance(odds_service, OddsService) else None
+        )
         sep = " vs " if " vs " in match_id else (" VS " if " VS " in match_id else None)
 
         if sep is not None:

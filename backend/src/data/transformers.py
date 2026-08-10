@@ -12,6 +12,7 @@ from ..models.feature_registry import (
     DEFAULT_FEATURE_VALUES_68,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
     derive_last5_form_features,
+    derive_market_features,
 )
 
 
@@ -321,18 +322,17 @@ class FeatureTransformer:
                 return default
             return value
 
-        home_odds = max(float(odds.get("home_win", 2.5)), 1.01)
-        draw_odds = max(float(odds.get("draw", 3.3)), 1.01)
-        away_odds = max(float(odds.get("away_win", 2.8)), 1.01)
-
-        ip_home = 1.0 / home_odds
-        ip_draw = 1.0 / draw_odds
-        ip_away = 1.0 / away_odds
-        total_ip = max(ip_home + ip_draw + ip_away, 1e-9)
-
-        market_prob_home = ip_home / total_ip
-        market_prob_draw = ip_draw / total_ip
-        market_prob_away = ip_away / total_ip
+        home_odds = odds.get("home_win", 2.5)
+        draw_odds = odds.get("draw", 3.3)
+        away_odds = odds.get("away_win", 2.8)
+        try:
+            market_features = derive_market_features(home_odds, draw_odds, away_odds)
+        except ValueError as exc:
+            raise DataUnavailableError(
+                "Malformed 1X2 market; refusing to repair invalid prices",
+                provider="market",
+                evidence_type="odds:1x2",
+            ) from exc
 
         home_form_5 = get_num("home_form_5", 0.5)
         away_form_5 = get_num("away_form_5", 0.45)
@@ -362,21 +362,8 @@ class FeatureTransformer:
         canonical["combined_defense_weakness"] = canonical["home_goals_against_avg"] + canonical["away_goals_against_avg"]
         canonical["total_goals_expected"] = get_num("xg_differential", 0.20) + 2.60
 
-        canonical["market_prob_home"] = market_prob_home
-        canonical["market_prob_draw"] = market_prob_draw
-        canonical["market_prob_away"] = market_prob_away
-        canonical["market_edge_home"] = market_prob_home - market_prob_away
-        canonical["market_favorite"] = float(np.argmax([market_prob_home, market_prob_draw, market_prob_away]))
-        canonical["odds_ratio"] = home_odds / away_odds
-        canonical["log_odds_home"] = float(np.log(home_odds))
-        canonical["log_odds_draw"] = float(np.log(draw_odds))
-        canonical["log_odds_away"] = float(np.log(away_odds))
-        canonical["draw_probability"] = market_prob_draw
-        canonical["market_confidence"] = max(market_prob_home, market_prob_draw, market_prob_away)
-
-        canonical["ev_home"] = market_prob_home * home_odds - 1.0
-        canonical["ev_draw"] = market_prob_draw * draw_odds - 1.0
-        canonical["ev_away"] = market_prob_away * away_odds - 1.0
+        canonical.update(market_features)
+        market_prob_home = market_features["market_prob_home"]
 
         canonical["h2h_home_wins"] = get_num("h2h_home_wins", 2.0)
         canonical["h2h_away_wins"] = get_num("h2h_away_wins", 2.0)
