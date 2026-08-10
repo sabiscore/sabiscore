@@ -30,7 +30,12 @@ interface ValueBetScanResponse {
   days: number;
   source: string;
   data_gap?: boolean;
-  reason?: string;
+  status?: string;
+  reason?: string | null;
+  retryable?: boolean;
+  freshness?: Record<string, unknown> | null;
+  provenance?: string[];
+  generated_at?: string | null;
 }
 
 // ─── League chip colors ───────────────────────────────────────────────────────
@@ -54,7 +59,7 @@ function confidenceLabel(c: number): { label: string; cls: string } {
 }
 
 function dataQualityLabel(fixture: ValueBetFixture): { label: string; cls: string } {
-  if (!fixture.model_prob && !fixture.implied_prob) {
+  if (fixture.model_prob == null && fixture.implied_prob == null) {
     return { label: "PARTIAL", cls: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/30" };
   }
   if (fixture.confidence >= 0.7 && fixture.model_prob && fixture.implied_prob) {
@@ -125,27 +130,36 @@ async function fetchValueBets(days: number): Promise<ValueBetScanResponse> {
     days: Number(data.days ?? days),
     source: (data.source ?? "api") as string,
     data_gap: Boolean(data.data_gap ?? false),
-    reason: typeof data.reason === "string" ? data.reason : undefined,
+    status: typeof data.status === "string" ? data.status : undefined,
+    reason: typeof data.reason === "string" ? data.reason : null,
+    retryable: Boolean(data.retryable ?? false),
+    freshness: data.freshness && typeof data.freshness === "object" ? data.freshness : null,
+    provenance: Array.isArray(data.provenance) ? data.provenance.map(String) : [],
+    generated_at: typeof data.generated_at === "string" ? data.generated_at : null,
   } as ValueBetScanResponse;
 }
 
 // ─── Empty states ─────────────────────────────────────────────────────────────
 
-function DataGapState({ reason }: { reason?: string }) {
+function DataGapState({ data }: { data?: ValueBetScanResponse }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center" data-testid="value-bet-data-gap">
       <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-300">No executable opportunities available</p>
+      <p className="text-sm font-medium text-slate-300">No fresh, fully gated candidates</p>
       <p className="max-w-md text-xs text-slate-500">
-        Only fresh, persisted decisions that pass every evidence and staking gate appear here.
-        {reason ? ` Status: ${reason.replaceAll("_", " ").toLowerCase()}.` : ""}
+        The scanner reads persisted analysis only. Missing, stale, partial, zero-stake, or non-actionable records are intentionally excluded.
       </p>
+      {data?.generated_at ? (
+        <p className="text-[11px] text-slate-600">
+          Checked {new Date(data.generated_at).toLocaleString()} · {data.provenance?.join(" + ") || "provenance unavailable"}
+        </p>
+      ) : null}
       <Link
         href="/match"
         className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
       >
         <ExternalLink className="h-3 w-3" aria-hidden="true" />
-        Inspect a fixture
+        Go to Match
       </Link>
     </div>
   );
@@ -157,7 +171,7 @@ function LegitimateEmptyState({ days }: { days: number }) {
       <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
       <p className="text-sm font-medium text-slate-400">No value edges detected</p>
       <p className="text-xs text-slate-600">
-        No persisted, fully gated opportunities are available in the next {days} days.
+        No bets above threshold for current filters in the next {days} days. Min edge 4.2%.
       </p>
     </div>
   );
@@ -310,7 +324,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-white">Persisted Opportunity Monitor</h2>
+          <h2 className="text-sm font-semibold text-white">Value Bet Scanner</h2>
           {fixtures.length > 0 && (
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
               {fixtures.length}
@@ -343,12 +357,12 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-slate-400" aria-live="polite" aria-busy="true">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span className="text-sm">Loading persisted decisions...</span>
+          <span className="text-sm">Scanning for value…</span>
         </div>
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : isDataGap ? (
-        <DataGapState reason={data?.reason} />
+        <DataGapState data={data} />
       ) : isLegitimateEmpty ? (
         <LegitimateEmptyState days={activeDays} />
       ) : (
@@ -377,7 +391,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       {/* Footer */}
       {data && !isDataGap && (
         <p className="border-t border-white/[0.04] px-4 py-2 text-[10px] text-slate-600">
-          Source: {data.source} · Fresh, persisted, fully gated decisions only · {activeDays}d window
+          Source: {data.source} · Min EV 4.2% · {activeDays}d window
         </p>
       )}
     </section>

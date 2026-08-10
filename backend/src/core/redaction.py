@@ -41,10 +41,13 @@ def redact_text(value: object) -> str:
 def redact_url(url: str) -> str:
     """Return a usable URL with userinfo and sensitive query values removed."""
 
-    parts = urlsplit(url)
-    host = parts.hostname or ""
-    if parts.port is not None:
-        host = f"{host}:{parts.port}"
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        if parts.port is not None:
+            host = f"{host}:{parts.port}"
+    except ValueError:
+        return "[REDACTED_INVALID_URL]"
     pairs = [
         (key, "[REDACTED]" if key.lower() in SENSITIVE_QUERY_KEYS else value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
@@ -55,11 +58,14 @@ def redact_url(url: str) -> str:
 def safe_endpoint(url: str) -> str:
     """Return only scheme and host for dependency diagnostics."""
 
-    parts = urlsplit(url)
-    host = parts.hostname or "unconfigured"
-    if parts.port is not None:
-        host = f"{host}:{parts.port}"
-    return f"{parts.scheme or 'unknown'}://{host}"
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or "unconfigured"
+        if parts.port is not None:
+            host = f"{host}:{parts.port}"
+        return f"{parts.scheme or 'unknown'}://{host}"
+    except ValueError:
+        return "invalid://[REDACTED]"
 
 
 def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
@@ -75,6 +81,15 @@ def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
         )
         if sensitive and not metadata_field:
             redacted[key] = "[REDACTED]" if value else None
+        elif isinstance(value, Mapping):
+            redacted[key] = redact_mapping(value)
+        elif isinstance(value, (list, tuple)):
+            redacted[key] = [
+                redact_mapping(item) if isinstance(item, Mapping) else redact_text(item)
+                if isinstance(item, str)
+                else item
+                for item in value
+            ]
         elif isinstance(value, str):
             redacted[key] = redact_text(value)
         else:

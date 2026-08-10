@@ -193,6 +193,36 @@
       - key: SABISCORE_MONITORING_URL
         sync: false
 
+  - type: cron
+    name: sabiscore-evidence-acquisition
+    runtime: docker
+    region: oregon
+    plan: starter
+    branch: master
+    schedule: "0 3 * * 1,4"
+    dockerfilePath: ./apps/scraper/Dockerfile.worker
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      # Operator gate: leave disabled until source policy, S3 retention/versioning,
+      # scoped bucket credentials, and database access have been approved.
+      - key: SCRAPER_PRODUCTION_ENABLED
+        value: "false"
+      - key: APP_ENV
+        value: production
+      - key: SABISCORE_ARTIFACT_BUCKET
+        sync: false
+      - key: SABISCORE_S3_ENDPOINT
+        sync: false
+      - key: SABISCORE_S3_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+
 # No `databases:` block: the blueprint-managed `sabiscore-db` free-tier instance
 # this used to declare expired and was replaced by a standalone instance set
 # directly on DATABASE_URL above (sync:false). Declaring a `databases:` entry

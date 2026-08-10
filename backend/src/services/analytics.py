@@ -169,9 +169,17 @@ class CertifiedAnalyticsService:
         if self.db is None or result.probabilities is None:
             return
 
+        from .canonical_identity_service import canonical_fixture_id_for_provider_event
+
+        canonical_fixture_id = await canonical_fixture_id_for_provider_event(
+            self.db,
+            provider="football-data.org",
+            provider_event_id=result.match_id,
+        )
+
         log = MatchPredictionLog(
             match_id=result.match_id,
-            canonical_fixture_id=None,
+            canonical_fixture_id=canonical_fixture_id,
             model_version=result.calculation_audit.model_version if result.calculation_audit else "unknown",
             calibration_method=result.calculation_audit.calibration_method if result.calculation_audit else None,
             home_probability=float(result.probabilities.home or 0.0),

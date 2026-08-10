@@ -267,3 +267,80 @@ async def test_model_performance_summary_200_once_seeded(session: AsyncSession) 
     # card showing an em-dash even with real settled data behind it.
     assert 0.0 <= body["accuracy_overall"] <= 1.0
     assert body["n_splits"] >= 1
+
+
+async def test_value_bet_scan_reads_only_fresh_persisted_actionable_rows(
+    session: AsyncSession,
+) -> None:
+    from src.api.endpoints.performance import value_bet_scan
+
+    now = datetime.now().replace(microsecond=0)
+    session.add_all(
+        [
+            Match(
+                id="fd-actionable",
+                home_team_id="home",
+                away_team_id="away",
+                league_id="DED",
+                match_date=now + timedelta(days=1),
+                status="scheduled",
+            ),
+            MatchPredictionLog(
+                match_id="fd-actionable",
+                canonical_fixture_id=None,
+                model_version="v5_phase7",
+                calibration_method="isotonic",
+                home_probability=0.5,
+                draw_probability=0.3,
+                away_probability=0.2,
+                confidence=0.5,
+                created_at=now - timedelta(minutes=2),
+                payload={
+                    "verdict": "ACTIONABLE",
+                    "stake_permitted": True,
+                    "partial_intelligence": False,
+                    "staleness_available": True,
+                    "staleness_seconds": 120,
+                    "evidence_quality": {"critical_gaps": [], "conflicts": []},
+                    "ensemble": {"confidence": 0.5},
+                    "odds_edge": {
+                        "market": "home",
+                        "market_odds": 2.2,
+                        "model_prob": 0.5,
+                        "edge": 0.0455,
+                    },
+                },
+            ),
+            Match(
+                id="fd-partial",
+                home_team_id="home",
+                away_team_id="away",
+                league_id="DED",
+                match_date=now + timedelta(days=1),
+                status="scheduled",
+            ),
+            MatchPredictionLog(
+                match_id="fd-partial",
+                canonical_fixture_id=None,
+                model_version="v5_phase7",
+                home_probability=0.4,
+                draw_probability=0.3,
+                away_probability=0.3,
+                created_at=now - timedelta(minutes=2),
+                payload={
+                    "verdict": "PARTIAL",
+                    "stake_permitted": False,
+                    "partial_intelligence": True,
+                },
+            ),
+        ]
+    )
+    await session.commit()
+
+    response = await value_bet_scan(days=7, limit=50, db=session)
+    payload = response.model_dump()
+
+    assert payload["total"] == 1
+    assert payload["fixtures"][0]["match_id"] == "fd-actionable"
+    assert payload["fixtures"][0]["edge_pct"] == pytest.approx(4.55)
+    assert payload["source"] == "persisted_prediction_logs"

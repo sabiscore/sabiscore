@@ -12,6 +12,7 @@ From a clean release checkout:
 ```powershell
 python scripts/check-codex-skills.py
 python backend/scripts/verify_active_artifacts.py
+node apps/scraper/src/cli.mjs registry validate
 docker compose -f docker-compose.prod.yml config --quiet
 pnpm --filter @sabiscore/web lint
 pnpm --filter @sabiscore/web typecheck
@@ -23,6 +24,14 @@ Run backend Ruff, mypy, full pytest, OpenAPI verification, Gitleaks, Alembic
 upgrade/check against staging PostgreSQL, sequential backend/web image builds, and
 Playwright desktop/mobile gates using the exact commands in current CI/Makefile.
 Default CI keeps `PROVIDER_LIVE_TESTS=false`.
+
+If the evidence-acquisition worker is part of a release, also validate scraper
+parsers and source policy before enabling cron execution:
+
+```powershell
+pnpm --filter @sabiscore/scraper test
+node apps/scraper/src/cli.mjs registry validate
+```
 
 Do not promote an artifact whose candidate manifest says
 `promotion_permitted: false`.
@@ -42,8 +51,8 @@ USE_PHASE9_CANDIDATE_FEATURES=false
 PHASE9_SHADOW_ONLY=true
 ```
 
-`DATABASE_URL` must be PostgreSQL with TLS. `REDIS_URL` must be a complete
-`redis://` or preferably `rediss://` URL. Provider keys and `SECRET_KEY` are
+`DATABASE_URL` must be PostgreSQL with TLS. Production `REDIS_URL` must be a
+complete `rediss://` URL; plaintext `redis://` is local-development only. Provider keys and `SECRET_KEY` are
 server-only. Never expose them as `NEXT_PUBLIC_*` values.
 
 `REVALIDATE_SECRET` is a separate server-only secret shared by the backend and
@@ -52,14 +61,28 @@ on on-demand page invalidation. When it is absent, `/api/revalidate` returns a
 structured `503` and the backend skips the request; it never falls back to a
 predictable development token.
 
-For a credential incident: create replacement, update the platform secret, verify
-TLS/application behavior, revoke the exposed credential, and scan redacted logs.
+For the open Render Redis incident, operators must complete and record this exact
+sequence without copying credentials into tickets or logs:
+
+1. provision a replacement Redis instance/credential with TLS required;
+2. set the complete `rediss://` value in the protected Render `REDIS_URL` secret;
+3. verify TLS connectivity and require `/health/ready` to report the external cache available;
+4. revoke the old credential after the replacement is serving;
+5. redeploy the reviewed backend SHA and verify startup/runtime logs are redacted;
+6. retain provider-side rotation/revocation evidence in the private incident record.
+
+In-memory fallback can preserve liveness, but it never satisfies production cache readiness.
 
 ## 3. Backend on Render
 
 `render.yaml` is authoritative. Its build installs requirements and verifies the
 active artifact pairs. Startup applies `alembic upgrade head` and then launches
 Uvicorn; `/health/ready` is the deployment gate.
+
+The Render blueprint also includes a disabled-by-default scraper cron service
+(`sabiscore-evidence-acquisition`). Keep `SCRAPER_PRODUCTION_ENABLED=false`
+until source-policy/legal approval, storage credentials, and retention controls
+are explicitly signed off.
 
 Before promotion, verify these endpoints without printing credentials or raw
 provider payloads:

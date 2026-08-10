@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from .backfill import backfill_cli
+from .ingest import ingest_cli
 from .providers import providers_cli
 
 
@@ -15,6 +16,7 @@ def main() -> None:
 
 main.add_command(providers_cli, "providers")
 main.add_command(backfill_cli, "backfill")
+main.add_command(ingest_cli, "ingest")
 
 
 @main.command(

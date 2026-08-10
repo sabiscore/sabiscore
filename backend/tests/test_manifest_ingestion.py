@@ -96,3 +96,57 @@ def test_payload_hash_mismatch_is_rejected(workspace_tmp: Path):
 
     with pytest.raises(ManifestValidationError, match="hash mismatch"):
         validate_manifest(manifest, data_root=data_root)
+
+
+def test_manifest_v2_accepts_content_addressed_artifact(workspace_tmp: Path):
+    data_root = workspace_tmp / "data"
+    payload = data_root / "processed" / "football-data-csv" / "run" / "fixtures.json"
+    _write(payload, "[]\n")
+    digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+    manifest_path = _manifest(data_root, payload)
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    body.update({
+        "manifest_version": "2.0",
+        "adapter_version": "2.0.0",
+        "schema_version": "2.0.0",
+        "registry_version": "2.0.0",
+        "attribution": "football-data.co.uk",
+        "processed_files": [{
+            "file": str(payload),
+            "uri": str(payload),
+            "object_key": f"processed/football-data-csv/run/{digest}.json",
+            "hash": digest,
+            "size_bytes": payload.stat().st_size,
+            "content_type": "application/json",
+        }],
+        "payload_hashes": {str(payload): digest},
+    })
+    manifest_path.write_text(json.dumps(body), encoding="utf-8")
+
+    result = validate_manifest(manifest_path, data_root=data_root)
+
+    assert result.payload_paths == (payload.resolve(),)
+
+
+def test_manifest_v2_rejects_unsafe_object_key(workspace_tmp: Path):
+    data_root = workspace_tmp / "data"
+    payload = data_root / "processed" / "fixtures.json"
+    _write(payload, "[]\n")
+    digest = hashlib.sha256(payload.read_bytes()).hexdigest()
+    manifest_path = _manifest(data_root, payload)
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    body.update({
+        "manifest_version": "2.0",
+        "adapter_version": "2.0.0",
+        "registry_version": "2.0.0",
+        "processed_files": [{
+            "file": str(payload),
+            "uri": str(payload),
+            "object_key": "../escape.json",
+            "hash": digest,
+        }],
+    })
+    manifest_path.write_text(json.dumps(body), encoding="utf-8")
+
+    with pytest.raises(ManifestValidationError, match="unsafe object_key"):
+        validate_manifest(manifest_path, data_root=data_root)

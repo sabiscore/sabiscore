@@ -26,6 +26,21 @@ work, and MLflow experiment capture remain blocked locally. Installing these
 packages does not permit model promotion; the real-settlement and active-generation
 gates in item 14 still apply.
 
+## 18. Scraper production cron is wired but intentionally inactive
+
+**Tier:** `NEXT` — trigger: approved source-policy + storage credential
+provisioning + retention controls documented in deployment record.
+**Verified:** 2026-08-10.
+
+`render.yaml` now defines `sabiscore-evidence-acquisition` (Docker cron) and
+worker runtime assets exist in `apps/scraper/`, but
+`SCRAPER_PRODUCTION_ENABLED=false` keeps execution fail-closed by default.
+Code readiness exists; operational approval and secrets enablement do not.
+
+**Release impact:** none for current API runtime while disabled.
+**Risk if prematurely enabled:** unapproved source ingestion and uncontrolled
+artifact retention/cost.
+
 ## 14. Apex candidate artifacts are quarantined and not certified
 
 **Tier:** `FIX-NOW` before model promotion. **Found:** 2026-08-09.
@@ -80,9 +95,10 @@ league models' prediction cache actually calls) instead of raising. Regression
 tests in `backend/tests/unit/test_model_orchestrator_redis_fallback.py`. Code
 cannot rotate the provider credential or modify the protected Render secret.
 
-**Required operator sequence:** create a replacement credential; set a valid TLS
-Render secret without printing it; verify cache connection and application
-readiness; revoke the exposed credential; then run the live secret/log probe.
+**Required operator sequence:** provision replacement Redis; set a complete
+`rediss://` Render secret without printing it; prove TLS connectivity and external
+cache readiness; revoke the exposed credential; redeploy; then prove current logs
+remain redacted. Record provider-side replacement and revocation evidence privately.
 Production remains blocked until every step is recorded.
 
 ## 16. Release infrastructure and historical-secret gates remain closed

@@ -129,6 +129,51 @@ class UpcomingMatchService:
                 (time.perf_counter() - started_at) * 1000,
             )
 
+    async def get_upcoming_matches_cached_or_db(
+        self,
+        db: AsyncSession,
+        league: Optional[str] = None,
+        days_ahead: int = 7,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Interactive database/cache-only fixture discovery.
+
+        Provider traffic belongs to the background synchronization path. This
+        method is deliberately separate so callers can prove that disabling
+        predictions also disables provider and model work.
+        """
+
+        cache_key = f"upcoming:v2:{league or '*'}:{days_ahead}:{limit}"
+        cached = cache_manager.get(cache_key)
+        if isinstance(cached, dict) and "matches" in cached:
+            payload = dict(cached)
+            cache_hit = True
+        else:
+            payload = await self._get_upcoming_matches_from_db(
+                db, league=league, days_ahead=days_ahead, limit=limit
+            )
+            payload["source"] = "database"
+            cache_manager.set(cache_key, payload, ttl=settings.fixture_cache_ttl)
+            cache_hit = False
+
+        matches = list(payload.get("matches") or [])
+        return {
+            "upcoming_matches": matches,
+            "total": len(matches),
+            "matches_with_value": 0,
+            "avg_edge_pct": 0.0,
+            "cache_hit": cache_hit,
+            "ttl_seconds": settings.fixture_cache_ttl,
+            "source": payload.get("source", "database"),
+            "status": "OK",
+            "data_gap": False,
+            "reason": None,
+            "retryable": False,
+            "freshness": {"ttl_seconds": settings.fixture_cache_ttl},
+            "provenance": [payload.get("source", "database")],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
     async def _get_upcoming_matches_from_db(
         self,
         db: AsyncSession,

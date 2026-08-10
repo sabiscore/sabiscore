@@ -33,7 +33,8 @@ REQUIRED_MANIFEST_FIELDS = {
 }
 
 INGESTIBLE_STATUSES = {"SUCCESS", "PARTIAL"}
-DEFAULT_ALLOWED_ADAPTER_VERSIONS = {"1.0.0"}
+DEFAULT_ALLOWED_ADAPTER_VERSIONS = {"1.0.0", "2.0.0"}
+SUPPORTED_MANIFEST_VERSIONS = {"1.0", "2.0"}
 
 
 class ManifestValidationError(ValueError):
@@ -65,15 +66,28 @@ def _require_under_root(path: Path, root: Path, label: str) -> Path:
     return resolved
 
 
-def _iter_payloads(manifest: dict[str, Any]) -> Iterable[str]:
+def _iter_payloads(manifest: dict[str, Any]) -> Iterable[tuple[str, dict[str, Any] | None]]:
     for key in ("raw_files", "processed_files"):
         values = manifest.get(key)
         if not isinstance(values, list):
             raise ManifestValidationError(f"{key} must be a list")
         for value in values:
-            if not isinstance(value, str) or not value:
-                raise ManifestValidationError(f"{key} contains a non-string path")
-            yield value
+            if isinstance(value, str) and value:
+                yield value, None
+                continue
+            if isinstance(value, dict):
+                local_file = value.get("file")
+                object_key = value.get("object_key")
+                digest = value.get("hash")
+                if not all(isinstance(item, str) and item for item in (local_file, object_key, digest)):
+                    raise ManifestValidationError(
+                        f"{key} artifact descriptors require file, object_key, and hash"
+                    )
+                if Path(object_key).is_absolute() or ".." in Path(object_key).parts:
+                    raise ManifestValidationError(f"{key} contains an unsafe object_key")
+                yield local_file, value
+                continue
+            raise ManifestValidationError(f"{key} contains an invalid artifact")
 
 
 def validate_manifest(
@@ -104,8 +118,12 @@ def validate_manifest(
     if missing:
         raise ManifestValidationError(f"manifest missing required fields: {', '.join(missing)}")
 
-    if manifest["manifest_version"] != "1.0":
+    if manifest["manifest_version"] not in SUPPORTED_MANIFEST_VERSIONS:
         raise ManifestValidationError("unsupported manifest_version")
+    if manifest["manifest_version"] == "2.0":
+        for field in ("registry_version", "attribution"):
+            if not isinstance(manifest.get(field), str) or not manifest[field].strip():
+                raise ManifestValidationError(f"manifest v2 requires {field}")
     if manifest["status"] not in INGESTIBLE_STATUSES:
         raise ManifestValidationError(f"manifest status is not ingestible: {manifest['status']}")
     if manifest["adapter_version"] not in (allowed_adapter_versions or DEFAULT_ALLOWED_ADAPTER_VERSIONS):
@@ -114,13 +132,18 @@ def validate_manifest(
         raise ManifestValidationError("payload_hashes must be an object")
 
     payload_paths: list[Path] = []
-    for payload in _iter_payloads(manifest):
+    for payload, descriptor in _iter_payloads(manifest):
         payload_path = _require_under_root(Path(payload), root, "payload")
         if payload_path.name.endswith(".tmp"):
             raise ManifestValidationError(f"payload is still a temporary file: {payload_path}")
         if not payload_path.exists():
             raise ManifestValidationError(f"payload does not exist: {payload_path}")
-        expected_hash = manifest["payload_hashes"].get(str(payload_path))
+        expected_hash = descriptor.get("hash") if descriptor else None
+        uri = descriptor.get("uri") if descriptor else None
+        if expected_hash is None and isinstance(uri, str):
+            expected_hash = manifest["payload_hashes"].get(uri)
+        if expected_hash is None:
+            expected_hash = manifest["payload_hashes"].get(str(payload_path))
         if expected_hash is None:
             expected_hash = manifest["payload_hashes"].get(payload)
         if not expected_hash:
@@ -140,4 +163,3 @@ def validate_manifest(
         manifest=manifest,
         payload_paths=tuple(payload_paths),
     )
-

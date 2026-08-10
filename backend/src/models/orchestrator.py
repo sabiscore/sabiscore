@@ -4,18 +4,13 @@ Model Orchestrator - Routes predictions to league-specific models
 Handles training, caching, live calibration, and edge detection
 """
 
-import logging
-import redis
-from redis.exceptions import RedisError
 import json
-import os
+from threading import Lock
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import pandas as pd
 import numpy as np
-
-from ..core.redaction import redact_text, safe_endpoint
 
 # Import all league models
 from .leagues.premier_league import PremierLeagueModel
@@ -24,13 +19,9 @@ from .leagues.bundesliga import BundesligaModel
 from .leagues.serie_a import SerieAModel
 from .leagues.ligue_1 import Ligue1Model
 
-logger = logging.getLogger(__name__)
-
 
 class _InMemoryRedisAdapter:
-    """Minimal Redis-compatible fallback so a missing/invalid REDIS_URL degrades
-    instead of crashing the module import (and therefore the whole API process).
-    """
+    """Minimal Redis-compatible fallback for legacy batch utilities only."""
 
     def __init__(self) -> None:
         self._values: dict[str, Any] = {}
@@ -60,7 +51,6 @@ class _InMemoryRedisAdapter:
         values = self._lists.get(key, [])
         return values[start:] if stop == -1 else values[start : stop + 1]
 
-
 class ModelOrchestrator:
     """
     Central orchestrator for all league-specific models
@@ -84,19 +74,13 @@ class ModelOrchestrator:
         'eredivisie': 'eredivisie'
     }
     
-    def __init__(self, redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")):
-        try:
-            client = redis.from_url(redis_url, decode_responses=True)
-            client.ping()
-            self.redis = client
-        except (RedisError, ConnectionError, TimeoutError, ValueError) as exc:
-            logger.warning(
-                "ModelOrchestrator Redis unavailable at %s, using in-memory fallback: %s",
-                safe_endpoint(redis_url),
-                redact_text(exc),
-            )
-            self.redis = _InMemoryRedisAdapter()
+    def __init__(self, redis_client: Any | None = None):
+        if redis_client is None:
+            from ..core.cache import cache
 
+            redis_client = cache.redis_client
+        self.redis = redis_client or _InMemoryRedisAdapter()
+        
         # Import additional league models
         from .leagues.championship import ChampionshipModel
         from .leagues.eredivisie import EredivisieModel
@@ -468,5 +452,16 @@ class ModelOrchestrator:
         
         print("\n" + "="*60)
 
-# Export singleton instance
-orchestrator = ModelOrchestrator()
+_orchestrator: ModelOrchestrator | None = None
+_orchestrator_lock = Lock()
+
+
+def get_model_orchestrator(redis_client: Any | None = None) -> ModelOrchestrator:
+    """Lazily construct the legacy orchestrator without import-time I/O."""
+
+    global _orchestrator
+    if _orchestrator is None:
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = ModelOrchestrator(redis_client=redis_client)
+    return _orchestrator

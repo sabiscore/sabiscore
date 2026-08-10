@@ -1,175 +1,206 @@
 #!/usr/bin/env python3
-"""Generate Apex train/serve feature-availability evidence from current code."""
+"""Generate auditable train/serve availability without changing feature selection."""
 
 from __future__ import annotations
 
 import argparse
+import csv
+import importlib.util
 import json
-from datetime import datetime
+import math
+import sys
+from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-import train_on_real_matches as training
+_registry_spec = importlib.util.spec_from_file_location(
+    "sabiscore_feature_registry", BACKEND_ROOT / "src" / "models" / "feature_registry.py"
+)
+if _registry_spec is None or _registry_spec.loader is None:
+    raise RuntimeError("feature registry could not be loaded")
+_registry = importlib.util.module_from_spec(_registry_spec)
+_registry_spec.loader.exec_module(_registry)
+APEX_FEATURES_68 = _registry.APEX_FEATURES_68
 
 
-REGISTRY = training._FEATURE_REGISTRY
+COMPETITIONS = {
+    "EPL": "E0",
+    "CHAMPIONSHIP": "E1",
+    "LA_LIGA": "SP1",
+    "SERIE_A": "I1",
+    "BUNDESLIGA": "D1",
+    "LIGUE_1": "F1",
+    "EREDIVISIE": "N1",
+}
+MARKET_PREFIXES = ("market_", "ev_", "odds_", "log_odds_", "form_market_", "venue_market_", "h2h_market_")
 
 
-def _training_resolved_features() -> set[str]:
-    resolved: set[str] = set()
-    resolved.update(
-        training.derive_last5_form_features(
-            0.5, 0.4, is_home=True, wins_5=2, draws_5=1, losses_5=2
-        )
+def _finite(value: str | None) -> bool:
+    try:
+        return math.isfinite(float(value or "")) and float(value or "") > 1
+    except ValueError:
+        return False
+
+
+def _coherent_market(row: dict[str, str]) -> bool:
+    return any(
+        all(_finite(row.get(column)) for column in columns)
+        for columns in (("B365H", "B365D", "B365A"), ("PSH", "PSD", "PSA"))
     )
-    resolved.update(
-        training.derive_last5_form_features(
-            0.4, 0.3, is_home=False, wins_5=1, draws_5=2, losses_5=2
-        )
-    )
-    resolved.update(
-        {
-            "home_goals_for_avg",
-            "home_goals_against_avg",
-            "home_gd_recent",
-            "away_goals_for_avg",
-            "away_goals_against_avg",
-            "away_gd_recent",
-        }
-    )
-    resolved.update(training.derive_temporal_features(datetime(2026, 5, 1)))
-    resolved.update(training.derive_league_features("EPL"))
-    resolved.update(
-        training.derive_combination_features(
-            home_goals_for_avg=1.5,
-            home_goals_against_avg=1.1,
-            away_goals_for_avg=1.2,
-            away_goals_against_avg=1.4,
-        )
-    )
-    resolved.update(training.derive_apex_market_features(2.1, 3.4, 3.8))
-    return resolved
 
 
-def _source(feature: str, *, training_source: bool) -> str:
-    if feature in REGISTRY.APEX_MARKET_FEATURES_14:
-        return "football-data.co.uk coherent opening 1X2" if training_source else "OddsService coherent 1X2 snapshot"
-    if feature in REGISTRY.TEMPORAL_FEATURES:
-        return "fixture kickoff"
-    if feature in set(REGISTRY.LEAGUE_ONEHOT_FEATURES) | set(REGISTRY.LEAGUE_RATE_FEATURES):
-        return "competition identity and governed league rates"
-    if feature in REGISTRY.COMBINATION_FEATURES:
-        return "derived from both teams' match history"
-    if feature in REGISTRY.PHASE7_FEATURES_10:
-        if training_source:
-            return "registry default"
-        if feature.startswith("elo_"):
-            return "EloEngine"
-        return "StatsBomb enrichment or registry default"
-    if feature.startswith("h2h_") or "venue" in feature:
-        return "registry default" if training_source else "unwired in current projector"
-    return "strictly prior completed-match history"
+def _feature_family(feature: str) -> str:
+    if feature.startswith(MARKET_PREFIXES) or feature in {"market_favorite", "draw_probability"}:
+        return "market"
+    if feature.startswith("h2h_"):
+        return "head_to_head"
+    if feature.startswith("home_venue_") or feature == "home_advantage_strength":
+        return "home_venue"
+    if feature.startswith("elo_"):
+        return "elo"
+    if any(token in feature for token in ("pressing", "carry", "shot_quality", "key_pass", "set_piece")):
+        return "tactical"
+    if feature in {"day_of_week", "is_weekend", "month", "season_phase"}:
+        return "temporal"
+    if feature.startswith("league_"):
+        return "league"
+    return "team_history"
 
 
-def _freshness(feature: str) -> str:
-    if feature in REGISTRY.APEX_MARKET_FEATURES_14:
-        return "request snapshot; bounded by odds freshness policy"
-    if feature in REGISTRY.TEMPORAL_FEATURES:
-        return "static for fixture kickoff"
-    if feature in set(REGISTRY.LEAGUE_ONEHOT_FEATURES) | set(REGISTRY.LEAGUE_RATE_FEATURES):
-        return "release/configuration scoped"
-    if feature in REGISTRY.PHASE7_FEATURES_10:
-        return "source timestamp required; DATA_GAP when absent"
-    return "age of newest completed match for either team"
-
-
-def build_matrix(cache_dir: Path) -> dict[str, Any]:
-    dataset = training.build_dataset(training.load_matches(cache_dir))
-    rows = np.concatenate(
-        [np.asarray(data["X"], dtype=np.float64) for data in dataset.values() if data["X"]],
-        axis=0,
-    )
-    training_resolved = _training_resolved_features()
-    always_gap = set(REGISTRY.PHASE7_FEATURES_ALWAYS_DATA_GAP)
-    current_schema = list(REGISTRY.CANONICAL_FEATURES_68)
-    candidate_schema = list(REGISTRY.APEX_FEATURES_68)
-
-    entries: list[dict[str, Any]] = []
-    for index, feature in enumerate(candidate_schema):
-        values = rows[:, index]
-        trained_from_source = feature in training_resolved
-        position_aligned = current_schema[index] == feature
-        if not position_aligned:
-            serving_status = "UNAVAILABLE_SCHEMA_MISALIGNED"
-        elif feature in always_gap:
-            serving_status = "ALWAYS_DATA_GAP"
-        elif feature.startswith("h2h_") or "venue" in feature:
-            serving_status = "UNWIRED_DEFAULT"
-        else:
-            serving_status = "CONDITIONAL_SOURCE"
-        entries.append(
-            {
-                "index": index,
-                "feature": feature,
-                "training_source": _source(feature, training_source=True),
-                "serving_source": _source(feature, training_source=False),
-                "training_coverage": 1.0 if trained_from_source else 0.0,
-                "training_missingness": 0.0 if trained_from_source else 1.0,
-                "serving_status": serving_status,
-                "freshness_contract": _freshness(feature),
-                "variable_in_training": bool(float(np.std(values)) > 1e-12),
-                "training_stddev": float(np.std(values)),
-                "training_min": float(np.min(values)),
-                "training_max": float(np.max(values)),
-                "defaulted_training_slot": not trained_from_source,
-                "candidate_position_matches_current_serving_schema": position_aligned,
-            }
-        )
-
+def _coverage(cache_dir: Path, code: str) -> dict[str, Any]:
+    files = sorted(cache_dir.glob(f"fd_{code}_*.csv"))
+    rows: list[dict[str, str]] = []
+    for path in files:
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            rows.extend(dict(row) for row in csv.DictReader(handle))
+    total = len(rows)
+    teams: dict[str, int] = defaultdict(int)
+    home_counts: dict[str, int] = defaultdict(int)
+    pairs: dict[tuple[str, str], int] = defaultdict(int)
+    counts = defaultdict(int)
+    for row in rows:
+        home = (row.get("HomeTeam") or "").strip()
+        away = (row.get("AwayTeam") or "").strip()
+        if row.get("Date"):
+            counts["temporal"] += 1
+        if _coherent_market(row):
+            counts["market"] += 1
+        if teams[home] >= 5 and teams[away] >= 5:
+            counts["team_history"] += 1
+        if home_counts[home] >= 5:
+            counts["home_venue"] += 1
+        pair = tuple(sorted((home, away)))
+        if pairs[pair] >= 1:
+            counts["head_to_head"] += 1
+        if home and away:
+            teams[home] += 1
+            teams[away] += 1
+            home_counts[home] += 1
+            pairs[pair] += 1
     return {
-        "schema": "apex_v1_68",
-        "training_rows": int(len(rows)),
-        "selection": {
-            "source_matches": 12765,
-            "insufficient_history_excluded": 505,
-            "eligible_after_history": 12260,
-            "coherent_opening_odds_rows": 12256,
-            "odds_missing_rows_excluded": 4,
+        "files": [path.name for path in files],
+        "rows": total,
+        "coverage": {
+            family: (counts[family] / total if total else 0.0)
+            for family in ("market", "team_history", "home_venue", "head_to_head", "temporal")
         },
-        "summary": {
-            "features": len(entries),
-            "training_defaulted_slots": sum(item["defaulted_training_slot"] for item in entries),
-            "non_variable_training_slots": sum(not item["variable_in_training"] for item in entries),
-            "serving_schema_misaligned_slots": sum(
-                item["serving_status"] == "UNAVAILABLE_SCHEMA_MISALIGNED" for item in entries
-            ),
-            "always_data_gap_slots": sum(item["serving_status"] == "ALWAYS_DATA_GAP" for item in entries),
-        },
-        "promotion_gate": "FAIL" if any(
-            item["serving_status"] in {"UNAVAILABLE_SCHEMA_MISALIGNED", "ALWAYS_DATA_GAP"}
-            for item in entries
-        ) else "PASS",
-        "features": entries,
     }
 
 
-def main() -> int:
+def generate(cache_dir: Path) -> dict[str, Any]:
+    matrix: dict[str, Any] = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "feature_schema_changed": False,
+        "settlement_gate": "BLOCKED_ZERO_SETTLED_PREDICTIONS",
+        "competitions": {},
+    }
+    for competition, code in COMPETITIONS.items():
+        evidence = _coverage(cache_dir, code)
+        features = []
+        for feature in APEX_FEATURES_68:
+            family = _feature_family(feature)
+            training_coverage = (
+                1.0 if family == "league" and evidence["rows"] else
+                0.0 if family in {"elo", "tactical"} else
+                evidence["coverage"].get(family, 0.0)
+            )
+            if family == "market":
+                serving_source = "fresh executable coherent market_snapshots"
+                serving_coverage = 0.0
+                gap_behavior = "critical market gap; no EV/value/stake"
+            elif family in {"head_to_head", "home_venue", "team_history"}:
+                serving_source = "canonical/legacy finished matches in PostgreSQL or cache"
+                serving_coverage = evidence["coverage"].get(family, 0.0)
+                gap_behavior = "explicit gap; confidence reduced or abstain"
+            elif family in {"elo", "tactical"}:
+                serving_source = "no reliable serving source"
+                serving_coverage = 0.0
+                gap_behavior = "explicit gap; never default to fabricated evidence"
+            else:
+                serving_source = "fixture and competition persistence"
+                serving_coverage = training_coverage
+                gap_behavior = "explicit missingness"
+            features.append({
+                "feature": feature,
+                "family": family,
+                "training_source": "football-data.co.uk committed chronological CSV" if evidence["rows"] else None,
+                "serving_source": serving_source,
+                "training_coverage": round(training_coverage, 6),
+                "serving_projection_coverage": round(serving_coverage, 6),
+                "missingness": round(1.0 - training_coverage, 6),
+                "freshness": "historical" if evidence["rows"] else "unavailable",
+                "variability": "observed" if training_coverage > 0 else "unavailable",
+                "temporal_validity": "strictly-prior rolling history" if family in {"team_history", "head_to_head", "home_venue"} else "event-time keyed",
+                "default_gap_behavior": gap_behavior,
+            })
+        matrix["competitions"][competition] = {**evidence, "features": features}
+    return matrix
+
+
+def _markdown(matrix: dict[str, Any]) -> str:
+    lines = [
+        "# APEX Feature Availability Matrix",
+        "",
+        f"Generated: `{matrix['generated_at']}`",
+        "",
+        "Settlement gate: `BLOCKED_ZERO_SETTLED_PREDICTIONS`. This evidence does not authorize feature or model changes.",
+        "",
+        "| Competition | Rows | Market | H2H | Home venue | Team history | Elo/tactical |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for competition, entry in matrix["competitions"].items():
+        coverage = entry["coverage"]
+        lines.append(
+            f"| {competition} | {entry['rows']} | {coverage['market']:.1%} | "
+            f"{coverage['head_to_head']:.1%} | {coverage['home_venue']:.1%} | "
+            f"{coverage['team_history']:.1%} | 0.0% |"
+        )
+    lines.extend([
+        "",
+        "The JSON companion contains one record per active feature and competition, including sources, missingness, freshness, variability, temporal validity, and fail-closed gap behavior.",
+        "Historical bookmaker rows are never projected as live executable market coverage.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache-dir", type=Path, default=training._BACKEND_ROOT / "data" / "cache")
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=training._BACKEND_ROOT / "models" / "candidate" / "feature_availability_matrix.json",
-    )
+    parser.add_argument("--cache-dir", type=Path, default=BACKEND_ROOT / "data" / "cache")
+    parser.add_argument("--json-out", type=Path, required=True)
+    parser.add_argument("--markdown-out", type=Path, required=True)
     args = parser.parse_args()
-    payload = build_matrix(args.cache_dir)
-    args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(json.dumps(payload["summary"], sort_keys=True))
-    print(f"promotion_gate={payload['promotion_gate']} output={args.output}")
-    return 0
+    matrix = generate(args.cache_dir)
+    args.json_out.parent.mkdir(parents=True, exist_ok=True)
+    args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
+    args.json_out.write_text(json.dumps(matrix, indent=2) + "\n", encoding="utf-8")
+    args.markdown_out.write_text(_markdown(matrix), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

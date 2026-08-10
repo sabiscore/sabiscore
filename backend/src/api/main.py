@@ -99,6 +99,8 @@ class CustomJSONEncoder(json.JSONEncoder):
 # not freshness: a boot-time 429 previously left the platform with zero fixtures
 # until the next deploy (observed in production 2026-08-08).
 _FIXTURE_SYNC_INTERVAL_SECONDS = 21600
+_INITIAL_SETTLEMENT_DELAY_SECONDS = 60
+_FIXTURE_SYNC_COMPLETED = asyncio.Event()
 
 
 async def _background_fixture_sync() -> None:
@@ -122,16 +124,19 @@ async def _background_fixture_sync() -> None:
 
     first_tick = True
     while True:
-        if first_tick:
-            try:
-                await run_historical_backfill()
-            except Exception:
-                logger.exception("Historical backfill failed")
-            first_tick = False
         try:
-            await run_fixture_sync()
-        except Exception:
-            logger.exception("Background fixture sync failed")
+            if first_tick:
+                try:
+                    await run_historical_backfill()
+                except Exception:
+                    logger.exception("Historical backfill failed")
+                first_tick = False
+            try:
+                await run_fixture_sync()
+            except Exception:
+                logger.exception("Background fixture sync failed")
+        finally:
+            _FIXTURE_SYNC_COMPLETED.set()
         await asyncio.sleep(_FIXTURE_SYNC_INTERVAL_SECONDS)
 
 
@@ -149,12 +154,18 @@ async def _background_settlement_sync() -> None:
     burst — both hit football-data.org's shared 10 req/min free-tier quota."""
     from ..services.settlement_service import run_settlement_pass
 
+    try:
+        await asyncio.wait_for(_FIXTURE_SYNC_COMPLETED.wait(), timeout=900)
+    except asyncio.TimeoutError:
+        logger.warning("Initial settlement proceeding before fixture sync completed")
+    await asyncio.sleep(_INITIAL_SETTLEMENT_DELAY_SECONDS)
+
     while True:
-        await asyncio.sleep(_SETTLEMENT_SYNC_INTERVAL_SECONDS)
         try:
             await run_settlement_pass()
         except Exception:
             logger.exception("Background settlement sync failed")
+        await asyncio.sleep(_SETTLEMENT_SYNC_INTERVAL_SECONDS)
 
 
 # docs/adr/0004-clv-capture.md: a kickoff that passes uncaptured is
@@ -207,6 +218,13 @@ async def lifespan(app: FastAPI):
         cache_backend=app.state.cache,
         provider=app.state.provider_registry.get("the_odds_api"),
     )
+    app.state.legacy_model_orchestrator = None
+    if settings.enable_legacy_inference:
+        from ..models.orchestrator import get_model_orchestrator
+
+        app.state.legacy_model_orchestrator = get_model_orchestrator(
+            app.state.cache.redis_client
+        )
 
     # Initialize async database
     try:

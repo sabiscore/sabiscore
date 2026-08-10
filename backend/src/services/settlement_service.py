@@ -17,7 +17,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_last_result: dict[str, Any] = {"outcome": "never_run", "consecutive_failures": 0}
+_last_result: dict[str, Any] = {
+    "outcome": "never_run",
+    "consecutive_failures": 0,
+    "total_failures": 0,
+    "last_success_at": None,
+    "settled_predictions_total": 0,
+}
 _registry_instance: "ModelRegistry | None" = None
 
 
@@ -39,7 +45,19 @@ def get_walk_forward_registry() -> "ModelRegistry":
 def last_settlement_result() -> dict[str, Any]:
     """Sync accessor for /health — a copy, never the live dict (health_check()
     is a sync function; this must never be awaited or block on I/O)."""
-    return dict(_last_result)
+    result = dict(_last_result)
+    last_success_at = result.get("last_success_at")
+    if isinstance(last_success_at, str):
+        try:
+            observed = datetime.fromisoformat(last_success_at.replace("Z", "+00:00"))
+            result["last_success_age_seconds"] = max(
+                0, int((datetime.now(timezone.utc) - observed).total_seconds())
+            )
+        except ValueError:
+            result["last_success_age_seconds"] = None
+    else:
+        result["last_success_age_seconds"] = None
+    return result
 
 
 async def run_settlement_pass() -> dict[str, Any]:
@@ -75,19 +93,25 @@ async def run_settlement_pass() -> dict[str, Any]:
         _last_result = {
             "outcome": "ok",
             "checked_at": checked_at,
+            "last_success_at": checked_at,
             "sync": sync_counts,
             "settled_predictions_total": len(records),
             "walk_forward": validation,
             "consecutive_failures": 0,
+            "total_failures": int(_last_result.get("total_failures", 0)),
         }
     except Exception as exc:
         logger.exception("settlement_pass: unhandled error")
         consecutive_failures = int(_last_result.get("consecutive_failures", 0)) + 1
+        from ..core.redaction import redact_text
+
         _last_result = {
+            **_last_result,
             "outcome": "error",
             "checked_at": checked_at,
-            "message": str(exc),
+            "message": redact_text(exc),
             "consecutive_failures": consecutive_failures,
+            "total_failures": int(_last_result.get("total_failures", 0)) + 1,
         }
 
     return _last_result

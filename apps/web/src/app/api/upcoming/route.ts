@@ -11,39 +11,17 @@ import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody } from '@/lib/proxy-uti
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 15;
+export const maxDuration = 30;
+const BACKEND_DEADLINE_MS = 8_000;
+const ALLOWED_LEAGUES = new Set(['EPL', 'CHAMPIONSHIP', 'LA_LIGA', 'SERIE_A', 'BUNDESLIGA', 'LIGUE_1', 'EREDIVISIE', 'UCL']);
 
-const PROXY_TIMEOUT_MS = 8_000;
-
-function boundedInteger(value: string | null, fallback: number, min: number, max: number): number | null {
-  if (value == null) return fallback;
-  if (!/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : null;
+function boundedInteger(value: string | null, fallback: number, minimum: number, maximum: number) {
+  const parsed = Number(value ?? fallback);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
-function booleanQuery(value: string | null, fallback: boolean): boolean | null {
-  if (value == null) return fallback;
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return null;
-}
-
-function unavailablePayload(reason: string, source: string) {
-  return {
-    upcoming_matches: [],
-    total: 0,
-    matches_with_value: 0,
-    avg_edge_pct: 0,
-    cache_hit: false,
-    ttl_seconds: 0,
-    source,
-    data_gap: true,
-    unavailable_reasons: [reason],
-    offseason: false,
-    next_season_start: null,
-    generated_at: new Date().toISOString(),
-  };
+function booleanQuery(value: string | null, fallback: boolean) {
+  return value === null ? fallback : value === 'true';
 }
 
 /**
@@ -59,24 +37,15 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
 
-    const league = searchParams.get('league') || undefined;
+    // Extract query parameters
+    const requestedLeague = searchParams.get('league');
+    const league = requestedLeague && ALLOWED_LEAGUES.has(requestedLeague.toUpperCase())
+      ? requestedLeague.toUpperCase()
+      : undefined;
     const daysAhead = boundedInteger(searchParams.get('days_ahead'), 7, 1, 30);
     const limit = boundedInteger(searchParams.get('limit'), 20, 1, 50);
-    const includePredictions = booleanQuery(searchParams.get('include_predictions'), false);
-    const includeValueBets = booleanQuery(searchParams.get('include_value_bets'), false);
-
-    if (
-      daysAhead === null ||
-      limit === null ||
-      includePredictions === null ||
-      includeValueBets === null ||
-      (league !== undefined && !/^[A-Za-z0-9 _-]{1,40}$/.test(league))
-    ) {
-      return NextResponse.json(
-        { ...unavailablePayload('INVALID_UPCOMING_QUERY', 'validation'), error: 'Invalid query parameters' },
-        { status: 400, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
+    const includePredictions = booleanQuery(searchParams.get('include_predictions'), true);
+    const includeValueBets = booleanQuery(searchParams.get('include_value_bets'), true);
 
     // Build backend URL with query params
     const backendBaseUrl = resolveBackendBaseUrl();
@@ -91,18 +60,33 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(url.toString(), {
       headers: proxyHeaders(),
-      signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
       cache: 'no-store',
+      signal: AbortSignal.timeout(BACKEND_DEADLINE_MS),
     });
     const body = await response.text().catch(() => '');
 
     if (!response.ok || isHtmlBody(body)) {
       return NextResponse.json(
         {
-          ...unavailablePayload('UPCOMING_BACKEND_UNAVAILABLE', 'backend_error'),
-          error: 'Backend service unavailable',
+          upcoming_matches: [],
+          total: 0,
+          matches_with_value: 0,
+          avg_edge_pct: 0.0,
+          cache_hit: false,
+          ttl_seconds: 0,
+          source: 'error',
+          status: 'UNAVAILABLE',
+          data_gap: true,
+          reason: 'backend_service_unavailable',
+          retryable: true,
+          freshness: null,
+          provenance: [],
+          generated_at: new Date().toISOString(),
+          deadline_ms: BACKEND_DEADLINE_MS,
+          offseason: false,
+          next_season_start: null,
         },
-        { status: response.status >= 400 && response.status < 500 ? response.status : 503, headers: { 'Cache-Control': 'no-store' } },
+        { status: 503 }
       );
     }
 
@@ -111,8 +95,8 @@ export async function GET(request: NextRequest) {
       data = JSON.parse(body);
     } catch {
       return NextResponse.json(
-        { ...unavailablePayload('UPCOMING_BACKEND_INVALID_RESPONSE', 'backend_error'), error: 'Unexpected response from backend' },
-        { status: 502, headers: { 'Cache-Control': 'no-store' } },
+        { upcoming_matches: [], total: 0, matches_with_value: 0, avg_edge_pct: 0, cache_hit: false, ttl_seconds: 0, source: 'error', error: 'Unexpected response from backend', offseason: false, next_season_start: null },
+        { status: 502 }
       );
     }
 
@@ -122,18 +106,30 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
       },
     });
-  } catch (error: unknown) {
-    const timedOut = error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name);
+  } catch {
+    console.error('[Upcoming Matches] backend request failed');
 
     return NextResponse.json(
       {
-        ...unavailablePayload(
-          timedOut ? 'UPCOMING_PROXY_TIMEOUT' : 'UPCOMING_PROXY_UNAVAILABLE',
-          timedOut ? 'timeout' : 'proxy_error',
-        ),
-        error: timedOut ? 'Upcoming fixtures timed out' : 'Upcoming fixtures unavailable',
+        upcoming_matches: [],
+        total: 0,
+        matches_with_value: 0,
+        avg_edge_pct: 0.0,
+        cache_hit: false,
+        ttl_seconds: 0,
+        source: 'error',
+        status: 'UNAVAILABLE',
+        data_gap: true,
+        reason: 'backend_deadline_or_network_failure',
+        retryable: true,
+        freshness: null,
+        provenance: [],
+        generated_at: new Date().toISOString(),
+        deadline_ms: BACKEND_DEADLINE_MS,
+        offseason: false,
+        next_season_start: null,
       },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
