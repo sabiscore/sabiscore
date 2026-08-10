@@ -295,6 +295,12 @@ pwsh -File scripts/run-canonical-ci.ps1 -Branch master
 
 This invokes and watches `.github/workflows/ci.yml` end to end. Treat any non-`success` conclusion as a hard release blocker.
 
+Readiness probe behavior:
+
+- `GET /health/ready` fails closed on core dependencies only: database, Alembic head, external-cache readiness policy, and strict model load.
+- The capability probe is additive and now runs only after those core checks are green. A `503` readiness response no longer triggers odds-provider reads or prediction-path warmups.
+- The root route now accepts both `GET /` and `HEAD /` so platform probes do not generate avoidable `405 Method Not Allowed` noise during startup.
+
 Latest local Phase 1-2 evidence on 2026-07-05:
 - `python -m src.cli providers doctor` and `providers status` passed in offline
   mode with the five-state public contract and no credential values printed.

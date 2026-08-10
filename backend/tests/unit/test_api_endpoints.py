@@ -61,6 +61,12 @@ def test_health_check(test_client: TestClient) -> None:
         assert "database" in data["components"]
         assert "cache" in data["components"]
 
+
+def test_root_head_probe_is_accepted(test_client: TestClient) -> None:
+    response = test_client.head("/")
+
+    assert response.status_code == 200
+
 def test_search_matches(test_client: TestClient, mock_async_session) -> None:
     """Test match search endpoint."""
     # Override the dependency

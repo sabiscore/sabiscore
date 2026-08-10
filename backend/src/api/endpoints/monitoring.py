@@ -525,16 +525,26 @@ async def readiness_check(
     if models_status.get("status") in ("not_ready", "error"):
         model_error_message = models_status.get("message")
 
-    # Capability probe: additive/informational only — never coupled to `status`/503.
-    # A single dyno's ML-pipeline hiccup must not flip infra routing; it must, however,
-    # never be silently reported as "ready" without ever having proven it (INV-20).
-    try:
-        capability = await _check_capability(db)
-    except Exception as exc:
-        logger.error("Capability probe raised unexpectedly: %s", exc)
+    # Capability probing is meaningful only after the core readiness gates pass.
+    # When infra is already not ready, probing the prediction path just burns quota,
+    # warms model state, and adds noisy warnings to a probe that is going to 503.
+    if ready:
+        try:
+            capability = await _check_capability(db)
+        except Exception as exc:
+            logger.error("Capability probe raised unexpectedly: %s", exc)
+            capability = {
+                "status": "failed",
+                "message": str(exc),
+                "match_id": None,
+                "league": None,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "cache_hit": False,
+            }
+    else:
         capability = {
-            "status": "failed",
-            "message": str(exc),
+            "status": "skipped_not_ready",
+            "message": "Capability probe skipped because core readiness checks are not yet green",
             "match_id": None,
             "league": None,
             "checked_at": datetime.now(timezone.utc).isoformat(),

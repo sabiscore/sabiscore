@@ -452,7 +452,7 @@ app.include_router(ws_router, tags=["WebSocket"])
 app.include_router(monitoring_router_root, tags=["monitoring"])
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "message": "Welcome to SabiScore API",

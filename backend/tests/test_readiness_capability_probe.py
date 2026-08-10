@@ -11,6 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import Response
 
 from src.api.endpoints import monitoring
 
@@ -157,6 +158,66 @@ async def test_second_call_within_ttl_is_served_from_cache(monkeypatch: pytest.M
     assert first["cache_hit"] is False
     assert second["cache_hit"] is True
     assert second["status"] == "verified"
+
+
+async def test_readiness_skips_capability_probe_when_core_checks_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = {"capability": 0}
+
+    class _BrokenEngine:
+        def connect(self):
+            raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(monitoring, "engine", _BrokenEngine())
+    monkeypatch.setattr(monitoring, "_check_alembic_revision", lambda: {"status": "ready"})
+
+    class _ReadyCache:
+        def production_ready(self) -> bool:
+            return True
+
+        def metrics_snapshot(self):
+            return {
+                "tier1_redis_enabled": False,
+                "tier1_redis_available": False,
+            }
+
+    monkeypatch.setattr(monitoring, "cache", _ReadyCache())
+    monkeypatch.setattr(
+        monitoring,
+        "_discover_model_artifacts",
+        lambda: {"count": 1},
+    )
+    monkeypatch.setattr(
+        monitoring,
+        "_resolve_required_leagues",
+        lambda: ["epl"],
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            models={"epl": SimpleNamespace(is_trained=True)},
+            models_loaded=True,
+            leagues_loaded=["epl"],
+            model_version="v5_phase7",
+            model_load_error_message=None,
+            model_load_in_progress=False,
+        )
+    )
+    request = SimpleNamespace(app=app)
+
+    async def _counted(_db):
+        called["capability"] += 1
+        return {"status": "verified"}
+
+    monkeypatch.setattr(monitoring, "_check_capability", _counted)
+
+    response = Response()
+    payload = await monitoring.readiness_check(request, response, db=object())
+
+    assert response.status_code == 503
+    assert called["capability"] == 0
+    assert payload["capability"]["status"] == "skipped_not_ready"
 
 
 async def _fixture():

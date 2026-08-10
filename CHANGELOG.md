@@ -7,6 +7,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Short-circuited the root readiness capability probe when core readiness is already failing, so `GET /health/ready` no longer burns provider/prediction work or adds misleading warning noise while still returning the correct `503` fail-closed result.
+- Added explicit `HEAD /` support on the FastAPI root route to stop platform startup probes from generating avoidable `405 Method Not Allowed` noise in Render logs.
 - Added `workflow_dispatch` to `.github/workflows/ci.yml` and a new
   `scripts/run-canonical-ci.ps1` helper so maintainers can trigger and watch the
   canonical Linux CI workflow from Windows without relying on POSIX shell parity.
