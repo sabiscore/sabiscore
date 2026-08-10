@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from ...db.models import Match, Odds, Prediction
 from ...db.session import get_async_session
+from ...models.active_generation import active_generation_is_certified
 from ...schemas.betting_intelligence import (
     CompetitionEnum,
     EvidenceTierEnum,
@@ -311,6 +312,7 @@ def _model_from_prediction(prediction: Optional[Prediction]) -> Optional[ModelIn
         model_version=str(prediction.model_version or "unknown"),
         calibration_method=str(metadata["calibration_method"]),
         calibration_validated=bool(metadata["calibration_validated"]),
+        generation_certified=active_generation_is_certified(),
         epistemic_uncertainty=float(metadata["epistemic_uncertainty"]),
         aleatoric_uncertainty=float(metadata["aleatoric_uncertainty"]),
         confidence_tier=EvidenceTierEnum(str(metadata["confidence_tier"])),

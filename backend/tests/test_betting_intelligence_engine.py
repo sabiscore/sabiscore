@@ -66,6 +66,7 @@ def _model(
         model_version="test-v1.0",
         calibration_method="isotonic",
         calibration_validated=calibration_validated,
+        generation_certified=True,
         epistemic_uncertainty=epistemic,
         aleatoric_uncertainty=0.10,
         confidence_tier=tier,
@@ -85,6 +86,18 @@ def _market(
         away_odds=away,
         captured_at=MARKET_NOW,
     )
+
+
+def test_uncertified_generation_forces_partial_and_zero_stake():
+    request = _request()
+    request.model = request.model.model_copy(update={"generation_certified": False})
+
+    result = analyze_match(request, evaluation_at=MARKET_NOW)
+
+    assert result.verdict == VerdictEnum.PARTIAL
+    assert result.stake == "pass"
+    assert result.stake_fraction == 0.0
+    assert "DATA_GAP: MODEL_GENERATION_UNCERTIFIED" in result.critical_gaps
 
 
 _FOUR_PROVIDERS = ["espn", "api_football", "football_data_org", "the_odds_api"]

@@ -522,8 +522,9 @@ async def readiness_check(
             "cache_hit": False,
         }
 
-    payload = {
+    payload: Dict[str, Any] = {
         "status": "ok" if ready else "not_ready",
+        "release_sha": (os.getenv("RENDER_GIT_COMMIT") or "local")[:40],
         "checks": checks,
         "capability": capability,
         "models": models_status.get("model_version") if models_loaded_flag else None,

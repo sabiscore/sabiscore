@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, status
+from ...models.active_generation import active_generation_is_certified
 
 from ...schemas.betting_intelligence import (
     BatchAnalysisRequest,
@@ -50,6 +51,18 @@ router = APIRouter(
 )
 
 
+def _with_server_generation(request: MatchAnalysisRequest) -> MatchAnalysisRequest:
+    if request.model is None:
+        return request
+    return request.model_copy(
+        update={
+            "model": request.model.model_copy(
+                update={"generation_certified": active_generation_is_certified()}
+            )
+        }
+    )
+
+
 @router.post(
     "/analyze",
     response_model=BatchAnalysisResponse,
@@ -74,8 +87,11 @@ async def analyze(
     """
     try:
         evaluation_at = datetime.now(timezone.utc)
+        governed_request = request.model_copy(
+            update={"matches": [_with_server_generation(match) for match in request.matches]}
+        )
         result = analyze_batch(
-            request=request,
+            request=governed_request,
             causal_drivers_map=causal_drivers,
             evaluation_at=evaluation_at,
         )
@@ -113,7 +129,7 @@ async def analyze_single(
     """Single-match convenience endpoint."""
     try:
         result = analyze_match(
-            request=request,
+            request=_with_server_generation(request),
             causal_drivers=causal_drivers,
             evaluation_at=datetime.now(timezone.utc),
         )

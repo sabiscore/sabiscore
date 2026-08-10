@@ -40,6 +40,7 @@ from ...data.elo_engine import EloContext
 from ...db.session import get_async_session
 from ...models.causal_selector import CausalFeatureResult
 from ...models.feature_registry import active_canonical_features
+from ...models.active_generation import active_generation_is_certified
 from ...schemas.full_analysis import (
     FullMatchAnalysisResponseSchema,
     PredictionSource,
@@ -583,6 +584,8 @@ async def get_full_analysis(
     league = str(live.get("league", league) or league)
     data_gaps: List[str] = list(live.get("data_gaps", []))
     critical_gaps: List[str] = list(live.get("critical_gaps", []))
+    if not active_generation_is_certified():
+        critical_gaps.append("MODEL_GENERATION_UNCERTIFIED")
     advisory_gaps: List[str] = list(live.get("advisory_gaps", []))
     conflicts: List[str] = list(live.get("conflicts", []))
     effective_kelly_cap, policy_gap, model_freshness_limit = _effective_kelly_cap(league)

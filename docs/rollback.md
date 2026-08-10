@@ -30,12 +30,18 @@ Previous stable commit: `a5a94f9 feat: finalize production data intelligence wor
 
 1. Read the active release manifest and verify its hashes before promotion.
 2. Retain the prior manifest and artifacts as an immutable last-known-good set.
-3. Atomically switch the active manifest to the prior set; do not copy individual
-   model files across generations.
+3. Revert the single release commit that changed the complete artifact set and
+   `backend/models/active_generation.json`; do not copy individual model files
+   across generations or edit hashes by hand.
 4. Run `python backend/scripts/verify_active_artifacts.py` and both-loader smoke
    tests, restart the backend, and verify `/health/ready` plus `/models/status`.
 5. Record the restored model version and hash, then restore the newer manifest
    only after the incident is resolved and the same gates pass.
+
+The manifest is fail-closed: a missing file, path escape, or SHA-256 mismatch
+must prevent model readiness. A rollback is incomplete until both production
+loaders consume the same verified generation and `/api/v1/models/status` reports
+the expected generation, manifest hash, certification state, and release SHA.
 
 ## Service-level rollback
 
@@ -53,11 +59,16 @@ IMAGE_TAG=<previous-tag> docker compose -f docker-compose.prod.yml up -d
 
 ### Frontend (Vercel)
 
-1. Open Vercel dashboard → your project → **Deployments**
-2. Find the last green deployment before the bad one
-3. Click **⋮ → Promote to Production**
+1. Record the failing production deployment id and its source SHA.
+2. Find the last green deployment whose source SHA matches the paired backend
+   release and whose browser/API probes were recorded.
+3. Promote that exact deployment; do not trigger a rebuild from a moving branch.
+4. Verify production aliases, the custom domain, CSP, release SHAs, five bounded
+   upcoming probes, and the observation-window error cluster before declaring
+   rollback complete.
 
-This requires no code changes and takes ~30 seconds.
+Do not promote a preview while GitHub release checks, backend same-SHA proof, or
+the Redis operator checkpoint is incomplete.
 
 ### Database
 

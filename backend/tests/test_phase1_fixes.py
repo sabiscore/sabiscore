@@ -186,8 +186,8 @@ class TestBUG002TFJSDisconnection:
 
         assert 'resolveBackendBaseUrl()' in content, \
             "predict/route.ts does not call resolveBackendBaseUrl()"
-        assert '/api/v1/predictions/predict' in content, \
-            "predict/route.ts does not proxy to /api/v1/predictions/predict"
+        assert '/api/v1/fixtures/${encodeURIComponent(matchId)}/analyze' in content, \
+            "predict/route.ts does not proxy verified fixtures to authoritative analysis"
         assert 'backendResponse = await fetch' in content, \
             "predict/route.ts does not fetch from backend"
 
@@ -198,12 +198,15 @@ class TestBUG002TFJSDisconnection:
         assert 'TFJSEnsembleEngine' not in content, \
             "predict/route.ts incorrectly uses TFJSEnsembleEngine"
 
-    def test_backend_health_check_endpoint_exists(self):
-        """Verify prediction route can check backend health"""
+    def test_verified_fixture_and_bounded_backend_contract(self):
+        """The proxy validates fixture identity and uses one bounded backend call."""
         content = self._predict_route_path().read_text()
 
-        assert '/api/v1/health' in content, \
-            "predict/route.ts missing health check endpoint"
+        assert 'validFixtureId(matchId)' in content
+        assert 'hasValidProbabilitySimplex(parsed)' in content
+        assert 'AbortSignal.timeout(8000)' in content
+        assert '/api/v1/health' not in content, \
+            "predict/route.ts must not add a serial health-check waterfall"
 
 
 class TestPhase1Integration:

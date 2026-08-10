@@ -25,6 +25,7 @@ class CoreModelInput(BaseModel):
     model_version: Optional[str] = None
     calibration_method: Optional[str] = None
     calibration_validated: Optional[bool] = None
+    generation_certified: Optional[bool] = None
     epistemic_uncertainty: Optional[float] = None
     aleatoric_uncertainty: Optional[float] = None
     confidence_tier: Optional[Literal["OK", "LOW_EVIDENCE"]] = None

@@ -23,6 +23,7 @@ paths = [
   '''(^|/)\.env(\.[a-z]+)?\.local$''',
   '''(^|/)backend/\.env$''',
   '''^\.worktrees/''',
+  '''(^|/)\.tmp/''',
   '''apps/web/\.next/''',
   '''backend/artifacts/''',
   '''test-results/''',

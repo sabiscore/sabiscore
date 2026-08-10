@@ -1,65 +1,39 @@
-/**
- * Metrics API Route
- * 
- * Returns detailed rolling metrics for dashboard.
- * Note: Uses Node.js runtime for localStorage compatibility in freeMonitoring.
- */
+/** Compatibility metrics route backed only by authoritative settlement data. */
 
-import { NextResponse } from 'next/server';
-import { freeMonitoring } from '@/lib/monitoring/free-analytics';
+import { NextResponse } from "next/server";
+import { isHtmlBody, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-utils";
 
-// Use Node.js runtime for localStorage compatibility
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [metrics, health, drift] = await Promise.all([
-      freeMonitoring.getMetrics(),
-      freeMonitoring.getHealthCheck(),
-      freeMonitoring.detectDrift(),
-    ]);
-    
-    return NextResponse.json({
-      metrics: {
-        accuracy: metrics.accuracy,
-        brierScore: metrics.brierScore,
-        roi: metrics.roi,
-        totalPredictions: metrics.totalPredictions,
-        correctPredictions: metrics.correctPredictions,
-        totalBets: metrics.totalBets,
-        winningBets: metrics.winningBets,
-        totalProfit: metrics.totalProfit,
-        byOutcome: metrics.byOutcome,
-        updatedAt: metrics.updatedAt,
-      },
-      health: {
-        status: health.status,
-        accuracy: health.accuracy,
-        brierScore: health.brierScore,
-        roi: health.roi,
-        predictionCount: health.predictionCount,
-        issues: health.issues,
-        lastUpdate: health.lastUpdate,
-        hasSufficientData: health.hasSufficientData,
-      },
-      drift: {
-        driftDetected: drift.driftDetected,
-        severity: drift.severity,
-        recommendation: drift.recommendation,
-        metrics: drift.metrics,
-      },
-      timestamp: new Date().toISOString(),
-    }, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-      },
+    const response = await fetch(`${resolveBackendBaseUrl()}/api/v1/model-performance/summary`, {
+      headers: proxyHeaders(),
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
-  } catch (error) {
-    console.error('Metrics fetch failed:', error);
-    return NextResponse.json({
-      error: 'Failed to fetch metrics',
-      timestamp: new Date().toISOString(),
-    }, { status: 500 });
+    const body = await response.text().catch(() => "");
+    if (isHtmlBody(body)) {
+      throw new Error("backend_unavailable");
+    }
+    const summary = JSON.parse(body) as Record<string, unknown>;
+    return NextResponse.json(
+      {
+        status: summary.status === "OK" ? "MEASURED" : "PENDING",
+        source: "backend_settlement",
+        summary,
+      },
+      { status: response.status, headers: { "Cache-Control": "no-store" } },
+    );
+  } catch {
+    return NextResponse.json(
+      {
+        status: "PENDING",
+        source: "backend_settlement",
+        reason: "backend_unavailable",
+      },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }

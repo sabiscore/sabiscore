@@ -111,6 +111,7 @@ class ModelInput(BaseModel):
     model_version: str
     calibration_method: str
     calibration_validated: bool
+    generation_certified: bool = False
     epistemic_uncertainty: float = Field(..., ge=0.0)
     aleatoric_uncertainty: float = Field(..., ge=0.0)
     confidence_tier: EvidenceTierEnum

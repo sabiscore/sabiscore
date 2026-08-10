@@ -1,0 +1,269 @@
+{
+  "holdout_season": "2526",
+  "served_head": true,
+  "leagues": {
+    "BUNDESLIGA": {
+      "incumbent": {
+        "accuracy": 0.5548172757475083,
+        "rps": 0.18996153546415553,
+        "brier": 0.5509931942078587,
+        "log_loss": 0.935537763248518,
+        "calibration_error": 0.12018424450970301,
+        "n": 301
+      },
+      "candidate": {
+        "accuracy": 0.5282392026578073,
+        "rps": 0.1989695550278033,
+        "brier": 0.5817390588591096,
+        "log_loss": 0.9790342813633024,
+        "calibration_error": 0.06723440059475709,
+        "n": 301
+      },
+      "candidate_rps_improvement": -0.009008019563647773,
+      "candidate_wins": false,
+      "market_baseline_rps": 0.19083929061889648,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 33,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.6235431060002943,
+          0.24548129387597853,
+          0.13097560012372728
+        ],
+        "away_favourite_probabilities": [
+          0.2978983006245255,
+          0.2816376468429608,
+          0.4204640525325137
+        ],
+        "max_probability_change": 0.3256448053757688,
+        "directionally_coherent": true
+      }
+    },
+    "EPL": {
+      "incumbent": {
+        "accuracy": 0.5173333333333333,
+        "rps": 0.20361049040572635,
+        "brier": 0.6189210804795098,
+        "log_loss": 1.0403177968047923,
+        "calibration_error": 0.04352599133099665,
+        "n": 375
+      },
+      "candidate": {
+        "accuracy": 0.49866666666666665,
+        "rps": 0.20646451068484264,
+        "brier": 0.6126555600695974,
+        "log_loss": 1.019423057613252,
+        "calibration_error": 0.05033699971235046,
+        "n": 375
+      },
+      "candidate_rps_improvement": -0.0028540202791162983,
+      "candidate_wins": false,
+      "market_baseline_rps": 0.2053660899400711,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 34,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.6825670065457747,
+          0.18423327389209432,
+          0.13319971956213086
+        ],
+        "away_favourite_probabilities": [
+          0.13233689635125806,
+          0.2114365602437032,
+          0.6562265434050387
+        ],
+        "max_probability_change": 0.5502301101945166,
+        "directionally_coherent": true
+      }
+    },
+    "EREDIVISIE": {
+      "incumbent": {
+        "accuracy": 0.49615384615384617,
+        "rps": 0.20477104658886608,
+        "brier": 0.6059831670334076,
+        "log_loss": 1.012883633981648,
+        "calibration_error": 0.06523864435644545,
+        "n": 260
+      },
+      "candidate": {
+        "accuracy": 0.5230769230769231,
+        "rps": 0.19840231894249855,
+        "brier": 0.593229655767579,
+        "log_loss": 0.9939868649896019,
+        "calibration_error": 0.04925992094217342,
+        "n": 260
+      },
+      "candidate_rps_improvement": 0.0063687276463675335,
+      "candidate_wins": true,
+      "market_baseline_rps": 0.19784937798976898,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 41,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.7028560834535157,
+          0.19625827104210514,
+          0.10088564550437916
+        ],
+        "away_favourite_probabilities": [
+          0.12131634662165923,
+          0.19576597425877112,
+          0.6829176791195697
+        ],
+        "max_probability_change": 0.5820320336151905,
+        "directionally_coherent": true
+      }
+    },
+    "LA_LIGA": {
+      "incumbent": {
+        "accuracy": 0.5333333333333333,
+        "rps": 0.20180306145637406,
+        "brier": 0.5797135386097911,
+        "log_loss": 0.9729834916921433,
+        "calibration_error": 0.0637030665905044,
+        "n": 375
+      },
+      "candidate": {
+        "accuracy": 0.5466666666666666,
+        "rps": 0.19663356355571796,
+        "brier": 0.5752297023446584,
+        "log_loss": 0.971389073416174,
+        "calibration_error": 0.04123960863362405,
+        "n": 375
+      },
+      "candidate_rps_improvement": 0.0051694979006561,
+      "candidate_wins": true,
+      "market_baseline_rps": 0.19628490507602692,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 34,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.7548854077286999,
+          0.17010509787313624,
+          0.07500949439816382
+        ],
+        "away_favourite_probabilities": [
+          0.08780217430668256,
+          0.18319729374756302,
+          0.7290005319457544
+        ],
+        "max_probability_change": 0.6670832334220174,
+        "directionally_coherent": true
+      }
+    },
+    "LIGUE_1": {
+      "incumbent": {
+        "accuracy": 0.5249169435215947,
+        "rps": 0.20318009934923592,
+        "brier": 0.5949139008475054,
+        "log_loss": 0.9973810558042933,
+        "calibration_error": 0.08950196374084139,
+        "n": 301
+      },
+      "candidate": {
+        "accuracy": 0.5149501661129569,
+        "rps": 0.2034483125573563,
+        "brier": 0.594627946477895,
+        "log_loss": 0.9977027247672666,
+        "calibration_error": 0.028587766566688513,
+        "n": 301
+      },
+      "candidate_rps_improvement": -0.0002682132081203714,
+      "candidate_wins": false,
+      "market_baseline_rps": 0.19912628829479218,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 33,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.6105708168197189,
+          0.20617189146961307,
+          0.18325729171066799
+        ],
+        "away_favourite_probabilities": [
+          0.06938876446394607,
+          0.2318287119435404,
+          0.6987825235925136
+        ],
+        "max_probability_change": 0.5411820523557729,
+        "directionally_coherent": true
+      }
+    },
+    "SERIE_A": {
+      "incumbent": {
+        "accuracy": 0.528,
+        "rps": 0.2051491605335584,
+        "brier": 0.6020618968743299,
+        "log_loss": 1.0063097831400947,
+        "calibration_error": 0.055163125089086947,
+        "n": 375
+      },
+      "candidate": {
+        "accuracy": 0.5333333333333333,
+        "rps": 0.19947788296020016,
+        "brier": 0.587855255043604,
+        "log_loss": 0.9903563948664595,
+        "calibration_error": 0.04023839904434153,
+        "n": 375
+      },
+      "candidate_rps_improvement": 0.005671277573358224,
+      "candidate_wins": true,
+      "market_baseline_rps": 0.19714131951332092,
+      "candidate_beats_market_baseline": false,
+      "responsive_features": 33,
+      "coherent_price_perturbation": {
+        "home_favourite_probabilities": [
+          0.6426835566466864,
+          0.23369684032423507,
+          0.12361960302907851
+        ],
+        "away_favourite_probabilities": [
+          0.1025944511673961,
+          0.21977055442879528,
+          0.6776349944038085
+        ],
+        "max_probability_change": 0.55401539137473,
+        "directionally_coherent": true
+      }
+    }
+  },
+  "gates": {
+    "valid_probability_simplex": {
+      "status": "PASS",
+      "evidence": "evaluate() rejected no candidate holdout probability row"
+    },
+    "input_responsiveness": {
+      "status": "PASS",
+      "minimum_responsive_features": 33
+    },
+    "coherent_price_perturbation": {
+      "status": "PASS"
+    },
+    "serving_feature_availability": {
+      "status": "FAIL",
+      "summary": {
+        "features": 68,
+        "training_defaulted_slots": 24,
+        "non_variable_training_slots": 24,
+        "serving_schema_misaligned_slots": 11,
+        "always_data_gap_slots": 4
+      }
+    },
+    "primary_metric_improvement": {
+      "status": "PASS",
+      "mean_rps_improvement": 0.0008465416782495692
+    },
+    "no_league_regression": {
+      "status": "FAIL",
+      "league_wins": 3,
+      "leagues_compared": 6
+    },
+    "market_baseline": {
+      "status": "FAIL",
+      "leagues_beating_market": 0
+    }
+  },
+  "candidate_league_wins": 3,
+  "leagues_compared": 6,
+  "mean_rps_improvement": 0.0008465416782495692,
+  "no_league_regression": false,
+  "promotion_permitted": false
+}

@@ -22,7 +22,11 @@ function infrastructureError(message: string, status: number) {
 export async function GET() {
   try {
     const url = `${resolveBackendBaseUrl()}/api/v1/model-performance/summary`;
-    const response = await fetch(url, { headers: proxyHeaders() });
+    const response = await fetch(url, {
+      headers: proxyHeaders(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
     const body = await response.text().catch(() => '');
 
     if (isHtmlBody(body)) {
@@ -36,7 +40,9 @@ export async function GET() {
     }
   } catch (error: unknown) {
     return infrastructureError(
-      error instanceof Error ? error.message : 'Unknown error',
+      error instanceof DOMException && error.name === 'TimeoutError'
+        ? 'Backend performance request timed out'
+        : 'Backend performance service unavailable',
       503,
     );
   }

@@ -1,263 +1,125 @@
 /**
- * Prediction API Route
+ * Strict prediction compatibility proxy.
  *
- * Proxies prediction requests to the production FastAPI ensemble backend.
+ * Only a fixture persisted by the backend may be analysed. The backend response
+ * is returned unchanged after validating its probability simplex; this route
+ * never invents fixture context, fills missing probabilities, or records local
+ * outcomes/performance.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { freeMonitoring } from '@/lib/monitoring/free-analytics';
-import {
-  getCachedPrediction,
-  setCachedPrediction,
-  generateMatchId,
-} from '@/lib/cache/prediction-cache';
-import { isHtmlBody } from '@/lib/proxy-utils';
+import { NextRequest, NextResponse } from "next/server";
+import { isHtmlBody, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-utils";
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // 30 second timeout
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 15;
 
-interface PredictRequestBody {
-  home_team?: string;
-  away_team?: string;
-  match_id?: string;
-  matchup?: {
-    homeTeam?: string;
-    awayTeam?: string;
-    league?: string;
-    label?: string;
-  };
-  homeTeam?: string;
-  awayTeam?: string;
-  league?: string;
-  odds?: Record<string, number>;
-  features?: { odds?: Record<string, number> };
-  kickoff_time?: string;
-  kickoffTime?: string;
-  bankroll?: number;
+type PredictionPayload = {
+  probabilities?: { home?: unknown; draw?: unknown; away?: unknown } | null;
+};
+
+function validFixtureId(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 1 && value.length <= 128 &&
+    /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(value);
 }
 
-interface BackendPredictionResult {
-  predictions?: {
-    home_win?: number;
-    home_win_prob?: number;
-    draw?: number;
-    draw_prob?: number;
-    away_win?: number;
-    away_win_prob?: number;
-  };
-  prediction?: {
-    homeWin?: number;
-    draw?: number;
-    awayWin?: number;
-    confidence?: number;
-  };
-  confidence?: number;
-  metadata?: { ensemble_agreement?: number };
-  brier_score?: number;
-  model_version?: string | number;
-}
-
-function resolveBackendBaseUrl(): string {
-  const configured = process.env.SABISCORE_BACKEND_URL;
-  if (configured && configured.trim().length > 0) {
-    return configured.replace(/\/+$/, '');
+function hasValidProbabilitySimplex(payload: PredictionPayload): boolean {
+  const values = [
+    payload.probabilities?.home,
+    payload.probabilities?.draw,
+    payload.probabilities?.away,
+  ];
+  if (!values.every((value) => typeof value === "number" && Number.isFinite(value))) {
+    return false;
   }
-  return 'http://127.0.0.1:8000';
-}
-
-function buildBackendPayload(body: PredictRequestBody, generatedMatchId: string) {
-  if (body?.home_team && body?.away_team) {
-    return {
-      ...body,
-      match_id: body.match_id || generatedMatchId,
-    };
-  }
-
-  const matchup = body?.matchup || {};
-  return {
-    match_id: generatedMatchId,
-    home_team: matchup.homeTeam || body?.homeTeam || 'Home',
-    away_team: matchup.awayTeam || body?.awayTeam || 'Away',
-    league: matchup.league || body?.league || 'EPL',
-    odds: body?.odds || body?.features?.odds || {},
-    kickoff_time: body?.kickoff_time || body?.kickoffTime || null,
-    bankroll: body?.bankroll,
-  };
-}
-
-function normalizeBackendPrediction(result: BackendPredictionResult) {
-  const predictions = result?.predictions ?? {};
-  const homeWin = Number(predictions.home_win ?? predictions.home_win_prob ?? result?.prediction?.homeWin ?? 0);
-  const draw = Number(predictions.draw ?? predictions.draw_prob ?? result?.prediction?.draw ?? 0);
-  const awayWin = Number(predictions.away_win ?? predictions.away_win_prob ?? result?.prediction?.awayWin ?? 0);
-  const confidence = Number(result?.confidence ?? result?.prediction?.confidence ?? Math.max(homeWin, draw, awayWin));
-
-  return {
-    homeWin,
-    draw,
-    awayWin,
-    confidence,
-    ensembleAgreement: Number(result?.metadata?.ensemble_agreement ?? confidence),
-    calibratedBrier: Number(result?.brier_score ?? 0),
-    backend: result,
-  };
+  const probabilities = values as number[];
+  return probabilities.every((value) => value >= 0 && value <= 1) &&
+    Math.abs(probabilities.reduce((sum, value) => sum + value, 0) - 1) <= 1e-6;
 }
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  
+  let body: unknown;
   try {
-    const body = (await request.json()) as PredictRequestBody;
-    const matchup = body?.matchup;
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "invalid_request", message: "A JSON body is required" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
-    if (!matchup && !(body?.home_team && body?.away_team)) {
-      return NextResponse.json({
-        error: 'Missing match context',
-        message: 'Request must include matchup or home_team/away_team fields',
-      }, { status: 400 });
-    }
-    
-    // Generate match ID for caching
-    const matchId = matchup ? generateMatchId(
-      matchup.homeTeam ?? '',
-      matchup.awayTeam ?? '',
-      matchup.league
-    ) : `unknown-${Date.now()}`;
-    
-    // Check cache first
-    const cached = await getCachedPrediction(matchId);
-    if (cached) {
-      console.log(`✅ Cache hit for ${matchId}`);
-      return NextResponse.json({
-        ...cached,
-        performance: {
-          inferenceTime: 0,
-          totalTime: Date.now() - startTime,
-          fromCache: true,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
+  const matchId = (body as { match_id?: unknown })?.match_id;
+  if (!validFixtureId(matchId)) {
+    return NextResponse.json(
+      {
+        error: "verified_fixture_required",
+        message: "match_id must identify a persisted backend fixture",
+      },
+      { status: 422, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
-    const backendBaseUrl = resolveBackendBaseUrl();
-    const backendPayload = buildBackendPayload(body, matchId);
-
-    // Run backend prediction with performance tracking
-    const predictionStart = Date.now();
-    const backendResponse = await fetch(`${backendBaseUrl}/api/v1/predictions/predict`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(backendPayload),
-      cache: 'no-store',
-    });
-
-    const predBody = await backendResponse.text().catch(() => '');
-    if (!backendResponse.ok || isHtmlBody(predBody)) {
-      throw new Error(
-        isHtmlBody(predBody)
-          ? 'Backend service unavailable'
-          : `Backend prediction failed (${backendResponse.status}): ${predBody.slice(0, 120)}`
+  try {
+    const backendResponse = await fetch(
+      `${resolveBackendBaseUrl()}/api/v1/fixtures/${encodeURIComponent(matchId)}/analyze`,
+      {
+        method: "POST",
+        headers: proxyHeaders(),
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    const responseBody = await backendResponse.text().catch(() => "");
+    if (isHtmlBody(responseBody)) {
+      return NextResponse.json(
+        { error: "backend_unavailable", message: "Backend service unavailable" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
 
-    let backendResult: BackendPredictionResult;
+    let parsed: PredictionPayload;
     try {
-      backendResult = JSON.parse(predBody) as BackendPredictionResult;
+      parsed = JSON.parse(responseBody) as PredictionPayload;
     } catch {
-      throw new Error('Backend returned an unexpected response');
+      return NextResponse.json(
+        { error: "invalid_backend_response", message: "Backend returned invalid JSON" },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
     }
-    const prediction = normalizeBackendPrediction(backendResult);
-    const inferenceTime = Date.now() - predictionStart;
-    
-    // Track prediction with performance metrics
-    if (matchup && matchup.homeTeam && matchup.awayTeam) {
-      await freeMonitoring.trackPrediction({
-        id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        matchup: matchup.label || `${matchup.homeTeam} vs ${matchup.awayTeam}`,
-        homeTeam: matchup.homeTeam,
-        awayTeam: matchup.awayTeam,
-        league: matchup.league || 'unknown',
-        timestamp: Date.now(),
-        prediction: {
-          homeWin: prediction.homeWin,
-          draw: prediction.draw,
-          awayWin: prediction.awayWin,
-          confidence: prediction.confidence,
+
+    if (backendResponse.ok && !hasValidProbabilitySimplex(parsed)) {
+      return NextResponse.json(
+        {
+          error: "invalid_probability_simplex",
+          message: "Backend prediction probabilities are missing or invalid",
         },
-      });
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
     }
-    
-    const totalTime = Date.now() - startTime;
-    
-    // Cache the prediction result
-    const responseData = {
-      prediction,
-      performance: {
-        inferenceTime,
-        totalTime,
-        fromCache: false,
-      },
-      metadata: {
-        ensembleAgreement: prediction.ensembleAgreement,
-        calibratedBrier: prediction.calibratedBrier,
-      },
-    };
-    
-    await setCachedPrediction(matchId, responseData);
-    
-    return NextResponse.json({
-      ...responseData,
-      timestamp: new Date().toISOString(),
+
+    return NextResponse.json(parsed, {
+      status: backendResponse.status,
+      headers: { "Cache-Control": "no-store" },
     });
-  } catch (error) {
-    console.error('Prediction failed:', error);
-    
-    // Track error for monitoring
-    await freeMonitoring.trackError({
-      type: 'prediction_error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: Date.now(),
-    });
-    
-    return NextResponse.json({
-      error: 'Prediction failed',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
-    }, { status: 500 });
+  } catch (error: unknown) {
+    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+    return NextResponse.json(
+      {
+        error: timedOut ? "backend_timeout" : "backend_unavailable",
+        message: timedOut ? "Prediction request timed out" : "Backend service unavailable",
+      },
+      { status: timedOut ? 504 : 503, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }
 
 export async function GET() {
-  try {
-    const backendBaseUrl = resolveBackendBaseUrl();
-    const healthResponse = await fetch(`${backendBaseUrl}/api/v1/health`, {
-      method: 'GET',
-      cache: 'no-store',
-    });
-
-    const healthBody = await healthResponse.text().catch(() => '');
-
-    if (!healthResponse.ok || isHtmlBody(healthBody)) {
-      return NextResponse.json({ status: 'not_ready', error: 'Backend service unavailable' }, { status: 503 });
-    }
-
-    let info: unknown;
-    try {
-      info = JSON.parse(healthBody);
-    } catch {
-      return NextResponse.json({ status: 'not_ready', error: 'Unexpected response from backend' }, { status: 503 });
-    }
-
-    return NextResponse.json({
-      status: 'ready',
-      backend: info,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    return NextResponse.json({
-      status: 'not_ready',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 503 });
-  }
+  return NextResponse.json(
+    {
+      status: "ready",
+      mode: "verified_fixture_proxy",
+      outcomeMutation: "retired",
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

@@ -13,8 +13,7 @@ from ...db.session import get_async_session
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
-from ...services.upcoming_match_service import UpcomingMatchService
-from ...services.odds_service import OddsService, get_odds_service
+from ...monitoring.metrics import metrics_collector
 
 router = APIRouter(tags=["performance"])
 
@@ -38,6 +37,8 @@ class ValueBetScanResponse(BaseModel):
     total: int
     days: int
     data_gap: bool = False
+    reason: Optional[str] = None
+    source: str = "persisted_decisions"
     generated_at: str
 
 
@@ -45,75 +46,24 @@ class ValueBetScanResponse(BaseModel):
 async def value_bet_scan(
     days: int = Query(7, ge=1, le=14),
     limit: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_async_session),
-    odds_service: OddsService = Depends(get_odds_service),
 ) -> ValueBetScanResponse:
-    service = UpcomingMatchService(
-        odds_service=odds_service if isinstance(odds_service, OddsService) else None
-    )
-    payload = await service.get_upcoming_matches_with_predictions(
-        db,
-        league=None,
-        days_ahead=days,
-        limit=200,
-        include_value_bets=True,
-    )
+    """Return only persisted, independently gated opportunities.
 
-    rows: List[ValueBetScanFixture] = []
-    for match in payload.get("upcoming_matches", []):
-        value_bets = match.get("value_bets") or []
-        if not value_bets:
-            continue
-
-        try:
-            best = max(value_bets, key=lambda v: float(v.get("edge_pct", 0.0)))
-            edge = float(best.get("edge_pct", 0.0))
-        except Exception:
-            continue
-
-        if edge <= 0:
-            continue
-
-        predictions = match.get("predictions") or {}
-        confidence = predictions.get("confidence")
-        outcome = best.get("market") or best.get("outcome")
-        model_prob = best.get("fair_probability") or best.get("model_prob")
-        implied_prob = best.get("implied_probability") or best.get("implied_prob")
-        odds = best.get("odds")
-        if implied_prob is None and odds and float(odds) > 0:
-            implied_prob = round(1.0 / float(odds), 4)
-
-        rows.append(
-            ValueBetScanFixture(
-                match_id=str(match.get("id", "")),
-                home_team=str(match.get("home_team", "")),
-                away_team=str(match.get("away_team", "")),
-                league=str(match.get("league", "")),
-                kickoff_utc=str(match.get("match_date", "")),
-                edge_pct=edge,
-                confidence=float(confidence) if confidence is not None else None,
-                outcome=str(outcome) if outcome else None,
-                model_prob=float(model_prob) if model_prob is not None else None,
-                implied_prob=float(implied_prob) if implied_prob is not None else None,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            )
-        )
-
-    rows.sort(key=lambda row: row.edge_pct, reverse=True)
-    rows = rows[:limit]
-
-    # data_gap=True when the service returned no matches or none had predictions
-    data_gap = len(payload.get("upcoming_matches", [])) == 0 or (
-        len(rows) == 0 and any(
-            bool(m.get("predictions")) for m in payload.get("upcoming_matches", [])
-        )
-    )
-
+    The previous request path performed fresh model and odds work across 200
+    fixtures and repeatedly exceeded Vercel's function limit. The legacy
+    ``value_bets`` table does not store the evidence passport, certification
+    state, coherent snapshot identity, or stake-permission gate needed to prove
+    executability. Until an authoritative persisted decision exists, the only
+    honest bulk result is an explicit empty data gap.
+    """
+    del limit  # retained as a compatible public query parameter
+    metrics_collector.increment("value_bet_scan.no_persisted_decisions")
     return ValueBetScanResponse(
-        fixtures=rows,
-        total=len(rows),
+        fixtures=[],
+        total=0,
         days=days,
-        data_gap=data_gap,
+        data_gap=True,
+        reason="NO_PERSISTED_EXECUTABLE_OPPORTUNITIES",
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
 

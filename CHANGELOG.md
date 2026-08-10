@@ -7,6 +7,28 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Moved public upcoming-fixture reads to cache/PostgreSQL only. Provider fixture
+  acquisition remains in the periodic sync service; prediction-free reads and
+  web proxies now have explicit deadlines and structured provenance/data-gap
+  responses.
+- Retired synchronous 200-fixture value scanning. The stable endpoint now exposes
+  only fresh persisted gated decisions (currently an empty non-executable gap),
+  and the UI no longer promotes a bulk best-bet scan.
+- Retired public outcome mutation and client-local monitoring truth. Health,
+  performance, and monitoring surfaces now use backend settlement evidence;
+  absent samples render nullable `Pending` metrics.
+- Made `/api/predict` a verified-fixture-only proxy that preserves the backend
+  analysis and rejects missing, non-finite, out-of-range, or non-simplex
+  probabilities without filling or normalization.
+- Added one hash-validated active-generation manifest consumed by both model
+  loaders. The current active generation is explicitly `UNVERIFIED`, so both
+  independent betting engines add a critical generation gap and expose zero
+  stake while analytical output remains available.
+- Re-ran Apex training with pre-2024/25 training, 2024/25 calibration, and an
+  untouched 2025/26 evaluation. The candidate passed simplex, responsiveness,
+  coherent-price perturbation, and mean RPS-improvement gates, but failed serving
+  feature availability, market baseline, and no-league-regression gates. It
+  remains quarantined with `promotion_permitted: false`.
 - Made caller-supplied `/api/v1/predictions/analyze` probabilities explicitly
   external and unverified. They now fail closed with
   `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and zero stake.
@@ -39,12 +61,17 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   instead of crashing import, but production still requires operator rotation
   and a valid `redis://` or `rediss://` value.
 
-Validation completed locally: backend `1259 passed, 13 skipped`; frontend
-Vitest `118 passed`; lint, type-check, Next.js production build, 78-path OpenAPI,
-active artifact verification, NEXUS discovery, and production Compose config
-passed. Docker image builds, production Alembic connectivity, credential
-rotation, candidate model certification, and live same-SHA deployment proof
-remain release blockers.
+Validation completed locally: backend `1265 passed, 13 skipped`; changed-file
+Ruff passed; mypy improved from the accepted 784-error ceiling to 783 errors;
+frontend ESLint, TypeScript, 19 Vitest files / 123 tests, Next.js 15.5.19
+production build, and 36/36 desktop/mobile Playwright flows passed. The 78-path
+OpenAPI check, scraper tests/manifest, active-artifact verification, current-tree
+Gitleaks, CSP checks, and production Compose configuration also passed. Full
+history still has two unproven-revocation secret findings. Both Docker image
+builds timed out without producing tags; production Alembic upgrade timed out;
+GitHub jobs are locked by account billing; the deployed Render/Vercel releases
+are stale and unhealthy; and Redis rotation is operator-blocked. No merge or
+production promotion is permitted.
 
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 

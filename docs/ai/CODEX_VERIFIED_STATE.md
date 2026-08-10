@@ -7,8 +7,26 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 
 ## Fresh Apex activation evidence from 2026-08-10
 
-- Branch `feat/market-odds-features` remains a dirty integration checkout. The
-  unrelated `data/cache/football_data/E0_2324.csv` change is preserved and must
+- Upcoming fixture reads are now cache/PostgreSQL-first and provider-free on the
+  public request path. Prediction-free reads have a five-second backend deadline
+  and an eight-second Vercel proxy deadline with structured data gaps.
+- `/value-bet-scan` no longer performs 200 synchronous analyses; it returns only
+  persisted fresh gated opportunities, or an empty non-executable data gap.
+- Health accuracy/RPS/edge fields are nullable and `Pending` without settled
+  backend samples. Public outcome mutation and client-local performance truth are
+  retired; `/api/predict` requires a persisted fixture and validates the backend
+  probability simplex without zero filling.
+- Active v5 artifacts are governed by one hash-validated generation manifest used
+  by both loaders. The generation is `UNVERIFIED`, therefore both betting engines
+  enforce a critical generation gap and zero stake.
+- Apex chronological evidence uses pre-2024/25 training, 2024/25 calibration, and
+  untouched 2025/26 evaluation. The candidate wins 3/6 active-league RPS
+  comparisons and 0/6 market-baseline comparisons. Serving availability also
+  fails (11 schema-misaligned and four always-data-gap slots), so promotion stays
+  closed.
+- Work is isolated on `feat/market-odds-features` in a clean linked worktree.
+  Dirty local `master`, the two local skill deletions, and the unrelated
+  `data/cache/football_data/E0_2324.csv` modification remain untouched and must
   not enter a release commit.
 - Generated model files are quarantined under `backend/models/candidate/` with
   `UNVERIFIED_CANDIDATE` status and promotion disabled. Active v5 binaries were
@@ -26,33 +44,38 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 - Codex discovery validation reports 40 canonical skills and `.agents/skills`
   resolves to `.ai/skills`. A Codex/VS Code restart may be needed to refresh the
   selector after the junction is created.
-- Backend: `1259 passed, 13 skipped`; focused post-suite hardening tests passed.
-  Repository-wide Ruff now passes. Repository-wide mypy still exposes existing
-  SQLAlchemy and legacy typing debt.
-- Frontend: lint, type-check, 17 Vitest files / 118 tests, and the Next.js
+- Backend: `1265 passed, 13 skipped` in the final full run. Changed-file Ruff
+  passes. Mypy reports 783 errors in 127 files / 232 checked files, one below the
+  accepted 784-error ceiling; no new typing debt was added. A repository-wide
+  Ruff invocation that includes legacy utility scripts still exposes 33
+  pre-existing script findings.
+- Frontend: lint, type-check, 19 Vitest files / 123 tests, and the Next.js
   15.5.19 production build passed. Playwright passed 36/36 desktop/mobile tests,
   including route overflow, keyboard, verified-fixture, and decision-state flows.
 - OpenAPI verification passed with 78 paths. Alembic has one head
-  (`0006_canonical_league_ids`). Production `alembic check` cannot run from this
-  host because the configured Render-internal PostgreSQL hostname does not
-  resolve externally; SQLite fallback was not used.
-- `docker compose -f docker-compose.prod.yml config --quiet` passed. Image builds
-  are blocked because the Docker Desktop Linux daemon is not running.
-- Gitleaks scanned the full current worktree (~309.87 MB) with no leaks. Full Git
-  history still contains two redacted `backend/.env.example` findings: an old
-  `SECRET_KEY` and `API_FOOTBALL_KEY`. They were not ignored because rotation is
-  not proven.
+  (`0006_canonical_league_ids`). Production `alembic upgrade head` timed out at
+  120 seconds; `alembic check` therefore remains unexecuted. SQLite fallback was
+  not used.
+- `docker compose -f docker-compose.prod.yml config --quiet` passed. The Docker
+  daemon responds, but backend and web image builds timed out after 604 and 304
+  seconds and produced no tagged image.
+- Gitleaks scanned the current worktree (~178.21 MB) with no leaks. Full Git
+  history still contains exactly two `backend/.env.example` findings: an old
+  `SECRET_KEY` fingerprint at `d604c13` and `API_FOOTBALL_KEY` fingerprint at
+  `67ed0ab`. They were not ignored because revocation is not proven.
 - The supplied Render log shows an invalid Redis URL causing the deployed server
   to crash before bind. Code now degrades safely for malformed URLs, but the
   exposed credential must still be rotated and Render must receive a valid
   `redis://` or `rediss://` secret before release.
-- Live proof is not coherent. Direct Render readiness/provider/fixture/model
-  probes timed out. `sabiscore.vercel.app/api/health` returned 404. The responding
-  `web-lac-theta-42.vercel.app` deployment reports frontend SHA `1769b13`, still
-  publishes hardcoded accuracy/Brier/RPS fields, and returns 404 for the new model
-  status proxy. Its cached backend readiness says DB/cache/models ready and one
-  La Liga capability verified; a full-analysis request returned `AVAILABLE` but
-  correctly kept stake disabled with one critical gap. No backend SHA was exposed.
+- Live proof is not coherent. Vercel recorded 86 timeout errors in seven days on
+  `/api/upcoming` and `/api/value-bet-scan`. The existing PR preview at `dd24536`
+  returns a platform 504 for prediction-free upcoming, times out model status,
+  and still publishes hardcoded health metrics. Production remains on frontend
+  SHA `1769b13`; neither deployment proves a matching backend SHA. The supplied
+  Render evidence is stale and lacks the Redis/startup fixes.
+- GitHub Actions did not execute the required jobs: every locked job has
+  `runner_id: 0`, no steps, and an account-billing-lock annotation. Local success
+  does not replace the absent Linux security/backend/web/Playwright/model evidence.
 - The model-artifact workflow now validates the actual `backend/models` artifacts,
   both production loaders, fixture sensitivity, and the closed candidate promotion
   manifest instead of generating dummy models in the wrong directory.

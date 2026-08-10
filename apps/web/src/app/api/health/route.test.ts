@@ -103,5 +103,9 @@ describe("/api/health backend status discrimination", () => {
 
     expect(body.backendStatus).toBe("ok");
     expect(body.status).toBe("healthy");
+    expect(body.accuracy).toBeNull();
+    expect(body.brierScore).toBeNull();
+    expect(body.avgEdgePct).toBeNull();
+    expect(body.performanceStatus).toBe("PENDING");
   });
 });

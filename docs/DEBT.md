@@ -14,16 +14,28 @@ disguise — say so honestly.
 Generated v5-named binaries were written over the active artifact paths before a
 qualifying promotion decision. The active binaries have been restored and the
 generated files moved to `backend/models/candidate/` with an explicit
-`UNVERIFIED_CANDIDATE` manifest. The new Apex feature schema and temporal
-meta-model/calibration implementation are code-complete, but a full chronological
-run, untouched final-season evaluation, per-competition RPS/baseline evidence,
-hash/version manifest, and dual-loader proof have not yet been executed for a new
-generation. Eredivisie remains pooled fallback; UCL remains generic and capped at
-`ACTIONABLE`.
+`UNVERIFIED_CANDIDATE` manifest.
+
+The required chronological run is now executed: training ends in 2023/24,
+calibration is 2024/25, and the untouched evaluation season is 2025/26. The exact
+stacked served head passed probability-simplex, input-responsiveness, coherent
+price-perturbation, and positive mean RPS-improvement gates. Promotion still
+fails three hard gates:
+
+- RPS regressed in Bundesliga, EPL, and Ligue 1 (candidate won only 3/6 leagues);
+- the candidate beat the coherent market baseline in 0/6 evaluated league rows;
+- serving availability fails with 11 schema-misaligned positions and four
+  always-data-gap slots; 24/68 training slots were defaulted/non-variable.
+
+Evidence is versioned in `training_report_real.json`, `comparison_report.json`,
+and `feature_availability_matrix.json`. Eredivisie remains pooled fallback; UCL
+remains generic and capped at `ACTIONABLE`.
 
 **Release rule:** candidate promotion is forbidden while
 `promotion_permitted=false`. Do not rename or copy candidate files into the active
-directory to make deployment pass.
+directory to make deployment pass. The active v5 generation is hash-locked but
+formally `UNVERIFIED`; until it is certified, both betting engines must keep every
+public stake at zero.
 
 ## 15. Redis credential incident and Render configuration are operator-blocked
 
@@ -39,6 +51,30 @@ or modify the protected Render secret.
 Render secret without printing it; verify cache connection and application
 readiness; revoke the exposed credential; then run the live secret/log probe.
 Production remains blocked until every step is recorded.
+
+## 16. Release infrastructure and historical-secret gates remain closed
+
+**Tier:** `FIX-NOW` / P0 before merge or deployment. **Verified:** 2026-08-10.
+
+- Current-tree Gitleaks passes. Full-history Gitleaks still reports exactly two
+  historical `backend/.env.example` fingerprints: `generic-api-key:17` at
+  `d604c13` and `generic-api-key:10` at `67ed0ab`. Neither may be waived until
+  the credential owner supplies dated revocation evidence for that exact value.
+- GitHub required jobs have `runner_id: 0`, no steps, and the annotation
+  `The job was not started because your account is locked due to a billing issue.`
+  The security, backend, web, Playwright, and model-validation jobs must be
+  rerun after billing is resolved; workflow edits must not bypass this gate.
+- Docker Compose configuration passes, but backend and web image builds timed
+  out after 604 and 304 seconds respectively and produced no tagged images.
+- Alembic reports one head (`0006_canonical_league_ids`), but the production
+  `upgrade head` connection attempt timed out after 120 seconds, so `check` and
+  migration-head proof remain absent.
+- The canonical `make verify` cannot execute faithfully on this Windows host
+  because its recipe assumes POSIX shell syntax and `jq`. The Linux CI run is
+  mandatory and may not be replaced by a green local summary.
+
+**Release rule:** keep PR #5 unmerged and do not activate Render or promote a
+Vercel deployment while any item above remains unproven.
 
 ## 12. Certified artifacts were trained on synthetic data — RESOLVED, with a residual
 

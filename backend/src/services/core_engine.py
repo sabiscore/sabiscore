@@ -136,6 +136,8 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
     source_status = match.source_status
 
     _collect_required_field_gaps(match, data_gaps)
+    if model is not None and model.generation_certified is not True:
+        data_gaps.append("DATA_GAP: MODEL_GENERATION_UNCERTIFIED")
     _collect_source_status_gaps(source_status, data_gaps)
 
     probabilities = _probabilities_output(match)

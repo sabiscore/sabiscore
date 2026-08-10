@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import logging
 import sys
@@ -74,15 +75,23 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from src.models.feature_registry import (  # noqa: E402
-    APEX_FEATURES_68,
-    DEFAULT_FEATURE_VALUES_68,
-    derive_combination_features,
-    derive_last5_form_features,
-    derive_league_features,
-    derive_apex_market_features,
-    derive_temporal_features,
+_FEATURE_SPEC = importlib.util.spec_from_file_location(
+    "sabiscore_feature_registry",
+    _BACKEND_ROOT / "src" / "models" / "feature_registry.py",
 )
+if _FEATURE_SPEC is None or _FEATURE_SPEC.loader is None:
+    raise RuntimeError("Unable to load the canonical feature registry")
+_FEATURE_REGISTRY = importlib.util.module_from_spec(_FEATURE_SPEC)
+_FEATURE_SPEC.loader.exec_module(_FEATURE_REGISTRY)
+APEX_FEATURES_68 = _FEATURE_REGISTRY.APEX_FEATURES_68
+CANONICAL_FEATURES_68 = _FEATURE_REGISTRY.CANONICAL_FEATURES_68
+DEFAULT_FEATURE_VALUES_68 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_68
+derive_combination_features = _FEATURE_REGISTRY.derive_combination_features
+derive_last5_form_features = _FEATURE_REGISTRY.derive_last5_form_features
+derive_league_features = _FEATURE_REGISTRY.derive_league_features
+derive_apex_market_features = _FEATURE_REGISTRY.derive_apex_market_features
+derive_market_features = _FEATURE_REGISTRY.derive_market_features
+derive_temporal_features = _FEATURE_REGISTRY.derive_temporal_features
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("retrain")
@@ -244,7 +253,9 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
     signal than serving can ever supply.
     """
     histories: Dict[str, TeamHistory] = defaultdict(TeamHistory)
-    out: Dict[str, dict] = defaultdict(lambda: {"X": [], "y": [], "seasons": [], "dates": []})
+    out: Dict[str, dict] = defaultdict(
+        lambda: {"X": [], "X_incumbent": [], "y": [], "seasons": [], "dates": []}
+    )
     skipped = 0
     odds_rows = 0
     total_rows = 0
@@ -293,10 +304,15 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
             total_rows += 1
 
             if market_features is not None:
+                incumbent_features = dict(features)
+                incumbent_features.update(derive_market_features(*m["odds"]))
                 features.update(market_features)
                 odds_rows += 1
                 label = 0 if m["hg"] > m["ag"] else 1 if m["hg"] == m["ag"] else 2
                 out[league]["X"].append([features[name] for name in APEX_FEATURES_68])
+                out[league]["X_incumbent"].append(
+                    [incumbent_features[name] for name in CANONICAL_FEATURES_68]
+                )
                 out[league]["y"].append(label)
                 out[league]["seasons"].append(m["season"])
                 out[league]["dates"].append(m["date"])
@@ -501,19 +517,30 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
     dates = np.asarray(data["dates"], dtype=object)
 
     test_mask = seasons == holdout_season
-    if test_mask.sum() < 50 or (~test_mask).sum() < 200:
+    if test_mask.sum() < 50:
         logger.warning("  %s: insufficient split (train=%d test=%d) — skipped",
                        league, int((~test_mask).sum()), int(test_mask.sum()))
         return None
 
-    pretest_seasons = list(dict.fromkeys(seasons[~test_mask].tolist()))
+    holdout_start = min(dates[test_mask])
+    holdout_end = max(dates[test_mask])
+    if any(date > holdout_end for date in dates[~test_mask]):
+        raise ValueError(
+            f"holdout season {holdout_season} is not the latest season for {league}"
+        )
+    pretest_mask = np.asarray([date < holdout_start for date in dates], dtype=bool)
+    if pretest_mask.sum() < 200:
+        logger.warning("  %s: insufficient pre-holdout rows (%d)", league, int(pretest_mask.sum()))
+        return None
+
+    pretest_seasons = list(dict.fromkeys(seasons[pretest_mask].tolist()))
     pretest_seasons.sort(key=lambda season: max(dates[seasons == season]))
     if len(pretest_seasons) < 2:
         logger.warning("  %s: no independent calibration season — skipped", league)
         return None
     calibration_season = pretest_seasons[-1]
-    calibration_mask = seasons == calibration_season
-    core_mask = ~test_mask & ~calibration_mask
+    calibration_mask = (seasons == calibration_season) & pretest_mask
+    core_mask = pretest_mask & ~calibration_mask
     if calibration_mask.sum() < 50 or core_mask.sum() < 300:
         logger.warning(
             "  %s: insufficient core/calibration split (core=%d calibration=%d) — skipped",
@@ -559,6 +586,8 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
         y_test, meta_model.predict_proba(_build_meta_features(models, X_test))
     )
     metrics["train_n"] = int(len(y_train))
+    metrics["calibration_n"] = int(len(y_calibration))
+    metrics["evaluation_n"] = int(len(y_test))
     metrics["responsive_features"] = _served_sensitivity(models, meta_model, X_test[0].copy())
 
     # Always-predict-home baseline: the bar any real model must clear.
@@ -571,6 +600,19 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
     )]
     metrics["baseline_rps_market"] = ranked_probability_score(y_test, X_test[:, market_columns])
     metrics["calibration_season"] = calibration_season
+    metrics["holdout_season"] = holdout_season
+    metrics["training_window"] = {
+        "start": min(dates[core_mask]).date().isoformat(),
+        "end": max(dates[core_mask]).date().isoformat(),
+    }
+    metrics["calibration_window"] = {
+        "start": min(dates[calibration_mask]).date().isoformat(),
+        "end": max(dates[calibration_mask]).date().isoformat(),
+    }
+    metrics["evaluation_window"] = {
+        "start": holdout_start.date().isoformat(),
+        "end": holdout_end.date().isoformat(),
+    }
 
     logger.info(
         "  %-12s train=%5d test=%4d | avg: acc=%.4f rps=%.4f | stacked: acc=%.4f rps=%.4f "
@@ -606,6 +648,9 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
                 "start": min(dates[core_mask]).date().isoformat(),
                 "end": max(dates[core_mask]).date().isoformat(),
             },
+            "calibration_window": metrics["calibration_window"],
+            "evaluation_window": metrics["evaluation_window"],
+            "calibration_samples": metrics["calibration_n"],
             "market_baseline_rps": metrics["baseline_rps_market"],
             "league_prior_baseline_rps": metrics["baseline_rps_trainprior"],
             "data_source": "football-data.co.uk (real matches)",
@@ -638,7 +683,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
     ap.add_argument("--out-dir", type=Path, default=_BACKEND_ROOT / "models" / "candidate")
-    ap.add_argument("--holdout-season", default="2425")
+    ap.add_argument("--holdout-season", default="2526")
     args = ap.parse_args()
 
     import joblib

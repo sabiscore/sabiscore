@@ -10,6 +10,10 @@ type ModelRecord = {
 
 type ModelStatus = {
   active_version?: unknown;
+  generation?: unknown;
+  generation_hash?: unknown;
+  certification_state?: unknown;
+  promotion_state?: unknown;
   validation_status?: unknown;
   models?: Record<string, ModelRecord>;
 };
@@ -34,9 +38,15 @@ export function ModelMetadataPanel() {
   const models = Object.values(data?.models ?? {});
   const stats = [
     { label: "Active model", value: data?.active_version ? String(data.active_version) : "Unknown" },
+    { label: "Generation", value: data?.generation ? String(data.generation) : "Unknown" },
+    {
+      label: "Generation hash",
+      value: data?.generation_hash ? String(data.generation_hash).slice(0, 16) : "Unknown",
+    },
     { label: "Feature schema", value: unique(models.map((model) => model.feature_schema_version ?? model.feature_count)) },
     { label: "Served head", value: unique(models.map((model) => model.served_head)) },
-    { label: "Validation", value: data?.validation_status ? String(data.validation_status) : "Pending" },
+    { label: "Certification", value: data?.certification_state ? String(data.certification_state) : "Pending" },
+    { label: "Promotion", value: data?.promotion_state ? String(data.promotion_state) : "Unknown" },
   ];
 
   return (
