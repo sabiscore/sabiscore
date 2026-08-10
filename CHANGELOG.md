@@ -7,6 +7,36 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Diagnosed a browser report of simultaneous `503` responses from
+  `/api/upcoming`, `/api/value-bet-scan`, and `/api/models/status` on a
+  Vercel deployment. The attached Render log shows the exact window: a
+  redeploy ran 2026-08-10 23:19:00–23:21:42 UTC, during which the single
+  Render instance (no zero-downtime blue/green on this plan) was briefly
+  unreachable — every backend-proxied route fails closed with a structured,
+  `retryable: true` `503` during that gap by design (`upcoming_matches.py`'s
+  `except Exception` handler, `value-bet-scan`'s DB-deadline handler, and the
+  generic proxy `catch` blocks in `apps/web/src/lib/proxy-utils.ts` callers).
+  This is expected single-instance redeploy behavior, not a regression — the
+  three routes recovered once startup completed (`SabiScore API startup
+  complete`, 23:21:40 UTC in the same log). `GET /health/ready` continuing to
+  report `not_ready` afterward is the separate, already-tracked Redis
+  limitation (`docs/DEBT.md` item 15: `production Redis requires a rediss://
+  URL`); it does not block request serving on this single-instance service,
+  confirmed by the same log showing successful responses immediately after
+  startup. No code defect was found in either path. This session's
+  `backend/requirements.runtime.txt` trim (below) directly shortens the
+  redeploy window this incident depended on — the captured log shows the
+  prior build installing Jupyter/JupyterLab, MLflow, Great Expectations,
+  Playwright/Selenium/undetected-chromedriver, CatBoost/SHAP/Optuna, and
+  Kafka clients, none of which the API needs to boot.
+- Re-verified the match loading screen (`match-loading-experience.tsx`) and
+  the match-results reload path (`insights-error-state.tsx`) against every
+  documented container-parity and reload-behavior fix (vΩ.14/20/25/31/33):
+  the live container, SSR skeleton, and `match-selector.tsx` overlay wrapper
+  all still agree at `max-w-6xl` with no self-imposed padding conflicting
+  with the root `<main>`, and "Retry now" still calls `router.refresh()`
+  inside a transition rather than `window.location.reload()`. No regression
+  found; no change made to either file.
 - Corrected `docs/DEBT.md` item 13: the 14 canonical market features
   (`derive_market_features`/`MARKET_FEATURES_14`) are already live in
   `UpcomingMatchFeatureProjector.project_match_features()` and pinned by

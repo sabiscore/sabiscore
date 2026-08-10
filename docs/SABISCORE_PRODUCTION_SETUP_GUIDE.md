@@ -315,6 +315,17 @@ Readiness probe behavior:
 - The capability probe is additive and now runs only after those core checks are green. A `503` readiness response no longer triggers odds-provider reads or prediction-path warmups.
 - The root route now accepts both `GET /` and `HEAD /` so platform probes do not generate avoidable `405 Method Not Allowed` noise during startup.
 
+Single-instance redeploy window: this service has no zero-downtime blue/green
+cutover, so `/api/upcoming`, `/api/value-bet-scan`, and `/api/models/status`
+on the Vercel proxy will correctly return a structured, `retryable: true`
+`503` for the roughly 2–3 minutes between a Render deploy starting and
+`SabiScore API startup complete` logging. This is expected, not an incident —
+correlate a reported browser 503 against the Render deploy log before
+treating it as a regression. The canonical production install surface
+(`backend/requirements.runtime.txt`) exists in part to shorten this window by
+keeping the backend build off optional Jupyter/MLflow/Playwright/CatBoost/
+Kafka packages the API never imports at boot.
+
 Latest local Phase 1-2 evidence on 2026-07-05:
 - `python -m src.cli providers doctor` and `providers status` passed in offline
   mode with the five-state public contract and no credential values printed.
