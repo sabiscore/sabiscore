@@ -69,9 +69,10 @@ OpenAPI check, scraper tests/manifest, active-artifact verification, current-tre
 Gitleaks, CSP checks, and production Compose configuration also passed. Full
 history still has two unproven-revocation secret findings. Both Docker image
 builds timed out without producing tags; production Alembic upgrade timed out;
-GitHub jobs are locked by account billing; the deployed Render/Vercel releases
-are stale and unhealthy; and Redis rotation is operator-blocked. No merge or
-production promotion is permitted.
+GitHub jobs are locked by account billing; the exact-SHA Vercel preview correctly
+returns structured bounded gaps and nullable health truth but still has no usable
+paired Render backend; production remains stale; and Redis rotation is
+operator-blocked. No merge or production promotion is permitted.
 
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 

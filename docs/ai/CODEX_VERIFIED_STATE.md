@@ -67,15 +67,25 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   to crash before bind. Code now degrades safely for malformed URLs, but the
   exposed credential must still be rotated and Render must receive a valid
   `redis://` or `rediss://` secret before release.
-- Live proof is not coherent. Vercel recorded 86 timeout errors in seven days on
-  `/api/upcoming` and `/api/value-bet-scan`. The existing PR preview at `dd24536`
-  returns a platform 504 for prediction-free upcoming, times out model status,
-  and still publishes hardcoded health metrics. Production remains on frontend
-  SHA `1769b13`; neither deployment proves a matching backend SHA. The supplied
-  Render evidence is stale and lacks the Redis/startup fixes.
-- GitHub Actions did not execute the required jobs: every locked job has
-  `runner_id: 0`, no steps, and an account-billing-lock annotation. Local success
-  does not replace the absent Linux security/backend/web/Playwright/model evidence.
+- Vercel built READY preview `dpl_FZcdYXQ1zTi4VbQvXephkc2ncDMQ` from code SHA
+  `89c1254`. Health now reports frontend SHA `89c1254`, nullable metrics,
+  `performanceStatus: PENDING`, no optimistic model version, and no backend SHA.
+  CSP retains a per-request nonce and `strict-dynamic` without `unsafe-eval`.
+- Prediction-free upcoming no longer reaches Vercel's platform timeout: it exits
+  with a no-store structured 503, `data_gap: true`, and
+  `UPCOMING_PROXY_TIMEOUT`. Five preview probes took 9.13-9.49 seconds, all 503;
+  therefore they do not satisfy the production requirement for successful
+  probes or warm latency below two seconds. Model status also returns a bounded
+  503 because the paired Render backend is stale and lacks this release.
+- Production remains on frontend SHA `1769b13`. Vercel recorded 86 timeout errors
+  over the preceding seven days on `/api/upcoming` and `/api/value-bet-scan`.
+  No matching backend SHA, Render readiness, Redis, provider, fixture-sync, or
+  real-analysis proof exists, so the preview was not promoted.
+- Fresh GitHub Actions for `89c1254` did not execute the required jobs. Failed
+  security/model/large-file jobs have `runner_id: 0`, no runner name, and no
+  steps; dependent backend/web/Playwright jobs were skipped. The account billing
+  lock must be resolved and every required job rerun. Local success does not
+  replace the absent Linux evidence.
 - The model-artifact workflow now validates the actual `backend/models` artifacts,
   both production loaders, fixture sensitivity, and the closed candidate promotion
   manifest instead of generating dummy models in the wrong directory.
