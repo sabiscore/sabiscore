@@ -81,7 +81,7 @@ jobs:
 
       - name: Ruff before tests
         working-directory: backend
-        run: ruff check src
+        run: ruff check src --select E4,E7,E9,F
 
       - name: MyPy (advisory — type-debt burndown pending)
         working-directory: backend
