@@ -10,6 +10,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Added `workflow_dispatch` to `.github/workflows/ci.yml` and a new
   `scripts/run-canonical-ci.ps1` helper so maintainers can trigger and watch the
   canonical Linux CI workflow from Windows without relying on POSIX shell parity.
+- Ran canonical Linux CI for this branch head (`fe46d97`) with all jobs passing
+  (`actions/runs/31437373215`) and updated `docs/DEBT.md` item 16 to reflect the
+  cleared GitHub dispatch blocker and current remaining release blockers.
 - Fixed a full-suite-only backend test flake in
   `backend/tests/unit/test_model_orchestrator_redis_fallback.py` by replacing
   brittle private-class identity assertions with stable module/name adapter

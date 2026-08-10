@@ -111,11 +111,11 @@ Production remains blocked until every step is recorded.
   the credential owner supplies dated revocation evidence for that exact value.
 - Historical required-job runs still include `runner_id: 0` entries with the
   annotation `The job was not started because your account is locked due to a
-  billing issue.` A newer keep-alive run (`31407327985`) now executes checkout,
-  Python setup, and dependency install, then fails at `Ping backend readiness`.
-  This confirms workflow execution is no longer fully blocked at dispatch, but
-  the required security/backend/web/Playwright/model-validation jobs still
-  lack fresh passing evidence and must be rerun without bypass edits.
+  billing issue.` That dispatch blocker has now cleared: canonical Linux CI run
+  `31437373215` (head `fe46d97`) completed with all five jobs green
+  (Secret Scan, Backend Lint/Typecheck/Tests, Scraper Validate/Tests,
+  Web Lint/Typecheck/Build, Playwright Smoke). Keep this item open only for the
+  remaining infra/deploy proofs below.
 - Docker Compose configuration passes. Fresh backend and web image retries ran
   for more than five and three minutes respectively without producing a current
   image. The only `sabiscore-backend:verify` tag is dated 2026-07-15 and
@@ -124,8 +124,9 @@ Production remains blocked until every step is recorded.
   `upgrade head` connection attempt timed out after 120 seconds, so `check` and
   migration-head proof remain absent.
 - The canonical `make verify` cannot execute faithfully on this Windows host
-  because its recipe assumes POSIX shell syntax and `jq`. The Linux CI run is
-  mandatory and may not be replaced by a green local summary.
+  because its recipe assumes POSIX shell syntax and `jq`. Use canonical Linux CI
+  via `.github/workflows/ci.yml` (or `scripts/run-canonical-ci.ps1`) as the
+  source of truth for merge/release gates.
 
 **Release rule:** keep PR #5 unmerged and do not activate Render or promote a
 Vercel deployment while any item above remains unproven.
