@@ -58,13 +58,27 @@ public stake at zero.
 
 ## 15. Redis credential incident and Render configuration are operator-blocked
 
-**Tier:** `FIX-NOW` / P0. **Found:** 2026-08-09.
+**Tier:** `FIX-NOW` / P0. **Found:** 2026-08-09. **Second call site found and
+fixed:** 2026-08-10.
 
 A supplied Render log contained a complete Redis URI. A later Render build log
 shows `REDIS_URL` is not a valid `redis://`, `rediss://`, or `unix://` URL and the
 deployed process exits during import. Central redaction and malformed-URL safe
-degradation are now implemented, but code cannot rotate the provider credential
-or modify the protected Render secret.
+degradation in `core/cache.py`'s tiered `RedisCache` were already in place, but a
+live 2026-08-10T14:22 Render crash log traced a second, independent, unguarded
+call site: `ModelOrchestrator.__init__` (`models/orchestrator.py`) called
+`redis.from_url(redis_url, decode_responses=True)` directly, with no try/except.
+Because `models/__init__.py` imports `ModelOrchestrator` eagerly, and
+`ModelOrchestrator` is instantiated as a module-level singleton
+(`orchestrator = ModelOrchestrator()`), any import of `src.models` — including
+every request-path import of `models.feature_registry` — crashed the whole
+process the instant `REDIS_URL` was invalid or unconfigured. Fixed the same way
+as `cache.py`: the connection attempt is wrapped in
+`(RedisError, ConnectionError, TimeoutError, ValueError)`, degrading to a minimal
+`_InMemoryRedisAdapter` (get/setex/lpush/ltrim/llen/lrange — the only methods the
+league models' prediction cache actually calls) instead of raising. Regression
+tests in `backend/tests/unit/test_model_orchestrator_redis_fallback.py`. Code
+cannot rotate the provider credential or modify the protected Render secret.
 
 **Required operator sequence:** create a replacement credential; set a valid TLS
 Render secret without printing it; verify cache connection and application

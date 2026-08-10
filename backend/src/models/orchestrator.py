@@ -4,14 +4,18 @@ Model Orchestrator - Routes predictions to league-specific models
 Handles training, caching, live calibration, and edge detection
 """
 
+import logging
 import redis
+from redis.exceptions import RedisError
 import json
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import pandas as pd
 import numpy as np
+
+from ..core.redaction import redact_text, safe_endpoint
 
 # Import all league models
 from .leagues.premier_league import PremierLeagueModel
@@ -19,6 +23,43 @@ from .leagues.la_liga import LaLigaModel
 from .leagues.bundesliga import BundesligaModel
 from .leagues.serie_a import SerieAModel
 from .leagues.ligue_1 import Ligue1Model
+
+logger = logging.getLogger(__name__)
+
+
+class _InMemoryRedisAdapter:
+    """Minimal Redis-compatible fallback so a missing/invalid REDIS_URL degrades
+    instead of crashing the module import (and therefore the whole API process).
+    """
+
+    def __init__(self) -> None:
+        self._values: dict[str, Any] = {}
+        self._lists: dict[str, list[Any]] = {}
+
+    def get(self, key: str) -> Any:
+        return self._values.get(key)
+
+    def setex(self, key: str, _ttl: int, value: Any) -> bool:
+        self._values[key] = value
+        return True
+
+    def lpush(self, key: str, value: Any) -> int:
+        values = self._lists.setdefault(key, [])
+        values.insert(0, value)
+        return len(values)
+
+    def ltrim(self, key: str, start: int, stop: int) -> bool:
+        values = self._lists.setdefault(key, [])
+        self._lists[key] = values[start : stop + 1]
+        return True
+
+    def llen(self, key: str) -> int:
+        return len(self._lists.get(key, []))
+
+    def lrange(self, key: str, start: int, stop: int) -> list[Any]:
+        values = self._lists.get(key, [])
+        return values[start:] if stop == -1 else values[start : stop + 1]
+
 
 class ModelOrchestrator:
     """
@@ -44,8 +85,18 @@ class ModelOrchestrator:
     }
     
     def __init__(self, redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")):
-        self.redis = redis.from_url(redis_url, decode_responses=True)
-        
+        try:
+            client = redis.from_url(redis_url, decode_responses=True)
+            client.ping()
+            self.redis = client
+        except (RedisError, ConnectionError, TimeoutError, ValueError) as exc:
+            logger.warning(
+                "ModelOrchestrator Redis unavailable at %s, using in-memory fallback: %s",
+                safe_endpoint(redis_url),
+                redact_text(exc),
+            )
+            self.redis = _InMemoryRedisAdapter()
+
         # Import additional league models
         from .leagues.championship import ChampionshipModel
         from .leagues.eredivisie import EredivisieModel

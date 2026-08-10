@@ -75,8 +75,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   source tree or mask copy failures. An invalid `REDIS_URL` degrades safely
   instead of crashing import, but production still requires operator rotation
   and a valid `redis://` or `rediss://` value.
+- Fixed a second, independent unguarded Redis call site: a live 2026-08-10
+  Render crash traced to `ModelOrchestrator.__init__` calling
+  `redis.from_url()` directly with no guard, crashing the process on any
+  `src.models` import (see `docs/DEBT.md` item 15). It now degrades to the same
+  in-memory fallback pattern as `core/cache.py`.
 
-Validation completed locally: backend `1268 passed, 13 skipped`; repository-wide
+Validation completed locally: backend `1271 passed, 13 skipped`; repository-wide
 backend Ruff passed with zero findings; mypy improved from the accepted 784-error
 ceiling to 781 errors;
 frontend ESLint, TypeScript, 19 Vitest files / 123 tests, Next.js 15.5.19
