@@ -7,7 +7,9 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +21,7 @@ from ...core.config import settings
 from ...core.season_calendar import next_season_start
 from ...db.session import get_async_session
 from ...models.feature_registry import active_canonical_features
+from ...monitoring.metrics import metrics_collector
 from ...services.upcoming_match_service import UpcomingMatchService
 from ...services.odds_service import OddsService, get_odds_service
 
@@ -180,6 +183,11 @@ class UpcomingMatchesResponseSchema(BaseModel):
     source: str
     offseason: bool = False
     next_season_start: Optional[str] = None
+    data_gap: bool = False
+    unavailable_reasons: List[str] = Field(default_factory=list)
+    generated_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     # Batch-level advisory exposure summary (ADR-0005). None when predictions
     # weren't requested (include_predictions=False path never computes it).
     portfolio_exposure: Optional[PortfolioExposureSchema] = None
@@ -227,10 +235,10 @@ async def get_upcoming_matches(
         20, ge=1, le=50, description="Maximum number of matches to return"
     ),
     include_predictions: bool = Query(
-        True, description="Include ML predictions and value bets"
+        False, description="Include bounded ML enrichment; fixture discovery is the default"
     ),
     include_value_bets: bool = Query(
-        True, description="Include value bet calculations"
+        False, description="Include value bet calculations when predictions are requested"
     ),
     db: AsyncSession = Depends(get_async_session),
     odds_service: OddsService = Depends(get_odds_service),
@@ -252,10 +260,11 @@ async def get_upcoming_matches(
     - `league`: Filter by league (optional)
     - `days_ahead`: Forecast horizon (default: 7 days)
     - `limit`: Max matches (default: 20, max: 50)
-    - `include_predictions`: Attach ML predictions (default: true)
-    - `include_value_bets`: Calculate value bets (default: true)
+    - `include_predictions`: Attach bounded ML enrichment (default: false)
+    - `include_value_bets`: Calculate value bets only with predictions (default: false)
 
-    **Cache:** 5 minutes for prediction results. Falls back to database if external API unavailable.
+    **Source:** Redis cache then PostgreSQL. Provider acquisition is performed only
+    by the periodic fixture-sync task, never by this request path.
 
     **Example:**
     ```
@@ -263,28 +272,31 @@ async def get_upcoming_matches(
     ```
     """
 
+    started_at = time.perf_counter()
+    timeout_seconds = 18.0 if include_predictions else 5.0
     try:
         service = UpcomingMatchService(
             odds_service=odds_service if isinstance(odds_service, OddsService) else None
         )
 
-        if include_predictions:
-            response = await service.get_upcoming_matches_with_predictions(
-                db,
-                league=league,
-                days_ahead=days_ahead,
-                limit=limit,
-                include_value_bets=include_value_bets,
-            )
-        else:
-            response = await service.get_upcoming_matches(
-                db, league=league, days_ahead=days_ahead, limit=limit
-            )
-            response["matches_with_value"] = 0
-            response["avg_edge_pct"] = 0.0
-            # get_upcoming_matches returns "matches"; normalise to "upcoming_matches"
-            if "upcoming_matches" not in response and "matches" in response:
-                response["upcoming_matches"] = response.pop("matches")
+        async with asyncio.timeout(timeout_seconds):
+            if include_predictions:
+                response = await service.get_upcoming_matches_with_predictions(
+                    db,
+                    league=league,
+                    days_ahead=days_ahead,
+                    limit=limit,
+                    include_value_bets=include_value_bets,
+                )
+            else:
+                response = await service.get_upcoming_matches(
+                    db, league=league, days_ahead=days_ahead, limit=limit
+                )
+                response["matches_with_value"] = 0
+                response["avg_edge_pct"] = 0.0
+                # get_upcoming_matches returns "matches"; normalise to "upcoming_matches"
+                if "upcoming_matches" not in response and "matches" in response:
+                    response["upcoming_matches"] = response.pop("matches")
 
         matches = response.get("upcoming_matches", [])
 
@@ -296,11 +308,34 @@ async def get_upcoming_matches(
         is_offseason = len(matches) == 0
         response["offseason"] = is_offseason
         response["next_season_start"] = _next_season_start(league) if is_offseason else None
+        response.setdefault("data_gap", False)
+        response.setdefault("unavailable_reasons", [])
+        response.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
 
+        metrics_collector.increment("upcoming.request.success")
         return UpcomingMatchesResponseSchema.model_validate(response)
 
-    except Exception as e:
-        logger.error(f"Error fetching upcoming matches: {e}", exc_info=True)
+    except TimeoutError:
+        metrics_collector.increment("upcoming.request.timeout")
+        logger.warning(
+            "Upcoming request exceeded bounded deadline",
+            extra={"include_predictions": include_predictions, "limit": limit},
+        )
+        return UpcomingMatchesResponseSchema(
+            upcoming_matches=[],
+            total=0,
+            matches_with_value=0,
+            avg_edge_pct=0.0,
+            cache_hit=False,
+            ttl_seconds=0,
+            source="timeout",
+            offseason=False,
+            data_gap=True,
+            unavailable_reasons=["UPCOMING_REQUEST_TIMEOUT"],
+        )
+    except Exception as exc:
+        metrics_collector.increment("upcoming.request.failure")
+        logger.error("Error fetching upcoming matches: %s", type(exc).__name__, exc_info=True)
         return UpcomingMatchesResponseSchema(
             upcoming_matches=[],
             total=0,
@@ -310,6 +345,13 @@ async def get_upcoming_matches(
             ttl_seconds=0,
             source="error",
             offseason=False,
+            data_gap=True,
+            unavailable_reasons=["UPCOMING_SERVICE_UNAVAILABLE"],
+        )
+    finally:
+        metrics_collector.record_timer(
+            "upcoming.request.latency",
+            (time.perf_counter() - started_at) * 1000,
         )
 
 
@@ -330,33 +372,28 @@ async def get_upcoming_all(
     db: AsyncSession = Depends(get_async_session),
     odds_service: OddsService = Depends(get_odds_service),
 ) -> UpcomingAllResponseSchema:
-    """Get merged upcoming fixtures across all configured leagues.
+    """Get a bounded discovery list from the synchronized fixture database.
 
-    Includes prediction availability and edge summary where present.
+    Bulk prediction/odds enrichment used to run for up to 200 fixtures in this
+    request. Discovery now stays cheap and users request authoritative analysis
+    for one verified fixture at a time.
     """
     service = UpcomingMatchService(
         odds_service=odds_service if isinstance(odds_service, OddsService) else None
     )
-    payload = await service.get_upcoming_matches_with_predictions(
-        db,
-        league=None,
-        days_ahead=days,
-        limit=limit,
-        include_value_bets=True,
-    )
+    async with asyncio.timeout(5.0):
+        payload = await service.get_upcoming_matches(
+            db,
+            league=None,
+            days_ahead=days,
+            limit=limit,
+        )
 
     fixtures: List[UpcomingAllFixtureSchema] = []
-    for match in payload.get("upcoming_matches", []):
-        value_bets = match.get("value_bets") or []
-        best_edge = None
-        if value_bets:
-            try:
-                best_edge = float(max(v.get("edge_pct", 0.0) for v in value_bets))
-            except Exception:
-                best_edge = None
-
+    for match in payload.get("matches", []):
         league = str(match.get("league", ""))
         is_ucl = league.upper() in {"UCL", "CHAMPIONS LEAGUE", "UEFA CHAMPIONS LEAGUE"}
+        gaps = list(match.get("data_gaps") or [])
 
         fixtures.append(
             UpcomingAllFixtureSchema(
@@ -365,21 +402,15 @@ async def get_upcoming_all(
                 awayTeam=str(match.get("away_team", "")),
                 kickoffUtc=str(match.get("match_date", "")),
                 league=league,
-                predictionAvailable=bool(match.get("predictions") is not None),
+                predictionAvailable=False,
                 unavailableReason=(
-                    None
-                    if match.get("predictions") is not None
-                    else ", ".join(match.get("data_gaps") or ["Prediction unavailable"])
+                    ", ".join(gaps)
+                    if gaps
+                    else "Select this fixture to request authoritative analysis"
                 ),
-                edge_pct=best_edge,
-                freshnessTag=(
-                    "LIVE"
-                    if int(match.get("staleness_seconds", 0)) == 0
-                    else "RECENT"
-                    if int(match.get("staleness_seconds", 0)) < 86400
-                    else "STALE"
-                ),
-                partialData=bool(match.get("data_gaps")),
+                edge_pct=None,
+                freshnessTag="SYNCED",
+                partialData=bool(gaps),
                 model_votes=None,
                 matchImportance="high" if is_ucl else "normal",
                 matchRound="group" if is_ucl else None,
@@ -394,5 +425,3 @@ async def get_upcoming_all(
         source=str(payload.get("source", "unknown")),
         cache_ttl_seconds=int(payload.get("ttl_seconds", 300)),
     )
-
-

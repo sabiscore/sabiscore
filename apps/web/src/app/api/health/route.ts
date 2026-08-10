@@ -1,10 +1,6 @@
 /**
- * Health Check API Route
- *
- * Proxies backend /health/ready for live infrastructure status.
- * Historical Phase 7 artifact benchmarks are returned as-is until
- * live prediction data accumulates — hasSufficientData stays false until
- * the walk-forward RPS run completes with live match data.
+ * Public readiness proxy. Runtime performance is sourced only from settled
+ * backend predictions; absent evidence is Pending/null rather than a benchmark.
  */
 
 import { NextResponse } from "next/server";
@@ -17,72 +13,62 @@ export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.SABISCORE_BACKEND_URL;
 
-// Historical Phase 7 artifact benchmark. These are not labelled live results.
-// rpsGate is the one governed value here, so it comes from its owner (lib/model-gates)
-// rather than being retyped — the performance dashboard scores real RPS against it.
-const PHASE7_BASELINE = {
-  accuracy: 0.51,
-  brierScore: 0.225,
-  rpsGate: RPS_PROMOTION_GATE,
-  avgEdgePct: 0.084,
+type PerformanceSummary = {
+  status?: string;
+  total_settled?: number;
+  accuracy_overall?: number | null;
+  rps_overall?: number | null;
+  generated_at?: string;
 };
 
 export async function GET() {
   let backendStatus = "unavailable";
   let backendChecks: Record<string, unknown> = {};
   let backendCapability: Record<string, unknown> | null = null;
+  let backendSha: string | null = null;
   let providers: Array<Record<string, unknown>> = [];
+  let performance: PerformanceSummary = { status: "METRICS_UNAVAILABLE" };
 
   if (BACKEND_URL) {
     try {
-      const [readinessRes, providersRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/health/ready`, {
-          signal: AbortSignal.timeout(5000),
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-        }),
-        fetch(`${BACKEND_URL}/api/v1/providers/health`, {
-          signal: AbortSignal.timeout(5000),
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-        }),
+      const requestOptions = {
+        signal: AbortSignal.timeout(5000),
+        headers: { Accept: "application/json" },
+        cache: "no-store" as const,
+      };
+      const [readinessRes, providersRes, performanceRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/health/ready`, requestOptions),
+        fetch(`${BACKEND_URL}/api/v1/providers/health`, requestOptions),
+        fetch(`${BACKEND_URL}/api/v1/model-performance/summary`, requestOptions),
       ]);
-      if (readinessRes.ok) {
-        const data = (await readinessRes.json()) as Record<string, unknown>;
-        backendStatus = (data.status as string) ?? "unknown";
-        backendChecks = (data.checks as Record<string, unknown>) ?? {};
-        backendCapability = (data.capability as Record<string, unknown>) ?? null;
-      } else {
-        // A non-ok readiness response is two very different things, and mapping
-        // both to "degraded" understated a total outage: the backend answering
-        // 503 with its own JSON payload IS degraded and knows why, whereas an
-        // HTML error page from the platform edge means no process is running at
-        // all. The body is the discriminator, not the status code — Render
-        // serves HTML for 502/503/504 while the backend's own 503 is JSON.
-        const body = await readinessRes.text().catch(() => "");
-        let parsed: Record<string, unknown> | null = null;
-        if (!isHtmlBody(body)) {
-          try {
-            parsed = JSON.parse(body) as Record<string, unknown>;
-          } catch {
-            parsed = null;
-          }
-        }
-        if (parsed) {
-          backendStatus = (parsed.status as string) ?? "degraded";
-          // Preserve the diagnostics a degraded backend sent about itself; the
-          // previous branch discarded checks/capability on every non-ok reply.
-          backendChecks = (parsed.checks as Record<string, unknown>) ?? {};
-          backendCapability = (parsed.capability as Record<string, unknown>) ?? null;
-        } else {
+
+      const readinessBody = await readinessRes.text().catch(() => "");
+      if (!isHtmlBody(readinessBody)) {
+        try {
+          const data = JSON.parse(readinessBody) as Record<string, unknown>;
+          backendStatus = (data.status as string) ?? (readinessRes.ok ? "unknown" : "degraded");
+          backendChecks = (data.checks as Record<string, unknown>) ?? {};
+          backendCapability = (data.capability as Record<string, unknown>) ?? null;
+          backendSha = typeof data.release_sha === "string" ? data.release_sha : null;
+        } catch {
           backendStatus = "unavailable";
         }
       }
+
       if (providersRes.ok) {
         const providerData = (await providersRes.json()) as { providers?: unknown };
         providers = Array.isArray(providerData.providers)
           ? providerData.providers as Array<Record<string, unknown>>
           : [];
+      }
+
+      const performanceBody = await performanceRes.text().catch(() => "");
+      if (!isHtmlBody(performanceBody)) {
+        try {
+          performance = JSON.parse(performanceBody) as PerformanceSummary;
+        } catch {
+          performance = { status: "METRICS_UNAVAILABLE" };
+        }
       }
     } catch {
       backendStatus = "unavailable";
@@ -90,6 +76,16 @@ export async function GET() {
   }
 
   const isHealthy = isHealthyBackendStatus(backendStatus);
+  const hasSufficientData = performance.status === "OK" &&
+    typeof performance.total_settled === "number" && performance.total_settled > 0;
+  const accuracy = hasSufficientData && typeof performance.accuracy_overall === "number"
+    ? performance.accuracy_overall
+    : null;
+  const rps = hasSufficientData && typeof performance.rps_overall === "number"
+    ? performance.rps_overall
+    : null;
+  const predictionCount = hasSufficientData ? performance.total_settled ?? 0 : 0;
+  const modelCheck = backendChecks.models as Record<string, unknown> | undefined;
 
   return NextResponse.json(
     {
@@ -97,15 +93,29 @@ export async function GET() {
       backendStatus,
       backendChecks,
       backendCapability,
+      backendSha,
       providers,
-      ...PHASE7_BASELINE,
-      predictionCount: 0,
-      metrics: { ...PHASE7_BASELINE, predictionCount: 0 },
+      accuracy,
+      brierScore: null,
+      rps,
+      rpsGate: RPS_PROMOTION_GATE,
+      avgEdgePct: null,
+      predictionCount,
+      performanceStatus: hasSufficientData ? "MEASURED" : "PENDING",
+      metrics: {
+        accuracy,
+        brierScore: null,
+        rps,
+        rpsGate: RPS_PROMOTION_GATE,
+        avgEdgePct: null,
+        predictionCount,
+        status: hasSufficientData ? "MEASURED" : "PENDING",
+      },
       issues: backendHealthIssues(backendStatus),
-      hasSufficientData: false,
-      lastUpdate: new Date().toISOString(),
+      hasSufficientData,
+      lastUpdate: performance.generated_at ?? new Date().toISOString(),
       timestamp: new Date().toISOString(),
-      modelVersion: "v5_phase7",
+      modelVersion: modelCheck?.model_version ?? null,
       sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     },
     {

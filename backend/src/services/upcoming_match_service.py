@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -15,8 +17,9 @@ from sqlalchemy.orm import aliased
 from ..core.cache import cache_manager
 from ..core.config import settings
 from ..core.portfolio_exposure import compute_portfolio_exposure
-from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
+from ..data.loaders.football_data_api import FootballDataAPIClient
 from ..db.models import Match, Team
+from ..monitoring.metrics import metrics_collector
 from .upcoming_match_feature_service import UpcomingMatchFeatureProjector
 from ..models.prediction import PredictionEngine
 from .odds_service import OddsService
@@ -74,28 +77,57 @@ class UpcomingMatchService:
         days_ahead: int = 7,
         limit: int = 20,
     ) -> Dict[str, Any]:
+        """Read the request-path fixture snapshot from cache/PostgreSQL only.
+
+        Provider acquisition belongs to ``run_fixture_sync()``. Calling
+        football-data.org here previously made a seven-competition, rate-limit
+        aware provider loop part of every public request; one cold miss could
+        therefore outlive Vercel's 30 second function budget. The background
+        synchronizer already owns freshness and recovery, so this method is a
+        deliberately bounded serving read.
+        """
+        started_at = time.perf_counter()
         cache_key = f"upcoming:v2:{league or '*'}:{days_ahead}:{limit}"
         cached = cache_manager.get(cache_key)
         if isinstance(cached, dict) and "matches" in cached:
-            return cached
+            metrics_collector.increment("upcoming.cache.hit")
+            metrics_collector.record_timer(
+                "upcoming.base.latency",
+                (time.perf_counter() - started_at) * 1000,
+            )
+            response = copy.deepcopy(cached)
+            response["cache_hit"] = True
+            return response
 
+        metrics_collector.increment("upcoming.cache.miss")
         try:
-            matches = await self.api_client.get_upcoming_matches(days_ahead=days_ahead, limit=limit, league=league)
-            payload = {
-                "matches": matches,
-                "total": len(matches),
-                "league_filter": league,
-                "date_range_days": days_ahead,
-                "source": "football-data.org",
-            }
+            payload = await self._get_upcoming_matches_from_db(
+                db,
+                league=league,
+                days_ahead=days_ahead,
+                limit=limit,
+            )
+            payload.update(
+                {
+                    "source": "database",
+                    "cache_hit": False,
+                    "ttl_seconds": settings.fixture_cache_ttl,
+                    "data_gap": False,
+                    "unavailable_reasons": [],
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
             cache_manager.set(cache_key, payload, ttl=settings.fixture_cache_ttl)
-            return payload
-        except FootballDataAPIError:
-            # Fall back to DB seamlessly when external fixture API is unavailable.
-            db_payload = await self._get_upcoming_matches_from_db(db, league=league, days_ahead=days_ahead, limit=limit)
-            db_payload["source"] = "database"
-            cache_manager.set(cache_key, db_payload, ttl=settings.fixture_cache_ttl)
-            return db_payload
+            metrics_collector.increment("upcoming.database.success")
+            return copy.deepcopy(payload)
+        except Exception:
+            metrics_collector.increment("upcoming.database.failure")
+            raise
+        finally:
+            metrics_collector.record_timer(
+                "upcoming.base.latency",
+                (time.perf_counter() - started_at) * 1000,
+            )
 
     async def _get_upcoming_matches_from_db(
         self,

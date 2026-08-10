@@ -76,6 +76,10 @@ class TestAPIEndpoints:
         data = response.json()
         assert "models_loaded" in data
         assert data["validation_status"] in {"VALIDATED", "UNVERIFIED"}
+        assert data["manifest_valid"] is True
+        assert len(data["generation_hash"]) == 64
+        assert data["certification_state"] == "UNVERIFIED"
+        assert data["stake_permitted"] is False
         if data["models"]:
             model = next(iter(data["models"].values()))
             assert len(model["artifact_sha256"]) == 64

@@ -8,6 +8,7 @@
 node_modules/
 .pnpm-store/
 .venv/
+.venv-ml/
 backend/venv/
 __pycache__/
 *.pyc

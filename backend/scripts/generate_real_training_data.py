@@ -4,8 +4,8 @@ Generate training data from database matches with real features
 """
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
+from datetime import datetime
+from typing import Dict
 import pandas as pd
 import numpy as np
 
@@ -13,8 +13,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from core.database import SessionLocal, Match, Team, League
-from data.transformers import FeatureTransformer
+from core.database import Match, SessionLocal  # noqa: E402 - path bootstrap precedes import
 
 def calculate_team_stats(team_id: str, match_date: datetime, session) -> Dict[str, float]:
     """Calculate team statistics up to a given date"""

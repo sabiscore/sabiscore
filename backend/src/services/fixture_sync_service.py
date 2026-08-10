@@ -7,11 +7,13 @@ swallowed so they never prevent the API from serving requests.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..utils.season import canonical_season
+from ..monitoring.metrics import metrics_collector
 from .team_identity import resolve_team_id
 
 logger = logging.getLogger(__name__)
@@ -54,11 +56,17 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
     from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
     from ..core.database import League, Team, Match
 
+    started_at = time.perf_counter()
     client = FootballDataAPIClient()
     try:
         matches_raw = await client.get_upcoming_matches(days_ahead=SYNC_HORIZON_DAYS, limit=50)
     except FootballDataAPIError as exc:
         logger.warning("fixture_sync: football-data.org unavailable: %s", exc)
+        metrics_collector.record_provider_outcome(
+            provider="football_data_org",
+            outcome="fixture_sync_failed",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+        )
         return 0
 
     inserted = 0
@@ -115,6 +123,15 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
         inserted += 1
 
     await session.commit()
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    metrics_collector.increment("fixture_sync.successes")
+    metrics_collector.increment("fixture_sync.inserted", inserted)
+    metrics_collector.record_timer("fixture_sync.latency", duration_ms)
+    metrics_collector.record_provider_outcome(
+        provider="football_data_org",
+        outcome="fixture_sync_success",
+        duration_ms=duration_ms,
+    )
     return inserted
 
 

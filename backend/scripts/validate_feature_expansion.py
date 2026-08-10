@@ -45,10 +45,7 @@ from typing import Dict, List, Optional, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, f1_score, log_loss
-import xgboost as xgb
+from sklearn.metrics import brier_score_loss, f1_score
 import lightgbm as lgb
 
 # ── path bootstrap ────────────────────────────────────────────────────────────

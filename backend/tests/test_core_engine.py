@@ -23,6 +23,7 @@ def _base_match(**overrides) -> dict:
             "model_version": "core-v1",
             "calibration_method": "isotonic",
             "calibration_validated": True,
+            "generation_certified": True,
             "epistemic_uncertainty": 0.03,
             "aleatoric_uncertainty": 0.10,
             "confidence_tier": "OK",
@@ -114,6 +115,17 @@ def test_high_conviction_is_allowed_for_clean_tier_one_fixture():
     # EPL calibrated policy kelly_cap=0.04; global ceiling is 5% (directive §11/§12).
     assert result.stake_fraction == pytest.approx(0.04)
     assert result.stake == "2.5u"  # label is hardcoded "at-cap" signal regardless of cap value
+
+
+def test_uncertified_generation_forces_partial_and_zero_stake():
+    result = _analyze(
+        _base_match(model={"generation_certified": False})
+    ).matches[0]
+
+    assert result.verdict == "PARTIAL"
+    assert result.stake == "pass"
+    assert result.stake_fraction == 0.0
+    assert "DATA_GAP: MODEL_GENERATION_UNCERTIFIED" in result.data_gaps
 
 
 def test_advisory_lineup_and_sharp_signal_do_not_force_partial():

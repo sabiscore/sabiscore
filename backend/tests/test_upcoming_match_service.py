@@ -140,14 +140,9 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
     live homepage (freshness = 1 - staleness/threshold, pinned at its max)."""
     future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
     fake_api_client = MagicMock()
-    fake_api_client.get_upcoming_matches = AsyncMock(return_value=[{
-        "id": "test-match-1",
-        "home_team": "Home FC",
-        "away_team": "Away FC",
-        "league": "EPL",
-        "match_date": future_date,
-        "status": "scheduled",
-    }])
+    fake_api_client.get_upcoming_matches = AsyncMock(
+        side_effect=AssertionError("request-time provider access is forbidden")
+    )
 
     mocked_features_result = {
         "features": np.zeros(68, dtype=np.float32),
@@ -179,6 +174,18 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
         MockOddsService.return_value.get_match_odds = AsyncMock(return_value={})
 
         service = UpcomingMatchService(api_client=fake_api_client)
+        service.get_upcoming_matches = AsyncMock(return_value={
+            "matches": [{
+                "id": "test-match-1",
+                "home_team": "Home FC",
+                "away_team": "Away FC",
+                "league": "EPL",
+                "match_date": future_date,
+                "status": "scheduled",
+                "source": "database",
+            }],
+            "source": "database",
+        })
         response = await service.get_upcoming_matches_with_predictions(
             db=fake_db, league="EPL", days_ahead=3, limit=5,
         )
@@ -187,6 +194,7 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
         match_id="test-match-1", league="EPL", db=fake_db
     )
     MockProjector.return_value.project_match_features.assert_not_awaited()
+    fake_api_client.get_upcoming_matches.assert_not_awaited()
 
     enriched = response["upcoming_matches"][0]
     assert enriched["staleness_seconds"] == 54321  # not silently defaulted to 0

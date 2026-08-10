@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import json
 from urllib.request import urlopen, Request
 

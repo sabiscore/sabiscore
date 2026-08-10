@@ -24,7 +24,7 @@ from src.data.scrapers import (
     TransfermarktScraper,
     FootballDataEnhancedScraper,
 )
-from src.data.aggregator import DataAggregator, get_enhanced_aggregator
+from src.data.aggregator import get_enhanced_aggregator
 from src.services.prediction import PredictionService
 from src.schemas.prediction import MatchPredictionRequest
 from src.monitoring.metrics import metrics_collector
@@ -187,7 +187,7 @@ class PipelineValidator:
                 request=request
             )
             
-            logger.info(f"  ✅ Prediction successful")
+            logger.info("  ✅ Prediction successful")
             logger.info(f"  Home Win: {prediction.predictions['home_win']:.2%}")
             logger.info(f"  Draw: {prediction.predictions['draw']:.2%}")
             logger.info(f"  Away Win: {prediction.predictions['away_win']:.2%}")
@@ -218,7 +218,7 @@ class PipelineValidator:
         try:
             summary = metrics_collector.get_summary()
             
-            logger.info(f"  ✅ Metrics collector active")
+            logger.info("  ✅ Metrics collector active")
             logger.info(f"  Uptime: {summary.get('uptime_human', 'N/A')}")
             
             if "predictions" in summary:

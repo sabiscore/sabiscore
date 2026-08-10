@@ -46,6 +46,12 @@ PHASE9_SHADOW_ONLY=true
 `redis://` or preferably `rediss://` URL. Provider keys and `SECRET_KEY` are
 server-only. Never expose them as `NEXT_PUBLIC_*` values.
 
+`REVALIDATE_SECRET` is a separate server-only secret shared by the backend and
+Vercel. Configure the same non-empty value in both secret stores before relying
+on on-demand page invalidation. When it is absent, `/api/revalidate` returns a
+structured `503` and the backend skips the request; it never falls back to a
+predictable development token.
+
 For a credential incident: create replacement, update the platform secret, verify
 TLS/application behavior, revoke the exposed credential, and scan redacted logs.
 
@@ -71,8 +77,9 @@ result; a fabricated probability or stake is not.
 
 ## 4. Frontend on Vercel
 
-Build `apps/web` with pnpm. Configure `SABISCORE_BACKEND_URL` as a server-only
-value. Do not configure provider keys in Vercel.
+Build `apps/web` with pnpm. Configure `SABISCORE_BACKEND_URL` and
+`REVALIDATE_SECRET` as server-only values. Do not configure provider keys in
+Vercel.
 
 After CI succeeds:
 

@@ -24,6 +24,7 @@ class CertifiedModelInput(BaseModel):
     model_version: str | None = None
     calibration_method: str | None = None
     calibration_validated: bool | None = None
+    generation_certified: bool | None = None
     epistemic_uncertainty: float | None = Field(default=None, ge=0.0)
     aleatoric_uncertainty: float | None = Field(default=None, ge=0.0)
     confidence_tier: Literal["OK", "LOW_EVIDENCE"] | None = None

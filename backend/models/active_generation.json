@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "generation": "v5_phase7-20260808",
+  "active_version": "v5_phase7",
+  "feature_schema_version": "phase7_68",
+  "served_head": "SoftmaxMetaModel",
+  "certification_state": "UNVERIFIED",
+  "certified_at": null,
+  "promotion_state": "ACTIVE_FAIL_CLOSED",
+  "promoted_at": null,
+  "artifacts": {
+    "bundesliga": {
+      "artifact": "bundesliga_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "58e6b40ae6b3e147ac59b6cc078147bcbc119ff2887f16b1bee9cfa2b60445f6",
+      "metadata": "bundesliga_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "d7a4b1ba543507bccb114debd045871d4fd39c88cb475e16bec2b9d36c280e35",
+      "required": true
+    },
+    "epl": {
+      "artifact": "epl_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "9928f9f8307e260f335f0f9ed3bd772bbcfe66992337c62361b4a9f0b1baff30",
+      "metadata": "epl_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "c156989085543b520b79234a733a142341ca5c0337c2eede3a2d76fe6ef18ddf",
+      "required": true
+    },
+    "eredivisie": {
+      "artifact": "eredivisie_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "6e7a59b3082503eca8089dd2b702eda2e8bf4dfc1611fde4b77f969b229d6f43",
+      "metadata": "eredivisie_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "1083da04b2b7130dc0a2816c597418a56c6948b6664d5f8785220e4d3a20f0c6",
+      "required": false
+    },
+    "la_liga": {
+      "artifact": "la_liga_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "ee7c7b726fff6ac9abc298bbb42743b6afda0bcc8329157b3f2f6adcbe955bb9",
+      "metadata": "la_liga_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "fe60b025e27fe056c794f0fca635e9ea10d272ff132b7e2c5dea6780f9ce7b5f",
+      "required": true
+    },
+    "ligue_1": {
+      "artifact": "ligue_1_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "3dfd97cfbc720170fb7899a7c8a28ef0a1863801fc67a8dc9f86acda521f5823",
+      "metadata": "ligue_1_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "f56fde826ad55ea6f778dbbda6b5beb466040a4e1afae4f7e08c08b05c277e8a",
+      "required": true
+    },
+    "serie_a": {
+      "artifact": "serie_a_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "f57b2dc1e9ac37fe2a96bf192d37e7b550db3e269a84a66447d166b4fc7ddd65",
+      "metadata": "serie_a_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "8a387c695bff0f7f91d2c9f0d8d21bee1c71e40144a325be95af041dbfc0f580",
+      "required": true
+    }
+  }
+}

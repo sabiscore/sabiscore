@@ -10,7 +10,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 import requests
 from sqlalchemy.exc import SQLAlchemyError

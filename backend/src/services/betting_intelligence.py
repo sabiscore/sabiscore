@@ -615,6 +615,8 @@ def analyze_match(
     if league_policy_gap is not None:
         gaps.append(league_policy_gap)
     model = request.model
+    if model is not None and model.generation_certified is not True:
+        gaps.append("DATA_GAP: MODEL_GENERATION_UNCERTIFIED")
     market = request.market
 
     # -- Model validation -----------------------------------------------------

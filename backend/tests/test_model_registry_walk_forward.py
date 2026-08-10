@@ -9,15 +9,66 @@ matter how much data was supplied. These tests pin the fixed call convention.
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
+from types import SimpleNamespace
 
 os.environ["ALLOW_SQLITE_FALLBACK"] = "true"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["REDIS_ENABLED"] = "false"
 
 import numpy as np
+import pytest
 
 from src.models.evaluation.metrics import brier_score_decomposition, ranked_probability_score
+from src.models import model_registry
 from src.models.model_registry import ModelRegistry
+
+
+def test_registry_does_not_import_mlflow_without_tracking_uri(monkeypatch, tmp_path) -> None:
+    def fail_if_called():
+        raise AssertionError("MLflow must remain off the API path when unconfigured")
+
+    monkeypatch.setattr(model_registry, "_load_mlflow", fail_if_called)
+
+    registry = ModelRegistry(registry_path=str(tmp_path))
+
+    assert registry.mlflow_enabled is False
+
+
+def test_registry_enables_mlflow_without_logging_secret_uri(monkeypatch, caplog, tmp_path) -> None:
+    configured: list[tuple[str, str]] = []
+    fake_mlflow = SimpleNamespace(
+        set_tracking_uri=lambda uri: configured.append(("uri", uri)),
+        set_experiment=lambda name: configured.append(("experiment", name)),
+        start_run=lambda **_kwargs: nullcontext(),
+        log_params=lambda _params: None,
+        log_metrics=lambda _metrics: None,
+        set_tags=lambda _tags: None,
+        sklearn=SimpleNamespace(log_model=lambda _model, _name: None),
+    )
+    secret_uri = "https://user:super-secret@example.invalid/mlflow?token=hidden"
+    monkeypatch.setattr(model_registry, "_load_mlflow", lambda: fake_mlflow)
+
+    with caplog.at_level("INFO"):
+        registry = ModelRegistry(
+            registry_path=str(tmp_path),
+            mlflow_tracking_uri=secret_uri,
+        )
+
+    assert registry.mlflow_enabled is True
+    assert configured[0] == ("uri", secret_uri)
+    assert secret_uri not in caplog.text
+    assert "super-secret" not in caplog.text
+    assert "token=hidden" not in caplog.text
+
+
+def test_local_registry_cannot_promote_model(tmp_path) -> None:
+    registry = ModelRegistry(registry_path=str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="active generation"):
+        registry.promote_to_production("candidate_v1")
+
+    assert registry.metadata["production_model"] is None
 
 
 def test_ranked_probability_score_perfect_prediction_is_zero() -> None:

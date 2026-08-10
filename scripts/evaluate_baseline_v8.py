@@ -150,7 +150,7 @@ def main() -> None:
     data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir)
     version = args.version.strip()
-    leagues = [l.strip().lower() for l in args.leagues.split(",") if l.strip()]
+    leagues = [league.strip().lower() for league in args.leagues.split(",") if league.strip()]
 
     output_dir.mkdir(parents=True, exist_ok=True)
     today = date.today().strftime("%Y%m%d")

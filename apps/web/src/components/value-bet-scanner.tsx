@@ -30,6 +30,7 @@ interface ValueBetScanResponse {
   days: number;
   source: string;
   data_gap?: boolean;
+  reason?: string;
 }
 
 // ─── League chip colors ───────────────────────────────────────────────────────
@@ -124,23 +125,27 @@ async function fetchValueBets(days: number): Promise<ValueBetScanResponse> {
     days: Number(data.days ?? days),
     source: (data.source ?? "api") as string,
     data_gap: Boolean(data.data_gap ?? false),
+    reason: typeof data.reason === "string" ? data.reason : undefined,
   } as ValueBetScanResponse;
 }
 
 // ─── Empty states ─────────────────────────────────────────────────────────────
 
-function DataGapState() {
+function DataGapState({ reason }: { reason?: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center" data-testid="value-bet-data-gap">
       <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-300">Scanner requires predictions</p>
-      <p className="text-xs text-slate-500">Select a fixture to generate one, then return here.</p>
+      <p className="text-sm font-medium text-slate-300">No executable opportunities available</p>
+      <p className="max-w-md text-xs text-slate-500">
+        Only fresh, persisted decisions that pass every evidence and staking gate appear here.
+        {reason ? ` Status: ${reason.replaceAll("_", " ").toLowerCase()}.` : ""}
+      </p>
       <Link
         href="/match"
         className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
       >
         <ExternalLink className="h-3 w-3" aria-hidden="true" />
-        Go to Match
+        Inspect a fixture
       </Link>
     </div>
   );
@@ -152,7 +157,7 @@ function LegitimateEmptyState({ days }: { days: number }) {
       <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
       <p className="text-sm font-medium text-slate-400">No value edges detected</p>
       <p className="text-xs text-slate-600">
-        No bets above threshold for current filters in the next {days} days. Min edge 4.2%.
+        No persisted, fully gated opportunities are available in the next {days} days.
       </p>
     </div>
   );
@@ -305,7 +310,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-white">Value Bet Scanner</h2>
+          <h2 className="text-sm font-semibold text-white">Persisted Opportunity Monitor</h2>
           {fixtures.length > 0 && (
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
               {fixtures.length}
@@ -338,12 +343,12 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       {isLoading ? (
         <div className="flex items-center justify-center gap-2 py-12 text-slate-400" aria-live="polite" aria-busy="true">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span className="text-sm">Scanning for value…</span>
+          <span className="text-sm">Loading persisted decisions...</span>
         </div>
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : isDataGap ? (
-        <DataGapState />
+        <DataGapState reason={data?.reason} />
       ) : isLegitimateEmpty ? (
         <LegitimateEmptyState days={activeDays} />
       ) : (
@@ -372,7 +377,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       {/* Footer */}
       {data && !isDataGap && (
         <p className="border-t border-white/[0.04] px-4 py-2 text-[10px] text-slate-600">
-          Source: {data.source} · Min EV 4.2% · {activeDays}d window
+          Source: {data.source} · Fresh, persisted, fully gated decisions only · {activeDays}d window
         </p>
       )}
     </section>

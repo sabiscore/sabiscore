@@ -30,7 +30,7 @@ from .training_pipeline import ProductionMLPipeline
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MODEL_PATH = os.getenv("MODEL_PATH", "models/ultra")  # Directory path, not file
-API_KEY = os.getenv("API_KEY", "dev-key-12345")
+API_KEY = os.getenv("API_KEY")
 CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))  # 5 minutes
 MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "50"))
 
@@ -327,6 +327,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 async def verify_api_key(x_api_key: str = Header(...)):
     """Verify API key"""
+    if not API_KEY:
+        raise HTTPException(status_code=503, detail="API key is not configured")
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key

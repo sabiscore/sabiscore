@@ -32,10 +32,8 @@ from src.schemas.betting_intelligence import (
     VerdictEnum,
 )
 from src.services.betting_intelligence import (
-    HIGH_CONVICTION_EDGE,
     KELLY_FRACTION,
     MAX_KELLY_CAP,
-    MIN_ACTIONABLE_EDGE,
     _compute_devig,
     _expected_value,
     _full_kelly,

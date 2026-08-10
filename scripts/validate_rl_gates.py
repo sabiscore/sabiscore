@@ -441,10 +441,10 @@ def main() -> int:
     print(f"Max drawdown:       {report.max_drawdown:.4f}  (gate < {GATE_2_MAX_DRAWDOWN:.3f})")
     print(f"Rolling Sharpe:     {report.rolling_sharpe_mean:.4f}  (gate ≥ {GATE_3_ROLLING_SHARPE:.2f})")
     print(f"Abstention rate:    {report.abstention_rate:.4f}  (gate {GATE_4_ABSTENTION_LO:.0%}–{GATE_4_ABSTENTION_HI:.0%})")
-    print(f"\nPer-league ROI:")
+    print("\nPer-league ROI:")
     for lg, roi in sorted(report.per_league_roi.items()):
         print(f"  {lg:12} {roi:+.4f}")
-    print(f"\nGate results:")
+    print("\nGate results:")
     for g in report.gates:
         icon = "✅" if g.passed else "❌"
         print(f"  {icon} {g.gate:40} value={g.value:.4f}  threshold={g.threshold}")

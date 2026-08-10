@@ -29,7 +29,7 @@ import json
 # Add parent paths
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from ml_ultra.enhanced_data_pipeline import EnhancedDataPipeline, DATA_DIR, CACHE_DIR
+from ml_ultra.enhanced_data_pipeline import EnhancedDataPipeline, DATA_DIR
 
 # Define directories
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +38,10 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DIR = DATA_DIR / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-from ml_ultra.production_ml_model import ProductionMLModel, evaluate_model_realistically
+from ml_ultra.production_ml_model import (  # noqa: E402 - directories are initialized first
+    ProductionMLModel,
+    evaluate_model_realistically,
+)
 
 # Configure logging
 logging.basicConfig(

@@ -40,6 +40,7 @@ from ..core.cache import cache_manager
 from ..core.config import settings
 from ..core.league_policy import LeaguePolicyUnavailableError, get_league_policy
 from ..core.redaction import redact_text
+from .active_generation import ActiveGenerationError, active_artifact_path
 
 # ── Soft import: calibration module (requires scipy / sklearn) ─────────────────
 _apply_calibrator = None
@@ -219,6 +220,12 @@ class PredictionEngine:
         import joblib
         import pickle
 
+        try:
+            manifested = active_artifact_path(slug)
+        except ActiveGenerationError as exc:
+            logger.error("PredictionEngine: active generation rejected: %s", redact_text(exc))
+            return None
+
         search_dirs = [settings.phase7_models_path, settings.models_path]
         for directory in search_dirs:
             if not directory.exists():
@@ -227,6 +234,8 @@ class PredictionEngine:
                 for ext in (".pkl", ".joblib"):
                     candidate = directory / f"{slug}{suffix}{ext}"
                     if candidate.exists():
+                        if manifested is not None and candidate.resolve() != manifested.resolve():
+                            continue
                         try:
                             # joblib.load first for BOTH extensions. Every committed
                             # artifact is joblib-serialised regardless of whether it

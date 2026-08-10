@@ -36,7 +36,7 @@ def check_endpoint(base_url: str, path: str, expected_status=200, timeout=15) ->
                     data = json.loads(body)
                     detail = json.dumps(data, indent=2)[:200]  # First 200 chars
                     return True, f"Status {status} ✓ - {detail}"
-                except:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     return True, f"Status {status} ✓"
             else:
                 return False, f"Status {status} (expected {expected_status})"
@@ -76,7 +76,7 @@ def validate_backend(base_url: str) -> dict:
             print(colored("✗ FAIL", 'red'), f"- {message}")
     
     # Special validation for /health/ready to check model status
-    print(f"\nValidating model loading status ... ", end="", flush=True)
+    print("\nValidating model loading status ... ", end="", flush=True)
     try:
         req = Request(f"{base_url}/health/ready", headers={"User-Agent": "SabiScore-Deploy-Validator/1.0"})
         with urlopen(req, timeout=15) as response:

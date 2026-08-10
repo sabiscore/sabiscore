@@ -7,6 +7,43 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Replaced the oversized Apex activation prompt with an executable,
+  current-state directive in `docs/APEX_FINAL_PRODUCTION_ACTIVATION_DIRECTIVE.md`.
+  It separates code work from operator gates, makes real settled predictions a
+  hard prerequisite for model-changing work, and keeps master/deployment closed
+  until every required release gate has actually run.
+- Added a dedicated Python 3.11-3.13 offline research dependency set and import
+  verifier. Python 3.12 now selects wheel-backed CatBoost 1.2.8, SHAP 0.49.1,
+  and scikit-learn 1.5.2 rather than incompatible Python 3.11 pins.
+- Removed eager MLflow imports from the model registry, stopped logging tracking
+  URIs, redacted registry errors, and retired mutable local-registry production
+  promotion. The hash-validated active-generation release remains the only
+  production promotion authority.
+- Cleared all 79 repository-wide Ruff findings across legacy diagnostics,
+  deployment utilities, and training scripts without changing model artifacts or
+  prediction policy.
+- Moved public upcoming-fixture reads to cache/PostgreSQL only. Provider fixture
+  acquisition remains in the periodic sync service; prediction-free reads and
+  web proxies now have explicit deadlines and structured provenance/data-gap
+  responses.
+- Retired synchronous 200-fixture value scanning. The stable endpoint now exposes
+  only fresh persisted gated decisions (currently an empty non-executable gap),
+  and the UI no longer promotes a bulk best-bet scan.
+- Retired public outcome mutation and client-local monitoring truth. Health,
+  performance, and monitoring surfaces now use backend settlement evidence;
+  absent samples render nullable `Pending` metrics.
+- Made `/api/predict` a verified-fixture-only proxy that preserves the backend
+  analysis and rejects missing, non-finite, out-of-range, or non-simplex
+  probabilities without filling or normalization.
+- Added one hash-validated active-generation manifest consumed by both model
+  loaders. The current active generation is explicitly `UNVERIFIED`, so both
+  independent betting engines add a critical generation gap and expose zero
+  stake while analytical output remains available.
+- Re-ran Apex training with pre-2024/25 training, 2024/25 calibration, and an
+  untouched 2025/26 evaluation. The candidate passed simplex, responsiveness,
+  coherent-price perturbation, and mean RPS-improvement gates, but failed serving
+  feature availability, market baseline, and no-league-regression gates. It
+  remains quarantined with `promotion_permitted: false`.
 - Made caller-supplied `/api/v1/predictions/analyze` probabilities explicitly
   external and unverified. They now fail closed with
   `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and zero stake.
@@ -38,13 +75,41 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   source tree or mask copy failures. An invalid `REDIS_URL` degrades safely
   instead of crashing import, but production still requires operator rotation
   and a valid `redis://` or `rediss://` value.
+- Fixed a second, independent unguarded Redis call site: a live 2026-08-10
+  Render crash traced to `ModelOrchestrator.__init__` calling
+  `redis.from_url()` directly with no guard, crashing the process on any
+  `src.models` import (see `docs/DEBT.md` item 15). It now degrades to the same
+  in-memory fallback pattern as `core/cache.py`.
+- Removed the predictable ISR revalidation-token fallback. The backend now
+  skips invalidation and the Vercel route returns `503` until both platforms
+  have a configured shared `REVALIDATE_SECRET`; route errors no longer echo
+  exception details to callers.
+- Hardened two legacy non-production modules against secret foot-guns by
+  removing baked demo API-key defaults (`dev-key-12345` / `demo_key`) and
+  failing closed when keys are missing.
+- Added a small accessibility polish to model metadata cards with explicit
+  per-card `aria-label` values, improving screen-reader announcement clarity.
 
-Validation completed locally: backend `1259 passed, 13 skipped`; frontend
-Vitest `118 passed`; lint, type-check, Next.js production build, 78-path OpenAPI,
-active artifact verification, NEXUS discovery, and production Compose config
-passed. Docker image builds, production Alembic connectivity, credential
-rotation, candidate model certification, and live same-SHA deployment proof
-remain release blockers.
+Validation completed locally: backend `1271 passed, 13 skipped`; repository-wide
+backend Ruff passed with zero findings; mypy improved from the accepted 784-error
+ceiling to 781 errors;
+frontend ESLint, TypeScript, 19 Vitest files / 123 tests, Next.js 15.5.19
+production build, and 36/36 desktop/mobile Playwright flows passed. The 78-path
+OpenAPI check, scraper tests/manifest, active-artifact verification, current-tree
+Gitleaks, CSP checks, and production Compose configuration also passed. Full
+history still has two unproven-revocation secret findings. Fresh Docker retries
+ran for more than five minutes (backend) and three minutes (web) without a
+current image; the only backend verify tag predates this work and no web verify
+tag exists. Production Alembic upgrade remains blocked without a configured URL;
+GitHub jobs are locked by account billing; the exact-SHA Vercel preview correctly
+returns structured bounded gaps and nullable health truth but still has no usable
+paired Render backend; production remains stale; and Redis rotation is
+operator-blocked. No merge or production promotion is permitted.
+
+The isolated Python 3.12 research environment imports CatBoost 1.2.8 and SHAP
+0.49.1, but MLflow and the broader research stack were still network-bound during
+installation. Importability is therefore partial and does not clear any model
+certification or release gate.
 
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 

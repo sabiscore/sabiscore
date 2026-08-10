@@ -25,6 +25,7 @@ except ImportError:
     _PHASE9_MARKET_AVAILABLE = False
 from ..data.transformers import FeatureTransformer
 from ..models.edge_detector import EdgeDetector
+from ..models.active_generation import active_artifact_path
 from ..models.ensemble import SabiScoreEnsemble
 from ..monitoring.metrics import metrics_collector
 from ..schemas.prediction import MatchPredictionRequest, PredictionResponse
@@ -255,8 +256,9 @@ class PredictionService:
                 candidate_paths.append(_search_dir / "ucl_ensemble.pkl")
         else:
             if settings.use_phase7_models and self._in_phase7_canary_group(league_slug):
-                for _search_dir in (settings.phase7_models_path, settings.models_path, _backend_models):
-                    candidate_paths.append(_search_dir / f"{league_slug}_ensemble_v5_phase7.pkl")
+                manifested = active_artifact_path(league_slug)
+                if manifested is not None:
+                    candidate_paths.append(manifested)
 
             if settings.use_optuna_v4 and self._in_canary_group(league_slug):
                 for _search_dir in (settings.models_path, _backend_models):

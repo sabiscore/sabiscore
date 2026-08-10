@@ -12,6 +12,7 @@ from ..core.config import settings
 from ..core.redaction import redact_text
 from ..core.cache import cache
 from ..core.model_fetcher import DEFAULT_LEAGUES, load_ensemble_per_league
+from ..models.active_generation import load_active_generation
 from ..db.session import init_db, close_db
 from ..providers import build_provider_registry
 from ..services.odds_service import OddsService
@@ -318,23 +319,34 @@ def _startup_load_models_strict(app: FastAPI) -> None:
     app.state.model_load_attempts = int(getattr(app.state, "model_load_attempts", 0)) + 1
     model_load_in_progress = True
 
-    model_base_url = (os.environ.get("MODEL_BASE_URL") or "").strip() or None
-    fetch_token = (os.environ.get("MODEL_FETCH_TOKEN") or "").strip() or None
     model_version = (os.environ.get("ACTIVE_BASELINE_VERSION") or "v5_phase7").strip() or "v5_phase7"
     leagues = _resolve_active_leagues()
 
-    local_dirs = [
-        settings.phase7_models_path,
-        settings.models_path,
-        settings.models_path.parent / "backend" / "models",
-    ]
+    generation = load_active_generation()
+    manifest_version = str(generation.get("active_version") or "").strip()
+    if manifest_version != model_version:
+        raise RuntimeError(
+            "ACTIVE_BASELINE_VERSION does not match the hash-validated active generation"
+        )
+    missing_leagues = sorted(set(leagues) - set(generation["artifacts"]))
+    if missing_leagues:
+        raise RuntimeError(
+            "Active generation does not contain every required league: "
+            + ", ".join(missing_leagues)
+        )
+
+    # Promotion and rollback are commit-atomic: startup may load only files whose
+    # artifact and metadata hashes were validated by the committed manifest.
+    # MODEL_BASE_URL remains available to offline fetch tooling, but cannot replace
+    # an active production generation with an unmanifested remote payload.
+    local_dirs = [generation["manifest_path"].parent]
 
     models = load_ensemble_per_league(
-        model_base_url=model_base_url,
+        model_base_url=None,
         version=model_version,
         local_model_dirs=local_dirs,
         leagues=leagues,
-        fetch_token=fetch_token,
+        fetch_token=None,
     )
 
     if not models:
@@ -343,6 +355,8 @@ def _startup_load_models_strict(app: FastAPI) -> None:
     app.state.models = dict(models)
     app.state.leagues_loaded = sorted(models.keys())
     app.state.model_version = model_version
+    app.state.model_generation = generation["generation"]
+    app.state.model_manifest_sha256 = generation["manifest_sha256"]
     app.state.models_loaded = True
     app.state.model_load_error_message = None
     app.state.model_load_in_progress = False

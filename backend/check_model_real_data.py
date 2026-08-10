@@ -1,7 +1,5 @@
 """Script to verify models are trained on real data, not mock data"""
 import joblib
-import json
-import sys
 
 # Load trained model
 model_path = r'c:\Users\USR\Documents\SabiScore\models\epl_ensemble.pkl'
@@ -18,13 +16,13 @@ print(f"\n✓ Model Trained: {is_trained}")
 # Check feature columns
 feature_columns = model.get('feature_columns', [])
 print(f"\n✓ Total Features: {len(feature_columns)}")
-print(f"\n✓ First 15 Features:")
+print("\n✓ First 15 Features:")
 for i, feat in enumerate(feature_columns[:15], 1):
     print(f"   {i}. {feat}")
 
 # Check model metadata
 metadata = model.get('model_metadata', {})
-print(f"\n✓ Model Metadata:")
+print("\n✓ Model Metadata:")
 print(f"   - Accuracy: {metadata.get('accuracy', 'N/A')}")
 print(f"   - Training samples: {metadata.get('training_samples', 'N/A')}")
 print(f"   - Test samples: {metadata.get('test_samples', 'N/A')}")
@@ -41,7 +39,7 @@ expected_real_features = [
     'away_form_points', 'home_squad_value_mean', 'away_squad_value_mean'
 ]
 
-print(f"\n✓ Verifying Real Data Features:")
+print("\n✓ Verifying Real Data Features:")
 for feat in expected_real_features:
     if feat in feature_columns:
         print(f"   ✓ {feat} - FOUND (REAL DATA)")
@@ -52,13 +50,13 @@ for feat in expected_real_features:
 mock_indicators = ['mock', 'dummy', 'fake', 'test', 'placeholder', 'sample']
 suspicious_features = [f for f in feature_columns if any(ind in f.lower() for ind in mock_indicators)]
 
-print(f"\n✓ Mock Data Check:")
+print("\n✓ Mock Data Check:")
 if suspicious_features:
     print(f"   ⚠ WARNING: Found {len(suspicious_features)} suspicious features:")
     for feat in suspicious_features:
         print(f"      - {feat}")
 else:
-    print(f"   ✓ NO MOCK/DUMMY FEATURES DETECTED")
+    print("   ✓ NO MOCK/DUMMY FEATURES DETECTED")
 
 print("\n" + "=" * 80)
 print("CONCLUSION:")

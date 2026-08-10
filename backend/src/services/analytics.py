@@ -22,6 +22,7 @@ from ..schemas.betting_intelligence import (
     SourceStatusEnum,
     SourceStatusInput,
 )
+from ..models.active_generation import active_generation_is_certified
 from .betting_intelligence import analyze_match
 
 
@@ -94,6 +95,9 @@ class CertifiedAnalyticsService:
                 model_version=str(model_payload["model_version"]),
                 calibration_method=str(model_payload["calibration_method"]),
                 calibration_validated=bool(model_payload["calibration_validated"]),
+                generation_certified=(
+                    active_generation_is_certified() if trusted_backend else False
+                ),
                 epistemic_uncertainty=float(model_payload["epistemic_uncertainty"]),
                 aleatoric_uncertainty=float(model_payload["aleatoric_uncertainty"]),
                 confidence_tier=EvidenceTierEnum(model_payload["confidence_tier"]),

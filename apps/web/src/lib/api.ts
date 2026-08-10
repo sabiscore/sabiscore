@@ -842,9 +842,12 @@ export interface UpcomingMatchesResponse {
   offseason: boolean;
   /** ISO 8601 date of the next season kick-off. Null when not offseason. */
   next_season_start: string | null;
+  data_gap: boolean;
+  unavailable_reasons: string[];
+  generated_at: string;
 }
 
-/** Fetch upcoming matches with predictions and edge quality scores. */
+/** Fetch the synchronized fixture-discovery list without bulk model/provider work. */
 export async function getUpcomingMatches(
   params: { league?: string; days_ahead?: number; limit?: number } = {},
 ): Promise<UpcomingMatchesResponse> {
@@ -852,6 +855,8 @@ export async function getUpcomingMatches(
   if (params.league) qs.set("league", params.league);
   if (params.days_ahead !== undefined) qs.set("days_ahead", String(params.days_ahead));
   if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  qs.set("include_predictions", "false");
+  qs.set("include_value_bets", "false");
   const url = `/api/upcoming${qs.size ? `?${qs}` : ""}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8_000);
@@ -859,9 +864,9 @@ export async function getUpcomingMatches(
   try {
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
-      next: { revalidate: 300 },
+      cache: "no-store",
       signal: controller.signal,
-    } as RequestInit);
+    });
 
     if (!response.ok) {
       let detail = `HTTP ${response.status}`;
@@ -874,7 +879,7 @@ export async function getUpcomingMatches(
 
     return (await response.json()) as UpcomingMatchesResponse;
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
+    if (err instanceof Error && ["AbortError", "TimeoutError"].includes(err.name)) {
       throw new APIError("Upcoming matches request timed out (8s)", 408, "UPCOMING_MATCHES_TIMEOUT");
     }
     throw err;

@@ -310,8 +310,11 @@ async def trigger_isr_revalidation(match_id: str):
     """
     try:
         # Get Next.js revalidation settings from config
-        next_url = getattr(settings, 'next_url', 'http://localhost:3000')
-        revalidate_secret = getattr(settings, 'revalidate_secret', 'dev-secret-token')
+        next_url = settings.next_url
+        revalidate_secret = settings.revalidate_secret
+        if not revalidate_secret:
+            logger.warning("ISR revalidation skipped because REVALIDATE_SECRET is not configured")
+            return
         
         # Construct revalidation payload
         payload = {
@@ -336,8 +339,8 @@ async def trigger_isr_revalidation(match_id: str):
     
     except asyncio.TimeoutError:
         logger.warning("ISR revalidation timeout for match %s", match_id)
-    except Exception as e:
-        logger.error("Error triggering ISR revalidation: %s", e)
+    except Exception as exc:
+        logger.error("Error triggering ISR revalidation: %s", exc)
 
 
 async def handle_client_message(data: dict, match_id: str, websocket: WebSocket):
