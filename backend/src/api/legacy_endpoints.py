@@ -19,6 +19,7 @@ from ..core.database import (
 from ..core.cache import cache
 from ..core.config import settings
 from ..core.exceptions import DataUnavailableError
+from ..core.redaction import redact_text
 from ..schemas.requests import InsightsRequest
 from ..schemas.responses import (
     ErrorResponse,
@@ -314,7 +315,17 @@ async def model_status(league: Optional[str] = None):
     cache_key = f"model-status:{league or '*'}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        response = dict(cached)
+        from ..services.settlement_service import last_settlement_result
+
+        settlement = last_settlement_result()
+        settled_count = int(settlement.get("settled_predictions_total") or 0)
+        response["settlement"] = settlement
+        response["model_change_permitted"] = settled_count > 0
+        response["model_change_blocker"] = (
+            None if settled_count > 0 else "ZERO_REAL_SETTLED_PREDICTIONS"
+        )
+        return response
 
     try:
         metadata = _active_model_metadata()
@@ -332,6 +343,15 @@ async def model_status(league: Optional[str] = None):
             }
 
         cache.set(cache_key, response, ttl=3600)
+        from ..services.settlement_service import last_settlement_result
+
+        settlement = last_settlement_result()
+        settled_count = int(settlement.get("settled_predictions_total") or 0)
+        response["settlement"] = settlement
+        response["model_change_permitted"] = settled_count > 0
+        response["model_change_blocker"] = (
+            None if settled_count > 0 else "ZERO_REAL_SETTLED_PREDICTIONS"
+        )
         return response
 
     except HTTPException:
@@ -390,10 +410,9 @@ def _active_model_metadata() -> Dict[str, Any]:
                     "validation_status": data.get("validation_status", "UNVERIFIED"),
                     "artifact_type": artifact_file.suffix.lstrip("."),
                     "artifact_sha256": _sha256(artifact_file),
-                    "metrics": {
-                        key: data.get(key)
-                        for key in ("rps", "brier_score", "log_loss", "accuracy", "holdout_samples")
-                    },
+                    "metrics": None,
+                    "metrics_status": "PENDING_REAL_SETTLEMENT",
+                    "loader_compatibility": data.get("loader_compatibility", "UNVERIFIED"),
                     "trained_at": data.get("trained_at"),
                     "data_source": data.get("data_source"),
                 }
@@ -402,6 +421,27 @@ def _active_model_metadata() -> Dict[str, Any]:
                 logger.warning("Failed to inspect model metadata %s: %s", metadata_file, exc)
 
     versions = sorted({item["active_version"] for item in models.values()})
+    candidate: Dict[str, Any] = {
+        "status": "ABSENT",
+        "promotion_permitted": False,
+        "loader_compatibility": "UNVERIFIED",
+        "shadow_enabled": False,
+    }
+    candidate_manifest = Path(settings.models_path) / "candidate" / "candidate_manifest.json"
+    if candidate_manifest.is_file():
+        try:
+            candidate_data = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+            candidate = {
+                "status": candidate_data.get("status", "UNVERIFIED_CANDIDATE"),
+                "promotion_permitted": candidate_data.get("promotion_permitted") is True,
+                "reason": candidate_data.get("reason"),
+                "manifest_sha256": _sha256(candidate_manifest),
+                "loader_compatibility": candidate_data.get("loader_compatibility", "UNVERIFIED"),
+                "shadow_enabled": False,
+                "artifacts": candidate_data.get("artifacts", {}),
+            }
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to inspect candidate manifest: %s", redact_text(exc))
     return {
         "active_version": versions[0] if len(versions) == 1 else None,
         "validation_status": (
@@ -411,6 +451,7 @@ def _active_model_metadata() -> Dict[str, Any]:
         ),
         "last_updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "models": models,
+        "candidate": candidate,
     }
 
 

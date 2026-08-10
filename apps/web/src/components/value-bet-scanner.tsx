@@ -30,6 +30,12 @@ interface ValueBetScanResponse {
   days: number;
   source: string;
   data_gap?: boolean;
+  status?: string;
+  reason?: string | null;
+  retryable?: boolean;
+  freshness?: Record<string, unknown> | null;
+  provenance?: string[];
+  generated_at?: string | null;
 }
 
 // ─── League chip colors ───────────────────────────────────────────────────────
@@ -53,7 +59,7 @@ function confidenceLabel(c: number): { label: string; cls: string } {
 }
 
 function dataQualityLabel(fixture: ValueBetFixture): { label: string; cls: string } {
-  if (!fixture.model_prob && !fixture.implied_prob) {
+  if (fixture.model_prob == null && fixture.implied_prob == null) {
     return { label: "PARTIAL", cls: "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/30" };
   }
   if (fixture.confidence >= 0.7 && fixture.model_prob && fixture.implied_prob) {
@@ -124,17 +130,30 @@ async function fetchValueBets(days: number): Promise<ValueBetScanResponse> {
     days: Number(data.days ?? days),
     source: (data.source ?? "api") as string,
     data_gap: Boolean(data.data_gap ?? false),
+    status: typeof data.status === "string" ? data.status : undefined,
+    reason: typeof data.reason === "string" ? data.reason : null,
+    retryable: Boolean(data.retryable ?? false),
+    freshness: data.freshness && typeof data.freshness === "object" ? data.freshness : null,
+    provenance: Array.isArray(data.provenance) ? data.provenance.map(String) : [],
+    generated_at: typeof data.generated_at === "string" ? data.generated_at : null,
   } as ValueBetScanResponse;
 }
 
 // ─── Empty states ─────────────────────────────────────────────────────────────
 
-function DataGapState() {
+function DataGapState({ data }: { data?: ValueBetScanResponse }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center" data-testid="value-bet-data-gap">
       <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-300">Scanner requires predictions</p>
-      <p className="text-xs text-slate-500">Select a fixture to generate one, then return here.</p>
+      <p className="text-sm font-medium text-slate-300">No fresh, fully gated candidates</p>
+      <p className="max-w-md text-xs text-slate-500">
+        The scanner reads persisted analysis only. Missing, stale, partial, zero-stake, or non-actionable records are intentionally excluded.
+      </p>
+      {data?.generated_at ? (
+        <p className="text-[11px] text-slate-600">
+          Checked {new Date(data.generated_at).toLocaleString()} · {data.provenance?.join(" + ") || "provenance unavailable"}
+        </p>
+      ) : null}
       <Link
         href="/match"
         className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
@@ -343,7 +362,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
       ) : isDataGap ? (
-        <DataGapState />
+        <DataGapState data={data} />
       ) : isLegitimateEmpty ? (
         <LegitimateEmptyState days={activeDays} />
       ) : (

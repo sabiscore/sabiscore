@@ -4,10 +4,9 @@ Model Orchestrator - Routes predictions to league-specific models
 Handles training, caching, live calibration, and edge detection
 """
 
-import redis
 import json
-import os
-from typing import Dict, Optional
+from threading import Lock
+from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import pandas as pd
@@ -19,6 +18,38 @@ from .leagues.la_liga import LaLigaModel
 from .leagues.bundesliga import BundesligaModel
 from .leagues.serie_a import SerieAModel
 from .leagues.ligue_1 import Ligue1Model
+
+
+class _InMemoryRedisAdapter:
+    """Minimal Redis-compatible fallback for legacy batch utilities only."""
+
+    def __init__(self) -> None:
+        self._values: dict[str, Any] = {}
+        self._lists: dict[str, list[Any]] = {}
+
+    def get(self, key: str) -> Any:
+        return self._values.get(key)
+
+    def setex(self, key: str, _ttl: int, value: Any) -> bool:
+        self._values[key] = value
+        return True
+
+    def lpush(self, key: str, value: Any) -> int:
+        values = self._lists.setdefault(key, [])
+        values.insert(0, value)
+        return len(values)
+
+    def ltrim(self, key: str, start: int, stop: int) -> bool:
+        values = self._lists.setdefault(key, [])
+        self._lists[key] = values[start : stop + 1]
+        return True
+
+    def llen(self, key: str) -> int:
+        return len(self._lists.get(key, []))
+
+    def lrange(self, key: str, start: int, stop: int) -> list[Any]:
+        values = self._lists.get(key, [])
+        return values[start:] if stop == -1 else values[start : stop + 1]
 
 class ModelOrchestrator:
     """
@@ -43,8 +74,12 @@ class ModelOrchestrator:
         'eredivisie': 'eredivisie'
     }
     
-    def __init__(self, redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")):
-        self.redis = redis.from_url(redis_url, decode_responses=True)
+    def __init__(self, redis_client: Any | None = None):
+        if redis_client is None:
+            from ..core.cache import cache
+
+            redis_client = cache.redis_client
+        self.redis = redis_client or _InMemoryRedisAdapter()
         
         # Import additional league models
         from .leagues.championship import ChampionshipModel
@@ -417,5 +452,16 @@ class ModelOrchestrator:
         
         print("\n" + "="*60)
 
-# Export singleton instance
-orchestrator = ModelOrchestrator()
+_orchestrator: ModelOrchestrator | None = None
+_orchestrator_lock = Lock()
+
+
+def get_model_orchestrator(redis_client: Any | None = None) -> ModelOrchestrator:
+    """Lazily construct the legacy orchestrator without import-time I/O."""
+
+    global _orchestrator
+    if _orchestrator is None:
+        with _orchestrator_lock:
+            if _orchestrator is None:
+                _orchestrator = ModelOrchestrator(redis_client=redis_client)
+    return _orchestrator

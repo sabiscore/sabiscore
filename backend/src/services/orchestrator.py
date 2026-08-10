@@ -114,8 +114,8 @@ class ProductionOrchestrator:
         """Lazy-load ModelOrchestrator"""
         if self._model_orchestrator is None:
             try:
-                from ..models.orchestrator import orchestrator
-                self._model_orchestrator = orchestrator
+                from ..models.orchestrator import get_model_orchestrator
+                self._model_orchestrator = get_model_orchestrator(self.redis)
             except ImportError:
                 logger.warning("ModelOrchestrator not available, using mock")
                 self._model_orchestrator = MockModelOrchestrator()

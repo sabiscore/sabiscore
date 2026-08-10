@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import Ajv from "ajv";
 import { defaultLeagues, manifestDir, processedDir, rawDir } from "./config.mjs";
+import { sourceRegistry, validateSourceRegistry } from "./registry.mjs";
 import { PublicHttpClient } from "./http.mjs";
 import { FootballDataAdapter } from "./adapters/football-data.mjs";
 import { ensureStorage, readFixture, writeManifest } from "./storage.mjs";
@@ -28,9 +31,15 @@ function summarizeResults(results) {
 
 async function scrape({ adapterKind = "fixtures" } = {}) {
   await ensureStorage();
+  const runId = randomUUID();
+  const acquiredAt = new Date().toISOString();
+  const source = sourceRegistry.sources.footballData;
   const client = new PublicHttpClient({
-    minDelayMs: Number(process.env.SABISCORE_SCRAPER_DELAY_MS ?? 2500),
-    respectRobots: process.env.SABISCORE_SCRAPER_RESPECT_ROBOTS !== "false"
+    minDelayMs: Number(process.env.SABISCORE_SCRAPER_DELAY_MS ?? source.sameDomainDelaySeconds * 1000),
+    retries: source.maxRetries,
+    maxRequestsPerMinute: source.maxRequestsPerMinute,
+    timeoutMs: source.timeoutMs,
+    respectRobots: true,
   });
   const adapter = new FootballDataAdapter(client);
   const seasonCode = process.env.SABISCORE_SEASON_CODE ?? "2425";
@@ -53,14 +62,36 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
       results.push({ league, skipped: true, reason: `${adapterKind}_adapter_disabled`, zero_paid_api: true });
       continue;
     }
-    results.push(await adapter.scrapeLeague({ league, leagueCode, seasonCode, fixtureText }));
+    try {
+      results.push(await adapter.scrapeLeague({
+        league, leagueCode, seasonCode, fixtureText, runId, acquiredAt
+      }));
+    } catch (error) {
+      results.push({
+        source_id: source.id,
+        league,
+        season_code: seasonCode,
+        skipped: true,
+        validation_status: "FAILED",
+        reason: error instanceof Error && error.message.startsWith("schema_drift_")
+          ? error.message
+          : "acquisition_failed",
+        failure: {
+          type: error instanceof Error ? error.name : "Error",
+          retryable: false,
+        },
+      });
+    }
   }
 
   const summary = summarizeResults(results);
   const manifestFile = await writeManifest({
     source_id: "football-data-csv",
-    adapter_version: "1.0.0",
-    schema_version: "1.0.0",
+    run_id: runId,
+    adapter_version: source.parserVersion,
+    schema_version: source.schemaVersion,
+    registry_version: sourceRegistry.registryVersion,
+    started_at: acquiredAt,
     status: summary.errors.length ? "PARTIAL" : "SUCCESS",
     command,
     sources: results,
@@ -82,6 +113,19 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
 async function validate() {
   await ensureStorage();
   await access(processedDir);
+  const schema = JSON.parse(
+    await readFile(new URL("./source-registry.schema.json", import.meta.url), "utf8")
+  );
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const schemaValid = ajv.validate(schema, sourceRegistry);
+  const semantic = validateSourceRegistry(sourceRegistry);
+  if (!schemaValid || !semantic.valid) {
+    const errors = [
+      ...(ajv.errors ?? []).map((error) => `${error.instancePath} ${error.message}`),
+      ...semantic.errors,
+    ];
+    throw new Error(`source_registry_invalid: ${errors.join("; ")}`);
+  }
   const manifestFile = await writeManifest({
     source_id: "node-scraper",
     status: "SUCCESS",
@@ -92,6 +136,8 @@ async function validate() {
       storage_ready: true,
       paid_api_dependencies: false,
       public_source_allowlist: true,
+      source_registry_valid: true,
+      source_registry_version: sourceRegistry.registryVersion,
       raw_dir: rawDir,
       processed_dir: processedDir,
       manifest_dir: manifestDir
@@ -108,6 +154,11 @@ async function doctor() {
     dynamic_scrapers_enabled: process.env.ENABLE_DYNAMIC_SCRAPERS === "true",
     user_agent_rotation: false,
     storage: { rawDir, processedDir, manifestDir },
+    source_registry: {
+      version: sourceRegistry.registryVersion,
+      valid: validateSourceRegistry(sourceRegistry).valid,
+      competitions: Object.keys(sourceRegistry.competitions),
+    },
   };
   const manifestFile = await writeManifest({
     source_id: "node-scraper",

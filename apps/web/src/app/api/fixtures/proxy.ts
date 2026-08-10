@@ -4,6 +4,7 @@ import { z } from "zod";
 const BACKEND_URL = process.env.SABISCORE_BACKEND_URL;
 
 const BACKEND_TOKEN = process.env.BACKEND_TOKEN;
+const BACKEND_DEADLINE_MS = 8_000;
 
 const FixtureIdSchema = z.string().min(1).max(64).regex(/^[a-zA-Z0-9_-]+$/);
 
@@ -37,7 +38,8 @@ export async function proxyFixtureRequest(
       method: init?.method ?? req.method,
       headers,
       body: init?.body,
-      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+      signal: AbortSignal.timeout(BACKEND_DEADLINE_MS),
     });
     const data = await backendRes.json().catch(() => null);
     return NextResponse.json(data, {
@@ -48,12 +50,22 @@ export async function proxyFixtureRequest(
     const name = err instanceof Error ? err.name : "";
     return NextResponse.json(
       {
-        error: name === "TimeoutError" || name === "AbortError"
-          ? "BACKEND_TIMEOUT"
-          : "BACKEND_UNAVAILABLE",
+        status: "UNAVAILABLE",
+        data_gap: true,
+        reason: name === "TimeoutError" || name === "AbortError"
+          ? "backend_deadline_exceeded"
+          : "backend_unavailable",
+        retryable: true,
+        freshness: null,
+        provenance: [],
+        generated_at: new Date().toISOString(),
+        deadline_ms: BACKEND_DEADLINE_MS,
         message: "Could not complete the fixture intelligence request.",
       },
-      { status: name === "TimeoutError" || name === "AbortError" ? 504 : 503 },
+      {
+        status: name === "TimeoutError" || name === "AbortError" ? 504 : 503,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   }
 }

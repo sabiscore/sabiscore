@@ -16,6 +16,7 @@ from ...core.cache import cache
 from ...core.database import engine, get_db_status
 from ...core.config import settings
 from ...core.model_fetcher import REQUIRED_LEAGUES
+from ...core.redaction import redact_text
 from ...db.session import check_db_connection
 from ...db.session import _alembic_head_revision
 from ...db.session import get_async_session
@@ -392,16 +393,34 @@ async def readiness_check(
     if checks["migrations"]["status"] != "ready":
         ready = False
     
-    # Check cache (degraded is acceptable)
+    # In-process fallback preserves liveness, not production readiness.
     try:
-        cache_healthy = cache.ping()
+        cache_healthy = cache.production_ready()
+        cache_metrics = cache.metrics_snapshot()
+        configured = bool(cache_metrics.get("tier1_redis_enabled"))
         checks["cache"] = {
-            "status": "ready" if cache_healthy else "degraded",
-            "message": "Connected" if cache_healthy else "Using in-memory fallback"
+            "status": "ready" if cache_healthy else "not_ready",
+            "message": (
+                "External Redis connected"
+                if configured and cache_healthy
+                else "External Redis unavailable; in-memory fallback is non-production"
+                if configured
+                else "External Redis disabled by configuration"
+            ),
+            "configured": configured,
+            "external_available": bool(cache_metrics.get("tier1_redis_available")),
         }
+        if not cache_healthy:
+            ready = False
     except Exception as e:
-        logger.warning(f"Cache check failed: {e}")
-        checks["cache"] = {"status": "degraded", "message": "Using in-memory fallback"}
+        logger.warning("Cache readiness check failed: %s", redact_text(e))
+        checks["cache"] = {
+            "status": "not_ready",
+            "message": "Cache readiness check failed",
+            "configured": True,
+            "external_available": False,
+        }
+        ready = False
     
     # Check models (critical for predictions)
     try:

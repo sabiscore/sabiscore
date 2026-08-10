@@ -15,6 +15,7 @@ def cache():
         mock_client.ping.return_value = True
         
         cache = RedisCache()
+        cache._enabled = True
         cache.redis_client = mock_client
         yield cache
 
@@ -90,7 +91,41 @@ def test_malformed_redis_url_degrades_to_memory_without_crashing(monkeypatch):
     cache = RedisCache()
 
     assert cache.redis_client is None
-    assert cache._enabled is False
+    assert cache._enabled is True
+    assert cache.production_ready() is False
     assert cache.metrics.errors == 1
     assert cache.set("health", {"status": "degraded"}) is True
     assert cache.get("health") == {"status": "degraded"}
+
+
+def test_disabled_external_cache_is_ready_by_configuration(monkeypatch):
+    from src.core.cache import settings
+
+    monkeypatch.setattr(settings, "redis_enabled", False)
+    cache = RedisCache()
+
+    assert cache.production_ready() is True
+
+
+def test_production_plaintext_redis_is_rejected_without_connection(monkeypatch):
+    from src.core.cache import settings
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "redis_url", "redis://user:password@cache.example:6379/0")
+
+    with patch("redis.Redis.from_url") as from_url:
+        cache = RedisCache()
+
+    from_url.assert_not_called()
+    assert cache.production_ready() is False
+
+
+def test_model_orchestrator_import_performs_no_redis_connection():
+    import importlib
+    import src.models.orchestrator as module
+
+    with patch("redis.Redis.from_url") as from_url:
+        importlib.reload(module)
+
+    from_url.assert_not_called()

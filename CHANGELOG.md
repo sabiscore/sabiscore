@@ -7,6 +7,23 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Added canonical manifest-ingestion expansion with schema/version support for
+  v1/v2 payloads, dedicated ingestion CLI wiring, and new canonical identity
+  ingestion service/test coverage for fail-closed evidence intake.
+- Added scraper source-registry governance and production-worker scaffolding:
+  registry schema + validator, worker Dockerfile/start script, and Render cron
+  service wiring with explicit operator-off default (`SCRAPER_PRODUCTION_ENABLED=false`).
+- Coordinated startup scheduling so settlement passes wait for fixture-sync
+  completion, reducing free-tier provider quota collisions during cold starts.
+- Hardened cache/redaction/runtime safety: production Redis now enforces
+  `rediss://` policy for readiness, nested mapping/list redaction is centralized,
+  and malformed URL parsing fails closed in redaction helpers.
+- Updated web backend-proxy routes for upcoming/value-bet surfaces to return
+  bounded fail-closed `503` payloads with explicit retryability/provenance fields
+  and `Cache-Control: no-store` on degraded responses.
+- Added Apex feature availability artifacts (`docs/apex_feature_availability.*`)
+  and backend generator tooling for evidence-coverage audits.
+
 - Made caller-supplied `/api/v1/predictions/analyze` probabilities explicitly
   external and unverified. They now fail closed with
   `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and zero stake.

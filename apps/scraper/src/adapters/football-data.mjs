@@ -12,7 +12,7 @@ export class FootballDataAdapter {
     return `${this.source.baseUrl}/mmz4281/${seasonCode}/${leagueCode}.csv`;
   }
 
-  async scrapeLeague({ league, leagueCode, seasonCode = "2425", fixtureText = null }) {
+  async scrapeLeague({ league, leagueCode, seasonCode = "2425", fixtureText = null, runId, acquiredAt }) {
     if (process.env[this.source.killSwitchEnv] === "true") {
       return {
         source_id: this.source.id,
@@ -26,14 +26,27 @@ export class FootballDataAdapter {
     }
     const url = this.buildUrl(seasonCode, leagueCode);
     const raw = fixtureText ?? await this.client.getText(url);
-    const rawArtifact = await writeRaw(`football-data-${league}-${seasonCode}.csv`, raw);
+    const artifactContext = {
+      sourceId: this.source.id,
+      league,
+      season: seasonCode,
+      runId,
+      acquiredAt,
+    };
+    const rawArtifact = await writeRaw(
+      `football-data-${league}-${seasonCode}.csv`, raw, artifactContext
+    );
 
     const rows = parseCsv(raw);
     const fixtures = normalizeFootballDataRows(rows, league);
     const teamForm = buildTeamForm(fixtures);
 
-    const fixturesArtifact = await writeJson("fixtures", `${league}-${seasonCode}`, fixtures);
-    const formArtifact = await writeJson("team-form", `${league}-${seasonCode}`, teamForm);
+    const fixturesArtifact = await writeJson(
+      "fixtures", `${league}-${seasonCode}`, fixtures, artifactContext
+    );
+    const formArtifact = await writeJson(
+      "team-form", `${league}-${seasonCode}`, teamForm, artifactContext
+    );
     return {
       source_id: this.source.id,
       url,
@@ -42,15 +55,18 @@ export class FootballDataAdapter {
       rows: rows.length,
       fixtures: fixtures.length,
       artifacts: {
-        raw: rawArtifact.file,
-        fixtures: fixturesArtifact.file,
-        team_form: formArtifact.file,
+        raw: rawArtifact,
+        fixtures: fixturesArtifact,
+        team_form: formArtifact,
       },
       payload_hashes: {
-        [rawArtifact.file]: rawArtifact.hash,
-        [fixturesArtifact.file]: fixturesArtifact.hash,
-        [formArtifact.file]: formArtifact.hash,
+        [rawArtifact.uri]: rawArtifact.hash,
+        [fixturesArtifact.uri]: fixturesArtifact.hash,
+        [formArtifact.uri]: formArtifact.hash,
       },
+      acquired_at: acquiredAt,
+      parser_version: this.source.parserVersion,
+      schema_version: this.source.schemaVersion,
     };
   }
 }

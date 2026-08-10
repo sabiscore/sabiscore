@@ -23,6 +23,7 @@ import type {
   Verdict,
 } from "@/lib/betting-intelligence-api";
 import {
+  APIError,
   analyzeFixture,
   getEnginePolicy,
   getFixtureEvidence,
@@ -47,8 +48,8 @@ const VERDICT_LABEL: Record<Verdict, { label: string; action: string; tone: stri
     tone: "positive",
   },
   SPECULATIVE: {
-    label: "Risky — Small Stake Only",
-    action: "WATCHLIST — SMALL STAKE ONLY",
+    label: "Watchlist Signal",
+    action: "WATCHLIST ONLY",
     tone: "watch",
   },
   HOLD: {
@@ -82,6 +83,18 @@ const fmtDate = (value?: string | null) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value)) : "Kickoff unavailable";
+
+const recordNumber = (record: Record<string, unknown> | null | undefined, key: string) => {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+function userFacingError(error: unknown, fallback: string): string {
+  if (error instanceof APIError && [408, 503, 504].includes(error.status)) {
+    return "Intelligence service is unavailable or exceeded its deadline. No recommendation was produced; retry shortly.";
+  }
+  return fallback;
+}
 
 interface OddsForm {
   bookmaker: string;
@@ -159,7 +172,7 @@ function nextActionText(
   if (result?.verdict === "ACTIONABLE" || result?.verdict === "HIGH_CONVICTION") {
     return "Qualifies only while the current price remains at or above the minimum acceptable odds.";
   }
-  if (result?.verdict === "SPECULATIVE") return "Keep on watchlist; stake remains capped if price remains valid.";
+  if (result?.verdict === "SPECULATIVE") return "Keep on watchlist only; do not treat this state as execution permission.";
   if (evidence?.data_gaps.some((gap) => gap.includes("coherent_1x2_market_snapshot"))) {
     return "Enter one confirmed bookmaker 1X2 snapshot to unlock market math.";
   }
@@ -328,7 +341,7 @@ export function BettingIntelligenceDashboard() {
       setEvidence(null);
       setResult(null);
       setOddsCandidates([]);
-      setError(err instanceof Error ? err.message : "Could not load fixtures.");
+      setError(userFacingError(err, "Could not load verified fixtures."));
     } finally {
       setLoading(null);
     }
@@ -374,7 +387,7 @@ export function BettingIntelligenceDashboard() {
     try {
       setEvidence(await getFixtureEvidence(selectedFixtureId));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Evidence retrieval failed.");
+      setError(userFacingError(err, "Evidence retrieval failed. No recommendation was produced."));
     } finally {
       setLoading(null);
     }
@@ -389,7 +402,7 @@ export function BettingIntelligenceDashboard() {
       setResult(response);
       setEvidence(await getFixtureEvidence(selectedFixtureId).catch(() => evidence));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Analysis failed.");
+      setError(userFacingError(err, "Analysis failed. No recommendation was produced."));
     } finally {
       setLoading(null);
     }
@@ -403,7 +416,7 @@ export function BettingIntelligenceDashboard() {
       await refreshFixtureEvidence(selectedFixtureId, "PREMATCH_STANDARD");
       setEvidence(await getFixtureEvidence(selectedFixtureId));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Evidence refresh failed.");
+      setError(userFacingError(err, "Evidence refresh failed."));
     } finally {
       setLoading(null);
     }
@@ -420,7 +433,7 @@ export function BettingIntelligenceDashboard() {
         setError("No backend bookmaker snapshots are available. Manual entry is required.");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Could not load bookmaker snapshots.");
+      setError(userFacingError(err, "Could not load bookmaker snapshots."));
     } finally {
       setLoading(null);
     }
@@ -460,7 +473,7 @@ export function BettingIntelligenceDashboard() {
       setEvidence(await getFixtureEvidence(selectedFixtureId));
       setResult(await analyzeFixture(selectedFixtureId));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Odds snapshot was rejected.");
+      setError(userFacingError(err, "Odds snapshot was rejected."));
     } finally {
       setLoading(null);
     }
@@ -604,7 +617,10 @@ export function BettingIntelligenceDashboard() {
                   <div className="bi-metric"><span>Best Market</span><strong>{result.best_market?.replace("_ML", "") ?? "Unavailable"}</strong></div>
                   <div className="bi-metric"><span>Edge<em className="bi-gloss">Model prob. minus fair implied</em></span><strong>{fmtPp(result.edge_percentage_points)}</strong></div>
                   <div className="bi-metric"><span>Expected Value<em className="bi-gloss">Avg. return per unit staked</em></span><strong>{result.expected_value == null ? "Unavailable" : result.expected_value.toFixed(4)}</strong></div>
-                  <div className="bi-metric"><span>Stake<em className="bi-gloss">Quarter-Kelly, policy-capped</em></span><strong>{result.stake}</strong></div>
+                  <div className="bi-metric"><span>Stake<em className="bi-gloss">Quarter-Kelly, policy-capped</em></span><strong>{result.execution_eligible ? result.stake : "pass"}</strong></div>
+                  <div className="bi-metric"><span>Stake permission</span><strong>{result.execution_eligible ? "Permitted by current gates" : "Not permitted"}</strong></div>
+                  <div className="bi-metric"><span>Confidence</span><strong>{result.confidence ?? "Unavailable"}</strong></div>
+                  <div className="bi-metric"><span>Minimum acceptable odds</span><strong>{fmtOdds(result.minimum_acceptable_odds)}</strong></div>
                 </div>
                 <p className="bi-muted">{result.explanation}</p>
               </section>
@@ -627,6 +643,10 @@ export function BettingIntelligenceDashboard() {
                       <div className="bi-metric"><span>Market</span><strong>{evidence.source_status.market}</strong></div>
                       <div className="bi-metric"><span>Team Metrics</span><strong>{evidence.source_status.team_metrics}</strong></div>
                       <div className="bi-metric"><span>Availability</span><strong>{evidence.source_status.availability}</strong></div>
+                      <div className="bi-metric"><span>Model age</span><strong>{recordNumber(evidence.freshness, "model_features_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "model_features_seconds")}s`}</strong></div>
+                      <div className="bi-metric"><span>Market age</span><strong>{recordNumber(evidence.freshness, "market_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "market_seconds")}s`}</strong></div>
+                      <div className="bi-metric"><span>Epistemic uncertainty</span><strong>{fmtPct(recordNumber(evidence.model ?? null, "epistemic_uncertainty"))}</strong></div>
+                      <div className="bi-metric"><span>Aleatoric uncertainty</span><strong>{fmtPct(recordNumber(evidence.model ?? null, "aleatoric_uncertainty"))}</strong></div>
                     </div>
                     {evidence.data_gaps.length > 0 && (
                       evidence.data_gaps.length > 5 ? (

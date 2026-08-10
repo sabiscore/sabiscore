@@ -6,8 +6,9 @@ swallowed so they never prevent the API from serving requests.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +39,7 @@ _LEAGUE_META: dict[str, tuple[str, str]] = {
 # 2026-08-08 — 28 required-league fixtures seeded, probe still reporting
 # "unverified_no_fixtures" against its own hardcoded 7 days).
 SYNC_HORIZON_DAYS = 14
+_FOOTBALL_DATA_SYNC_LIMITER = asyncio.Lock()
 
 
 def _team_id(team_name: str, league_id: str) -> str:
@@ -56,7 +58,8 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
 
     client = FootballDataAPIClient()
     try:
-        matches_raw = await client.get_upcoming_matches(days_ahead=SYNC_HORIZON_DAYS, limit=50)
+        async with _FOOTBALL_DATA_SYNC_LIMITER:
+            matches_raw = await client.get_upcoming_matches(days_ahead=SYNC_HORIZON_DAYS, limit=50)
     except FootballDataAPIError as exc:
         logger.warning("fixture_sync: football-data.org unavailable: %s", exc)
         return 0
@@ -93,7 +96,7 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
 
         # Match upsert
         match_id: str = raw.get("id", "")
-        if not match_id or await session.get(Match, match_id):
+        if not match_id:
             continue
 
         raw_date = raw.get("match_date", "")
@@ -103,16 +106,40 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
             logger.debug("fixture_sync: unparseable date %r — skipping %s", raw_date, match_id)
             continue
 
-        session.add(Match(
-            id=match_id,
-            league_id=league_id,
-            home_team_id=home_id,
-            away_team_id=away_id,
-            match_date=match_date,
+        if not await session.get(Match, match_id):
+            session.add(Match(
+                id=match_id,
+                league_id=league_id,
+                home_team_id=home_id,
+                away_team_id=away_id,
+                match_date=match_date,
+                season=canonical_season(match_date),
+                status="scheduled",
+            ))
+            inserted += 1
+
+        from .canonical_identity_service import ensure_canonical_fixture
+
+        await ensure_canonical_fixture(
+            session,
+            provider="football-data.org",
+            provider_event_id=match_id,
+            competition_id=league_id,
+            competition_name=league_name,
+            home_provider_id=home_id,
+            home_name=home_name,
+            away_provider_id=away_id,
+            away_name=away_name,
+            kickoff_utc=match_date,
             season=canonical_season(match_date),
             status="scheduled",
-        ))
-        inserted += 1
+            evidence={
+                "source": raw.get("source") or "football-data.org",
+                "provider_event_id": match_id,
+                "provider_timestamp": raw_date,
+                "reconciled_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
     await session.commit()
     return inserted
@@ -133,7 +160,8 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
 
     client = FootballDataAPIClient()
     try:
-        results_raw = await client.get_recent_results(days_back=days_back, limit=100)
+        async with _FOOTBALL_DATA_SYNC_LIMITER:
+            results_raw = await client.get_recent_results(days_back=days_back, limit=100)
     except FootballDataAPIError as exc:
         logger.warning("settlement_sync: football-data.org unavailable: %s", exc)
         return {"updated": 0, "unmatched": 0, "already_settled": 0}

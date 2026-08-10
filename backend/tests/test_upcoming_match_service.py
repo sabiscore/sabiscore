@@ -192,3 +192,26 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
     assert enriched["staleness_seconds"] == 54321  # not silently defaulted to 0
     assert "elo_difference" in enriched["data_gaps"]
     assert "home_pressing_intensity" in enriched["data_gaps"]
+
+
+async def test_cached_or_db_fixture_discovery_never_calls_provider_or_model():
+    fake_api_client = MagicMock()
+    fake_api_client.get_upcoming_matches = AsyncMock(
+        side_effect=AssertionError("interactive discovery must not call provider")
+    )
+    service = UpcomingMatchService(api_client=fake_api_client)
+    service._get_upcoming_matches_from_db = AsyncMock(
+        return_value={"matches": [], "total": 0, "source": "database"}
+    )
+
+    with patch(
+        "src.services.upcoming_match_service.PredictionEngine",
+        side_effect=AssertionError("interactive discovery must not load a model"),
+    ):
+        result = await service.get_upcoming_matches_cached_or_db(
+            MagicMock(), league="EREDIVISIE", days_ahead=7, limit=10
+        )
+
+    fake_api_client.get_upcoming_matches.assert_not_awaited()
+    assert result["source"] == "database"
+    assert result["data_gap"] is False

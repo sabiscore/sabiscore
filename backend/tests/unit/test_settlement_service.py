@@ -14,6 +14,9 @@ Contracts verified:
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
+import shutil
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -34,6 +37,16 @@ def _reset_settlement_module_state():
     settlement_service._last_result = {"outcome": "never_run", "consecutive_failures": 0}
     settlement_service._registry_instance = None
     yield
+
+
+@pytest.fixture
+def registry_tmp() -> Path:
+    root = Path.cwd() / ".pytest_tmp" / "settlement_registry" / uuid.uuid4().hex
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 @pytest.fixture
@@ -151,11 +164,11 @@ async def test_run_settlement_pass_db_not_ready() -> None:
     assert result["outcome"] == "db_not_ready"
 
 
-def test_get_walk_forward_registry_is_memoized(tmp_path) -> None:
+def test_get_walk_forward_registry_is_memoized(registry_tmp: Path) -> None:
     from src.core.config import settings
     from src.services.settlement_service import get_walk_forward_registry
 
-    with patch.object(settings, "models_path", tmp_path):
+    with patch.object(settings, "models_path", registry_tmp):
         first = get_walk_forward_registry()
         second = get_walk_forward_registry()
 

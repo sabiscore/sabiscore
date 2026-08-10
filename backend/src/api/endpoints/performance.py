@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ...db.session import get_async_session
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
-from ...services.upcoming_match_service import UpcomingMatchService
-from ...services.odds_service import OddsService, get_odds_service
+from ...core.database import Match, Team
+from ...db.models import MatchPredictionLog
+from ...monitoring.metrics import metrics_collector
 
 router = APIRouter(tags=["performance"])
+_VALUE_SCAN_DB_DEADLINE_SECONDS = 2.5
 
 
 class ValueBetScanFixture(BaseModel):
@@ -39,6 +46,13 @@ class ValueBetScanResponse(BaseModel):
     days: int
     data_gap: bool = False
     generated_at: str
+    status: str = "OK"
+    reason: Optional[str] = None
+    retryable: bool = False
+    source: str = "persisted_prediction_logs"
+    freshness: Dict[str, Any] = Field(default_factory=dict)
+    provenance: List[str] = Field(default_factory=list)
+    deadline_ms: int = 2500
 
 
 @router.get("/value-bet-scan", response_model=ValueBetScanResponse)
@@ -46,67 +60,128 @@ async def value_bet_scan(
     days: int = Query(7, ge=1, le=14),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_async_session),
-    odds_service: OddsService = Depends(get_odds_service),
-) -> ValueBetScanResponse:
-    service = UpcomingMatchService(
-        odds_service=odds_service if isinstance(odds_service, OddsService) else None
+) -> ValueBetScanResponse | JSONResponse:
+    """Return only fresh, persisted, fully gated candidates.
+
+    This endpoint intentionally performs no provider calls and no inference.
+    Repeated prediction requests are de-duplicated to the newest persisted log
+    for each upcoming fixture.
+    """
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    end = now + timedelta(days=days)
+    max_age_seconds = 900
+    cutoff = now - timedelta(seconds=max_age_seconds)
+
+    latest = (
+        select(
+            MatchPredictionLog.match_id.label("match_id"),
+            func.max(MatchPredictionLog.created_at).label("created_at"),
+        )
+        .where(MatchPredictionLog.created_at >= cutoff)
+        .group_by(MatchPredictionLog.match_id)
+        .subquery()
     )
-    payload = await service.get_upcoming_matches_with_predictions(
-        db,
-        league=None,
-        days_ahead=days,
-        limit=200,
-        include_value_bets=True,
+    home = aliased(Team)
+    away = aliased(Team)
+    query = (
+        select(
+            MatchPredictionLog,
+            Match,
+            home.name.label("home_name"),
+            away.name.label("away_name"),
+        )
+        .join(
+            latest,
+            and_(
+                MatchPredictionLog.match_id == latest.c.match_id,
+                MatchPredictionLog.created_at == latest.c.created_at,
+            ),
+        )
+        .join(Match, Match.id == MatchPredictionLog.match_id)
+        .outerjoin(home, home.id == Match.home_team_id)
+        .outerjoin(away, away.id == Match.away_team_id)
+        .where(Match.match_date >= now, Match.match_date <= end)
+        .order_by(MatchPredictionLog.created_at.desc())
+        .limit(500)
     )
+    started = time.perf_counter()
+    try:
+        records = (
+            await asyncio.wait_for(db.execute(query), timeout=_VALUE_SCAN_DB_DEADLINE_SECONDS)
+        ).all()
+    except TimeoutError:
+        metrics_collector.increment("value_scan.db_deadline_exceeded")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "fixtures": [],
+                "total": 0,
+                "days": days,
+                "data_gap": True,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "status": "UNAVAILABLE",
+                "reason": "database_deadline_exceeded",
+                "retryable": True,
+                "source": "persisted_prediction_logs",
+                "freshness": {"max_age_seconds": max_age_seconds},
+                "provenance": ["match_prediction_logs", "matches"],
+                "deadline_ms": int(_VALUE_SCAN_DB_DEADLINE_SECONDS * 1000),
+            },
+        )
 
     rows: List[ValueBetScanFixture] = []
-    for match in payload.get("upcoming_matches", []):
-        value_bets = match.get("value_bets") or []
-        if not value_bets:
+    for prediction, match, home_name, away_name in records:
+        payload = prediction.payload if isinstance(prediction.payload, dict) else {}
+        evidence = payload.get("evidence_quality") or {}
+        odds_edge = payload.get("odds_edge") or {}
+        if payload.get("verdict") not in {"ACTIONABLE", "HIGH_CONVICTION"}:
+            continue
+        if payload.get("stake_permitted") is not True:
+            continue
+        if payload.get("partial_intelligence") is True:
+            continue
+        if evidence.get("critical_gaps") or evidence.get("conflicts"):
+            continue
+        if payload.get("staleness_available") is not True:
+            continue
+        if int(payload.get("staleness_seconds") or 0) > max_age_seconds:
             continue
 
         try:
-            best = max(value_bets, key=lambda v: float(v.get("edge_pct", 0.0)))
-            edge = float(best.get("edge_pct", 0.0))
-        except Exception:
+            edge_fraction = float(odds_edge["edge"])
+            market_odds = float(odds_edge["market_odds"])
+            model_prob = float(odds_edge["model_prob"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if edge_fraction <= 0 or market_odds <= 1:
             continue
 
-        if edge <= 0:
-            continue
-
-        predictions = match.get("predictions") or {}
-        confidence = predictions.get("confidence")
-        outcome = best.get("market") or best.get("outcome")
-        model_prob = best.get("fair_probability") or best.get("model_prob")
-        implied_prob = best.get("implied_probability") or best.get("implied_prob")
-        odds = best.get("odds")
-        if implied_prob is None and odds and float(odds) > 0:
-            implied_prob = round(1.0 / float(odds), 4)
+        ensemble = payload.get("ensemble") or {}
+        confidence = ensemble.get("confidence", prediction.confidence)
 
         rows.append(
             ValueBetScanFixture(
-                match_id=str(match.get("id", "")),
-                home_team=str(match.get("home_team", "")),
-                away_team=str(match.get("away_team", "")),
-                league=str(match.get("league", "")),
-                kickoff_utc=str(match.get("match_date", "")),
-                edge_pct=edge,
+                match_id=str(match.id),
+                home_team=str(home_name or match.home_team_id or ""),
+                away_team=str(away_name or match.away_team_id or ""),
+                league=str(match.league_id or payload.get("league") or ""),
+                kickoff_utc=match.match_date.replace(tzinfo=timezone.utc).isoformat(),
+                edge_pct=round(edge_fraction * 100.0, 4),
                 confidence=float(confidence) if confidence is not None else None,
-                outcome=str(outcome) if outcome else None,
-                model_prob=float(model_prob) if model_prob is not None else None,
-                implied_prob=float(implied_prob) if implied_prob is not None else None,
-                created_at=datetime.now(timezone.utc).isoformat(),
+                outcome=str(odds_edge.get("market") or "") or None,
+                model_prob=model_prob,
+                implied_prob=round(1.0 / market_odds, 6),
+                created_at=prediction.created_at.replace(tzinfo=timezone.utc).isoformat(),
             )
         )
 
     rows.sort(key=lambda row: row.edge_pct, reverse=True)
     rows = rows[:limit]
 
-    # data_gap=True when the service returned no matches or none had predictions
-    data_gap = len(payload.get("upcoming_matches", [])) == 0 or (
-        len(rows) == 0 and any(
-            bool(m.get("predictions")) for m in payload.get("upcoming_matches", [])
-        )
+    data_gap = len(records) == 0
+    metrics_collector.record_timer(
+        "value_scan.db_and_filter_ms", (time.perf_counter() - started) * 1000
     )
 
     return ValueBetScanResponse(
@@ -115,6 +190,12 @@ async def value_bet_scan(
         days=days,
         data_gap=data_gap,
         generated_at=datetime.now(timezone.utc).isoformat(),
+        status="DATA_GAP" if data_gap else "OK",
+        reason="no_fresh_persisted_predictions" if data_gap else None,
+        retryable=data_gap,
+        freshness={"max_age_seconds": max_age_seconds},
+        provenance=["match_prediction_logs", "matches"],
+        deadline_ms=int(_VALUE_SCAN_DB_DEADLINE_SECONDS * 1000),
     )
 
 

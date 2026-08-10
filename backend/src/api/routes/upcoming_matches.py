@@ -7,20 +7,27 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
 from ...services.upcoming_match_service import UpcomingMatchService
+from ...core.redaction import redact_text
+from ...monitoring.metrics import metrics_collector
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upcoming", tags=["upcoming"])
+_PREDICTION_DEADLINE_SECONDS = 5.5
+_DISCOVERY_DEADLINE_SECONDS = 3.0
 
 
 # Pydantic response models
@@ -82,6 +89,14 @@ class UpcomingMatchesResponseSchema(BaseModel):
     cache_hit: bool = False
     ttl_seconds: int = 300
     source: str
+    status: str = "OK"
+    data_gap: bool = False
+    reason: Optional[str] = None
+    retryable: bool = False
+    freshness: Optional[Dict[str, Any]] = None
+    provenance: List[str] = Field(default_factory=list)
+    generated_at: Optional[str] = None
+    deadline_ms: Optional[int] = None
 
 
 @router.get("/matches", response_model=UpcomingMatchesResponseSchema)
@@ -192,37 +207,77 @@ async def get_upcoming_matches(
     """
 
     try:
+        started = time.perf_counter()
         service = UpcomingMatchService()
 
         if include_predictions:
-            response = await service.get_upcoming_matches_with_predictions(
-                db,
-                league=league,
-                days_ahead=days_ahead,
-                limit=limit,
-                include_value_bets=include_value_bets,
-            )
+            try:
+                response = await asyncio.wait_for(
+                    service.get_upcoming_matches_with_predictions(
+                        db,
+                        league=league,
+                        days_ahead=days_ahead,
+                        limit=limit,
+                        include_value_bets=include_value_bets,
+                    ),
+                    timeout=_PREDICTION_DEADLINE_SECONDS,
+                )
+            except TimeoutError:
+                metrics_collector.increment("upcoming.prediction_deadline_exceeded")
+                response = await asyncio.wait_for(
+                    service.get_upcoming_matches_cached_or_db(
+                        db, league=league, days_ahead=days_ahead, limit=limit
+                    ),
+                    timeout=1.5,
+                )
+                response.update({
+                    "status": "PARTIAL",
+                    "data_gap": True,
+                    "reason": "prediction_deadline_exceeded",
+                    "retryable": True,
+                })
         else:
-            # Get base upcoming matches only
-            response = await service.get_upcoming_matches(
-                db, league=league, days_ahead=days_ahead, limit=limit
+            response = await asyncio.wait_for(
+                service.get_upcoming_matches_cached_or_db(
+                    db, league=league, days_ahead=days_ahead, limit=limit
+                ),
+                timeout=_DISCOVERY_DEADLINE_SECONDS,
             )
-            response["matches_with_value"] = 0
-            response["avg_edge_pct"] = 0.0
 
+        response["deadline_ms"] = int(
+            (_PREDICTION_DEADLINE_SECONDS if include_predictions else _DISCOVERY_DEADLINE_SECONDS)
+            * 1000
+        )
+        metrics_collector.record_timer(
+            "upcoming.total_request_ms", (time.perf_counter() - started) * 1000
+        )
         return response
 
     except Exception as e:
-        logger.error(f"Error fetching upcoming matches: {e}", exc_info=True)
-        return {
-            "upcoming_matches": [],
-            "total": 0,
-            "matches_with_value": 0,
-            "avg_edge_pct": 0.0,
-            "cache_hit": False,
-            "ttl_seconds": 0,
-            "source": "error",
-        }
+        logger.error("Upcoming matches unavailable: %s", redact_text(e), exc_info=True)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "upcoming_matches": [],
+                "total": 0,
+                "matches_with_value": 0,
+                "avg_edge_pct": 0.0,
+                "cache_hit": False,
+                "ttl_seconds": 0,
+                "source": "database",
+                "status": "UNAVAILABLE",
+                "data_gap": True,
+                "reason": "fixture_store_unavailable",
+                "retryable": True,
+                "freshness": None,
+                "provenance": ["database"],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "deadline_ms": int(
+                    (_PREDICTION_DEADLINE_SECONDS if include_predictions else _DISCOVERY_DEADLINE_SECONDS)
+                    * 1000
+                ),
+            },
+        )
 
 
 @router.get("/health")

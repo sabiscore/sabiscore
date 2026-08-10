@@ -348,10 +348,18 @@ async def _save_prediction_to_db(
         # in this codebase populates today (see WP-1 identity work); match_id is
         # the legacy Match.id namespace, which is what WP-1's resolve_team_id()/
         # canonical_season() and get_settled_predictions() below actually operate on.
+        from ...services.canonical_identity_service import canonical_fixture_id_for_provider_event
+
+        persisted_match_id = match_id or prediction_data.match_id
+        canonical_fixture_id = await canonical_fixture_id_for_provider_event(
+            db,
+            provider="football-data.org",
+            provider_event_id=persisted_match_id,
+        )
         db.add(
             MatchPredictionLog(
-                match_id=match_id or prediction_data.match_id,
-                canonical_fixture_id=None,
+                match_id=persisted_match_id,
+                canonical_fixture_id=canonical_fixture_id,
                 model_version=str(
                     prediction_data.metadata.get('model_version')
                     or prediction_data.metadata.get('model_key')

@@ -79,7 +79,7 @@ class UpstashTier:
             self._available = True
             return value
         except (RedisError, Exception) as exc:
-            logger.debug("Upstash get error: %s", exc)
+            logger.debug("Upstash get error: %s", redact_text(exc))
             self._trip()
             return None
 
@@ -91,7 +91,7 @@ class UpstashTier:
             self._available = True
             return True
         except (RedisError, Exception) as exc:
-            logger.debug("Upstash set error: %s", exc)
+            logger.debug("Upstash set error: %s", redact_text(exc))
             self._trip()
             return False
 
@@ -112,7 +112,7 @@ class UpstashTier:
                 return int(self._client.delete(*keys))  # type: ignore[union-attr]
             return 0
         except (RedisError, Exception) as exc:
-            logger.debug("Upstash clear_pattern error: %s", exc)
+            logger.debug("Upstash clear_pattern error: %s", redact_text(exc))
             return 0
 
 
@@ -158,6 +158,9 @@ class RedisCache:
         self._circuit_open_until: Optional[float] = None
         self._memory_cache: Dict[str, Tuple[Any, Optional[float]]] = {}
         self._lock = Lock()
+        # Preserve the operator's configured intent separately from transient
+        # connectivity. Readiness must not silently turn REDIS_ENABLED=true
+        # into an optional in-process cache after a malformed URL or outage.
         self._enabled = settings.redis_enabled
         self._redis_available = False
         self.redis_client: Optional[redis.Redis] = None
@@ -168,6 +171,8 @@ class RedisCache:
 
         if self._enabled:
             try:
+                if settings.app_env == "production" and not settings.redis_url.startswith("rediss://"):
+                    raise ValueError("production Redis requires a rediss:// URL")
                 client = redis.Redis.from_url(
                     settings.redis_url,
                     max_connections=settings.redis_max_connections,
@@ -194,7 +199,6 @@ class RedisCache:
                     self._max_memory_entries
                 )
                 self.metrics.record_error()
-                self._enabled = False
                 self.redis_client = None
 
     # Internal helpers -------------------------------------------------
@@ -244,7 +248,7 @@ class RedisCache:
                     return self._deserialize(payload)
                 # T1 miss — fall through to T2
             except RedisError as exc:
-                logger.error("Cache get error (tier-1): %s", exc)
+                logger.error("Cache get error (tier-1): %s", redact_text(exc))
                 self.metrics.record_error()
                 self._trip_circuit()
                 self._redis_available = False
@@ -372,6 +376,24 @@ class RedisCache:
             self._trip_circuit()
             self._redis_available = False
             return bool(self._memory_cache)
+
+    def production_ready(self) -> bool:
+        """Return whether the configured production cache dependency is ready.
+
+        In-memory storage preserves process liveness, but it is neither shared
+        nor durable. It cannot satisfy readiness when tier-1 Redis is enabled.
+        """
+
+        if not self._enabled:
+            return True
+        if not self.redis_client:
+            self._redis_available = False
+            return False
+        try:
+            self._redis_available = bool(self.redis_client.ping())
+        except (RedisError, ConnectionError, TimeoutError):
+            self._redis_available = False
+        return self._redis_available
 
     def metrics_snapshot(self) -> Dict[str, Any]:
         with self._lock:

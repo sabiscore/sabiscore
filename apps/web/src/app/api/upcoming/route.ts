@@ -11,7 +11,18 @@ import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody } from '@/lib/proxy-uti
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30; // 30 second timeout
+export const maxDuration = 30;
+const BACKEND_DEADLINE_MS = 8_000;
+const ALLOWED_LEAGUES = new Set(['EPL', 'CHAMPIONSHIP', 'LA_LIGA', 'SERIE_A', 'BUNDESLIGA', 'LIGUE_1', 'EREDIVISIE', 'UCL']);
+
+function boundedInteger(value: string | null, fallback: number, minimum: number, maximum: number) {
+  const parsed = Number(value ?? fallback);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
+}
+
+function booleanQuery(value: string | null, fallback: boolean) {
+  return value === null ? fallback : value === 'true';
+}
 
 /**
  * GET /api/upcoming
@@ -27,11 +38,14 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
 
     // Extract query parameters
-    const league = searchParams.get('league') || undefined;
-    const daysAhead = searchParams.get('days_ahead') || '7';
-    const limit = searchParams.get('limit') || '20';
-    const includePredictions = searchParams.get('include_predictions') ?? 'true';
-    const includeValueBets = searchParams.get('include_value_bets') ?? 'true';
+    const requestedLeague = searchParams.get('league');
+    const league = requestedLeague && ALLOWED_LEAGUES.has(requestedLeague.toUpperCase())
+      ? requestedLeague.toUpperCase()
+      : undefined;
+    const daysAhead = boundedInteger(searchParams.get('days_ahead'), 7, 1, 30);
+    const limit = boundedInteger(searchParams.get('limit'), 20, 1, 50);
+    const includePredictions = booleanQuery(searchParams.get('include_predictions'), true);
+    const includeValueBets = booleanQuery(searchParams.get('include_value_bets'), true);
 
     // Build backend URL with query params
     const backendBaseUrl = resolveBackendBaseUrl();
@@ -39,12 +53,16 @@ export async function GET(request: NextRequest) {
 
     // Add query parameters
     if (league) url.searchParams.set('league', league);
-    url.searchParams.set('days_ahead', daysAhead);
-    url.searchParams.set('limit', limit);
-    url.searchParams.set('include_predictions', includePredictions);
-    url.searchParams.set('include_value_bets', includeValueBets);
+    url.searchParams.set('days_ahead', String(daysAhead));
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('include_predictions', String(includePredictions));
+    url.searchParams.set('include_value_bets', String(includeValueBets));
 
-    const response = await fetch(url.toString(), { headers: proxyHeaders() });
+    const response = await fetch(url.toString(), {
+      headers: proxyHeaders(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(BACKEND_DEADLINE_MS),
+    });
     const body = await response.text().catch(() => '');
 
     if (!response.ok || isHtmlBody(body)) {
@@ -57,7 +75,14 @@ export async function GET(request: NextRequest) {
           cache_hit: false,
           ttl_seconds: 0,
           source: 'error',
-          error: 'Backend service unavailable',
+          status: 'UNAVAILABLE',
+          data_gap: true,
+          reason: 'backend_service_unavailable',
+          retryable: true,
+          freshness: null,
+          provenance: [],
+          generated_at: new Date().toISOString(),
+          deadline_ms: BACKEND_DEADLINE_MS,
           offseason: false,
           next_season_start: null,
         },
@@ -77,12 +102,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': `public, s-maxage=${data?.ttl_seconds || 300}, stale-while-revalidate=60`,
+        'Cache-Control': 'no-store',
         'Content-Type': 'application/json',
       },
     });
-  } catch (error: unknown) {
-    console.error('[Upcoming Matches] Error:', error);
+  } catch {
+    console.error('[Upcoming Matches] backend request failed');
 
     return NextResponse.json(
       {
@@ -93,11 +118,18 @@ export async function GET(request: NextRequest) {
         cache_hit: false,
         ttl_seconds: 0,
         source: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'UNAVAILABLE',
+        data_gap: true,
+        reason: 'backend_deadline_or_network_failure',
+        retryable: true,
+        freshness: null,
+        provenance: [],
+        generated_at: new Date().toISOString(),
+        deadline_ms: BACKEND_DEADLINE_MS,
         offseason: false,
         next_season_start: null,
       },
-      { status: 500 }
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
