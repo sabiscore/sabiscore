@@ -130,10 +130,38 @@ jobs:
         working-directory: backend
         run: pytest tests -q
 
+  scraper-quality:
+    name: Scraper Validate and Tests
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate scraper source registry and storage contract
+        run: pnpm --filter @sabiscore/scraper validate
+
+      - name: Run scraper tests
+        run: pnpm --filter @sabiscore/scraper test
+
   web-quality:
     name: Web Lint, Typecheck, Build
     runs-on: ubuntu-latest
-    needs: security
+    needs: [security, scraper-quality]
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       SABISCORE_BACKEND_URL: http://localhost:8000

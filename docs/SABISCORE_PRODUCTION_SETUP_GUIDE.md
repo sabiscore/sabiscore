@@ -1,6 +1,6 @@
 ﻿# SabiScore Production Setup Guide
 
-Last updated: 2026-07-28
+Last updated: 2026-08-10
 
 This is the authoritative setup and deployment guide for the finalized production shape.
 
@@ -39,9 +39,9 @@ Backend-only provider keys:
 | Variable | Required | Notes |
 |---|---:|---|
 | `FOOTBALL_DATA_API_KEY` | Optional | Official fixture/standing provider |
-| `API_FOOTBALL_API_KEY` | Optional | Authenticated enrichment provider |
-| `SPORTMONKS_API_TOKEN` | Optional | Authenticated enrichment provider |
-| `THE_ODDS_API_KEY` | Optional | Current market snapshots |
+| `API_FOOTBALL_API_KEY` | Optional | Authenticated enrichment provider; legacy alias `API_FOOTBALL_KEY` is still accepted |
+| `SPORTMONKS_API_TOKEN` | Optional | Authenticated enrichment provider; legacy alias `SPORTMONKS_API_KEY` is still accepted |
+| `THE_ODDS_API_KEY` | Optional | Current market snapshots; legacy alias `ODDS_API_KEY` is still accepted |
 
 Frontend/server variables:
 
@@ -56,6 +56,10 @@ Frontend/server variables:
 | `NEXT_PUBLIC_BASE_BANKROLL` | Browser-safe | UI default only |
 
 ESPN is keyless. Any previously exposed provider key must be rotated in the provider/platform console after repo sanitization.
+
+The backend loads the project-root `.env` first and `backend/.env` second, so
+put backend-only provider secrets in the backend template or `backend/.env`
+rather than the browser-safe templates.
 
 Credential safety:
 

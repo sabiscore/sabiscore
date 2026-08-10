@@ -58,7 +58,7 @@
   },
   "competitions": {
     "EPL": "E0",
-    "CHAMPIONSHIP": "E1",
+    "UCL": "CL",
     "LA_LIGA": "SP1",
     "SERIE_A": "I1",
     "BUNDESLIGA": "D1",

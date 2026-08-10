@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { access, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import Ajv from "ajv";
+import Ajv2020 from "ajv/dist/2020.js";
 import { defaultLeagues, manifestDir, processedDir, rawDir } from "./config.mjs";
 import { sourceRegistry, validateSourceRegistry } from "./registry.mjs";
 import { PublicHttpClient } from "./http.mjs";
@@ -116,7 +116,7 @@ async function validate() {
   const schema = JSON.parse(
     await readFile(new URL("./source-registry.schema.json", import.meta.url), "utf8")
   );
-  const ajv = new Ajv({ allErrors: true, strict: false });
+  const ajv = new Ajv2020({ allErrors: true, strict: false });
   const schemaValid = ajv.validate(schema, sourceRegistry);
   const semantic = validateSourceRegistry(sourceRegistry);
   if (!schemaValid || !semantic.valid) {

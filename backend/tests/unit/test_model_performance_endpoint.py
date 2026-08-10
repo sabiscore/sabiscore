@@ -192,14 +192,27 @@ async def test_model_performance_series_matches_the_chart_contract(session: Asyn
 async def test_model_performance_league_filter_accepts_canonical_form(session: AsyncSession) -> None:
     from src.api.endpoints.performance import model_performance
 
-    await _seed(session, n=10, league_id="DED")
-    await _seed(session, n=10, league_id="PL", base_date=datetime(2026, 9, 1, 15, 0))
+    await _seed(session, n=10, league_id="EREDIVISIE")
+    await _seed(session, n=10, league_id="EPL", base_date=datetime(2026, 9, 1, 15, 0))
 
     response = await model_performance(league="EREDIVISIE", window=180, db=session)
     status, body = _status_and_body(response)
 
     assert status == 200
-    assert body["settled_predictions"] == 10  # only the DED-league rows counted
+    assert body["settled_predictions"] == 10  # only the EREDIVISIE rows counted
+
+
+async def test_model_performance_league_filter_accepts_legacy_code_alias(session: AsyncSession) -> None:
+    from src.api.endpoints.performance import model_performance
+
+    await _seed(session, n=10, league_id="EREDIVISIE")
+    await _seed(session, n=10, league_id="EPL", base_date=datetime(2026, 9, 1, 15, 0))
+
+    response = await model_performance(league="DED", window=180, db=session)
+    status, body = _status_and_body(response)
+
+    assert status == 200
+    assert body["settled_predictions"] == 10
 
 
 async def test_model_performance_clv_skipped_when_no_closing_lines(session: AsyncSession) -> None:

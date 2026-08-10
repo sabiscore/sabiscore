@@ -61,6 +61,9 @@ The web app reads `SABISCORE_BACKEND_URL` server-side and serves browser API cal
 
 ## Environment
 
+The backend reads the project-root `.env` first and `backend/.env` second, so
+backend-local values override shared templates.
+
 Start from sanitized templates:
 
 - Root template: `.env.example`
@@ -68,11 +71,12 @@ Start from sanitized templates:
 - Web template: `apps/web/.env.example`
 - Production template: `.env.production.example`
 
-Provider keys are backend-only:
+Provider keys are backend-only and the canonical names live in
+`backend/.env.example`:
 
 - `FOOTBALL_DATA_API_KEY`
-- `API_FOOTBALL_KEY`
-- `SPORTMONKS_API_KEY`
+- `API_FOOTBALL_API_KEY` (legacy alias: `API_FOOTBALL_KEY`)
+- `SPORTMONKS_API_TOKEN` (legacy alias: `SPORTMONKS_API_KEY`)
 - `THE_ODDS_API_KEY`
 
 ESPN is keyless. If a real provider key was ever committed or copied into a frontend/Vercel public variable, rotate it in the provider console.

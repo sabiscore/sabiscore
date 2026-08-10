@@ -12,6 +12,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   It separates code work from operator gates, makes real settled predictions a
   hard prerequisite for model-changing work, and keeps master/deployment closed
   until every required release gate has actually run.
+- Aligned the user-facing README and production setup guide with the canonical
+  backend provider env names and documented the backend `.env` precedence over
+  the project-root template.
 - Added a dedicated Python 3.11-3.13 offline research dependency set and import
   verifier. Python 3.12 now selects wheel-backed CatBoost 1.2.8, SHAP 0.49.1,
   and scikit-learn 1.5.2 rather than incompatible Python 3.11 pins.

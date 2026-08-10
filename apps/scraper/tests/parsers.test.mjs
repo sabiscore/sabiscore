@@ -80,7 +80,7 @@ test("never combines a partial bookmaker book with another bookmaker", () => {
 test("source registry covers exactly seven competitions", async () => {
   const { sourceRegistry } = await import("../src/registry.mjs");
   assert.deepEqual(Object.keys(sourceRegistry.competitions).sort(), [
-    "BUNDESLIGA", "CHAMPIONSHIP", "EPL", "EREDIVISIE", "LA_LIGA", "LIGUE_1", "SERIE_A"
+    "BUNDESLIGA", "EPL", "EREDIVISIE", "LA_LIGA", "LIGUE_1", "SERIE_A", "UCL"
   ]);
 });
 

@@ -18,6 +18,7 @@ from ...db.session import get_async_session
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
+from ...core.league_policy import canonical_league_id
 from ...core.database import Match, Team
 from ...db.models import MatchPredictionLog
 from ...monitoring.metrics import metrics_collector
@@ -199,21 +200,32 @@ async def value_bet_scan(
     )
 
 
-def _resolve_league_code(league: Optional[str]) -> Optional[str]:
-    """Match.league_id stores football-data.org competition codes (PL/PD/DED/...),
-    not the canonical vocabulary (EPL/LA_LIGA/EREDIVISIE) used elsewhere in the app.
-    Accepts either form (or the code itself) and returns the code get_settled_
-    predictions()'s filter actually needs. An unrecognized value passes through
-    unchanged — an honest empty result, never a silently wrong league's data."""
+_FD_CODE_TO_CANONICAL = {
+    "PL": "EPL",
+    "PD": "LA_LIGA",
+    "BL1": "BUNDESLIGA",
+    "SA": "SERIE_A",
+    "FL1": "LIGUE_1",
+    "DED": "EREDIVISIE",
+    "CL": "UCL",
+}
+
+
+def _resolve_league_filter(league: Optional[str]) -> Optional[str]:
+    """Return the canonical league id used by persisted match rows.
+
+    Accepts canonical ids (``EREDIVISIE``), display forms (``Eredivisie``),
+    and legacy football-data.org codes (``DED``) for backward compatibility.
+    """
     if not league:
         return None
-    from ...data.loaders.football_data_api import FootballDataAPIClient
-
-    normalized = league.strip().lower().replace("-", "_").replace(" ", "_")
-    for code, display_name in FootballDataAPIClient.TOP_COMPETITIONS.items():
-        if normalized == code.lower() or normalized == display_name.lower().replace(" ", "_"):
-            return code
-    return league
+    value = league.strip()
+    if not value:
+        return None
+    code = _FD_CODE_TO_CANONICAL.get(value.upper())
+    if code is not None:
+        return code
+    return canonical_league_id(value)
 
 
 async def _walk_forward_summary(
@@ -223,7 +235,11 @@ async def _walk_forward_summary(
     if window is not None:
         started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
 
-    records = await get_settled_predictions(db, league=_resolve_league_code(league), started_at=started_at)
+    records = await get_settled_predictions(
+        db,
+        league=_resolve_league_filter(league),
+        started_at=started_at,
+    )
     return {
         "records": records,
         "validation": get_walk_forward_registry().walk_forward_validate(records),
@@ -263,7 +279,11 @@ async def model_performance(
     # have plenty of captured closing lines and too few *finished* matches for
     # RPS, or vice versa. Computed unconditionally so neither gates the other.
     started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
-    clv_records = await get_clv_records(db, league=_resolve_league_code(league), started_at=started_at)
+    clv_records = await get_clv_records(
+        db,
+        league=_resolve_league_filter(league),
+        started_at=started_at,
+    )
     clv = compute_clv_summary(clv_records)
 
     if not records or validation.get("skipped"):

@@ -2,6 +2,8 @@
 // Contract version: 1.2.0
 // Updated: 2026-07-04
 
+import { z } from "zod";
+
 // --- Enums -------------------------------------------------------------------
 
 export type Verdict =
@@ -324,6 +326,166 @@ export type { FullMatchAnalysisResponse } from "./full-analysis-contract";
 
 const SAME_ORIGIN_API = "/api/betting-intelligence";
 
+const verdictSchema = z.enum([
+  "HIGH_CONVICTION",
+  "ACTIONABLE",
+  "SPECULATIVE",
+  "HOLD",
+  "PARTIAL",
+  "NO_BET",
+]);
+
+const marketEvaluationSchema = z.object({
+  outcome: z.enum(["home", "draw", "away"]),
+  market_label: z.enum(["HOME_ML", "DRAW_ML", "AWAY_ML"]),
+  model_probability: z.number(),
+  market_odds: z.number(),
+  raw_implied_probability: z.number(),
+  fair_market_probability: z.number(),
+  edge: z.number(),
+  edge_pct: z.number(),
+  expected_value: z.number(),
+  stake_fraction: z.number(),
+  confidence_adjusted_value: z.number(),
+});
+
+const matchAnalysisResultSchema: z.ZodType<MatchAnalysisResult> = z.object({
+  match_identifier: z.string(),
+  match_id: z.string(),
+  competition: z.string(),
+  verdict: verdictSchema,
+  stake: z.string(),
+  stake_fraction: z.number(),
+  drivers: z.array(z.string()),
+  risks: z.array(z.string()),
+  invalidation_conditions: z.array(z.string()),
+  data_gaps: z.array(z.string()),
+  explanation: z.string(),
+  probabilities: z.object({
+    home: z.number().nullable(),
+    draw: z.number().nullable(),
+    away: z.number().nullable(),
+  }).nullable().optional(),
+  best_market: z.enum(["HOME_ML", "DRAW_ML", "AWAY_ML"]).nullable().optional(),
+  market_odds: z.number().nullable().optional(),
+  raw_market_implied_probability: z.number().nullable().optional(),
+  fair_market_probability: z.number().nullable().optional(),
+  edge: z.number().nullable().optional(),
+  edge_percentage_points: z.number().nullable().optional(),
+  expected_value: z.number().nullable().optional(),
+  confidence: z.enum(["HIGH", "MEDIUM", "LOW"]).nullable().optional(),
+  confidence_adjusted_value: z.number().nullable().optional(),
+  minimum_acceptable_odds: z.number().nullable().optional(),
+  all_market_evaluations: z.array(marketEvaluationSchema).nullable().optional(),
+  critical_gaps: z.array(z.string()).optional(),
+  advisory_gaps: z.array(z.string()).optional(),
+  conflicts: z.array(z.string()).optional(),
+}).passthrough();
+
+const batchAnalysisResponseSchema: z.ZodType<BatchAnalysisResponse> = z.object({
+  engine_version: z.string(),
+  generated_at: z.string(),
+  top_opportunities: z.array(z.string()),
+  matches: z.array(matchAnalysisResultSchema),
+  contract_version: z.string().optional(),
+  policy_version: z.string().optional(),
+  batch_watchlist: z.array(z.string()).optional(),
+}).passthrough();
+
+const enginePolicySchema: z.ZodType<EnginePolicy> = z.object({
+  engine_version: z.string(),
+  generated_at: z.string(),
+  policy: z.object({
+    min_actionable_edge_pp: z.number(),
+    high_conviction_edge_pp: z.number(),
+    kelly_fraction: z.number(),
+    max_kelly_cap: z.number(),
+    speculative_stake_cap: z.number(),
+    minimum_acceptable_odds_method: z.string().optional(),
+    target_expected_value: z.number().optional(),
+    verdict_precedence: z.array(verdictSchema),
+    ucl_coverage: z.string(),
+    market_freshness_thresholds: z.object({
+      fresh_seconds: z.number(),
+      recent_seconds: z.number(),
+      stale_above_seconds: z.number(),
+    }),
+    model_features_fresh_seconds: z.number().optional(),
+    null_rules: z.object({
+      missing_quantitative_data: z.string(),
+      stake_under_partial_hold_no_bet: z.string(),
+      probabilities_under_partial: z.string(),
+    }),
+  }).passthrough(),
+  contract_version: z.string().optional(),
+  policy_version: z.string().optional(),
+}).passthrough();
+
+const fixtureSummarySchema: z.ZodType<FixtureSummary> = z.object({
+  fixture_id: z.string(),
+  competition: z.string(),
+  home_team: z.string(),
+  away_team: z.string(),
+  kickoff_utc: z.string(),
+  status: z.string(),
+  evidence_status: z.string(),
+  odds_status: z.string(),
+  venue: z.string().nullable().optional(),
+});
+
+const upcomingFixturesResponseSchema: z.ZodType<UpcomingFixturesResponse> = z.object({
+  fixtures: z.array(fixtureSummarySchema),
+  total: z.number(),
+  source: z.string(),
+});
+
+const fixtureEvidenceResponseSchema: z.ZodType<FixtureEvidenceResponse> = z.object({
+  fixture: fixtureSummarySchema,
+  freshness: z.record(z.unknown()),
+  source_status: z.record(z.string()),
+  data_gaps: z.array(z.string()),
+  retrieval_timeline: z.array(z.record(z.unknown())),
+  readiness: z.array(z.record(z.unknown())),
+  source_comparison: z.array(z.record(z.unknown())),
+  model: z.record(z.unknown()).nullable().optional(),
+  market: z.record(z.unknown()).nullable().optional(),
+});
+
+const manualOddsSnapshotResponseSchema: z.ZodType<ManualOddsSnapshotResponse> = z.object({
+  fixture_id: z.string(),
+  bookmaker: z.string(),
+  home_odds: z.number(),
+  draw_odds: z.number(),
+  away_odds: z.number(),
+  observed_at: z.string(),
+  received_at: z.string(),
+  executable: z.boolean(),
+  provenance: z.record(z.unknown()),
+});
+
+const providerOddsCandidateSchema: z.ZodType<ProviderOddsCandidate> = z.object({
+  bookmaker: z.string(),
+  home_odds: z.number(),
+  draw_odds: z.number(),
+  away_odds: z.number(),
+  captured_at: z.string(),
+  provider: z.string(),
+  executable: z.boolean(),
+});
+
+const providerOddsCandidatesResponseSchema: z.ZodType<ProviderOddsCandidatesResponse> = z.object({
+  fixture_id: z.string(),
+  candidates: z.array(providerOddsCandidateSchema),
+  warnings: z.array(z.string()),
+});
+
+const refreshEvidenceResponseSchema: z.ZodType<RefreshEvidenceResponse> = z.object({
+  fixture_id: z.string(),
+  profile: z.string(),
+  provider_results: z.array(z.record(z.unknown())),
+  refreshed_at: z.string(),
+});
+
 export class APIError extends Error {
   constructor(
     public readonly status: number,
@@ -332,6 +494,29 @@ export class APIError extends Error {
   ) {
     super(message ?? `API error ${status}`);
   }
+}
+
+function validateApiResponse<T>(
+  schema: z.ZodType<T>,
+  payload: unknown,
+  path: string,
+): T {
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new APIError(
+      502,
+      {
+        error: "invalid_response",
+        path,
+        issues: parsed.error.issues.slice(0, 5).map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+      `Backend contract error at ${path}`,
+    );
+  }
+  return parsed.data;
 }
 
 function messageFromErrorBody(body: unknown): string | undefined {
@@ -377,12 +562,23 @@ async function apiFetch<T>(
   }
 }
 
+async function apiFetchValidated<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  options?: RequestInit,
+  timeoutMs = 10_000,
+): Promise<T> {
+  const payload = await apiFetch<unknown>(path, options, timeoutMs);
+  return validateApiResponse(schema, payload, path);
+}
+
 /** Call the strict betting intelligence batch endpoint. */
 export async function analyzeBatch(
   request: BatchAnalysisRequest,
 ): Promise<BatchAnalysisResponse> {
-  return apiFetch<BatchAnalysisResponse>(
+  return apiFetchValidated<BatchAnalysisResponse>(
     `${SAME_ORIGIN_API}/analyze`,
+    batchAnalysisResponseSchema,
     { method: "POST", body: JSON.stringify(request) },
   );
 }
@@ -391,25 +587,33 @@ export async function analyzeBatch(
 export async function analyzeSingle(
   request: MatchAnalysisRequest,
 ): Promise<MatchAnalysisResult> {
-  return apiFetch<MatchAnalysisResult>(
+  return apiFetchValidated<MatchAnalysisResult>(
     `${SAME_ORIGIN_API}/analyze`,
+    matchAnalysisResultSchema,
     { method: "POST", body: JSON.stringify(request) },
   );
 }
 
 /** Get current engine policy parameters. */
 export async function getEnginePolicy(): Promise<EnginePolicy> {
-  return apiFetch<EnginePolicy>(`${SAME_ORIGIN_API}/policy`);
+  return apiFetchValidated<EnginePolicy>(
+    `${SAME_ORIGIN_API}/policy`,
+    enginePolicySchema,
+  );
 }
 
 export async function getUpcomingFixtures(competition?: string): Promise<UpcomingFixturesResponse> {
   const params = competition ? `?competition=${encodeURIComponent(competition)}` : "";
-  return apiFetch<UpcomingFixturesResponse>(`/api/fixtures/upcoming${params}`);
+  return apiFetchValidated<UpcomingFixturesResponse>(
+    `/api/fixtures/upcoming${params}`,
+    upcomingFixturesResponseSchema,
+  );
 }
 
 export async function getFixtureEvidence(fixtureId: string): Promise<FixtureEvidenceResponse> {
-  return apiFetch<FixtureEvidenceResponse>(
+  return apiFetchValidated<FixtureEvidenceResponse>(
     `/api/fixtures/${encodeURIComponent(fixtureId)}/evidence`,
+    fixtureEvidenceResponseSchema,
   );
 }
 
@@ -417,8 +621,9 @@ export async function refreshFixtureEvidence(
   fixtureId: string,
   profile = "PREMATCH_STANDARD",
 ): Promise<RefreshEvidenceResponse> {
-  return apiFetch<RefreshEvidenceResponse>(
+  return apiFetchValidated<RefreshEvidenceResponse>(
     `/api/fixtures/${encodeURIComponent(fixtureId)}/refresh`,
+    refreshEvidenceResponseSchema,
     { method: "POST", body: JSON.stringify({ profile }) },
   );
 }
@@ -426,8 +631,9 @@ export async function refreshFixtureEvidence(
 export async function getProviderOddsCandidates(
   fixtureId: string,
 ): Promise<ProviderOddsCandidatesResponse> {
-  return apiFetch<ProviderOddsCandidatesResponse>(
+  return apiFetchValidated<ProviderOddsCandidatesResponse>(
     `/api/fixtures/${encodeURIComponent(fixtureId)}/odds-snapshots`,
+    providerOddsCandidatesResponseSchema,
   );
 }
 
@@ -435,15 +641,17 @@ export async function submitManualOddsSnapshot(
   fixtureId: string,
   request: ManualOddsSnapshotRequest,
 ): Promise<ManualOddsSnapshotResponse> {
-  return apiFetch<ManualOddsSnapshotResponse>(
+  return apiFetchValidated<ManualOddsSnapshotResponse>(
     `/api/fixtures/${encodeURIComponent(fixtureId)}/odds-snapshot`,
+    manualOddsSnapshotResponseSchema,
     { method: "POST", body: JSON.stringify(request) },
   );
 }
 
 export async function analyzeFixture(fixtureId: string): Promise<MatchAnalysisResult> {
-  return apiFetch<MatchAnalysisResult>(
+  return apiFetchValidated<MatchAnalysisResult>(
     `/api/fixtures/${encodeURIComponent(fixtureId)}/analyze`,
+    matchAnalysisResultSchema,
     { method: "POST" },
   );
 }

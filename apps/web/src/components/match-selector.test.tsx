@@ -62,7 +62,7 @@ describe("match selection summary", () => {
     const summary = describeMatchSelectionState({
       homeTeam: "",
       awayTeam: "",
-      league: "LA_LIGA",
+      league: "La Liga",
       selectedFixture: null,
     });
 
