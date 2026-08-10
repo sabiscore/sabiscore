@@ -20,9 +20,7 @@ Checks:
 from __future__ import annotations
 
 import ast
-import os
 import pathlib
-import sys
 from typing import List, Tuple
 
 import pytest

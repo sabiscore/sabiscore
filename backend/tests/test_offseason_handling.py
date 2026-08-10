@@ -20,7 +20,7 @@ from __future__ import annotations
 import sys
 import os
 from datetime import date
-from typing import List, Optional
+from typing import Optional
 
 import pytest
 
@@ -30,7 +30,6 @@ from src.api.endpoints.upcoming_matches import (
     _compute_edge_quality_score,
     _next_season_start,
     UpcomingMatchesResponseSchema,
-    UpcomingMatchSchema,
 )
 
 

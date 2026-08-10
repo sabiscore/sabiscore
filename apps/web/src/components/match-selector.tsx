@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/aria-proptypes */
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
@@ -240,6 +240,8 @@ export function MatchSelector() {
   const [loading, setLoading] = useState(false);
   const [showInterstitial, setShowInterstitial] = useState(false);
   const [selectedFixture, setSelectedFixture] = useState<SelectedFixture | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const interstitialV2Enabled = useFeatureFlag(FeatureFlag.PREDICTION_INTERSTITIAL_V2);
   const premiumVisualsEnabled = useFeatureFlag(FeatureFlag.PREMIUM_VISUAL_HIERARCHY);
@@ -355,10 +357,44 @@ export function MatchSelector() {
 
   useEffect(() => {
     if (!showInterstitial) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => dialogRef.current?.focus());
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setShowInterstitial(false);
+        setPendingMatchup(null);
+        setLoading(false);
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleDialogKeyDown);
     return () => {
       document.body.style.overflow = previous;
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      previousFocusRef.current?.focus();
     };
   }, [showInterstitial]);
 
@@ -452,13 +488,13 @@ export function MatchSelector() {
                 />
                 <div className="mt-4 hidden flex-wrap gap-3 text-[11px] text-slate-300 sm:flex">
                   <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1">
-                    Recent form weighted ×3
+                    Evidence availability checked
                   </span>
                   <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1">
-                    Monte Carlo (10,000 sims)
+                    Model status reported by backend
                   </span>
                   <span className="rounded-full border border-purple-300/30 bg-purple-300/10 px-3 py-1">
-                    Ensemble vote locking
+                    Zero stake when gates close
                   </span>
                 </div>
               </>
@@ -588,7 +624,7 @@ export function MatchSelector() {
                 } catch {}
                 toast.success("Selector reset");
               }}
-              className="text-xs text-slate-400 transition-colors hover:text-slate-200"
+              className="min-h-11 rounded-lg px-3 text-sm text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               Reset selection
             </button>
@@ -597,7 +633,7 @@ export function MatchSelector() {
 
         <div className="pt-4 border-t border-slate-800/50">
           <p className="text-xs text-center text-slate-500">
-            Powered by server-side calibrated ensemble ML
+            Analysis, evidence checks, and verdicts remain server-authoritative
           </p>
           <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-slate-600">
             <span className="inline-flex items-center gap-1">
@@ -614,7 +650,7 @@ export function MatchSelector() {
                 : "Checking providers"}
             </span>
             <span>•</span>
-            <span>Fetched fresh per request</span>
+            <span>Evidence timestamps appear in each analysis</span>
           </div>
         </div>
         </div>
@@ -625,12 +661,18 @@ export function MatchSelector() {
         // `py-safe-area-inset-top` is not a Tailwind utility and compiled to
         // nothing, so this overlay had no vertical padding at all.
         <div
+          ref={dialogRef}
+          tabIndex={-1}
           className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/90 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur"
           role="dialog"
           aria-modal="true"
           aria-labelledby="match-loading-title"
           aria-describedby="match-loading-desc"
         >
+          <h2 id="match-loading-title" className="sr-only">Preparing match analysis</h2>
+          <p id="match-loading-desc" className="sr-only">
+            SabiScore is acquiring evidence and will navigate to the authoritative analysis.
+          </p>
           <div className="absolute inset-0" aria-hidden="true" />
           {/* max-w-6xl matches the interstitial's own container; a narrower clamp
               here would collapse its two-column layout back to a single strip.

@@ -7,6 +7,39 @@ disguise — say so honestly.
 
 ---
 
+## 14. Apex candidate artifacts are quarantined and not certified
+
+**Tier:** `FIX-NOW` before model promotion. **Found:** 2026-08-09.
+
+Generated v5-named binaries were written over the active artifact paths before a
+qualifying promotion decision. The active binaries have been restored and the
+generated files moved to `backend/models/candidate/` with an explicit
+`UNVERIFIED_CANDIDATE` manifest. The new Apex feature schema and temporal
+meta-model/calibration implementation are code-complete, but a full chronological
+run, untouched final-season evaluation, per-competition RPS/baseline evidence,
+hash/version manifest, and dual-loader proof have not yet been executed for a new
+generation. Eredivisie remains pooled fallback; UCL remains generic and capped at
+`ACTIONABLE`.
+
+**Release rule:** candidate promotion is forbidden while
+`promotion_permitted=false`. Do not rename or copy candidate files into the active
+directory to make deployment pass.
+
+## 15. Redis credential incident and Render configuration are operator-blocked
+
+**Tier:** `FIX-NOW` / P0. **Found:** 2026-08-09.
+
+A supplied Render log contained a complete Redis URI. A later Render build log
+shows `REDIS_URL` is not a valid `redis://`, `rediss://`, or `unix://` URL and the
+deployed process exits during import. Central redaction and malformed-URL safe
+degradation are now implemented, but code cannot rotate the provider credential
+or modify the protected Render secret.
+
+**Required operator sequence:** create a replacement credential; set a valid TLS
+Render secret without printing it; verify cache connection and application
+readiness; revoke the exposed credential; then run the live secret/log probe.
+Production remains blocked until every step is recorded.
+
 ## 12. Certified artifacts were trained on synthetic data — RESOLVED, with a residual
 
 **Tier:** `ACCEPTED` — root cause fixed 2026-08-08 (retrain). Kept as the incident

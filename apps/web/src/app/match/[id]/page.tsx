@@ -1,19 +1,8 @@
 import { notFound } from "next/navigation";
-import { InsightsDisplayWrapper } from "@/components/insights-display-wrapper";
 import { FullAnalysisSection } from "@/components/full-analysis-section";
 import { Phase8AnalyticsSection } from "@/components/phase8-analytics-section";
-import { InsightsErrorState } from "@/components/insights-error-state";
-import { APIError } from "@/lib/api";
-import { getMatchInsights } from "@/lib/insights-server";
 import { canonicalLeagueId } from "@/lib/league";
-import {
-  classifyAnalysisError,
-  type AnalysisErrorCategory,
-} from "@/lib/full-analysis-contract";
 
-// Force fully-dynamic rendering: each request fetches live data.
-// Removing revalidate + fetchCache = "force-no-store" eliminates the ISR
-// conflict that caused stale error pages to be served for up to 15 s.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -22,10 +11,6 @@ type PageProps = {
   searchParams?: Promise<{ league?: string; home?: string; away?: string }>;
 };
 
-// Real fixtures now route by canonical match_id, with home/away carried as
-// query params (the id itself is opaque and unsuitable as display text).
-// Manual/typed matchups have no home/away params — id IS the "Home vs Away"
-// string, matching the pre-existing behavior.
 function matchupLabelFor(id: string, home?: string, away?: string): string {
   return home && away ? `${home} vs ${away}` : decodeURIComponent(id);
 }
@@ -44,13 +29,13 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
     const { league, home, away } = resolvedSearchParams || {};
     const matchup = matchupLabelFor(id, home, away);
     return {
-      title: `${matchup} - Insights | Sabiscore`,
-      description: `AI-powered betting insights and predictions for ${matchup} in ${league || "EPL"}`,
+      title: `${matchup} - Match Intelligence | Sabiscore`,
+      description: `Evidence-led match intelligence for ${matchup} in ${league || "EPL"}.`,
     };
   } catch {
     return {
-      title: "Match Insights | Sabiscore",
-      description: "AI-powered betting insights and predictions.",
+      title: "Match Intelligence | Sabiscore",
+      description: "Evidence-led match intelligence and explicit availability states.",
     };
   }
 }
@@ -59,7 +44,7 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
   if (!params) notFound();
 
   let id: string;
-  let league: string = "EPL";
+  let league = "EPL";
   let home: string | undefined;
   let away: string | undefined;
 
@@ -67,8 +52,6 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
     const resolvedParams = await params;
     id = resolvedParams.id;
     const resolvedSearchParams = searchParams ? await searchParams : undefined;
-    // Links in the wild carry either vocabulary ("La Liga" or "LA_LIGA");
-    // everything downstream expects the canonical id.
     league = canonicalLeagueId(resolvedSearchParams?.league) ?? "EPL";
     home = resolvedSearchParams?.home;
     away = resolvedSearchParams?.away;
@@ -76,68 +59,40 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
     notFound();
   }
 
-  // `rawId` goes to FullAnalysisSection/Phase8AnalyticsSection unchanged —
-  // both backend endpoints auto-detect a real match_id vs. a "vs" string.
-  // `matchup` is only for the legacy Phase-7 insights call (team names
-  // required, no ID variant) and the page title.
   const rawId = decodeURIComponent(id);
   const matchup = matchupLabelFor(id, home, away);
+  const isVerifiedFixturePath = Boolean(home && away);
 
-  // ── Fetch insights ─────────────────────────────────────────────────────────
-  // Handle backend errors inline rather than throwing to error.tsx.
-  // In Next.js 15 production mode, error.tsx receives a sanitised error object
-  // (message is stripped, digest is an opaque hash), so the error page cannot
-  // distinguish timeout from server-error from unknown. Rendering inline lets
-  // us show the correct copy for each explicit error class.
-  let errorType: AnalysisErrorCategory | null = null;
-
-  try {
-    const insights = await getMatchInsights(matchup, league);
-
-    return (
-      <div className="max-w-6xl mx-auto space-y-12">
-        <InsightsDisplayWrapper insights={insights} />
-        <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
-        <Phase8AnalyticsSection matchId={rawId} league={league} />
-      </div>
-    );
-  } catch (error) {
-    if (error instanceof APIError) {
-      // True 404s / invalid matchup format → show the 404 page
-      if (
-        error.status === 404 ||
-        error.code === "INVALID_MATCHUP" ||
-        error.code === "INVALID_MATCHUP_FORMAT"
-      ) {
-        notFound();
-      }
-
-      // Preserve status and code: HTTP 500 remains an internal error, while
-      // only explicit/recognized wake-up failures receive cold-start copy.
-      errorType = classifyAnalysisError({
-        status: error.status,
-        code: error.code,
-      });
-    } else if (error instanceof Error) {
-      // A generic network failure is unavailable, not proof of a cold start.
-      errorType = classifyAnalysisError({ networkError: true });
-    } else {
-      errorType = "unknown";
-    }
-
-    console.error(
-      "[MatchInsightsPage] Backend error:",
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  // Render inline error — FullAnalysisSection still mounts so Phase 7 data
-  // can load independently (it has its own error boundary + retry).
   return (
-    <div className="max-w-6xl mx-auto space-y-12">
-      <InsightsErrorState errorType={errorType ?? "unknown"} matchup={matchup} />
+    <main className="mx-auto max-w-6xl space-y-8" aria-labelledby="match-analysis-title">
+      <header className="flex flex-col gap-3 border-b border-slate-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+            Authoritative full analysis
+          </p>
+          <h1 id="match-analysis-title" className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+            {matchup}
+          </h1>
+        </div>
+        <span
+          className={`inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold ${
+            isVerifiedFixturePath
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+          }`}
+        >
+          {isVerifiedFixturePath ? "Verified fixture path" : "Hypothetical — non-executable"}
+        </span>
+      </header>
       <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
-      <Phase8AnalyticsSection matchId={rawId} league={league} />
-    </div>
+      <details className="group rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+          Technical feature diagnostics
+        </summary>
+        <div className="pt-4">
+          <Phase8AnalyticsSection matchId={rawId} league={league} />
+        </div>
+      </details>
+    </main>
   );
 }

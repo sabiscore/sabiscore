@@ -1,5 +1,6 @@
 """Canonical feature registry for inference-safe SabiScore models."""
 
+import math
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -148,10 +149,38 @@ PHASE7_FEATURES_ALWAYS_DATA_GAP: List[str] = [
     *PHASE7_FEATURES_REMOVED,
 ]
 
+# Apex candidate schema. The active v5 contract above remains byte-for-byte
+# compatible; candidate training replaces its redundant market block under a
+# distinct manifest rather than silently changing positional semantics.
+APEX_MARKET_FEATURES_14: List[str] = [
+    "market_prob_home",
+    "market_prob_draw",
+    "market_prob_away",
+    "market_overround",
+    "market_favorite_home",
+    "market_favorite_draw",
+    "market_favorite_away",
+    "log_odds_home",
+    "log_odds_draw",
+    "log_odds_away",
+    "market_probability_margin",
+    "market_normalized_entropy",
+    "market_home_away_probability_diff",
+    "odds_ratio",
+]
+
+APEX_FEATURES_58: List[str] = [
+    *CANONICAL_FEATURES_58[:17],
+    *APEX_MARKET_FEATURES_14,
+    *CANONICAL_FEATURES_58[31:],
+]
+
 CANONICAL_FEATURES_68: List[str] = [
     *CANONICAL_FEATURES_58,
     *PHASE7_FEATURES_10,
 ]
+
+APEX_FEATURES_68: List[str] = [*APEX_FEATURES_58, *PHASE7_FEATURES_10]
 
 # Deprecated alias — holds 68, not 65. The 2026-06-10 rename to _65 described a
 # vector the serving artifacts could not accept; see PHASE7_FEATURES_10. Retained
@@ -511,4 +540,120 @@ def derive_combination_features(
         "combined_defense_weakness": home_goals_against_avg + away_goals_against_avg,
         "home_attack_vs_away_defense": home_goals_for_avg - away_goals_against_avg,
         "away_attack_vs_home_defense": away_goals_for_avg - home_goals_against_avg,
+    }
+
+
+# WP-A: the 14 canonical market fields CANONICAL_FEATURES_58 declares (see
+# feature_registry.py:25-38), in that same order.
+MARKET_FEATURES_14 = (
+    "market_prob_home", "market_prob_draw", "market_prob_away",
+    "market_edge_home", "market_favorite", "odds_ratio",
+    "log_odds_home", "log_odds_draw", "log_odds_away",
+    "draw_probability", "market_confidence",
+    "ev_home", "ev_draw", "ev_away",
+)
+
+
+def derive_market_features(
+    home_odds: float, draw_odds: float, away_odds: float,
+) -> Dict[str, float]:
+    """WP-A: pure remap from 1X2 decimal odds onto the 14 canonical market
+    fields (MARKET_FEATURES_14). Numerically identical to the inline formula
+    FeatureTransformer._project_to_canonical_features() (data/transformers.py
+    lines ~324-379) has always used — this is the shared, callable version so
+    training (train_on_real_matches.py) and live serving
+    (upcoming_match_feature_service.py) compute it from the SAME code, per the
+    WP-18 train/serve-consistency precedent set by derive_last5_form_features()
+    above. transformers.py's own inline copy is left untouched: it is live,
+    tested, and out of scope for this change.
+
+    Invalid prices are rejected. Provider/schema errors must not be repaired
+    into plausible-looking evidence.
+
+    ev_home == ev_draw == ev_away always under this formula — algebraically,
+    each equals (1/overround) - 1, since market_prob_i * odds_i == 1/overround
+    for every outcome once probabilities are de-vigged from the same odds they
+    price. This is not a bug; it is what "EV against your own de-vigged
+    probabilities" means.
+
+    De-vigs inline ((1/odds_i)/overround per outcome) rather than importing
+    providers.the_odds_api.devig_probabilities, which does the identical
+    arithmetic — this module is loaded standalone (module name "models",
+    outside the real "src" package tree) by tests/test_phase_c_pipeline.py's
+    bootstrap to dodge core.database's import-time DB connection, and a
+    relative import reaching into a sibling package breaks under that
+    isolation. Two lines of duplicated arithmetic is a smaller, more robust
+    diff than fixing the bootstrap.
+    """
+    home_odds, draw_odds, away_odds = _validated_market_prices(
+        home_odds, draw_odds, away_odds
+    )
+
+    overround = (1 / home_odds) + (1 / draw_odds) + (1 / away_odds)
+    market_prob_home = (1 / home_odds) / overround
+    market_prob_draw = (1 / draw_odds) / overround
+    market_prob_away = (1 / away_odds) / overround
+    probs = [market_prob_home, market_prob_draw, market_prob_away]
+
+    return {
+        "market_prob_home": market_prob_home,
+        "market_prob_draw": market_prob_draw,
+        "market_prob_away": market_prob_away,
+        "market_edge_home": market_prob_home - market_prob_away,
+        "market_favorite": float(probs.index(max(probs))),
+        "odds_ratio": home_odds / away_odds,
+        "log_odds_home": math.log(home_odds),
+        "log_odds_draw": math.log(draw_odds),
+        "log_odds_away": math.log(away_odds),
+        "draw_probability": market_prob_draw,
+        "market_confidence": max(probs),
+        "ev_home": market_prob_home * home_odds - 1.0,
+        "ev_draw": market_prob_draw * draw_odds - 1.0,
+        "ev_away": market_prob_away * away_odds - 1.0,
+    }
+
+
+def _validated_market_prices(
+    home_odds: float, draw_odds: float, away_odds: float
+) -> Tuple[float, float, float]:
+    try:
+        prices = (float(home_odds), float(draw_odds), float(away_odds))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("1X2 prices must be finite decimal numbers") from exc
+    if not all(math.isfinite(price) and price > 1.0 for price in prices):
+        raise ValueError("1X2 prices must be finite and greater than 1.0")
+    return prices
+
+
+def derive_apex_market_features(
+    home_odds: float, draw_odds: float, away_odds: float
+) -> Dict[str, float]:
+    """Build the non-redundant Apex market block from one coherent snapshot."""
+
+    home_odds, draw_odds, away_odds = _validated_market_prices(
+        home_odds, draw_odds, away_odds
+    )
+    raw = (1.0 / home_odds, 1.0 / draw_odds, 1.0 / away_odds)
+    overround = sum(raw)
+    if not 1.0 <= overround <= 1.25:
+        raise ValueError("1X2 market overround is outside integrity limits")
+    probs = tuple(value / overround for value in raw)
+    ordered = sorted(probs, reverse=True)
+    favorite = max(range(3), key=probs.__getitem__)
+    entropy = -sum(prob * math.log(prob) for prob in probs) / math.log(3.0)
+    return {
+        "market_prob_home": probs[0],
+        "market_prob_draw": probs[1],
+        "market_prob_away": probs[2],
+        "market_overround": overround,
+        "market_favorite_home": float(favorite == 0),
+        "market_favorite_draw": float(favorite == 1),
+        "market_favorite_away": float(favorite == 2),
+        "log_odds_home": math.log(home_odds),
+        "log_odds_draw": math.log(draw_odds),
+        "log_odds_away": math.log(away_odds),
+        "market_probability_margin": ordered[0] - ordered[1],
+        "market_normalized_entropy": entropy,
+        "market_home_away_probability_diff": probs[0] - probs[2],
+        "odds_ratio": home_odds / away_odds,
     }

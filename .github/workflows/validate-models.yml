@@ -2,9 +2,9 @@ name: Validate Model Artifacts
 
 on:
   push:
-    branches: [ main, ci/* ]
+    branches: [ master, "feat/**", "ci/**" ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   validate-models:
@@ -25,21 +25,29 @@ jobs:
           pip install -r backend/requirements-dev.txt
           pip install joblib scikit-learn
 
-      - name: Install optional boto3 (s3:// model storage)
-        continue-on-error: true
-        run: pip install boto3
-
-      - name: Generate dummy models if missing
+      - name: Verify active artifact pairs
         run: |
-          if [ ! -d "models" ] || [ -z "$(ls -A models/*.pkl 2>/dev/null)" ]; then
-            python scripts/generate_dummy_models.py --outdir ./models
-          fi
+          python backend/scripts/verify_active_artifacts.py
 
-      - name: Validate model artifacts
+      - name: Verify both production loaders and fixture sensitivity
+        env:
+          PYTHONPATH: backend
+          PROVIDER_LIVE_TESTS: "false"
         run: |
-          # Fail CI if dummy models detected unless explicitly allowed
-          python scripts/validate_models.py --models-dir ./models --timeout 20
+          python -m pytest -q \
+            backend/tests/unit/test_artifact_serves_both_loaders.py \
+            backend/tests/unit/test_model_artifact_loading.py \
+            backend/tests/unit/test_model_differentiates_fixtures.py
 
-      - name: List models directory
+      - name: Reject candidate promotion without certification
         run: |
-          ls -lh ./models
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = Path("backend/models/candidate/candidate_manifest.json")
+          if manifest.exists():
+              payload = json.loads(manifest.read_text(encoding="utf-8"))
+              if payload.get("promotion_permitted") is not False:
+                  raise SystemExit("Candidate manifest must remain non-promotable until certification")
+          PY

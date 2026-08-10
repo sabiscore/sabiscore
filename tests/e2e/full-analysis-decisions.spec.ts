@@ -49,6 +49,7 @@ function analysisPayload(options: {
     top_outcome_probability: probabilities.top,
     effective_kelly_cap: 0.04,
     stake_permitted: stakePermitted,
+    fixture_verified: true,
     evidence_quality: evidence,
     ensemble: {
       home_win_prob: probabilities.home_win_prob,
@@ -71,6 +72,7 @@ function analysisPayload(options: {
       credible_interval: [0.42, 0.58],
       confidence_tier: "OK",
     },
+    model_drivers: stakePermitted ? ["elo_difference"] : [],
     causal_drivers: stakePermitted ? ["elo_difference"] : [],
     rl_recommendation: {
       stake_fraction: stakePermitted ? 0.015 : 0,

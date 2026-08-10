@@ -6,7 +6,7 @@
     plan: free
     branch: master
     rootDir: backend
-    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && echo '=== Build dir ===' && pwd && ls -la ../ && mkdir -p /opt/render/project/src/models && mkdir -p models && cp -a ../models/. /opt/render/project/src/models 2>/dev/null || true && cp -a ../models/. models/ 2>/dev/null || true && echo '=== Models copied to /opt/render/project/src/models and backend/models ===' && ls -la /opt/render/project/src/models && ls -la models"
+    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && python scripts/verify_active_artifacts.py"
     startCommand: alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-max-requests 500 --timeout-keep-alive 30 --log-level info
     # Use readiness probe which validates DB/cache/models before marking instance healthy
     healthCheckPath: /health/ready
@@ -63,10 +63,6 @@
         value: 10000
       - key: MIN_EDGE_NGN
         value: 66
-      - key: MODEL_VERSION
-        value: v5_phase7
-      - key: FEATURES_COUNT
-        value: 86
       - key: SKIP_S3
         value: "true"
       - key: MODEL_FETCH_STRICT
@@ -110,7 +106,7 @@
       - key: THE_ODDS_API_KEY
         sync: false
       - key: MODELS_PATH
-        value: "/opt/render/project/src/models"
+        value: "/opt/render/project/src/backend/models"
       - key: USE_PHASE7_MODELS
         value: "true"
       - key: PHASE7_CANARY_PCT

@@ -52,31 +52,52 @@ class CertifiedAnalyticsService:
     def __init__(self, db: AsyncSession | None = None) -> None:
         self.db = db
 
-    async def analyze_payload(self, payload: dict[str, Any]) -> MatchAnalysisResult:
+    async def analyze_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        trusted_backend: bool = False,
+    ) -> MatchAnalysisResult:
         evaluation_at = datetime.now(timezone.utc)
-        request = self._build_request(payload)
+        request = self._build_request(payload, trusted_backend=trusted_backend)
         result = analyze_match(request, evaluation_at=evaluation_at)
-        await self._persist_prediction_log(result)
+        if trusted_backend:
+            await self._persist_prediction_log(result)
         return result
 
-    def _build_request(self, payload: dict[str, Any]) -> MatchAnalysisRequest:
+    def _build_request(
+        self,
+        payload: dict[str, Any],
+        *,
+        trusted_backend: bool = False,
+    ) -> MatchAnalysisRequest:
         model_payload = payload.get("model") or {}
         market_payload = payload.get("market")
         source_payload = payload.get("source_status") or {}
         freshness_payload = payload.get("freshness") or {}
         signals_payload = payload.get("signals") or {}
 
-        model = ModelInput(
-            home_probability=float(model_payload["home_probability"]),
-            draw_probability=float(model_payload["draw_probability"]),
-            away_probability=float(model_payload["away_probability"]),
-            model_version=str(model_payload.get("model_version") or "certified-v1"),
-            calibration_method=str(model_payload.get("calibration_method") or "backend_calibrated"),
-            calibration_validated=bool(model_payload.get("calibration_validated", True)),
-            epistemic_uncertainty=float(model_payload.get("epistemic_uncertainty", 0.12)),
-            aleatoric_uncertainty=float(model_payload.get("aleatoric_uncertainty", 0.18)),
-            confidence_tier=EvidenceTierEnum(model_payload.get("confidence_tier") or EvidenceTierEnum.OK.value),
+        required_model_metadata = (
+            "model_version",
+            "calibration_method",
+            "calibration_validated",
+            "epistemic_uncertainty",
+            "aleatoric_uncertainty",
+            "confidence_tier",
         )
+        model = None
+        if all(model_payload.get(field) is not None for field in required_model_metadata):
+            model = ModelInput(
+                home_probability=float(model_payload["home_probability"]),
+                draw_probability=float(model_payload["draw_probability"]),
+                away_probability=float(model_payload["away_probability"]),
+                model_version=str(model_payload["model_version"]),
+                calibration_method=str(model_payload["calibration_method"]),
+                calibration_validated=bool(model_payload["calibration_validated"]),
+                epistemic_uncertainty=float(model_payload["epistemic_uncertainty"]),
+                aleatoric_uncertainty=float(model_payload["aleatoric_uncertainty"]),
+                confidence_tier=EvidenceTierEnum(model_payload["confidence_tier"]),
+            )
 
         market = None
         if market_payload:
@@ -89,15 +110,32 @@ class CertifiedAnalyticsService:
                 opening_home_odds=market_payload.get("opening_home_odds"),
                 opening_draw_odds=market_payload.get("opening_draw_odds"),
                 opening_away_odds=market_payload.get("opening_away_odds"),
-                captured_at=market_payload.get("captured_at") or datetime.now(timezone.utc),
+                captured_at=market_payload["captured_at"],
             )
+
+        if trusted_backend:
+            source_status = SourceStatusInput(
+                model=SourceStatusEnum(source_payload.get("model") or SourceStatusEnum.DATA_GAP.value),
+                market=SourceStatusEnum(source_payload.get("market") or SourceStatusEnum.DATA_GAP.value),
+                team_metrics=SourceStatusEnum(source_payload.get("team_metrics") or SourceStatusEnum.DATA_GAP.value),
+                availability=SourceStatusEnum(source_payload.get("availability") or SourceStatusEnum.DATA_GAP.value),
+            )
+            declared_gaps = list(payload.get("data_gaps") or [])
+            verified_providers = payload.get("verified_evidence_providers")
+        else:
+            source_status = SourceStatusInput()
+            declared_gaps = [
+                *list(payload.get("data_gaps") or []),
+                "EXTERNAL_INPUT_UNVERIFIED",
+            ]
+            verified_providers = []
 
         return MatchAnalysisRequest(
             match_id=str(payload["match_id"]),
             home_team=str(payload["home_team"]),
             away_team=str(payload["away_team"]),
             competition=_competition(str(payload.get("competition") or payload.get("league") or "EPL")),
-            kickoff_utc=payload.get("kickoff_utc") or datetime.now(timezone.utc),
+            kickoff_utc=payload["kickoff_utc"],
             model=model,
             market=market,
             signals=SignalsInput(
@@ -112,23 +150,15 @@ class CertifiedAnalyticsService:
                 sharp_market_signal=SharpSignalEnum(signals_payload.get("sharp_market_signal") or SharpSignalEnum.UNKNOWN.value),
             ),
             freshness=FreshnessInput(
-                model_features_seconds=freshness_payload.get("model_features_seconds", 0),
-                market_seconds=freshness_payload.get("market_seconds", 0 if market else None),
+                model_features_seconds=freshness_payload.get("model_features_seconds"),
+                market_seconds=freshness_payload.get("market_seconds"),
                 injury_news_seconds=freshness_payload.get("injury_news_seconds"),
                 lineup_seconds=freshness_payload.get("lineup_seconds"),
             ),
-            source_status=SourceStatusInput(
-                model=SourceStatusEnum(source_payload.get("model") or SourceStatusEnum.VERIFIED.value),
-                market=(
-                    SourceStatusEnum(source_payload.get("market") or SourceStatusEnum.VERIFIED.value)
-                    if market
-                    else SourceStatusEnum.DATA_GAP
-                ),
-                team_metrics=SourceStatusEnum(source_payload.get("team_metrics") or SourceStatusEnum.VERIFIED.value),
-                availability=SourceStatusEnum(source_payload.get("availability") or SourceStatusEnum.VERIFIED.value),
-            ),
-            data_gaps=list(payload.get("data_gaps") or []),
+            source_status=source_status,
+            data_gaps=declared_gaps,
             known_risks=list(payload.get("known_risks") or []),
+            verified_evidence_providers=verified_providers,
         )
 
     async def _persist_prediction_log(self, result: MatchAnalysisResult) -> None:

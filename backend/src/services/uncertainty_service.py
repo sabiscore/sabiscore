@@ -91,14 +91,22 @@ class UncertaintyService:
             self._bnn_model = None
             logger.warning("Failed to load BNN uncertainty model: %s", exc)
 
-    def _build_input_tensor(self, feature_frame: pd.DataFrame) -> "torch.Tensor":
+    def _build_input_tensor(
+        self,
+        feature_frame: pd.DataFrame,
+        *,
+        strict: bool = False,
+    ) -> "torch.Tensor":
         """Build BNN input tensor aligned to the training feature_cols.
 
-        If feature_cols were saved in the checkpoint, extract those columns in
-        order (filling missing ones with 0).  Otherwise fall back to using all
-        numeric columns from feature_frame as-is.
+        Strict mode rejects missing or non-finite inputs. It is required for
+        public measured uncertainty so zero-filled features cannot masquerade
+        as model evidence.
         """
         if self._bnn_feature_cols is not None:
+            missing = [column for column in self._bnn_feature_cols if column not in feature_frame.columns]
+            if strict and missing:
+                raise ValueError(f"BNN feature schema incomplete ({len(missing)} missing columns)")
             rows = []
             for _, row in feature_frame.iterrows():
                 vec = np.array(
@@ -109,8 +117,55 @@ class UncertaintyService:
             X = np.stack(rows, axis=0)
         else:
             X = feature_frame.select_dtypes(include="number").to_numpy(dtype=np.float32)
+        if strict and not np.isfinite(X).all():
+            raise ValueError("BNN feature tensor contains non-finite values")
         X = np.where(np.isfinite(X), X, 0.0)
         return torch.tensor(X, dtype=torch.float32)
+
+    def decompose_measured(
+        self,
+        feature_frame: pd.DataFrame,
+    ) -> Optional[UncertaintyBreakdown]:
+        """Return BNN-backed uncertainty only when every required input exists."""
+
+        if self._bnn_model is None or torch is None:
+            return None
+        if feature_frame is None or feature_frame.empty:
+            return None
+        try:
+            x_tensor = self._build_input_tensor(feature_frame, strict=True)
+            outputs = self._bnn_model.predict_uncertainty(
+                x_tensor,
+                epistemic_threshold=float(settings.epistemic_threshold),
+                ci_samples=max(50, int(settings.bnn_mc_samples)),
+            )
+            if not outputs:
+                return None
+            out = outputs[0]
+            probs = [out.home_prob, out.draw_prob, out.away_prob]
+            top_idx = max(range(3), key=lambda idx: probs[idx])
+            values = (
+                float(out.epistemic),
+                float(out.aleatoric),
+                float(out.concentration),
+                float(out.ci_lower[top_idx]),
+                float(out.ci_upper[top_idx]),
+            )
+            if not np.isfinite(values).all():
+                return None
+            return UncertaintyBreakdown(
+                epistemic_unc=max(0.0, values[0]),
+                aleatoric_unc=max(0.0, values[1]),
+                concentration=max(0.0, values[2]),
+                credible_interval=(
+                    _clamp(values[3], 0.0, 1.0),
+                    _clamp(values[4], 0.0, 1.0),
+                ),
+                confidence_tier="LOW_EVIDENCE" if out.low_evidence else "OK",
+            )
+        except Exception as exc:
+            logger.warning("Measured BNN uncertainty unavailable: %s", type(exc).__name__)
+            return None
 
     def decompose(
         self,

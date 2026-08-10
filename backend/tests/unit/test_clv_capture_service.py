@@ -103,10 +103,8 @@ async def test_capture_writes_snapshot_for_due_fixture_with_coherent_odds(factor
 
     mock_provider = AsyncMock()
     mock_provider.odds.return_value = _provider_result(records)
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch(
-        "src.providers.the_odds_api.TheOddsAPIProvider", return_value=mock_provider
-    ):
-        result = await run_clv_capture_pass()
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        result = await run_clv_capture_pass(provider=mock_provider)
 
     assert result["outcome"] == "ok"
     assert result["captured"] == 1
@@ -121,6 +119,8 @@ async def test_capture_writes_snapshot_for_due_fixture_with_coherent_odds(factor
     assert snap.match_id == "fd-ded-1"
     assert snap.is_closing_line is True
     assert snap.canonical_fixture_id is None
+    assert snap.bookmaker == "pinnacle"
+    assert snap.provenance["bookmaker"] == "pinnacle"
     prob_sum = snap.home_implied_prob_devigged + snap.draw_implied_prob_devigged + snap.away_implied_prob_devigged
     assert abs(prob_sum - 1.0) < 1e-6
 

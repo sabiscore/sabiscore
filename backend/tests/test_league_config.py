@@ -7,7 +7,6 @@ import pytest
 from src.core.league_config import (
     ACTIVE_LEAGUES,
     LEAGUE_BY_ID,
-    LeagueProfile,
     allows_low_evidence,
     get_league_profile,
     is_active_league,

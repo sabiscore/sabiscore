@@ -10,30 +10,20 @@ import hashlib
 import json
 import logging
 import random
-import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
-
-SENSITIVE_QUERY_KEYS = {"api_key", "apikey", "api_token", "key", "token", "auth", "authorization"}
-
-_SENSITIVE_PARAM_RE = re.compile(
-    r"\b(" + "|".join(SENSITIVE_QUERY_KEYS) + r")=([^&\s'\"]+)",
-    re.IGNORECASE,
+from ..core.redaction import (
+    redact_mapping,
+    redact_text,
+    redact_url,
 )
 
-
-def redact_text(text: str) -> str:
-    """Scrub sensitive query-param values from arbitrary text (e.g. exception messages
-    that embed full request URLs, like httpx.HTTPStatusError)."""
-    return _SENSITIVE_PARAM_RE.sub(r"\1=[REDACTED]", text)
-
+logger = logging.getLogger(__name__)
 
 class ProviderStatus(str, Enum):
     VERIFIED = "VERIFIED"
@@ -112,27 +102,6 @@ def utc_now() -> datetime:
 def stable_hash(payload: Any) -> str:
     raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def redact_url(url: str) -> str:
-    parts = urlsplit(url)
-    pairs = []
-    for key, value in parse_qsl(parts.query, keep_blank_values=True):
-        pairs.append((key, "[REDACTED]" if key.lower() in SENSITIVE_QUERY_KEYS else value))
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(pairs), parts.fragment))
-
-
-def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
-    redacted: dict[str, Any] = {}
-    for key, value in values.items():
-        lowered = key.lower()
-        metadata_field = lowered in {"requires_key", "api_key_configured"}
-        sensitive_field = any(marker in lowered for marker in ("api_key", "token", "secret", "password", "authorization"))
-        if sensitive_field and not metadata_field:
-            redacted[key] = "[REDACTED]" if value else None
-        else:
-            redacted[key] = value
-    return redacted
 
 
 class CircuitBreaker:

@@ -16,7 +16,6 @@ until identity resolution work populates canonical_fixtures.
 from __future__ import annotations
 
 import logging
-import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -98,7 +97,7 @@ def _match_events_to_fixtures(
     return matched
 
 
-async def run_clv_capture_pass() -> dict[str, Any]:
+async def run_clv_capture_pass(provider: Any = None) -> dict[str, Any]:
     """Never raises — every failure lands in the returned/stored dict,
     matching run_settlement_pass()'s swallow-and-log convention."""
     global _last_result
@@ -113,16 +112,22 @@ async def run_clv_capture_pass() -> dict[str, Any]:
 
     try:
         async with AsyncSessionLocal() as session:
-            counts = await _capture_due_fixtures(session)
+            counts = await _capture_due_fixtures(session, provider=provider)
         _last_result = {"outcome": "ok", "checked_at": checked_at, **counts}
     except Exception as exc:
         logger.exception("clv_capture_pass: unhandled error")
-        _last_result = {"outcome": "error", "checked_at": checked_at, "message": str(exc)}
+        from ..core.redaction import redact_text
+
+        _last_result = {
+            "outcome": "error",
+            "checked_at": checked_at,
+            "message": redact_text(str(exc)),
+        }
 
     return _last_result
 
 
-async def _capture_due_fixtures(session: Any) -> dict[str, int]:
+async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str, int]:
     from sqlalchemy import select
 
     from ..core.config import settings
@@ -187,7 +192,7 @@ async def _capture_due_fixtures(session: Any) -> dict[str, int]:
     if not by_league:
         return counts
 
-    provider = TheOddsAPIProvider(
+    provider = provider or TheOddsAPIProvider(
         api_key=settings.the_odds_api_key,
         enabled=settings.enable_the_odds_api_provider,
         live_tests=settings.provider_live_tests,
@@ -210,9 +215,12 @@ async def _capture_due_fixtures(session: Any) -> dict[str, int]:
                 counts["unmatched"] += 1
                 continue
 
-            home = statistics.median(r["home_odds"] for r in coherent)
-            draw = statistics.median(r["draw_odds"] for r in coherent)
-            away = statistics.median(r["away_odds"] for r in coherent)
+            # Persist one bookmaker's complete 1X2 record. Independent medians
+            # per outcome create a synthetic cross-bookmaker market.
+            selected = min(coherent, key=lambda record: str(record.get("bookmaker", "")))
+            home = selected["home_odds"]
+            draw = selected["draw_odds"]
+            away = selected["away_odds"]
             h_prob, d_prob, a_prob = devig_probabilities(home, draw, away)
 
             session.add(
@@ -220,7 +228,7 @@ async def _capture_due_fixtures(session: Any) -> dict[str, int]:
                     canonical_fixture_id=None,  # ADR-0004 addendum — no populated canonical_fixtures row exists yet
                     match_id=match.id,
                     provider="the_odds_api",
-                    bookmaker="consensus",
+                    bookmaker=str(selected.get("bookmaker") or "unknown"),
                     market_type="1X2",
                     home_odds=home,
                     draw_odds=draw,
@@ -232,7 +240,12 @@ async def _capture_due_fixtures(session: Any) -> dict[str, int]:
                     captured_at=datetime.now(timezone.utc),
                     coherent=True,
                     executable=False,
-                    provenance={"source": "the_odds_api", "bookmaker_count": len(coherent)},
+                    provenance={
+                        "source": "the_odds_api",
+                        "bookmaker": selected.get("bookmaker"),
+                        "provider_event_id": selected.get("provider_event_id"),
+                        "captured_at": selected.get("captured_at"),
+                    },
                 )
             )
             counts["captured"] += 1

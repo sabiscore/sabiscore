@@ -121,7 +121,8 @@ export const fullMatchAnalysisSchema = z
       concentration: z.number(),
       credible_interval: z.tuple([z.number(), z.number()]),
       confidence_tier: z.string(),
-    }),
+    }).nullable(),
+    model_drivers: z.array(z.string()),
     causal_drivers: z.array(z.string()),
     rl_recommendation: z.object({
       stake_fraction: z.number().min(0),
@@ -136,7 +137,7 @@ export const fullMatchAnalysisSchema = z
       home_elo_trend_5: z.number(),
       away_elo_trend_5: z.number(),
       elo_momentum_cross: z.number(),
-    }),
+    }).nullable(),
     odds_edge: z
       .object({
         market: z.string(),
@@ -157,6 +158,13 @@ export const fullMatchAnalysisSchema = z
     actionability: actionabilitySchema.nullable(),
     match_importance_score: z.number().nullable().optional(),
     competition_stage: z.string().nullable().optional(),
+    home_team: z.string().nullable().optional(),
+    away_team: z.string().nullable().optional(),
+    league: z.string().nullable().optional(),
+    kickoff_utc: z.string().datetime({ offset: true }).nullable().optional(),
+    fixture_verified: z.boolean().nullable().optional(),
+    field_availability: z.record(z.boolean()).default({}),
+    unavailable_reasons: z.record(z.string()).default({}),
     generated_at: z.string().datetime({ offset: true }),
     phase9_candidate_features: phase9CandidateSchema.nullable().optional(),
     // Backend declares Optional[bool] = None (schemas/full_analysis.py): null when
@@ -255,7 +263,9 @@ export const fullMatchAnalysisSchema = z
       (blocked ||
         !["ACTIONABLE", "HIGH_CONVICTION"].includes(value.verdict) ||
         value.rl_recommendation.abstain ||
-        value.rl_recommendation.stake_fraction <= 0)
+        value.rl_recommendation.stake_fraction <= 0 ||
+        value.uncertainty === null ||
+        value.fixture_verified !== true)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

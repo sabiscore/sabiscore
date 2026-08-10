@@ -1,9 +1,66 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-07-20
+Last reviewed: 2026-08-10
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## Fresh Apex activation evidence from 2026-08-10
+
+- Branch `feat/market-odds-features` remains a dirty integration checkout. The
+  unrelated `data/cache/football_data/E0_2324.csv` change is preserved and must
+  not enter a release commit.
+- Generated model files are quarantined under `backend/models/candidate/` with
+  `UNVERIFIED_CANDIDATE` status and promotion disabled. Active v5 binaries were
+  restored to the checked-in generation.
+- External caller probabilities, missing uncertainty/calibration/freshness, bad
+  simplexes, incoherent odds, and failed feature projection now fail closed. A
+  projection exception does not run inference on a zero/default vector.
+- One lifespan-scoped odds service and coherent request snapshot now feed
+  features, full analysis, edge, CLV capture, and provenance.
+- Full analysis is the authoritative match-page contract. The legacy insights
+  error was removed; uncertainty/Elo are nullable; `model_drivers` is preferred;
+  verified fixture identity is required for public staking.
+- The homepage prioritizes verified fixtures and renders model claims from
+  `/models/status`. Hypothetical entry is visibly secondary and non-executable.
+- Codex discovery validation reports 40 canonical skills and `.agents/skills`
+  resolves to `.ai/skills`. A Codex/VS Code restart may be needed to refresh the
+  selector after the junction is created.
+- Backend: `1259 passed, 13 skipped`; focused post-suite hardening tests passed.
+  Repository-wide Ruff now passes. Repository-wide mypy still exposes existing
+  SQLAlchemy and legacy typing debt.
+- Frontend: lint, type-check, 17 Vitest files / 118 tests, and the Next.js
+  15.5.19 production build passed. Playwright passed 36/36 desktop/mobile tests,
+  including route overflow, keyboard, verified-fixture, and decision-state flows.
+- OpenAPI verification passed with 78 paths. Alembic has one head
+  (`0006_canonical_league_ids`). Production `alembic check` cannot run from this
+  host because the configured Render-internal PostgreSQL hostname does not
+  resolve externally; SQLite fallback was not used.
+- `docker compose -f docker-compose.prod.yml config --quiet` passed. Image builds
+  are blocked because the Docker Desktop Linux daemon is not running.
+- Gitleaks scanned the full current worktree (~309.87 MB) with no leaks. Full Git
+  history still contains two redacted `backend/.env.example` findings: an old
+  `SECRET_KEY` and `API_FOOTBALL_KEY`. They were not ignored because rotation is
+  not proven.
+- The supplied Render log shows an invalid Redis URL causing the deployed server
+  to crash before bind. Code now degrades safely for malformed URLs, but the
+  exposed credential must still be rotated and Render must receive a valid
+  `redis://` or `rediss://` secret before release.
+- Live proof is not coherent. Direct Render readiness/provider/fixture/model
+  probes timed out. `sabiscore.vercel.app/api/health` returned 404. The responding
+  `web-lac-theta-42.vercel.app` deployment reports frontend SHA `1769b13`, still
+  publishes hardcoded accuracy/Brier/RPS fields, and returns 404 for the new model
+  status proxy. Its cached backend readiness says DB/cache/models ready and one
+  La Liga capability verified; a full-analysis request returned `AVAILABLE` but
+  correctly kept stake disabled with one critical gap. No backend SHA was exposed.
+- The model-artifact workflow now validates the actual `backend/models` artifacts,
+  both production loaders, fixture sensitivity, and the closed candidate promotion
+  manifest instead of generating dummy models in the wrong directory.
+
+Release decision: **NOT SAFE FOR PRODUCTION** until credential rotation, valid
+Redis/PostgreSQL checks, Docker/CI gates, candidate certification (or explicit
+continued use of the last known-good artifacts), live provider flow, coherent
+deployment SHAs, and a rollback rehearsal are proven.
 
 ## Confirmed in the supplied control file
 

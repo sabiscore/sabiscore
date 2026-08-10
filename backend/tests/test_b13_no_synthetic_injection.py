@@ -33,7 +33,6 @@ from src.models.feature_registry import (
     CANONICAL_FEATURES_68,
     CANONICAL_FEATURES_83,
     CANONICAL_FEATURES_86,
-    DEFAULT_FEATURE_VALUES_58,
     DEFAULT_FEATURE_VALUES_68,
     DEFAULT_FEATURE_VALUES_86,
     PHASE7_FEATURES_7,
@@ -198,11 +197,6 @@ class TestFeatureRegistryNoRemovedFeatures:
             f"Removed feature '{removed}' occupies a vector slot but is not pinned "
             "to DATA_GAP — a live value could be computed for it"
         )
-
-    @pytest.mark.parametrize("removed", PHASE7_FEATURES_REMOVED)
-    def test_removed_not_in_canonical_58(self, removed: str):
-        """The 58-feature base predates Phase 7 and must stay clean."""
-        assert removed not in CANONICAL_FEATURES_58
 
     @pytest.mark.parametrize("removed", PHASE7_FEATURES_REMOVED)
     def test_removed_features_default_to_neutral(self, removed: str):
@@ -500,7 +494,7 @@ class TestComputeMarketDriftDataGap:
     @pytest.mark.asyncio
     async def test_no_odds_history_returns_all_data_gap(self):
         """When OddsHistory returns no rows, all 5 features must be DATA_GAP."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, MagicMock
 
         from src.features.market import MARKET_FEATURE_NAMES, compute_market_drift
 

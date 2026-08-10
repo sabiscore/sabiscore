@@ -59,8 +59,13 @@ def _is_fallback_prediction(predictions: Dict[str, Any]) -> bool:
 class UpcomingMatchService:
     """Fetch upcoming matches with cache and resilient fallback chain."""
 
-    def __init__(self, api_client: Optional[FootballDataAPIClient] = None):
+    def __init__(
+        self,
+        api_client: Optional[FootballDataAPIClient] = None,
+        odds_service: Optional[OddsService] = None,
+    ):
         self.api_client = api_client or FootballDataAPIClient()
+        self.odds_service = odds_service or OddsService()
 
     async def get_upcoming_matches(
         self,
@@ -198,9 +203,9 @@ class UpcomingMatchService:
             return cached
 
         # Initialize services
-        feature_projector = UpcomingMatchFeatureProjector()
+        feature_projector = UpcomingMatchFeatureProjector(odds_service=self.odds_service)
         prediction_engine = PredictionEngine()
-        odds_service = OddsService()
+        odds_service = self.odds_service
 
         # Get base upcoming matches
         try:

@@ -4,7 +4,7 @@ from src.core.cache import RedisCache
 
 @pytest.fixture
 def mocked_cache():
-    with patch('src.core.cache.redis.Redis') as mock_redis:
+    with patch('src.core.cache.redis.Redis'):
         cache = RedisCache()
         cache._enabled = True  # Force enable
         cache._redis_available = True  # Mark as available

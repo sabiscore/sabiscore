@@ -21,12 +21,12 @@ class CertifiedModelInput(BaseModel):
     home_probability: float = Field(..., ge=0.0, le=1.0)
     draw_probability: float = Field(..., ge=0.0, le=1.0)
     away_probability: float = Field(..., ge=0.0, le=1.0)
-    model_version: str = "certified-v1"
-    calibration_method: str = "backend_calibrated"
-    calibration_validated: bool = True
-    epistemic_uncertainty: float = Field(default=0.12, ge=0.0)
-    aleatoric_uncertainty: float = Field(default=0.18, ge=0.0)
-    confidence_tier: Literal["OK", "LOW_EVIDENCE"] = "OK"
+    model_version: str | None = None
+    calibration_method: str | None = None
+    calibration_validated: bool | None = None
+    epistemic_uncertainty: float | None = Field(default=None, ge=0.0)
+    aleatoric_uncertainty: float | None = Field(default=None, ge=0.0)
+    confidence_tier: Literal["OK", "LOW_EVIDENCE"] | None = None
 
 
 class CertifiedMarketInput(BaseModel):
@@ -54,17 +54,17 @@ class CertifiedSignalsInput(BaseModel):
 
 
 class CertifiedFreshnessInput(BaseModel):
-    model_features_seconds: int | None = 0
-    market_seconds: int | None = 0
+    model_features_seconds: int | None = None
+    market_seconds: int | None = None
     injury_news_seconds: int | None = None
     lineup_seconds: int | None = None
 
 
 class CertifiedSourceStatusInput(BaseModel):
-    model: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "VERIFIED"
-    market: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "VERIFIED"
-    team_metrics: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "VERIFIED"
-    availability: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "VERIFIED"
+    model: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "DATA_GAP"
+    market: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "DATA_GAP"
+    team_metrics: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "DATA_GAP"
+    availability: Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"] = "DATA_GAP"
 
 
 class CertifiedPredictionRequest(BaseModel):
@@ -92,10 +92,10 @@ async def analyze_prediction(
     request: CertifiedPredictionRequest,
     db: AsyncSession = Depends(get_async_session),
 ) -> MatchAnalysisResult:
-    """Analyze one match using backend-owned model, market, EV, and Kelly contracts."""
+    """Evaluate untrusted caller input without certifying it for execution."""
     try:
         service = CertifiedAnalyticsService(db)
-        return await service.analyze_payload(request.model_dump())
+        return await service.analyze_payload(request.model_dump(), trusted_backend=False)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

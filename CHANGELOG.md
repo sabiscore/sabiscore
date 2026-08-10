@@ -5,6 +5,47 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Apex activation hardening (2026-08-10)
+
+- Made caller-supplied `/api/v1/predictions/analyze` probabilities explicitly
+  external and unverified. They now fail closed with
+  `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and zero stake.
+- Removed optimistic calibration, freshness, uncertainty, and source defaults;
+  invalid probability simplexes are rejected rather than normalized.
+- Reused one lifespan-scoped odds provider and one coherent bookmaker snapshot
+  through feature projection, market comparison, CLV capture, and evidence
+  display. Malformed, incomplete, stale, or cross-bookmaker 1X2 inputs fail
+  closed.
+- Stopped full analysis from running model inference after feature projection
+  failure. Nullable uncertainty and Elo fields replace probability-derived or
+  1500-point placeholders.
+- Added central DSN/API-key/authorization redaction and bounded metrics for
+  prediction availability, evidence completeness, abstention, calibration,
+  provider outcomes, cache/circuit state, and latency.
+- Added truthful model-governance metadata and a frontend proxy. The homepage
+  now starts with verified fixtures, places hypothetical matchups in a visible
+  non-executable disclosure, and no longer hardcodes corpus, calibration,
+  feature-count, or readiness claims.
+- Added keyboard-complete combobox/dialog behavior, 44px targets, explicit
+  non-color verdict cues, and nullable evidence rendering.
+- Kept active v5 artifacts unchanged and quarantined the current generated files
+  under `backend/models/candidate/` with `promotion_permitted: false`. A new
+  Apex candidate schema and chronological training/calibration pipeline exist,
+  but no candidate is certified or promoted by this change.
+- Repaired Codex skill discovery so `.agents/skills` resolves to the canonical
+  `.ai/skills` registry and added a 40-skill validation check.
+- Render builds now verify required active artifact pairs and no longer list the
+  source tree or mask copy failures. An invalid `REDIS_URL` degrades safely
+  instead of crashing import, but production still requires operator rotation
+  and a valid `redis://` or `rediss://` value.
+
+Validation completed locally: backend `1259 passed, 13 skipped`; frontend
+Vitest `118 passed`; lint, type-check, Next.js production build, 78-path OpenAPI,
+active artifact verification, NEXUS discovery, and production Compose config
+passed. Docker image builds, production Alembic connectivity, credential
+rotation, candidate model certification, and live same-SHA deployment proof
+remain release blockers.
+
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 
 vΩ.46's retrained artifacts shipped `"meta_model": None`. Every boot of the new

@@ -269,10 +269,9 @@ export function TeamAutocomplete({
       setHighlightedIndex(-1);
     }
     
-    // Tab to first/highlighted option
-    if (event.key === "Tab" && isOpen && allDisplayedOptions.length > 0) {
-      const idx = highlightedIndex >= 0 ? highlightedIndex : 0;
-      handleSelect(allDisplayedOptions[idx]);
+    if (event.key === "Tab") {
+      setIsOpen(false);
+      setHighlightedIndex(-1);
     }
   };
 
@@ -295,13 +294,22 @@ export function TeamAutocomplete({
             placeholder={placeholder}
             disabled={disabled}
             autoComplete="off"
-            className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={isOpen}
+            aria-controls={`team-listbox-${uid}`}
+            aria-activedescendant={
+              highlightedIndex >= 0 ? `team-option-${uid}-${highlightedIndex}` : undefined
+            }
+            className="min-h-11 w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
         {isOpen && allDisplayedOptions.length > 0 && (
           <div
             ref={listRef as unknown as React.RefObject<HTMLDivElement>}
             id={`team-listbox-${uid}`}
+            role="listbox"
+            aria-label={`${label} options`}
             className="absolute z-20 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-slate-700 bg-slate-900/95 shadow-xl backdrop-blur-sm"
           >
             {/* Recent Teams Section */}
@@ -317,9 +325,11 @@ export function TeamAutocomplete({
                     <div
                       key={`recent-${team}`}
                       id={`team-option-${uid}-${index}`}
+                      role="option"
+                      aria-selected={highlightedIndex === index}
                       tabIndex={-1}
                       title={team}
-                      className={`cursor-pointer px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${
+                      className={`flex min-h-11 cursor-pointer items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                         highlightedIndex === index
                           ? "bg-indigo-600 text-white"
                           : "text-slate-200 hover:bg-slate-800"
@@ -358,9 +368,11 @@ export function TeamAutocomplete({
                     <div
                       key={team}
                       id={`team-option-${uid}-${index}`}
+                      role="option"
+                      aria-selected={highlightedIndex === index}
                       tabIndex={-1}
                       title={team}
-                      className={`cursor-pointer px-4 py-2.5 text-sm transition-colors ${
+                      className={`flex min-h-11 cursor-pointer items-center px-4 py-2.5 text-sm transition-colors ${
                         highlightedIndex === index
                           ? "bg-indigo-600 text-white"
                           : "text-slate-200 hover:bg-slate-800"

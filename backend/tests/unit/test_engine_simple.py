@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 def test_engine_basic_flow():
     """Core engine workflow: no evidence from the aggregator means no insights."""

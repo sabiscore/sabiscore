@@ -1,0 +1,34 @@
+{
+  "status": "UNVERIFIED_CANDIDATE",
+  "promotion_permitted": false,
+  "reason": "Temporal walk-forward, independent calibration slice, and untouched final-season certification are incomplete.",
+  "feature_count": 68,
+  "served_head_report_key": "stacked",
+  "artifacts": {
+    "BUNDESLIGA": {
+      "file": "bundesliga_ensemble_v5_phase7.pkl",
+      "sha256": "e39c574c90fc42d2c5b32e3d2749356d6a2d5469f3a9517f0aa95cb1d5df5c8a"
+    },
+    "EPL": {
+      "file": "epl_ensemble_v5_phase7.pkl",
+      "sha256": "b2f5dba3e5461088311855d437e1f288c8dc2679207e875d26a1918d12b3b7bc"
+    },
+    "EREDIVISIE": {
+      "file": "eredivisie_ensemble_v5_phase7.pkl",
+      "sha256": "ad5a20d20665aa189e759f259f2398e5fa6ca90f7c71e4c66d7fc2a147772888",
+      "coverage": "POOLED_FALLBACK"
+    },
+    "LA_LIGA": {
+      "file": "la_liga_ensemble_v5_phase7.pkl",
+      "sha256": "d63414533e74457c3e299e144125aa09087367176221e80122bd8490f3771d64"
+    },
+    "LIGUE_1": {
+      "file": "ligue_1_ensemble_v5_phase7.pkl",
+      "sha256": "423562a4dc5535e09fc56aa5462c995e45ed28d7d612b89ca792621ddff4eb98"
+    },
+    "SERIE_A": {
+      "file": "serie_a_ensemble_v5_phase7.pkl",
+      "sha256": "259253b37d1fe2eb04afd8456670ba7e8c8a4b078fa94ea810ceaebcc9ac260b"
+    }
+  }
+}

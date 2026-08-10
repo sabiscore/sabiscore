@@ -9,13 +9,14 @@ This document satisfies certification gate C-25 of the SABI-CORE vΩ.1 directive
 git log --oneline -10
 
 # Rollback to a specific commit (DESTRUCTIVE — loses local uncommitted changes)
-git reset --hard <known-good-sha>
-
-# Or, safer: create a revert commit that undoes a bad commit
+# Create a reviewed revert commit; never rewrite shared or protected history.
 git revert <bad-sha> --no-edit
 ```
 
-## Current certified commit
+## Historical examples only
+
+The SHAs below are historical records, not current certification. Read the
+last-known-good SHA from the successful deployment itself before any rollback.
 
 ```
 a6c4fe6  feat: SABI-CORE production hardening — zero-fabrication, provider ceilings, league policy
@@ -24,6 +25,17 @@ a6c4fe6  feat: SABI-CORE production hardening — zero-fabrication, provider cei
 Previous stable commit: `a5a94f9 feat: finalize production data intelligence workflow`
 
 ---
+
+## Model artifact rollback
+
+1. Read the active release manifest and verify its hashes before promotion.
+2. Retain the prior manifest and artifacts as an immutable last-known-good set.
+3. Atomically switch the active manifest to the prior set; do not copy individual
+   model files across generations.
+4. Run `python backend/scripts/verify_active_artifacts.py` and both-loader smoke
+   tests, restart the backend, and verify `/health/ready` plus `/models/status`.
+5. Record the restored model version and hash, then restore the newer manifest
+   only after the incident is resolved and the same gates pass.
 
 ## Service-level rollback
 

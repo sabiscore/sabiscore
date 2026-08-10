@@ -15,13 +15,18 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, Match, Team
-from src.models.feature_registry import PHASE7_FEATURES_7, PHASE7_FEATURES_ALWAYS_DATA_GAP
+from src.models.feature_registry import (
+    MARKET_FEATURES_14,
+    PHASE7_FEATURES_7,
+    PHASE7_FEATURES_ALWAYS_DATA_GAP,
+)
 from src.services.scraped_feature_store import ScrapedTeamFormStore
 from src.services.upcoming_match_feature_service import (
     _CALLER_RESOLVED_FEATURES,
@@ -252,6 +257,42 @@ async def test_shot_quality_diff_always_flagged(
         MATCH_DATE,
     )
     assert "shot_quality_diff" in result["data_gaps"]
+
+
+# ---------------------------------------------------------------------------
+# WP-A: market-odds features — honest gapping, same precedent as Elo/StatsBomb
+# ---------------------------------------------------------------------------
+
+
+async def test_market_features_rescued_from_gaps_when_odds_available(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    projector.odds_service.get_match_odds = AsyncMock(
+        return_value={"home_win": 2.0, "draw": 3.0, "away_win": 4.0, "source": "odds_api"}
+    )
+    result = await projector.project_match_features(
+        {"id": "m1", "home_team": "Home FC", "away_team": "Away FC", "league": "EPL"},
+        session,
+        MATCH_DATE,
+    )
+    for feature in MARKET_FEATURES_14:
+        assert feature not in result["data_gaps"], feature
+    assert result["features_dict"]["market_prob_home"] == pytest.approx(6 / 13)
+
+
+async def test_market_features_remain_gap_when_odds_unavailable(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    projector.odds_service.get_match_odds = AsyncMock(
+        return_value={"source": "unavailable", "reason": "coherent_1x2_market_snapshot_not_found"}
+    )
+    result = await projector.project_match_features(
+        {"id": "m1", "home_team": "Home FC", "away_team": "Away FC", "league": "EPL"},
+        session,
+        MATCH_DATE,
+    )
+    for feature in MARKET_FEATURES_14:
+        assert feature in result["data_gaps"], feature
 
 
 # ---------------------------------------------------------------------------

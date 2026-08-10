@@ -44,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-__all__ = ["SoftmaxMetaModel"]
+__all__ = ["SoftmaxMetaModel", "TemperatureScaledMetaModel"]
 
 
 class SoftmaxMetaModel:
@@ -112,3 +112,28 @@ class SoftmaxMetaModel:
             f"SoftmaxMetaModel(n_classes={self.coef_.shape[0]}, "
             f"n_features={self.coef_.shape[1]})"
         )
+
+
+class TemperatureScaledMetaModel:
+    """Repository-owned calibration wrapper fitted on a later temporal slice."""
+
+    def __init__(self, base_model: SoftmaxMetaModel, temperature: float) -> None:
+        if not np.isfinite(temperature) or temperature <= 0:
+            raise ValueError("temperature must be finite and positive")
+        self.base_model = base_model
+        self.temperature = float(temperature)
+        self.classes_ = base_model.classes_
+        self.feature_names_in_ = base_model.feature_names_in_
+
+    def predict_proba(self, X: Any) -> np.ndarray:
+        probabilities = self.base_model.predict_proba(X)
+        logits = np.log(np.clip(probabilities, 1e-12, 1.0)) / self.temperature
+        logits -= logits.max(axis=1, keepdims=True)
+        exp = np.exp(logits)
+        calibrated = exp / exp.sum(axis=1, keepdims=True)
+        if not np.all(np.isfinite(calibrated)):
+            raise ValueError("calibration produced non-finite probabilities")
+        return calibrated
+
+    def predict(self, X: Any) -> np.ndarray:
+        return self.classes_[np.argmax(self.predict_proba(X), axis=1)]

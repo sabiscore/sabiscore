@@ -24,12 +24,27 @@ def main() -> int:
     if not bridge.exists():
         fail(f"missing Codex discovery bridge: {bridge}")
         errors += 1
+    elif bridge.resolve() != canonical.resolve():
+        fail(
+            f"Codex discovery path must resolve to the canonical skill directory: "
+            f"{bridge.relative_to(root)} -> {canonical.relative_to(root)}"
+        )
+        errors += 1
 
     names: dict[str, Path] = {}
     skill_files = sorted(canonical.glob("*/SKILL.md"))
     if not skill_files:
         fail(f"no SKILL.md files found under {canonical}")
         return 1
+
+    if bridge.exists():
+        canonical_names = {path.parent.name for path in skill_files}
+        bridge_names = {path.parent.name for path in bridge.glob("*/SKILL.md")}
+        if bridge_names != canonical_names:
+            missing = sorted(canonical_names - bridge_names)
+            extra = sorted(bridge_names - canonical_names)
+            fail(f"Codex discovery mismatch: missing={missing}, extra={extra}")
+            errors += 1
 
     frontmatter_re = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
     name_re = re.compile(r"^name:\s*(\S.*?)\s*$", re.MULTILINE)

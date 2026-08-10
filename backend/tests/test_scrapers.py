@@ -6,7 +6,7 @@ Tests for the enhanced scraping infrastructure.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from datetime import datetime
 from typing import Any, Dict, Optional
 

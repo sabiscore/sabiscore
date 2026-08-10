@@ -13,6 +13,7 @@ import redis
 from redis.exceptions import RedisError
 
 from .config import settings
+from .redaction import redact_text, safe_endpoint
 
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class UpstashTier:
             self._available = True
             logger.info("Upstash (tier-2) connection established")
         except (RedisError, ConnectionError, TimeoutError) as exc:
-            logger.warning("Upstash unavailable, tier-2 disabled: %s", exc)
+            logger.warning("Upstash unavailable, tier-2 disabled: %s", redact_text(exc))
 
     # ── circuit breaker ────────────────────────────────────────────────────
     def _is_circuit_open(self) -> bool:
@@ -181,11 +182,11 @@ class RedisCache:
                 self.redis_client = client
                 self._redis_available = True
                 logger.info("Redis (tier-1) connection established successfully")
-            except (RedisError, ConnectionError, TimeoutError) as exc:
+            except (RedisError, ConnectionError, TimeoutError, ValueError) as exc:
                 logger.warning(
                     "Redis unavailable at %s, falling back through tier-2/3: %s",
-                    settings.redis_url,
-                    exc
+                    safe_endpoint(settings.redis_url),
+                    redact_text(exc),
                 )
                 logger.info(
                     "In-memory cache active with %d entry limit. "

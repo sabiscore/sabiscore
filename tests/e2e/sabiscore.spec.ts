@@ -4,11 +4,12 @@ import { test, expect } from '@playwright/test';
 // assertions target static shell chrome and mocked API responses so the
 // release gate never needs a live FastAPI backend.
 test.describe('SabiScore End-to-End', () => {
-  test('homepage renders hero with primary CTA into the workspace', async ({ page }) => {
+  test('homepage renders the verified-fixture primary workflow', async ({ page }) => {
     await page.goto('/');
 
+    await expect(page.getByRole('heading', { name: /Upcoming verified fixtures/i })).toBeVisible();
     await expect(
-      page.getByRole('link', { name: /See today's value picks/i }).first(),
+      page.getByRole('link', { name: /Review verified fixtures/i }).first(),
     ).toBeVisible();
   });
 

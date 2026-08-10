@@ -1,0 +1,110 @@
+{
+  "BUNDESLIGA": {
+    "accuracy": 0.5168918918918919,
+    "rps": 0.2038928630960394,
+    "brier": 0.6015489168099972,
+    "log_loss": 1.0168913363994738,
+    "n": 296,
+    "stacked": {
+      "accuracy": 0.5304054054054054,
+      "rps": 0.2018213072776531,
+      "brier": 0.5924722662780578,
+      "log_loss": 0.9913812931430676,
+      "n": 296
+    },
+    "train_n": 1756,
+    "responsive_features": 34,
+    "baseline_accuracy_home": 0.3885135135135135,
+    "baseline_rps_trainprior": 0.23595031281742251
+  },
+  "EPL": {
+    "accuracy": 0.5173333333333333,
+    "rps": 0.2034606471847445,
+    "brier": 0.5917279163000609,
+    "log_loss": 0.9899129240360638,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.5466666666666666,
+      "rps": 0.1978522178478724,
+      "brier": 0.5772675677872994,
+      "log_loss": 0.9711532675857794,
+      "n": 375
+    },
+    "train_n": 2196,
+    "responsive_features": 35,
+    "baseline_accuracy_home": 0.4106666666666667,
+    "baseline_rps_trainprior": 0.2353037357208503
+  },
+  "LA_LIGA": {
+    "accuracy": 0.5342105263157895,
+    "rps": 0.19634924761532102,
+    "brier": 0.5852500724740275,
+    "log_loss": 0.9805414778954649,
+    "n": 380,
+    "stacked": {
+      "accuracy": 0.55,
+      "rps": 0.19019302369290345,
+      "brier": 0.5672194376036725,
+      "log_loss": 0.9557069263546966,
+      "n": 380
+    },
+    "train_n": 2192,
+    "responsive_features": 34,
+    "baseline_accuracy_home": 0.44473684210526315,
+    "baseline_rps_trainprior": 0.22876527114804365
+  },
+  "LIGUE_1": {
+    "accuracy": 0.5522875816993464,
+    "rps": 0.2118106031483188,
+    "brier": 0.5939185768480664,
+    "log_loss": 1.0103573167003879,
+    "n": 306,
+    "stacked": {
+      "accuracy": 0.565359477124183,
+      "rps": 0.20718438723157823,
+      "brier": 0.5776867764798297,
+      "log_loss": 0.9747959364951999,
+      "n": 306
+    },
+    "train_n": 1943,
+    "responsive_features": 35,
+    "baseline_accuracy_home": 0.4673202614379085,
+    "baseline_rps_trainprior": 0.23608777001121217
+  },
+  "SERIE_A": {
+    "accuracy": 0.5253333333333333,
+    "rps": 0.18654003538239872,
+    "brier": 0.5759021759150564,
+    "log_loss": 0.9636570168006707,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.528,
+      "rps": 0.18653801300587453,
+      "brier": 0.5731641007942359,
+      "log_loss": 0.9608941722811939,
+      "n": 375
+    },
+    "train_n": 2181,
+    "responsive_features": 34,
+    "baseline_accuracy_home": 0.3973333333333333,
+    "baseline_rps_trainprior": 0.22862086112798186
+  },
+  "POOLED": {
+    "accuracy": 0.5375288683602771,
+    "rps": 0.19630514746655006,
+    "brier": 0.5789811212851399,
+    "log_loss": 0.9737446331110392,
+    "n": 1732,
+    "stacked": {
+      "accuracy": 0.5386836027713626,
+      "rps": 0.1951857115748458,
+      "brier": 0.5752870439243032,
+      "log_loss": 0.9674868713631679,
+      "n": 1732
+    },
+    "train_n": 10528,
+    "responsive_features": 43,
+    "baseline_accuracy_home": 0.4214780600461894,
+    "baseline_rps_trainprior": 0.2327081633568691
+  }
+}

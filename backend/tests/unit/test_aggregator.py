@@ -1,10 +1,8 @@
 """Tests for data aggregation module with fallback scenarios."""
-import pytest
 from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from src.data.aggregator import DataAggregator
-from src.core.config import settings
 
 
 def test_aggregator_with_live_data():

@@ -182,10 +182,11 @@ class FullMatchAnalysisResponse:
     match_id: str
     verdict: str                             # HIGH_CONVICTION|ACTIONABLE|SPECULATIVE|HOLD|NO_BET|PARTIAL
     ensemble: EnsemblePrediction
-    uncertainty: UncertaintyBreakdown
+    uncertainty: Optional[UncertaintyBreakdown]
+    model_drivers: List[str]
     causal_drivers: List[str]
     rl_recommendation: RLRecommendationPayload
-    elo_context: EloContext
+    elo_context: Optional[EloContext]
     odds_edge: Optional[OddsEdge]
     narrative: str                           # B11: ≤280 chars
     partial_intelligence: bool              # True only for critical gaps/conflicts
@@ -205,6 +206,13 @@ class FullMatchAnalysisResponse:
     # Phase F: UCL + high-stakes metadata (populated in full_analysis.py from features_dict)
     match_importance_score: Optional[float] = field(default=None)
     competition_stage: Optional[str] = field(default=None)
+    home_team: Optional[str] = field(default=None)
+    away_team: Optional[str] = field(default=None)
+    league: Optional[str] = field(default=None)
+    kickoff_utc: Optional[str] = field(default=None)
+    fixture_verified: Optional[bool] = field(default=None)
+    field_availability: dict = field(default_factory=dict)
+    unavailable_reasons: dict = field(default_factory=dict)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
@@ -244,13 +252,18 @@ class FullMatchAnalysisResponse:
                 "overlay_applied": self.ensemble.overlay_applied,
                 "probabilities_available": self.probabilities_available,
             },
-            "uncertainty": {
-                "epistemic_unc": self.uncertainty.epistemic_unc,
-                "aleatoric_unc": self.uncertainty.aleatoric_unc,
-                "concentration": self.uncertainty.concentration,
-                "credible_interval": list(self.uncertainty.credible_interval),
-                "confidence_tier": self.uncertainty.confidence_tier,
-            },
+            "uncertainty": (
+                {
+                    "epistemic_unc": self.uncertainty.epistemic_unc,
+                    "aleatoric_unc": self.uncertainty.aleatoric_unc,
+                    "concentration": self.uncertainty.concentration,
+                    "credible_interval": list(self.uncertainty.credible_interval),
+                    "confidence_tier": self.uncertainty.confidence_tier,
+                }
+                if self.uncertainty is not None
+                else None
+            ),
+            "model_drivers": self.model_drivers,
             "causal_drivers": self.causal_drivers,
             "rl_recommendation": {
                 "stake_fraction": self.rl_recommendation.stake_fraction,
@@ -258,14 +271,18 @@ class FullMatchAnalysisResponse:
                 "reason": self.rl_recommendation.reason,
                 "reward_components": self.rl_recommendation.reward_components,
             },
-            "elo_context": {
-                "home_elo": self.elo_context.home_elo,
-                "away_elo": self.elo_context.away_elo,
-                "elo_difference": self.elo_context.elo_difference,
-                "home_elo_trend_5": self.elo_context.home_elo_trend_5,
-                "away_elo_trend_5": self.elo_context.away_elo_trend_5,
-                "elo_momentum_cross": self.elo_context.elo_momentum_cross,
-            },
+            "elo_context": (
+                {
+                    "home_elo": self.elo_context.home_elo,
+                    "away_elo": self.elo_context.away_elo,
+                    "elo_difference": self.elo_context.elo_difference,
+                    "home_elo_trend_5": self.elo_context.home_elo_trend_5,
+                    "away_elo_trend_5": self.elo_context.away_elo_trend_5,
+                    "elo_momentum_cross": self.elo_context.elo_momentum_cross,
+                }
+                if self.elo_context is not None
+                else None
+            ),
             "odds_edge": (
                 {
                     "market": self.odds_edge.market,
@@ -302,6 +319,13 @@ class FullMatchAnalysisResponse:
             # Phase F: UCL + high-stakes metadata
             "match_importance_score": self.match_importance_score,
             "competition_stage": self.competition_stage,
+            "home_team": self.home_team,
+            "away_team": self.away_team,
+            "league": self.league,
+            "kickoff_utc": self.kickoff_utc,
+            "fixture_verified": self.fixture_verified,
+            "field_availability": self.field_availability,
+            "unavailable_reasons": self.unavailable_reasons,
             "generated_at": self.generated_at.isoformat(),
         }
 
@@ -325,10 +349,10 @@ class IntelligenceSynthesizer:
         self,
         match_id: str,
         ensemble: EnsemblePrediction,
-        uncertainty: UncertaintyBreakdown,
+        uncertainty: Optional[UncertaintyBreakdown],
         causal_results: List[CausalFeatureResult],
         rl_rec: RLRecommendationPayload,
-        elo_ctx: EloContext,
+        elo_ctx: Optional[EloContext],
         odds_edge: Optional[OddsEdge] = None,
         data_gaps: Optional[List[str]] = None,
         actionability: Optional[MatchActionability] = None,
@@ -370,6 +394,7 @@ class IntelligenceSynthesizer:
         effective_kelly_cap = round(max(0.0, min(0.05, effective_kelly_cap)), 6)
         stake_permitted = bool(
             probabilities_available
+            and kwargs.get("fixture_verified") is True
             and not partial
             and verdict in {"ACTIONABLE", "HIGH_CONVICTION"}
             and not rl_rec.abstain
@@ -415,7 +440,7 @@ class IntelligenceSynthesizer:
             narrative = "Watchlist only — no stake is permitted."
         elif verdict in {"HOLD", "NO_BET"}:
             narrative = "No bet — the public stake gate is closed."
-        else:
+        elif uncertainty is not None and elo_ctx is not None:
             narrative = self._compose_narrative(
                 ensemble=ensemble,
                 uncertainty=uncertainty,
@@ -425,6 +450,8 @@ class IntelligenceSynthesizer:
                 rl_rec=rl_rec,
                 phase8_ctx=phase8_ctx,
             )
+        else:
+            narrative = "No bet â€” measured model evidence is unavailable."
 
         staleness = int(kwargs.get("staleness_seconds", 0))
         staleness_available = bool(kwargs.get("staleness_available", True))
@@ -446,6 +473,7 @@ class IntelligenceSynthesizer:
             verdict=verdict,
             ensemble=ensemble,
             uncertainty=uncertainty,
+            model_drivers=active_drivers,
             causal_drivers=active_drivers,
             rl_recommendation=rl_rec,
             elo_context=elo_ctx,
@@ -467,6 +495,13 @@ class IntelligenceSynthesizer:
             actionability=actionability,
             match_importance_score=match_importance_score,
             competition_stage=competition_stage,
+            home_team=kwargs.get("home_team"),
+            away_team=kwargs.get("away_team"),
+            league=kwargs.get("league") or ensemble.league,
+            kickoff_utc=kwargs.get("kickoff_utc"),
+            fixture_verified=kwargs.get("fixture_verified"),
+            field_availability=dict(kwargs.get("field_availability") or {}),
+            unavailable_reasons=dict(kwargs.get("unavailable_reasons") or {}),
         )
 
     # ------------------------------------------------------------------
@@ -476,7 +511,7 @@ class IntelligenceSynthesizer:
     def _compute_verdict(
         self,
         ensemble: EnsemblePrediction,
-        uncertainty: UncertaintyBreakdown,
+        uncertainty: Optional[UncertaintyBreakdown],
         active_drivers: List[str],
         rl_rec: RLRecommendationPayload,
         partial: bool,
@@ -484,6 +519,9 @@ class IntelligenceSynthesizer:
         # PARTIAL takes priority — analysis is incomplete (B13).
         if partial:
             return "PARTIAL"
+
+        if uncertainty is None:
+            return "HOLD"
 
         tier_ok = uncertainty.confidence_tier == "OK"
         abstains = rl_rec.abstain

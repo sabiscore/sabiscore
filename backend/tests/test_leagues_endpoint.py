@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.api.endpoints.leagues import LeagueListItem, _to_item, list_leagues
-from src.core.league_config import ACTIVE_LEAGUES, LEAGUE_BY_ID
+from src.core.league_config import ACTIVE_LEAGUES
 
 
 @pytest.mark.asyncio

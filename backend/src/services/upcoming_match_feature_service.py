@@ -44,12 +44,14 @@ from ..models.feature_registry import (
     COMBINATION_FEATURES,
     LEAGUE_ONEHOT_FEATURES,
     LEAGUE_RATE_FEATURES,
+    MARKET_FEATURES_14,
     TEMPORAL_FEATURES,
     active_canonical_features,
     active_default_feature_values,
     derive_combination_features,
     derive_last5_form_features,
     derive_league_features,
+    derive_market_features,
     derive_temporal_features,
 )
 from ..utils.season import canonical_season
@@ -140,7 +142,7 @@ _AWAY_REMAP_FEATURES = frozenset({
 class UpcomingMatchFeatureProjector:
     """Project upcoming matches to canonical feature space (68 or 86 dimensions)."""
 
-    def __init__(self) -> None:
+    def __init__(self, odds_service: OddsService | None = None) -> None:
         self._use_phase8 = settings.phase8_enabled
         self.canonical_features = active_canonical_features(
             use_phase7=settings.use_phase7_models,
@@ -158,7 +160,7 @@ class UpcomingMatchFeatureProjector:
         self.berrar_engine = BerrarRatingSystem(
             parquet_path=settings.berrar_ratings_parquet_path
         )
-        self.odds_service = OddsService()
+        self.odds_service = odds_service or OddsService()
         self.scraped_form_store = ScrapedTeamFormStore()
 
     async def project_match_features(
@@ -296,6 +298,28 @@ class UpcomingMatchFeatureProjector:
             ))
             derived_resolved.update(COMBINATION_FEATURES)
 
+        # WP-A: 14 canonical market-odds features (market_prob_home, ev_home,
+        # ...). Unconditional — unlike combination features, odds don't need
+        # either side's history resolved, and are often the single most
+        # valuable signal on a reduced-evidence fixture. OddsService already
+        # caches this lookup (120s/league board, 300s/fixture — odds_service.py),
+        # so a second call from full_analysis.py's _fetch_market_odds() for the
+        # same fixture in the same request costs no extra provider quota.
+        # get_match_odds() normalizes the league via canonical_league_id()
+        # internally and never raises for an unsupported competition — no
+        # extra normalization needed here.
+        odds = await self.odds_service.get_match_odds(
+            match_dict["home_team"], match_dict["away_team"], match_dict.get("league") or "",
+        )
+        if {"home_win", "draw", "away_win"}.issubset(odds):
+            features_dict.update(derive_market_features(
+                odds["home_win"], odds["draw"], odds["away_win"],
+            ))
+            derived_resolved.update(MARKET_FEATURES_14)
+        # else: leave features_dict at its DEFAULT_FEATURE_VALUES_68 seed for
+        # these 14 keys — they fall through to data_gaps below, same honest-gap
+        # treatment Elo/StatsBomb already get.
+
         features_array = np.array(
             [features_dict.get(f, self.defaults.get(f, 0.0)) for f in self.canonical_features],
             dtype=np.float32,
@@ -385,6 +409,9 @@ class UpcomingMatchFeatureProjector:
             "model_input_staleness_seconds": _model_input_staleness_seconds(
                 home_stats, away_stats
             ),
+            "odds_snapshot": odds,
+            "odds": odds if {"home_win", "draw", "away_win"}.issubset(odds) else None,
+            "market_snapshot_acquired": True,
         }
 
     async def build_live_feature_vector(
@@ -455,6 +482,7 @@ class UpcomingMatchFeatureProjector:
             db=db,
             match_date=match_date,
             competition_stage=match_competition_stage,
+            current_odds=projected.get("odds_snapshot"),
         )
 
         features = np.array(
@@ -494,11 +522,15 @@ class UpcomingMatchFeatureProjector:
             # the fixture — full_analysis.py needs them for the odds fetch.
             "home_team": projected.get("home_team"),
             "away_team": projected.get("away_team"),
+            "odds": projected.get("odds"),
+            "market_snapshot_acquired": bool(projected.get("market_snapshot_acquired")),
             "feature_freshness_seconds": phase8_freshness,
             "feature_source": phase8_sources,
             "data_quality": dict(projected.get("data_quality") or {}),
             "identity_resolution": identity_resolution,
             "fixture_identity_verified": fixture_identity_verified,
+            "elo_context": elo if elo.resolved else None,
+            "kickoff_utc": match_date.isoformat(),
             "is_reduced_evidence_baseline": bool(
                 (projected.get("data_quality") or {}).get("is_synthetic", False)
             ),
@@ -580,6 +612,7 @@ class UpcomingMatchFeatureProjector:
             match_id=synthetic_match_id,
             db=db,
             match_date=match_date,
+            current_odds=projected.get("odds_snapshot"),
         )
 
         features = np.array(
@@ -619,11 +652,15 @@ class UpcomingMatchFeatureProjector:
             # the fixture — full_analysis.py needs them for the odds fetch.
             "home_team": projected.get("home_team"),
             "away_team": projected.get("away_team"),
+            "odds": projected.get("odds"),
+            "market_snapshot_acquired": bool(projected.get("market_snapshot_acquired")),
             "feature_freshness_seconds": phase8_freshness,
             "feature_source": phase8_sources,
             "data_quality": dict(projected.get("data_quality") or {}),
             "identity_resolution": identity_resolution,
             "fixture_identity_verified": fixture_identity_verified,
+            "elo_context": elo if elo.resolved else None,
+            "kickoff_utc": match_date.isoformat(),
             "is_reduced_evidence_baseline": bool(
                 (projected.get("data_quality") or {}).get("is_synthetic", False)
             ),
@@ -641,6 +678,7 @@ class UpcomingMatchFeatureProjector:
         db: AsyncSession,
         match_date: datetime,
         competition_stage: str = "group",
+        current_odds: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[str], Dict[str, Optional[int]], Dict[str, str]]:
         """Inject Phase 8 features into features_dict in-place.
 
@@ -749,7 +787,8 @@ class UpcomingMatchFeatureProjector:
 
         # ── Market drift (Phase 8 P1 live enrichment) ─────────────────────────
         try:
-            current_odds = await self.odds_service.get_match_odds(home_team, away_team, league)
+            if current_odds is None:
+                current_odds = await self.odds_service.get_match_odds(home_team, away_team, league)
             drift_result = await compute_market_drift(
                 current_odds=current_odds,
                 match_id=match_id,

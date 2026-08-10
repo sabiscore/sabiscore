@@ -8,9 +8,7 @@ import time
 import pytest
 
 from src.api.endpoints.sources import (
-    SourceFreshnessItem,
     _last_checked,
-    _LIVE_THRESHOLD_S,
     _RECENT_THRESHOLD_S,
     _freshness_status,
     get_sources_freshness,

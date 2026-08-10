@@ -50,6 +50,7 @@ function payload(overrides: Record<string, unknown> = {}) {
       credible_interval: [0.42, 0.58],
       confidence_tier: "OK",
     },
+    model_drivers: ["elo_difference"],
     causal_drivers: ["elo_difference"],
     rl_recommendation: {
       stake_fraction: 0.015,
@@ -93,6 +94,19 @@ function payload(overrides: Record<string, unknown> = {}) {
     generated_at: "2026-07-20T12:00:00Z",
     match_importance_score: null,
     competition_stage: null,
+    home_team: "Arsenal",
+    away_team: "Chelsea",
+    league: "EPL",
+    kickoff_utc: "2026-07-21T15:00:00Z",
+    fixture_verified: true,
+    field_availability: {
+      fixture: true,
+      prediction: true,
+      market: true,
+      uncertainty: true,
+      elo: true,
+    },
+    unavailable_reasons: {},
   };
   return fullMatchAnalysisSchema.parse({ ...base, ...overrides });
 }

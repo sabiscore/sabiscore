@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import time
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import pandas as pd
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.cache import cache
 from ...core.config import settings
 from ...core.league_policy import LeaguePolicyUnavailableError, get_league_policy
+from ...core.redaction import redact_text
 from ...data.elo_engine import EloContext
 from ...db.session import get_async_session
 from ...models.causal_selector import CausalFeatureResult
@@ -49,6 +53,8 @@ from ...services.intelligence_synthesizer import (
     OddsEdge,
 )
 from ...models.prediction import PredictionEngine
+from ...monitoring.metrics import metrics_collector
+from ...services.odds_service import OddsService, get_odds_service
 from ...services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
 from ...services.uncertainty_service import UncertaintyBreakdown, UncertaintyService
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
@@ -151,10 +157,17 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
     except (TypeError, ValueError, AttributeError):
         return None
 
-    total = h + d + a
-    if total <= 0:
+    values = (h, d, a)
+    if not all(math.isfinite(value) and 0.0 <= value <= 1.0 for value in values):
         return None
-    h, d, a = h / total, d / total, a / total
+    total = h + d + a
+    if abs(total - 1.0) > 1e-4:
+        logger.error(
+            "Prediction probability simplex rejected league=%s total=%.8f",
+            league,
+            total,
+        )
+        return None
     prediction = max({"home_win": h, "draw": d, "away_win": a}, key=lambda k: {"home_win": h, "draw": d, "away_win": a}[k])
     return EnsemblePrediction(
         home_win_prob=h,
@@ -170,22 +183,14 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
     )
 
 
-def _uncertainty_from_features(features: Dict[str, Any]) -> UncertaintyBreakdown:
-    unc_svc = UncertaintyService()
-    try:
-        return unc_svc.compute_from_defaults(
-            home_win_prob=features.get("market_prob_home", 0.42),
-            draw_prob=features.get("market_prob_draw", 0.26),
-            away_win_prob=features.get("market_prob_away", 0.32),
-        )
-    except Exception:
-        return UncertaintyBreakdown(
-            epistemic_unc=0.15,
-            aleatoric_unc=0.12,
-            concentration=1.8,
-            credible_interval=(0.25, 0.55),
-            confidence_tier="OK",
-        )
+def _uncertainty_from_features(
+    features: Dict[str, Any],
+) -> Optional[UncertaintyBreakdown]:
+    """Return measured BNN uncertainty, never a probability-derived proxy."""
+
+    if not features:
+        return None
+    return UncertaintyService().decompose_measured(pd.DataFrame([features]))
 
 
 def _causal_results_from_report(
@@ -225,6 +230,7 @@ def _causal_results_from_report(
 
 def _rl_from_ensemble(
     ensemble: EnsemblePrediction,
+    uncertainty: Optional[UncertaintyBreakdown],
     odds: Optional[Dict[str, float]] = None,
     effective_kelly_cap: float = 0.0,
 ) -> RLRecommendationPayload:
@@ -233,6 +239,13 @@ def _rl_from_ensemble(
         "draw": ensemble.draw_prob,
         "away_win": ensemble.away_win_prob,
     }
+    if uncertainty is None:
+        return RLRecommendationPayload(
+            stake_fraction=0.0,
+            abstain=True,
+            reward_components={"R_pnl": 0.0, "R_ic": 0.0, "R_cal": 0.0, "R_risk": 0.0, "R_abs": 0.05},
+            reason="Abstained: measured model uncertainty unavailable",
+        )
     if odds is None:
         return RLRecommendationPayload(
             stake_fraction=0.0,
@@ -245,7 +258,7 @@ def _rl_from_ensemble(
         probabilities=probs,
         odds=odds,
         confidence=ensemble.confidence,
-        epistemic_unc=0.12,
+        epistemic_unc=uncertainty.epistemic_unc,
     )
     public_stake = 0.0 if recommendation.abstain else min(
         recommendation.stake_fraction * _QUARTER_KELLY,
@@ -259,22 +272,12 @@ def _rl_from_ensemble(
     )
 
 
-def _elo_from_features(features: Dict[str, Any]) -> EloContext:
-    return EloContext(
-        home_elo=float(features.get("home_elo", 1500.0)),
-        away_elo=float(features.get("away_elo", 1500.0)),
-        elo_difference=float(features.get("elo_difference", 0.0)),
-        home_elo_trend_5=float(features.get("elo_home_trend_5", 0.0)),
-        away_elo_trend_5=float(features.get("elo_away_trend_5", 0.0)),
-        elo_momentum_cross=float(features.get("elo_momentum_cross", 0.0)),
-    )
-
-
 async def _fetch_market_odds(
     *,
     home_team: Optional[str],
     away_team: Optional[str],
     league: str,
+    odds_service: Optional[OddsService] = None,
 ) -> Optional[Dict[str, float]]:
     """Look up a coherent 1X2 price for this fixture, or ``None``.
 
@@ -286,16 +289,20 @@ async def _fetch_market_odds(
     """
     if not home_team or not away_team:
         return None
-    try:
-        from ...services.odds_service import OddsService
+    if odds_service is None:
+        # Kept lazy for direct/unit callers. Production always injects the one
+        # lifespan-scoped instance through ``get_odds_service``.
+        from ...services.odds_service import OddsService as DefaultOddsService
 
-        odds = await OddsService().get_match_odds(
+        odds_service = DefaultOddsService()
+    try:
+        odds = await odds_service.get_match_odds(
             home_team=home_team, away_team=away_team, league=league
         )
     except Exception as exc:
         logger.warning(
             "Live odds lookup failed for %s vs %s (%s): %s: %s",
-            home_team, away_team, league, type(exc).__name__, exc,
+            home_team, away_team, league, type(exc).__name__, redact_text(str(exc)),
         )
         return None
 
@@ -470,7 +477,9 @@ def _build_actionability(
 
     # Caveats: low evidence, data gaps, or score-below-threshold warnings
     caveats: List[str] = []
-    if uncertainty.confidence_tier == "LOW_EVIDENCE":
+    if uncertainty is None:
+        caveats.append("Measured model uncertainty unavailable")
+    elif uncertainty.confidence_tier == "LOW_EVIDENCE":
         caveats.append(f"Low model evidence (epistemic {uncertainty.epistemic_unc:.2f})")
     # Exclude structural always-gap features from user-visible caveat count
     important_gaps = [g for g in data_gaps if g not in ("shot_quality_diff",)]
@@ -506,6 +515,7 @@ async def get_full_analysis(
     match_id: str,
     league: str = Query(default="EPL", description="League for matchup-based lookups"),
     db: AsyncSession = Depends(get_async_session),
+    odds_service: OddsService = Depends(get_odds_service),
 ) -> dict:
     """Return fused TYPE-F verdict: ensemble × BNN × causal × RL × Elo × StatsBomb.
 
@@ -515,15 +525,21 @@ async def get_full_analysis(
       are built without requiring a DB match record (P7-E live data wiring).
     """
 
+    started_at = time.perf_counter()
     cache_key = f"full_analysis:v2:{match_id}:{league}"
     cached = cache.get(cache_key) if cache else None
     if cached:
         try:
+            metrics_collector.increment("analysis.cache_hit")
             return json.loads(cached) if isinstance(cached, str) else cached
         except Exception:
             pass
 
-    projector = UpcomingMatchFeatureProjector()
+    # Direct unit calls do not execute FastAPI dependencies. Production requests
+    # always receive the lifespan-scoped service through get_odds_service.
+    if not isinstance(odds_service, OddsService):
+        odds_service = OddsService()
+    projector = UpcomingMatchFeatureProjector(odds_service=odds_service)
     prediction_engine = PredictionEngine()
     synthesizer = IntelligenceSynthesizer()
     canonical_features = active_canonical_features(
@@ -534,6 +550,7 @@ async def get_full_analysis(
     # Detect matchup strings like "Arsenal vs Chelsea"
     _is_matchup = " vs " in match_id or " VS " in match_id
 
+    projection_failed = False
     try:
         if _is_matchup:
             sep = " vs " if " vs " in match_id else " VS "
@@ -553,13 +570,14 @@ async def get_full_analysis(
                 db=db,
             )
     except Exception as exc:
+        projection_failed = True
         logger.warning(
             "Feature projection failed for match_id=%r league=%r: %s: %s — "
-            "falling back to default zero-vector (all DATA_GAP)",
-            match_id, league, type(exc).__name__, exc,
+            "model inference skipped; all fields marked DATA_GAP",
+            match_id, league, type(exc).__name__, redact_text(exc),
         )
-        # Return a partial analysis rather than 404: all features are DATA_GAP,
-        # but the synthesis pipeline still runs and sets partial_intelligence=true.
+        # The diagnostic vector is response scaffolding only. It is never sent
+        # to a model after a projection failure.
         live = _default_live_vector(league, list(canonical_features))
 
     league = str(live.get("league", league) or league)
@@ -570,7 +588,8 @@ async def get_full_analysis(
     effective_kelly_cap, policy_gap, model_freshness_limit = _effective_kelly_cap(league)
     if policy_gap:
         critical_gaps.append(policy_gap)
-    if not bool(live.get("fixture_identity_verified", not _is_matchup)):
+    fixture_verified = bool(live.get("fixture_identity_verified", False))
+    if not fixture_verified:
         critical_gaps.append("FIXTURE_IDENTITY_UNVERIFIED")
     data_quality = dict(live.get("data_quality") or {})
     reduced_evidence_input = bool(live.get("is_reduced_evidence_baseline", False))
@@ -613,23 +632,28 @@ async def get_full_analysis(
         critical_gaps.append("STALE_REQUIRED_EVIDENCE")
 
     # Layer 1: Ensemble prediction (Phase 8 canonical path — full feature vector)
-    try:
-        full_features = np.asarray(
-            live.get("features")
-            if live.get("features") is not None
-            else np.asarray(list(live.get("features_dict", {}).values()), dtype=np.float32),
-            dtype=np.float32,
-        )
-        pred_result = await prediction_engine.predict(
-            features=full_features,
-            league=league,
-            match_id=match_id,
-        )
-        raw_pred = pred_result.to_dict()
-    except Exception as exc:
-        logger.warning("Ensemble prediction failed for %s: %s", match_id, exc)
-        data_gaps.append("ensemble_prediction")
+    if projection_failed:
         raw_pred = {}
+    else:
+        try:
+            full_features = np.asarray(
+                live.get("features")
+                if live.get("features") is not None
+                else np.asarray(list(live.get("features_dict", {}).values()), dtype=np.float32),
+                dtype=np.float32,
+            )
+            pred_result = await prediction_engine.predict(
+                features=full_features,
+                league=league,
+                match_id=match_id,
+            )
+            raw_pred = pred_result.to_dict()
+        except Exception as exc:
+            logger.warning(
+                "Ensemble prediction failed for %s: %s", match_id, redact_text(exc)
+            )
+            data_gaps.append("ensemble_prediction")
+            raw_pred = {}
 
     ensemble = _ensemble_from_prediction(raw_pred, league)
     prediction_status = PredictionStatus.AVAILABLE
@@ -647,6 +671,8 @@ async def get_full_analysis(
 
     # Layer 2: BNN uncertainty
     uncertainty = _uncertainty_from_features(features_dict)
+    if uncertainty is None:
+        critical_gaps.append("MODEL_UNCERTAINTY_UNAVAILABLE")
 
     # Layer 3: Causal drivers (read-only; path controlled via CAUSAL_REPORT_PATH env var)
     causal_results = _causal_results_from_report(str(settings.causal_report_path))
@@ -661,27 +687,30 @@ async def get_full_analysis(
     # None, and COHERENT_1X2_MARKET_UNAVAILABLE fired as a critical gap on 100% of
     # requests regardless of provider state. Enabling the_odds_api in production
     # changed nothing on this surface because nothing ever asked it for a price.
-    market_odds: Optional[Dict[str, float]] = live.get("odds") or None
-    if market_odds is None:
+    market_odds: Optional[Dict[str, Any]] = live.get("odds") or None
+    if market_odds is None and not bool(live.get("market_snapshot_acquired")):
         market_odds = await _fetch_market_odds(
             home_team=live.get("home_team"),
             away_team=live.get("away_team"),
             league=league,
+            odds_service=odds_service,
         )
     rl_rec = _rl_from_ensemble(
         ensemble,
+        uncertainty,
         odds=market_odds,
         effective_kelly_cap=effective_kelly_cap,
     )
 
     # Layer 5: Elo context
-    elo_ctx = _elo_from_features(features_dict)
+    elo_candidate = live.get("elo_context")
+    elo_ctx = elo_candidate if isinstance(elo_candidate, EloContext) else None
     # Elo ratings are keyed by team_id — an unresolved identity makes any Elo value
     # meaningless regardless of its number. Gate on identity (the real cause), not
     # value: EloEngine never fails/raises, so a genuine, evenly-rated matchup can
     # legitimately land at elo_difference == 0.0 / home_elo == 1500.0 — the old
     # value check would have false-positived on exactly that real result.
-    if not bool(live.get("fixture_identity_verified", not _is_matchup)):
+    if elo_ctx is None:
         data_gaps.append("elo_ratings")
 
     # Layer 6: Odds edge (optional)
@@ -706,7 +735,8 @@ async def get_full_analysis(
             },
             reason="Abstained: insufficient verified evidence",
         )
-        odds_edge = None
+        # Retain a measured market comparison for explanation, while the
+        # synthesizer zeroes Kelly and every public stake for this closed gate.
 
     # Advisory actionability block (Sprint 4 Slice A)
     deduped_gaps = sorted(set(data_gaps))
@@ -720,6 +750,25 @@ async def get_full_analysis(
         uncertainty=uncertainty,
         canonical_feature_count=len(canonical_features),
     )
+
+    field_availability = {
+        "fixture": fixture_verified,
+        "prediction": prediction_status == PredictionStatus.AVAILABLE,
+        "market": bool(market_odds and {"home_win", "draw", "away_win"}.issubset(market_odds)),
+        "uncertainty": uncertainty is not None,
+        "elo": elo_ctx is not None,
+    }
+    unavailable_reasons = {
+        key: reason
+        for key, reason in {
+            "fixture": "Stable verified fixture identity unavailable",
+            "prediction": "Certified model output unavailable",
+            "market": "Coherent single-bookmaker 1X2 snapshot unavailable",
+            "uncertainty": "Measured BNN uncertainty unavailable",
+            "elo": "Resolved Elo history unavailable for one or both teams",
+        }.items()
+        if not field_availability[key]
+    }
 
     # Fuse
     response: FullMatchAnalysisResponse = synthesizer.synthesize(
@@ -743,9 +792,30 @@ async def get_full_analysis(
         feature_freshness_seconds=dict(live.get("feature_freshness_seconds") or {}),
         feature_source=dict(live.get("feature_source") or {}),
         features_dict=features_dict,
+        home_team=live.get("home_team"),
+        away_team=live.get("away_team"),
+        league=league,
+        kickoff_utc=live.get("kickoff_utc"),
+        fixture_verified=fixture_verified,
+        field_availability=field_availability,
+        unavailable_reasons=unavailable_reasons,
     )
 
     result = response.to_dict()
+
+    available_fields = sum(1 for value in field_availability.values() if value)
+    abstention_reason = (
+        sorted(set(critical_gaps))[0]
+        if critical_gaps
+        else (sorted(set(conflicts))[0] if conflicts else "NONE")
+    )
+    metrics_collector.record_analysis_state(
+        prediction_available=prediction_status == PredictionStatus.AVAILABLE,
+        evidence_completeness=available_fields / max(1, len(field_availability)),
+        abstention_reason=abstention_reason,
+        calibration_status=str(raw_pred.get("calibration_status") or "UNKNOWN"),
+        duration_ms=(time.perf_counter() - started_at) * 1000,
+    )
 
     if cache:
         try:

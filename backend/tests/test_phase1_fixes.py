@@ -6,7 +6,6 @@ Test date: May 30, 2026
 import pytest
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.datasets import make_classification
 from sklearn.calibration import CalibratedClassifierCV
 
@@ -91,7 +90,7 @@ class TestBUG001DrawCalibration:
         try:
             redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
             redis_client.ping()
-        except:
+        except Exception:
             pytest.skip("Redis not available for league model tests")
         
         for LeagueModel in league_models:
