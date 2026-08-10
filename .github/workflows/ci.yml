@@ -128,7 +128,7 @@ jobs:
 
       - name: Backend tests
         working-directory: backend
-        run: pytest tests -q --no-cov
+        run: pytest tests -q
 
   web-quality:
     name: Web Lint, Typecheck, Build
