@@ -123,6 +123,11 @@ async def ensure_canonical_fixture(
                 checked_at=now,
             ))
 
+    # Flush the canonical team rows before inserting the fixture. Without this
+    # boundary, the fixture insert can reach the database before the matching
+    # canonical_teams rows are visible, which trips the FK observed in Render.
+    await session.flush()
+
     fixture_id = _stable_id(
         "fixture", competition_id, kickoff_utc.isoformat(), home_name, away_name
     )

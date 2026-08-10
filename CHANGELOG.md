@@ -55,11 +55,17 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Hardened cache/redaction/runtime safety: production Redis now enforces
   `rediss://` policy for readiness, nested mapping/list redaction is centralized,
   and malformed URL parsing fails closed in redaction helpers.
+- Fixed canonical fixture seeding so canonical team rows are flushed before the
+  fixture insert, preventing the Render-time `canonical_fixtures.home_team_id`
+  foreign-key violation during startup sync.
 - Updated web backend-proxy routes for upcoming/value-bet surfaces to return
   bounded fail-closed `503` payloads with explicit retryability/provenance fields
   and `Cache-Control: no-store` on degraded responses.
 - Added Apex feature availability artifacts (`docs/apex_feature_availability.*`)
   and backend generator tooling for evidence-coverage audits.
+- Improved the match-selection section with an explicit verified-vs-manual
+  selection summary and a clearer CTA so users can see whether they are routing
+  into canonical fixture analysis or an explicit hypothetical matchup.
 - Made caller-supplied `/api/v1/predictions/analyze` probabilities explicitly
   external and unverified. They now fail closed with
   `EXTERNAL_INPUT_UNVERIFIED`, `NO_BET`, and zero stake.

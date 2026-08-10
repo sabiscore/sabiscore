@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UpcomingMatch } from "@/lib/api";
-import { excludeSelectedTeam } from "./match-selector";
+import { describeMatchSelectionState, excludeSelectedTeam } from "./match-selector";
 import {
   buildMatchInsightsHref,
   getTopEdgeFixtureId,
@@ -23,6 +23,52 @@ describe("excludeSelectedTeam", () => {
   it("returns the full list when no valid selection exists", () => {
     expect(excludeSelectedTeam(teams, "")).toEqual(teams);
     expect(excludeSelectedTeam(teams, "Chelsea")).toEqual(teams);
+  });
+});
+
+describe("match selection summary", () => {
+  it("describes a verified fixture selection", () => {
+    const summary = describeMatchSelectionState({
+      homeTeam: "Arsenal",
+      awayTeam: "Bournemouth",
+      league: "EPL",
+      selectedFixture: {
+        matchId: "fixture-123",
+        homeTeam: "Arsenal",
+        awayTeam: "Bournemouth",
+        league: "EPL",
+      },
+    });
+
+    expect(summary.badge).toBe("Verified fixture");
+    expect(summary.title).toBe("Arsenal vs Bournemouth");
+    expect(summary.description).toContain("canonical fixture identity");
+  });
+
+  it("describes an explicit manual matchup as hypothetical", () => {
+    const summary = describeMatchSelectionState({
+      homeTeam: "Arsenal",
+      awayTeam: "Chelsea",
+      league: "EPL",
+      selectedFixture: null,
+    });
+
+    expect(summary.badge).toBe("Manual matchup");
+    expect(summary.title).toBe("Arsenal vs Chelsea");
+    expect(summary.description).toContain("hypothetical Premier League matchup");
+  });
+
+  it("gives a league-aware prompt when no teams are selected yet", () => {
+    const summary = describeMatchSelectionState({
+      homeTeam: "",
+      awayTeam: "",
+      league: "LA_LIGA",
+      selectedFixture: null,
+    });
+
+    expect(summary.badge).toBe("Selection pending");
+    expect(summary.title).toBe("Start with La Liga");
+    expect(summary.description).toContain("Verified selections stay authoritative");
   });
 });
 

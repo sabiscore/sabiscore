@@ -48,6 +48,55 @@ export function excludeSelectedTeam(teams: readonly string[], selected: string):
   return teams.filter((team) => team.trim().toLowerCase() !== target);
 }
 
+export interface MatchSelectionSummary {
+  badge: string;
+  title: string;
+  description: string;
+}
+
+export function describeMatchSelectionState({
+  homeTeam,
+  awayTeam,
+  league,
+  selectedFixture,
+}: {
+  homeTeam: string;
+  awayTeam: string;
+  league: LeagueId;
+  selectedFixture: SelectedFixture | null;
+}): MatchSelectionSummary {
+  const leagueKey = canonicalLeagueId(league);
+  const leagueLabel = LEAGUES.find((item) => canonicalLeagueId(item.id) === leagueKey)?.name ?? league;
+  const matchupLabel = homeTeam.trim() && awayTeam.trim()
+    ? `${homeTeam.trim()} vs ${awayTeam.trim()}`
+    : `Pick two teams in ${leagueLabel}`;
+
+  if (selectedFixture) {
+    return {
+      badge: "Verified fixture",
+      title: matchupLabel,
+      description:
+        "This selection preserves the canonical fixture identity from the carousel and keeps the analysis on a verified path.",
+    };
+  }
+
+  if (homeTeam.trim() && awayTeam.trim()) {
+    return {
+      badge: "Manual matchup",
+      title: matchupLabel,
+      description:
+        `This will be treated as a hypothetical ${leagueLabel} matchup until a verified fixture is chosen.`,
+    };
+  }
+
+  return {
+    badge: "Selection pending",
+    title: `Start with ${leagueLabel}`,
+    description:
+      "Pick a verified fixture from the carousel or enter a matchup below. Verified selections stay authoritative; manual entries remain explicit hypotheticals.",
+  };
+}
+
 const LEAGUES = [
   { id: "EPL", name: "Premier League" },
   { id: "La Liga", name: "La Liga" },
@@ -443,6 +492,17 @@ export function MatchSelector() {
     staleTime: 30_000,
   });
   const platformHealth = platformHealthData ? derivePlatformHealth(platformHealthData) : null;
+  const selectionSummary = describeMatchSelectionState({
+    homeTeam,
+    awayTeam,
+    league,
+    selectedFixture,
+  });
+  const submitLabel = loading
+    ? "Generating insights..."
+    : selectedFixture
+    ? "Open verified analysis"
+    : "Generate manual insights";
 
   return (
     <>
@@ -475,6 +535,37 @@ export function MatchSelector() {
             <p className="text-sm text-slate-400 sm:text-base">Choose a verified fixture or enter a hypothetical matchup.</p>
           </div>
 
+          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn(
+                "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.24em]",
+                selectedFixture
+                  ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-300"
+                  : homeTeam.trim() && awayTeam.trim()
+                  ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                  : "border-slate-700/60 bg-slate-900/70 text-slate-400",
+              )}>
+                {selectionSummary.badge}
+              </span>
+              <h3 className="text-sm font-semibold text-slate-100 sm:text-base">
+                {selectionSummary.title}
+              </h3>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              {selectionSummary.description}
+            </p>
+            {selectedFixture && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                  Canonical fixture ID preserved
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                  {league}
+                </span>
+              </div>
+            )}
+          </div>
+
         {premiumVisualsEnabled && hasTeamsSelected && (
           <div className="hidden rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:block">
             <>
@@ -502,10 +593,15 @@ export function MatchSelector() {
         )}
 
         {hasTeamsSelected && (
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm sm:hidden">
-            <span className="truncate font-medium text-slate-200">{homeTeam}</span>
-            <span className="mx-2 text-xs uppercase text-slate-500">vs</span>
-            <span className="truncate text-right font-medium text-slate-200">{awayTeam}</span>
+          <div className="rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm sm:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate font-medium text-slate-200">{homeTeam || "Home team"}</span>
+              <span className="text-xs uppercase text-slate-500">vs</span>
+              <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}
+            </p>
           </div>
         )}
 
@@ -599,14 +695,14 @@ export function MatchSelector() {
             {loading ? (
               <>
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                Generating Insights...
+                Generating insights...
               </>
             ) : (
               <>
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Generate Insights
+                {submitLabel}
               </>
             )}
           </button>
