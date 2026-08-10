@@ -79,6 +79,12 @@ In-memory fallback can preserve liveness, but it never satisfies production cach
 active artifact pairs. Startup applies `alembic upgrade head` and then launches
 Uvicorn; `/health/ready` is the deployment gate.
 
+The canonical backend production install surface is
+`backend/requirements.runtime.txt`, not the broader local-development
+`backend/requirements.txt`. Runtime-only builds must stay off the optional
+research, browser-automation, Kafka, and experiment-tracking dependency tree
+unless a reviewed production change explicitly requires it.
+
 The Render blueprint also includes a disabled-by-default scraper cron service
 (`sabiscore-evidence-acquisition`). Keep `SCRAPER_PRODUCTION_ENABLED=false`
 until source-policy/legal approval, storage credentials, and retention controls

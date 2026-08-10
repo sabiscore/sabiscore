@@ -30,6 +30,12 @@ separate Python 3.11-3.13 virtual environment and run
 promote a model; production activation is controlled by the reviewed,
 hash-validated active-generation manifest.
 
+The canonical production backend build now installs
+`backend/requirements.runtime.txt`. Keep `backend/requirements.txt` for local
+development and broad repository tooling; it still includes optional research,
+browser-automation, Kafka, and experiment-tracking packages that the FastAPI
+runtime does not need to boot.
+
 Kafka clients and browser automation packages are treated as optional worker dependencies on Python 3.14/Windows because they otherwise require native toolchains or older `greenlet` pins. The canonical API/provider gateway does not import them at runtime.
 
 Use Node 22 through 24 and pnpm 8 through 11 with this lockfile. Do not run `corepack enable` on Windows unless you have admin rights and intentionally want Corepack shims installed globally.
@@ -41,6 +47,12 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r backend\requirements.txt
+```
+
+Production Docker and Render builds should use:
+
+```bash
+pip install -r backend/requirements.runtime.txt
 ```
 
 Run the backend:

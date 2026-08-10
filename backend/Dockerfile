@@ -67,9 +67,9 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
 COPY src/ ./src/
 
 # Install Python dependencies in production
-COPY requirements.txt .
+COPY requirements.runtime.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+    pip install -r requirements.runtime.txt
 
 # Create directories for volume mounts
 RUN mkdir -p /app/models /app/data

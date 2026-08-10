@@ -91,6 +91,14 @@ it is not the active Render runtime. Optional training/experiment packages such
 as CatBoost, SHAP, MLflow, and Great Expectations remain Python <3.14 extras
 because they are not required for API boot or provider intelligence.
 
+Production build/install split:
+
+- `backend/requirements.runtime.txt` — canonical Render/Docker backend runtime
+  install surface; excludes optional research, browser-automation, Kafka, and
+  experiment-tracking packages.
+- `backend/requirements.txt` — broader local development/tooling environment.
+- `backend/requirements-training.txt` — isolated offline research stack only.
+
 Create the research environment separately. Python 3.12 selects newer binary
 wheels for CatBoost, SHAP, and scikit-learn while Python 3.11 retains the validated
 production-era pins:
@@ -131,6 +139,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
+```
+
+Render and backend production-image builds install:
+
+```bash
+pip install -r backend/requirements.runtime.txt
 ```
 
 ## Run Locally

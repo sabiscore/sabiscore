@@ -7,6 +7,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Apex activation hardening (2026-08-10)
 
+- Corrected `docs/DEBT.md` item 13: the 14 canonical market features
+  (`derive_market_features`/`MARKET_FEATURES_14`) are already live in
+  `UpcomingMatchFeatureProjector.project_match_features()` and pinned by
+  existing tests. The entry previously still described them as absent from
+  serving; the remaining unresolved families are now correctly limited to
+  head-to-head, home venue, and Elo/tactical evidence.
+- Fixed `ModelMetadataPanel` rendering "Unknown" for every governance field
+  while the `/api/models/status` request was still in flight — indistinguishable
+  from a genuinely absent field once real data arrived. The panel now renders a
+  labeled loading skeleton (`isPending`) before showing resolved values, and
+  keeps `isError` mapped to "Unavailable" as before. Covered by a new
+  `model-metadata-panel.test.tsx` (loading / success / error states).
 - Short-circuited the root readiness capability probe when core readiness is already failing, so `GET /health/ready` no longer burns provider/prediction work or adds misleading warning noise while still returning the correct `503` fail-closed result.
 - Added explicit `HEAD /` support on the FastAPI root route to stop platform startup probes from generating avoidable `405 Method Not Allowed` noise in Render logs.
 - Added `workflow_dispatch` to `.github/workflows/ci.yml` and a new
@@ -112,6 +124,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   source tree or mask copy failures. An invalid `REDIS_URL` degrades safely
   instead of crashing import, but production still requires operator rotation
   and a valid `redis://` or `rediss://` value.
+- Added `backend/requirements.runtime.txt` and switched the Render backend build
+  plus the production Docker stage to it, so the canonical FastAPI runtime no
+  longer installs optional browser-automation, Kafka, SHAP/CatBoost/MLflow,
+  or Great Expectations dependency trees just to boot the API and verify the
+  active artifacts.
 - Fixed a second, independent unguarded Redis call site: a live 2026-08-10
   Render crash traced to `ModelOrchestrator.__init__` calling
   `redis.from_url()` directly with no guard, crashing the process on any

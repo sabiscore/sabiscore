@@ -120,6 +120,12 @@ Production remains blocked until every step is recorded.
   for more than five and three minutes respectively without producing a current
   image. The only `sabiscore-backend:verify` tag is dated 2026-07-15 and
   `sabiscore-web:verify` does not exist.
+- The backend production install surface is now trimmed to
+  `backend/requirements.runtime.txt` in both `render.yaml` and the production
+  Docker stage, removing optional research/browser/Kafka packages from the API
+  boot path. This reduces build surface area but does **not** by itself prove a
+  fresh backend/web image build; the image-proof gate remains open until new
+  tags exist from the current release candidate.
 - Alembic reports one head (`0006_canonical_league_ids`), but the production
   `upgrade head` connection attempt timed out after 120 seconds, so `check` and
   migration-head proof remain absent.
@@ -159,42 +165,50 @@ all-league model annotated as such. Reproducible via
 `scripts/compare_candidate_vs_incumbent.py`. Pinned by
 `tests/unit/test_model_differentiates_fixtures.py`.
 
-**What this does NOT fix** — see item 13. The model is now sound, but it is
-trained on 31 of 68 features because that is all serving resolves. Market, h2h,
-venue and Elo evidence remain unavailable at prediction time, and the artifact
-holds those slots at registry defaults by design so it cannot lean on them.
+**What this does NOT fix** — see item 13. The model is now sound, but several
+canonical evidence families still remain unavailable at prediction time. The
+previous note that market features were absent is stale: serving now fetches one
+coherent 1X2 market, projects `derive_market_features(...)`, and marks
+`MARKET_FEATURES_14` resolved. Head-to-head, venue, and Elo/tactical evidence
+remain incomplete, so the artifact still holds those slots at registry defaults
+by design and cannot lean on them yet.
 
 ---
 
-## 13. Serving resolves 31 of 68 canonical features — market, h2h, venue and Elo are absent
+## 13. Serving still has unresolved canonical feature families — h2h, venue, and Elo/tactical remain
 
-**Tier:** `NEXT` — trigger: whichever of the four below is wanted first; each is
-independently shippable and each would be followed by a retrain to let the model
-use it.
+**Tier:** `NEXT` — trigger: whichever remaining family below is wanted first;
+each is independently shippable and each would be followed by a retrain to let
+the model use it.
 **Owner:** unassigned.
 **Found:** 2026-08-08, while establishing the retrain's feature set.
 
-After the 2026-08-08 derivation fix (schedule, league one-hots, league rates and
-combination features are now computed rather than defaulted), serving resolves
-**31 of 68**. The model is trained on exactly that set, so there is no train/serve
-skew — but four families of genuine football evidence are still missing:
+The prior version of this item claimed the 14 canonical market fields were still
+absent and reused a stale served-feature count. That is no longer accurate.
+`UpcomingMatchFeatureProjector.project_match_features()` now calls
+`derive_market_features(...)` and marks `MARKET_FEATURES_14` resolved, with the
+contract pinned by `backend/tests/test_staleness_and_market_wiring.py`,
+`backend/tests/test_feature_gap_detection.py`, and
+`backend/tests/unit/test_feature_registry.py`. Re-derive any exact
+served-feature count from code before using this item in retrain planning.
+
+The remaining missing families of genuine football evidence are:
 
 | Family | Count | Why it is absent |
 |---|---|---|
-| Market prices / odds | 14 | `OddsService` fetches a board, but the canonical `market_prob_*` / `log_odds_*` / `ev_*` block is never projected onto the feature vector. Highest value of the four: it is the market consensus the edge calculation exists to beat. |
 | Head-to-head | 5 | One DB query over prior meetings; nothing computes it. |
 | Home venue record | 4 | Derivable from the same team history already queried, filtered to home fixtures. |
 | Elo / tactical | 8 | Blocked on item 10 — the parquets are synthetically keyed. |
 
-**Blast radius:** prediction quality. The model is honest and directionally sane
-on 31 features, but it is pricing without ever seeing the market, the fixture's
-own history, or venue effects.
-**Cost:** market and h2h are each a contained piece of work (compute at serving,
-add to the training builder's feature set, retrain, re-run the comparison).
-Venue is smaller still. Elo depends on item 10.
+**Blast radius:** prediction quality. The model no longer prices blind to the
+market, but it still lacks fixture-history, venue, and Elo/tactical context for
+these families.
+**Cost:** head-to-head is a contained piece of work (compute at serving, add to
+the training builder's feature set, retrain, re-run the comparison). Venue is
+smaller still. Elo depends on item 10.
 **Impact:** moderate-to-high — this is the difference between a working model and
 a competitive one.
-**Priority:** highest open item. Take market prices first.
+**Priority:** high. Take head-to-head or venue first; market wiring is already live.
 
 ---
 

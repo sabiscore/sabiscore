@@ -6,7 +6,7 @@
     plan: free
     branch: master
     rootDir: backend
-    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && python scripts/verify_active_artifacts.py"
+    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r requirements.runtime.txt && python scripts/verify_active_artifacts.py"
     startCommand: alembic upgrade head && uvicorn src.api.main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-max-requests 500 --timeout-keep-alive 30 --log-level info
     # Use readiness probe which validates DB/cache/models before marking instance healthy
     healthCheckPath: /health/ready
