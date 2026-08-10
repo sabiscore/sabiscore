@@ -14,8 +14,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { secret, path } = body;
 
-    // Verify revalidation secret
-    const revalidateSecret = process.env.REVALIDATE_SECRET || 'dev-secret-token';
+    // Revalidation is disabled until both services receive the same secret.
+    const revalidateSecret = process.env.REVALIDATE_SECRET;
+    if (!revalidateSecret) {
+      return NextResponse.json(
+        { error: 'Revalidation is not configured' },
+        { status: 503 },
+      );
+    }
     
     if (secret !== revalidateSecret) {
       return NextResponse.json(
@@ -50,7 +56,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Revalidation failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

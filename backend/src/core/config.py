@@ -113,8 +113,8 @@ class Settings(BaseSettings):
         alias="NEXT_URL",
         description="Next.js frontend URL for ISR revalidation"
     )
-    revalidate_secret: str = Field(
-        default="dev-secret-token",
+    revalidate_secret: Optional[str] = Field(
+        default=None,
         alias="REVALIDATE_SECRET", 
         description="Secret token for Next.js ISR revalidation API"
     )

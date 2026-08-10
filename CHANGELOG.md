@@ -80,6 +80,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   `redis.from_url()` directly with no guard, crashing the process on any
   `src.models` import (see `docs/DEBT.md` item 15). It now degrades to the same
   in-memory fallback pattern as `core/cache.py`.
+- Removed the predictable ISR revalidation-token fallback. The backend now
+  skips invalidation and the Vercel route returns `503` until both platforms
+  have a configured shared `REVALIDATE_SECRET`; route errors no longer echo
+  exception details to callers.
 
 Validation completed locally: backend `1271 passed, 13 skipped`; repository-wide
 backend Ruff passed with zero findings; mypy improved from the accepted 784-error
