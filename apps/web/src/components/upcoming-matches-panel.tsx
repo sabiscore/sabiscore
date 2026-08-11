@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LEAGUE_COLORS } from "@/lib/league-colors";
+import { getUpcomingMatches } from "@/lib/api";
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
@@ -217,11 +218,11 @@ function freshnessLabel(stalenessSeconds?: number) {
 }
 
 async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> {
-  const params = new URLSearchParams({ limit: "8", days_ahead: "7" });
-  if (league) params.set("league", league);
-  const res = await fetch(`/api/upcoming?${params.toString()}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json() as Promise<UpcomingMatchesResponse>;
+  return getUpcomingMatches({
+    league,
+    limit: 8,
+    days_ahead: 7,
+  }) as Promise<UpcomingMatchesResponse>;
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────

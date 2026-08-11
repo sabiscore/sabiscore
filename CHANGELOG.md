@@ -116,8 +116,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   fixture insert, preventing the Render-time `canonical_fixtures.home_team_id`
   foreign-key violation during startup sync.
 - Updated web backend-proxy routes for upcoming/value-bet surfaces to return
-  bounded fail-closed `503` payloads with explicit retryability/provenance fields
-  and `Cache-Control: no-store` on degraded responses.
+  bounded fail-closed payloads with explicit retryability/provenance fields and
+  `Cache-Control: no-store` on degraded responses. The upcoming proxy now also
+  treats invalid backend JSON as a structured `502` degradation with a clear
+  `backend_invalid_response` reason instead of surfacing a generic parser error.
 - Added Apex feature availability artifacts (`docs/apex_feature_availability.*`)
   and backend generator tooling for evidence-coverage audits.
 - Improved the match-selection section with an explicit verified-vs-manual

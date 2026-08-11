@@ -30,8 +30,8 @@ function booleanQuery(value: string | null, fallback: boolean) {
  *   - league: Optional league filter (EPL, La Liga, Bundesliga, Serie A, Ligue 1, Eredivisie)
  *   - days_ahead: Number of days ahead (1-30, default 7)
  *   - limit: Max matches (1-50, default 20)
- *   - include_predictions: Include ML predictions (default true)
- *   - include_value_bets: Include value bets (default true)
+ *   - include_predictions: Include ML predictions (default false)
+ *   - include_value_bets: Include value bets (default false)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -44,8 +44,10 @@ export async function GET(request: NextRequest) {
       : undefined;
     const daysAhead = boundedInteger(searchParams.get('days_ahead'), 7, 1, 30);
     const limit = boundedInteger(searchParams.get('limit'), 20, 1, 50);
-    const includePredictions = booleanQuery(searchParams.get('include_predictions'), true);
-    const includeValueBets = booleanQuery(searchParams.get('include_value_bets'), true);
+    // Discovery-first default: callers must explicitly opt into bounded
+    // enrichment to avoid accidental heavy-mode requests from omitted params.
+    const includePredictions = booleanQuery(searchParams.get('include_predictions'), false);
+    const includeValueBets = booleanQuery(searchParams.get('include_value_bets'), false);
 
     // Build backend URL with query params
     const backendBaseUrl = resolveBackendBaseUrl();
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
           offseason: false,
           next_season_start: null,
         },
-        { status: 503 }
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -95,8 +97,27 @@ export async function GET(request: NextRequest) {
       data = JSON.parse(body);
     } catch {
       return NextResponse.json(
-        { upcoming_matches: [], total: 0, matches_with_value: 0, avg_edge_pct: 0, cache_hit: false, ttl_seconds: 0, source: 'error', error: 'Unexpected response from backend', offseason: false, next_season_start: null },
-        { status: 502 }
+        {
+          upcoming_matches: [],
+          total: 0,
+          matches_with_value: 0,
+          avg_edge_pct: 0.0,
+          cache_hit: false,
+          ttl_seconds: 0,
+          source: 'error',
+          status: 'UNAVAILABLE',
+          data_gap: true,
+          reason: 'backend_invalid_response',
+          retryable: true,
+          freshness: null,
+          provenance: [],
+          generated_at: new Date().toISOString(),
+          deadline_ms: BACKEND_DEADLINE_MS,
+          offseason: false,
+          next_season_start: null,
+          error: 'Unexpected response from backend',
+        },
+        { status: 502, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
