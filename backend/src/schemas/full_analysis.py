@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PredictionStatus(str, Enum):
@@ -22,6 +22,7 @@ class PredictionSource(str, Enum):
 
 
 class FullMatchEnsembleResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     home_win_prob: float = Field(ge=0.0, le=1.0)
     draw_prob: float = Field(ge=0.0, le=1.0)
     away_win_prob: float = Field(ge=0.0, le=1.0)
@@ -77,6 +78,7 @@ class FullMatchEloResponse(BaseModel):
 
 
 class FullMatchOddsEdgeResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     market: str
     market_odds: float
     model_prob: float
@@ -131,6 +133,7 @@ class EvidenceQualityResponse(BaseModel):
 
 
 class FullMatchAnalysisResponseSchema(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     match_id: str
     verdict: Literal[
         "HIGH_CONVICTION",

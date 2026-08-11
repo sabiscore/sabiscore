@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
@@ -32,6 +32,7 @@ _DISCOVERY_DEADLINE_SECONDS = 3.0
 
 # Pydantic response models
 class PredictionSchema(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     home_win: float
     draw: float
     away_win: float

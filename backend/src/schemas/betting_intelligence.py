@@ -19,7 +19,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +104,7 @@ class EvidenceTierEnum(str, Enum):
 
 class ModelInput(BaseModel):
     """Calibrated model output for one match."""
+    model_config = ConfigDict(protected_namespaces=())
 
     home_probability: float = Field(..., ge=0.0, le=1.0)
     draw_probability: float = Field(..., ge=0.0, le=1.0)
@@ -157,6 +158,7 @@ class SignalsInput(BaseModel):
 
 class FreshnessInput(BaseModel):
     """Measured staleness in seconds for each evidence category."""
+    model_config = ConfigDict(protected_namespaces=())
 
     model_features_seconds: Optional[int] = None
     market_seconds: Optional[int] = None
@@ -227,6 +229,7 @@ class DataFreshness(BaseModel):
 
 
 class CalculationAudit(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     bookmaker: Optional[str] = None
     market_overround: Optional[float] = None
     raw_implied_home: Optional[float] = None
@@ -246,6 +249,7 @@ class CalculationAudit(BaseModel):
 
 class MarketEvaluation(BaseModel):
     """Edge/EV calculation for a single 1X2 outcome."""
+    model_config = ConfigDict(protected_namespaces=())
 
     outcome: str  # "home" | "draw" | "away"
     market_label: BestMarketEnum

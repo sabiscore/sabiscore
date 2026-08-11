@@ -19,6 +19,7 @@ Verdict = Literal[
 
 
 class CoreModelInput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     home_probability: Optional[float] = None
     draw_probability: Optional[float] = None
     away_probability: Optional[float] = None
@@ -58,6 +59,7 @@ class CoreSignalsInput(BaseModel):
 
 
 class CoreFreshnessInput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     model_features_seconds: Optional[int] = None
     market_seconds: Optional[int] = None
     injury_news_seconds: Optional[int] = None
@@ -112,6 +114,7 @@ class CoreDataFreshnessOutput(BaseModel):
 
 
 class CoreCalculationAuditOutput(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     bookmaker: Optional[str]
     market_overround: Optional[float]
     calibration_method: Optional[str]

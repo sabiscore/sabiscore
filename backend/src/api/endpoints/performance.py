@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -28,6 +28,7 @@ _VALUE_SCAN_DB_DEADLINE_SECONDS = 2.5
 
 
 class ValueBetScanFixture(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     match_id: str
     home_team: str
     away_team: str

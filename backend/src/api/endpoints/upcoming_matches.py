@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import settings
@@ -89,6 +89,7 @@ def _next_season_start(league: Optional[str]) -> str:
 
 # Pydantic response models
 class PredictionSchema(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     home_win: float
     draw: float
     away_win: float
@@ -194,6 +195,7 @@ class UpcomingMatchesResponseSchema(BaseModel):
 
 
 class UpcomingAllFixtureSchema(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     matchId: str
     homeTeam: str
     awayTeam: str

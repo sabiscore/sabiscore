@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class SHAPFeatureContribution(BaseModel):
 
 
 class SHAPExplainResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     match_id: str
     home_team: str
     away_team: str

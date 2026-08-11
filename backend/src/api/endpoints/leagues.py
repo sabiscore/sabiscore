@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ...core.league_config import ACTIVE_LEAGUES, LeagueProfile
 from ...core.season_calendar import next_season_start
@@ -26,6 +26,7 @@ _MODEL_ARTIFACT: dict[str, str] = {
 
 
 class LeagueListItem(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     id: str
     name: str
     coverage: str
