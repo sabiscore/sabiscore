@@ -31,6 +31,15 @@ export function isHtmlBody(body: string): boolean {
 }
 
 /**
+ * Returns true when the backend URL has not been configured and the proxy
+ * is falling back to localhost — useful for surfacing "env var missing" in error reasons.
+ */
+export function isLocalhostFallback(): boolean {
+  const url = resolveBackendBaseUrl();
+  return url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost");
+}
+
+/**
  * Produce a safe, short error message from a backend response body.
  *
  * - If the body is HTML → returns "Backend service unavailable"

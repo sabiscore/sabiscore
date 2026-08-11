@@ -1,4 +1,4 @@
-import { isHtmlBody, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-utils";
+import { isHtmlBody, isLocalhostFallback, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +25,11 @@ export async function GET() {
     });
   } catch (error) {
     const timedOut = error instanceof Error && error.name === "AbortError";
+    const reason = isLocalhostFallback()
+      ? "backend_url_not_configured"
+      : timedOut ? "backend_deadline" : "backend_unreachable";
     return Response.json(
-      { error: timedOut ? "Model status timed out" : "Model status unreachable" },
+      { error: timedOut ? "Model status timed out" : "Model status unreachable", reason },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   } finally {

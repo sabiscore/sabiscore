@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody } from '@/lib/proxy-utils';
+import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody, isLocalhostFallback } from '@/lib/proxy-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
         source: 'error',
         status: 'UNAVAILABLE',
         data_gap: true,
-        reason: 'backend_deadline_or_network_failure',
+        reason: isLocalhostFallback() ? 'backend_url_not_configured' : 'backend_deadline_or_network_failure',
         retryable: true,
         freshness: null,
         provenance: [],
