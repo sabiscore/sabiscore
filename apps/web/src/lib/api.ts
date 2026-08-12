@@ -828,6 +828,22 @@ export interface UpcomingMatch {
   edge_quality_score: number | null;
   /** Closing-line value %. Always null pre-kick-off. */
   clv_pct: number | null;
+  /** Feature completeness provenance — present when the projector ran. */
+  data_quality?: {
+    historical_data_ratio: number;
+    defaults_used_count: number;
+    is_synthetic: boolean;
+  } | null;
+  /** UCL knockout/group stage slug: "group" | "r16" | "qf" | "sf" | "final". Null for domestic leagues. */
+  competition_stage?: string | null;
+  /** Advisory portfolio-exposure annotation (ADR-0005). Null on non-value fixtures. */
+  portfolio?: {
+    raw_kelly_stake_pct: number;
+    correlation_group_size: number;
+    correlation_haircut_multiplier: number;
+    adjusted_kelly_stake_pct: number;
+    exceeds_aggregate_cap: boolean;
+  } | null;
 }
 
 export interface UpcomingMatchesResponse {
@@ -845,6 +861,13 @@ export interface UpcomingMatchesResponse {
   data_gap: boolean;
   unavailable_reasons: string[];
   generated_at: string;
+  /** Batch-level advisory exposure summary (ADR-0005). Null when predictions weren't requested. */
+  portfolio_exposure?: {
+    aggregate_recommended_pct: number;
+    aggregate_cap_pct: number;
+    exceeds_aggregate_cap: boolean;
+    drawdown: { status: string; realized_drawdown_pct: number | null; paused: boolean };
+  } | null;
 }
 
 /** Fetch the synchronized fixture-discovery list without bulk model/provider work. */

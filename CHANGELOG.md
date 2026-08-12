@@ -5,6 +5,90 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Proxy league normalization, type unification, selector/loading polish (2026-08-12)
+
+### Fixed
+
+- **`/api/upcoming` league filter was silently broken for 3 of 7 leagues.**
+  `apps/web/src/app/api/upcoming/route.ts` normalized the incoming `league`
+  query param with a bare `.toUpperCase()` and checked the result against a
+  local `ALLOWED_LEAGUES` set of canonical ids. `"La Liga".toUpperCase()` is
+  `"LA LIGA"` — a space, not an underscore — which is not in that set, so the
+  filter fell through to `undefined` and the backend returned **every** league
+  instead of the one requested. Identical failure for `"Serie A"` and
+  `"Ligue 1"`. The route now calls `canonicalLeagueId()`
+  (`apps/web/src/lib/league.ts`), which already mirrors
+  `backend/src/core/league_policy.py` rule-for-rule and validates against the
+  seven-competition closed set, making the local set redundant (deleted).
+  ⚠️ This is the **vΩ.26 two-vocabulary trap again, at a different boundary**:
+  `EPL` is spelled identically in both the display and canonical vocabularies,
+  so testing with EPL alone showed a working filter through multiple sessions.
+  Pinned by `apps/web/src/app/api/upcoming/route.test.ts` (10 cases — every
+  league in display form, an already-canonical id, an out-of-set league, and
+  the no-league case).
+- **`create_prediction()` no longer mints a synthetic `match_id`.**
+  `backend/src/api/endpoints/predictions.py` synthesized
+  `f"{home}_{away}_{timestamp}"` when the caller supplied no `match_id`. That
+  value can never equal a real `Match.id`, so `get_settled_predictions()` —
+  which joins `MatchPredictionLog.match_id` to `Match.id` — could never settle
+  such a row, silently depressing `settled_join_rate` as the season produces
+  real outcomes. The endpoint now fails closed with HTTP 422
+  (`FIXTURE_IDENTITY_REQUIRED`) instead of fabricating an identity. Closes
+  `docs/DEBT.md` item 5; the DB-fixture path (which already passes a real id)
+  is unaffected. Pinned by
+  `test_prediction_endpoint_never_mints_a_synthetic_match_id`.
+- **Submit button reverted to idle before navigation finished.**
+  `match-selector.tsx`'s `handleSubmit` called `setLoading(false)` in a
+  `finally` block immediately after `router.push()`. App Router's `push()` does
+  not await the transition, so the spinner flashed for a single frame and the
+  button returned to its idle label while the route change was still pending.
+  Replaced with `useTransition` — `isPending` stays true for the whole
+  navigation, matching the `router.refresh()` shape already established in
+  `insights-error-state.tsx` (vΩ.25).
+- **Loading progress ticker ran forever.**
+  `match-loading-experience.tsx`'s 300 ms `setInterval` kept firing after its
+  cubic ease-out saturated at 90% (28 s), re-setting the same value
+  indefinitely. Worst on precisely the slow Render cold-start path the screen
+  exists to cover. It now clears itself at saturation.
+- **League grid rendered 7 buttons in a 5-column grid**, leaving the second row
+  as two stub-width cells beside three empty columns. Now `md:grid-cols-4
+  lg:grid-cols-7`, which divides evenly at both breakpoints.
+- **Matchup preview was gated behind `PREMIUM_VISUAL_HIERARCHY`.** With that
+  flag off, desktop users saw no confirmation of their own team selection at
+  all — the compact fallback row beneath it is `sm:hidden`. Echoing a
+  selection back to the user is baseline feedback, not a premium visual, so
+  `TeamVsDisplay` is now gated on `hasTeamsSelected` alone; only the decorative
+  trust chips remain flag-gated.
+
+### Changed
+
+- **`UpcomingMatch` / `UpcomingMatchesResponse` unified** (closes
+  `docs/DEBT.md` item 19). `upcoming-matches-panel.tsx` independently
+  redeclared both interfaces with a diverging shape and bridged the gap with
+  `getUpcomingMatches(...) as Promise<UpcomingMatchesResponse>`, so TypeScript
+  could not catch a genuine mismatch between the wire format and what the panel
+  read. The canonical `lib/api.ts` types gained the three fields the panel
+  legitimately needed (`data_quality`, `competition_stage`, `portfolio`) plus
+  `portfolio_exposure` on the response; the panel's 65-line local copy and the
+  force cast are deleted.
+- Corrected a false comment in `match-selector.tsx` claiming
+  `buildMatchInsightsHref` "always carries home/away/league as query params".
+  It carries `home`/`away` only on the verified-fixture path; hypothetical
+  matchups encode identity in the route segment and `loading.tsx` recovers the
+  names by splitting on `" vs "`.
+
+### Verification
+
+Ruff 0 · backend 1306 passed / 13 skipped / 0 failed · web lint 0 · web
+typecheck 0 · Vitest 151 passed (141 + 10 new) · `NODE_ENV=production` build
+exit 0 · Gitleaks working tree clean.
+
+**Not certified for production** — two P0 operator-only items are unchanged and
+unresolved by this release: the exposed Redis credential still needs
+provider-side rotation (`docs/DEBT.md` item 15), and the two historical
+Gitleaks fingerprints at `d604c13` / `67ed0ab` still lack dated revocation
+evidence (item 16).
+
 ## Unreleased - Apex activation hardening (2026-08-10)
 
 - Diagnosed a browser report of simultaneous `503` responses from

@@ -63,6 +63,31 @@ def test_prohibited_production_patterns_are_absent() -> None:
     )
 
 
+def test_prediction_endpoint_never_mints_a_synthetic_match_id() -> None:
+    """A minted `{home}_{away}_{timestamp}` key can never equal a real Match.id.
+
+    `get_settled_predictions()` joins `MatchPredictionLog.match_id` to `Match.id`,
+    so any prediction logged under a synthesized identifier is permanently
+    unjoinable and silently depresses `settled_join_rate` (docs/DEBT.md item 5).
+    The endpoint must reject the write instead of fabricating an identity.
+    """
+    predictions_src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "api"
+        / "endpoints"
+        / "predictions.py"
+    ).read_text(encoding="utf-8", errors="ignore")
+
+    assert "base_identifier" not in predictions_src, (
+        "Synthetic match_id minting reintroduced in create_prediction() — "
+        "callers must supply a real Match.id or receive HTTP 422."
+    )
+    assert "FIXTURE_IDENTITY_REQUIRED" in predictions_src, (
+        "The fail-closed guard for a missing match_id is gone from predictions.py."
+    )
+
+
 def test_calibrated_ensemble_uses_prefit_cv() -> None:
     """Regression guard: CalibratedEnsemble must default to cv='prefit'.
 

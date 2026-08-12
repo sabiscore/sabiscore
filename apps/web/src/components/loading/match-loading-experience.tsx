@@ -568,12 +568,15 @@ export function MatchLoadingExperience({
   const homeCountryCode = homeTeamData.countryCode || leagueConfig?.countryCode;
   const awayCountryCode = awayTeamData.countryCode || leagueConfig?.countryCode;
 
-  // ponytail: cubic ease-out asymptotes at 90% over the 28s client budget
+  // ponytail: cubic ease-out asymptotes at 90% over the 28s client budget.
+  // Stops itself at saturation — it previously kept firing every 300ms
+  // indefinitely, worst on the slow cold-start path this screen exists for.
   useEffect(() => {
     const start = Date.now();
     const interval = setInterval(() => {
       const t = Math.min((Date.now() - start) / 28_000, 1);
       setProgress(Math.floor(90 * (1 - Math.pow(1 - t, 3))));
+      if (t >= 1) clearInterval(interval);
     }, 300);
     return () => clearInterval(interval);
   }, []);

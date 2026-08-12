@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LEAGUE_COLORS } from "@/lib/league-colors";
-import { getUpcomingMatches } from "@/lib/api";
+import { getUpcomingMatches, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
@@ -101,75 +101,6 @@ function LeagueFilterBar({
   );
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface UpcomingMatch {
-  match_id: string;
-  home_team: string;
-  away_team: string;
-  league: string;
-  match_date: string;
-  status: string;
-  has_value: boolean;
-  staleness_seconds?: number;
-  data_gaps?: string[];
-  best_value_bet?: {
-    edge_pct: number;
-    confidence: number;
-    outcome: string;
-  } | null;
-  data_quality?: {
-    historical_data_ratio: number;
-    defaults_used_count: number;
-    is_synthetic: boolean;
-  } | null;
-  predictions?: {
-    home_win?: number;
-    draw_prob?: number;
-    draw?: number;
-    away_win_prob?: number;
-    away_win?: number;
-    prediction?: string;
-    confidence?: number;
-  } | null;
-  /** Composite edge quality score 0–1. Null when neither predictions nor value bets are present. */
-  edge_quality_score?: number | null;
-  /** Closing-line value %. Always null pre-kick-off. */
-  clv_pct?: number | null;
-  /** UCL knockout/group stage slug: "group" | "r16" | "qf" | "sf" | "final". Null for domestic leagues. */
-  competition_stage?: string | null;
-  /** Advisory portfolio-exposure annotation (ADR-0005). Null on non-value fixtures. */
-  portfolio?: {
-    raw_kelly_stake_pct: number;
-    correlation_group_size: number;
-    correlation_haircut_multiplier: number;
-    adjusted_kelly_stake_pct: number;
-    exceeds_aggregate_cap: boolean;
-  } | null;
-}
-
-interface UpcomingMatchesResponse {
-  upcoming_matches: UpcomingMatch[];
-  total: number;
-  matches_with_value: number;
-  avg_edge_pct: number;
-  source: string;
-  offseason?: boolean;
-  next_season_start?: string | null;
-  /** True when the backend failed to build the list, as opposed to genuinely
-   *  having no fixtures. Must stay distinguishable from an empty in-season
-   *  window: reporting a backend failure as "no fixtures" hid a total outage
-   *  behind a plausible empty state. */
-  data_gap?: boolean;
-  /** Batch-level advisory exposure summary (ADR-0005). Null when predictions weren't requested. */
-  portfolio_exposure?: {
-    aggregate_recommended_pct: number;
-    aggregate_cap_pct: number;
-    exceeds_aggregate_cap: boolean;
-    drawdown: { status: string; realized_drawdown_pct: number | null; paused: boolean };
-  } | null;
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // EdgeQualityBar (+ edgeQualityLabel/edgeQualityColor) now live in
 // @/components/edge-quality-bar and @/lib/edge-quality — shared with
@@ -244,7 +175,7 @@ async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> 
     league,
     limit: FETCH_MATCH_LIMIT,
     days_ahead: VISIBLE_WINDOW_DAYS,
-  }) as Promise<UpcomingMatchesResponse>;
+  });
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────

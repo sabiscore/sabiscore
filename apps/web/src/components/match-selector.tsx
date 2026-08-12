@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/aria-proptypes */
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
@@ -275,8 +275,10 @@ export function MatchSelector() {
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
   const [league, setLeague] = useState<LeagueId>("EPL");
-  const [loading, setLoading] = useState(false);
   const [selectedFixture, setSelectedFixture] = useState<SelectedFixture | null>(null);
+  // isPending covers the full route transition; a plain boolean reset right
+  // after router.push() only ever flashed for a frame.
+  const [loading, startNavigation] = useTransition();
   const router = useRouter();
   const premiumVisualsEnabled = useFeatureFlag(FeatureFlag.PREMIUM_VISUAL_HIERARCHY);
 
@@ -352,23 +354,29 @@ export function MatchSelector() {
     // mounted it twice per navigation — this overlay started its 28s progress
     // clock, then loading.tsx mounted a second, independent instance that
     // restarted from 0%, so the screen visibly "reloaded" mid-analysis.
-    // buildMatchInsightsHref always carries home/away/league as query params,
-    // which is exactly what loading.tsx reads, so nothing is lost.
-    setLoading(true);
-
+    // buildMatchInsightsHref carries home/away only on the verified-fixture
+    // path; loading.tsx falls back to splitting the "<home> vs <away>" route
+    // segment for hypothetical matchups, so both paths resolve team names.
     try {
-      // Preserve the canonical fixture ID when the selection came from the
-      // real-fixture carousel. Manual edits intentionally clear that identity
-      // and remain an explicitly unverified matchup path.
-      router.push(
-        buildMatchInsightsHref({
-          selectedFixture,
-          homeTeam: normalizedHome,
-          awayTeam: normalizedAway,
-          league,
-        }),
-      );
-      
+      // router.push() does not await the navigation, so a plain
+      // setLoading(false) in a finally block flipped the button back to idle in
+      // the same tick — the spinner flashed for one frame while the transition
+      // was still pending. useTransition's isPending stays true for the whole
+      // navigation, matching insights-error-state.tsx's router.refresh() shape.
+      startNavigation(() => {
+        // Preserve the canonical fixture ID when the selection came from the
+        // real-fixture carousel. Manual edits intentionally clear that identity
+        // and remain an explicitly unverified matchup path.
+        router.push(
+          buildMatchInsightsHref({
+            selectedFixture,
+            homeTeam: normalizedHome,
+            awayTeam: normalizedAway,
+            league,
+          }),
+        );
+      });
+
       // Clear persisted state after successful navigation to avoid stale team selections
       try {
         localStorage.removeItem(STORAGE_KEY);
@@ -376,10 +384,7 @@ export function MatchSelector() {
         // ignore storage errors
       }
     } catch (error) {
-      const message = safeErrorMessage(error);
-      toast.error(message);
-    } finally {
-      setLoading(false);
+      toast.error(safeErrorMessage(error));
     }
   };
 
@@ -502,18 +507,23 @@ export function MatchSelector() {
             )}
           </div>
 
-        {premiumVisualsEnabled && hasTeamsSelected && (
-          <div className="hidden rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:block">
-            <>
-                <TeamVsDisplay
-                  homeTeam={homeTeam}
-                  awayTeam={awayTeam}
-                  league={league}
-                  size="lg"
-                  showCountryFlags={true}
-                  className="justify-between"
-                />
-                <div className="mt-4 hidden flex-wrap gap-3 text-[11px] text-slate-300 sm:flex">
+          {/* Confirming the user's own selection back to them is baseline
+              feedback, not a premium visual — this was gated on
+              premiumVisualsEnabled, so with the flag off desktop showed no
+              matchup preview at all (the compact row below is sm:hidden). Only
+              the decorative trust chips stay flag-gated. */}
+          {hasTeamsSelected && (
+            <div className="hidden rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:block">
+              <TeamVsDisplay
+                homeTeam={homeTeam}
+                awayTeam={awayTeam}
+                league={league}
+                size="lg"
+                showCountryFlags={true}
+                className="justify-between"
+              />
+              {premiumVisualsEnabled && (
+                <div className="mt-4 flex flex-wrap gap-3 text-[11px] text-slate-300">
                   <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1">
                     Evidence availability checked
                   </span>
@@ -524,28 +534,31 @@ export function MatchSelector() {
                     Zero stake when gates close
                   </span>
                 </div>
-              </>
-          </div>
-        )}
-
-        {hasTeamsSelected && (
-          <div className="rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm sm:hidden">
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate font-medium text-slate-200">{homeTeam || "Home team"}</span>
-              <span className="text-xs uppercase text-slate-500">vs</span>
-              <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
+              )}
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              {selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}
-            </p>
-          </div>
-        )}
+          )}
+
+          {hasTeamsSelected && (
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm sm:hidden">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-medium text-slate-200">{homeTeam || "Home team"}</span>
+                <span className="text-xs uppercase text-slate-500">vs</span>
+                <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}
+              </p>
+            </div>
+          )}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* League Selector */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-300">League</label>
-            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:overflow-visible">
+            {/* 7 leagues: a 5-col grid left the last row as 2 stub-width cells
+                with 3 empty columns beside them. 4→7 divides evenly at both
+                breakpoints. */}
+            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible lg:grid-cols-7">
               {LEAGUES.map((l) => (
                 <button
                   key={l.id}

@@ -8,12 +8,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody, isLocalhostFallback } from '@/lib/proxy-utils';
+import { canonicalLeagueId } from '@/lib/league';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 const BACKEND_DEADLINE_MS = 8_000;
-const ALLOWED_LEAGUES = new Set(['EPL', 'CHAMPIONSHIP', 'LA_LIGA', 'SERIE_A', 'BUNDESLIGA', 'LIGUE_1', 'EREDIVISIE', 'UCL']);
 
 function boundedInteger(value: string | null, fallback: number, minimum: number, maximum: number) {
   const parsed = Number(value ?? fallback);
@@ -37,11 +37,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
 
-    // Extract query parameters
+    // Extract query parameters — canonicalLeagueId() validates against the
+    // 7-competition closed set and returns null for unknown/display-form inputs.
+    // ponytail: replaces .toUpperCase()+Set check; "La Liga"→"LA_LIGA" now works
     const requestedLeague = searchParams.get('league');
-    const league = requestedLeague && ALLOWED_LEAGUES.has(requestedLeague.toUpperCase())
-      ? requestedLeague.toUpperCase()
-      : undefined;
+    const league = requestedLeague ? (canonicalLeagueId(requestedLeague) ?? undefined) : undefined;
     const daysAhead = boundedInteger(searchParams.get('days_ahead'), 7, 1, 30);
     const limit = boundedInteger(searchParams.get('limit'), 20, 1, 50);
     // Discovery-first default: callers must explicitly opt into bounded

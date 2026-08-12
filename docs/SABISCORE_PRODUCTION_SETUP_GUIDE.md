@@ -370,6 +370,67 @@ run the full release matrix before tagging the release.
 3. Roll back database schema only with reviewed Alembic downgrade or forward-fix migration.
 4. Re-run `python -m src.cli providers doctor` and `make verify` before restoring traffic.
 
+## Proxy league normalization, prediction identity, selector polish (2026-08-12)
+
+Frontend + API-boundary release. Verdict, Kelly, edge, EV, model artifacts, and
+evidence-gating logic are all unchanged. **No migration required** — Alembic head
+stays `0006_canonical_league_ids`.
+
+### League filters were silently ignored for 3 of 7 leagues
+
+`GET /api/upcoming?league=La+Liga` returned **every** league, not La Liga. The
+Next.js proxy normalized with `.toUpperCase()` and matched against a set of
+canonical ids, so `"LA LIGA"` (space) missed `"LA_LIGA"` (underscore) and the
+filter silently became "no filter". Same for Serie A and Ligue 1. EPL is spelled
+identically in both vocabularies and always worked, which is why this survived.
+
+The route now uses `canonicalLeagueId()` (`apps/web/src/lib/league.ts`).
+
+**Post-deploy check — must exercise a multi-word league, not EPL:**
+
+```bash
+# Every returned fixture must be LA_LIGA. Before this release the response
+# contained fixtures from every synced competition.
+curl -s "https://<web-host>/api/upcoming?league=La%20Liga&limit=50" \
+  | python -c "import json,sys; \
+      print(sorted({m['league'] for m in json.load(sys.stdin)['upcoming_matches']}))"
+```
+
+### Prediction writes now require a real fixture id
+
+`POST /api/v1/predictions/` returns **HTTP 422 `FIXTURE_IDENTITY_REQUIRED`**
+when `match_id` is omitted. It previously minted
+`f"{home}_{away}_{timestamp}"`, which can never equal a real `Match.id` and so
+could never be settled by `get_settled_predictions()`.
+
+**Operational note:** this is a deliberate behavior change on a public endpoint.
+Any integration calling it without a `match_id` starts receiving 422 on deploy.
+Fixture ids come from `GET /api/v1/fixtures/upcoming`. The DB-fixture path,
+which already supplies a real id, is unaffected — as is `/api/full-analysis/*`,
+which the frontend actually uses.
+
+### Selector and loading-screen fixes
+
+- Submit button now uses `useTransition`, so the spinner persists for the whole
+  route transition instead of flashing for one frame.
+- The loading progress ticker stops at saturation rather than running a 300 ms
+  interval indefinitely — previously worst on slow Render cold starts.
+- League grid `md:grid-cols-5` → `md:grid-cols-4 lg:grid-cols-7` (7 leagues no
+  longer leave a ragged second row).
+- The desktop matchup preview no longer requires `PREMIUM_VISUAL_HIERARCHY`.
+
+### Release gate results (local, 2026-08-12)
+
+Ruff 0 · backend 1307 passed / 13 skipped / 0 failed · web lint 0 · web
+typecheck 0 · Vitest 151 passed · `NODE_ENV=production` build exit 0 ·
+Gitleaks working tree clean.
+
+⚠️ **Not a production certification.** Two P0 operator items are unchanged by
+this release and still block certification: the exposed Redis credential awaits
+provider-side rotation (`docs/DEBT.md` item 15), and the historical Gitleaks
+fingerprints at `d604c13` / `67ed0ab` still lack dated revocation evidence
+(item 16). Full-history Gitleaks and the Docker image-build gates remain red.
+
 ## vΩ.33 Identity deploy, capability readiness, season calendar (2026-08-04)
 
 Backend data-truth release. Verdict, Kelly, edge, EV, and evidence-gating logic

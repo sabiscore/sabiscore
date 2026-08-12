@@ -552,28 +552,45 @@ exactly one season-string writer (`backend/src/utils/season.py`), matching
 
 ## 5. Predictions with a synthetic match_id can never settle
 
-**Tier:** `NEXT` — trigger: once `settled_join_rate` is real and being watched (item 2
-shipped 2026-08-05), an unexplained gap between total predictions and joinable
-predictions needs this fix.
+**Tier:** `ACCEPTED` — **CLOSED 2026-08-12**. Kept as the incident record.
 **Owner:** unassigned.
 **Found:** 2026-08-05, while wiring the settlement join (item 2).
+**Fixed:** 2026-08-12, ahead of its own trigger — closed *before* real settled
+data could expose the gap, rather than waiting for a depressed
+`settled_join_rate` to prove it. Eredivisie's first settleable results land
+within days, so fixing it after the fact would have meant permanently
+unjoinable rows already written.
 
-`create_prediction()` (`backend/src/api/endpoints/predictions.py:106-110`) synthesizes
-`match_id = f"{home}_{away}_{timestamp}"` when the caller doesn't supply a real one.
+`create_prediction()` (`backend/src/api/endpoints/predictions.py`) synthesized
+`match_id = f"{home}_{away}_{timestamp}"` when the caller didn't supply a real one.
 `get_settled_predictions()` joins `MatchPredictionLog.match_id` to `Match.id` — a
-synthetic value can never equal a real `Match.id`, so such prediction rows are
+synthetic value can never equal a real `Match.id`, so such prediction rows were
 permanently unjoinable no matter how correct the settlement pipeline is.
 
+**Resolution:** the endpoint now fails closed. When no `match_id` is supplied it
+raises HTTP 422 with `error_code: "FIXTURE_IDENTITY_REQUIRED"`, directing the
+caller to a real fixture id from `GET /api/v1/fixtures/upcoming`, instead of
+fabricating an identity that silently corrupts the settlement SLI. This is the
+"rejecting the write" option named in the original cost estimate below, chosen
+over back-resolving the fixture by team name + kickoff: that lookup would itself
+be an identity guess, and the codebase already has a canonical answer for
+whether a matchup resolves (`reconcile_team`, the `FIXTURE_IDENTITY_UNVERIFIED`
+path) rather than a second, weaker heuristic in an endpoint. The DB-fixture
+path, which already passes a real `match_id`, is untouched. Regression guard:
+`test_prediction_endpoint_never_mints_a_synthetic_match_id` in
+`backend/tests/test_zero_fabrication_contract.py` — a source-level contract
+assertion in the repo's established style for this invariant class, since
+importing the endpoint requires a live DB (item 7).
+
 **Blast radius:** `settled_join_rate` (item 2's SLI) and `/model-performance`'s
-`settled_predictions` count — both will read low even once matches are settling
-correctly, if a meaningful share of predictions were logged via this path.
-**Cost:** small — requires either always passing a real `Match.id` at the call site
-that reaches `create_prediction()`, or rejecting the write when one isn't available,
-rather than silently minting an unjoinable key.
-**Impact:** unknown until measured — not yet confirmed how much of live traffic hits
-this path vs. the DB-listed-fixture path (which already passes a real `match_id`).
-**Priority:** low today (no settled data exists yet to expose the gap); revisit the
-moment item 2's telemetry is live against real matches.
+`settled_predictions` count — both would have read low even once matches settled
+correctly, for any share of predictions logged via this path.
+**Impact:** now none for new writes. ⚠️ **Residual:** any rows already written
+under a synthetic key before this fix remain unjoinable. No backfill was
+attempted — `MatchPredictionLog` currently holds no settled rows at all
+(`settled_predictions_total: 0`), so there is nothing to repair yet; re-check
+if `settled_join_rate` reads low once real volume exists.
+**Priority:** none remaining for the write path.
 
 ## 6. CLV and ROI are structurally unavailable, not merely unimplemented
 
@@ -833,10 +850,25 @@ is if the marker is ever dropped.
 
 ## 19. `UpcomingMatch` / `UpcomingMatchesResponse` are declared twice in `apps/web`, bridged by an unchecked cast
 
-**Tier:** `NEXT` — trigger: the next time either shape changes, or the next
-field that silently goes missing.
+**Tier:** `ACCEPTED` — **CLOSED 2026-08-12**, same day it was opened. Kept as
+the incident record per this ledger's convention.
 **Owner:** unassigned.
 **Found:** 2026-08-12, while fixing the empty fixtures panel.
+
+**Closed 2026-08-12.** The trigger named below ("the next time either shape
+changes") fired immediately: the very next change to this response shape was
+the league-filter fix in the same session. Resolution: `lib/api.ts` remains the
+single authority and absorbed the three fields the panel legitimately needed
+and the canonical copy lacked — `data_quality`, `competition_stage`, `portfolio`
+on `UpcomingMatch`, plus `portfolio_exposure` on `UpcomingMatchesResponse`. The
+panel's 65-line local redeclaration and the
+`as Promise<UpcomingMatchesResponse>` cast are deleted; it now imports both
+types from `@/lib/api`. The prediction sub-shape disagreement noted below
+(`draw_prob`/`away_win_prob` vs `draw`/`away_win`) resolved on inspection —
+the panel never read those keys, only `predictions?.confidence`, so the
+divergence was dead surface area rather than a live mismatch. `pnpm typecheck`
+exits 0 with the cast removed, which is the proof that matters: any future
+field drift is now a compile error rather than a runtime `undefined`.
 
 `apps/web/src/lib/api.ts` exports the canonical `UpcomingMatch` /
 `UpcomingMatchesResponse` interfaces used by `getUpcomingMatches()`.

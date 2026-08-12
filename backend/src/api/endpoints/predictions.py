@@ -106,8 +106,19 @@ async def create_prediction(
         if request.match_id:
             match_identifier = request.match_id
         else:
-            base_identifier = f"{request.home_team}_{request.away_team}_{int(datetime.now(timezone.utc).timestamp())}"
-            match_identifier = base_identifier.replace(" ", "_").lower()
+            # Minting a synthetic key makes the prediction permanently
+            # unjoinable by get_settled_predictions() — DEBT item 5.
+            # Callers must supply a real fixture ID from /api/v1/fixtures/upcoming.
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error_code": "FIXTURE_IDENTITY_REQUIRED",
+                    "message": (
+                        "match_id is required. Supply a real fixture ID "
+                        "from GET /api/v1/fixtures/upcoming."
+                    ),
+                },
+            )
 
         try:
             # Add timeout to prevent hanging requests
