@@ -828,3 +828,45 @@ group.
 **Impact:** low today; the risk is the placeholder looking more authoritative than it
 is if the marker is ever dropped.
 **Priority:** low until Eredivisie's opening round settles.
+
+---
+
+## 19. `UpcomingMatch` / `UpcomingMatchesResponse` are declared twice in `apps/web`, bridged by an unchecked cast
+
+**Tier:** `NEXT` — trigger: the next time either shape changes, or the next
+field that silently goes missing.
+**Owner:** unassigned.
+**Found:** 2026-08-12, while fixing the empty fixtures panel.
+
+`apps/web/src/lib/api.ts` exports the canonical `UpcomingMatch` /
+`UpcomingMatchesResponse` interfaces used by `getUpcomingMatches()`.
+`apps/web/src/components/upcoming-matches-panel.tsx` independently redeclares
+both with a **different** shape, then force-casts the real client's return
+value (`getUpcomingMatches(...) as Promise<UpcomingMatchesResponse>`), so
+TypeScript cannot catch a genuine mismatch between what the API returns and
+what the panel assumes.
+
+The drift is real in both directions: the panel's copy carries
+`data_quality`, `competition_stage`, and `portfolio`; the canonical copy
+carries `venue`, `value_bets`, `source`, `edge_quality_score`, `clv_pct`,
+`data_gap`, `unavailable_reasons`, and `generated_at`. The prediction sub-shapes
+disagree outright — the panel spells the keys `draw_prob`/`away_win_prob`,
+the canonical copy `draw`/`away_win`.
+
+**This is no longer theoretical.** Rendering an honest "backend failed" empty
+state required `data_gap`, which exists on the canonical type and on the wire
+but was absent from the panel's copy — a compile error that the cast would
+have hidden entirely had the field been read through it rather than declared.
+`data_gap?: boolean` was added to the local copy as the minimal unblock; the
+duplication itself is untouched.
+
+**Blast radius:** any field the backend adds, renames, or removes is invisible
+to the panel until it fails at runtime.
+**Cost:** small but not mechanical — the two shapes must first be reconciled
+(they are not a superset/subset), then the cast removed and the panel's reads
+re-typechecked.
+**Impact:** moderate — this is a zero-fabrication surface, and a silently
+`undefined` field here renders as a missing badge or a wrong empty state
+rather than an error.
+**Priority:** medium. Do it as part of the next change to this response shape,
+not as a standalone refactor.

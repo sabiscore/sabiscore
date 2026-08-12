@@ -1,8 +1,7 @@
 /* eslint-disable jsx-a11y/aria-proptypes */
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
@@ -24,17 +23,7 @@ import {
   selectorLeagueId,
   type SelectedFixture,
 } from "@/lib/match-selection";
-// Only rendered once a matchup is submitted, and it carries framer-motion's
-// drag/gesture machinery — keep it out of the /match first-load bundle.
-const MatchLoadingExperience = dynamic(
-  () =>
-    import("@/components/loading/match-loading-experience").then(
-      (m) => m.MatchLoadingExperience,
-    ),
-  { ssr: false },
-);
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
-import { hashMatchup } from "@/lib/interstitial-storage";
 import { canonicalLeagueId } from "@/lib/league";
 import { describeEdgeQualityPill, describeValueBadge } from "@/lib/edge-quality";
 import { cn } from "@/lib/utils";
@@ -287,19 +276,9 @@ export function MatchSelector() {
   const [awayTeam, setAwayTeam] = useState("");
   const [league, setLeague] = useState<LeagueId>("EPL");
   const [loading, setLoading] = useState(false);
-  const [showInterstitial, setShowInterstitial] = useState(false);
   const [selectedFixture, setSelectedFixture] = useState<SelectedFixture | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const router = useRouter();
-  const interstitialV2Enabled = useFeatureFlag(FeatureFlag.PREDICTION_INTERSTITIAL_V2);
   const premiumVisualsEnabled = useFeatureFlag(FeatureFlag.PREMIUM_VISUAL_HIERARCHY);
-  const [pendingMatchup, setPendingMatchup] = useState<{
-    home: string;
-    away: string;
-    league: LeagueId;
-    key: string;
-  } | null>(null);
 
   const STORAGE_KEY = "sabiscore.matchSelector.v1";
 
@@ -368,12 +347,14 @@ export function MatchSelector() {
 
     const normalizedHome = homeTeam.trim();
     const normalizedAway = awayTeam.trim();
+    // No client-side interstitial here: the route's own loading.tsx owns the
+    // loading UI for /match/[id]. Rendering MatchLoadingExperience here too
+    // mounted it twice per navigation — this overlay started its 28s progress
+    // clock, then loading.tsx mounted a second, independent instance that
+    // restarted from 0%, so the screen visibly "reloaded" mid-analysis.
+    // buildMatchInsightsHref always carries home/away/league as query params,
+    // which is exactly what loading.tsx reads, so nothing is lost.
     setLoading(true);
-    if (interstitialV2Enabled) {
-      const matchupKey = hashMatchup(normalizedHome, normalizedAway);
-      setPendingMatchup({ home: normalizedHome, away: normalizedAway, league, key: matchupKey });
-      setShowInterstitial(true);
-    }
 
     try {
       // Preserve the canonical fixture ID when the selection came from the
@@ -395,57 +376,12 @@ export function MatchSelector() {
         // ignore storage errors
       }
     } catch (error) {
-      setShowInterstitial(false);
-      setPendingMatchup(null);
       const message = safeErrorMessage(error);
       toast.error(message);
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!showInterstitial) return;
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    requestAnimationFrame(() => dialogRef.current?.focus());
-    const handleDialogKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setShowInterstitial(false);
-        setPendingMatchup(null);
-        setLoading(false);
-        return;
-      }
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", handleDialogKeyDown);
-    return () => {
-      document.body.style.overflow = previous;
-      document.removeEventListener("keydown", handleDialogKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [showInterstitial]);
 
   const hasTeamsSelected = Boolean(homeTeam.trim() && awayTeam.trim());
 
@@ -752,38 +688,6 @@ export function MatchSelector() {
         </div>
       </div>
 
-      {interstitialV2Enabled && showInterstitial && pendingMatchup && (
-        // py-[max(…)] keeps the card clear of a notch. The previous
-        // `py-safe-area-inset-top` is not a Tailwind utility and compiled to
-        // nothing, so this overlay had no vertical padding at all.
-        <div
-          ref={dialogRef}
-          tabIndex={-1}
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/90 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="match-loading-title"
-          aria-describedby="match-loading-desc"
-        >
-          <h2 id="match-loading-title" className="sr-only">Preparing match analysis</h2>
-          <p id="match-loading-desc" className="sr-only">
-            SabiScore is acquiring evidence and will navigate to the authoritative analysis.
-          </p>
-          <div className="absolute inset-0" aria-hidden="true" />
-          {/* max-w-6xl matches the interstitial's own container; a narrower clamp
-              here would collapse its two-column layout back to a single strip.
-              py-4 replaces the padding the interstitial dropped for route parity —
-              this overlay has no <main> ancestor supplying it. */}
-          <div className="relative w-full max-w-6xl max-h-[calc(100vh-2rem)] overflow-y-auto py-4">
-            <MatchLoadingExperience
-              homeTeam={pendingMatchup.home}
-              awayTeam={pendingMatchup.away}
-              league={pendingMatchup.league}
-              matchupId={pendingMatchup.key}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -240,6 +240,50 @@ certification or release gate.
   unreferenced anywhere in `backend/src` or `backend/tests` before removal.
   Simplified dead-code branches in the new `replay_elo_from_db.py`'s
   `_sync_engine()`.
+- **Fixed the real cause of the empty "Upcoming verified fixtures" panel.**
+  A live probe found 64 synced, in-window fixtures in the production database
+  (earliest 2026-08-14) while `GET /api/v1/upcoming/matches` returned
+  `total: 0, source: "error"`. `_get_upcoming_matches_from_db()` emitted each
+  row's identity as `id`, but `UpcomingMatchSchema` requires `match_id` (which
+  is also what `apps/web`'s `UpcomingMatch` interface reads), so every response
+  failed Pydantic validation. The endpoint's broad `except Exception` then
+  converted that into `UPCOMING_SERVICE_UNAVAILABLE` with an empty list —
+  indistinguishable from a genuine off-season. The public fixtures panel always
+  sends `include_predictions=false`, so it took exactly this path and had been
+  showing "no upcoming fixtures" regardless of how many were synced. The
+  prediction path masked it in tests by overwriting `match["match_id"]` on both
+  its success and failure branches, so no prediction-path test could ever catch
+  a missing key in the shared row builder. Row builder now emits `match_id`;
+  all three readers already used `.get("match_id") or .get("id")`, so the fix
+  is safe at the source. Pinned by a new test that runs the real row builder
+  against the real response schema
+  (`test_db_rows_satisfy_response_schema_without_predictions`).
+  ⚠️ The earlier `days_ahead` 7→14 change was necessary but **not** sufficient —
+  the window was never why the list was empty.
+- Endpoint failures on `/upcoming/matches` now carry the exception class name
+  (`EXC:<ClassName>`) alongside `UPCOMING_SERVICE_UNAVAILABLE`. Class name only —
+  never the message, which can contain row data. Without it, one opaque reason
+  string covered every distinct failure and a schema bug served a believable
+  empty list for as long as it took someone to read the logs.
+- Fixed the match-selection panel layout: fixtures now lay out two-up from `xl`
+  instead of a single narrow column in a full-width section, render 12 instead
+  of 8, and show an honest "showing N of M" count. `days_ahead` and the
+  empty-state copy now read one shared `VISIBLE_WINDOW_DAYS` constant — they
+  were independent literals, which is how the query (7) and the backend sync
+  window (14) drifted apart in the first place. The panel also requested
+  `limit: 8`, capping the list below what the window contained.
+- The empty state now distinguishes a backend failure (`data_gap`) from a
+  genuinely empty in-season window, instead of reporting an outage as
+  "No upcoming fixtures".
+- Fixed the results page appearing to reload mid-analysis: `match-selector.tsx`
+  rendered `MatchLoadingExperience` in a client overlay *and* the route's own
+  `app/match/[id]/loading.tsx` rendered a second, independent instance on
+  navigation, so the 28-second progress clock visibly restarted from 0%.
+  The route's `loading.tsx` is now the single owner of that UI;
+  `buildMatchInsightsHref` already carries `home`/`away`/`league` as query
+  params, which is exactly what it reads, so nothing is lost. Removes the
+  overlay's body-scroll lock and focus trap with it (~70 lines), and drops
+  the `/match` first-load bundle from 210 kB to 208 kB.
 
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 

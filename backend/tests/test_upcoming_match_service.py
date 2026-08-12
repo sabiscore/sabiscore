@@ -228,3 +228,84 @@ async def test_cached_or_db_fixture_discovery_never_calls_provider_or_model():
     fake_api_client.get_upcoming_matches.assert_not_awaited()
     assert result["source"] == "database"
     assert result["data_gap"] is False
+
+
+# ---------------------------------------------------------------------------
+# Contract: the DB row builder must satisfy UpcomingMatchesResponseSchema.
+#
+# _get_upcoming_matches_from_db() emitted "id" while UpcomingMatchSchema
+# requires "match_id". Every include_predictions=false request therefore
+# raised ValidationError inside the endpoint, whose broad `except Exception`
+# converted it into source="error" + UPCOMING_SERVICE_UNAVAILABLE and an
+# EMPTY fixture list. The public fixtures panel always sends
+# include_predictions=false, so it showed "no upcoming fixtures" while the
+# database held dozens of synced, in-window fixtures.
+#
+# The prediction path masked this in tests: it overwrites match["match_id"]
+# on both its success and failure branches, so a prediction-path test can
+# never catch a missing match_id in the shared row builder.
+# ---------------------------------------------------------------------------
+
+
+async def test_db_rows_satisfy_response_schema_without_predictions():
+    """Run the real row builder against a real session, then validate with the
+    real response schema — the exact sequence the endpoint performs."""
+    import pytest_asyncio  # noqa: F401  (asyncio_mode=auto)
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from src.api.endpoints.upcoming_matches import UpcomingMatchesResponseSchema
+    from src.core.database import Base, League, Match, Team
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        async with factory() as db:
+            db.add(League(id="EPL", name="Premier League", country="England"))
+            db.add_all([
+                Team(id="t-home", name="Arsenal", league_id="EPL", active=True),
+                Team(id="t-away", name="Chelsea", league_id="EPL", active=True),
+            ])
+            await db.commit()
+            db.add(Match(
+                id="fd-900001",
+                home_team_id="t-home",
+                away_team_id="t-away",
+                league_id="EPL",
+                match_date=now + timedelta(days=2),
+                status="scheduled",
+            ))
+            await db.commit()
+
+            service = UpcomingMatchService(api_client=MagicMock())
+            with patch("src.services.upcoming_match_service.cache_manager") as MockCache:
+                MockCache.get.return_value = None  # force a real DB read
+                payload = await service.get_upcoming_matches(
+                    db, league=None, days_ahead=14, limit=50
+                )
+
+            rows = payload["matches"]
+            assert len(rows) == 1, "seeded in-window fixture must be returned"
+            # The canonical identity key the schema and apps/web both read.
+            assert rows[0]["match_id"] == "fd-900001"
+
+            # Replicate the endpoint's normalisation, then validate for real.
+            payload["upcoming_matches"] = payload.pop("matches")
+            payload["matches_with_value"] = 0
+            payload["avg_edge_pct"] = 0.0
+            payload["offseason"] = False
+            validated = UpcomingMatchesResponseSchema.model_validate(payload)
+
+            assert validated.total == 1
+            assert validated.source == "database"
+            assert validated.upcoming_matches[0].match_id == "fd-900001"
+            # A successful read must never look like an outage or an off-season.
+            assert validated.data_gap is False
+            assert validated.unavailable_reasons == []
+            assert validated.offseason is False
+    finally:
+        await engine.dispose()

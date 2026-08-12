@@ -156,6 +156,11 @@ interface UpcomingMatchesResponse {
   source: string;
   offseason?: boolean;
   next_season_start?: string | null;
+  /** True when the backend failed to build the list, as opposed to genuinely
+   *  having no fixtures. Must stay distinguishable from an empty in-season
+   *  window: reporting a backend failure as "no fixtures" hid a total outage
+   *  behind a plausible empty state. */
+  data_gap?: boolean;
   /** Batch-level advisory exposure summary (ADR-0005). Null when predictions weren't requested. */
   portfolio_exposure?: {
     aggregate_recommended_pct: number;
@@ -217,11 +222,28 @@ function freshnessLabel(stalenessSeconds?: number) {
   return { label: "Stale", className: "border-rose-500/30 bg-rose-500/10 text-rose-300" };
 }
 
+/**
+ * Discovery window, in days. MUST stay aligned with the backend's
+ * `fixture_sync_service.SYNC_HORIZON_DAYS` — fixtures outside the sync
+ * horizon are never seeded, so asking for more returns nothing.
+ *
+ * Single source of truth for BOTH the query and the empty-state copy. These
+ * were two independent literals and drifted: the query asked for 7 days while
+ * the backend synced 14, and the copy quoted its own third number.
+ */
+const VISIBLE_WINDOW_DAYS = 14;
+/** Fixtures rendered in the panel. */
+const VISIBLE_MATCH_LIMIT = 12;
+/** Fetched from the backend — a margin above what's rendered so the
+ *  "showing N of M" count is meaningful. Cheap: this call always sets
+ *  include_predictions=false, so it is a bounded DB read with no model work. */
+const FETCH_MATCH_LIMIT = 24;
+
 async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> {
   return getUpcomingMatches({
     league,
-    limit: 8,
-    days_ahead: 14,
+    limit: FETCH_MATCH_LIMIT,
+    days_ahead: VISIBLE_WINDOW_DAYS,
   }) as Promise<UpcomingMatchesResponse>;
 }
 
@@ -453,7 +475,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
       {isLoading && <PanelSkeleton />}
 
       {error && !data && (
-        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 py-4 text-center text-xs text-slate-500">
+        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-500">
           Fixtures unavailable — backend offline or warming up.
         </p>
       )}
@@ -465,18 +487,34 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
             nextSeasonStart={data.next_season_start ?? null}
           />
         ) : (
-          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 py-4 text-center text-xs text-slate-500">
-            No upcoming fixtures in the next 14 days.
+          // data_gap means the backend failed rather than genuinely having no
+          // fixtures — saying "no fixtures" there would report an outage as a
+          // quiet, believable empty state.
+          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-500">
+            {data.data_gap
+              ? "Fixture list unavailable right now. Please try again shortly."
+              : `No upcoming fixtures in the next ${VISIBLE_WINDOW_DAYS} days.`}
           </p>
         )
       )}
 
       {data && data.upcoming_matches.length > 0 && (
-        <div className="space-y-2">
-          {data.upcoming_matches.slice(0, 8).map((m) => (
-            <MatchRow key={m.match_id} match={m} />
-          ))}
-        </div>
+        <>
+          {/* Two columns from xl up: the panel spans the full content width, so a
+              single column left most of the row empty and pushed all but a
+              handful of fixtures below the fold. */}
+          <div className="grid gap-2 xl:grid-cols-2">
+            {data.upcoming_matches.slice(0, VISIBLE_MATCH_LIMIT).map((m) => (
+              <MatchRow key={m.match_id} match={m} />
+            ))}
+          </div>
+          {data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && (
+            <p className="pt-1 text-center text-[11px] text-slate-600">
+              Showing {VISIBLE_MATCH_LIMIT} of {data.upcoming_matches.length} fixtures
+              {!selectedLeague && " · filter by league to narrow the list"}
+            </p>
+          )}
+        </>
       )}
     </section>
   );

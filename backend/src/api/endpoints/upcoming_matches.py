@@ -338,6 +338,12 @@ async def get_upcoming_matches(
     except Exception as exc:
         metrics_collector.increment("upcoming.request.failure")
         logger.error("Error fetching upcoming matches: %s", type(exc).__name__, exc_info=True)
+        # Carry the exception CLASS NAME (never the message — it can contain row
+        # data) into the response. Without it this handler reported every distinct
+        # failure as the same three words, and a schema-validation bug served an
+        # empty fixture list that was indistinguishable from a real off-season for
+        # as long as it took someone to read the logs. Class name only: no
+        # payload, no query values, nothing user-supplied.
         return UpcomingMatchesResponseSchema(
             upcoming_matches=[],
             total=0,
@@ -348,7 +354,10 @@ async def get_upcoming_matches(
             source="error",
             offseason=False,
             data_gap=True,
-            unavailable_reasons=["UPCOMING_SERVICE_UNAVAILABLE"],
+            unavailable_reasons=[
+                "UPCOMING_SERVICE_UNAVAILABLE",
+                f"EXC:{type(exc).__name__}",
+            ],
         )
     finally:
         metrics_collector.record_timer(

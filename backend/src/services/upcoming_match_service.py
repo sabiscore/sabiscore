@@ -219,7 +219,16 @@ class UpcomingMatchService:
                 identity_gaps.append("AWAY_TEAM_NAME_UNRESOLVED")
             rows.append(
                 {
-                    "id": str(match.id),
+                    # Canonical key is `match_id` — it is what UpcomingMatchSchema
+                    # requires and what apps/web's UpcomingMatch interface reads.
+                    # Emitting only `id` here made every include_predictions=false
+                    # response fail schema validation, which the endpoint's broad
+                    # `except Exception` then reported as UPCOMING_SERVICE_UNAVAILABLE
+                    # with zero fixtures — indistinguishable from a genuine
+                    # off-season. The fixtures panel always requests
+                    # include_predictions=false, so the public list was empty
+                    # regardless of how many fixtures were actually synced.
+                    "match_id": str(match.id),
                     "home_team": home_team_name or "Unknown home team",
                     "away_team": away_team_name or "Unknown away team",
                     "league": match.league_id,
