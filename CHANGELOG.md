@@ -57,6 +57,27 @@ league-parameterized boundaries that did not normalize. All now route through
 - `apps/web/src/app/api/offseason/[league]/route.test.ts` — pins display-form
   forwarding and that an unsupported league never claims a season status.
 
+- **The keep-alive workflow had never run successfully.**
+  `.github/workflows/keep_alive.yml` sourced `BACKEND_URL` from
+  `secrets.BACKEND_URL`, which was never configured, so
+  `scripts/keep_alive.py` exited 2 with `BACKEND_URL is required` on **every**
+  14-minute scheduled run. The job whose entire purpose is preventing
+  free-tier cold starts had therefore never warmed the dyno once — a
+  plausible contributor to the cold-start 503s previously investigated
+  (2026-08-11 entry below).
+
+  The canonical backend host is not a secret — it already appears in
+  `render.yaml`'s `ALLOWED_HOSTS` and `vercel.json`'s rewrites — so it is now
+  a literal fallback: `secrets.BACKEND_URL || vars.BACKEND_URL ||
+  'https://sabiscore-api-bav1.onrender.com'`. A repo secret or variable still
+  overrides it. Verified by running the script directly against production:
+  `status=200 readiness=ok models_loaded=True leagues=bundesliga,epl,
+  eredivisie,la_liga,ligue_1,serie_a cold_start=False`, exit 0.
+
+  ⚠️ **This was only visible because a failing scheduled workflow was
+  investigated rather than dismissed as unrelated to the commit.** A red
+  scheduled job that predates your change is still a red job.
+
 ### Verification
 
 Ruff 0 · web lint 0 · typecheck 0 · Vitest **155 passed** (25 files) ·

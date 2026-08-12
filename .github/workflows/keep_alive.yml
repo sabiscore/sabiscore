@@ -25,7 +25,13 @@ jobs:
       - name: Ping backend readiness
         run: python scripts/keep_alive.py
         env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          # The canonical backend host is public (it already appears in
+          # render.yaml ALLOWED_HOSTS and vercel.json rewrites), so it is a
+          # safe default rather than a required secret. Without this fallback
+          # the job exited 2 on every scheduled run -- the keep-alive had
+          # never actually warmed the free-tier dyno it exists to keep warm.
+          # A repo secret or variable still overrides it for other environments.
+          BACKEND_URL: ${{ secrets.BACKEND_URL || vars.BACKEND_URL || 'https://sabiscore-api-bav1.onrender.com' }}
           # Log a cold-start warning when response time exceeds this threshold.
           # Render free-tier cold starts typically range 5-30 s.
           COLD_START_THRESHOLD_S: '5.0'
