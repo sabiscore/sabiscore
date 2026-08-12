@@ -197,6 +197,50 @@ The isolated Python 3.12 research environment imports CatBoost 1.2.8 and SHAP
 installation. Importability is therefore partial and does not clear any model
 certification or release gate.
 
+- Fixed the empty "No upcoming fixtures in the next 7 days" panel on the match
+  selector and homepage: the query and its empty-state copy now request a
+  14-day window (`match-selector.tsx`, `upcoming-matches-panel.tsx`), matching
+  `fixture_sync_service.py`'s `SYNC_HORIZON_DAYS = 14` sync window (widened
+  2026-08-08 so EPL's Aug-21 opener is reachable) — the frontend had drifted
+  back to its old 7-day default.
+- Wired head-to-head and home-venue canonical features into
+  `UpcomingMatchFeatureProjector.project_match_features()`
+  (`_get_h2h_stats`/`_get_home_venue_stats`, new DB-query helpers), resolving
+  the two largest sub-items of `docs/DEBT.md` item 13; formulas cross-checked
+  against `data/transformers.py` for train/serve parity. Four incidental
+  cross-signal features (`h2h_market_agreement`, `venue_market_combo`,
+  `form_market_agreement_home`, `form_market_disagreement`) also resolve once
+  their inputs are available. Added value-asserting tests (not just a ratio
+  count) to `test_feature_gap_detection.py`.
+- Added `backend/scripts/replay_elo_from_db.py`, a one-off operator script
+  re-keying the Elo parquet by real `Team.id` instead of synthetic placeholder
+  IDs — the remaining prerequisite for item 13's last sub-item (Elo/tactical,
+  blocked on item 10). Not yet run against a production database.
+- Fixed a syntax error (two stray leading spaces before the module docstring's
+  opening `"""`) that had been introduced into
+  `backend/src/api/endpoints/upcoming_matches.py` during this session and
+  currently broke FastAPI app boot outright
+  (`IndentationError: unexpected indent`); this module is imported
+  unconditionally at startup, so the app could not have started as-is.
+- Fixed a mobile-only layout regression in the match-loading skeleton
+  (`match-loading-experience.tsx`): a `space-y-4`/`lg:space-y-0` addition
+  stacked additively with the skeleton's own `gap-4` (CSS Grid gap and margin
+  are independent mechanisms), doubling the intended 1rem gap between skeleton
+  sections below the `lg:` breakpoint. Removed; also dropped a same-diff
+  `space-y-4` on the live component's outer wrapper that was redundant with
+  the footer's own `mt-4`.
+- Fixed a CSS Grid stretch bug on the homepage hero (`page.tsx`): the
+  `[1.2fr,0.8fr]` grid had no `items-start`, so the short left column (badge,
+  heading, CTA buttons) was stretched by default `align-items: stretch` to
+  match the taller right column (model-status card), leaving unfilled dead
+  space below the buttons with nothing to redistribute it into.
+- Deleted `backend/src/api/routes/upcoming_matches.py` (291 lines) — an
+  orphaned original implementation from an early plan doc, superseded by the
+  modular `endpoints/` package and never wired into any router; confirmed
+  unreferenced anywhere in `backend/src` or `backend/tests` before removal.
+  Simplified dead-code branches in the new `replay_elo_from_db.py`'s
+  `_sync_engine()`.
+
 ## vΩ.47 — Incident: the retrain could not deploy; two loaders, one artifact (2026-08-08)
 
 vΩ.46's retrained artifacts shipped `"meta_model": None`. Every boot of the new

@@ -221,7 +221,7 @@ async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> 
   return getUpcomingMatches({
     league,
     limit: 8,
-    days_ahead: 7,
+    days_ahead: 14,
   }) as Promise<UpcomingMatchesResponse>;
 }
 
@@ -466,7 +466,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           />
         ) : (
           <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 py-4 text-center text-xs text-slate-500">
-            No upcoming fixtures in the next 7 days.
+            No upcoming fixtures in the next 14 days.
           </p>
         )
       )}

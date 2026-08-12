@@ -175,11 +175,10 @@ by design and cannot lean on them yet.
 
 ---
 
-## 13. Serving still has unresolved canonical feature families — h2h, venue, and Elo/tactical remain
+## 13. Serving still has an unresolved canonical feature family — Elo/tactical remains
 
-**Tier:** `NEXT` — trigger: whichever remaining family below is wanted first;
-each is independently shippable and each would be followed by a retrain to let
-the model use it.
+**Tier:** `NEXT` — head-to-head and home venue resolved 2026-08-11 (see below);
+Elo/tactical is the sole remaining sub-item, still blocked on item 10.
 **Owner:** unassigned.
 **Found:** 2026-08-08, while establishing the retrain's feature set.
 
@@ -192,23 +191,37 @@ contract pinned by `backend/tests/test_staleness_and_market_wiring.py`,
 `backend/tests/unit/test_feature_registry.py`. Re-derive any exact
 served-feature count from code before using this item in retrain planning.
 
-The remaining missing families of genuine football evidence are:
+**Update 2026-08-11:** head-to-head and home venue are also now resolved.
+`UpcomingMatchFeatureProjector._get_h2h_stats()` and `._get_home_venue_stats()`
+(`backend/src/services/upcoming_match_feature_service.py`) query `Match` history
+directly and are wired into `project_match_features()`; formulas were cross-checked
+against `backend/src/data/transformers.py` for train/serve parity. Covered by
+value-asserting tests in `backend/tests/test_feature_gap_detection.py`
+(`test_get_h2h_stats_returns_computed_values_for_seeded_meeting`,
+`test_get_home_venue_stats_returns_computed_rates`, plus a none-with-no-history
+guard for h2h). Four cross-signal features also resolve incidentally once their
+inputs are available: `h2h_market_agreement`, `venue_market_combo`,
+`form_market_agreement_home`, `form_market_disagreement`.
+
+The remaining missing family of genuine football evidence is:
 
 | Family | Count | Why it is absent |
 |---|---|---|
-| Head-to-head | 5 | One DB query over prior meetings; nothing computes it. |
-| Home venue record | 4 | Derivable from the same team history already queried, filtered to home fixtures. |
+| ~~Head-to-head~~ | ~~5~~ | **Resolved 2026-08-11** — see above. |
+| ~~Home venue record~~ | ~~4~~ | **Resolved 2026-08-11** — see above. |
 | Elo / tactical | 8 | Blocked on item 10 — the parquets are synthetically keyed. |
 
 **Blast radius:** prediction quality. The model no longer prices blind to the
-market, but it still lacks fixture-history, venue, and Elo/tactical context for
-these families.
-**Cost:** head-to-head is a contained piece of work (compute at serving, add to
-the training builder's feature set, retrain, re-run the comparison). Venue is
-smaller still. Elo depends on item 10.
-**Impact:** moderate-to-high — this is the difference between a working model and
-a competitive one.
-**Priority:** high. Take head-to-head or venue first; market wiring is already live.
+market, fixture history, or venue, but it still lacks Elo/tactical context.
+**Cost:** Elo depends on item 10 — the parquets must be re-keyed by real
+`Team.id` first. `backend/scripts/replay_elo_from_db.py` (added 2026-08-11) is a
+ready replay script for exactly that; it has not yet been run against a real
+database — running it is a separate runtime/operator action, not a remaining
+code-completeness gap.
+**Impact:** moderate — head-to-head and venue were the larger share of this item;
+Elo alone is a smaller remaining slice.
+**Priority:** medium. Run the Elo replay against a real DB, confirm
+`EloEngine.get_context()` returns non-neutral ratings, then retrain.
 
 ---
 

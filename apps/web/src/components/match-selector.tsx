@@ -118,7 +118,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["big-matches-carousel"],
-    queryFn: () => getUpcomingMatches({ days_ahead: 7, limit: 20 }),
+    queryFn: () => getUpcomingMatches({ days_ahead: 14, limit: 20 }),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });

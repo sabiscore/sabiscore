@@ -163,7 +163,12 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
         "src.services.upcoming_match_service.PredictionEngine"
     ) as MockPredictionEngine, patch(
         "src.services.upcoming_match_service.OddsService"
-    ) as MockOddsService:
+    ) as MockOddsService, patch(
+        "src.services.upcoming_match_service.cache_manager"
+    ) as MockCache:
+        # Force cache miss so prior tests cannot pollute this test via the
+        # module-level cache_manager singleton (pre-existing flake pattern).
+        MockCache.get.return_value = None
         MockProjector.return_value.build_live_feature_vector = AsyncMock(
             return_value=mocked_features_result
         )

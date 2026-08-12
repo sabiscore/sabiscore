@@ -64,7 +64,7 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
   const isVerifiedFixturePath = Boolean(home && away);
 
   return (
-    <main className="mx-auto max-w-6xl space-y-8" aria-labelledby="match-analysis-title">
+    <article className="mx-auto max-w-6xl space-y-8" aria-labelledby="match-analysis-title">
       <header className="flex flex-col gap-3 border-b border-slate-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
@@ -93,6 +93,6 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
           <Phase8AnalyticsSection matchId={rawId} league={league} />
         </div>
       </details>
-    </main>
+    </article>
   );
 }

@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import and_, desc, select
+from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
@@ -136,6 +136,14 @@ _AWAY_REMAP_FEATURES = frozenset({
     "away_form_last5_away", "away_wins_last5_away", "away_draws_last5_away",
     "away_losses_last5_away", "away_goals_for_avg", "away_goals_against_avg",
     "away_gd_recent",
+})
+
+_H2H_FEATURES = frozenset({
+    "h2h_home_wins", "h2h_away_wins", "h2h_draws", "h2h_matches", "h2h_dominance",
+})
+_VENUE_FEATURES = frozenset({
+    "home_venue_win_rate", "home_venue_draw_rate", "home_venue_loss_rate",
+    "home_advantage_strength",
 })
 
 
@@ -298,6 +306,17 @@ class UpcomingMatchFeatureProjector:
             ))
             derived_resolved.update(COMBINATION_FEATURES)
 
+        # H2H and home-venue features — pure DB queries, no external provider
+        # needed. Called after home/away team IDs are resolved above.
+        h2h_stats = await self._get_h2h_stats(home_team_id, away_team_id, db, match_date)
+        venue_stats = await self._get_home_venue_stats(home_team_id, db, match_date)
+        if h2h_stats:
+            features_dict.update(h2h_stats)
+            derived_resolved.update(_H2H_FEATURES)
+        if venue_stats:
+            features_dict.update(venue_stats)
+            derived_resolved.update(_VENUE_FEATURES)
+
         # WP-A: 14 canonical market-odds features (market_prob_home, ev_home,
         # ...). Unconditional — unlike combination features, odds don't need
         # either side's history resolved, and are often the single most
@@ -319,6 +338,24 @@ class UpcomingMatchFeatureProjector:
         # else: leave features_dict at its DEFAULT_FEATURE_VALUES_68 seed for
         # these 14 keys — they fall through to data_gaps below, same honest-gap
         # treatment Elo/StatsBomb already get.
+
+        # Cross-signal features — same formulas as data/transformers.py:424-429
+        # (train/serve parity). Only computed when both inputs are genuinely
+        # resolved, never mixing a real value with a registry default.
+        _market_resolved = "market_prob_home" in derived_resolved
+        if _market_resolved:
+            mph = features_dict["market_prob_home"]
+            if h2h_stats:
+                features_dict["h2h_market_agreement"] = h2h_stats["h2h_dominance"] * mph
+                derived_resolved.add("h2h_market_agreement")
+            if venue_stats:
+                features_dict["venue_market_combo"] = venue_stats["home_venue_win_rate"] * mph
+                derived_resolved.add("venue_market_combo")
+            if home_stats:
+                form_norm = features_dict.get("home_form_last5_home", 1.5) / 3.0
+                features_dict["form_market_agreement_home"] = form_norm * mph
+                features_dict["form_market_disagreement"] = abs(form_norm - mph)
+                derived_resolved.update(("form_market_agreement_home", "form_market_disagreement"))
 
         features_array = np.array(
             [features_dict.get(f, self.defaults.get(f, 0.0)) for f in self.canonical_features],
@@ -881,6 +918,91 @@ class UpcomingMatchFeatureProjector:
                 sources[k] = "league_standings"
 
         return phase8_gaps, freshness, sources
+
+    async def _get_h2h_stats(
+        self,
+        home_team_id: str,
+        away_team_id: str,
+        db: AsyncSession,
+        match_date: datetime,
+        n: int = 10,
+    ) -> Optional[Dict[str, float]]:
+        """Last N head-to-head meetings, scored from current home team's perspective."""
+        query = (
+            select(Match)
+            .where(
+                and_(
+                    or_(
+                        and_(Match.home_team_id == home_team_id, Match.away_team_id == away_team_id),
+                        and_(Match.home_team_id == away_team_id, Match.away_team_id == home_team_id),
+                    ),
+                    Match.match_date < match_date,
+                    Match.status == "finished",
+                )
+            )
+            .order_by(desc(Match.match_date))
+            .limit(n)
+        )
+        result = await db.execute(query)
+        meetings = result.scalars().all()
+        if not meetings:
+            return None
+        total = len(meetings)
+        home_wins = away_wins = draws = total_goals = 0
+        for m in meetings:
+            if m.home_team_id == home_team_id:
+                gf, ga = (m.home_score or 0), (m.away_score or 0)
+            else:
+                gf, ga = (m.away_score or 0), (m.home_score or 0)
+            total_goals += gf + ga
+            if gf > ga:
+                home_wins += 1
+            elif gf < ga:
+                away_wins += 1
+            else:
+                draws += 1
+        return {
+            "h2h_home_wins": float(home_wins),
+            "h2h_away_wins": float(away_wins),
+            "h2h_draws": float(draws),
+            "h2h_matches": float(total),
+            "h2h_dominance": (home_wins - away_wins) / total,
+        }
+
+    async def _get_home_venue_stats(
+        self,
+        home_team_id: str,
+        db: AsyncSession,
+        match_date: datetime,
+        n: int = 20,
+    ) -> Optional[Dict[str, float]]:
+        """Home-venue record for home_team_id from last n home matches before match_date."""
+        query = (
+            select(Match)
+            .where(
+                and_(
+                    Match.home_team_id == home_team_id,
+                    Match.match_date < match_date,
+                    Match.status == "finished",
+                )
+            )
+            .order_by(desc(Match.match_date))
+            .limit(n)
+        )
+        result = await db.execute(query)
+        home_matches = result.scalars().all()
+        if not home_matches:
+            return None
+        total = len(home_matches)
+        wins = sum(1 for m in home_matches if (m.home_score or 0) > (m.away_score or 0))
+        draws = sum(1 for m in home_matches if (m.home_score or 0) == (m.away_score or 0))
+        losses = total - wins - draws
+        return {
+            "home_venue_win_rate": wins / total,
+            "home_venue_draw_rate": draws / total,
+            "home_venue_loss_rate": losses / total,
+            "home_advantage_strength": (wins - losses) / total,
+        }
 
     async def _get_team_results_sequence(
         self,

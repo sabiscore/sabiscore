@@ -129,6 +129,67 @@ async def test_get_team_results_sequence_empty_with_no_history(
 
 
 # ---------------------------------------------------------------------------
+# _get_h2h_stats / _get_home_venue_stats: value-asserting coverage.
+#
+# Previously only covered indirectly via a ratio-count assertion in
+# test_feature_defaulted_ratio_reflects_resolved_canonical_fields (which
+# proves *something* resolved, not that the computed numbers are correct).
+# ---------------------------------------------------------------------------
+
+
+async def test_get_h2h_stats_returns_none_with_no_shared_history(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    """_seed_old_match's only match is team-home vs team-opp — team-home and
+    team-away have never played each other directly, so h2h must be None,
+    not an empty/zeroed dict."""
+    await _seed_old_match(session, days_before=1)
+    stats = await projector._get_h2h_stats("team-home", "team-away", session, MATCH_DATE)
+    assert stats is None
+
+
+async def test_get_h2h_stats_returns_computed_values_for_seeded_meeting(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    await _seed_old_match(session, days_before=1)  # creates team-home/team-away/team-opp
+    session.add(
+        Match(
+            id="h2h-match",
+            home_team_id="team-home",
+            away_team_id="team-away",
+            match_date=MATCH_DATE - timedelta(days=2),
+            status="finished",
+            home_score=2,
+            away_score=1,
+        )
+    )
+    await session.commit()
+    stats = await projector._get_h2h_stats("team-home", "team-away", session, MATCH_DATE)
+    assert stats == {
+        "h2h_home_wins": 1.0,
+        "h2h_away_wins": 0.0,
+        "h2h_draws": 0.0,
+        "h2h_matches": 1.0,
+        "h2h_dominance": 1.0,
+    }
+
+
+async def test_get_home_venue_stats_returns_computed_rates(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    """_seed_old_match already gives team-home exactly one home match (a 2-1
+    win) before MATCH_DATE — reuse it rather than seeding bespoke data."""
+    await _seed_old_match(session, days_before=1)
+    stats = await projector._get_home_venue_stats("team-home", session, MATCH_DATE)
+    assert stats == {
+        "home_venue_win_rate": 1.0,
+        "home_venue_draw_rate": 0.0,
+        "home_venue_loss_rate": 0.0,
+        "home_advantage_strength": 1.0,
+    }
+
+
+# ---------------------------------------------------------------------------
 # data_gaps: provenance-based, not value-based
 # ---------------------------------------------------------------------------
 
@@ -223,7 +284,12 @@ async def test_feature_defaulted_ratio_reflects_resolved_canonical_fields(
     home_only_ratio = home_only_result["data_quality"]["feature_defaulted_ratio"]
 
     n_canonical = len(projector.canonical_features)
-    expected_home_only = baseline_ratio - (7 / n_canonical)  # 7 = len(_HOME_REMAP_FEATURES)
+    # _seed_old_match seeds "Home FC" as home vs "Opponent FC" (not "Away FC"),
+    # so home_stats + venue_stats resolve for "Home FC":
+    #   7 = len(_HOME_REMAP_FEATURES)
+    #   4 = len(_VENUE_FEATURES)  — home-only venue record for "Home FC"
+    # H2H and away-side stats are still None (no Away FC match seeded).
+    expected_home_only = baseline_ratio - (11 / n_canonical)
     assert home_only_ratio == pytest.approx(expected_home_only)
     assert home_only_ratio < baseline_ratio
 
