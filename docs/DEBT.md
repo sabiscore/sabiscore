@@ -1,5 +1,67 @@
 # SabiScore Debt Ledger
 
+## 20. A Render service builds the monorepo at root and is not in `render.yaml`
+
+**Tier:** `FIX-NOW` / P0 — it crash-loops on every push to master.
+**Found:** 2026-08-12, from an operator-supplied Render deploy log for commit
+`5de6228`.
+
+A Render web service clones the repo **at root** (no `rootDir`), runs
+`pnpm install --frozen-lockfile; pnpm run build` on Node 24.14.1, builds
+`@sabiscore/web` + `@sabiscore/scraper` successfully — then dies:
+
+```text
+==> Running 'pnpm run start'
+ ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+==> Exited with status 1
+==> No open ports detected, continuing to scan...
+```
+
+`render.yaml` declares only two services: `sabiscore-api`
+(`rootDir: backend`, pip + `alembic upgrade head && uvicorn`) and the
+`sabiscore-evidence-acquisition` cron. **Neither matches this log.** The
+service is therefore dashboard-created and outside blueprint management —
+the same drift class as the operator-managed `DATABASE_URL` recorded above,
+and consistent with the Blueprint-sync approval that has been outstanding
+since vΩ.12.
+
+**Immediate half fixed (2026-08-12):** root `package.json` had no `start`
+script at all (only `apps/web/package.json` did), so the service could never
+boot regardless of configuration. Added
+`"start": "pnpm --filter @sabiscore/web start"`. Verified locally that
+`PORT=4123 pnpm run start` binds to `$PORT` and serves `GET /api/health` →
+200, which is exactly the port-binding contract Render's "No open ports
+detected" scan was failing.
+
+**Operator decision still required — do not skip this.** Adding the script
+stops the crash loop, but it does **not** answer whether this service should
+exist. `CLAUDE.md`'s canonical production shape puts `apps/web` on **Vercel**
+and only `backend/` on Render. A second, blueprint-invisible copy of the
+frontend on Render is either:
+
+1. an intentional migration off Vercel — in which case it belongs in
+   `render.yaml` with an explicit `startCommand`, and the Vercel project's
+   role must be restated; or
+2. a stale experiment that should be deleted, because it rebuilds the whole
+   monorepo on every master push and its failures look identical to a
+   backend outage in the dashboard.
+
+⚠️ **This also explains why `sabiscore-api-bav1.onrender.com` still reports
+`sha: 229efbc` after `5de6228` was pushed and CI went green** — a Render
+deploy that never binds a port is a *failed deploy*, and Render holds the
+previous release rather than serving a broken one. That is the identical
+failure signature recorded in `CLAUDE.md`'s vΩ.47 entry (artifacts that
+passed every request-path test but aborted at startup). **A stale `sha` on a
+healthy-looking endpoint means "the new deploy failed", not "the push did
+not land" — check the deploy log before re-pushing.**
+
+**Blast radius:** every push to master triggers a failing build; the live
+backend silently stays on the previous commit.
+**Cost:** small for the script (done); the architectural decision is an ADR.
+**Priority:** P0 for the decision — until it is made, no push to master
+reliably reaches production.
+
+
 Format per entry: **Tier** (`FIX-NOW` / `NEXT` — named trigger / `ARCH-DEBT` — needs an
 ADR / `ACCEPTED` — rationale + review date), owner, blast radius, engineering cost,
 user impact, priority. An entry without a trigger is not `NEXT`, it's `ACCEPTED` in
