@@ -46,14 +46,18 @@ frontend on Render is either:
    monorepo on every master push and its failures look identical to a
    backend outage in the dashboard.
 
-⚠️ **This also explains why `sabiscore-api-bav1.onrender.com` still reports
-`sha: 229efbc` after `5de6228` was pushed and CI went green** — a Render
-deploy that never binds a port is a *failed deploy*, and Render holds the
-previous release rather than serving a broken one. That is the identical
-failure signature recorded in `CLAUDE.md`'s vΩ.47 entry (artifacts that
-passed every request-path test but aborted at startup). **A stale `sha` on a
-healthy-looking endpoint means "the new deploy failed", not "the push did
-not land" — check the deploy log before re-pushing.**
+⚠️ **CORRECTED 2026-08-12, same session.** An earlier version of this entry
+claimed the crash loop "also explains why `sabiscore-api-bav1.onrender.com`
+still reports `sha: 229efbc`". **That was wrong.** The backend subsequently
+reached `5de6228` — and stayed healthy — while still running code that did
+*not* contain the root `start` script, proving the API service was never
+blocked by it. The two services are independent: `sabiscore-api` was simply
+slow (free-tier `pip install` of the full runtime set takes many minutes),
+and I read a slow deploy as a failed one. The real lesson is narrower than
+the one first written here: **before attributing a stale `sha` to a specific
+cause, confirm the timeline — a Render free-tier deploy can legitimately take
+10–15 minutes, so "not yet" and "failed" look identical for a long window.**
+Check the deploy log for that service, not a sibling's.
 
 **Blast radius:** every push to master triggers a failing build; the live
 backend silently stays on the previous commit.

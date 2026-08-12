@@ -8,6 +8,7 @@
 
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { canonicalLeagueId } from "@/lib/league";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,8 +38,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Normalize before validating: the Zod enum only speaks the canonical
+  // vocabulary, so a caller sending the display form ("La Liga") got a 422 for
+  // a competition this platform fully supports. canonicalLeagueId() folds both
+  // vocabularies; genuinely unknown input still returns null and 422s below.
+  const requestedCompetition = request.nextUrl.searchParams.get("competition");
   const parsed = QuerySchema.safeParse({
-    competition: request.nextUrl.searchParams.get("competition"),
+    competition: requestedCompetition ? canonicalLeagueId(requestedCompetition) : null,
   });
 
   if (!parsed.success) {

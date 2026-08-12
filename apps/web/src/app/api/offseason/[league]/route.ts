@@ -8,6 +8,7 @@
  * for 1 hour (s-maxage=3600) to avoid hammering the backend on every page load.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { canonicalLeagueId } from '@/lib/league';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,16 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ league: string }> },
 ): Promise<NextResponse> {
-  const { league } = await params;
+  const { league: requestedLeague } = await params;
+  // Normalize at the boundary rather than relying on the backend's own
+  // tolerance and on callers happening to pre-normalize. An unsupported league
+  // degrades to the same honest UNKNOWN body every other failure path returns —
+  // never a fabricated season status.
+  const league = canonicalLeagueId(requestedLeague);
+
+  if (!league) {
+    return NextResponse.json(unknownFallback(requestedLeague), { status: 200 });
+  }
 
   if (!BACKEND_URL) {
     return NextResponse.json(

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveBackendBaseUrl, proxyHeaders, isHtmlBody } from "@/lib/proxy-utils";
+import { canonicalLeagueId } from "@/lib/league";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const league = request.nextUrl.searchParams.get("league") ?? "";
+    // Normalize at the boundary like every other league-parameterized proxy:
+    // an unrecognised league is dropped rather than forwarded verbatim.
+    const requestedLeague = request.nextUrl.searchParams.get("league");
+    const league = requestedLeague ? canonicalLeagueId(requestedLeague) : null;
     const nBins = request.nextUrl.searchParams.get("n_bins") ?? "10";
     const url = new URL(`${resolveBackendBaseUrl()}/api/v1/calibration-stats`);
     if (league) url.searchParams.set("league", league);

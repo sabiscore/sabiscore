@@ -5,6 +5,68 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - League normalization closed as a class, not another instance (2026-08-12)
+
+### Fixed
+
+Sweeping for siblings of the `/api/upcoming` fix below turned up **four more**
+league-parameterized boundaries that did not normalize. All now route through
+`canonicalLeagueId()` (`apps/web/src/lib/league.ts`):
+
+- **`/api/fixtures/upcoming`** — carried the *byte-for-byte identical* bug:
+  `competition?.toUpperCase()` matched against an allowlist `Set` of canonical
+  ids, so `"La Liga"` → `"LA LIGA"` missed `"LA_LIGA"` and the filter was
+  silently dropped. Not live-broken only because the `/intelligence` dropdown
+  happens to send canonical ids — but `getUpcomingFixtures()` is an exported
+  helper over a public route, one caller away from the same failure.
+- **`/api/providers/espn`** — normalizes *before* its Zod enum validates. The
+  enum only spoke the canonical vocabulary, so a caller sending the display
+  form got HTTP 422 for a competition the platform fully supports. Genuinely
+  unknown input still 422s; the loud rejection is preserved, tolerance added.
+- **`/api/offseason/[league]`** — normalizes its path segment instead of
+  relying on the backend's `_normalise_league` tolerance and on callers
+  happening to pre-normalize. An out-of-set league now degrades to the existing
+  honest `UNKNOWN` body (all availability flags `false`) rather than being
+  forwarded verbatim.
+- **`/api/calibration-stats`** and **`/api/model-performance`** — were raw
+  passthroughs with no validation at all. `model-performance` additionally
+  echoes `league` back in its error bodies, which now reports the value
+  actually forwarded rather than the raw client string.
+
+### Added
+
+- **`apps/web/src/lib/league-contract.test.ts`** — a repo-wide contract test,
+  in the same source-scanning idiom as the existing `copy-contract.test.ts`.
+  Two assertions: every `app/api/**/route.ts` that reads a league or
+  competition parameter must reference `canonicalLeagueId`, and none may
+  upper-case a league instead of canonicalizing it.
+
+  This class had shipped **five** times. Patching each reported site
+  demonstrably did not stop the sixth, because the failure is invisible under
+  the obvious test: `EPL` is spelled identically in both vocabularies, so an
+  EPL-only check passes under every broken implementation.
+
+  ⚠️ The guard's first draft had the same blind spot as the code it polices —
+  it matched `params.league` but not the destructured
+  `const { league } = await params`, i.e. it would have skipped
+  `offseason/[league]/route.ts`, the file most at risk. Widened, then
+  **verified by reverting each fix and confirming the test fails**, naming the
+  offending file, for both the destructured-path-param and `.toUpperCase()`
+  forms.
+
+- `apps/web/src/app/api/offseason/[league]/route.test.ts` — pins display-form
+  forwarding and that an unsupported league never claims a season status.
+
+### Verification
+
+Ruff 0 · web lint 0 · typecheck 0 · Vitest **155 passed** (25 files) ·
+`NODE_ENV=production` build exit 0 · Gitleaks working tree clean.
+
+Live-verified after the previous deploy:
+`GET /api/upcoming?league=La%20Liga` → 7 fixtures, all `LA_LIGA`; unfiltered →
+16 across `EREDIVISIE` + `LA_LIGA`. Before the fix the filtered query returned
+all 16.
+
 ## Unreleased - Proxy league normalization, type unification, selector/loading polish (2026-08-12)
 
 ### Fixed
