@@ -6,7 +6,6 @@ import {
   BarChart3,
   BookOpen,
   CalendarClock,
-  Gauge,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -22,6 +21,7 @@ import { BackendStatusBanner } from "../components/backend-status-banner";
 import { MobileNav } from "../components/mobile-nav";
 import { PlatformHealthPills } from "../components/platform-health-pills";
 import { MobilePlatformSummary } from "../components/mobile-platform-summary";
+import { SabiScoreBrand } from "../components/brand/sabiscore-brand";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -95,7 +95,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-[#07110f] text-slate-100 antialiased">
+      <body className="min-h-screen bg-[var(--brand-nav)] text-slate-100 antialiased">
         <a
           href="#main-content"
           className="sr-only fixed left-3 top-3 z-[100] min-h-11 items-center rounded-md bg-emerald-300 px-4 py-2 font-semibold text-slate-950 focus:not-sr-only focus:flex focus:outline-none focus:ring-2 focus:ring-white"
@@ -108,17 +108,15 @@ export default function RootLayout({
             <ToastProvider />
             <ConsentProvider requireConsent={true}>
               <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-                <aside className="hidden border-r border-white/10 bg-[#0b1714] lg:block">
+                <aside className="hidden border-r border-white/10 bg-[var(--brand-elevated)] lg:block">
                   <div className="sticky top-0 flex h-screen flex-col">
                     <div className="border-b border-white/10 px-5 py-5">
-                      <Link href="/" className="flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <span className="grid h-10 w-10 place-items-center rounded-md bg-emerald-400 text-slate-950">
-                          <Gauge className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <span>
-                          <span className="block text-base font-semibold text-white">SabiScore</span>
-                          <span className="block text-xs text-slate-400">Production analytics</span>
-                        </span>
+                      <Link
+                        href="/"
+                        className="inline-flex rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        aria-label="SabiScore home"
+                      >
+                        <SabiScoreBrand showDescriptor />
                       </Link>
                     </div>
 
@@ -170,15 +168,15 @@ export default function RootLayout({
                 </aside>
 
                 <div className="min-w-0">
-                  <header className="sticky top-0 z-40 border-b border-white/10 bg-[#07110f]/95 backdrop-blur">
+                  <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--brand-nav)]/95 backdrop-blur">
                     <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:gap-3 sm:px-6 sm:py-3">
                       <div className="flex items-center gap-3">
                         <Link
                           href="/"
-                          className="grid h-10 w-10 place-items-center rounded-md bg-emerald-400 text-slate-950 focus:outline-none focus:ring-2 focus:ring-emerald-200 lg:hidden"
+                          className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-200 lg:hidden"
                           aria-label="SabiScore home"
                         >
-                          <Gauge className="h-5 w-5" aria-hidden="true" />
+                          <SabiScoreBrand compact />
                         </Link>
                         <MobileNav />
                         <div>

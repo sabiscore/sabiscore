@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { PredictionMatrix } from "@/components/brand/prediction-matrix";
 
 type ModelRecord = {
   feature_schema_version?: unknown;
@@ -58,10 +59,11 @@ export function ModelMetadataPanel() {
         return (
           <div
             key={stat.label}
-            className="min-h-24 rounded-2xl border border-white/5 bg-slate-900/70 p-4"
+            className="relative min-h-24 overflow-hidden rounded-2xl border border-white/5 bg-slate-900/70 p-4"
             aria-label={`${stat.label}: ${displayValue}`}
           >
-            <p className="text-[11px] uppercase tracking-widest text-slate-500">{stat.label}</p>
+            <PredictionMatrix className="absolute right-3 top-3 opacity-55" activeCell={8} />
+            <p className="pr-10 text-[11px] uppercase tracking-widest text-slate-500">{stat.label}</p>
             {isPending ? (
               <span
                 className="mt-2 block h-5 w-24 animate-pulse rounded bg-slate-700/50"

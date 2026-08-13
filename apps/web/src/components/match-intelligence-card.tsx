@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { EdgeSignal } from "@/components/brand/edge-signal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ export const MatchIntelligenceCard = memo(function MatchIntelligenceCard({
           aria-label="Value bet identified"
           className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300"
         >
-          <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <EdgeSignal className="h-3.5 w-3.5 text-emerald-300" />
           +{(fixture.edge_pct ?? 0).toFixed(1)}% edge
         </div>
       )}

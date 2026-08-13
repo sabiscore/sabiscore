@@ -12,6 +12,7 @@ import {
   Trophy,
   X,
 } from "lucide-react";
+import { SabiScoreBrand } from "@/components/brand/sabiscore-brand";
 
 const NAV_LINKS = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },
@@ -63,11 +64,11 @@ export const MobileNav = memo(function MobileNav() {
             aria-hidden="true"
           />
           <nav
-            className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[#0b1714] shadow-2xl"
+            className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[var(--brand-elevated)] shadow-2xl"
             aria-label="Mobile navigation"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-              <span className="text-base font-semibold text-white">SabiScore</span>
+              <SabiScoreBrand />
               <button
                 type="button"
                 aria-label="Close navigation"

@@ -133,3 +133,58 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@layer base {
+  :root {
+    /* SabiScore identity — SabiSignal / Prediction Matrix / The Edge */
+    --brand-mint: #3ce4aa;
+    --brand-prediction: #29cff3;
+    --brand-wordmark: #f6f8f7;
+    --brand-muted: #829590;
+    --brand-nav: #06140f;
+    --brand-elevated: #091c16;
+    --brand-inactive: #244139;
+  }
+}
+
+@layer components {
+  .brand-mark-shell {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border: 1px solid rgb(60 228 170 / 0.24);
+    border-radius: 0.625rem;
+    background:
+      radial-gradient(circle at 68% 72%, rgb(41 207 243 / 0.12), transparent 26%),
+      linear-gradient(145deg, rgb(60 228 170 / 0.12), rgb(9 28 22 / 0.9));
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+  }
+
+  .brand-wordmark {
+    font-family: "Inter Tight", "Arial Narrow", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.025em;
+    text-rendering: geometricPrecision;
+  }
+
+  .prediction-matrix {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 0.18rem;
+  }
+
+  .prediction-matrix__cell {
+    border: 1px solid rgb(60 228 170 / 0.2);
+    border-radius: 0.12rem;
+    background: rgb(36 65 57 / 0.72);
+  }
+
+  .prediction-matrix__cell--active {
+    border-color: rgb(41 207 243 / 0.72);
+    background: rgb(41 207 243 / 0.95);
+    box-shadow: 0 0 0 2px rgb(41 207 243 / 0.08);
+  }
+}
