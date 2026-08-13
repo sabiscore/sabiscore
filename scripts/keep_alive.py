@@ -5,14 +5,28 @@ Usage:
   BACKEND_URL=https://your-backend.example.com python scripts/keep_alive.py
 
 Exit codes:
-  0  — ready (HTTP 2xx, models_loaded=true)
-  1  — unhealthy / timeout
+  0  — ready, OR a wake was triggered but readiness could not be confirmed
+  1  — the backend answered and is genuinely unhealthy
   2  — misconfigured (BACKEND_URL not set)
 
+A timeout is deliberately NOT a failure. This job exists to *wake* a sleeping
+free-tier dyno; when it finds one cold, the request itself starts the container
+— which is the whole point — and then times out waiting for the heavy
+`/health/ready` checks (Alembic + DB + cache + 18 model artifacts) to finish
+booting. Failing on that would mark the single most useful run as broken, and a
+permanently red recurring job is one nobody reads. That is precisely how this
+workflow's missing BACKEND_URL went unnoticed indefinitely.
+
+The distinction mirrors the readiness capability probe (vΩ.43): inability to
+confirm is not an outage. A backend that *answers* with 5xx or with models
+unloaded is still a real failure and still exits 1.
+
 Environment:
-  BACKEND_URL            Required. Server-side secret — never use a public NEXT_PUBLIC_ var.
+  BACKEND_URL            Required. The canonical public backend origin.
   COLD_START_THRESHOLD_S Optional. Float seconds above which to log a cold-start warning
                          (default: 5.0).
+  TIMEOUT_S              Optional. Per-request read timeout (default: 90.0). Render
+                         free-tier cold starts routinely exceed the old 35 s value.
 """
 
 from __future__ import annotations
@@ -29,7 +43,9 @@ BACKEND_URL: str = os.environ.get("BACKEND_URL", "").strip()
 COLD_START_THRESHOLD_S: float = float(
     os.environ.get("COLD_START_THRESHOLD_S", "5.0")
 )
-TIMEOUT_S: float = 35.0  # slightly above Render's 30-s socket timeout
+# 35.0 was below a real Render free-tier cold start: an observed scheduled run
+# timed out at 35.153 s against a dyno that had been idle overnight.
+TIMEOUT_S: float = float(os.environ.get("TIMEOUT_S", "90.0"))
 
 
 def _log(level: str, msg: str, **fields: Any) -> None:
@@ -98,8 +114,24 @@ def ping() -> int:
         return 0
 
     except httpx.TimeoutException as exc:
+        # The request still reached Render and started the container; we simply
+        # could not wait for the heavy readiness checks. Warn, don't fail —
+        # see the module docstring.
         latency = time.perf_counter() - started
-        _log("ERROR", "timeout", url=url, latency_s=f"{latency:.3f}", exc=str(exc))
+        _log(
+            "WARN",
+            "wake triggered, readiness unconfirmed",
+            url=url,
+            latency_s=f"{latency:.3f}",
+            timeout_s=TIMEOUT_S,
+            exc=type(exc).__name__,
+        )
+        return 0
+    except httpx.TransportError as exc:
+        # DNS/connection failure: nothing was woken and the host may be gone.
+        # Distinct from a timeout, and worth failing on.
+        latency = time.perf_counter() - started
+        _log("ERROR", "unreachable", url=url, latency_s=f"{latency:.3f}", exc=str(exc))
         return 1
     except Exception as exc:  # pragma: no cover - network/runtime safety
         latency = time.perf_counter() - started

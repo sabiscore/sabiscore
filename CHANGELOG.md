@@ -78,6 +78,35 @@ league-parameterized boundaries that did not normalize. All now route through
   investigated rather than dismissed as unrelated to the commit.** A red
   scheduled job that predates your change is still a red job.
 
+- **…and fixing that immediately exposed the real defect underneath.** With
+  `BACKEND_URL` finally populated, the next scheduled run failed differently:
+  `timeout url=…/health/ready latency_s=35.153`. Two problems in
+  `scripts/keep_alive.py`:
+
+  1. `TIMEOUT_S = 35.0` was below an actual Render free-tier cold start. Now
+     `90.0`, env-overridable. (Measured this session: a ping against an idle
+     dyno returned in **11.06 s**; the overnight-idle scheduled run exceeded
+     35 s.)
+  2. **A timeout was treated as failure, which inverts the job's purpose.**
+     This workflow exists to *wake* a sleeping dyno. When it finds one cold,
+     the request itself starts the container — the entire point — and then
+     times out waiting for the heavy `/health/ready` checks (Alembic + DB +
+     cache + 18 model artifacts) to finish booting. The single most useful run
+     was being recorded as broken, and a permanently red recurring job is one
+     nobody reads — which is exactly how the missing `BACKEND_URL` above
+     survived indefinitely.
+
+  A timeout now logs `WARN wake triggered, readiness unconfirmed` and exits 0.
+  This mirrors the readiness capability probe (vΩ.43): **inability to confirm
+  is not an outage.** Genuine failures are unchanged and still exit 1 — a
+  backend that *answers* with 5xx or `models_loaded=false`, and now a
+  `TransportError` (DNS/connection failure, where nothing was woken and the
+  host may be gone), which is deliberately distinguished from a timeout.
+
+  All four exit paths verified directly: warm backend → 0; forced 1 ms timeout
+  → `WARN` + 0; unreachable host → `ERROR unreachable` + 1; unset
+  `BACKEND_URL` → 2.
+
 ### Verification
 
 Ruff 0 · web lint 0 · typecheck 0 · Vitest **155 passed** (25 files) ·
