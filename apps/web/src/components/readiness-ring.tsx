@@ -14,7 +14,7 @@ import {
 // actually produce a prediction — this line reports that separately (INV-20), and
 // must never conflate "nothing to test yet" (off-season, just-deployed) with "broken".
 const CAPABILITY_COPY: Record<CapabilityStatus, { text: string; className: string }> = {
-  verified: { text: "Predictions verified", className: "text-emerald-400" },
+  verified: { text: "Prediction pipeline verified", className: "text-emerald-400" },
   unverified_no_fixtures: { text: "No fixtures to verify yet", className: "text-slate-500" },
   // Pipeline ran and fail-closed correctly — a fixture days out has no odds or
   // lineups published yet. Amber (partial), never rose: this is not an outage.
@@ -22,7 +22,7 @@ const CAPABILITY_COPY: Record<CapabilityStatus, { text: string; className: strin
     text: "Awaiting pre-match evidence",
     className: "text-amber-400",
   },
-  failed: { text: "Predictions not verified", className: "text-rose-400" },
+  failed: { text: "Prediction pipeline not verified", className: "text-rose-400" },
   unknown: { text: "No fixtures to verify yet", className: "text-slate-500" },
 };
 

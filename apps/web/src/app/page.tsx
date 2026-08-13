@@ -238,7 +238,11 @@ function PremiumHome() {
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 text-left shadow-[0_35px_80px_rgba(2,6,23,0.6)] sm:p-10">
-        <div className="relative grid items-start gap-6 lg:grid-cols-[1.2fr,0.8fr] lg:gap-10">
+        {/* items-center, not items-start: the right column (Model Pulse +
+            Platform Status + pillars) runs far taller than the left
+            column's headline/CTA stack, and items-start left a large empty
+            block below the CTAs instead of balancing the extra height. */}
+        <div className="relative grid items-center gap-6 lg:grid-cols-[1.2fr,0.8fr] lg:gap-10">
           <div className="space-y-6 sm:space-y-8">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-slate-100">
               <Activity size={14} aria-hidden="true" />

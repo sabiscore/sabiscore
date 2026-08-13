@@ -499,7 +499,8 @@ function FreshnessPill({
   stalenessSecs: number;
 }) {
   const config = {
-    LIVE: { label: "Live", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/25 bg-emerald-500/8" },
+    // "Live" would claim match state; this measures evidence-data freshness only.
+    LIVE: { label: "Fresh", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/25 bg-emerald-500/8" },
     RECENT: { label: "Recent", dot: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/25 bg-amber-500/8" },
     STALE: { label: "Stale", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/25 bg-rose-500/8" },
     UNKNOWN: { label: "Unknown", dot: "bg-slate-500", text: "text-slate-300", border: "border-slate-600/30 bg-slate-700/20" },

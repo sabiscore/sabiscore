@@ -3,7 +3,9 @@ import { MatchSelector } from "@/components/match-selector";
 import { UpcomingMatchesSection } from "@/components/upcoming-matches-section";
 
 export const metadata = {
-  title: "Match Insights | Sabiscore",
+  // layout.tsx's metadata.title.template already appends " | Sabiscore" —
+  // repeating it here rendered "Match Insights | Sabiscore | Sabiscore".
+  title: "Match Insights",
   description: "Choose a league and matchup to generate Sabiscore betting insights.",
 };
 
@@ -30,11 +32,16 @@ export default function MatchLandingPage() {
           <span>Live Match Insights</span>
           <span className="text-indigo-400">Fetched fresh per request</span>
         </div>
+        {/* "Actionable edges for any fixture" promised the ACTIONABLE verdict
+            tier for every input — the evidence gates contradict that, and the
+            manual path is explicitly a non-executable hypothetical. Matches the
+            homepage hero's evidence-first phrasing instead. */}
         <h1 className="text-4xl font-bold tracking-tight text-slate-100 md:text-5xl">
-          Generate actionable edges for any fixture
+          Evidence-gated analysis for the fixture you choose
         </h1>
         <p className="text-base text-slate-400 md:text-lg">
-          Select your league and teams to unlock probability curves, value bets, and risk guidance tuned for the latest market moves.
+          Pick a verified fixture or enter a matchup. Forecasts, market comparison, and
+          staking guidance appear only when the backend confirms the required evidence.
         </p>
       </section>
 

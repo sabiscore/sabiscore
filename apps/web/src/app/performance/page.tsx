@@ -5,7 +5,7 @@ import { PerformancePageClient } from "@/components/performance/performance-page
 export const metadata: Metadata = {
   // Matches the <h1> and the sidebar's "Performance" entry. It previously read
   // "Intelligence Hub", which is a different route (/intelligence).
-  title: "Performance | SabiScore",
+  title: "Performance",
   description:
     "Walk-forward model accuracy and ranked probability score, computed from predictions settled against final results.",
 };

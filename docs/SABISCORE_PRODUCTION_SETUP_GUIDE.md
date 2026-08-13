@@ -431,6 +431,62 @@ provider-side rotation (`docs/DEBT.md` item 15), and the historical Gitleaks
 fingerprints at `d604c13` / `67ed0ab` still lack dated revocation evidence
 (item 16). Full-history Gitleaks and the Docker image-build gates remain red.
 
+## Client-surface truthfulness and selection UI (2026-08-13)
+
+Frontend-only release. No backend, model, provider, verdict, Kelly, EV, or
+evidence-gating logic is touched, and no migration or redeploy of the API is
+required. Ships from Vercel alone.
+
+### What changed on the client
+
+- **Fixture freshness badges no longer claim match state.** The freshest tier
+  read `LIVE` on every scheduled fixture because it was driven by
+  `staleness_seconds` (feature-data recency, recomputed per request), while the
+  endpoint behind that list only ever returns `status == "scheduled"` rows — so
+  the badge could never be true there. Now `Fresh` / `Recent` / `Stale`. The
+  `LIVE` **enum key** is intentionally unchanged; it is shared with
+  `freshness_tag` in the response contract, and only the display label moved.
+- **Page titles are single-branded.** `app/layout.tsx` supplies
+  `template: "%s | Sabiscore"`, so the 9 routes that also spelled the brand into
+  their own `title:` rendered it twice in tabs, `<title>`, and social cards.
+- **Mobile horizontal scroll removed.** 27px of document overflow at a 360px
+  client width came from the fixture row being a grid item with the default
+  `min-width: auto`; it now carries `min-w-0`.
+- **Selection UI**: the manual-matchup carousel keeps its league chips when a
+  filter returns nothing (it previously unmounted itself, stranding the user),
+  covers all 7 competitions instead of 5, no longer duplicates the
+  "Upcoming Fixtures" heading already used by the panel below it, and truncates
+  long away-team names.
+- **Copy**: "Predictions verified" → "Prediction **pipeline** verified" so it
+  cannot be read as model certification (which remains `UNVERIFIED`); the
+  best-bet empty state is user-centric rather than database-centric; the
+  `/match` hero no longer promises `ACTIONABLE` output for arbitrary input.
+
+### New guard
+
+`apps/web/src/lib/metadata-title-contract.test.ts` — repo-wide scan asserting no
+page duplicates the brand the root layout already appends. It caught a 9th
+offender that a hand-written grep had missed, and was watched failing on that
+offender before being accepted as green.
+
+### Release gate results (local, 2026-08-13)
+
+Web lint 0 · typecheck 0 · **Vitest 157 passed** (155 + 2 new guards) ·
+`NODE_ENV=production` build exit 0. Live DOM verification against a local
+production build pointed at the live Render backend: 12 fixture rows render
+`Fresh` with zero bare `Live` badges remaining; document overflow 0px at 360 /
+399 / 753 client widths on `/` and 0px at 360 on `/match`; the UCL filter keeps
+its chips and shows the honest empty message; `/match` renders a single-branded
+title.
+
+⚠️ **Not a production certification, and nothing here advances one.** This
+release changes only what the client displays. Model certification remains
+`UNVERIFIED` with `promotion_permitted=false` and every public stake at zero
+(`docs/DEBT.md` item 14); the exposed Redis credential still awaits provider-side
+rotation (item 15); the historical Gitleaks fingerprints still lack dated
+revocation evidence (item 16); and the undeclared Render web service still awaits
+the dashboard suspend/delete decision (item 20).
+
 ## vΩ.33 Identity deploy, capability readiness, season calendar (2026-08-04)
 
 Backend data-truth release. Verdict, Kelly, edge, EV, and evidence-gating logic

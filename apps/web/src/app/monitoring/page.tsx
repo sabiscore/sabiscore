@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Model Monitoring | SabiScore",
+  title: "Model Monitoring",
   description: "Authoritative settled-prediction model performance",
 };
 

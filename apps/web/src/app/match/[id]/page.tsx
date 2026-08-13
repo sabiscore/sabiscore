@@ -18,7 +18,7 @@ function matchupLabelFor(id: string, home?: string, away?: string): string {
 export async function generateMetadata({ params, searchParams }: PageProps) {
   if (!params) {
     return {
-      title: "Match Not Found | Sabiscore",
+      title: "Match Not Found",
       description: "The requested match could not be found.",
     };
   }
@@ -29,12 +29,12 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
     const { league, home, away } = resolvedSearchParams || {};
     const matchup = matchupLabelFor(id, home, away);
     return {
-      title: `${matchup} - Match Intelligence | Sabiscore`,
+      title: `${matchup} — Match Intelligence`,
       description: `Evidence-led match intelligence for ${matchup} in ${league || "EPL"}.`,
     };
   } catch {
     return {
-      title: "Match Intelligence | Sabiscore",
+      title: "Match Intelligence",
       description: "Evidence-led match intelligence and explicit availability states.",
     };
   }

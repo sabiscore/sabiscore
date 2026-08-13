@@ -145,7 +145,9 @@ function formatMatchDate(dateStr: string) {
 function freshnessLabel(stalenessSeconds?: number) {
   const age = stalenessSeconds ?? 0;
   if (age <= 0) {
-    return { label: "Live", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" };
+    // "Live" would claim match state; this measures data freshness only,
+    // and the backing query only ever returns status:"scheduled" fixtures.
+    return { label: "Fresh", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" };
   }
   if (age < 86400) {
     return { label: "Recent", className: "border-amber-500/30 bg-amber-500/10 text-amber-300" };
@@ -215,11 +217,16 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
   const partialAria = hasDataGaps ? " · partial intelligence" : "";
   const ariaLabel = `${match.home_team} vs ${match.away_team} · ${match.league} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}`;
 
+  // `min-w-0` on the Link below is load-bearing: the row is a grid item, and
+  // grid items default to min-width:auto (their min-content), so at a 360px
+  // viewport the row rendered 359px inside a 303px column and pushed 27px of
+  // horizontal scroll onto the entire page. The inner text block already had
+  // min-w-0; the row itself did not, and that is the constraint that binds.
   return (
     <Link
       href={href}
       aria-label={ariaLabel}
-      className="group flex items-center justify-between gap-4 rounded-xl border border-slate-800/60 bg-slate-900/50 px-4 py-3 transition hover:border-indigo-500/30 hover:bg-slate-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+      className="group flex min-w-0 items-center justify-between gap-4 rounded-xl border border-slate-800/60 bg-slate-900/50 px-4 py-3 transition hover:border-indigo-500/30 hover:bg-slate-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="truncate text-sm font-medium text-slate-200 group-hover:text-white transition-colors">

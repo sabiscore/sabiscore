@@ -5,6 +5,123 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Client-surface truthfulness and selection-UI pass (2026-08-13)
+
+Frontend-only. No backend, model, provider, verdict, Kelly, or evidence-gate
+logic was touched. Every claim below was verified against the rendered DOM on a
+local production build pointed at the live Render backend, not inferred.
+
+### Fixed
+
+- **Every scheduled fixture rendered a green `LIVE` badge.**
+  `upcoming-matches-panel.tsx`'s `freshnessLabel()` mapped
+  `staleness_seconds <= 0` to the label `"Live"`, but that field measures
+  *feature-data recency*, not match state — and it is recomputed per request,
+  so it sits at ~0 for essentially every row. The endpoint behind this list
+  (`_get_upcoming_matches_from_db`) only ever returns fixtures with
+  `status == "scheduled"`, so within this surface `LIVE` was **never** a true
+  statement. The freshest tier now reads `Fresh`; `Recent`/`Stale` are
+  unchanged (neither claims match state). The row's `aria-label` improved from
+  the false "live data" to "fresh data" as a direct consequence. Same one-word
+  fix applied to `full-analysis-dashboard.tsx`'s `FreshnessPill`, which had the
+  identical conflation on the match page. The `LIVE` **enum key** is deliberately
+  untouched — it is shared with `freshness_tag` in the Zod contract; only the
+  display string changed.
+
+- **All 9 titled routes double-branded their page title.**
+  `app/layout.tsx` declares `metadata.title.template = "%s | Sabiscore"`, and
+  every page also spelled the brand into its own `title:` — so browser tabs,
+  SEO `<title>`, and social cards all read
+  `Match Insights | Sabiscore | Sabiscore`. Removed the redundant suffix from
+  all 9.
+
+- **27px of horizontal scroll on every mobile viewport.** Measured at a 360px
+  client width: page `scrollWidth` 387 against `clientWidth` 360. Root cause was
+  not the badges or long team names — the fixture row `<a>` is a **grid item**,
+  and grid items default to `min-width: auto` (min-content), so the row rendered
+  359px inside its own 303px column and pushed the overflow onto the document.
+  `min-w-0` was present on the row's inner text block but not on the row itself,
+  which is the constraint that actually binds. Proven by applying the candidate
+  fix in-page and re-measuring (387 → 360) before editing source.
+
+- **The manual-matchup carousel was a dead end on any empty league filter.**
+  `BigMatchesCarousel` returned `null` whenever the *active filter* had zero
+  results — unmounting its own league chips along with the cards, leaving no
+  in-UI way back to "All" short of a reload. Now distinguishes "nothing synced
+  at all" (still `null`) from "this filter is empty" (chips stay, with
+  `No {league} fixtures in the next 14 days. Try another league.`).
+
+- **That same carousel could not reach 2 of the 7 competitions.**
+  `LEAGUES.slice(0, 5)` omitted Eredivisie and UCL — Eredivisie being the league
+  whose season opens first, i.e. the only one with fixtures. Now renders all 7;
+  the row already scrolls horizontally, so it costs no layout.
+
+- **Two identically-labelled fixture lists on `/match`.** The carousel heading
+  and `UpcomingMatchesPanel` both read "Upcoming Fixtures", each with its own
+  league filter row and different behaviour. The carousel — a shortcut into the
+  form below it — is now "Quick pick".
+
+- **A long away-team name stretched every sibling card** in the carousel's
+  non-wrapping flex row (`align-items: stretch`): the home-team name had
+  `truncate`, the away-team name did not.
+
+- **Hero dead space on the homepage.** The 2-column hero used `items-start`
+  against a right rail (Model Pulse + Platform Status + pillars) that runs
+  ~2× the height of the headline/CTA column, dumping ~546px of emptiness below
+  the CTAs. `items-center` splits it evenly; measured post-fix as exactly
+  centred.
+
+### Changed
+
+- **`readiness-ring.tsx`: "Predictions verified" → "Prediction pipeline
+  verified"** (and the failure copy to match). The string was never fabricated —
+  it is driven by a real backend probe that runs `get_full_analysis()` against
+  the next fixture. But it sat directly beside the Model Pulse panel reading
+  `CERTIFICATION: UNVERIFIED` / `PROMOTION: ACTIVE_FAIL_CLOSED`, with nothing
+  distinguishing the two axes, so a reader could take it as "certified to stake
+  on". Copy-only; no logic, no gating change.
+
+- **`best-bet-spotlight.tsx` empty state** — "No recent predictions in
+  database" named the storage layer rather than the user-facing reason; now
+  "No certified opportunities right now". Its already-accurate subtext is
+  unchanged.
+
+- **`/match` hero** — "Generate actionable edges for any fixture" promised the
+  `ACTIONABLE` verdict tier for arbitrary input, which the evidence gates
+  contradict and which collides with the verdict vocabulary; the manual path is
+  an explicit non-executable hypothetical. Rephrased to match the homepage
+  hero's evidence-first voice.
+
+- **Removed the "Premium visual mode" chip** from the selector header — it
+  named an internal feature flag and described the stylesheet, not the analysis.
+
+### Added
+
+- **`apps/web/src/lib/metadata-title-contract.test.ts`** — repo-wide guard, same
+  source-scanning idiom as `copy-contract.test.ts` and
+  `league-contract.test.ts`: no `app/**/{page,layout}.tsx` may spell the brand
+  into its own `title:`, and the root layout must still supply it exactly once.
+  ⚠️ **The guard immediately caught a 9th offender that a hand-written grep had
+  missed** (`team/[slug]/page.tsx`, a template literal) — and was watched
+  failing on that real offender before being taken as green, per this repo's
+  "a guard you have not watched fail is not a guard" rule.
+
+### Verification
+
+Lint 0 · typecheck 0 · Vitest **157/157** (155 + 2 new guards) ·
+`NODE_ENV=production` build ✓. Live DOM checks on a local production server
+against the real backend: 12 fixture rows render `Fresh` with zero remaining
+bare `Live` badges; page overflow 0px at 360 / 399 / 753 client widths on `/`
+and 0px at 360 on `/match`; UCL filter keeps its chips and shows the honest
+empty message; `/match` title renders single-branded.
+
+### Not touched, deliberately
+
+Backend, models, providers, evidence gates, verdict/Kelly logic, and the
+zero-stake-until-certified contract are unchanged. `docs/DEBT.md` items 14/15/20
+(model certification, Redis credential rotation, the undeclared Render service)
+remain open operator actions — none are code-resolvable from this environment.
+
 ## Unreleased - League normalization closed as a class, not another instance (2026-08-12)
 
 ### Fixed

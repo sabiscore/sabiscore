@@ -35,7 +35,7 @@ describe("ReadinessRing capability line (D6)", () => {
       backendChecks: READY_CHECKS,
       backendCapability: { status: "verified", message: "ok" },
     });
-    expect(await screen.findByText("Predictions verified")).toBeInTheDocument();
+    expect(await screen.findByText("Prediction pipeline verified")).toBeInTheDocument();
     expect(screen.getByText("Core ready")).toBeInTheDocument();
   });
 
@@ -55,7 +55,7 @@ describe("ReadinessRing capability line (D6)", () => {
       backendCapability: { status: "failed", message: "prediction_status=UNAVAILABLE" },
     });
     await waitFor(() => expect(screen.getByText("Core ready")).toBeInTheDocument());
-    expect(screen.getByText("Predictions not verified")).toBeInTheDocument();
+    expect(screen.getByText("Prediction pipeline not verified")).toBeInTheDocument();
   });
 
   it("falls back to the neutral copy for a backend response with no capability field yet", async () => {

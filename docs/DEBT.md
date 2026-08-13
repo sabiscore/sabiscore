@@ -113,6 +113,57 @@ disguise — say so honestly.
 
 ---
 
+## 21. Frontend residuals left deliberately after the 2026-08-13 truthfulness pass
+
+**Tier:** `ACCEPTED` (a and b) / `NEXT` (c — trigger named below).
+**Found:** 2026-08-13, while fixing the `LIVE`-badge, page-title, mobile-overflow
+and selection-UI defects recorded in `CHANGELOG.md` for that date.
+
+Three things were found, understood, and **not** changed. Recording them so the
+next session does not re-derive them or "fix" them without the context.
+
+**(a) `BigMatchesCarousel` fetches while collapsed.** On the homepage the match
+selector is wrapped in a native `<details>` (`app/page.tsx`, the
+"Explore a manual matchup" accordion). React mounts `<MatchSelector />`
+unconditionally and the browser merely hides it via the UA stylesheet, so the
+carousel's `useQuery(["big-matches-carousel"])` issues its
+`getUpcomingMatches()` request on every homepage load whether or not the user
+ever expands the section. It is one bounded, cached (`staleTime` 5 min) request
+that React Query dedupes, so the cost is small and it is **not** a correctness
+or truthfulness issue — but it is avoidable. The fix is to gate the fetch on the
+`<details>` open state (or lazy-mount the selector), which needs the accordion to
+become a controlled component. Not worth the added state today.
+
+**(b) `monitoring-dashboard.tsx` / `performance-dashboard.tsx` are orphaned.**
+Neither is imported anywhere in `apps/web/src` (repo-wide grep), and
+`app/monitoring/page.tsx` is a pure `redirect("/performance")`. They also fetch
+endpoint shapes (`/api/metrics`, `/api/drift`) that no longer match the
+`/api/model-performance*` surface `/performance` actually uses. Dead code, not
+user-reachable, so deleting them is safe but is a separate cleanup with its own
+review — bundling it into a UI-truthfulness commit would have obscured that diff.
+
+**(c) `phase8-analytics-panel.tsx` still labels a tier `"Live"`.** It carries its
+own local `freshnessLabel()` (different return shape from the one in
+`upcoming-matches-panel.tsx` — `{label, cls}` vs `{label, className}`; the two
+share no code) which labels **individual feature rows** inside a technical
+diagnostics panel, e.g. `away_attack_vs_home_defense: Live`. That is the same
+overloaded vocabulary the fixture-badge fix removed, but it is *not* the same
+defect: it annotates a feature's data recency inside an explicitly technical
+panel, not a fixture's state on a scanning surface, so it cannot be misread as
+"this match is in progress". Left as-is to keep the fix scoped to the surface
+that was actually wrong. **Trigger:** align it if that panel is ever promoted out
+of diagnostics into a primary user surface, or if a third copy of this helper
+appears — at which point extract one shared freshness helper rather than editing
+a third local one.
+
+**Blast radius:** (a) one redundant request per homepage load; (b) none — dead
+code; (c) none — technical panel only.
+**Cost:** (a) small but needs a controlled accordion; (b) trivial deletion,
+separate review; (c) trivial, but see trigger.
+**Priority:** low for all three.
+
+---
+
 ## 17. Offline ML research environment is only partially installed
 
 **Tier:** `NEXT` — trigger: reliable package-index access on a Python 3.11-3.13

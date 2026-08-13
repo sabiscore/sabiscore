@@ -231,3 +231,9 @@ ssl/*.pem
 ssl/*.key
 ssl/*.crt
 .env*
+
+# Playwright MCP scratch output (DOM snapshots, console logs, screenshots)
+# written into the repo root during local UI verification.
+.playwright-mcp/
+/homepage-full.png
+/match-page.png

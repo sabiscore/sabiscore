@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
   const name = decodeURIComponent(slug).replace(/-/g, " ");
   return {
-    title: `${name} — Team Intelligence | Sabiscore`,
+    title: `${name} — Team Intelligence`,
     description: `Rolling form, H2H analysis, and upcoming fixtures for ${name}.`,
   };
 }

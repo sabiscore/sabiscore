@@ -126,14 +126,22 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
 
   const topEdgeId = getTopEdgeFixtureId(fixtures);
 
-  // Don't render during offseason or when data is empty after load
-  if (!isLoading && (data?.offseason || fixtures.length === 0)) return null;
+  // Don't render during offseason or when nothing was synced at all. A zero
+  // result for the *currently selected* league filter is a different case —
+  // handled below, inside the cards row, so the filter chips (the only way
+  // back to "All") never disappear along with a filtered-empty result.
+  const hasAnyFixtures = (data?.upcoming_matches?.length ?? 0) > 0;
+  if (!isLoading && (data?.offseason || !hasAnyFixtures)) return null;
 
   return (
     <div className="space-y-3 mb-6">
       <div className="flex items-center justify-between">
+        {/* Not "Upcoming Fixtures": UpcomingMatchesPanel renders a section with
+            that exact heading and its own league filter further down /match, so
+            two identically-labelled fixture lists with two different filter rows
+            appeared on one page. This one is a shortcut into the form below. */}
         <p className="text-xs uppercase tracking-[0.3em] text-slate-500 font-semibold">
-          Upcoming Fixtures
+          Quick pick
         </p>
         {/* League filter chips */}
         <div className="flex gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -150,7 +158,11 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
           >
             All
           </button>
-          {LEAGUES.slice(0, 5).map((l) => (
+          {/* All 7, not slice(0,5): the two omitted leagues were Eredivisie and
+              UCL, and Eredivisie is the league whose season opens first — the
+              filter could not reach the only league with fixtures. The row
+              already scrolls horizontally, so it costs no layout. */}
+          {LEAGUES.map((l) => (
             <button
               key={l.id}
               type="button"
@@ -178,6 +190,12 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                 className="flex-shrink-0 w-[180px] h-[100px] rounded-xl border border-slate-800/60 bg-slate-900/40 animate-pulse"
               />
             ))
+          : fixtures.length === 0
+          ? (
+              <p className="text-xs text-slate-500 py-4">
+                No {activeLeague === "ALL" ? "" : `${activeLeague} `}fixtures in the next 14 days. Try another league.
+              </p>
+            )
           : fixtures.map((match) => {
               const selectorLeague = selectorLeagueId(match.league);
               const isTopEdge = match.match_id === topEdgeId;
@@ -223,7 +241,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                     </p>
                   )}
                   <p className="text-[11px] font-semibold text-slate-100 truncate">{match.home_team}</p>
-                  <p className="text-[10px] text-slate-500">vs {match.away_team}</p>
+                  <p className="text-[10px] text-slate-500 truncate">vs {match.away_team}</p>
                   {match.match_date && (
                     <p className="text-[9px] text-slate-600 mt-0.5">
                       {new Date(match.match_date).toLocaleString("en-NG", {
@@ -467,11 +485,9 @@ export function MatchSelector() {
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-xl font-bold text-slate-100 sm:text-2xl">Generate Match Insights</h2>
-              {premiumVisualsEnabled && (
-                <span className="hidden rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-slate-300 sm:inline-flex">
-                  Premium visual mode
-                </span>
-              )}
+              {/* The "Premium visual mode" chip that used to sit here named an
+                  internal feature flag. It described the stylesheet, not the
+                  analysis, and meant nothing to a reader. */}
             </div>
             <p className="text-sm text-slate-400 sm:text-base">Choose a verified fixture or enter a hypothetical matchup.</p>
           </div>

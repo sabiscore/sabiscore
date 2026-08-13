@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { ModelHealthClient } from "@/components/admin/model-health-client";
 
 export const metadata: Metadata = {
-  title: "Model Health | Admin | SabiScore",
+  title: "Model Health | Admin",
   description: "Admin model health dashboard — artifact status, readiness checks, and load diagnostics.",
 };
 
