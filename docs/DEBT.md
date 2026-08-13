@@ -59,12 +59,52 @@ cause, confirm the timeline — a Render free-tier deploy can legitimately take
 10–15 minutes, so "not yet" and "failed" look identical for a long window.**
 Check the deploy log for that service, not a sibling's.
 
+**Update 2026-08-13 — new symptom, decision made.** An operator-supplied
+Render deploy log shows the `384f9f4` root `start` script fix holds — the
+service now binds `$PORT` and boots cleanly (`Ready in 3.3s`) — but it still
+dies roughly 4 minutes later (`ELIFECYCLE Command failed`), with no further
+detail captured in the log excerpt. This is a **different failure** from the
+original "no start script" crash, and it was not investigated further this
+session: `render.yaml` still declares only `sabiscore-api` (Python) and the
+`sabiscore-evidence-acquisition` cron, and `apps/web` is confirmed live and
+correct on Vercel (production alias `sabiscore.com`, `vercel --prod` output
+this session shows `Aliased https://sabiscore.com`, and
+`web-lac-theta-42.vercel.app/api/health` independently reports `sha` matching
+current `master` HEAD). With Vercel already canonical and healthy, the
+decision is **suspend → verify → delete**, not further diagnosis of the
+Render copy's runtime crash.
+
+**Operator checklist (dashboard-only — no code change can execute this):**
+
+1. In the Render dashboard, find the web service that is **not**
+   `sabiscore-api` and **not** the `sabiscore-evidence-acquisition` cron.
+2. Confirm its build/deploy log matches the signature already captured here:
+   `pnpm install --frozen-lockfile`, `pnpm run build` building
+   `@sabiscore/web` + `@sabiscore/scraper`, then `pnpm run start` →
+   `next start`.
+3. Record (privately, values not needed) whether it carries any of
+   `REDIS_URL`, `DATABASE_URL`, `API_FOOTBALL_API_KEY`,
+   `UPSTASH_REDIS_URL` — if the exposed Redis Cloud credential (item 15) was
+   ever pasted into this service specifically, note that before touching
+   item 15's revocation step.
+4. **Suspend** the service (not delete yet).
+5. Re-check `https://sabiscore.com` and
+   `https://web-lac-theta-42.vercel.app` both still serve normally — they
+   should be completely unaffected, since neither depends on this service.
+6. Only after confirming step 5, **delete** the service and remove it from
+   the Render dashboard's service list.
+
+This item stays open until an operator actually performs steps 1–6 above —
+adding the start script only stopped the crash-on-boot symptom, it did not
+answer whether the service should exist, and code cannot make a dashboard
+deletion.
+
 **Blast radius:** every push to master triggers a failing build; the live
 backend silently stays on the previous commit.
-**Cost:** small for the script (done); the architectural decision is an ADR.
+**Cost:** small for the script (done); the architectural decision is made
+(suspend/delete) — remaining cost is five minutes in the Render dashboard.
 **Priority:** P0 for the decision — until it is made, no push to master
 reliably reaches production.
-
 
 Format per entry: **Tier** (`FIX-NOW` / `NEXT` — named trigger / `ARCH-DEBT` — needs an
 ADR / `ACCEPTED` — rationale + review date), owner, blast radius, engineering cost,
@@ -166,6 +206,66 @@ cannot rotate the provider credential or modify the protected Render secret.
 cache readiness; revoke the exposed credential; redeploy; then prove current logs
 remain redacted. Record provider-side replacement and revocation evidence privately.
 Production remains blocked until every step is recorded.
+
+**Update 2026-08-13 — verified runbook, migration not yet proven.** An
+operator-supplied transcript worked through migrating to Upstash. Its
+technical claims were checked against real code this session and hold:
+`backend/src/core/config.py:174-175` does raise
+`"production Redis requires a rediss:// URL"` when
+`app_env == "production"` and the URL isn't `rediss://`, and
+`backend/src/core/cache.py:189` does log
+`"Redis (tier-1) connection established successfully"` only after a real
+`PING` — the transcript's diagnostic advice is grounded, not guessed.
+Superseding the freeform transcript with the corrected sequence:
+
+1. Locally, clear the process env var by its **correct** name — `REDIS_URL`,
+   not a mis-escaped `REDIS\_URL` (a real mistake caught mid-transcript;
+   PowerShell doesn't need underscore escaping in a string).
+2. Confirm which Render service is being edited before touching anything —
+   it must be `sabiscore-api` (Python/FastAPI, `rootDir: backend`), **never**
+   the undeclared Node service tracked in item 20. A pasted deploy log this
+   session was from that other service and was initially misread as this
+   one — see item 20's 2026-08-13 update.
+3. Set the new Upstash `rediss://` URL as `sabiscore-api`'s `REDIS_URL` in
+   the Render dashboard, keep `REDIS_ENABLED=true`, choose **Save and
+   deploy** (not "Save only" — that only stores the value for a future
+   deploy).
+4. Watch the deploy log for the confirmed-real line
+   `"Redis (tier-1) connection established successfully"`. Its absence, or
+   `"production Redis requires a rediss:// URL"` appearing instead, means
+   the guard rejected the value — fix the URL scheme, don't bypass the guard.
+5. Re-run `/health/ready` and read `components.cache.metrics`' tier-1 flags
+   specifically — **not** just the top-level `cache: "Connected"` string,
+   which the 2026-08-12 CLAUDE.md ground-truth entry already documents as
+   insufficient on its own (it read "Connected" once even while Redis was
+   genuinely absent).
+6. Only after step 5 confirms tier-1 is live, revoke the old Redis Cloud
+   credential in its own console, then strip the stale `REDIS_URL` line from
+   the local `backend/.env` (`Select-String` to confirm no match remains).
+7. **Local re-test footgun:** `Settings.model_config.env_file` in
+   `config.py` is `(project_root/.env, backend/.env)` — the second entry is
+   cwd-relative, so `REDIS_URL` can resolve differently depending on whether
+   a local script runs from the repo root or from `backend/`. Confirm from
+   both cwds after editing, don't trust one.
+
+Local Upstash connectivity (TLS, PING, write/read/delete) was reported PASS
+in the transcript but is **not independently verified here** — this session
+had no Upstash credential to test against. `sabiscore-api`'s `REDIS_URL` has
+**not** been confirmed migrated as of this entry; a live probe
+(2026-08-13, ~18:4x UTC) found `sabiscore-api-bav1.onrender.com` returning
+`503` on `/health`, `/health/ready`, and `/api/v1/providers/health` alike —
+consistent with either an in-progress redeploy from exactly this migration,
+or an unrelated cold start/crash. Re-probe before concluding either way; see
+the dated entry in CLAUDE.md for the exact snapshot.
+
+A user-supplied screenshot of the Redis Cloud console (`cloud.redis.io`,
+database `sabiscore-database`, ID `13753214` — the *old* provider being
+migrated away from, not Upstash) confirms **Transport layer security (TLS)
+is Off** and **CIDR allow list is Off** on that instance. This is exactly
+why `sabiscore-api`'s production guard rejects it
+(`config.py:174-175`, `"production Redis requires a rediss:// URL"` — a
+non-TLS Redis Cloud endpoint is `redis://`, never `rediss://`). Confirms the
+diagnosis; does not change the runbook above.
 
 ## 16. Release infrastructure and historical-secret gates remain closed
 
