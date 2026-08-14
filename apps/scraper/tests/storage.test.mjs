@@ -6,6 +6,7 @@ import {
   contentHash,
   probeImmutableStorage,
   putS3Object,
+  storageFailureReport,
   writeManifest,
   writeRaw,
 } from "../src/storage.mjs";
@@ -21,6 +22,28 @@ class HeadObjectCommand {
 class S3Client {}
 
 const fakeS3 = { HeadObjectCommand, PutObjectCommand, S3Client };
+
+test("storage probe failures expose only bounded redacted fields", () => {
+  const error = Object.assign(
+    new Error("User arn:aws:iam::123456789012:user/private is not authorized"),
+    {
+      $metadata: {
+        httpStatusCode: 403,
+        requestId: "sensitive-request-id",
+        extendedRequestId: "sensitive-extended-id",
+      },
+    },
+  );
+
+  const report = storageFailureReport(error);
+  assert.deepEqual(report, {
+    ok: false,
+    error_code: "s3_authorization_failed",
+    http_status: 403,
+  });
+  assert.equal(JSON.stringify(report).includes("arn:aws"), false);
+  assert.equal(JSON.stringify(report).includes("request-id"), false);
+});
 
 class InMemoryS3Client {
   constructor() {

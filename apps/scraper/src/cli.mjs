@@ -10,6 +10,7 @@ import {
   ensureStorage,
   probeImmutableStorage,
   readFixture,
+  storageFailureReport,
   writeManifest,
 } from "./storage.mjs";
 
@@ -176,8 +177,13 @@ async function doctor() {
 }
 
 async function storageProbe() {
-  const result = await probeImmutableStorage();
-  console.log(JSON.stringify(result, null, 2));
+  try {
+    const result = await probeImmutableStorage();
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    console.error(JSON.stringify(storageFailureReport(error), null, 2));
+    process.exitCode = 1;
+  }
 }
 
 if (command === "storage:probe") {

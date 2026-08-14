@@ -5,13 +5,62 @@ Last reviewed: 2026-08-14
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
-## Local Apex v3 candidate evidence from 2026-08-14
+## Apex v3 production-finalization evidence from 2026-08-14
 
-- On `feat/apex-v3-activation`, shared prediction capture and strict temporal joins
+- `master`, Vercel production, and the Render API all identify code SHA
+  `e0f89ae030f7c36bcb77f929a3ca46fcc65dc3c2`. Required GitHub workflows for that
+  SHA ran on named GitHub-hosted runners with non-empty successful steps: canonical
+  backend, web, scraper, Playwright, secret scan, Gitleaks, model-artifact, and
+  large-file checks. A new candidate SHA must repeat those gates.
+- Production prediction capture is **DEPLOYED / CALLED / VERIFIED** for scheduled
+  fixture `fd-558223`. Two consecutive full-analysis calls remained `PARTIAL`,
+  prohibited stake, and incremented `analysis.prediction_log.duplicate` from zero
+  to two, proving an existing immutable row and exact-snapshot deduplication. The
+  direct database count is unavailable outside Render's private network. Settlement
+  is therefore DATA-FED at zero, not persistence-blocked: `/health` reports zero
+  settled predictions and no settlement failures, while `/api/v1/model-performance`
+  remains a structured 503. No outcome was invented or manually settled.
+- Explicit bounded local live validation passed for `football_data_org`,
+  `api_football`, and `sportmonks`; it failed for keyless supplementary `espn` and
+  failed with redacted 401 evidence for `the_odds_api`. Public non-live health
+  correctly remains configuration-only and must not be presented as production
+  liveness. The Odds API credential still requires operator rotation.
+- Runtime health verifies an external tier-1 Redis connection, but neither its vendor
+  nor production TLS is established by available Render evidence. Gitignored local
+  environment copies currently use `redis://`, not `rediss://`; they were inspected
+  structurally without printing the URL. Replacement/revocation remains an operator
+  gate.
+- The live immutable S3 probe reached the configured bucket but failed closed with
+  403 writer authorization. Read-only bucket/control checks also returned 403, so
+  ownership, versioning, encryption, public-access blocking, lifecycle, and
+  least-privilege IAM are not verified. The worker remains disabled and no acquisition
+  canary ran. The standalone CLI now reduces SDK failures to bounded
+  `error_code`/HTTP-status JSON; its redaction regression brings scraper coverage to
+  20 tests.
+- The deployed homepage was measured at 12 initial and 24 expanded fixture links.
+  Keyboard-operable expansion, accessible soft-coverage names, display-name-first
+  league identity, UCL estimated-date wording, mobile overflow protection, and the
+  compact research-market empty state are present; no frontend change was needed.
+- The current Vercel deployment first returned bounded no-store 503 envelopes for
+  both `/api/upcoming` and `/api/value-bet-scan` during a measured Render free-tier
+  cold start; direct backend health recovered to 200 after 45.67 seconds. The next
+  five proxy calls per route were all 200 (upcoming 1.08-4.87 seconds; value-bet
+  scan 0.99-1.62 seconds). The retained 89 platform-timeout events ended on
+  2026-08-10 and belong to an older deployment.
+
+Release decision: **NOT SAFE FOR PRODUCTION**. Real settlement/CLV thresholds,
+provider and historical-secret rotation evidence, Redis TLS/vendor confirmation,
+S3 authorization/controls/canary, and the stray Render service operation remain
+open.
+
+## Apex v3 implementation evidence from 2026-08-14
+
+- On the now-deployed Apex v3 implementation, shared prediction capture and strict
+  temporal joins
   **EXIST / TESTED**. A seeded test reaches scheduled verified fixture → full
   analysis → one deduplicated `MatchPredictionLog` → finished score → settled join.
-  Production is still DATA-FED at zero until this code is deployed and a real result
-  joins; Phases F-J/N2 and promotion remain closed.
+  Production is still DATA-FED at zero until a real result joins; Phases F-J/N2 and
+  promotion remain closed.
 - Both verdict engines now make `SPECULATIVE` watchlist-only with zero stake. The RL
   advisory API was reviewed separately because it has no matching verdict taxonomy;
   its full-analysis integration still abstains/zeroes on insufficient evidence and
@@ -19,20 +68,21 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 - The upcoming list can expose all 24 fetched fixtures without filtering, resets on
   league changes, gives soft coverage a visible and accessible explanation, uses
   human league names with secondary canonical IDs, and carries the UCL estimate flag
-  through FastAPI/proxy/TypeScript/off-season copy. This is local TESTED evidence,
-  not deployed-page measurement.
+  through FastAPI/proxy/TypeScript/off-season copy. This is TESTED and deployed-page
+  VERIFIED evidence.
 - Ruff's CI-blocking E402 is fixed. Mypy is pinned to 2.1.0; the local count is 766
   errors in 123 files / 236 checked files, and CI now enforces the 784 ceiling instead
   of marking the step advisory.
 - S3 checksum, matching-412 replay, conflicting-412, outage continuity/redaction,
-  manifest hash, and fixed-context probe behavior are mocked and TESTED (19 scraper
+  manifest hash, and fixed-context probe behavior are mocked and TESTED (20 scraper
   tests total). The gitignored root/backend env files agree on structurally valid,
   unmasked credentials and the existing `sabiscore-artifacts-prod-uswest2` regional
   configuration; their values were compared without printing secrets. The Render
   blueprint is aligned but the live dashboard is unverified. Read-only AWS
   `HeadBucket` and `GetBucketLocation` calls both returned 403, so bucket identity,
-  controls, and writer authorization are not VERIFIED. The mutating probe/acquisition
-  was not run and the worker remains disabled.
+  controls, and writer authorization are not VERIFIED. The live mutating probe was
+  run once and failed 403 before writing; acquisition was not run and the worker
+  remains disabled.
 - Local release gates completed after the final accessibility fixes: backend
   `1329 passed, 13 skipped`; focused backend `163 passed`; Ruff clean; mypy 766
   under the enforced 784 ceiling; web lint and typecheck clean; 31 Vitest files /

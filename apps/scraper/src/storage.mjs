@@ -37,12 +37,20 @@ function artifactContext(metadata = {}) {
   };
 }
 
-function storageFailureCode(error) {
+export function storageFailureCode(error) {
   if (error?.message === "immutable_object_conflict") return "immutable_object_conflict";
   const status = Number(error?.$metadata?.httpStatusCode ?? 0);
   if (status === 401 || status === 403) return "s3_authorization_failed";
   if (status === 408 || status === 429 || status >= 500) return "s3_temporarily_unavailable";
   return "s3_write_failed";
+}
+
+export function storageFailureReport(error) {
+  return {
+    ok: false,
+    error_code: storageFailureCode(error),
+    http_status: Number(error?.$metadata?.httpStatusCode ?? 0) || null,
+  };
 }
 
 function reportStorageFailure(error, key) {

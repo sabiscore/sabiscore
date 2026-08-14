@@ -24,6 +24,9 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- Redacted standalone scraper `storage:probe` failures to a bounded error code and
+  HTTP status so AWS SDK exception text cannot disclose IAM identity or request
+  metadata; the live 403 remains a fail-closed activation blocker.
 - Made `SPECULATIVE` watchlist-only with zero public stake in both independent
   verdict engines and reviewed the distinct RL advisory integration.
 - Fixed backend CI's Ruff E402 failure and reduced mypy 2.1.0 debt below the 781
@@ -33,9 +36,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Evidence status
 
-- These changes currently **EXIST / TESTED** only on the local feature candidate.
-  They are not **DEPLOYED / VERIFIED / CERTIFIED**; real production settlement,
-  provider rotation, secret revocation, S3 activation, and release CI remain gates.
+- The Apex v3 implementation is **DEPLOYED / VERIFIED** on frontend/backend SHA
+  `e0f89ae`. Production full analysis deduplicated twice against an existing
+  prediction row while preserving `PARTIAL`/zero-stake output. Settlement remains
+  DATA-FED at zero; model certification, provider/key rotation, secret revocation,
+  and S3 activation remain gates.
+- Required GitHub workflows for `e0f89ae` ran on real runners with successful steps.
+  Any new candidate SHA, including the probe-redaction follow-up, must repeat them.
 - Final local gates: backend `1329 passed, 13 skipped`; focused backend `163
   passed`; Ruff clean; mypy 766 under the blocking 784 ceiling; web lint,
   typecheck, 31 files / 178 tests, and production build; scraper validation and
