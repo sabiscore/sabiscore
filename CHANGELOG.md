@@ -5,10 +5,11 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased - Production log leak fixed; the_odds_api key confirmed invalid (2026-08-14)
+## Unreleased - Production log leak fixed; the_odds_api key confirmed invalid; WAT label parity (2026-08-14)
 
-Backend-only, one line. Found while reviewing an operator-supplied Render
-production log excerpt (2026-08-13T23:22-23:26 UTC).
+Backend log-leak fix is one line. Frontend fix is a one-line label addition.
+Log leak found while reviewing an operator-supplied Render production log
+excerpt (2026-08-13T23:22-23:26 UTC).
 
 ### Fixed
 
@@ -24,6 +25,14 @@ production log excerpt (2026-08-13T23:22-23:26 UTC).
   existing `basicConfig` call, mirroring the identical `uvicorn.access`
   suppression already present (but unreachable from this entrypoint) in
   `core/logging.py`.
+
+- **`upcoming-matches-panel.tsx`'s fixture rows showed a Lagos-timezone
+  kickoff time with no timezone label.** `match-selector.tsx`'s
+  `BigMatchesCarousel` already computes the same `Africa/Lagos` time and
+  appends `WAT`; the primary "Upcoming verified fixtures" list computed the
+  identical timezone-correct time but never labelled it, so a browser
+  outside WAT would see an unlabelled time indistinguishable from its own
+  local time. Added the same `WAT` suffix for parity.
 
 ### Found, not code-fixable
 
