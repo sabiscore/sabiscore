@@ -54,13 +54,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   DATA-FED at zero; model certification, provider/key rotation, secret revocation,
   and S3 activation remain gates.
 - Required GitHub workflows for `e0f89ae` ran on real runners with successful steps.
-  Any new candidate SHA, including the probe-redaction follow-up, must repeat them.
-- Final local gates: backend `1329 passed, 13 skipped`; focused backend `163
-  passed`; Ruff clean; mypy 766 under the blocking 784 ceiling; web lint,
-  typecheck, 31 files / 178 tests, and production build; scraper validation and
-  19 tests; OpenAPI 78 paths; Docker Compose configuration; and 38 desktop/mobile
-  Playwright tests including axe. Alembic upgrade passed on a disposable database;
-  `alembic check` still reports 11 pre-existing legacy index removals.
+  `master` HEAD is now `237c8bf` (two commits ahead of `e0f89ae`: the
+  edge_quality_score truthfulness fix, then the cherry-picked probe-redaction
+  commit) — **EXISTS / TESTED locally, not yet DEPLOYED**; those workflows must
+  rerun against this SHA before it is DEPLOYED/VERIFIED.
+- Final local gates re-run against `237c8bf`: backend `1329 passed, 13 skipped`;
+  Ruff clean; mypy 766 under the blocking 784 ceiling; web lint 0 warnings,
+  typecheck clean, `33 files / 182 tests`, and production build clean; scraper
+  `20/20` tests (was 19; the redaction commit adds one). OpenAPI/Docker/Alembic/
+  Playwright gates were not re-run this pass — no code in this session touched
+  those surfaces; their `e0f89ae` results stand (78 paths; Docker Compose config
+  passing; Alembic upgrade passing on a disposable DB with 11 pre-existing legacy
+  index removals in `check`; 38 desktop/mobile Playwright including axe).
 - Gitleaks is clean for the committed-tree snapshot and exact staged candidate.
   Full history still reports the two known redacted `.env.example` findings, so
   rotation/revocation evidence remains an operator gate.

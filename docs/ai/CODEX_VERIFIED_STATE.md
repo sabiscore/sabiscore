@@ -5,6 +5,34 @@ Last reviewed: 2026-08-14
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
+## Integration pass evidence from 2026-08-14 (post-`e0f89ae`)
+
+Before this pass, three side branches existed
+(`feat/apex-v3-activation`, `fix/httpx-odds-api-key-log-leak`,
+`fix/match-selection-window-and-feature-wiring`) but were byte-identical to
+`master` at `e0f89ae` — already merged, verified via `git diff master...<branch>`
+returning empty for each. The only genuinely unmerged work anywhere was one
+commit, `9d56ece` "redact S3 activation probe failures", on
+`feat/apex-v3-activation-finalization` (one commit ahead of `e0f89ae`). It was
+cherry-picked onto `master` cleanly (auto-merged, no conflict).
+
+Separately, a UI-truthfulness defect was found and fixed: `edge_quality_score`
+(a confidence/freshness/completeness composite, never a market edge) was
+presented as one in three places — `match-selector.tsx`'s celebratory
+"🔥 Top Edge Today" badge, `insights-tease-strip.tsx`'s bare "High/Medium/Low
+Edge" tier text, and `phase8-analytics-panel.tsx`'s literal "LIVE" freshness
+label on the primary `/match/[id]` page (closing `docs/DEBT.md` item 21c's
+own named trigger). Full detail in `CHANGELOG.md`.
+
+`master` HEAD is now `237c8bf` (two commits ahead of the previously-deployed
+`e0f89ae`: `db26b37` the edge-quality fix, `237c8bf` the cherry-picked S3
+redaction). **Not yet pushed/deployed as of this entry** — re-verify SHA
+parity against Vercel/Render `/api/health` after the push. Full local gates
+re-run against this exact tree: backend `ruff` clean; mypy `766 <= 784`;
+backend `pytest` `1329 passed, 13 skipped`; scraper `20/20` (was 19, +1 from
+the cherry-picked redaction test); web `lint` 0 warnings; web `typecheck`
+clean; web Vitest `33 files / 182 tests` passed; web production build clean.
+
 ## Apex v3 production-finalization evidence from 2026-08-14
 
 - `master`, Vercel production, and the Render API all identify code SHA
