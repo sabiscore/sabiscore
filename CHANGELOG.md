@@ -36,6 +36,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   match-analysis states; associated every manual-odds input with an accessible
   name and corrected provider-meter, verdict-token, focus, landmark, tooltip,
   heading-order, and dark-surface contrast defects found by the full axe audit.
+- Corrected the successful `PARTIAL` full-analysis surface after the first
+  production deploy exposed legacy slate-500/600 text below WCAG AA and generic
+  elements with unsupported ARIA names. The muted copy now uses the existing
+  `--conviction-hold` token; visible text and valid roles supply accessible names.
 
 ### Verified
 
@@ -48,7 +52,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   no horizontal overflow, long club names retained, keyboard focus visible and
   ordered, reduced-motion animation durations effectively zero, the 200% zoom
   equivalent viewport reflowed without overflow, and the home, intelligence,
-  and fail-closed match surfaces had zero axe violations. Axe could not infer
+  and successful fail-closed `PARTIAL` match surfaces had zero axe violations.
+  Axe could not infer
   contrast through gradients; manual endpoint checks measured a 4.516:1 worst
   case.
 - Current-source Gitleaks completed without a finding. Inaccessible generated

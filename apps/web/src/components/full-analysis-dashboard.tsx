@@ -120,7 +120,8 @@ function SabiInsightsBadge({
 }) {
   const displayedCopy = copy ?? sabiInsightCopy(verdict, matchId);
   return (
-    <p className="text-[11px] text-slate-500 italic leading-relaxed truncate" aria-label={`Sabi Insights: ${displayedCopy}`}>
+    <p className="text-[11px] text-slate-500 italic leading-relaxed truncate">
+      <span className="sr-only">Sabi Insights: </span>
       {displayedCopy}
     </p>
   );
@@ -418,7 +419,7 @@ function getActionabilitySummary(data: FullMatchAnalysisResponse) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse" aria-busy="true" aria-label="Loading intelligence dashboard">
+    <div className="space-y-5 animate-pulse" role="status" aria-busy="true" aria-label="Loading intelligence dashboard">
       <div className="h-14 rounded-2xl bg-slate-800/70" />
       <div className="h-20 rounded-2xl bg-slate-800/50" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -458,8 +459,8 @@ function FreshnessPill({
   return (
     <span
       className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider", config.border, config.text)}
-      aria-label={`Data freshness: ${config.label}${ageLabel}`}
     >
+      <span className="sr-only">Data freshness: </span>
       <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} aria-hidden />
       {config.label}{ageLabel}
     </span>
@@ -768,7 +769,10 @@ export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
           {["Home Elo", "Away Elo", "Elo Diff", "Momentum"].map((label) => (
             <div key={label} className="flex justify-between text-sm">
               <span className="text-slate-400">{label}</span>
-              <span className="font-semibold text-slate-500 tabular-nums" aria-label={`${label} unavailable`}>—</span>
+              <span className="font-semibold text-slate-500 tabular-nums">
+                <span className="sr-only">{label} unavailable</span>
+                <span aria-hidden="true">—</span>
+              </span>
             </div>
           ))}
         </div>
@@ -958,7 +962,7 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
               {groupEvidenceGaps(gaps).map((group) => (
                 <li key={group.label} className="text-xs text-amber-200/70">
                   {group.label}
-                  <span className="ml-1 tabular-nums text-amber-200/40">{group.count}</span>
+                  <span className="ml-1 tabular-nums text-amber-200">{group.count}</span>
                 </li>
               ))}
             </ul>
@@ -1015,6 +1019,7 @@ function EdgeDeltaBar({
   return (
     <div
       className="rounded-xl border border-slate-800/60 bg-slate-900/50 px-5 py-4 space-y-3"
+      role="group"
       aria-label="Model vs market edge delta"
     >
       <div className="flex items-center justify-between">
@@ -1117,7 +1122,7 @@ function DataFreshnessSection() {
             <span className="text-[10px] text-slate-500">{src.category}</span>
           </div>
         ))}
-        <div className="ml-auto flex items-center gap-2.5 text-[9px] text-slate-700">
+        <div className="ml-auto flex items-center gap-2.5 text-[9px] text-slate-300">
           <span><span className="text-emerald-500">●</span> Live</span>
           <span><span className="text-amber-500">●</span> Recent</span>
           <span><span className="text-rose-500">●</span> Stale</span>
@@ -1214,7 +1219,7 @@ function ActionabilityStrip({ data }: { data: FullMatchAnalysisResponse }) {
   const summary = getActionabilitySummary(data);
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-3" aria-label="Actionability summary">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3" role="group" aria-label="Actionability summary">
       <div className={cn("rounded-xl border px-4 py-3", summary.tone)}>
         <p className="text-[10px] uppercase tracking-wider text-slate-500">Next move</p>
         <p className="mt-1 text-sm font-semibold">{summary.action}</p>
@@ -1318,9 +1323,9 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
             <p
               className="text-sm font-bold text-slate-500 tabular-nums"
               title="CLV is computed against the closing implied probability at kick-off. Pre-match value is unavailable."
-              aria-label="CLV not yet available — computed at match end"
             >
-              Pre-match
+              <span className="sr-only">CLV not yet available — computed at match end. </span>
+              <span aria-hidden="true">Pre-match</span>
               <span className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-700/60 text-[8px] font-bold text-slate-500 select-none" aria-hidden>
                 ?
               </span>
@@ -1537,7 +1542,7 @@ function FullAnalysisDashboardInner({
       animate={{ opacity: 1, y: 0 }}
       transition={prefersReduced ? { duration: 0 } : { duration: 0.4 }}
       aria-label="Full match intelligence dashboard"
-      className="space-y-5"
+      className="full-analysis-surface space-y-5"
     >
       {/* ── Enhanced match hero (E.1 + Phase F) ── */}
       <EnhancedMatchHero
@@ -1591,7 +1596,7 @@ function FullAnalysisDashboardInner({
       {data.odds_edge ? (
         <OddsEdgeCard edge={data.odds_edge} />
       ) : (
-        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-4 flex items-center gap-3" aria-label="No live odds available">
+        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-4 flex items-center gap-3">
           <svg className="w-4 h-4 flex-shrink-0 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -1638,6 +1643,7 @@ function Phase9ShadowStrip({
   return (
     <div
       className="rounded-xl border border-violet-800/30 bg-violet-950/20 px-4 py-3 space-y-2"
+      role="group"
       aria-label="Phase 9 candidate signal strip (shadow mode)"
     >
       <div className="flex items-center gap-2 flex-wrap">

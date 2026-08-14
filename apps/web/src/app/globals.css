@@ -123,6 +123,14 @@
     transition: width 0.5s ease;
   }
 }
+
+/* This intentionally sits outside Tailwind cascade layers. Utilities are the
+   later layer and otherwise override a component-layer rule regardless of
+   selector specificity. Scope the accessible muted token to full analysis. */
+.full-analysis-surface .text-slate-500,
+.full-analysis-surface .text-slate-600 {
+  color: hsl(var(--conviction-hold));
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

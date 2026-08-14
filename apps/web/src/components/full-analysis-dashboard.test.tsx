@@ -41,6 +41,8 @@ describe("reduced-evidence display honesty", () => {
     const { container } = render(<EloContextCard elo={null} />);
     expect(container.textContent).not.toContain("1500");
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText("Home Elo unavailable")).toHaveClass("sr-only");
+    expect(container.querySelector('[aria-label="Home Elo unavailable"]')).toBeNull();
   });
 
   it("shows Elo ratings when the analysis is evidence-backed", () => {

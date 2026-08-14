@@ -40,9 +40,11 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   1440x900. Each viewport retained the research/no-stake frame and long club
   names without horizontal overflow. Keyboard order and visible focus,
   accessibility-tree names, reduced motion, a 200% zoom-equivalent viewport,
-  and fail-closed match rendering passed. Axe reported zero violations on the
-  home, intelligence, and match surfaces. Gradient contrast required a manual
-  endpoint calculation; the worst measured ratio was 4.516:1.
+  and fail-closed match rendering passed. The successful live-backed `PARTIAL`
+  full-analysis state was retested after its first deploy exposed legacy muted
+  text and generic-element ARIA defects; the persisted production build then
+  reported zero axe violations. Gradient contrast required a manual endpoint
+  calculation; the worst measured ratio was 4.516:1.
 - Current-source Gitleaks completed with no finding while inaccessible generated
   pytest temporary trees were excluded. The explicit staged release diff was
   scanned separately (`160.79 KB`, no finding). This is current-source evidence,
