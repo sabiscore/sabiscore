@@ -71,6 +71,10 @@ setup_telemetry()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# httpx logs the full request URL (including query-string API keys, e.g.
+# the_odds_api's ?apiKey=...) at INFO on every request. Suppress it the same
+# way core/logging.py already suppresses uvicorn.access noise.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Global model instance

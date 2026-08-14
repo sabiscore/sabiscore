@@ -1,5 +1,62 @@
 # SabiScore Debt Ledger
 
+## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401, operator action required)
+
+**Tier:** log leak = `FIXED` this session. Key validity = `FIX-NOW` / P0 —
+operator-only, blocks CLV capture (item 6) and any market-benchmark work.
+**Found:** 2026-08-13/14, from an operator-supplied Render deploy log
+(2026-08-13T23:22–23:26 UTC) pasted into a chat session.
+
+Two findings from the same log excerpt:
+
+**(a) Log leak, fixed.** Every `the_odds_api` request logged its full URL,
+including `?apiKey=<key>` in cleartext, at INFO level:
+
+```text
+httpx - INFO - HTTP Request: GET https://api.the-odds-api.com/v4/sports/soccer_spain_la_liga/odds?apiKey=<redacted>&regions=uk%2Ceu&markets=h2h&oddsFormat=decimal "HTTP/1.1 401 Unauthorized"
+```
+
+Root cause: `backend/src/api/main.py`'s `logging.basicConfig(level=logging.INFO, ...)`
+sets the root logger level with no per-logger override, so the third-party
+`httpx` package's own request-line logger (which httpx never redacts)
+propagates straight to stdout/Render logs on every call. `core/logging.py`'s
+`configure_logging()` already suppresses `uvicorn.access` the identical way
+but is never called by `main.py` (a separate, pre-existing duplication — not
+fixed this session). Only `the_odds_api` was exposed: `api_football` and
+`football_data_org` use header auth (`x-apisports-key` / `X-Auth-Token`),
+which httpx's INFO log line never includes (method/url/status only, never
+headers); ESPN is keyless. Fixed with one line in `main.py`:
+`logging.getLogger("httpx").setLevel(logging.WARNING)`, mirroring the
+existing `uvicorn.access` precedent.
+
+**(b) Key confirmed invalid — first real evidence, not code-fixable.** Every
+request in the same log excerpt returned `401 Unauthorized`. The auth
+mechanism in `the_odds_api.py` is correct (query-param `apiKey` is
+the-odds-api.com's only scheme; `config.py`'s `AliasChoices` accepts both
+`THE_ODDS_API_KEY`/`ODDS_API_KEY`; no truncation or mis-naming anywhere in
+the request path). CLAUDE.md's "5 of 5 [providers] enabled" /
+`CONFIGURED_UNVERIFIED` framing (vΩ.43) only ever meant the enable flag was
+on and a non-empty key string was present — `PROVIDER_LIVE_TESTS=false`
+means it was never actually probed end-to-end. This is the first live
+confirmation, and it's negative. This is why `clv_capture` reads
+`outcome:"never_run"` (item 6) — a second, more specific blocker than the
+previously-documented Blueprint-sync story.
+
+**Operator action required:** rotate the key at the-odds-api.com's dashboard,
+then update `THE_ODDS_API_KEY`/`ODDS_API_KEY` in Render's environment
+variables and redeploy. Treat the value visible in the pre-fix logs as
+compromised regardless of root cause — it was both in Render's log retention
+and pasted into a chat session.
+
+**Blast radius:** (a) none going forward — fixed; historical log lines
+already written are unaffected by this fix. (b) CLV capture (item 6) and any
+Phase I market-benchmark work stay blocked until the key is rotated.
+**Cost:** (a) done. (b) a few minutes across two dashboards, operator-only.
+**Priority:** (a) closed. (b) high — it's the only remaining DATA-FED
+prerequisite for CLV/market-comparison work.
+
+---
+
 ## 20. A Render service builds the monorepo at root and is not in `render.yaml`
 
 **Tier:** `FIX-NOW` / P0 — it crash-loops on every push to master.

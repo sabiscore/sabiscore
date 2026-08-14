@@ -5,6 +5,37 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Production log leak fixed; the_odds_api key confirmed invalid (2026-08-14)
+
+Backend-only, one line. Found while reviewing an operator-supplied Render
+production log excerpt (2026-08-13T23:22-23:26 UTC).
+
+### Fixed
+
+- **`the_odds_api`'s API key was appearing in cleartext in every production
+  log line.** `backend/src/api/main.py`'s `logging.basicConfig(level=logging.INFO, ...)`
+  left the third-party `httpx` package's own request logger at its default
+  level, and httpx logs the full request URL (query string included) at INFO
+  on every call. Since `the_odds_api.py` sends its key as a query parameter
+  (`?apiKey=...` — the-odds-api.com's only auth scheme), it leaked on every
+  request; `api_football`/`football_data_org` use header auth so they were
+  never exposed by this, and ESPN is keyless. Fixed with
+  `logging.getLogger("httpx").setLevel(logging.WARNING)` right after the
+  existing `basicConfig` call, mirroring the identical `uvicorn.access`
+  suppression already present (but unreachable from this entrypoint) in
+  `core/logging.py`.
+
+### Found, not code-fixable
+
+- **The `the_odds_api` key itself is rejected (401 Unauthorized) on every
+  request.** The same log excerpt that exposed the leak also showed the
+  first real, live-verified result for this provider — and it's negative.
+  Prior "5 of 5 providers enabled" status only ever meant the enable flag was
+  on and a non-empty key string was configured (`CONFIGURED_UNVERIFIED`,
+  never live-probed under `PROVIDER_LIVE_TESTS=false`). The request/auth code
+  itself is correct; this needs a key rotation at the-odds-api.com plus a
+  Render env var update, both operator-only. See `docs/DEBT.md` item 22.
+
 ## Unreleased - Client-surface truthfulness and selection-UI pass (2026-08-13)
 
 Frontend-only. No backend, model, provider, verdict, Kelly, or evidence-gate
