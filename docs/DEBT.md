@@ -376,7 +376,7 @@ why `sabiscore-api`'s production guard rejects it
 non-TLS Redis Cloud endpoint is `redis://`, never `rediss://`). Confirms the
 diagnosis; does not change the runbook above.
 
-## 16. Release infrastructure and historical-secret gates remain closed
+## 16. Release infrastructure and historical-secret gates remain partially closed
 
 **Tier:** `FIX-NOW` / P0 before merge or deployment. **Verified:** 2026-08-10.
 
@@ -391,6 +391,11 @@ diagnosis; does not change the runbook above.
   (Secret Scan, Backend Lint/Typecheck/Tests, Scraper Validate/Tests,
   Web Lint/Typecheck/Build, Playwright Smoke). Keep this item open only for the
   remaining infra/deploy proofs below.
+- **Update 2026-08-14:** the current deployed SHA `e0f89ae` has genuine successful
+  runs for canonical CI, backend, web, scraper, Playwright, Secret Scan, Gitleaks,
+  model artifacts, and large-file checks on named runners with real steps. Billing
+  dispatch is closed for this SHA. This does not prove CI for a new candidate SHA,
+  nor revoke either historical credential.
 - Docker Compose configuration passes. Fresh backend and web image retries ran
   for more than five and three minutes respectively without producing a current
   image. The only `sabiscore-backend:verify` tag is dated 2026-07-15 and
@@ -721,10 +726,10 @@ were completed by WP-18, as the 2026-08-07 closure note records.
 
 ---
 
-## 2. Settlement loop shipped; production prediction capture was missing
+## 2. Settlement loop and production prediction capture shipped; real outcomes pending
 
 **Tier:** `NEXT` → settlement loop **shipped 2026-08-05**; interactive capture fix
-**EXISTS / TESTED 2026-08-14** on the Apex v3 candidate but is not yet DEPLOYED.
+**DEPLOYED / VERIFIED 2026-08-14** on Apex v3.
 Entry kept (annotate, don't remove, matching item 1's precedent) because production
 is still DATA-FED at zero, a residual limitation and a related risk (item 5) remain.
 **Owner:** unassigned.
@@ -758,9 +763,11 @@ finished result → settled join. Persistence failure is observable but does not
 an analytical fail-closed response into an execution claim.
 
 Settlement and CLV selection now choose the latest eligible prediction strictly
-before kickoff or closing-line capture. These changes are **not** DATA-FED,
-DEPLOYED, VERIFIED, or CERTIFIED until the candidate is released and real production
-settlement becomes non-zero.
+before kickoff or closing-line capture. Two production full-analysis calls for the
+same scheduled fixture incremented the duplicate counter twice, proving the existing
+immutable row and deployed deduplication without creating another row. Direct row
+counts remain private-network-only. The path is **DEPLOYED / CALLED / VERIFIED** but
+not DATA-FED or CERTIFIED until a naturally finished fixture joins.
 
 **Blast radius:** `/model-performance`, accuracy/RPS, CLV, and every promotion gate
 that requires settled outcomes. **Residual:** production remains honestly
