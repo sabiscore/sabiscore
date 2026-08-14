@@ -100,18 +100,20 @@ function toLabel(name: string): string {
 }
 
 /** Convert freshness_seconds to a compact human label + color class.
- * null = DATA_GAP (feature has no live value); 0 = just fetched (LIVE). */
-function freshnessLabel(seconds: number | null): { label: string; cls: string } {
+ * null = DATA_GAP (feature has no live value); 0 = just fetched (Fresh).
+ * Never "Live" — this measures feature-data recency, not match state. */
+export function freshnessLabel(seconds: number | null): { label: string; cls: string } {
   if (seconds === null) return { label: "—", cls: "text-slate-600" };
-  if (seconds === 0) return { label: "Live", cls: "text-emerald-400" };
+  if (seconds === 0) return { label: "Fresh", cls: "text-emerald-400" };
   if (seconds < 3_600) return { label: `${Math.round(seconds / 60)}m`, cls: "text-emerald-400" };
   if (seconds < 86_400) return { label: `${Math.round(seconds / 3600)}h`, cls: "text-amber-400" };
   return { label: `${Math.round(seconds / 86400)}d`, cls: "text-rose-400" };
 }
 
-/** Summary freshness chip label for a group card header (only called when all_available=true). */
-function groupFreshnessChip(seconds: number): { label: string; cls: string; bg: string } {
-  if (seconds < 3_600) return { label: "LIVE", cls: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/25" };
+/** Summary freshness chip label for a group card header (only called when all_available=true).
+ * Never "LIVE" — this measures feature-data recency, not match state. */
+export function groupFreshnessChip(seconds: number): { label: string; cls: string; bg: string } {
+  if (seconds < 3_600) return { label: "FRESH", cls: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/25" };
   if (seconds < 86_400) return { label: "RECENT", cls: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/25" };
   return { label: "STALE", cls: "text-rose-400", bg: "bg-rose-500/10 border-rose-500/25" };
 }
@@ -457,7 +459,7 @@ export const Phase8AnalyticsPanel = memo(function Phase8AnalyticsPanel({
           className="text-[10px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/25 rounded-full px-2 py-0.5"
           aria-label={`${data.available_features} of ${totalCount} Phase 8 features available`}
         >
-          {data.available_features}/{totalCount} LIVE
+          {data.available_features}/{totalCount} FRESH
         </span>
         {data.status === "partial" && (
           <span className="text-[10px] text-fuchsia-400 font-semibold">

@@ -30,6 +30,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   target without ignores or relaxed configuration.
 - Prevented the research market-comparison empty state from stretching to the
   adjacent card stack.
+- Fixed three live instances of `edge_quality_score` (a confidence/freshness/
+  completeness composite, never a market edge) being presented as if it were
+  one: `BigMatchesCarousel`'s "🔥 Top Edge Today" celebratory badge on the
+  homepage/`/match` selector is now a neutral "Highest evidence quality" label
+  with no emoji and no certified-looking green fill; `InsightsTeaseStrip`'s
+  tease card no longer reports a bare "High/Medium/Low Edge" tier (now reuses
+  `edgeQualityLabel()`, "{tier} quality"); `Phase8AnalyticsPanel`'s feature-
+  freshness chip no longer renders the literal string "LIVE"/"Live" for data
+  fetched within the last hour on the primary `/match/[id]` result page (now
+  "FRESH"/"Fresh", matching the vocabulary already used elsewhere on the same
+  page). Guarded by a new repo-wide copy-contract assertion plus two new
+  focused unit tests.
 
 ### Evidence status
 
