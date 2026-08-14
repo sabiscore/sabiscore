@@ -24,7 +24,7 @@ import hashlib
 import json
 import math
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from ..schemas.betting_intelligence import (
     AnalysisModeEnum,
@@ -380,7 +380,10 @@ def _evaluate_all_outcomes(
         })
 
     # Sort by confidence-adjusted value descending (best market first)
-    results.sort(key=lambda r: r["confidence_adjusted_value"], reverse=True)
+    results.sort(
+        key=lambda result: cast(float, result["confidence_adjusted_value"]),
+        reverse=True,
+    )
     return results
 
 
@@ -645,12 +648,16 @@ def analyze_match(
     # Validate overround integrity
     if market is not None and not market_gaps:
         try:
-            overround, fair_h, fair_d, fair_a = _compute_devig(
+            market_overround_check, _, _, _ = _compute_devig(
                 market.home_odds, market.draw_odds, market.away_odds
             )
-            if overround > float(policy["max_market_overround"]) or overround < float(policy["min_market_overround"]):
+            if (
+                market_overround_check > float(policy["max_market_overround"])
+                or market_overround_check < float(policy["min_market_overround"])
+            ):
                 gaps.append(
-                    f"DATA_GAP: market_overround_outside_integrity_limits ({overround:.4f})"
+                    "DATA_GAP: market_overround_outside_integrity_limits "
+                    f"({market_overround_check:.4f})"
                 )
                 market = None
         except ValueError as exc:

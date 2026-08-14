@@ -180,7 +180,11 @@ async def create_prediction(
 
         try:
             preds = result.predictions if isinstance(result.predictions, dict) else {}
-            predicted_outcome = max(preds, key=preds.get) if preds else None
+            predicted_outcome = (
+                max(preds, key=lambda outcome: float(preds[outcome]))
+                if preds
+                else None
+            )
             edge_pct = None
             if result.value_bets:
                 first_bet = result.value_bets[0]
@@ -319,7 +323,7 @@ async def get_todays_value_bets(
         # For production with real data, query from database
         # Currently returning empty list as we're building up data
         logger.info("No value bets available yet - building historical data")
-        empty_response = []
+        empty_response: list[ValueBetResponse] = []
         
         # Cache empty response for 5 minutes to reduce DB load
         cache_manager.set(cache_key, empty_response, ttl=300)

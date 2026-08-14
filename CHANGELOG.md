@@ -37,7 +37,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   They are not **DEPLOYED / VERIFIED / CERTIFIED**; real production settlement,
   provider rotation, secret revocation, S3 activation, and release CI remain gates.
 - Final local gates: backend `1329 passed, 13 skipped`; focused backend `163
-  passed`; Ruff clean; mypy 772 under the blocking 784 ceiling; web lint,
+  passed`; Ruff clean; mypy 766 under the blocking 784 ceiling; web lint,
   typecheck, 31 files / 178 tests, and production build; scraper validation and
   19 tests; OpenAPI 78 paths; Docker Compose configuration; and 38 desktop/mobile
   Playwright tests including axe. Alembic upgrade passed on a disposable database;

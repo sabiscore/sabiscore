@@ -17,7 +17,7 @@
   redacted degradation, and retained local continuity. The existing bucket remains
   unverified because read-only checks returned 403, so scraper production stays
   disabled.
-- Local evidence: Ruff clean; mypy 772 errors; backend 1329 passed / 13 skipped;
+- Local evidence: Ruff clean; mypy 766 errors; backend 1329 passed / 13 skipped;
   web lint/typecheck, 178 Vitest tests, production build, and 38 desktop/mobile
   Playwright tests passed; scraper 19 tests passed. This candidate is not model
   promotion evidence and is not production-certified.

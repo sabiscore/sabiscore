@@ -21,7 +21,7 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   human league names with secondary canonical IDs, and carries the UCL estimate flag
   through FastAPI/proxy/TypeScript/off-season copy. This is local TESTED evidence,
   not deployed-page measurement.
-- Ruff's CI-blocking E402 is fixed. Mypy is pinned to 2.1.0; the local count is 772
+- Ruff's CI-blocking E402 is fixed. Mypy is pinned to 2.1.0; the local count is 766
   errors in 123 files / 236 checked files, and CI now enforces the 784 ceiling instead
   of marking the step advisory.
 - S3 checksum, matching-412 replay, conflicting-412, outage continuity/redaction,
@@ -34,7 +34,7 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   controls, and writer authorization are not VERIFIED. The mutating probe/acquisition
   was not run and the worker remains disabled.
 - Local release gates completed after the final accessibility fixes: backend
-  `1329 passed, 13 skipped`; focused backend `163 passed`; Ruff clean; mypy 772
+  `1329 passed, 13 skipped`; focused backend `163 passed`; Ruff clean; mypy 766
   under the enforced 784 ceiling; web lint and typecheck clean; 31 Vitest files /
   178 tests; Next.js 15.5.19 production build; scraper validation and 19 tests;
   OpenAPI 78 paths; Docker Compose configuration; and 38 desktop/mobile Playwright
