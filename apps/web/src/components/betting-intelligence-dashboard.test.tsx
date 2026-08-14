@@ -132,6 +132,13 @@ beforeEach(() => {
 });
 
 describe("BettingIntelligenceDashboard fail-closed states", () => {
+  it("frames every analysis as research with staking disabled", async () => {
+    render(<BettingIntelligenceDashboard />);
+    expect(screen.getByText(/Research forecast — staking disabled/i)).toBeVisible();
+    expect(screen.getByText(/no stake is recommended/i)).toBeVisible();
+    await waitFor(() => expect(getUpcomingFixtures).toHaveBeenCalled());
+  });
+
   it("renders source conflict state after evidence retrieval", async () => {
     getFixtureEvidence.mockResolvedValue({
       fixture,
@@ -190,7 +197,7 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Skip This Match: PASS/i)).toBeInTheDocument();
-      expect(screen.getByText(/Not permitted/i)).toBeInTheDocument();
+      expect(screen.getByText(/Not permitted — uncertified generation/i)).toBeInTheDocument();
     });
   });
 

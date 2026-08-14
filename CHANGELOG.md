@@ -5,6 +5,60 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Apex v2 fail-closed research and season UX (2026-08-14)
+
+### Added
+
+- Added an explicit `RESEARCH FORECAST — staking disabled` product frame and
+  persistent plain-language model-certification explanations.
+- Added `next_season_start_estimated` to the season-status contract. The value
+  is sourced from `season_calendar.py`; estimated UCL copy omits an exact
+  countdown and states that the provider has not confirmed the date.
+- Added dormant S3 acquisition configuration parity for bucket, endpoint,
+  region, path-style, SSE, and the SDK credential chain. No worker or bucket was
+  activated.
+
+### Fixed
+
+- Normalized database-naive canonical fixture kickoffs to offset-aware UTC at
+  the public FastAPI boundary while preserving the strict web validator.
+- Separated provider configuration from live verification in the platform
+  header and scoped the readiness claim to a runtime capability check.
+- Consolidated official verdict presentation on the semantic variables already
+  defined in `globals.css`, removing verdict-specific raw hex values from the
+  intelligence dashboard.
+- Redacted signed model-artifact URLs and exception text in Python fetch logs;
+  the shell fetcher now reports artifact identifiers without echoing configured
+  endpoints.
+- Corrected the closed WP-18 debt entry's stale present-tense narrative and the
+  obsolete Fastify rate-limit comment.
+- Kept research-only framing visible on successful, loading, and fail-closed
+  match-analysis states; associated every manual-odds input with an accessible
+  name and corrected provider-meter, verdict-token, focus, landmark, tooltip,
+  heading-order, and dark-surface contrast defects found by the full axe audit.
+
+### Verified
+
+- Full backend suite: 1,317 passed, 13 skipped. Focused backend
+  contract/security/season tests: 53 passed.
+- Web type-check and lint passed; the full web suite passed 30 files / 168
+  tests, and the Next.js 15.5.19 production build completed successfully.
+- Scraper suite: 14 passed. OpenAPI verification: 78 paths.
+- Gate C passed at 360x800, 430x932, 768x1024, 1280x800, and 1440x900:
+  no horizontal overflow, long club names retained, keyboard focus visible and
+  ordered, reduced-motion animation durations effectively zero, the 200% zoom
+  equivalent viewport reflowed without overflow, and the home, intelligence,
+  and fail-closed match surfaces had zero axe violations. Axe could not infer
+  contrast through gradients; manual endpoint checks measured a 4.516:1 worst
+  case.
+- Current-source Gitleaks completed without a finding. Inaccessible generated
+  pytest temporary trees were excluded from that filesystem scan and are not
+  release content. The explicit staged release diff was then scanned separately
+  (`160.79 KB`) with no finding.
+- Production re-verification still reports zero settled predictions; the one
+  authorized The Odds API probe returned 401. Retraining, calibration, and
+  promotion were not run, and `promotion_permitted` remains false.
+
 ## Unreleased - Production log leak fixed; the_odds_api key confirmed invalid; WAT label parity (2026-08-14)
 
 Backend log-leak fix is one line. Frontend fix is a one-line label addition.

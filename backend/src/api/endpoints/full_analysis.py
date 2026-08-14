@@ -14,8 +14,8 @@ Then fuses layers via IntelligenceSynthesizer → FullMatchAnalysisResponse.
 
 Cache: Redis key full_analysis:{match_id}, TTL 60s (B13: stale features are
 preferable to synthetic substitution; staleness is surfaced via data_gaps).
-Rate limit: 30 req/min per IP (enforced at Fastify gateway; this layer trusts
-the gateway).
+Rate limiting is enforced by the FastAPI application's global Redis-backed
+middleware using the configured request window.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -61,6 +62,28 @@ from ...services.uncertainty_service import UncertaintyBreakdown, UncertaintySer
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_aware_datetime(value: object) -> Optional[datetime]:
+    """Normalize canonical DB timestamps at the public response boundary.
+
+    PostgreSQL deployments historically returned naive UTC datetimes here.
+    Internally that convention remains unchanged, but the public
+    ``kickoff_utc`` contract must always serialize with an explicit offset.
+    Invalid values fail closed to ``None`` instead of emitting an ambiguous
+    local timestamp.
+    """
+    if value is None:
+        return None
+    try:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 router = APIRouter(prefix="/matches", tags=["intelligence"])
 
@@ -798,7 +821,7 @@ async def get_full_analysis(
         home_team=live.get("home_team"),
         away_team=live.get("away_team"),
         league=league,
-        kickoff_utc=live.get("kickoff_utc"),
+        kickoff_utc=_utc_aware_datetime(live.get("kickoff_utc")),
         fixture_verified=fixture_verified,
         field_availability=field_availability,
         unavailable_reasons=unavailable_reasons,

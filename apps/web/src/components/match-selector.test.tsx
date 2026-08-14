@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { UpcomingMatch } from "@/lib/api";
-import { describeMatchSelectionState, excludeSelectedTeam } from "./match-selector";
+import {
+  describeMatchSelectionState,
+  excludeSelectedTeam,
+  shouldShowCarouselOffseasonNotice,
+} from "./match-selector";
 import {
   buildMatchInsightsHref,
   getTopEdgeFixtureId,
@@ -82,6 +86,30 @@ describe("selector league normalization", () => {
 
   it("fails closed for an unsupported competition", () => {
     expect(selectorLeagueId("SCOTTISH_PREMIERSHIP")).toBeNull();
+  });
+});
+
+describe("shouldShowCarouselOffseasonNotice", () => {
+  it("shows the notice for a specific league reported as off-season", () => {
+    expect(shouldShowCarouselOffseasonNotice("Bundesliga", "OFF_SEASON")).toBe(true);
+  });
+
+  it("does not show the notice for the 'ALL' filter, even if off-season", () => {
+    expect(shouldShowCarouselOffseasonNotice("ALL", "OFF_SEASON")).toBe(false);
+  });
+
+  it("does not show the notice for an in-season league with an empty result", () => {
+    // The regression this guards: a zero-fixture result must not be
+    // mislabeled off-season purely because the count is zero.
+    expect(shouldShowCarouselOffseasonNotice("Eredivisie", "IN_SEASON")).toBe(false);
+  });
+
+  it("does not show the notice while season status is still loading", () => {
+    expect(shouldShowCarouselOffseasonNotice("EPL", undefined)).toBe(false);
+  });
+
+  it("does not show the notice for an unrecognised league status", () => {
+    expect(shouldShowCarouselOffseasonNotice("UCL", "UNKNOWN")).toBe(false);
   });
 });
 

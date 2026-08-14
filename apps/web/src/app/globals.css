@@ -12,7 +12,7 @@
     --conviction-high: 160 80% 55%;    /* Emerald */
     --conviction-actionable: 190 80% 60%;  /* Cyan */
     --conviction-speculative: 40 90% 65%;  /* Amber */
-    --conviction-hold: 215 20% 50%;    /* Slate */
+    --conviction-hold: 215 20.2% 65.1%; /* Slate; matches accessible muted foreground */
     --conviction-partial: 290 60% 70%; /* Fuchsia */
 
     /* Surface tokens */
@@ -24,7 +24,7 @@
     /* Signal tokens */
     --signal-positive:  145 63% 45%;
     --signal-warning:   38 92% 50%;
-    --signal-danger:    0 72% 55%;
+    --signal-danger:    0 84.2% 60.2%; /* Matches the accessible destructive signal */
     --signal-stale:     260 40% 55%;
     --signal-data-gap:  0 0% 40%;
 

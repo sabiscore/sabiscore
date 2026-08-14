@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ProviderMeter } from "@/components/ProviderMeter";
 import { ResponsibleGamblingBanner } from "@/components/ui/ResponsibleGamblingTooltip";
+import { ResearchModeBanner } from "@/components/research-mode-banner";
 import type {
   FixtureEvidenceResponse,
   FixtureSummary,
@@ -33,39 +34,40 @@ import {
   submitManualOddsSnapshot,
 } from "@/lib/betting-intelligence-api";
 import { describeEvidenceCode } from "@/lib/full-analysis-contract";
+import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
 const VERDICT_LABEL: Record<Verdict, { label: string; action: string; tone: string }> = {
   HIGH_CONVICTION: {
-    label: "Strong Value Signal",
-    action: "STRONG VALUE — QUALIFIES",
-    tone: "positive",
+    label: VERDICT_TOKENS.HIGH_CONVICTION.label,
+    action: "RESEARCH SIGNAL — STAKING DISABLED",
+    tone: VERDICT_TOKENS.HIGH_CONVICTION.tone,
   },
   ACTIONABLE: {
-    label: "Good Value",
-    action: "QUALIFIES AT CURRENT PRICE",
-    tone: "positive",
+    label: VERDICT_TOKENS.ACTIONABLE.label,
+    action: "RESEARCH SIGNAL — STAKING DISABLED",
+    tone: VERDICT_TOKENS.ACTIONABLE.tone,
   },
   SPECULATIVE: {
     label: "Watchlist Signal",
     action: "WATCHLIST ONLY",
-    tone: "watch",
+    tone: VERDICT_TOKENS.SPECULATIVE.tone,
   },
   HOLD: {
     label: "Monitor Closely",
     action: "WAIT FOR MORE EVIDENCE",
-    tone: "neutral",
+    tone: VERDICT_TOKENS.HOLD.tone,
   },
   PARTIAL: {
     label: "Incomplete Data",
     action: "MORE EVIDENCE REQUIRED",
-    tone: "partial",
+    tone: VERDICT_TOKENS.PARTIAL.tone,
   },
   NO_BET: {
     label: "Skip This Match",
     action: "PASS",
-    tone: "pass",
+    tone: VERDICT_TOKENS.NO_BET.tone,
   },
 };
 
@@ -170,7 +172,7 @@ function nextActionText(
   if (result?.verdict === "HOLD") return "Wait for lineups or refreshed non-critical evidence before reassessment.";
   if (result?.verdict === "PARTIAL") return "Resolve the listed data gaps, then rerun analysis.";
   if (result?.verdict === "ACTIONABLE" || result?.verdict === "HIGH_CONVICTION") {
-    return "Qualifies only while the current price remains at or above the minimum acceptable odds.";
+    return "Review the signal as research only; staking remains disabled until model certification passes.";
   }
   if (result?.verdict === "SPECULATIVE") return "Keep on watchlist only; do not treat this state as execution permission.";
   if (evidence?.data_gaps.some((gap) => gap.includes("coherent_1x2_market_snapshot"))) {
@@ -509,7 +511,7 @@ export function BettingIntelligenceDashboard() {
         .bi-main{display:grid;gap:16px}
         .bi-status{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid rgba(255,255,255,.11);background:linear-gradient(135deg,#10251f,#111a20);border-radius:8px;padding:18px}
         .bi-verdict{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:6px;font-weight:900}
-        .bi-verdict.positive{background:#133b2a;color:#69f0a6}.bi-verdict.watch{background:#3a3215;color:#ffd76b}.bi-verdict.neutral{background:#25313a;color:#c8d7e0}.bi-verdict.partial{background:#332443;color:#d8b8ff}.bi-verdict.pass{background:#3a1f22;color:#ffb5bd}
+        .bi-verdict.positive{background:hsl(var(--conviction-actionable)/.12);color:hsl(var(--conviction-actionable))}.bi-verdict.watch{background:hsl(var(--conviction-speculative)/.12);color:hsl(var(--conviction-speculative))}.bi-verdict.neutral{background:hsl(var(--conviction-hold)/.12);color:hsl(var(--conviction-hold))}.bi-verdict.partial{background:hsl(var(--conviction-partial)/.12);color:hsl(var(--conviction-partial))}.bi-verdict.pass{background:hsl(var(--signal-danger)/.12);color:hsl(var(--signal-danger))}
         .bi-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
         .bi-metric{border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:12px;background:#0c1714}
         .bi-metric span{display:block;color:#9fb3aa;font-size:11px;text-transform:uppercase;font-weight:800}
@@ -518,7 +520,7 @@ export function BettingIntelligenceDashboard() {
         .bi-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}.bi-list li{border-left:3px solid #39d98a;padding:8px 10px;background:#0c1714;border-radius:4px}
         .bi-list.risk li{border-left-color:#ffd76b}.bi-list.gap li{border-left-color:#d8b8ff}
         .bi-table-wrap{overflow-x:auto;padding-bottom:2px}.bi-table{display:grid;gap:6px;min-width:680px}.bi-tr{display:grid;grid-template-columns:1fr 1fr 1fr .8fr .8fr .8fr;gap:8px;align-items:center;border-bottom:1px solid rgba(255,255,255,.07);padding:9px 0;font-size:13px}.bi-th{color:#9fb3aa;font-weight:900;text-transform:uppercase;font-size:11px}
-        .bi-good{color:#69f0a6}.bi-risk{color:#ffb5bd}
+        .bi-good{color:hsl(var(--signal-positive))}.bi-risk{color:hsl(var(--signal-danger))}
         .bi-timeline{display:grid;gap:10px}.bi-timeline-row{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:center}.bi-timeline-row small{grid-column:2 / 4;color:#9fb3aa}.bi-dot{width:10px;height:10px;border-radius:50%;background:#71827b}.bi-dot.verified,.bi-dot.success{background:#39d98a}.bi-dot.data_gap,.bi-dot.waiting{background:#d8b8ff}.bi-dot.stale{background:#ffd76b}.bi-dot.conflicting{background:#ffb5bd}
         .bi-rail{display:grid;gap:8px}.bi-rail-row{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:start;border-bottom:1px solid rgba(255,255,255,.07);padding:8px 0}.bi-rail-row strong{display:block}.bi-rail-row small{display:block;color:#9fb3aa;margin-top:2px}.bi-state{font-size:11px;font-weight:900;color:#cfe5dc}
         .bi-candidates{display:grid;gap:8px;margin-top:10px}.bi-candidate{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid rgba(255,255,255,.12);background:#0c1714;border-radius:7px;padding:10px}
@@ -533,6 +535,7 @@ export function BettingIntelligenceDashboard() {
         .bi-gap-summary{cursor:pointer;list-style:none;padding:8px 0;color:#9fb3aa;font-size:12px}
       `}</style>
       <div className="bi-shell">
+        <ResearchModeBanner className="mb-5" />
         <header className="bi-top">
           <div>
             <h1 className="bi-title">Betting Intelligence</h1>
@@ -550,10 +553,10 @@ export function BettingIntelligenceDashboard() {
             </select>
             <div className="bi-filters">
               <label className="bi-label">Team
-                <input className="bi-input" value={teamQuery} onChange={(e) => setTeamQuery(e.target.value)} placeholder="Search team" />
+                <input className="bi-input" aria-label="Search fixtures by team" value={teamQuery} onChange={(e) => setTeamQuery(e.target.value)} placeholder="Search team" />
               </label>
               <label className="bi-label">Date
-                <input className="bi-input" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+                <input className="bi-input" aria-label="Filter fixtures by date" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
               </label>
             </div>
             <div className="bi-actions">
@@ -617,8 +620,8 @@ export function BettingIntelligenceDashboard() {
                   <div className="bi-metric"><span>Best Market</span><strong>{result.best_market?.replace("_ML", "") ?? "Unavailable"}</strong></div>
                   <div className="bi-metric"><span>Edge<em className="bi-gloss">Model prob. minus fair implied</em></span><strong>{fmtPp(result.edge_percentage_points)}</strong></div>
                   <div className="bi-metric"><span>Expected Value<em className="bi-gloss">Avg. return per unit staked</em></span><strong>{result.expected_value == null ? "Unavailable" : result.expected_value.toFixed(4)}</strong></div>
-                  <div className="bi-metric"><span>Stake<em className="bi-gloss">Quarter-Kelly, policy-capped</em></span><strong>{result.execution_eligible ? result.stake : "pass"}</strong></div>
-                  <div className="bi-metric"><span>Stake permission</span><strong>{result.execution_eligible ? "Permitted by current gates" : "Not permitted"}</strong></div>
+                  <div className="bi-metric"><span>Stake</span><strong>Disabled</strong></div>
+                  <div className="bi-metric"><span>Stake permission</span><strong>Not permitted — uncertified generation</strong></div>
                   <div className="bi-metric"><span>Confidence</span><strong>{result.confidence ?? "Unavailable"}</strong></div>
                   <div className="bi-metric"><span>Minimum acceptable odds</span><strong>{fmtOdds(result.minimum_acceptable_odds)}</strong></div>
                 </div>
@@ -707,19 +710,15 @@ export function BettingIntelligenceDashboard() {
                 </div>
               )}
               <form onSubmit={submitOdds}>
-                <label className="bi-label">Bookmaker</label>
-                <input className="bi-input" value={oddsForm.bookmaker} onChange={(e) => setOddsForm((f) => ({ ...f, bookmaker: e.target.value }))} required />
+                <label className="bi-label">Bookmaker<input className="bi-input" value={oddsForm.bookmaker} onChange={(e) => setOddsForm((f) => ({ ...f, bookmaker: e.target.value }))} required /></label>
                 <div className="bi-form-grid">
                   <label className="bi-label">Home odds<input className="bi-input" type="number" min="1.01" step="0.01" value={oddsForm.home} onChange={(e) => setOddsForm((f) => ({ ...f, home: e.target.value }))} required /></label>
                   <label className="bi-label">Draw odds<input className="bi-input" type="number" min="1.01" step="0.01" value={oddsForm.draw} onChange={(e) => setOddsForm((f) => ({ ...f, draw: e.target.value }))} required /></label>
                   <label className="bi-label">Away odds<input className="bi-input" type="number" min="1.01" step="0.01" value={oddsForm.away} onChange={(e) => setOddsForm((f) => ({ ...f, away: e.target.value }))} required /></label>
                 </div>
-                <label className="bi-label">Observed timestamp</label>
-                <input className="bi-input" type="datetime-local" value={oddsForm.observedAt} onChange={(e) => setOddsForm((f) => ({ ...f, observedAt: e.target.value }))} required />
-                <label className="bi-label">Source label or page reference</label>
-                <input className="bi-input" value={oddsForm.sourceLabel} onChange={(e) => setOddsForm((f) => ({ ...f, sourceLabel: e.target.value }))} />
-                <label className="bi-label">Optional URL label</label>
-                <input className="bi-input" type="url" value={oddsForm.sourceUrl} onChange={(e) => setOddsForm((f) => ({ ...f, sourceUrl: e.target.value }))} />
+                <label className="bi-label">Observed timestamp<input className="bi-input" type="datetime-local" value={oddsForm.observedAt} onChange={(e) => setOddsForm((f) => ({ ...f, observedAt: e.target.value }))} required /></label>
+                <label className="bi-label">Source label or page reference<input className="bi-input" value={oddsForm.sourceLabel} onChange={(e) => setOddsForm((f) => ({ ...f, sourceLabel: e.target.value }))} /></label>
+                <label className="bi-label">Optional URL label<input className="bi-input" type="url" value={oddsForm.sourceUrl} onChange={(e) => setOddsForm((f) => ({ ...f, sourceUrl: e.target.value }))} /></label>
                 <div className="bi-note" style={{ marginTop: 12 }}>
                   Confirmation preview: {oddsForm.bookmaker || "Bookmaker unavailable"} | H {fmtOdds(parsedOdds.home)} D {fmtOdds(parsedOdds.draw)} A {fmtOdds(parsedOdds.away)}
                 </div>
@@ -753,8 +752,8 @@ export function BettingIntelligenceDashboard() {
             {result && (result.critical_gaps?.length || result.advisory_gaps?.length || result.conflicts?.length) ? (
               <div className="bi-two">
                 {result.critical_gaps?.length ? (
-                  <section className="bi-panel" style={{ borderColor: "var(--bi-red, #ef4444)" }}>
-                    <div className="bi-panel-title" style={{ color: "var(--bi-red, #ef4444)" }}>
+                  <section className="bi-panel border-[hsl(var(--signal-danger)/0.45)]">
+                    <div className="bi-panel-title text-[hsl(var(--signal-danger))]">
                       <AlertTriangle size={14} /> Blocking Gaps — execution paused
                     </div>
                     <ul className="bi-list gap">
@@ -763,8 +762,8 @@ export function BettingIntelligenceDashboard() {
                   </section>
                 ) : null}
                 {(result.advisory_gaps?.length || result.conflicts?.length) ? (
-                  <section className="bi-panel" style={{ borderColor: "var(--bi-amber, #f59e0b)" }}>
-                    <div className="bi-panel-title" style={{ color: "var(--bi-amber, #f59e0b)" }}>
+                  <section className="bi-panel border-[hsl(var(--signal-warning)/0.45)]">
+                    <div className="bi-panel-title text-[hsl(var(--signal-warning))]">
                       Advisory
                     </div>
                     {result.advisory_gaps?.length ? (

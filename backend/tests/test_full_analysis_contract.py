@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
 
 from src.api.endpoints import full_analysis as endpoint
 from src.data.elo_engine import EloContext
@@ -224,6 +226,9 @@ def _fake_live_vector(*, fixture_identity_verified: bool) -> dict:
         "is_reduced_evidence_baseline": False,
         "staleness_seconds": 0,
         "league": "EPL",
+        # Mirrors the canonical PostgreSQL payload that exposed the live bug:
+        # the database value is UTC by convention but arrives without tzinfo.
+        "kickoff_utc": datetime(2026, 8, 14, 18, 0, 0),
         "odds": None,
     }
 
@@ -261,6 +266,30 @@ async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(monkey
     payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
     assert "elo_ratings" not in payload["data_gaps"]
     assert "FIXTURE_IDENTITY_UNVERIFIED" not in payload["evidence_quality"]["critical_gaps"]
+
+
+@pytest.mark.asyncio
+async def test_live_shape_serializes_kickoff_with_explicit_utc_offset(monkeypatch) -> None:
+    class FakeProjector:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def build_live_feature_vector(self, **_kwargs):
+            return _fake_live_vector(fixture_identity_verified=True)
+
+    monkeypatch.setattr(endpoint, "UpcomingMatchFeatureProjector", FakeProjector)
+    monkeypatch.setattr(endpoint, "PredictionEngine", _ValidPredictionEngine)
+    monkeypatch.setattr(endpoint, "cache", None)
+
+    payload = await endpoint.get_full_analysis("fd-558223", league="EPL", db=object())
+    encoded = jsonable_encoder(payload)
+    kickoff = encoded["kickoff_utc"]
+    assert kickoff.endswith("Z") or kickoff.endswith("+00:00")
+    assert datetime.fromisoformat(kickoff.replace("Z", "+00:00")).tzinfo == timezone.utc
+
+
+def test_invalid_kickoff_fails_closed_instead_of_emitting_local_time() -> None:
+    assert endpoint._utc_aware_datetime("not-a-timestamp") is None
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,56 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-10
+Last reviewed: 2026-08-14
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## Fresh Apex v2 execution evidence from 2026-08-14
+
+- Settlement is EXISTS / TESTED / WIRED / CALLED / DEPLOYED and its production
+  query is DATA-FED at zero. `/api/v1/model-performance` returned
+  `503 METRICS_UNAVAILABLE` with `settled_predictions: 0`; walk-forward, CLV
+  calibration, retraining, and promotion remain unverified and gated.
+- Redis tier-1 is DEPLOYED / VERIFIED as an external connection from detailed
+  `/health` cache metrics (enabled, available, real hit/miss counters, zero
+  errors). The evidence does not establish the vendor as Upstash, and the
+  supplied Render log lacks the required connection-success line.
+- The single authorized `the_odds_api` live probe returned 401 with credentials
+  redacted. Football-Data.org, API-Football, Sportmonks, ESPN, and The Odds API
+  each remain `CONFIGURED_UNVERIFIED` in non-live provider health; no aggregate
+  provider-liveness claim is supported.
+- WP-18 remains WIRED / CALLED and its focused regression coverage passes.
+  Season confidence now comes from `season_calendar.py`: UCL is explicitly
+  estimated, while unknown leagues return an unknown confidence state.
+- Public `kickoff_utc` values are normalized to offset-aware UTC at the FastAPI
+  response boundary. The strict frontend contract remains unchanged.
+- The UI now states `RESEARCH FORECAST — staking disabled`, keeps model
+  certification explanations visible, separates configured providers from
+  live verification, and uses repository semantic variables for official
+  verdict presentation. Actionable celebration and pre-certification stake
+  surfaces were removed.
+- S3 acquisition remains dormant. The missing bucket, endpoint, region,
+  path-style, SSE, and standard credential-chain variables are scaffolded only;
+  bucket/IAM provisioning and worker activation remain operator actions.
+- TESTED evidence produced this session: backend `1317 passed, 13 skipped`
+  (focused contract/security/season subset `53 passed`); web type-check and
+  lint PASS; web `30 files / 168 tests`; Next.js 15.5.19 production build PASS;
+  scraper `14 passed`; OpenAPI verification `78 paths`.
+- Gate C is VERIFIED locally at 360x800, 430x932, 768x1024, 1280x800, and
+  1440x900. Each viewport retained the research/no-stake frame and long club
+  names without horizontal overflow. Keyboard order and visible focus,
+  accessibility-tree names, reduced motion, a 200% zoom-equivalent viewport,
+  and fail-closed match rendering passed. Axe reported zero violations on the
+  home, intelligence, and match surfaces. Gradient contrast required a manual
+  endpoint calculation; the worst measured ratio was 4.516:1.
+- Current-source Gitleaks completed with no finding while inaccessible generated
+  pytest temporary trees were excluded. The explicit staged release diff was
+  scanned separately (`160.79 KB`, no finding). This is current-source evidence,
+  not full-history revocation evidence.
+- Deployment SHA parity is not established by these local results and must be
+  verified independently after the release push.
+- The active generation remains `UNVERIFIED`, and `promotion_permitted=false`.
+  No candidate artifact was trained, copied, renamed, or promoted.
 
 ## Fresh Apex activation evidence from 2026-08-10
 

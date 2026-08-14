@@ -3,7 +3,7 @@
 import { memo, useState, useCallback } from "react";
 import { HelpCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   getFullAnalysis,
 } from "@/lib/api";
@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
+import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 
 // ─── Verdict description copy (Phase 3) ──────────────────────────────────────
 
@@ -51,53 +52,7 @@ interface FullAnalysisDashboardProps {
 type Verdict = FullMatchAnalysisResponse["verdict"];
 type FullAnalysisPresentation = ReturnType<typeof mapFullAnalysisPresentation>;
 
-const VERDICT_META: Record<
-  Verdict,
-  { label: string; color: string; bg: string; border: string; dot: string }
-> = {
-  HIGH_CONVICTION: {
-    label: "High Conviction",
-    color: "text-emerald-300",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/30",
-    dot: "bg-emerald-400",
-  },
-  ACTIONABLE: {
-    label: "Actionable",
-    color: "text-cyan-300",
-    bg: "bg-cyan-500/10",
-    border: "border-cyan-500/30",
-    dot: "bg-cyan-400",
-  },
-  SPECULATIVE: {
-    label: "Speculative",
-    color: "text-amber-300",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
-    dot: "bg-amber-400",
-  },
-  HOLD: {
-    label: "Hold",
-    color: "text-slate-400",
-    bg: "bg-slate-700/30",
-    border: "border-slate-600/40",
-    dot: "bg-slate-500",
-  },
-  NO_BET: {
-    label: "No Bet",
-    color: "text-rose-300",
-    bg: "bg-rose-500/10",
-    border: "border-rose-500/30",
-    dot: "bg-rose-400",
-  },
-  PARTIAL: {
-    label: "Partial Data",
-    color: "text-fuchsia-300",
-    bg: "bg-fuchsia-500/10",
-    border: "border-fuchsia-500/30",
-    dot: "bg-fuchsia-400",
-  },
-};
+const VERDICT_META = VERDICT_TOKENS;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,28 +127,6 @@ function SabiInsightsBadge({
 }
 
 // ─── Victory micro-animation (E.6) ────────────────────────────────────────────
-
-function VictorySparkle({ active }: { active: boolean }) {
-  const prefersReduced = useReducedMotion();
-  if (!active || prefersReduced) return null;
-  return (
-    <AnimatePresence>
-      {active && (
-        <motion.span
-          key="victory"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: [0, 1.4, 1], opacity: [0, 1, 0.7] }}
-          exit={{ opacity: 0, scale: 0 }}
-          transition={{ type: "spring", stiffness: 400, damping: 18, duration: 0.5 }}
-          className="absolute -top-1.5 -right-1.5 text-[10px] select-none pointer-events-none"
-          aria-hidden="true"
-        >
-          ✦
-        </motion.span>
-      )}
-    </AnimatePresence>
-  );
-}
 
 // ─── Probability orbs (E.1 + E.2) ────────────────────────────────────────────
 
@@ -294,6 +227,19 @@ function EnhancedMatchHero({
 
   return (
     <div className={cn("rounded-2xl border p-5 space-y-4", meta.bg, meta.border)}>
+      <section aria-labelledby="decision-heading" className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+        <p id="decision-heading" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Decision
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <VerdictBadge verdict={data.verdict} />
+          <strong className="text-base text-white">{presentation.primaryDecision}</strong>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-slate-300">{presentation.reason}</p>
+        <p className="mt-2 text-xs text-slate-500">
+          Evidence quality: {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
+        </p>
+      </section>
       {/* ── Teams clash ── */}
       <div className="flex items-center justify-between gap-3">
         <motion.div {...slideIn("left")} className="flex-1 min-w-0">
@@ -399,7 +345,6 @@ function EnhancedMatchHero({
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative inline-flex">
             <VerdictBadge verdict={data.verdict} />
-            <VictorySparkle active={presentation.stakePermitted && data.verdict === "HIGH_CONVICTION"} />
           </div>
           {/* WP-F: suppress alarming STALE badge when no live evidence was produced.
               A baseline/reduced-evidence response references historical training data,
@@ -1502,7 +1447,7 @@ function DashboardError({
         />
       </svg>
       <p className="text-sm font-medium text-rose-300">Intelligence unavailable</p>
-      <p className="text-xs text-slate-500">{safe}</p>
+      <p className="text-xs text-slate-300">{safe}</p>
       {onRetry && (
         <button
           type="button"

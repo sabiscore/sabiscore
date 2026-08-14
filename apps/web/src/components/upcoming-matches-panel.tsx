@@ -73,7 +73,7 @@ function LeagueFilterBar({
           "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors",
           selected === null
             ? "border-slate-400/40 bg-slate-700 text-white"
-            : "border-slate-700/50 text-slate-500 hover:text-slate-300",
+            : "border-slate-700/50 text-slate-300 hover:text-white",
         )}
       >
         All
@@ -88,7 +88,7 @@ function LeagueFilterBar({
             "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors",
             selected === l.id
               ? LEAGUE_COLORS[l.id] ?? "border-slate-400/40 bg-slate-700 text-white"
-              : "border-slate-700/50 text-slate-500 hover:text-slate-300",
+              : "border-slate-700/50 text-slate-300 hover:text-white",
           )}
         >
           {l.id}
@@ -231,12 +231,12 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="truncate text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
           {match.home_team}
-          <span className="mx-1.5 text-slate-600">vs</span>
+          <span className="mx-1.5 text-slate-300">vs</span>
           {match.away_team}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <span className={leagueChip(match.league)}>{match.league}</span>
-          <span className="text-[10px] text-slate-600">
+          <span className="text-[10px] text-slate-300">
             {formatMatchDate(match.match_date)}
             {" · "}
             {new Date(match.match_date).toLocaleTimeString("en-NG", {
@@ -277,7 +277,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
         {conf !== null && (
           <div className="hidden min-w-[4.5rem] sm:block text-right">
             <p className="text-xs font-bold text-slate-300">{(conf * 100).toFixed(0)}%</p>
-            <p className="text-[10px] uppercase tracking-wider text-slate-600">confidence</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-300">confidence</p>
           </div>
         )}
         <svg
@@ -352,13 +352,13 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-slate-200">{title}</h2>
             {isFetching && !isLoading && (
-              <span className="text-[10px] font-medium text-slate-600 animate-pulse" aria-live="polite">
+              <span className="text-[10px] font-medium text-slate-300 animate-pulse" aria-live="polite">
                 Refreshing…
               </span>
             )}
           </div>
           {data && data.matches_with_value > 0 && (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-slate-300">
               {data.matches_with_value} with value · avg edge {data.avg_edge_pct.toFixed(1)}%
               {data.portfolio_exposure?.exceeds_aggregate_cap && (
                 <span className="ml-2 text-amber-400">
@@ -391,7 +391,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
                 : "Off-season · Limited predictions available"}
             </p>
             {nextSeasonStart && (
-              <p className="mt-0.5 text-[11px] text-slate-500">
+              <p className="mt-0.5 text-[11px] text-slate-300">
                 Next season starts{" "}
                 <time dateTime={nextSeasonStart}>
                   {new Date(nextSeasonStart).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
@@ -401,7 +401,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           </div>
           <button
             onClick={handleDismiss}
-            className="flex-shrink-0 text-slate-600 hover:text-slate-400 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500 rounded"
+            className="flex-shrink-0 text-slate-300 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300 rounded"
             aria-label="Dismiss off-season notice"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -414,7 +414,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
       {isLoading && <PanelSkeleton />}
 
       {error && !data && (
-        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-500">
+        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-300">
           Fixtures unavailable — backend offline or warming up.
         </p>
       )}
@@ -429,7 +429,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           // data_gap means the backend failed rather than genuinely having no
           // fixtures — saying "no fixtures" there would report an outage as a
           // quiet, believable empty state.
-          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-500">
+          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-300">
             {data.data_gap
               ? "Fixture list unavailable right now. Please try again shortly."
               : `No upcoming fixtures in the next ${VISIBLE_WINDOW_DAYS} days.`}
@@ -448,7 +448,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
             ))}
           </div>
           {data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && (
-            <p className="pt-1 text-center text-[11px] text-slate-600">
+            <p className="pt-1 text-center text-[11px] text-slate-300">
               Showing {VISIBLE_MATCH_LIMIT} of {data.upcoming_matches.length} fixtures
               {!selectedLeague && " · filter by league to narrow the list"}
             </p>

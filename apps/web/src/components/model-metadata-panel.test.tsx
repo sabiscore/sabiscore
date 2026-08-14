@@ -56,4 +56,26 @@ describe("ModelMetadataPanel", () => {
     await waitFor(() => expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0));
     expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
   });
+
+  it("keeps plain-language Certification and Promotion explanations visible", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        active_version: "v5_phase7-20260808",
+        generation: "v5_phase7",
+        generation_hash: "abc123def456ghi789",
+        certification_state: "UNVERIFIED",
+        promotion_state: "ACTIVE_FAIL_CLOSED",
+        models: {
+          EPL: { feature_schema_version: "phase7_68", served_head: "SoftmaxMetaModel" },
+        },
+      }),
+    } as unknown as Response);
+
+    renderPanel();
+    await screen.findByText("UNVERIFIED");
+
+    expect(screen.getByText(/research output only/i)).toBeVisible();
+    expect(screen.getByText(/blocks staking until it is certified/i)).toBeVisible();
+  });
 });

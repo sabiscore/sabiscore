@@ -59,11 +59,11 @@ async function fetchScan(): Promise<ValueBetScanResponse> {
 function DataGapState() {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center" role="status">
-      <Database className="h-7 w-7 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-500">No certified opportunities right now</p>
+      <Database className="h-7 w-7 text-slate-400" aria-hidden="true" />
+      <p className="text-sm font-medium text-slate-300">No certified opportunities right now</p>
       {/* No fixed refresh cadence exists to promise — predictions are written as
           fixtures are analyzed, and none are during the close season. */}
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-slate-300">
         Predictions appear here once fixtures are analyzed.
       </p>
     </div>
@@ -73,9 +73,9 @@ function DataGapState() {
 function NoEdgeState() {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center" role="status">
-      <TrendingUp className="h-7 w-7 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-500">No qualifying value bets this week</p>
-      <p className="text-xs text-slate-600">Minimum edge threshold: 4.2%</p>
+      <TrendingUp className="h-7 w-7 text-slate-400" aria-hidden="true" />
+      <p className="text-sm font-medium text-slate-300">No research candidates this week</p>
+      <p className="text-xs text-slate-300">No model-market comparisons cleared the evidence filter.</p>
     </div>
   );
 }
@@ -99,8 +99,8 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
         >
           {bet.league}
         </span>
-        <span className="text-[10px] uppercase tracking-widest text-slate-600">
-          Best edge this week
+        <span className="text-[10px] uppercase tracking-widest text-slate-300">
+          Largest research gap this week
         </span>
       </div>
 
@@ -108,10 +108,10 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
       <div>
         <p className="text-xl font-bold text-white">
           {bet.homeTeam}
-          <span className="mx-2 text-slate-600 font-normal">vs</span>
+          <span className="mx-2 text-slate-300 font-normal">vs</span>
           {bet.awayTeam}
         </p>
-        <time dateTime={bet.kickoffUtc} className="text-[11px] text-slate-500">
+        <time dateTime={bet.kickoffUtc} className="text-[11px] text-slate-300">
           {formatKickoff(bet.kickoffUtc)}
         </time>
       </div>
@@ -120,7 +120,7 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
       <div className="flex flex-wrap items-end gap-6">
         {/* Edge */}
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-600">Edge</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300">Edge</p>
           <p className="flex items-center gap-1 text-3xl font-black text-emerald-400 tabular-nums leading-none">
             <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
             {bet.edge_pct.toFixed(1)}%
@@ -129,7 +129,7 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
 
         {/* Confidence */}
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-600">Confidence</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300">Confidence</p>
           <p className={cn("text-lg font-bold leading-none", tier.cls)}>
             {(bet.confidence * 100).toFixed(0)}%
           </p>
@@ -138,22 +138,17 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
 
         {/* Bet type */}
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-600">Bet</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300">Outcome</p>
           <p className="text-base font-semibold capitalize text-slate-200 leading-none">
             {bet.outcome}
           </p>
         </div>
 
-        {/* Kelly (EV pre-match — CLV is always null pre-kick-off per B14) */}
-        {bet.kelly_stake_pct != null && bet.kelly_stake_pct > 0 && (
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-600">¼ Kelly</p>
-            <p className="text-base font-semibold text-slate-200 leading-none tabular-nums">
-              {bet.kelly_stake_pct.toFixed(1)}%
-            </p>
-            <p className="text-[10px] text-slate-600 mt-0.5">of bankroll</p>
-          </div>
-        )}
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300">Stake</p>
+          <p className="text-base font-semibold text-slate-300 leading-none">Disabled</p>
+          <p className="mt-0.5 text-[10px] text-slate-300">uncertified generation</p>
+        </div>
       </div>
 
       {/* Responsible gambling notice — required below every stake surface */}
@@ -203,15 +198,15 @@ export const BestBetSpotlight = memo(function BestBetSpotlight({
 
   return (
     <section
-      aria-label="Best bet spotlight"
+      aria-label="Research market comparison"
       className={cn(
         "rounded-[24px] border border-white/[0.07] bg-slate-950/80 p-6 shadow-lg",
         className,
       )}
     >
-      <p className="mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
+      <p className="mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-300">
         <TrendingUp className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-        Best value bet
+        Research market comparison
       </p>
 
       {isLoading ? (

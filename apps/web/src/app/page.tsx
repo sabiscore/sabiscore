@@ -20,8 +20,10 @@ import { BestBetSpotlight } from "@/components/best-bet-spotlight";
 import { MatchSelector } from "@/components/match-selector";
 import { ModelMetadataPanel } from "@/components/model-metadata-panel";
 import { PlatformHealthPills } from "@/components/platform-health-pills";
+import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
+import { VERDICT_TOKENS, type Verdict } from "@/lib/verdict-tokens";
 
 const TRUST_BADGES = ["Verified fixtures first", "Explicit evidence gaps", "Zero stake when blocked"];
 
@@ -40,7 +42,7 @@ const PREMIUM_VALUE_STREAM = [
   },
   {
     title: "CLV + Kelly toolkit",
-    description: "Closing-line value, edge quality scoring, and fractional Kelly staking with RL abstention gate.",
+    description: "Closing-line value and edge-quality research with a fail-closed staking gate.",
     icon: Target,
     footer: "Fail-closed stake gate",
   },
@@ -111,7 +113,7 @@ const PIPELINE_STEPS = [
   {
     step: "05",
     label: "Surface the result",
-    detail: "Six evidence-gated verdict levels with a plain-English rationale, data gap report, and Quarter-Kelly stake sizing.",
+    detail: "Six evidence-gated verdict levels with a plain-English rationale and explicit data-gap report.",
     icon: Zap,
   },
 ] satisfies Array<{ step: string; label: string; detail: string; icon: LucideIcon }>;
@@ -122,50 +124,36 @@ const VERDICT_DEFINITIONS = [
     enum: "PARTIAL",
     label: "Incomplete Data",
     detail: "Critical evidence is missing. No bet is surfaced.",
-    className: "border-slate-700/50 bg-slate-900/40",
-    badge: "text-slate-400 bg-slate-800/60",
   },
   {
     enum: "NO_BET",
     label: "Skip This Match",
     detail: "Data is complete but no positive edge was found.",
-    className: "border-slate-700/50 bg-slate-900/40",
-    badge: "text-slate-400 bg-slate-800/60",
   },
   {
     enum: "HOLD",
     label: "Monitor Closely",
     detail: "Positive signal detected but evidence is thin. Watch for updates.",
-    className: "border-blue-500/20 bg-blue-500/5",
-    badge: "text-blue-300 bg-blue-900/40",
   },
   {
     enum: "SPECULATIVE",
-    label: "Risky — Small Stake Only",
-    detail: "Edge detected with low confidence. Watchlist only; strict stake cap applies.",
-    className: "border-amber-500/20 bg-amber-500/5",
-    badge: "text-amber-300 bg-amber-900/40",
+    label: "Watchlist Only",
+    detail: "A tentative signal is visible for research. No stake is permitted.",
   },
   {
     enum: "ACTIONABLE",
-    label: "Good Value",
-    detail: "Positive edge supported by sufficient verified evidence and an open staking gate.",
-    className: "border-emerald-500/20 bg-emerald-500/5",
-    badge: "text-emerald-300 bg-emerald-900/40",
+    label: "Certification-Gated Signal",
+    detail: "This verdict can become executable only when every evidence and certification gate is open.",
   },
   {
     enum: "HIGH_CONVICTION",
-    label: "Strong Value Signal",
-    detail: "Strong edge supported by sufficient independent evidence. Outcomes remain uncertain.",
-    className: "border-cyan-400/20 bg-cyan-400/5",
-    badge: "text-cyan-300 bg-cyan-900/40",
+    label: "Certification-Gated Strong Signal",
+    detail: "Independent evidence may be strong, but uncertified generations remain research-only.",
   },
 ] satisfies Array<{
   enum: string;
   label: string;
   detail: string;
-  className: string;
-  badge: string;
 }>;
 
 // Supported competitions
@@ -190,6 +178,7 @@ export default function HomePage() {
     <>
       <div className="container mx-auto">
         <div className="mx-auto max-w-6xl space-y-8 sm:space-y-12">
+          <ResearchModeBanner />
           {premiumEnabled ? <PremiumHome /> : <LegacyHome />}
         </div>
       </div>
@@ -198,8 +187,7 @@ export default function HomePage() {
       <aside className="container mx-auto mb-8 mt-4 max-w-6xl">
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 text-sm text-amber-200/80">
           <strong className="text-amber-300">Responsible use:</strong>{" "}
-          Staking suggestions are illustrative and depend on your stated bankroll.
-          Never stake more than you can afford to lose. No prediction is certain.
+          Staking is disabled while this generation remains uncertified. No prediction is certain.
           If gambling is affecting you or someone you know, seek support at{" "}
           <a
             href="https://www.begambleaware.org"
@@ -213,9 +201,9 @@ export default function HomePage() {
       </aside>
 
       <footer className="border-t border-slate-800/50 py-12">
-        <div className="container mx-auto text-center text-slate-500">
+        <div className="container mx-auto text-center text-slate-400">
           <p>SabiScore production intelligence workspace</p>
-          <p className="mt-2 text-sm">Built for responsible betting insights and advanced football analytics</p>
+          <p className="mt-2 text-sm">Built for responsible football research and advanced analytics</p>
         </div>
       </footer>
     </>
@@ -283,27 +271,27 @@ function PremiumHome() {
 
           <div className="grid grid-cols-3 gap-2 lg:hidden">
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-500">Model</p>
+              <p className="text-[9px] uppercase tracking-wider text-slate-300">Model</p>
               <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-500">Training</p>
+              <p className="text-[9px] uppercase tracking-wider text-slate-300">Training</p>
               <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-500">Live score</p>
+              <p className="text-[9px] uppercase tracking-wider text-slate-300">Live score</p>
               <p className="mt-1 text-sm font-semibold text-slate-300">Pending</p>
             </div>
           </div>
 
           <div className="hidden flex-col gap-6 rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-[0_20px_60px_rgba(3,7,18,0.8)] sm:p-6 lg:flex">
             <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Model pulse</p>
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-300">Model pulse</p>
               <div className="mt-4"><ModelMetadataPanel /></div>
             </div>
 
             <div className="rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3">
-              <p className="mb-3 text-[10px] uppercase tracking-[0.24em] text-slate-600">
+              <p className="mb-3 text-[10px] uppercase tracking-[0.24em] text-slate-300">
                 Platform status
               </p>
               <div className="grid gap-2 sm:grid-cols-3">
@@ -352,10 +340,10 @@ function PremiumHome() {
             <div key={card.title} className="glass-card flex flex-col justify-between gap-3 p-5">
               <div className="flex items-center gap-3 text-slate-200">
                 <card.icon className="h-5 w-5 text-cyan-300" aria-hidden="true" />
-                <h3 className="text-base font-semibold text-white">{card.title}</h3>
+                <h2 className="text-base font-semibold text-white">{card.title}</h2>
               </div>
               <p className="text-sm text-slate-400">{card.description}</p>
-              <span className="text-[10px] uppercase tracking-[0.24em] text-slate-500">{card.footer}</span>
+              <span className="text-[10px] uppercase tracking-[0.24em] text-slate-300">{card.footer}</span>
             </div>
           ))}
         </div>
@@ -369,12 +357,12 @@ function PremiumHome() {
           {PIPELINE_STEPS.map((s) => (
             <div key={s.step} className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-slate-900/60 p-4">
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold tracking-widest text-slate-600">{s.step}</span>
+                <span className="text-[10px] font-bold tracking-widest text-slate-300">{s.step}</span>
                 <s.icon className="h-4 w-4 text-cyan-400" aria-hidden="true" />
               </div>
               <p className="text-sm font-semibold text-white">{s.label}</p>
               <details className="mt-1">
-                <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-400">Technical detail ▸</summary>
+                <summary className="cursor-pointer text-xs text-slate-300 hover:text-slate-100">Technical detail ▸</summary>
                 <p className="mt-1 text-xs leading-relaxed text-slate-400">{s.detail}</p>
               </details>
             </div>
@@ -390,9 +378,12 @@ function PremiumHome() {
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {VERDICT_DEFINITIONS.map((v) => (
-            <div key={v.enum} className={`rounded-2xl border p-4 ${v.className}`}>
+            <div
+              key={v.enum}
+              className={`rounded-2xl border p-4 ${VERDICT_TOKENS[v.enum as Verdict].border} ${VERDICT_TOKENS[v.enum as Verdict].bg}`}
+            >
               <div className="mb-2 flex items-center gap-2">
-                <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${v.badge}`}>
+                <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${VERDICT_TOKENS[v.enum as Verdict].color}`}>
                   {v.enum}
                 </span>
               </div>
@@ -401,7 +392,7 @@ function PremiumHome() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-[11px] text-slate-500">
+        <p className="mt-4 text-[11px] text-slate-300">
           No verdict is a certain outcome. Stronger evidence reduces uncertainty — it does not eliminate it.
         </p>
       </section>
@@ -417,7 +408,7 @@ function PremiumHome() {
             <div key={c.short} className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-900/60 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-white">{c.name}</p>
-                <p className="text-xs text-slate-500">{c.short}</p>
+                <p className="text-xs text-slate-300">{c.short}</p>
               </div>
               <span className="rounded-lg bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Verify status

@@ -21,6 +21,7 @@ import sys
 import os
 from datetime import date
 from typing import Optional
+from unittest.mock import patch
 
 import pytest
 
@@ -28,9 +29,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.api.endpoints.upcoming_matches import (
     _compute_edge_quality_score,
+    _league_is_offseason,
     _next_season_start,
     UpcomingMatchesResponseSchema,
 )
+from src.api.endpoints import offseason as offseason_endpoint
+from src.core.season_calendar import next_season_start_estimated
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +215,20 @@ class TestNextSeasonStartCoverage:
         parsed = date.fromisoformat(start)
         assert parsed.year >= 2026
 
+    def test_only_ucl_supported_date_is_marked_estimated(self):
+        assert next_season_start_estimated("UCL") is True
+        assert next_season_start_estimated("EPL") is False
+        assert next_season_start_estimated("unknown_league_xyz") is None
+
+    @pytest.mark.asyncio
+    async def test_offseason_response_exposes_estimate_confidence(self):
+        ucl = await offseason_endpoint.get_offseason_status("UCL")
+        epl = await offseason_endpoint.get_offseason_status("EPL")
+        unknown = await offseason_endpoint.get_offseason_status("unknown_league_xyz")
+        assert ucl["next_season_start_estimated"] is True
+        assert epl["next_season_start_estimated"] is False
+        assert unknown["next_season_start_estimated"] is None
+
 
 # ---------------------------------------------------------------------------
 # OFF-8: Slug normalisation
@@ -236,3 +254,50 @@ class TestSlugNormalisation:
         b = _next_season_start("laliga")
         c = _next_season_start("La Liga")
         assert a == b == c
+
+
+# ---------------------------------------------------------------------------
+# C9: _league_is_offseason is decoupled from match count.
+#
+# Regression guard for the bug fixed this session: `is_offseason` used to be
+# `len(matches) == 0`, so an in-season league whose particular query returned
+# zero rows (sync gap, narrow window) was mislabeled "Off Season" identically
+# to a league whose season genuinely hasn't started. `date.today()` is mocked
+# so these assertions don't silently flip as real wall-clock time advances
+# past the fixed 2026-08-xx season-calendar dates.
+# ---------------------------------------------------------------------------
+
+
+class TestLeagueIsOffseasonDecoupledFromMatchCount:
+    def _frozen_today(self, mock_date, today: date) -> None:
+        mock_date.today.return_value = today
+        mock_date.fromisoformat.side_effect = date.fromisoformat
+
+    def test_false_when_season_already_started(self):
+        """Eredivisie starts 2026-08-07 — already in season on 2026-08-14.
+        A zero-fixture query for it must not be mislabeled off-season."""
+        with patch("src.api.endpoints.upcoming_matches.date") as mock_date:
+            self._frozen_today(mock_date, date(2026, 8, 14))
+            assert _league_is_offseason("eredivisie") is False
+
+    def test_true_when_season_has_not_started(self):
+        """Bundesliga starts 2026-08-28 — still off-season on 2026-08-14."""
+        with patch("src.api.endpoints.upcoming_matches.date") as mock_date:
+            self._frozen_today(mock_date, date(2026, 8, 14))
+            assert _league_is_offseason("bundesliga") is True
+
+    def test_multi_word_display_form_league(self):
+        """Never validate a league fix with EPL alone: 'La Liga' (display
+        form, two words) must resolve identically to 'LA_LIGA' (canonical)."""
+        with patch("src.api.endpoints.upcoming_matches.date") as mock_date:
+            self._frozen_today(mock_date, date(2026, 8, 14))
+            assert _league_is_offseason("La Liga") is _league_is_offseason("LA_LIGA") is True
+
+    def test_becomes_false_once_season_start_date_passes(self):
+        """The same league flips from off-season to in-season purely as a
+        function of today's date, independent of any fixture count."""
+        with patch("src.api.endpoints.upcoming_matches.date") as mock_date:
+            self._frozen_today(mock_date, date(2026, 8, 27))
+            assert _league_is_offseason("bundesliga") is True
+            self._frozen_today(mock_date, date(2026, 8, 28))
+            assert _league_is_offseason("bundesliga") is False

@@ -17,7 +17,10 @@ from typing import Dict, Tuple
 
 from fastapi import APIRouter
 
-from ...core.season_calendar import next_season_start as _canonical_start
+from ...core.season_calendar import (
+    next_season_start as _canonical_start,
+    next_season_start_estimated as _canonical_start_estimated,
+)
 
 router = APIRouter(prefix="/leagues", tags=["offseason", "seasons"])
 
@@ -236,6 +239,7 @@ async def get_offseason_status(league: str) -> dict:
             "current_season_label": None,
             "current_season_end": None,
             "next_season_start": None,
+            "next_season_start_estimated": None,
             "days_until_next_season": None,
             "data_availability": _data_availability("UNKNOWN"),
             "prediction_advisory": "Season calendar unavailable for this league.",
@@ -254,6 +258,7 @@ async def get_offseason_status(league: str) -> dict:
         "current_season_label": entry["current_season_label"],
         "current_season_end": entry["current_season_end"],
         "next_season_start": entry["next_season_start"],
+        "next_season_start_estimated": _canonical_start_estimated(slug),
         "days_until_next_season": days_until if season_status == "OFF_SEASON" else 0,
         "data_availability": _data_availability(season_status),
         "prediction_advisory": _prediction_advisory(season_status, days_until),

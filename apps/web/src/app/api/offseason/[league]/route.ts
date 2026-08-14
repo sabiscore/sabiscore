@@ -25,6 +25,9 @@ function unknownFallback(league: string) {
   return {
     league,
     season_status: 'UNKNOWN',
+    next_season_start: null,
+    next_season_start_estimated: null,
+    days_until_next_season: null,
     data_availability: {
       historical_data: false,
       live_odds: false,

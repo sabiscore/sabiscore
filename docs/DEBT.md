@@ -617,7 +617,8 @@ matches outside the seven-competition closed set into `matches`, with no canonic
 **Owner:** unassigned.
 **Found:** 2026-08-04, verifying the WP-0/WP-1/WP-2 identity + gap-detection campaign.
 **Updated:** 2026-08-05 — WP-10.1 shipped (caller wired), WP-10.2 semantics pinned
-(evidence below). WP-10.3 (the actual remap) is still **not done** — see below.
+(evidence below). WP-10.3 was still open at that point; it later shipped as WP-18
+on 2026-08-07, as recorded in the closure note below.
 
 **Closed 2026-08-07 (WP-18).** The `R4/INV-14` approval gate this entry described
 ("operator go/no-go... approval required, not autonomous, never execute-then-ask")
@@ -702,24 +703,20 @@ the same lossy `home_`-prefixed shape as `_get_team_stats()`, matching its bug
 intentionally) — a real remap has a strictly-better option than reproducing
 `transformers.py`'s algebraic estimate when the scraped source is what's in play.
 
-**Why WP-10.3 (wiring this remap into `upcoming_match_feature_service.py`) is still not
-done:** it is explicitly R4 under INV-14 ("remapping `_get_team_stats()` output onto
+**Historical pre-closure rationale for WP-10.3 (wiring this remap into
+`upcoming_match_feature_service.py`):** it was classified R4 under INV-14
+("remapping `_get_team_stats()` output onto
 canonical feature names is a feature-schema change... even though no new feature is
 added — the meaning bound to each name changes") — proposal-only, approval required,
-never execute-then-ask. Confidence the semantics above are correct is now high (cited to
-the live training artifact, not assumed), but R4 gates on *evidence quality*, not
-*confidence* — the operator must still sign off, because it changes what every live
-model actually sees and requires the D8b prefix fix to land atomically (see above) plus
-a `feature_defaulted_ratio` before/after capture per the campaign's own GATE-10 §3.
+never execute-then-ask. Confidence in the semantics was high (cited to the live
+training artifact, not assumed), but the operator still had to sign off because the
+change altered what every live model saw and required the D8b prefix fix plus a
+`feature_defaulted_ratio` before/after capture. That approval and atomic implementation
+were completed by WP-18, as the 2026-08-07 closure note records.
 
-**Blast radius:** every live prediction, matchup and DB-fixture paths alike (unchanged
-until WP-10.3 ships).
-**Cost:** now low for WP-10.3 itself — the semantics research (the expensive, blind-risk
-part) is done. Remaining cost is the approval round-trip + the D8b atomic fix + the
-re-certification/`feature_defaulted_ratio` proof GATE-10 requires.
-**Impact:** predictions are directionally usable but running on a small fraction of
-trained signal — unchanged by WP-10.1 alone, as designed.
-**Priority:** high value; ready for a go/no-go decision, no longer blocked on research.
+**Historical blast radius:** every live prediction, matchup and DB-fixture path.
+**Closure:** WP-18 completed the approval, D8b atomic fix, regression coverage, and
+`feature_defaulted_ratio` proof. No go/no-go decision remains open for this item.
 
 ---
 

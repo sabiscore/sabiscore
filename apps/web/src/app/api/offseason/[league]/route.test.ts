@@ -48,6 +48,7 @@ describe("/api/offseason/[league] normalization", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(body.season_status).toBe("UNKNOWN");
+    expect(body.next_season_start_estimated).toBeNull();
     expect(Object.values(body.data_availability as Record<string, boolean>)).toEqual(
       expect.arrayContaining([false]),
     );

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { FullAnalysisSection } from "@/components/full-analysis-section";
 import { Phase8AnalyticsSection } from "@/components/phase8-analytics-section";
+import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { canonicalLeagueId } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
           {isVerifiedFixturePath ? "Verified fixture path" : "Hypothetical — non-executable"}
         </span>
       </header>
+      <ResearchModeBanner />
       <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
       <details className="group rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
         <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">

@@ -25,6 +25,7 @@ except Exception:
     _HAS_BOTO3 = False
 
 from ..models.ensemble import SabiScoreEnsemble  # noqa: E402
+from .redaction import redact_text, redact_url, safe_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +88,17 @@ def _download_bytes_with_requests(
             logger.warning(
                 "Remote model download attempt %s failed for %s: %s",
                 attempt,
-                url,
-                exc,
+                redact_url(url),
+                redact_text(exc),
             )
             if attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
             raise
 
-    raise RuntimeError(f"Remote model download retries exhausted for {url}")
+    raise RuntimeError(
+        f"Remote model download retries exhausted for {safe_endpoint(url)}"
+    )
 
 
 def _download_bytes_with_urllib(url: str, headers: dict, timeout: int = 30) -> bytes:
@@ -211,7 +214,7 @@ def load_ensemble_per_league(
         if model_base_url:
             remote_url = urljoin(model_base_url.rstrip("/") + "/", artifact_name)
             try:
-                logger.info("Loading remote model artifact %s", remote_url)
+                logger.info("Loading remote model artifact %s", artifact_name)
                 if _HAS_REQUESTS:
                     payload = _download_bytes_with_requests(remote_url, headers)
                 else:
@@ -221,7 +224,7 @@ def load_ensemble_per_league(
                 logger.warning(
                     "Remote model unavailable for %s (%s). Falling back to local artifact.",
                     league,
-                    exc,
+                    redact_text(exc),
                 )
 
         if model is None:
@@ -275,7 +278,12 @@ def _download_with_requests(url: str, dest: str, headers: dict, timeout: int = 1
                         fh.write(chunk)
             return
         except Exception as e:
-            logger.warning(f"Download attempt {attempt} failed for {url}: {e}")
+            logger.warning(
+                "Download attempt %s failed for %s: %s",
+                attempt,
+                redact_url(url),
+                redact_text(e),
+            )
             if attempt < retries:
                 time.sleep(2 ** attempt)
                 continue
@@ -330,7 +338,10 @@ def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_
     if fetch_token:
         headers['Authorization'] = f"Bearer {fetch_token}"
 
-    logger.info(f"Fetching model artifacts from {model_base_url} into {dest_root}")
+    logger.info(
+        "Fetching model artifacts from %s into configured destination",
+        safe_endpoint(model_base_url),
+    )
 
     for rel in ARTIFACTS:
         dest = os.path.join(dest_root, rel)
@@ -351,26 +362,35 @@ def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_
             prefix = parts[1] if len(parts) > 1 else ''
             key = f"{prefix}/{rel}" if prefix else rel
             key = key.lstrip('/')
-            logger.info(f"Downloading s3://{bucket}/{key} -> {dest}")
+            logger.info("Downloading S3 model artifact %s", rel)
             try:
                 s3 = boto3.client('s3')
                 # use streaming download
                 with open(dest, 'wb') as fh:
                     s3.download_fileobj(bucket, key, fh)
             except Exception as e:
-                logger.error(f"Failed to download S3 artifact s3://{bucket}/{key}: {e}")
+                logger.error(
+                    "Failed to download S3 model artifact %s: %s",
+                    rel,
+                    redact_text(e),
+                )
                 return False
 
         else:
             url = urljoin(model_base_url.rstrip('/') + '/', rel)
-            logger.info(f"Downloading {url} -> {dest}")
+            logger.info("Downloading HTTPS model artifact %s", rel)
             try:
                 if _HAS_REQUESTS:
                     _download_with_requests(url, dest, headers)
                 else:
                     _download_with_urllib(url, dest, headers)
             except Exception as e:
-                logger.error(f"Failed to download artifact {url}: {e}")
+                logger.error(
+                    "Failed to download HTTPS model artifact %s from %s: %s",
+                    rel,
+                    safe_endpoint(url),
+                    redact_text(e),
+                )
                 return False
 
     logger.info("All artifacts downloaded (subject to validation).")

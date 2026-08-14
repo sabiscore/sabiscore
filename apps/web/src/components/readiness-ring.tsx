@@ -14,8 +14,8 @@ import {
 // actually produce a prediction — this line reports that separately (INV-20), and
 // must never conflate "nothing to test yet" (off-season, just-deployed) with "broken".
 const CAPABILITY_COPY: Record<CapabilityStatus, { text: string; className: string }> = {
-  verified: { text: "Prediction pipeline verified", className: "text-emerald-400" },
-  unverified_no_fixtures: { text: "No fixtures to verify yet", className: "text-slate-500" },
+  verified: { text: "Runtime capability check passed", className: "text-emerald-400" },
+  unverified_no_fixtures: { text: "No fixtures to verify yet", className: "text-slate-300" },
   // Pipeline ran and fail-closed correctly — a fixture days out has no odds or
   // lineups published yet. Amber (partial), never rose: this is not an outage.
   unverified_insufficient_evidence: {
@@ -23,7 +23,7 @@ const CAPABILITY_COPY: Record<CapabilityStatus, { text: string; className: strin
     className: "text-amber-400",
   },
   failed: { text: "Prediction pipeline not verified", className: "text-rose-400" },
-  unknown: { text: "No fixtures to verify yet", className: "text-slate-500" },
+  unknown: { text: "No fixtures to verify yet", className: "text-slate-300" },
 };
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
@@ -54,7 +54,11 @@ function ReadinessRingInner({ score, label }: { score: number; label: string }) 
   const pct = Math.round(filled * 100);
 
   return (
-    <div className="relative flex items-center justify-center" aria-label={`Core system readiness: ${label} (${pct}%)`}>
+    <div
+      className="relative flex items-center justify-center"
+      role="img"
+      aria-label={`Core system readiness: ${label} (${pct}%)`}
+    >
       <svg
         width={72}
         height={72}
@@ -130,7 +134,7 @@ export const ReadinessRing = memo(function ReadinessRing({ className }: { classN
             <p className="text-[11px] text-slate-400">
               {stats.ready} ready · {stats.unavailable} unavailable
             </p>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-600">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300">
               {stats.ready} of {stats.total} core checks
             </p>
             <p className={cn("text-[11px]", CAPABILITY_COPY[stats.capability].className)}>

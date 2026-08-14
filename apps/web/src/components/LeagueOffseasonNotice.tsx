@@ -9,6 +9,8 @@ interface LeagueOffseasonNoticeProps {
   leagueName: string;
   /** ISO 8601 date of the next season kick-off (e.g. "2026-08-08"). */
   nextSeasonStart: string | null;
+  /** True when the provider has not yet published a confirmed start date. */
+  nextSeasonStartEstimated?: boolean | null;
   className?: string;
 }
 
@@ -42,9 +44,10 @@ function daysUntil(iso: string | null): number | null {
 export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
   leagueName,
   nextSeasonStart,
+  nextSeasonStartEstimated = null,
   className,
 }: LeagueOffseasonNoticeProps) {
-  const days = daysUntil(nextSeasonStart);
+  const days = nextSeasonStartEstimated ? null : daysUntil(nextSeasonStart);
   const formattedDate = formatNextSeasonDate(nextSeasonStart);
   const prefersReduced = useReducedMotion();
 
@@ -78,7 +81,9 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
 
       {nextSeasonStart && (
         <div className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
-          <span className="text-zinc-400">Next season kicks off </span>
+          <span className="text-zinc-400">
+            {nextSeasonStartEstimated ? "Season currently expected around " : "Next season kicks off "}
+          </span>
           <time
             dateTime={nextSeasonStart}
             className="font-medium text-emerald-400"
@@ -87,6 +92,11 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
           </time>
           {days !== null && days > 0 && (
             <span className="ml-1 text-zinc-500">({days} days away)</span>
+          )}
+          {nextSeasonStartEstimated && (
+            <span className="mt-1 block text-xs text-amber-300">
+              Date not yet confirmed by the provider.
+            </span>
           )}
         </div>
       )}

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -85,6 +85,20 @@ def _next_season_start(league: Optional[str]) -> str:
     # Non-None by construction: season_calendar falls back to the earliest
     # supported opener for unknown/absent leagues.
     return str(next_season_start(league))
+
+
+def _league_is_offseason(league: Optional[str]) -> bool:
+    """Whether the league's season genuinely hasn't started yet.
+
+    Independent of any particular query's result count — a zero-row response
+    for an in-season league (sync gap, narrow window) is a different
+    condition and must not be mislabeled "Off Season" alongside it.
+    """
+    start = _next_season_start(league)
+    try:
+        return date.today() < date.fromisoformat(start)
+    except ValueError:
+        return False
 
 
 # Pydantic response models
@@ -306,8 +320,12 @@ async def get_upcoming_matches(
         for match in matches:
             match["edge_quality_score"] = _compute_edge_quality_score(match)
 
-        # Detect off-season: fixture list genuinely empty
-        is_offseason = len(matches) == 0
+        # Detect off-season: no fixtures AND the league's season genuinely
+        # hasn't started yet (season_calendar-derived). A zero-row response
+        # for an in-season league — a sync gap or a narrow window — is a
+        # different condition and must not be mislabeled "Off Season"; the
+        # frontend's existing data_gap/generic-empty branch already covers it.
+        is_offseason = len(matches) == 0 and _league_is_offseason(league)
         response["offseason"] = is_offseason
         response["next_season_start"] = _next_season_start(league) if is_offseason else None
         response.setdefault("data_gap", False)

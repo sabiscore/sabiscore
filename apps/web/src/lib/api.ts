@@ -706,9 +706,10 @@ export interface OffseasonStatusResponse {
   league: string;
   league_slug: string;
   season_status: "IN_SEASON" | "OFF_SEASON" | "UNKNOWN";
-  current_season_label: string;
-  current_season_end: string;
-  next_season_start: string;
+  current_season_label: string | null;
+  current_season_end: string | null;
+  next_season_start: string | null;
+  next_season_start_estimated: boolean | null;
   days_until_next_season: number | null;
   data_availability: OffseasonDataAvailability;
   prediction_advisory: string;
@@ -743,6 +744,7 @@ export async function getOffseasonStatus(
         current_season_label: "",
         current_season_end: "",
         next_season_start: "",
+        next_season_start_estimated: null,
         days_until_next_season: null,
         data_availability: {
           historical_data: false,
@@ -769,6 +771,7 @@ export async function getOffseasonStatus(
       current_season_label: "",
       current_season_end: "",
       next_season_start: "",
+      next_season_start_estimated: null,
       days_until_next_season: null,
       data_availability: {
         historical_data: false,

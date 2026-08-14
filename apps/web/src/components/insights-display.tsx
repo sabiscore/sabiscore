@@ -8,7 +8,6 @@ import { normalizeValueBet } from "@/types/value-bet";
 import { ProbabilityDonutChart } from "./charts/ProbabilityDonutChart";
 import { apiClient } from "@/lib/api";
 import { safeErrorMessage, trackPerformance } from "@/lib/error-utils";
-import { ValueBetCard } from "./ValueBetCard";
 import { GamblingDisclaimer } from "./ui/ResponsibleGamblingTooltip";
 import { TeamVsDisplay } from "./team-display";
 import {
@@ -497,10 +496,10 @@ function InsightsDisplayInner({ insights }: InsightsDisplayProps) {
         )}>
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-100">
-              💰 Best Value Bet
+              Model-market research comparison
             </h2>
             <span className="px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full text-sm font-semibold text-green-400">
-              {bestBet.quality?.tier ?? 'VALUE'}
+              RESEARCH ONLY
             </span>
           </div>
 
@@ -520,10 +519,8 @@ function InsightsDisplayInner({ insights }: InsightsDisplayProps) {
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm text-slate-400">Kelly Stake (¼)</p>
-              <p className="text-2xl font-bold text-indigo-400">
-                {typeof bestBet.kelly_stake === 'number' ? (bestBet.kelly_stake * 100).toFixed(1) : '0.0'}%
-              </p>
+              <p className="text-sm text-slate-400">Stake</p>
+              <p className="text-2xl font-bold text-slate-300">Disabled</p>
             </div>
           </div>
 
@@ -550,23 +547,10 @@ function InsightsDisplayInner({ insights }: InsightsDisplayProps) {
 
           <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
             <p className="text-sm text-indigo-300 font-medium">
-              {bestBet.recommendation}
+              Research output only. No stake is recommended until model certification passes.
             </p>
           </div>
 
-          {/* Also render a ValueBetCard component (maps server value to UI model) */}
-          <div className="mt-4">
-            <ValueBetCard
-              bet={bestBet}
-              context={{
-                matchId: current.matchup ?? insights.matchup,
-                homeTeam: insights.metadata?.home_team ?? 'Home',
-                awayTeam: insights.metadata?.away_team ?? 'Away',
-                bookmaker: 'Preferred Book',
-                clvExpected: bestBet.quality?.ev_contribution ?? null,
-              }}
-            />
-          </div>
         </div>
       )}
 

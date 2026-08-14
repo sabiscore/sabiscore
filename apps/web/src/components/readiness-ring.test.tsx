@@ -35,7 +35,7 @@ describe("ReadinessRing capability line (D6)", () => {
       backendChecks: READY_CHECKS,
       backendCapability: { status: "verified", message: "ok" },
     });
-    expect(await screen.findByText("Prediction pipeline verified")).toBeInTheDocument();
+    expect(await screen.findByText("Runtime capability check passed")).toBeInTheDocument();
     expect(screen.getByText("Core ready")).toBeInTheDocument();
   });
 

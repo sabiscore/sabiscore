@@ -108,7 +108,10 @@ export default function RootLayout({
             <ToastProvider />
             <ConsentProvider requireConsent={true}>
               <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-                <aside className="hidden border-r border-white/10 bg-[var(--brand-elevated)] lg:block">
+                <aside
+                  className="hidden border-r border-white/10 bg-[var(--brand-elevated)] lg:block"
+                  aria-label="Workspace navigation and backend authority"
+                >
                   <div className="sticky top-0 flex h-screen flex-col">
                     <div className="border-b border-white/10 px-5 py-5">
                       <Link
@@ -121,7 +124,7 @@ export default function RootLayout({
                     </div>
 
                     <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Primary navigation">
-                      <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace</p>
+                      <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Workspace</p>
                       <div className="mt-3 space-y-1">
                         {WORKSPACE_LINKS.map((item) => (
                           <Link
@@ -135,7 +138,7 @@ export default function RootLayout({
                         ))}
                       </div>
 
-                      <p className="mt-6 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Leagues</p>
+                      <p className="mt-6 px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Leagues</p>
                       <div className="mt-3 space-y-1">
                         {LEAGUES.map((league) => (
                           <Link
@@ -147,7 +150,7 @@ export default function RootLayout({
                               <Trophy className="h-4 w-4 text-emerald-300" aria-hidden="true" />
                               {league.label}
                             </span>
-                            <span className="text-[11px] font-semibold text-slate-500">{league.code}</span>
+                            <span className="text-[11px] font-semibold text-slate-300">{league.code}</span>
                           </Link>
                         ))}
                       </div>
@@ -180,7 +183,7 @@ export default function RootLayout({
                         </Link>
                         <MobileNav />
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                             Live workspace
                           </p>
                           <h1 className="text-base font-semibold text-white sm:text-lg">
@@ -207,7 +210,7 @@ export default function RootLayout({
                     {children}
                   </main>
                   {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA && (
-                    <footer className="py-2 text-center text-[10px] text-slate-600 select-none">
+                    <footer className="py-2 text-center text-[10px] text-slate-400 select-none">
                       {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}
                     </footer>
                   )}

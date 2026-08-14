@@ -115,9 +115,9 @@ export function ProviderMeter() {
       <div className="pm-header">
         <span className="pm-title">Evidence Sources</span>
         {lastChecked && (
-          <span className="pm-ts" aria-label={`Last checked ${lastChecked}`}>
+          <time className="pm-ts" dateTime={lastChecked} title={`Last checked ${lastChecked}`}>
             {new Date(lastChecked).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
+          </time>
         )}
       </div>
 
@@ -169,7 +169,7 @@ export function ProviderMeter() {
           letter-spacing: 0.06em;
           color: #6b8c7a;
         }
-        .pm-ts { color: #4a6358; font-size: 10px; }
+        .pm-ts { color: inherit; font-size: 10px; }
         .pm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
         .pm-row {
           display: flex;
@@ -191,15 +191,15 @@ export function ProviderMeter() {
         .pm-down .pm-label { color: #f87171; }
         .pm-quota .pm-icon { color: #c084fc; }
         .pm-quota .pm-label { color: #c084fc; }
-        .pm-off .pm-icon { color: #374640; }
-        .pm-off .pm-label { color: #374640; }
-        .pm-loading { color: #4a6358; padding: 6px 0; }
+        .pm-off .pm-icon { color: inherit; }
+        .pm-off .pm-label { color: inherit; }
+        .pm-loading { color: inherit; padding: 6px 0; }
         .pm-error { color: #f87171; margin: 4px 0 6px; }
         .pm-disclaimer {
           margin-top: 8px;
           font-size: 10px;
           line-height: 1.4;
-          color: #374640;
+          color: inherit;
         }
       `}</style>
     </section>

@@ -16,6 +16,13 @@ SENSITIVE_QUERY_KEYS = {
     "auth",
     "authorization",
     "password",
+    "signature",
+    "sig",
+    "x-amz-credential",
+    "x-amz-signature",
+    "x-amz-security-token",
+    "x-goog-credential",
+    "x-goog-signature",
 }
 
 _SENSITIVE_PARAM_RE = re.compile(

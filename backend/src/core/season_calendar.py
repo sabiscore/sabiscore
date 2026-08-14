@@ -32,6 +32,11 @@ _NEXT_SEASON_START: Dict[str, str] = {
     "UCL": "2026-09-15",
 }
 
+# Dates whose provider authority has not yet published the next-season value.
+# Keep this metadata beside the date itself so every consumer tells the same
+# truth about the calendar confidence.
+_ESTIMATED_STARTS = {"UCL"}
+
 # Earliest supported opener. Used when the league is unknown or absent so the
 # caller still gets a plausible, soon re-checked date rather than None.
 _DEFAULT_START: str = min(_NEXT_SEASON_START.values())
@@ -74,4 +79,16 @@ def next_season_start(
     return _NEXT_SEASON_START.get(key, default)
 
 
-__all__ = ["canonical_key", "next_season_start"]
+def next_season_start_estimated(league: Optional[str]) -> Optional[bool]:
+    """Whether the canonical next-season date is an estimate.
+
+    ``None`` means the league is not represented in the authoritative table;
+    callers must not attach confidence metadata to a fallback date.
+    """
+    key = canonical_key(league)
+    if key not in _NEXT_SEASON_START:
+        return None
+    return key in _ESTIMATED_STARTS
+
+
+__all__ = ["canonical_key", "next_season_start", "next_season_start_estimated"]

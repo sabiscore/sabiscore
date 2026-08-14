@@ -25,7 +25,7 @@ function HealthPill({
     <div className="flex min-h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
       <Icon className={isReady ? "h-4 w-4 text-emerald-300" : "h-4 w-4 text-amber-300"} aria-hidden="true" />
       <span>
-        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-300">{label}</span>
         <span className="block text-xs text-slate-300">{value}</span>
       </span>
     </div>
@@ -64,8 +64,8 @@ export function PlatformHealthPills() {
       <HealthPill
         icon={Activity}
         label="Providers"
-        value={health ? `${health.enabled} of ${health.configured} enabled` : "Checking"}
-        status={health?.providerActivation.label ?? "Unavailable"}
+        value={health ? `${health.configured} configured · ${health.live} live-verified` : "Checking"}
+        status={health && health.live === health.configured && health.configured > 0 ? "Ready" : health?.configured ? "Partial" : "Unavailable"}
       />
       <HealthPill
         icon={BarChart3}

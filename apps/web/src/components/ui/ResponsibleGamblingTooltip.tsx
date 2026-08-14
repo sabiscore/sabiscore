@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Info, AlertTriangle, HelpCircle } from 'lucide-react';
 
 interface TooltipProps {
@@ -14,6 +14,7 @@ interface TooltipProps {
  */
 export function Tooltip({ children, content }: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const tooltipId = useId();
 
   return (
     <div className="relative inline-block">
@@ -24,14 +25,15 @@ export function Tooltip({ children, content }: TooltipProps) {
         onBlur={() => setIsVisible(false)}
         tabIndex={0}
         role="button"
-        aria-describedby={isVisible ? "tooltip-content" : undefined}
+        aria-label={content}
+        aria-describedby={isVisible ? tooltipId : undefined}
         className="cursor-help"
       >
         {children}
       </div>
       {isVisible && (
         <div
-          id="tooltip-content"
+          id={tooltipId}
           role="tooltip"
           className="absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 transform rounded-lg border border-slate-600 bg-slate-800 p-3 text-xs text-slate-300 shadow-xl"
         >
@@ -78,7 +80,7 @@ export function ResponsibleGamblingBanner({ compact = false }: ResponsibleGambli
       <div className="flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-400" />
         <div className="flex-1">
-          <h4 className="font-semibold text-amber-300">Responsible Gambling</h4>
+          <h2 className="font-semibold text-amber-300">Responsible Gambling</h2>
           <ul className="mt-2 space-y-1 text-xs text-amber-200/80">
             <li>• Only bet what you can afford to lose</li>
             <li>• Predictions are probabilistic estimates, not guarantees</li>

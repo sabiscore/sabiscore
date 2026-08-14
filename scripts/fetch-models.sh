@@ -16,7 +16,7 @@ if [ -z "$MODEL_BASE_URL" ]; then
 fi
 
 if [[ "$MODEL_BASE_URL" != https://* ]]; then
-  echo "ERROR: MODEL_BASE_URL must use https:// for production safety. Got: $MODEL_BASE_URL"
+  echo "ERROR: MODEL_BASE_URL must use https:// for production safety."
   exit 1
 fi
 
@@ -48,10 +48,10 @@ for a in "${ARTIFACTS[@]}"; do
   dir=$(dirname "$dest")
   mkdir -p "$dir"
   url="$MODEL_BASE_URL/$a"
-  echo "Fetching $url -> $dest"
+  echo "Fetching artifact $a"
   # Retry a few times for transient network errors
   if ! curl -fsSL --retry 3 "${AUTH_HEADER[@]}" "$url" -o "$dest"; then
-    echo "ERROR: failed to fetch $url" >&2
+    echo "ERROR: failed to fetch artifact $a" >&2
     exit 2
   fi
 done

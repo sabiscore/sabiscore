@@ -29,6 +29,16 @@ import { describeEdgeQualityPill, describeValueBadge } from "@/lib/edge-quality"
 import { cn } from "@/lib/utils";
 import { CountryFlag } from "@/components/ui/cached-logo";
 
+// A zero-fixture query result for the currently active chip filter is only
+// an "Off Season" state when that specific league's season status says so —
+// never inferred from the fixture count alone (see backend `_league_is_offseason`).
+export function shouldShowCarouselOffseasonNotice(
+  activeLeague: LeagueId | "ALL",
+  seasonStatus: string | undefined,
+): boolean {
+  return activeLeague !== "ALL" && seasonStatus === "OFF_SEASON";
+}
+
 // Keeps a team already chosen on one side out of the other side's dropdown,
 // rather than only rejecting the combination after submit.
 export function excludeSelectedTeam(teams: readonly string[], selected: string): string[] {
@@ -112,6 +122,18 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
     gcTime: 10 * 60 * 1000,
   });
 
+  // The batch query above spans all leagues, so its own `offseason` flag
+  // can't tell you whether just the *selected* chip's league hasn't started
+  // — that needs a per-league check, same endpoint/cache shape the League
+  // Selector grid below already uses via `offseasonData`.
+  const { data: chipOffseasonData } = useQuery({
+    queryKey: ["carousel-chip-offseason", activeLeague],
+    queryFn: () => getOffseasonStatus(canonicalLeagueId(activeLeague) ?? activeLeague),
+    enabled: activeLeague !== "ALL",
+    staleTime: 60 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+  });
+
   const fixtures = useMemo<UpcomingMatch[]>(() => {
     if (!data?.upcoming_matches) return [];
     const list = activeLeague === "ALL"
@@ -192,9 +214,20 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
             ))
           : fixtures.length === 0
           ? (
-              <p className="text-xs text-slate-500 py-4">
-                No {activeLeague === "ALL" ? "" : `${activeLeague} `}fixtures in the next 14 days. Try another league.
-              </p>
+              shouldShowCarouselOffseasonNotice(activeLeague, chipOffseasonData?.season_status)
+              ? (
+                  <LeagueOffseasonNotice
+                    leagueName={chipOffseasonData?.league || activeLeague}
+                    nextSeasonStart={chipOffseasonData?.next_season_start || null}
+                    nextSeasonStartEstimated={chipOffseasonData?.next_season_start_estimated}
+                    className="w-full"
+                  />
+                )
+              : (
+                  <p className="text-xs text-slate-500 py-4">
+                    No {activeLeague === "ALL" ? "" : `${activeLeague} `}fixtures in the next 14 days. Try another league.
+                  </p>
+                )
             )
           : fixtures.map((match) => {
               const selectorLeague = selectorLeagueId(match.league);
@@ -625,6 +658,7 @@ export function MatchSelector() {
                 offseasonData.league || LEAGUES.find((l) => l.id === league)?.name || league
               }
               nextSeasonStart={offseasonData.next_season_start || null}
+              nextSeasonStartEstimated={offseasonData.next_season_start_estimated}
             />
           )}
 

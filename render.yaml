@@ -216,6 +216,10 @@
         sync: false
       - key: SABISCORE_S3_REGION
         sync: false
+      - key: SABISCORE_S3_FORCE_PATH_STYLE
+        sync: false
+      - key: SABISCORE_S3_SSE
+        sync: false
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
