@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urljoin
 
 from .python_compat import apply_python_314_compat
+from .redaction import redact_text, redact_url, safe_endpoint
 
 apply_python_314_compat()
 
@@ -25,7 +26,6 @@ except Exception:
     _HAS_BOTO3 = False
 
 from ..models.ensemble import SabiScoreEnsemble  # noqa: E402
-from .redaction import redact_text, redact_url, safe_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -159,10 +159,11 @@ def _force_single_thread_inference(obj: Any, *, _seen: set[int] | None = None) -
         except Exception:
             pass
 
+    iterable: list[Any]
     if isinstance(obj, dict):
-        iterable = obj.values()
+        iterable = list(obj.values())
     elif isinstance(obj, (list, tuple, set)):
-        iterable = obj
+        iterable = list(obj)
     else:
         iterable = []
         for attr in ("models", "estimators_", "estimators", "base_estimators", "steps", "named_steps", "meta_model"):

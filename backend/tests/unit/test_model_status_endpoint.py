@@ -3,8 +3,7 @@ Unit tests for GET /api/v1/models/status.
 
 These tests mock the filesystem so no real artifacts or database are required.
 """
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -46,7 +45,6 @@ _SAMPLE_MANIFEST = {
 
 
 def test_returns_manifest_fields(client):
-    raw = json.dumps(_SAMPLE_MANIFEST)
     with patch("src.api.endpoints.model_status._load_manifest", return_value=(
         _SAMPLE_MANIFEST,
         "abc123hash",

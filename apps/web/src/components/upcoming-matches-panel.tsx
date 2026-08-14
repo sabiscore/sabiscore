@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useEffect, useMemo } from "react";
+import { memo, useState, useEffect, useId, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { getUpcomingMatches, type UpcomingMatch, type UpcomingMatchesResponse } 
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
+import { canonicalLeagueId, leagueDisplayName } from "@/lib/league";
 
 // ─── League types (from /api/v1/leagues) ─────────────────────────────────────
 
@@ -67,10 +68,11 @@ function LeagueFilterBar({
       aria-label="Filter by league"
     >
       <button
+        type="button"
         onClick={() => onChange(null)}
         aria-pressed={selected === null}
         className={cn(
-          "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors",
+          "min-h-11 rounded-full border px-3 text-[10px] font-semibold uppercase tracking-wider transition-colors",
           selected === null
             ? "border-slate-400/40 bg-slate-700 text-white"
             : "border-slate-700/50 text-slate-300 hover:text-white",
@@ -78,25 +80,41 @@ function LeagueFilterBar({
       >
         All
       </button>
-      {items.map((l) => (
-        <button
-          key={l.id}
-          onClick={() => onChange(selected === l.id ? null : l.id)}
-          aria-pressed={selected === l.id}
-          title={l.caveat_text ?? l.name}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors",
-            selected === l.id
-              ? LEAGUE_COLORS[l.id] ?? "border-slate-400/40 bg-slate-700 text-white"
-              : "border-slate-700/50 text-slate-300 hover:text-white",
-          )}
-        >
-          {l.id}
-          {l.coverage === "SOFT" && (
-            <span className="text-[8px] font-normal normal-case tracking-normal opacity-70">~</span>
-          )}
-        </button>
-      ))}
+      {items.map((league) => {
+        const leagueCode = canonicalLeagueId(league.id) ?? league.id;
+        const displayName = leagueDisplayName(league.id);
+        const isSelected = selected === leagueCode;
+        const accessibleCaveat = league.coverage === "SOFT"
+          ? league.caveat_text ?? "Soft coverage with higher uncertainty"
+          : null;
+        return (
+          <button
+            key={leagueCode}
+            type="button"
+            onClick={() => onChange(isSelected ? null : leagueCode)}
+            aria-pressed={isSelected}
+            aria-label={`${displayName} (${leagueCode})${accessibleCaveat ? `. ${accessibleCaveat}` : ""}`}
+            className={cn(
+              "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-[10px] transition-colors",
+              isSelected
+                ? LEAGUE_COLORS[league.id] ?? LEAGUE_COLORS[displayName] ?? "border-slate-400/40 bg-slate-700 text-white"
+                : "border-slate-700/50 text-slate-300 hover:text-white",
+            )}
+          >
+            <span className="font-semibold">{displayName}</span>
+            <span className="font-mono uppercase tracking-wider opacity-70">{leagueCode}</span>
+            {league.coverage === "SOFT" && (
+              <span aria-hidden="true" className="text-[9px] opacity-70">~</span>
+            )}
+          </button>
+        );
+      })}
+      {items.some((item) => item.coverage === "SOFT") && (
+        <p className="basis-full pt-1 text-[11px] text-slate-400">
+          <span aria-hidden="true">~</span>{" "}
+          Soft coverage — higher uncertainty while provider evidence is limited.
+        </p>
+      )}
     </div>
   );
 }
@@ -184,7 +202,8 @@ async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> 
 
 function PanelSkeleton() {
   return (
-    <div className="space-y-3 animate-pulse" aria-busy="true" aria-label="Loading upcoming matches">
+    <div className="space-y-3 animate-pulse" aria-busy="true" role="status">
+      <span className="sr-only">Loading upcoming matches</span>
       {[...Array(4)].map((_, i) => (
         <div key={i} className="h-16 rounded-xl bg-slate-800/50" />
       ))}
@@ -306,6 +325,12 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
   // Internal league filter — overridden by the `league` prop when provided
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const activeLeague = leagueProp ?? selectedLeague ?? undefined;
+  const activeLeagueCode = canonicalLeagueId(activeLeague);
+  const activeLeagueName = leagueDisplayName(activeLeague);
+  const listKey = activeLeagueCode ?? "all";
+  const [expandedListKey, setExpandedListKey] = useState<string | null>(null);
+  const showAll = expandedListKey === listKey;
+  const fixtureGridId = useId();
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["upcomingMatches", activeLeague ?? "all"],
@@ -316,15 +341,21 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
   // Derive off-season state from the matches response — avoids a redundant /api/offseason fetch.
   const isOffseason = Boolean(data?.offseason);
   const nextSeasonStart = data?.next_season_start ?? null;
+  const nextSeasonStartEstimated = data?.next_season_start_estimated ?? null;
   const daysUntilNextSeason = useMemo(() => {
-    if (!nextSeasonStart) return null;
+    if (!nextSeasonStart || nextSeasonStartEstimated) return null;
     try {
       const diff = new Date(nextSeasonStart).getTime() - Date.now();
       return Math.max(0, Math.ceil(diff / 86_400_000));
     } catch {
       return null;
     }
-  }, [nextSeasonStart]);
+  }, [nextSeasonStart, nextSeasonStartEstimated]);
+
+  const handleLeagueChange = (league: string | null) => {
+    setSelectedLeague(league);
+    setExpandedListKey(null);
+  };
 
   const dismissKey = `offseason-dismissed:${activeLeague ?? "none"}`;
   const [dismissed, setDismissed] = useState(false);
@@ -370,7 +401,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
         </div>
         {/* Show league filter bar only when no fixed league prop is passed */}
         {!leagueProp && (
-          <LeagueFilterBar selected={selectedLeague} onChange={setSelectedLeague} />
+          <LeagueFilterBar selected={selectedLeague} onChange={handleLeagueChange} />
         )}
       </div>
 
@@ -392,7 +423,9 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
             </p>
             {nextSeasonStart && (
               <p className="mt-0.5 text-[11px] text-slate-300">
-                Next season starts{" "}
+                {nextSeasonStartEstimated
+                  ? "Season currently expected around "
+                  : "Next season starts "}
                 <time dateTime={nextSeasonStart}>
                   {new Date(nextSeasonStart).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
                 </time>
@@ -422,8 +455,10 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
       {data && data.upcoming_matches.length === 0 && !isLoading && (
         data.offseason ? (
           <LeagueOffseasonNotice
-            leagueName={activeLeague ?? "This league"}
+            leagueName={activeLeagueName}
+            leagueCode={activeLeagueCode}
             nextSeasonStart={data.next_season_start ?? null}
+            nextSeasonStartEstimated={data.next_season_start_estimated}
           />
         ) : (
           // data_gap means the backend failed rather than genuinely having no
@@ -442,17 +477,33 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           {/* Two columns from xl up: the panel spans the full content width, so a
               single column left most of the row empty and pushed all but a
               handful of fixtures below the fold. */}
-          <div className="grid gap-2 xl:grid-cols-2">
-            {data.upcoming_matches.slice(0, VISIBLE_MATCH_LIMIT).map((m) => (
+          <div id={fixtureGridId} className="grid gap-2 xl:grid-cols-2">
+            {(showAll
+              ? data.upcoming_matches
+              : data.upcoming_matches.slice(0, VISIBLE_MATCH_LIMIT)
+            ).map((m) => (
               <MatchRow key={m.match_id} match={m} />
             ))}
           </div>
-          {data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && (
-            <p className="pt-1 text-center text-[11px] text-slate-300">
-              Showing {VISIBLE_MATCH_LIMIT} of {data.upcoming_matches.length} fixtures
-              {!selectedLeague && " · filter by league to narrow the list"}
+          <div className="flex flex-col items-center justify-center gap-2 pt-1 sm:flex-row">
+            <p aria-live="polite" className="text-center text-[11px] text-slate-300">
+              Showing {showAll ? data.upcoming_matches.length : Math.min(VISIBLE_MATCH_LIMIT, data.upcoming_matches.length)} of {data.upcoming_matches.length} fixtures
+              {!selectedLeague && !showAll && data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && " · expand the list or filter by league"}
             </p>
-          )}
+            {data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && (
+              <button
+                type="button"
+                aria-expanded={showAll}
+                aria-controls={fixtureGridId}
+                onClick={() => setExpandedListKey(showAll ? null : listKey)}
+                className="inline-flex min-h-11 items-center rounded-full border border-slate-500/70 bg-slate-800/80 px-4 text-xs font-semibold text-slate-100 transition-colors hover:border-cyan-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              >
+                {showAll
+                  ? `Show first ${VISIBLE_MATCH_LIMIT}`
+                  : `Show all ${data.upcoming_matches.length}`}
+              </button>
+            )}
+          </div>
         </>
       )}
     </section>

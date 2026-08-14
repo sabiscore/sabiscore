@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 interface LeagueOffseasonNoticeProps {
   /** Display name of the league (e.g. "Premier League"). */
   leagueName: string;
+  /** Canonical identifier retained as secondary product identity. */
+  leagueCode?: string | null;
   /** ISO 8601 date of the next season kick-off (e.g. "2026-08-08"). */
   nextSeasonStart: string | null;
   /** True when the provider has not yet published a confirmed start date. */
@@ -43,6 +45,7 @@ function daysUntil(iso: string | null): number | null {
  */
 export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
   leagueName,
+  leagueCode = null,
   nextSeasonStart,
   nextSeasonStartEstimated = null,
   className,
@@ -55,7 +58,7 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
     <motion.section
       role="status"
       aria-live="polite"
-      aria-label={`${leagueName} is in off-season`}
+      aria-label={`${leagueName}${leagueCode ? ` (${leagueCode})` : ""} is in off-season`}
       initial={prefersReduced ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={prefersReduced ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
@@ -74,6 +77,11 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
         <h3 className="text-base font-semibold text-zinc-100">
           {leagueName} — Off Season
         </h3>
+        {leagueCode && (
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500">
+            {leagueCode}
+          </p>
+        )}
         <p className="text-sm text-zinc-400">
           No upcoming fixtures are scheduled right now.
         </p>

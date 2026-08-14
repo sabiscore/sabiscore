@@ -5,6 +5,47 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Apex v3 activation candidate (2026-08-14)
+
+### Added
+
+- Added shared, deduplicated, pre-kickoff `MatchPredictionLog` capture for real
+  verified-fixture full analysis, plus strict pre-kickoff settlement and
+  pre-closing-line CLV selection.
+- Added fixture-list expansion/collapse, accessible soft-coverage caveats, canonical
+  league display names, and end-to-end UCL estimated-date plumbing.
+- Added a blocking mypy debt ceiling, immutable S3 checksum/conflict/outage tests,
+  a fixed-context storage probe, retained CloudFormation storage controls, and an
+  operator activation runbook. Existing local configuration and the Render blueprint
+  now name `sabiscore-artifacts-prod-uswest2` in `us-west-2`; read-only AWS checks
+  returned 403, so the bucket controls and worker are not verified or activated.
+- Added per-provider `live_validation` evidence to provider doctor output while
+  preserving the existing five-state status contract.
+
+### Fixed
+
+- Made `SPECULATIVE` watchlist-only with zero public stake in both independent
+  verdict engines and reviewed the distinct RL advisory integration.
+- Fixed backend CI's Ruff E402 failure and reduced mypy 2.1.0 debt below the 781
+  target without ignores or relaxed configuration.
+- Prevented the research market-comparison empty state from stretching to the
+  adjacent card stack.
+
+### Evidence status
+
+- These changes currently **EXIST / TESTED** only on the local feature candidate.
+  They are not **DEPLOYED / VERIFIED / CERTIFIED**; real production settlement,
+  provider rotation, secret revocation, S3 activation, and release CI remain gates.
+- Final local gates: backend `1329 passed, 13 skipped`; focused backend `163
+  passed`; Ruff clean; mypy 772 under the blocking 784 ceiling; web lint,
+  typecheck, 31 files / 178 tests, and production build; scraper validation and
+  19 tests; OpenAPI 78 paths; Docker Compose configuration; and 38 desktop/mobile
+  Playwright tests including axe. Alembic upgrade passed on a disposable database;
+  `alembic check` still reports 11 pre-existing legacy index removals.
+- Gitleaks is clean for the committed-tree snapshot and exact staged candidate.
+  Full history still reports the two known redacted `.env.example` findings, so
+  rotation/revocation evidence remains an operator gate.
+
 ## Unreleased - Apex v2 fail-closed research and season UX (2026-08-14)
 
 ### Added

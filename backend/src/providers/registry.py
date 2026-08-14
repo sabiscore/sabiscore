@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 from typing import Iterable
 
 import httpx
@@ -10,7 +11,7 @@ from fastapi import Request
 
 from ..core.config import settings
 from .api_football import APIFootballProvider
-from .base import ProviderCapability, ProviderHealth, ProviderQuota
+from .base import BaseProvider, ProviderCapability, ProviderHealth, ProviderQuota
 from .espn import ESPNProvider
 from .football_data_org import FootballDataOrgProvider
 from .sportmonks import SportmonksProvider
@@ -18,22 +19,22 @@ from .the_odds_api import TheOddsAPIProvider
 
 
 class ProviderRegistry:
-    def __init__(self, providers: Iterable[object]) -> None:
+    def __init__(self, providers: Iterable[BaseProvider]) -> None:
         self.providers = list(providers)
 
-    def list(self) -> list[object]:
+    def list(self) -> builtins.list[BaseProvider]:
         return list(self.providers)
 
-    def get(self, provider_id: str):
+    def get(self, provider_id: str) -> BaseProvider:
         for provider in self.providers:
             if getattr(provider, "provider_id", None) == provider_id:
                 return provider
         raise KeyError(provider_id)
 
-    async def health(self) -> list[ProviderHealth]:
+    async def health(self) -> builtins.list[ProviderHealth]:
         return list(await asyncio.gather(*(provider.health() for provider in self.providers)))
 
-    async def capabilities(self) -> list[ProviderCapability]:
+    async def capabilities(self) -> builtins.list[ProviderCapability]:
         nested = await asyncio.gather(*(provider.capabilities() for provider in self.providers))
         return [item for group in nested for item in group]
 

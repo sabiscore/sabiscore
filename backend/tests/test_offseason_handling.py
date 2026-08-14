@@ -69,6 +69,9 @@ def _empty_response(league: Optional[str] = "epl", offseason: bool = True) -> di
         "source": "test",
         "offseason": offseason,
         "next_season_start": _next_season_start(league) if offseason else None,
+        "next_season_start_estimated": (
+            next_season_start_estimated(league) if offseason else None
+        ),
     }
 
 
@@ -95,6 +98,7 @@ def _response_with_matches(n: int = 3) -> dict:
         "source": "test",
         "offseason": False,
         "next_season_start": None,
+        "next_season_start_estimated": None,
     }
 
 
@@ -125,6 +129,18 @@ class TestOffseasonTrueWhenEmpty:
         parsed = date.fromisoformat(schema.next_season_start)
         assert parsed.year >= 2026
 
+    def test_ucl_response_marks_unconfirmed_start_as_estimated(self):
+        schema = UpcomingMatchesResponseSchema.model_validate(
+            _empty_response(league="UCL", offseason=True)
+        )
+        assert schema.next_season_start_estimated is True
+
+    def test_domestic_response_marks_provider_date_as_confirmed(self):
+        schema = UpcomingMatchesResponseSchema.model_validate(
+            _empty_response(league="EPL", offseason=True)
+        )
+        assert schema.next_season_start_estimated is False
+
     def test_total_is_zero_when_offseason(self):
         payload = _empty_response(offseason=True)
         schema = UpcomingMatchesResponseSchema.model_validate(payload)
@@ -149,6 +165,7 @@ class TestOffseasonFalseWhenMatchesPresent:
         payload = _response_with_matches(n=2)
         schema = UpcomingMatchesResponseSchema.model_validate(payload)
         assert schema.next_season_start is None
+        assert schema.next_season_start_estimated is None
 
     def test_fixture_count_matches_total(self):
         payload = _response_with_matches(n=4)

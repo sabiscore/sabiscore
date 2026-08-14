@@ -8,7 +8,11 @@ from typing import Iterable
 from click.testing import CliRunner
 
 from src.cli import providers as provider_cli
-from src.cli.providers import ALLOWED_PROVIDER_CLI_STATUSES, providers_cli
+from src.cli.providers import (
+    ALLOWED_LIVE_VALIDATION_STATES,
+    ALLOWED_PROVIDER_CLI_STATUSES,
+    providers_cli,
+)
 from src.providers.base import ProviderHealth, ProviderQuota, ProviderStatus, TrustTier
 
 
@@ -80,7 +84,15 @@ def test_provider_doctor_uses_only_public_status_contract(monkeypatch) -> None:
 
     payload = _payload(CliRunner().invoke(providers_cli, ["doctor"]))
 
-    assert payload == {"providers": [{"provider": "fake", "status": "configured"}]}
+    assert payload == {
+        "providers": [
+            {
+                "provider": "fake",
+                "status": "configured",
+                "live_validation": "not_run",
+            }
+        ]
+    }
     assert fake.live_tests is False
 
 
@@ -97,6 +109,30 @@ def test_provider_doctor_live_validation_is_explicit(monkeypatch) -> None:
     fake = _FakeProvider(_health(ProviderStatus.CONFIGURED_UNVERIFIED))
     monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
 
-    _payload(CliRunner().invoke(providers_cli, ["doctor", "--provider", "fake", "--validate-live"]))
+    payload = _payload(
+        CliRunner().invoke(
+            providers_cli,
+            ["doctor", "--provider", "fake", "--validate-live"],
+        )
+    )
 
     assert fake.live_tests is True
+    assert payload["providers"][0]["live_validation"] == "failed"
+    assert payload["providers"][0]["live_validation"] in ALLOWED_LIVE_VALIDATION_STATES
+
+
+def test_provider_doctor_live_validation_passes_only_after_verified_probe(
+    monkeypatch,
+) -> None:
+    fake = _FakeProvider(_health(ProviderStatus.VERIFIED))
+    monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
+
+    payload = _payload(
+        CliRunner().invoke(
+            providers_cli,
+            ["doctor", "--provider", "fake", "--validate-live"],
+        )
+    )
+
+    assert payload["providers"][0]["status"] == "configured"
+    assert payload["providers"][0]["live_validation"] == "passed"

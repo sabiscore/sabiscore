@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private immutable evidence storage and least-privilege Render writer for SabiScore.
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: sabiscore-artifacts-prod-uswest2
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+
+Resources:
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketKeyEnabled: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveEvidenceAfterNinetyDays
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  RequireTlsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EvidenceBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt EvidenceBucket.Arn
+              - !Sub ${EvidenceBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  RenderEvidenceWriter:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: sabiscore-render-evidence-writer
+      Policies:
+        - PolicyName: immutable-evidence-object-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BucketLocation
+                Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !GetAtt EvidenceBucket.Arn
+              - Sid: EvidenceObjectReadWrite
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub ${EvidenceBucket.Arn}/raw/*
+                  - !Sub ${EvidenceBucket.Arn}/processed/*
+                  - !Sub ${EvidenceBucket.Arn}/manifests/*
+
+Outputs:
+  BucketName:
+    Description: Configure this as SABISCORE_ARTIFACT_BUCKET.
+    Value: !Ref EvidenceBucket
+  WriterUserName:
+    Description: Create and rotate an access key separately; never store it in CloudFormation outputs.
+    Value: !Ref RenderEvidenceWriter

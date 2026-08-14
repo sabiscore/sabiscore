@@ -429,15 +429,18 @@ class TestSpeculativeActionable:
         result = analyze_match(req)
         assert result.verdict in (VerdictEnum.SPECULATIVE, VerdictEnum.NO_BET, VerdictEnum.ACTIONABLE, VerdictEnum.HOLD)
 
-    def test_speculative_stake_capped(self):
+    def test_speculative_is_watchlist_only_with_zero_stake(self):
         req = _request(
             model=_model(home=0.51, draw=0.27, away=0.22),
             market=_market(home=2.10, draw=3.60, away=4.20),
         )
         result = analyze_match(req)
         if result.verdict == VerdictEnum.SPECULATIVE:
-            # Speculative stake should be ≤ SPECULATIVE_STAKE_CAP
-            assert result.stake_fraction <= 0.0025 + 1e-9
+            # Research-only verdicts remain non-executable.
+            assert result.watchlist is True
+            assert result.execution_eligible is False
+            assert result.stake == "pass"
+            assert result.stake_fraction == 0.0
 
     def test_actionable_has_positive_edge_and_ev(self):
         # Strong edge: model 0.65 home vs Pinnacle 1.80 market

@@ -3,19 +3,23 @@
 1. predictions.py::_save_prediction_to_db persists a MatchPredictionLog row
    alongside the legacy Prediction row (previously only the latter was written;
    match_prediction_logs had a working insert path but no live caller).
-2. repositories.fixtures.get_settled_predictions() joins the most recent
-   logged prediction per match to its settled result, in the shape
+2. repositories.fixtures.get_settled_predictions() joins the latest eligible
+   pre-kickoff prediction per match to its settled result, in the shape
    model_registry.walk_forward_validate() expects.
+3. The production full-analysis path captures and deduplicates that log.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.api.endpoints.predictions import _save_prediction_to_db
+from src.api.endpoints import full_analysis as full_analysis_endpoint
 from src.core.database import Base, Match
 from src.db.models import MatchPredictionLog
 from src.repositories.fixtures import get_settled_predictions
@@ -142,6 +146,49 @@ async def test_get_settled_predictions_joins_latest_log_to_result(session: Async
     assert record["probs"] == pytest.approx([0.60, 0.25, 0.15])
 
 
+async def test_get_settled_predictions_excludes_post_kickoff_log(
+    session: AsyncSession,
+) -> None:
+    match_date = datetime(2026, 8, 1, 15, 0)
+    await _seed_settled_match(
+        session,
+        "match-temporal",
+        home_score=2,
+        away_score=1,
+        match_date=match_date,
+    )
+    session.add(
+        MatchPredictionLog(
+            match_id="match-temporal",
+            canonical_fixture_id=None,
+            model_version="eligible",
+            home_probability=0.55,
+            draw_probability=0.25,
+            away_probability=0.20,
+            confidence=0.55,
+            created_at=match_date - timedelta(minutes=1),
+        )
+    )
+    session.add(
+        MatchPredictionLog(
+            match_id="match-temporal",
+            canonical_fixture_id=None,
+            model_version="leaked",
+            home_probability=0.99,
+            draw_probability=0.005,
+            away_probability=0.005,
+            confidence=0.99,
+            created_at=match_date + timedelta(minutes=1),
+        )
+    )
+    await session.commit()
+
+    records = await get_settled_predictions(session)
+
+    assert len(records) == 1
+    assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])
+
+
 async def test_get_settled_predictions_excludes_unsettled_matches(session: AsyncSession) -> None:
     match_date = datetime(2026, 8, 10, 15, 0)
     session.add(
@@ -206,3 +253,113 @@ async def test_get_settled_predictions_outcome_encoding(session: AsyncSession) -
     records = await get_settled_predictions(session)
     outcomes = {r["outcome"] for r in records}
     assert outcomes == {1, 2}
+
+
+async def test_full_analysis_capture_flows_into_settlement_join(
+    session: AsyncSession,
+    monkeypatch,
+) -> None:
+    """scheduled fixture -> full analysis -> log -> result -> settled join."""
+
+    kickoff = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
+    session.add(
+        Match(
+            id="match-full-analysis",
+            home_team_id="team-home",
+            away_team_id="team-away",
+            league_id="EPL",
+            match_date=kickoff,
+            status="scheduled",
+        )
+    )
+    await session.commit()
+
+    class FakeProjector:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def build_live_feature_vector(self, **_kwargs):
+            return {
+                "features": [0.0] * 58,
+                "features_dict": {"home_form": 0.4},
+                "data_gaps": [],
+                "critical_gaps": [],
+                "advisory_gaps": [],
+                "conflicts": [],
+                "fixture_identity_verified": True,
+                "identity_resolution": {
+                    "home_team_resolved": True,
+                    "away_team_resolved": True,
+                },
+                "data_quality": {"is_synthetic": False},
+                "is_reduced_evidence_baseline": False,
+                "staleness_seconds": 0,
+                "league": "EPL",
+                "home_team": "Home FC",
+                "away_team": "Away FC",
+                "kickoff_utc": kickoff.isoformat(),
+                "odds": None,
+                "market_snapshot_acquired": True,
+                "feature_source": {"home_form": "settled_history"},
+            }
+
+    class FakePredictionEngine:
+        async def predict(self, **_kwargs):
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "home_win": 0.55,
+                    "draw": 0.25,
+                    "away_win": 0.20,
+                    "model_version": "v5_phase7",
+                    "calibration_method": "isotonic",
+                }
+            )
+
+    monkeypatch.setattr(
+        full_analysis_endpoint,
+        "UpcomingMatchFeatureProjector",
+        FakeProjector,
+    )
+    monkeypatch.setattr(
+        full_analysis_endpoint,
+        "PredictionEngine",
+        FakePredictionEngine,
+    )
+    monkeypatch.setattr(full_analysis_endpoint, "cache", None)
+
+    await full_analysis_endpoint.get_full_analysis(
+        "match-full-analysis",
+        league="EPL",
+        db=session,
+    )
+    await full_analysis_endpoint.get_full_analysis(
+        "match-full-analysis",
+        league="EPL",
+        db=session,
+    )
+
+    logs = (
+        await session.execute(
+            select(MatchPredictionLog).where(
+                MatchPredictionLog.match_id == "match-full-analysis"
+            )
+        )
+    ).scalars().all()
+    assert len(logs) == 1
+    assert logs[0].input_hash
+    assert logs[0].payload["capture_trigger"] == "interactive_full_analysis"
+
+    fixture = (
+        await session.execute(
+            select(Match).where(Match.id == "match-full-analysis")
+        )
+    ).scalar_one()
+    fixture.status = "finished"
+    fixture.home_score = 2
+    fixture.away_score = 1
+    await session.commit()
+
+    records = await get_settled_predictions(session)
+    assert len(records) == 1
+    assert records[0]["outcome"] == 0
+    assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])

@@ -97,6 +97,15 @@ alembic downgrade <revision>  # specific revision
 
 ## Environment variable rollback
 
+### Evidence-storage worker
+
+If S3 activation or acquisition is implicated, set
+`SCRAPER_PRODUCTION_ENABLED=false`, stop the exact scraper worker, and revoke only
+its scoped AWS access key. Do not delete the retained bucket or archived objects.
+Local/Postgres ingestion continuity remains available while S3 is unavailable;
+re-enable the worker only after the fixed-context immutable-write/checksum/conflict
+probe succeeds. See `docs/S3_EVIDENCE_STORAGE_RUNBOOK.md`.
+
 If a credential or feature flag change caused the rollback, revert only those variables in your hosting environment without redeploying code:
 
 | Provider issue | Fix |

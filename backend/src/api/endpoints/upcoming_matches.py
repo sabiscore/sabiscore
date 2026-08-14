@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import settings
-from ...core.season_calendar import next_season_start
+from ...core.season_calendar import next_season_start, next_season_start_estimated
 from ...db.session import get_async_session
 from ...models.feature_registry import active_canonical_features
 from ...monitoring.metrics import metrics_collector
@@ -198,6 +198,7 @@ class UpcomingMatchesResponseSchema(BaseModel):
     source: str
     offseason: bool = False
     next_season_start: Optional[str] = None
+    next_season_start_estimated: Optional[bool] = None
     data_gap: bool = False
     unavailable_reasons: List[str] = Field(default_factory=list)
     generated_at: str = Field(
@@ -328,6 +329,9 @@ async def get_upcoming_matches(
         is_offseason = len(matches) == 0 and _league_is_offseason(league)
         response["offseason"] = is_offseason
         response["next_season_start"] = _next_season_start(league) if is_offseason else None
+        response["next_season_start_estimated"] = (
+            next_season_start_estimated(league) if is_offseason else None
+        )
         response.setdefault("data_gap", False)
         response.setdefault("unavailable_reasons", [])
         response.setdefault("generated_at", datetime.now(timezone.utc).isoformat())

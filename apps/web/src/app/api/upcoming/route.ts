@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
           deadline_ms: BACKEND_DEADLINE_MS,
           offseason: false,
           next_season_start: null,
+          next_season_start_estimated: null,
         },
         { status: 503, headers: { 'Cache-Control': 'no-store' } }
       );
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
           deadline_ms: BACKEND_DEADLINE_MS,
           offseason: false,
           next_season_start: null,
+          next_season_start_estimated: null,
           error: 'Unexpected response from backend',
         },
         { status: 502, headers: { 'Cache-Control': 'no-store' } }
@@ -149,6 +151,7 @@ export async function GET(request: NextRequest) {
         deadline_ms: BACKEND_DEADLINE_MS,
         offseason: false,
         next_season_start: null,
+        next_season_start_estimated: null,
       },
       { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );

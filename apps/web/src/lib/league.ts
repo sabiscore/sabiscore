@@ -42,6 +42,16 @@ export const CANONICAL_LEAGUES = [
 
 export type CanonicalLeague = (typeof CANONICAL_LEAGUES)[number];
 
+const LEAGUE_DISPLAY_NAMES: Record<CanonicalLeague, string> = {
+  EPL: "Premier League",
+  LA_LIGA: "La Liga",
+  BUNDESLIGA: "Bundesliga",
+  SERIE_A: "Serie A",
+  LIGUE_1: "Ligue 1",
+  EREDIVISIE: "Eredivisie",
+  UCL: "UEFA Champions League",
+};
+
 /** Normalize any accepted spelling to its canonical id, or null if unsupported. */
 export function canonicalLeagueId(input: string | null | undefined): CanonicalLeague | null {
   const key = (input ?? "").trim();
@@ -51,4 +61,10 @@ export function canonicalLeagueId(input: string | null | undefined): CanonicalLe
   return (CANONICAL_LEAGUES as readonly string[]).includes(resolved)
     ? (resolved as CanonicalLeague)
     : null;
+}
+
+/** Resolve a supported spelling to its user-facing league name. */
+export function leagueDisplayName(input: string | null | undefined): string {
+  const canonical = canonicalLeagueId(input);
+  return canonical ? LEAGUE_DISPLAY_NAMES[canonical] : (input?.trim() || "This league");
 }

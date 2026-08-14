@@ -1,6 +1,6 @@
 ﻿# SabiScore Production Setup Guide
 
-Last updated: 2026-08-10
+Last updated: 2026-08-14
 
 This is the authoritative setup and deployment guide for the finalized production shape.
 
@@ -276,6 +276,13 @@ health view model. Freshness failures render `UNAVAILABLE`, `FETCH_FAILED`, or
 
 `apps/scraper` may acquire permitted open/batch data, write immutable raw snapshots, produce processed files, write manifests, and validate parsers. It must not calculate predictions, verdicts, EV, Kelly stakes, or user-facing decisions.
 
+AWS evidence storage is governed by
+`infra/aws/evidence-storage.yaml` and `docs/S3_EVIDENCE_STORAGE_RUNBOOK.md`.
+Keep `SCRAPER_PRODUCTION_ENABLED=false` until the private retained bucket, scoped
+writer secret, fixed-context storage probe, one real acquisition, manifest
+validation, and database ingestion are all directly VERIFIED. Code and mocked tests
+are not activation evidence.
+
 ## Release Gates
 
 ```bash
@@ -287,6 +294,8 @@ The target runs:
 - secret/public-provider scans and database migration hardening checks;
 - provider gateway tests;
 - backend regression tests;
+- pinned mypy 2.1.0 via `python backend/scripts/check_mypy_ceiling.py --ceiling
+  784` (a higher count is blocking; do not add ignores or relax configuration);
 - provider CLI doctor;
 - scraper tests;
 - web lint;

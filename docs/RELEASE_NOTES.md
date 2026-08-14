@@ -1,5 +1,31 @@
 # SabiScore Release Notes
 
+## Apex v3 candidate — settlement capture, zero-stake parity, fixture UX, and evidence storage (2026-08-14)
+
+- Full analysis now captures only finite real-model probability simplexes for
+  existing scheduled fixtures before kickoff, using a deterministic input hash and
+  deduplicated shared `MatchPredictionLog` persistence. Settlement and CLV select
+  only temporally eligible pre-kickoff/pre-close predictions.
+- `SPECULATIVE` is watchlist-only with zero public stake in both verdict engines;
+  the separate RL advisory path is covered by equivalent abstention and cap tests.
+- All 24 client-fetched fixtures can be expanded without guessing a league. League
+  chips expose human names, canonical ids, and accessible soft-coverage caveats;
+  UCL estimated season dates are explicitly qualified.
+- Provider-doctor output adds non-secret live-validation evidence without changing
+  provider status. Mypy 2.1.0 is pinned and the 784-error ceiling is blocking.
+- Immutable S3 writes use SHA-256 checksums, idempotent same-hash handling, bounded
+  redacted degradation, and retained local continuity. The existing bucket remains
+  unverified because read-only checks returned 403, so scraper production stays
+  disabled.
+- Local evidence: Ruff clean; mypy 772 errors; backend 1329 passed / 13 skipped;
+  web lint/typecheck, 178 Vitest tests, production build, and 38 desktop/mobile
+  Playwright tests passed; scraper 19 tests passed. This candidate is not model
+  promotion evidence and is not production-certified.
+- The committed-tree snapshot and exact staged diff are Gitleaks-clean. Full
+  history still contains the two known redacted `backend/.env.example` findings;
+  their revocation is not proven by source cleanup.
+
+
 ## v5.5.1 — Reconciliation REQUIRES_REVIEW status, PARTIAL-gate regression guard (2026-06-28)
 
 ### Overview

@@ -177,7 +177,7 @@ Required:
   testing-strategy-architect        (always — betting-engine/provider changes need regression coverage)
 
 Conditional:
-  sabiscore-betting-engine-auditor       (verdict/Kelly/EV/watchlist — betting_intelligence.py + core_engine.py, always both)
+  sabiscore-betting-engine-auditor       (verdict/Kelly/EV/watchlist — both verdict engines plus RL advisory integration review)
   sabiscore-provider-adapter-architect   (provider adapter stub → operational HTTP methods)
   sabiscore-settlement-calibration-architect  (wiring get_settled_predictions/walk_forward_validate/drift monitoring)
   sabiscore-portfolio-staking-architect  (exposure aggregation, CLV, bankroll drawdown — not single-bet Kelly)
@@ -541,7 +541,7 @@ When skills produce conflicting recommendations, resolve in this order:
 |---|---|
 | `nigerian-fintech-compliance-architect` | FIRS e-invoicing, VAT/CIT/WHT (22 rate codes), NRS 2026, BVN/NIN, NIBSS, Lagos Pidgin i18n |
 | `multi-agent-orchestration-architect` | SwarmX: agent routing, tool registry, LLM routing, BullMQ chains, agent state machine |
-| `sabiscore-betting-engine-auditor` | Audits/patches `betting_intelligence.py` + `core_engine.py` as a pair — dual-engine rule, critical_gaps PARTIAL gate, watchlist separation, UCL cap, Kelly/EV formulas |
+| `sabiscore-betting-engine-auditor` | Audits/patches `betting_intelligence.py` + `core_engine.py` as a verdict-engine pair and reviews `rl_betting_agent.py` as a distinct advisory API — critical-gaps/abstention gates, watchlist separation, zero-public-stake parity, UCL cap, Kelly/EV formulas |
 | `sabiscore-provider-adapter-architect` | Implements operational HTTP methods for stub-only provider adapters (football_data_org, api_football, sportmonks) — gateway contract, circuit breaker, schema validation |
 | `sabiscore-settlement-calibration-architect` | Wires built-but-uncalled prediction-accuracy subsystems (`get_settled_predictions`, `walk_forward_validate`, `ScrapedTeamFormStore`, drift monitoring) into production; governs the promotion ladder and Phase-2 gate |
 | `sabiscore-portfolio-staking-architect` | Portfolio-level staking — exposure aggregation, correlated-fixture risk, bankroll drawdown limits, CLV tracking; distinct from single-bet Kelly sizing |
@@ -648,7 +648,7 @@ If any system-level change is made:
 
 | Verified fact | NEXUS routing implication |
 |---|---|
-| SPECULATIVE → watchlist fixed in BOTH engines | Betting engine tasks: load `sabiscore-betting-engine-auditor` → always confirms both files |
+| SPECULATIVE → watchlist and zero public stake in both verdict engines | Betting engine tasks: load `sabiscore-betting-engine-auditor` → confirm both verdict files and review the distinct RL advisory integration for equivalent abstention/cap/zero-stake gates |
 | Provider gateway lifespan implemented | Provider tasks: use `Depends(get_provider_registry)` in endpoint — never call `build_provider_registry()` directly from endpoints |
 | TF.js browser model deleted | Frontend tasks: never re-add any `ml/` browser inference; route model calls to backend |
 | The Odds API: per-bookmaker normalization added | Market refresh tasks: `OddsMarketRecord` is the canonical shape; per-bookmaker, never combined |

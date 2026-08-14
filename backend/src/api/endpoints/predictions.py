@@ -17,8 +17,12 @@ from ...services.prediction import PredictionService
 from ...schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ...schemas.value_bet import ValueBetResponse
 from ...core.database import Prediction as PredictionModel
-from ...db.models import MatchPredictionLog
 from ...core.cache import cache_manager
+from ...services.prediction_log_service import (
+    PredictionLogCapture,
+    deterministic_input_hash,
+    persist_prediction_log,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/predictions", tags=["predictions"])
@@ -367,8 +371,9 @@ async def _save_prediction_to_db(
             provider="football-data.org",
             provider_event_id=persisted_match_id,
         )
-        db.add(
-            MatchPredictionLog(
+        await persist_prediction_log(
+            db,
+            PredictionLogCapture(
                 match_id=persisted_match_id,
                 canonical_fixture_id=canonical_fixture_id,
                 model_version=str(
@@ -381,11 +386,16 @@ async def _save_prediction_to_db(
                 draw_probability=prediction_data.predictions['draw'],
                 away_probability=prediction_data.predictions['away_win'],
                 confidence=prediction_data.confidence,
-                input_hash=None,
+                input_hash=deterministic_input_hash(
+                    {
+                        "capture_trigger": "prediction_endpoint",
+                        "prediction": payload,
+                    }
+                ),
                 decision_id=None,
-                payload=None,
-                created_at=prediction_data.created_at,
-            )
+                payload={"capture_trigger": "prediction_endpoint"},
+                evaluated_at=prediction_data.created_at,
+            ),
         )
 
         await db.commit()

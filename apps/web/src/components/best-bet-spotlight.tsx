@@ -163,7 +163,8 @@ function SpotlightCard({ bet }: { bet: ValueBetFixture }) {
 
 function SpotlightSkeleton() {
   return (
-    <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading best bet">
+    <div className="space-y-4 animate-pulse" aria-busy="true" role="status">
+      <span className="sr-only">Loading best bet</span>
       <div className="h-3 w-32 rounded bg-slate-800/60" />
       <div className="space-y-2">
         <div className="h-6 w-64 rounded bg-slate-800/60" />

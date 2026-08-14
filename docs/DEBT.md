@@ -282,8 +282,9 @@ remains generic and capped at `ACTIONABLE`.
 **Release rule:** candidate promotion is forbidden while
 `promotion_permitted=false`. Do not rename or copy candidate files into the active
 directory to make deployment pass. The active v5 generation is hash-locked but
-formally `UNVERIFIED`; until it is certified, both betting engines must keep every
-public stake at zero.
+formally `UNVERIFIED`; until it is certified, both verdict engines must keep every
+public stake at zero and the distinct RL advisory integration must equivalently
+abstain/zero its public recommendation.
 
 ## 15. Redis credential incident and Render configuration are operator-blocked
 
@@ -720,11 +721,12 @@ were completed by WP-18, as the 2026-08-07 closure note records.
 
 ---
 
-## 2. Settlement-join infrastructure built and tested, wired to nothing that runs
+## 2. Settlement loop shipped; production prediction capture was missing
 
-**Tier:** `NEXT` → **shipped 2026-08-05** — a real caller now exists; entry kept
-(annotate, don't remove, matching item 1's precedent) because a residual limitation
-and a related risk (item 5) are still open.
+**Tier:** `NEXT` → settlement loop **shipped 2026-08-05**; interactive capture fix
+**EXISTS / TESTED 2026-08-14** on the Apex v3 candidate but is not yet DEPLOYED.
+Entry kept (annotate, don't remove, matching item 1's precedent) because production
+is still DATA-FED at zero, a residual limitation and a related risk (item 5) remain.
 **Owner:** unassigned.
 **Updated:** 2026-08-05 — WP-10.4 shipped. New `services/settlement_service.py`
 composes `sync_settled_results()` (new, `fixture_sync_service.py`) →
@@ -742,22 +744,29 @@ for the scheduling decision and rejected alternatives. **Residual, not fixed by 
 change:** once a match hits `SETTLED_MATCH_STATUSES` its score is frozen — a
 provider-side correction after settlement is never re-applied.
 
-`get_settled_predictions()` (`backend/src/repositories/fixtures.py:113-206`) and
-`walk_forward_validate()` (`backend/src/models/model_registry.py:311`) are both correct
-and unit-tested (`backend/tests/test_settled_predictions_join.py`,
-`test_model_registry_walk_forward.py`) but have **zero production callers** — grepped,
-confirmed. Nothing in the live process transitions `Match.status` to `"finished"` with
-real scores: the only code that does
-(`DataIngestionService._update_match_score`, `backend/src/services/data_ingestion.py`)
-is reachable only via a standalone CLI (`cli/start_ingestion.py`) or via
-`ProductionOrchestrator.start()`, which itself has zero callers anywhere in the
-codebase.
+The older paragraph below the WP-10.4 closure was stale: the background settlement
+caller and result sync do run. The production zero instead traced to the other side
+of the join: fresh verified-fixture full analysis returned real model output without
+writing `MatchPredictionLog`, so there was nothing for a later finished result to
+join. The Apex v3 candidate adds one shared, transactional capture path used by full
+analysis and the existing prediction writers. It accepts only finite real-model
+simplexes for existing scheduled fixtures strictly before kickoff, records a
+deterministic input hash/provenance and `interactive_full_analysis` trigger, and
+deduplicates the same match/model/input snapshot without a migration. A seeded
+end-to-end test now proves scheduled fixture → full analysis → prediction log →
+finished result → settled join. Persistence failure is observable but does not turn
+an analytical fail-closed response into an execution claim.
 
-**Blast radius:** `/model-performance` and any accuracy/RPS surface — currently stubs
-honestly (`503 bet_history_aggregation_not_yet_integrated`) rather than lying, per
-earlier session notes; this entry just consolidates why.
-**Cost:** needs a decision on where a periodic job can run on a single free-tier Render
-dyno (no separate worker/cron service exists today) before it's worth wiring the join.
+Settlement and CLV selection now choose the latest eligible prediction strictly
+before kickoff or closing-line capture. These changes are **not** DATA-FED,
+DEPLOYED, VERIFIED, or CERTIFIED until the candidate is released and real production
+settlement becomes non-zero.
+
+**Blast radius:** `/model-performance`, accuracy/RPS, CLV, and every promotion gate
+that requires settled outcomes. **Residual:** production remains honestly
+`503 METRICS_UNAVAILABLE` with zero settled predictions until a deployed pre-kickoff
+capture later joins a real finished result. Do not retrain or promote on one row;
+existing sample-size and temporal gates still apply.
 **Impact:** no real accuracy telemetry exists yet even though the season is about to
 generate settleable matches (Eredivisie opens 2026-08-07, EPL 2026-08-21 — see
 `backend/src/core/season_calendar.py` for the provider-verified table).

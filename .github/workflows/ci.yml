@@ -84,16 +84,9 @@ jobs:
         working-directory: backend
         run: ruff check src --select E4,E7,E9,F
 
-      - name: MyPy (advisory — type-debt burndown pending)
+      - name: MyPy debt ceiling
         working-directory: backend
-        # Non-blocking: the codebase carries ~540 legacy type errors across 89 files
-        # (SQLAlchemy Column typing, FastAPI internals, untyped data/ML surfaces).
-        # A blocking `mypy src` here aborts the job before the steps below ever run —
-        # silently skipping the 942-test suite, alembic drift check, and zero-fab scan.
-        # Kept visible as advisory (full report stays in the log) until type-debt is
-        # burned down file-by-file. Do NOT convert to `|| true` — that discards output.
-        continue-on-error: true
-        run: mypy src
+        run: python scripts/check_mypy_ceiling.py --ceiling 784
 
       - name: Alembic upgrade
         working-directory: backend

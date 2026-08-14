@@ -211,15 +211,15 @@
       - key: APP_ENV
         value: production
       - key: SABISCORE_ARTIFACT_BUCKET
-        sync: false
+        value: sabiscore-artifacts-prod-uswest2
       - key: SABISCORE_S3_ENDPOINT
-        sync: false
+        value: https://s3.us-west-2.amazonaws.com
       - key: SABISCORE_S3_REGION
-        sync: false
+        value: us-west-2
       - key: SABISCORE_S3_FORCE_PATH_STYLE
-        sync: false
+        value: "false"
       - key: SABISCORE_S3_SSE
-        sync: false
+        value: AES256
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY

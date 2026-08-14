@@ -22,12 +22,18 @@ def providers_cli() -> None:
 
 
 ProviderCliStatus = str
+ProviderLiveValidation = str
 ALLOWED_PROVIDER_CLI_STATUSES: tuple[ProviderCliStatus, ...] = (
     "configured",
     "missing",
     "invalid",
     "quota_exhausted",
     "temporarily_unavailable",
+)
+ALLOWED_LIVE_VALIDATION_STATES: tuple[ProviderLiveValidation, ...] = (
+    "not_run",
+    "passed",
+    "failed",
 )
 
 
@@ -46,10 +52,21 @@ def _provider_cli_status(health: ProviderHealth) -> ProviderCliStatus:
     return "configured"
 
 
+def _live_validation_state(
+    health: ProviderHealth,
+    *,
+    validate_live: bool,
+) -> ProviderLiveValidation:
+    if not validate_live:
+        return "not_run"
+    return "passed" if health.status.value == "VERIFIED" else "failed"
+
+
 async def _provider_status_report(
     provider_id: str | None = None,
     *,
     validate_live: bool = False,
+    include_live_validation: bool = False,
 ) -> dict[str, list[dict[str, str]]]:
     registry = build_provider_registry()
     providers = [registry.get(provider_id)] if provider_id else registry.list()
@@ -57,12 +74,16 @@ async def _provider_status_report(
         for provider in providers:
             provider.live_tests = True
     healths = await asyncio.gather(*(provider.health() for provider in providers))
-    return {
-        "providers": [
-            {"provider": health.provider, "status": _provider_cli_status(health)}
-            for health in healths
-        ]
-    }
+    rows = []
+    for health in healths:
+        row = {"provider": health.provider, "status": _provider_cli_status(health)}
+        if include_live_validation:
+            row["live_validation"] = _live_validation_state(
+                health,
+                validate_live=validate_live,
+            )
+        rows.append(row)
+    return {"providers": rows}
 
 
 @providers_cli.command("doctor")
@@ -77,7 +98,13 @@ def doctor(provider_id: str | None, validate_live: bool) -> None:
     """Report provider status using the public five-state taxonomy only."""
 
     async def run() -> None:
-        _print_json(await _provider_status_report(provider_id, validate_live=validate_live))
+        _print_json(
+            await _provider_status_report(
+                provider_id,
+                validate_live=validate_live,
+                include_live_validation=True,
+            )
+        )
 
     asyncio.run(run())
 

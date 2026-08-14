@@ -249,6 +249,8 @@ def test_speculative_routed_to_batch_watchlist_not_top_opportunities():
 
     assert speculative_result.verdict == "SPECULATIVE"
     assert speculative_result.watchlist is True
+    assert speculative_result.stake == "pass"
+    assert speculative_result.stake_fraction == 0.0
     assert actionable_result.verdict in ("ACTIONABLE", "HIGH_CONVICTION")
     assert actionable_result.watchlist is False
 

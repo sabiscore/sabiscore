@@ -861,6 +861,8 @@ export interface UpcomingMatchesResponse {
   offseason: boolean;
   /** ISO 8601 date of the next season kick-off. Null when not offseason. */
   next_season_start: string | null;
+  /** Whether the date is an estimate pending provider confirmation. */
+  next_season_start_estimated: boolean | null;
   data_gap: boolean;
   unavailable_reasons: string[];
   generated_at: string;

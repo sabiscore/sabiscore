@@ -7,7 +7,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import MatchPredictionLog
 from ..schemas.betting_intelligence import (
     CompetitionEnum,
     EvidenceTierEnum,
@@ -24,6 +23,11 @@ from ..schemas.betting_intelligence import (
 )
 from ..models.active_generation import active_generation_is_certified
 from .betting_intelligence import analyze_match
+from .prediction_log_service import (
+    PredictionLogCapture,
+    deterministic_input_hash,
+    persist_prediction_log,
+)
 
 
 def _competition(value: str) -> CompetitionEnum:
@@ -177,19 +181,35 @@ class CertifiedAnalyticsService:
             provider_event_id=result.match_id,
         )
 
-        log = MatchPredictionLog(
-            match_id=result.match_id,
-            canonical_fixture_id=canonical_fixture_id,
-            model_version=result.calculation_audit.model_version if result.calculation_audit else "unknown",
-            calibration_method=result.calculation_audit.calibration_method if result.calculation_audit else None,
-            home_probability=float(result.probabilities.home or 0.0),
-            draw_probability=float(result.probabilities.draw or 0.0),
-            away_probability=float(result.probabilities.away or 0.0),
-            confidence=float(result.confidence_adjusted_value or 0.0),
-            input_hash=result.input_hash,
-            decision_id=result.decision_id,
-            payload=result.model_dump(mode="json"),
-            created_at=result.evaluation_at or datetime.now(timezone.utc),
+        payload = result.model_dump(mode="json")
+        await persist_prediction_log(
+            self.db,
+            PredictionLogCapture(
+                match_id=result.match_id,
+                canonical_fixture_id=canonical_fixture_id,
+                model_version=(
+                    result.calculation_audit.model_version
+                    if result.calculation_audit
+                    else "unknown"
+                )
+                or "unknown",
+                calibration_method=(
+                    result.calculation_audit.calibration_method
+                    if result.calculation_audit
+                    else None
+                ),
+                home_probability=float(result.probabilities.home or 0.0),
+                draw_probability=float(result.probabilities.draw or 0.0),
+                away_probability=float(result.probabilities.away or 0.0),
+                confidence=float(result.confidence_adjusted_value or 0.0),
+                input_hash=(
+                    result.input_hash
+                    or deterministic_input_hash(
+                        {"capture_trigger": "certified_analytics", "result": payload}
+                    )
+                ),
+                decision_id=result.decision_id,
+                payload=payload,
+                evaluated_at=result.evaluation_at or datetime.now(timezone.utc),
+            ),
         )
-        self.db.add(log)
-        await self.db.flush()

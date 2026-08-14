@@ -43,6 +43,16 @@ POST /fixtures/{fixture_id}/analyze
 
 `/odds-snapshots` returns coherent one-bookmaker 1X2 candidates. Cross-bookmaker comparisons are display evidence only; analysis uses one complete bookmaker snapshot or a user-confirmed manual snapshot.
 
+### Upcoming Discovery
+
+**GET** `/upcoming/matches`
+
+The response includes `next_season_start` and the additive nullable boolean
+`next_season_start_estimated`. When the flag is `true`, clients must describe the
+date as an estimate and must not present an exact countdown. Fail-closed proxy
+responses carry `next_season_start_estimated: null`. The field does not change
+fixture identity, probability, verdict, or staking semantics.
+
 ### Health Check
 
 **GET** `/health`
@@ -259,7 +269,7 @@ Use this endpoint when the caller already has:
 - `PARTIAL`: critical data is missing, stale, conflicting, or mathematically invalid. Value fields are `null` and stake is `pass`.
 - `NO_BET`: data is valid but the best market has non-positive edge or EV.
 - `HOLD`: positive value exists but gating restrictions force inaction.
-- `SPECULATIVE`: positive EV exists below the actionable edge threshold with confirming signals; stake is capped at 0.25%.
+- `SPECULATIVE`: positive EV exists below the actionable edge threshold with confirming signals; it is watchlist-only, is excluded from `top_opportunities`, and always exposes zero public stake.
 - `ACTIONABLE`: EV is positive, edge clears 4.2 percentage points, and model/market gates pass.
 - `HIGH_CONVICTION`: action criteria plus very low epistemic uncertainty and confirmed lineup; UCL fixtures are excluded.
 

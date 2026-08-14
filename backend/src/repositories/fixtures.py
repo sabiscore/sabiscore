@@ -126,6 +126,8 @@ def build_settled_predictions_query(
             MatchPredictionLog.match_id,
             func.max(MatchPredictionLog.created_at).label("latest_created_at"),
         )
+        .join(Match, MatchPredictionLog.match_id == Match.id)
+        .where(MatchPredictionLog.created_at < Match.match_date)
         .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
@@ -240,14 +242,6 @@ def build_clv_records_query(
 
     validated_limit = _validated_limit(limit)
 
-    latest_prediction = (
-        select(
-            MatchPredictionLog.match_id,
-            func.max(MatchPredictionLog.created_at).label("latest_created_at"),
-        )
-        .group_by(MatchPredictionLog.match_id)
-        .subquery()
-    )
     latest_closing_line = (
         select(
             MarketSnapshot.match_id,
@@ -255,6 +249,22 @@ def build_clv_records_query(
         )
         .where(MarketSnapshot.is_closing_line.is_(True))
         .group_by(MarketSnapshot.match_id)
+        .subquery()
+    )
+    latest_prediction = (
+        select(
+            MatchPredictionLog.match_id,
+            func.max(MatchPredictionLog.created_at).label("latest_created_at"),
+        )
+        .join(
+            latest_closing_line,
+            latest_closing_line.c.match_id == MatchPredictionLog.match_id,
+        )
+        .where(
+            MatchPredictionLog.created_at
+            < latest_closing_line.c.latest_captured_at
+        )
+        .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
 

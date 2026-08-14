@@ -57,6 +57,11 @@ from ...services.intelligence_synthesizer import (
 from ...models.prediction import PredictionEngine
 from ...monitoring.metrics import metrics_collector
 from ...services.odds_service import OddsService, get_odds_service
+from ...services.prediction_log_service import (
+    PredictionLogCapture,
+    deterministic_input_hash,
+    persist_prediction_log,
+)
 from ...services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
 from ...services.uncertainty_service import UncertaintyBreakdown, UncertaintyService
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
@@ -828,6 +833,96 @@ async def get_full_analysis(
     )
 
     result = response.to_dict()
+
+    # Capture the real model snapshot that settlement and CLV evaluate later.
+    # Matchup strings, diagnostic baselines, invalid simplexes, non-scheduled
+    # fixtures, and post-kickoff requests are refused by construction. The
+    # analytical response remains available if persistence fails, but the
+    # transaction is rolled back and the failure is observable.
+    if (
+        not _is_matchup
+        and isinstance(db, AsyncSession)
+        and fixture_verified
+        and prediction_status == PredictionStatus.AVAILABLE
+    ):
+        evaluated_at = datetime.now(timezone.utc)
+        input_hash = deterministic_input_hash(
+            {
+                "match_id": match_id,
+                "model_version": ensemble.model_version,
+                "calibration_method": ensemble.calibration_method,
+                "probabilities": [
+                    ensemble.home_win_prob,
+                    ensemble.draw_prob,
+                    ensemble.away_win_prob,
+                ],
+                "features": features_dict,
+                "feature_source": dict(live.get("feature_source") or {}),
+                "data_gaps": sorted(set(deduped_gaps)),
+                "critical_gaps": sorted(set(critical_gaps)),
+                "advisory_gaps": sorted(set(advisory_gaps)),
+                "conflicts": sorted(set(conflicts)),
+            }
+        )
+        try:
+            from ...services.canonical_identity_service import (
+                canonical_fixture_id_for_provider_event,
+            )
+
+            canonical_fixture_id = await canonical_fixture_id_for_provider_event(
+                db,
+                provider="football-data.org",
+                provider_event_id=match_id,
+            )
+            capture_outcome = await persist_prediction_log(
+                db,
+                PredictionLogCapture(
+                    match_id=match_id,
+                    canonical_fixture_id=canonical_fixture_id,
+                    model_version=ensemble.model_version,
+                    calibration_method=ensemble.calibration_method,
+                    home_probability=ensemble.home_win_prob,
+                    draw_probability=ensemble.draw_prob,
+                    away_probability=ensemble.away_win_prob,
+                    confidence=ensemble.confidence,
+                    input_hash=input_hash,
+                    evaluated_at=evaluated_at,
+                    payload={
+                        "capture_trigger": "interactive_full_analysis",
+                        "evaluation_at": evaluated_at.isoformat(),
+                        "prediction_status": prediction_status.value,
+                        "prediction_source": prediction_source.value,
+                        "fixture_verified": fixture_verified,
+                        "evidence": {
+                            "critical_gaps": sorted(set(critical_gaps)),
+                            "advisory_gaps": sorted(set(advisory_gaps)),
+                            "conflicts": sorted(set(conflicts)),
+                        },
+                    },
+                ),
+                require_scheduled_pre_kickoff=True,
+            )
+            await db.commit()
+            metrics_collector.increment(
+                f"analysis.prediction_log.{capture_outcome}"
+            )
+        except Exception as exc:
+            await db.rollback()
+            metrics_collector.increment("analysis.prediction_log.error")
+            metrics_collector.record_error(
+                "prediction_log_persistence",
+                redact_text(exc),
+                {
+                    "match_id": match_id,
+                    "capture_trigger": "interactive_full_analysis",
+                },
+            )
+            logger.error(
+                "Prediction-log capture failed for %s: %s: %s",
+                match_id,
+                type(exc).__name__,
+                redact_text(exc),
+            )
 
     available_fields = sum(1 for value in field_availability.values() if value)
     abstention_reason = (

@@ -39,7 +39,8 @@ execution begins:
   typecheck, 123 Vitest tests, production build, and 36 desktop/mobile Playwright
   cases also passed.
 - Six active artifact pairs are hash-locked, but the active generation is
-  `UNVERIFIED`; both betting engines therefore enforce zero stake.
+  `UNVERIFIED`; both verdict engines therefore enforce zero stake and the distinct
+  RL advisory integration must equivalently abstain/zero its public recommendation.
 - Live upcoming and model-performance proxy calls have timed out or returned
   structured 503 responses. Five warm upcoming responses below two seconds have
   not been demonstrated.
@@ -168,8 +169,9 @@ When the gate clears:
    hash-validated active-generation manifest. Rollback reverts that release commit.
 
 Keep v5 active unless every candidate gate passes. If the active generation itself
-cannot be certified, analytical output may continue but both betting engines must
-enforce zero stake.
+cannot be certified, analytical output may continue but both verdict engines must
+enforce zero stake and the distinct RL advisory integration must equivalently
+abstain/zero its public recommendation.
 
 ### 6. Finish the decision experience
 

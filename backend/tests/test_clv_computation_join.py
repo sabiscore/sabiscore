@@ -142,6 +142,48 @@ async def test_picks_latest_prediction_when_match_has_two(session: AsyncSession)
     assert records[0]["model_probs"] == pytest.approx([0.60, 0.25, 0.15])
 
 
+async def test_excludes_prediction_captured_at_or_after_closing_line(
+    session: AsyncSession,
+) -> None:
+    match_date = datetime(2026, 8, 8, 15, 0)
+    await _seed_match(session, "match-temporal", match_date=match_date)
+    closing_at = match_date - timedelta(minutes=5)
+    session.add(
+        _prediction(
+            "match-temporal",
+            closing_at - timedelta(minutes=1),
+            home=0.55,
+            draw=0.25,
+            away=0.20,
+        )
+    )
+    session.add(
+        _prediction(
+            "match-temporal",
+            closing_at,
+            home=0.98,
+            draw=0.01,
+            away=0.01,
+        )
+    )
+    session.add(
+        _prediction(
+            "match-temporal",
+            closing_at + timedelta(minutes=1),
+            home=0.99,
+            draw=0.005,
+            away=0.005,
+        )
+    )
+    session.add(_closing_snapshot("match-temporal", closing_at))
+    await session.commit()
+
+    records = await get_clv_records(session)
+
+    assert len(records) == 1
+    assert records[0]["model_probs"] == pytest.approx([0.55, 0.25, 0.20])
+
+
 async def test_picks_latest_closing_snapshot_when_two_exist(session: AsyncSession) -> None:
     """Defends the dedup subquery against the capture job ever writing two
     closing-line rows for one fixture (not prevented by the schema)."""

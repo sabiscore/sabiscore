@@ -14,6 +14,11 @@ export function contentHash(content) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+export function contentChecksum(content) {
+  const bytes = Buffer.isBuffer(content) ? content : Buffer.from(String(content), "utf8");
+  return createHash("sha256").update(bytes).digest("base64");
+}
+
 async function atomicWrite(file, content) {
   await ensureStorage();
   const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -32,15 +37,48 @@ function artifactContext(metadata = {}) {
   };
 }
 
-async function putS3Object({ key, content, contentType, metadata = {} }) {
-  const bucket = process.env.SABISCORE_ARTIFACT_BUCKET;
-  if (!bucket) return null;
-  const { HeadObjectCommand, PutObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
-  const client = new S3Client({
+function storageFailureCode(error) {
+  if (error?.message === "immutable_object_conflict") return "immutable_object_conflict";
+  const status = Number(error?.$metadata?.httpStatusCode ?? 0);
+  if (status === 401 || status === 403) return "s3_authorization_failed";
+  if (status === 408 || status === 429 || status >= 500) return "s3_temporarily_unavailable";
+  return "s3_write_failed";
+}
+
+function reportStorageFailure(error, key) {
+  // SDK exception messages can contain endpoints or credentials, so log only bounded fields.
+  const storagePlane = ["raw", "processed", "manifests"].includes(String(key).split("/")[0])
+    ? String(key).split("/")[0]
+    : "unknown";
+  console.warn(JSON.stringify({
+    event: "s3_write_degraded",
+    error_code: storageFailureCode(error),
+    storage_plane: storagePlane,
+    object_key_sha256: contentHash(String(key)),
+    http_status: Number(error?.$metadata?.httpStatusCode ?? 0) || null,
+  }));
+}
+
+function buildS3Client(S3Client) {
+  return new S3Client({
     endpoint: process.env.SABISCORE_S3_ENDPOINT || undefined,
-    region: process.env.SABISCORE_S3_REGION || "auto",
+    region: process.env.SABISCORE_S3_REGION || "us-west-2",
     forcePathStyle: process.env.SABISCORE_S3_FORCE_PATH_STYLE === "true",
   });
+}
+
+export async function putS3Object(
+  { key, content, contentType, metadata = {} },
+  dependencies = {},
+) {
+  const bucket = process.env.SABISCORE_ARTIFACT_BUCKET;
+  if (!bucket) return null;
+  const s3 = dependencies.s3 ?? await import("@aws-sdk/client-s3");
+  const { HeadObjectCommand, PutObjectCommand, S3Client } = s3;
+  const client = dependencies.client ?? buildS3Client(S3Client);
+  const sha256 = metadata.sha256 ?? contentHash(content);
+  const checksum = contentChecksum(content);
+  const objectMetadata = { ...metadata, sha256 };
   try {
     await client.send(new PutObjectCommand({
       Bucket: bucket,
@@ -48,23 +86,31 @@ async function putS3Object({ key, content, contentType, metadata = {} }) {
       Body: content,
       ContentType: contentType,
       IfNoneMatch: "*",
-      ServerSideEncryption: process.env.SABISCORE_S3_SSE || undefined,
+      ChecksumSHA256: checksum,
+      ServerSideEncryption: process.env.SABISCORE_S3_SSE || "AES256",
       Metadata: Object.fromEntries(
-        Object.entries(metadata).map(([name, value]) => [name, String(value)])
+        Object.entries(objectMetadata).map(([name, value]) => [name, String(value)])
       ),
     }));
   } catch (error) {
     const status = error?.$metadata?.httpStatusCode;
     if (status !== 412) throw error;
-    const existing = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-    if (existing.Metadata?.sha256 !== String(metadata.sha256)) {
+    const existing = await client.send(new HeadObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ChecksumMode: "ENABLED",
+    }));
+    if (
+      existing.Metadata?.sha256 !== String(sha256)
+      || (existing.ChecksumSHA256 && existing.ChecksumSHA256 !== checksum)
+    ) {
       throw new Error("immutable_object_conflict");
     }
   }
   return `s3://${bucket}/${key}`;
 }
 
-async function writeImmutable(kind, name, content, metadata = {}) {
+export async function writeImmutable(kind, name, content, metadata = {}, dependencies = {}) {
   await ensureStorage();
   const context = artifactContext(metadata);
   const hash = contentHash(content);
@@ -84,12 +130,22 @@ async function writeImmutable(kind, name, content, metadata = {}) {
   await mkdir(join(root, context.sourceId, context.league, context.season, context.runId), { recursive: true });
   await atomicWrite(file, content);
   const contentType = kind === "raw" ? "text/csv" : "application/json";
-  const uri = await putS3Object({
-    key: relativeKey,
-    content,
-    contentType,
-    metadata: { sha256: hash, run_id: context.runId, source_id: context.sourceId },
-  });
+  let uri = null;
+  let remoteStorage = process.env.SABISCORE_ARTIFACT_BUCKET ? "available" : "not_configured";
+  let storageError = null;
+  try {
+    uri = await (dependencies.putObject ?? putS3Object)({
+      key: relativeKey,
+      content,
+      contentType,
+      metadata: { sha256: hash, run_id: context.runId, source_id: context.sourceId },
+    }, dependencies);
+  } catch (error) {
+    if (storageFailureCode(error) === "immutable_object_conflict") throw error;
+    remoteStorage = "unavailable";
+    storageError = storageFailureCode(error);
+    reportStorageFailure(error, relativeKey);
+  }
   return {
     file,
     uri: uri ?? file,
@@ -97,6 +153,8 @@ async function writeImmutable(kind, name, content, metadata = {}) {
     hash,
     size_bytes: Buffer.byteLength(content),
     content_type: contentType,
+    remote_storage: remoteStorage,
+    storage_error: storageError,
   };
 }
 
@@ -106,11 +164,11 @@ export async function writeJson(kind, name, payload, metadata = {}) {
   return writeImmutable("processed", `${kind}-${name}.json`, content, metadata);
 }
 
-export async function writeRaw(name, content, metadata = {}) {
-  return writeImmutable("raw", name, content, metadata);
+export async function writeRaw(name, content, metadata = {}, dependencies = {}) {
+  return writeImmutable("raw", name, content, metadata, dependencies);
 }
 
-export async function writeManifest(run) {
+export async function writeManifest(run, dependencies = {}) {
   await ensureStorage();
   const now = new Date().toISOString();
   const runId = run.run_id ?? randomUUID();
@@ -142,13 +200,62 @@ export async function writeManifest(run) {
   const file = join(manifestDir, `${runId}-${basename(manifest.source_id)}.manifest.json`);
   const content = `${JSON.stringify(manifest, null, 2)}\n`;
   await atomicWrite(file, content);
-  await putS3Object({
-    key: `manifests/${manifest.source_id}/${runId}.manifest.json`,
+  const key = `manifests/${manifest.source_id}/${runId}.manifest.json`;
+  try {
+    await (dependencies.putObject ?? putS3Object)({
+      key,
+      content,
+      contentType: "application/json",
+      metadata: {
+        sha256: contentHash(content),
+        run_id: runId,
+        source_id: manifest.source_id,
+      },
+    }, dependencies);
+  } catch (error) {
+    if (storageFailureCode(error) === "immutable_object_conflict") throw error;
+    reportStorageFailure(error, key);
+  }
+  return file;
+}
+
+export async function probeImmutableStorage(dependencies = {}) {
+  const bucket = process.env.SABISCORE_ARTIFACT_BUCKET;
+  if (!bucket) throw new Error("s3_bucket_not_configured");
+  const s3 = dependencies.s3 ?? await import("@aws-sdk/client-s3");
+  const client = dependencies.client ?? buildS3Client(s3.S3Client);
+  const key = "manifests/probes/immutable-storage-v1.json";
+  const content = `${JSON.stringify({ probe: "sabiscore-immutable-storage", version: 1 })}\n`;
+  const hash = contentHash(content);
+  const request = {
+    key,
     content,
     contentType: "application/json",
-    metadata: { run_id: runId, source_id: manifest.source_id },
-  });
-  return file;
+    metadata: { sha256: hash, probe: "immutable-storage-v1" },
+  };
+
+  await putS3Object(request, { s3, client });
+  await putS3Object(request, { s3, client });
+  let conflictVerified = false;
+  try {
+    await putS3Object({ ...request, content: `${content}conflict` }, { s3, client });
+  } catch (error) {
+    conflictVerified = storageFailureCode(error) === "immutable_object_conflict";
+  }
+  if (!conflictVerified) throw new Error("s3_conflict_probe_failed");
+
+  const head = await client.send(new s3.HeadObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ChecksumMode: "ENABLED",
+  }));
+  if (
+    head.Metadata?.sha256 !== hash
+    || (head.ChecksumSHA256 && head.ChecksumSHA256 !== contentChecksum(content))
+  ) {
+    throw new Error("s3_checksum_probe_failed");
+  }
+  return { ok: true, bucket, object_key: key, sha256: hash, conflict_verified: true };
 }
 
 export async function readFixture(path) {

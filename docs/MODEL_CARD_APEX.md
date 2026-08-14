@@ -97,5 +97,7 @@ is capped at `ACTIONABLE` until a dedicated certified model/policy exists.
 
 Until every gate passes, the hash-locked active v5 artifacts remain authoritative.
 Their generation is currently `UNVERIFIED`, so analytical output may continue but
-both betting engines enforce `No bet — insufficient evidence` and zero stake.
+both verdict engines and the distinct RL advisory integration enforce abstention or
+`No bet — insufficient evidence` with zero public stake. The RL API does not share
+the verdict taxonomy and is reviewed for equivalent gates, not fabricated parity.
 The release status remains `NOT SAFE FOR PRODUCTION`.

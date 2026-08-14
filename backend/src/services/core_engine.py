@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from math import isfinite
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional, cast
 
 from ..core.league_policy import LeaguePolicy, get_league_policy
 from ..schemas.core_engine import (
@@ -43,12 +43,11 @@ PROBABILITY_TOLERANCE = 0.005
 FRESH_SECONDS = 900
 RECENT_SECONDS = 3600
 HIGH_CONVICTION_EPISTEMIC_MAX = 0.05
-SPECULATIVE_STAKE_CAP = 0.0025
 
 
 @dataclass(frozen=True)
 class Candidate:
-    market: str
+    market: Literal["HOME_ML", "DRAW_ML", "AWAY_ML"]
     probability_key: str
     model_probability: float
     odds: float
@@ -159,9 +158,9 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
         odds_values = (market.home_odds, market.draw_odds, market.away_odds)
         if all(_valid_odds(odds) for odds in odds_values):
             raw_implied = {
-                "home": 1.0 / market.home_odds,
-                "draw": 1.0 / market.draw_odds,
-                "away": 1.0 / market.away_odds,
+                "home": 1.0 / cast(float, market.home_odds),
+                "draw": 1.0 / cast(float, market.draw_odds),
+                "away": 1.0 / cast(float, market.away_odds),
             }
             market_overround = sum(raw_implied.values())
             if (
@@ -309,7 +308,6 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
         )
 
     if below_actionable and speculative_signal:
-        capped = min(best.kelly_fraction, SPECULATIVE_STAKE_CAP)
         return _build_output(
             match=match,
             verdict="SPECULATIVE",
@@ -319,11 +317,11 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
             audit=audit,
             candidate=best,
             confidence="LOW",
-            stake_fraction=capped,
+            stake_fraction=0.0,
             drivers=drivers,
             risks=risks or ["Speculative position remains below the actionable edge threshold."],
             invalidation_conditions=invalidation_conditions,
-            explanation="Positive EV exists below the actionable threshold with confirming market signal, so stake is hard capped.",
+            explanation="Positive EV exists below the actionable threshold with confirming market signal; this remains watchlist-only with no public stake.",
         )
 
     if restricted:
@@ -503,7 +501,9 @@ def _has_complete_market(market) -> bool:
     )
 
 
-def _freshness_status(freshness, source_status) -> str:
+def _freshness_status(
+    freshness, source_status
+) -> Literal["FRESH", "RECENT", "STALE", "DATA_GAP", "CONFLICTING"]:
     if source_status is not None:
         statuses = [
             getattr(source_status, field)
@@ -606,7 +606,7 @@ def _build_candidates(
         minimum_acceptable_odds = 1.0 / denominator if denominator > 0 else None
         candidates.append(
             Candidate(
-                market=market_name,
+                market=cast(Literal["HOME_ML", "DRAW_ML", "AWAY_ML"], market_name),
                 probability_key=key,
                 model_probability=model_probability,
                 odds=odds,
@@ -739,7 +739,7 @@ def _build_output(
     explanation: str,
     effective_kelly_cap: float = CORE_MAX_KELLY_CAP,
 ) -> CoreMatchOutput:
-    pass_verdicts = {"PARTIAL", "HOLD", "NO_BET"}
+    pass_verdicts = {"PARTIAL", "HOLD", "NO_BET", "SPECULATIVE"}
     final_stake_fraction = 0.0 if verdict in pass_verdicts else (stake_fraction or 0.0)
     stake = _stake_label(final_stake_fraction, verdict, effective_kelly_cap)
 
@@ -789,8 +789,12 @@ def _build_output(
     )
 
 
-def _stake_label(stake_fraction: float, verdict: str, kelly_cap: float = CORE_MAX_KELLY_CAP) -> str:
-    if verdict in {"PARTIAL", "HOLD", "NO_BET"} or stake_fraction <= 0:
+def _stake_label(
+    stake_fraction: float,
+    verdict: str,
+    kelly_cap: float = CORE_MAX_KELLY_CAP,
+) -> Literal["1u", "2.5u", "pass"]:
+    if verdict in {"PARTIAL", "HOLD", "NO_BET", "SPECULATIVE"} or stake_fraction <= 0:
         return "pass"
     # "2.5u" when at ≥90% of the effective cap (covers rounding); "1u" for smaller stakes.
     if stake_fraction >= kelly_cap * 0.90:

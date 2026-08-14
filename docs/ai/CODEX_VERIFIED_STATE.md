@@ -5,6 +5,49 @@ Last reviewed: 2026-08-14
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
+## Local Apex v3 candidate evidence from 2026-08-14
+
+- On `feat/apex-v3-activation`, shared prediction capture and strict temporal joins
+  **EXIST / TESTED**. A seeded test reaches scheduled verified fixture → full
+  analysis → one deduplicated `MatchPredictionLog` → finished score → settled join.
+  Production is still DATA-FED at zero until this code is deployed and a real result
+  joins; Phases F-J/N2 and promotion remain closed.
+- Both verdict engines now make `SPECULATIVE` watchlist-only with zero stake. The RL
+  advisory API was reviewed separately because it has no matching verdict taxonomy;
+  its full-analysis integration still abstains/zeroes on insufficient evidence and
+  applies the effective cap.
+- The upcoming list can expose all 24 fetched fixtures without filtering, resets on
+  league changes, gives soft coverage a visible and accessible explanation, uses
+  human league names with secondary canonical IDs, and carries the UCL estimate flag
+  through FastAPI/proxy/TypeScript/off-season copy. This is local TESTED evidence,
+  not deployed-page measurement.
+- Ruff's CI-blocking E402 is fixed. Mypy is pinned to 2.1.0; the local count is 772
+  errors in 123 files / 236 checked files, and CI now enforces the 784 ceiling instead
+  of marking the step advisory.
+- S3 checksum, matching-412 replay, conflicting-412, outage continuity/redaction,
+  manifest hash, and fixed-context probe behavior are mocked and TESTED (19 scraper
+  tests total). The gitignored root/backend env files agree on structurally valid,
+  unmasked credentials and the existing `sabiscore-artifacts-prod-uswest2` regional
+  configuration; their values were compared without printing secrets. The Render
+  blueprint is aligned but the live dashboard is unverified. Read-only AWS
+  `HeadBucket` and `GetBucketLocation` calls both returned 403, so bucket identity,
+  controls, and writer authorization are not VERIFIED. The mutating probe/acquisition
+  was not run and the worker remains disabled.
+- Local release gates completed after the final accessibility fixes: backend
+  `1329 passed, 13 skipped`; focused backend `163 passed`; Ruff clean; mypy 772
+  under the enforced 784 ceiling; web lint and typecheck clean; 31 Vitest files /
+  178 tests; Next.js 15.5.19 production build; scraper validation and 19 tests;
+  OpenAPI 78 paths; Docker Compose configuration; and 38 desktop/mobile Playwright
+  tests including an axe WCAG A/AA scan. Alembic upgraded a disposable database,
+  but `alembic check` still reports 11 pre-existing legacy index removals, so that
+  gate is not green.
+- Gitleaks found no secret in the current committed-tree snapshot or the exact
+  staged candidate diff. Full history still reports the known redacted
+  `backend/.env.example` findings at `d604c13f40f0fad0a72d6a83eb64f5e4fc106fd7`
+  (`SECRET_KEY`) and `67ed0ab7440595b0d304ea2768c46b17d97e9adb`
+  (`API_FOOTBALL_KEY`). Scan cleanliness does not prove either credential was
+  rotated or revoked; dated operator evidence remains required.
+
 ## Fresh Apex v2 execution evidence from 2026-08-14
 
 - Settlement is EXISTS / TESTED / WIRED / CALLED / DEPLOYED and its production
@@ -78,8 +121,9 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   retired; `/api/predict` requires a persisted fixture and validates the backend
   probability simplex without zero filling.
 - Active v5 artifacts are governed by one hash-validated generation manifest used
-  by both loaders. The generation is `UNVERIFIED`, therefore both betting engines
-  enforce a critical generation gap and zero stake.
+  by both loaders. The generation is `UNVERIFIED`, therefore both verdict engines
+  enforce a critical generation gap and zero stake; the distinct RL advisory
+  integration must equivalently abstain and expose zero public stake.
 - Apex chronological evidence uses pre-2024/25 training, 2024/25 calibration, and
   untouched 2025/26 evaluation. The candidate wins 3/6 active-league RPS
   comparisons and 0/6 market-baseline comparisons. Serving availability also

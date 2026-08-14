@@ -40,7 +40,7 @@ UCL soft coverage is deliberately conservative: UCL fixtures can reach `ACTIONAB
 | Minimum actionable edge | `0.042` |
 | Fractional Kelly multiplier | `0.125` |
 | Maximum Kelly cap | `0.025` |
-| Speculative stake cap | `0.0025` |
+| Speculative public stake | `0.0` (watchlist-only) |
 | Minimum market overround | `> 1.0` |
 | Maximum market overround | `<= 1.25` |
 | Probability sum tolerance | `+/- 0.005` |
@@ -160,7 +160,7 @@ max(EV, 0)
   * market_stability_factor
 ```
 
-The batch-level `top_opportunities` list includes at most three match IDs and only includes matches with `HIGH_CONVICTION`, `ACTIONABLE`, or `SPECULATIVE` verdicts.
+The batch-level `top_opportunities` list includes at most three match IDs and only includes matches with `HIGH_CONVICTION` or `ACTIONABLE` verdicts. `SPECULATIVE` is returned only through the watchlist surface.
 
 Tie breakers are deterministic:
 
@@ -177,7 +177,7 @@ Tie breakers are deterministic:
 | `PARTIAL` | Critical input is missing, stale, conflicting, or invalid. No bet fields are emitted. |
 | `NO_BET` | Inputs are valid, but no candidate has both positive edge and positive EV. |
 | `HOLD` | Positive value exists, but edge/gating restrictions require inaction. |
-| `SPECULATIVE` | Positive EV exists below actionable edge with confirming signals; stake is capped at `0.0025`. |
+| `SPECULATIVE` | Positive EV exists below actionable edge with confirming signals; watchlist-only with public stake fixed at `0.0`. |
 | `ACTIONABLE` | Positive EV, edge >= `0.042`, validated calibration, OK confidence, fresh/recent market. |
 | `HIGH_CONVICTION` | Actionable plus very low epistemic uncertainty and confirmed lineup; never for UCL. |
 

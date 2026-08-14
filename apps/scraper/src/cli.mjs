@@ -6,7 +6,12 @@ import { defaultLeagues, manifestDir, processedDir, rawDir } from "./config.mjs"
 import { sourceRegistry, validateSourceRegistry } from "./registry.mjs";
 import { PublicHttpClient } from "./http.mjs";
 import { FootballDataAdapter } from "./adapters/football-data.mjs";
-import { ensureStorage, readFixture, writeManifest } from "./storage.mjs";
+import {
+  ensureStorage,
+  probeImmutableStorage,
+  readFixture,
+  writeManifest,
+} from "./storage.mjs";
 
 const command = process.argv[2] ?? "validate";
 
@@ -170,7 +175,14 @@ async function doctor() {
   console.log(JSON.stringify({ ...payload, manifest: manifestFile }, null, 2));
 }
 
-if (command === "scrape" || command === "scrape:fixtures") {
+async function storageProbe() {
+  const result = await probeImmutableStorage();
+  console.log(JSON.stringify(result, null, 2));
+}
+
+if (command === "storage:probe") {
+  await storageProbe();
+} else if (command === "scrape" || command === "scrape:fixtures") {
   await scrape({ adapterKind: "fixtures" });
 } else if (command === "scrape:metrics") {
   await scrape({ adapterKind: "metrics" });

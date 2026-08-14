@@ -105,6 +105,44 @@ def test_unknown_league_does_not_fall_back_to_global_cap() -> None:
     assert freshness_limit == 0
 
 
+@pytest.mark.parametrize(
+    ("uncertainty", "odds", "reason_fragment"),
+    [
+        (None, {"home_win": 2.2, "draw": 3.4, "away_win": 4.0}, "uncertainty unavailable"),
+        (_uncertainty(), None, "market odds unavailable"),
+    ],
+)
+def test_rl_advisory_abstains_and_zeroes_when_required_evidence_is_missing(
+    uncertainty: UncertaintyBreakdown | None,
+    odds: dict[str, float] | None,
+    reason_fragment: str,
+) -> None:
+    recommendation = endpoint._rl_from_ensemble(
+        _ensemble(),
+        uncertainty,
+        odds,
+        effective_kelly_cap=0.04,
+    )
+
+    assert recommendation.abstain is True
+    assert recommendation.stake_fraction == 0.0
+    assert reason_fragment in recommendation.reason
+
+
+def test_rl_advisory_public_stake_is_quarter_kelly_and_below_effective_cap() -> None:
+    effective_cap = 0.02
+    recommendation = endpoint._rl_from_ensemble(
+        _ensemble(),
+        _uncertainty(),
+        {"home_win": 3.0, "draw": 4.0, "away_win": 5.0},
+        effective_kelly_cap=effective_cap,
+    )
+
+    assert recommendation.abstain is False
+    assert 0.0 < recommendation.stake_fraction <= effective_cap
+    assert recommendation.stake_fraction == pytest.approx(0.005)
+
+
 def test_quarter_kelly_edge_respects_effective_cap() -> None:
     edge = endpoint._odds_edge_from_features(
         _ensemble(),

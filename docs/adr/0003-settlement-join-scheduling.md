@@ -9,6 +9,16 @@ it is not backfilled retroactively; it starts here.
 
 ## Context
 
+**2026-08-14 follow-up.** The scheduling decision below shipped and is called in
+production. The remaining zero-data cause was on the prediction side of the join:
+fresh verified-fixture full analysis did not write `MatchPredictionLog`. The Apex v3
+candidate now uses one shared capture path for finite real-model simplexes on an
+existing scheduled fixture strictly before kickoff, deduplicated by
+match/model/input hash without a migration. Settlement and CLV queries also select
+only the latest prediction strictly before kickoff or closing-line capture. This is
+`EXISTS / TESTED`, not `DEPLOYED / DATA-FED / VERIFIED`; the original production
+context and decision history remain below.
+
 `get_settled_predictions()` (`backend/src/repositories/fixtures.py`) and
 `walk_forward_validate()` (`backend/src/models/model_registry.py`) were both correct
 and fully unit-tested, but had zero production callers. Nothing in the deployed

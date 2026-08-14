@@ -31,6 +31,7 @@ describe("/api/upcoming route", () => {
           source: "cache",
           offseason: false,
           next_season_start: null,
+          next_season_start_estimated: null,
           data_gap: false,
           unavailable_reasons: [],
           generated_at: "2026-08-11T00:00:00.000Z",
@@ -69,6 +70,7 @@ describe("/api/upcoming route", () => {
     expect(body.data_gap).toBe(true);
     expect(body.retryable).toBe(true);
     expect(body.reason).toBe("backend_service_unavailable");
+    expect(body.next_season_start_estimated).toBeNull();
   });
 
   it("returns structured 503 when upstream returns HTML body", async () => {

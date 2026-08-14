@@ -99,7 +99,8 @@ function ReadinessRingInner({ score, label }: { score: number; label: string }) 
 
 function RingSkeleton() {
   return (
-    <div className="flex items-center gap-4 animate-pulse" aria-busy="true" aria-label="Loading readiness">
+    <div className="flex items-center gap-4 animate-pulse" aria-busy="true" role="status">
+      <span className="sr-only">Loading readiness</span>
       <div className="h-[72px] w-[72px] rounded-full bg-slate-800/60" />
       <div className="space-y-2">
         <div className="h-3 w-24 rounded bg-slate-800/60" />

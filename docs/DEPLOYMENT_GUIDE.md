@@ -86,9 +86,13 @@ research, browser-automation, Kafka, and experiment-tracking dependency tree
 unless a reviewed production change explicitly requires it.
 
 The Render blueprint also includes a disabled-by-default scraper cron service
-(`sabiscore-evidence-acquisition`). Keep `SCRAPER_PRODUCTION_ENABLED=false`
-until source-policy/legal approval, storage credentials, and retention controls
-are explicitly signed off.
+(`sabiscore-evidence-acquisition`). Its desired evidence-storage configuration is
+the existing private bucket `sabiscore-artifacts-prod-uswest2` in `us-west-2`, using
+the standard regional endpoint, virtual-host addressing, and SSE-S3 `AES256`.
+Credentials remain Render secrets supplied through the AWS SDK credential chain.
+Keep `SCRAPER_PRODUCTION_ENABLED=false` until the controls in
+`docs/S3_EVIDENCE_STORAGE_RUNBOOK.md` are directly verified, the immutable storage
+probe and one bounded acquisition succeed, and database ingestion is confirmed.
 
 Before promotion, verify these endpoints without printing credentials or raw
 provider payloads:

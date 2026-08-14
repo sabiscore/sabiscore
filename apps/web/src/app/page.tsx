@@ -333,7 +333,7 @@ function PremiumHome() {
       </section>
 
       {/* Spotlight + value stream */}
-      <section className="grid gap-6 lg:grid-cols-[1fr,1fr]">
+      <section className="grid items-start gap-6 lg:grid-cols-[1fr,1fr]">
         <BestBetSpotlight />
         <div className="grid gap-4">
           {PREMIUM_VALUE_STREAM.map((card) => (

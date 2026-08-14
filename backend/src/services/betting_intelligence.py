@@ -63,7 +63,9 @@ MODEL_FEATURES_FRESH_SECONDS: int = 3600  # LIVE_THRESHOLD_SECONDS default
 INJURY_FRESH_SECONDS: int = 21600         # 6 h
 MAX_MARKET_OVERROUND: float = 1.20        # reject >120% book
 MIN_MARKET_OVERROUND: float = 0.90        # reject <90% book (integrity)
-SPECULATIVE_STAKE_CAP: float = 0.0025     # 0.25u cap for SPECULATIVE
+# Compatibility export for policy/status consumers. SPECULATIVE is research
+# watchlist only under Apex and therefore has no operative public stake cap.
+SPECULATIVE_STAKE_CAP: float = 0.0
 DEFAULT_TARGET_EXPECTED_VALUE: float = 0.0
 CONTRACT_VERSION: str = "1.2.0"
 POLICY_VERSION: str = "1.0"
@@ -743,10 +745,9 @@ def analyze_match(
         edge_pct_field = best_eval["edge_pct"]
         ev_field = best_eval["expected_value"]
 
-        # Clamp stake for SPECULATIVE
         raw_frac = best_eval["stake_fraction"]
         if verdict == VerdictEnum.SPECULATIVE:
-            final_stake_fraction = min(raw_frac, float(policy["speculative_stake_cap"]))
+            final_stake_fraction = 0.0
         else:
             final_stake_fraction = raw_frac
 
@@ -985,7 +986,7 @@ def _build_explanation(
         return (
             f"Sub-threshold edge on {outcome}_ML: {edge_pp:.2f}pp above fair market "
             f"(fair_p={fair_p:.3f}, EV={ev:.4f} at {odds:.2f}). "
-            f"Watchlist only; the micro-allocation cap applies if the price remains valid."
+            f"Watchlist only; no public stake is permitted."
         )
 
     if verdict == VerdictEnum.ACTIONABLE:

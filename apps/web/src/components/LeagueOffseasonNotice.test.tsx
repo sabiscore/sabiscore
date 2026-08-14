@@ -7,6 +7,7 @@ describe("LeagueOffseasonNotice", () => {
     render(
       <LeagueOffseasonNotice
         leagueName="UEFA Champions League"
+        leagueCode="UCL"
         nextSeasonStart="2026-09-15"
         nextSeasonStartEstimated
       />,
@@ -15,6 +16,7 @@ describe("LeagueOffseasonNotice", () => {
     expect(screen.getByText(/Season currently expected around/i)).toBeInTheDocument();
     expect(screen.getByText(/Date not yet confirmed by the provider/i)).toBeInTheDocument();
     expect(screen.queryByText(/days away/i)).not.toBeInTheDocument();
+    expect(screen.getByText("UCL")).toBeInTheDocument();
   });
 
   it("uses confirmed copy for a provider-published opener", () => {

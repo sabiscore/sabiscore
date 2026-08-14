@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalLeagueId, CANONICAL_LEAGUES } from "./league";
+import { canonicalLeagueId, CANONICAL_LEAGUES, leagueDisplayName } from "./league";
 
 describe("canonicalLeagueId", () => {
   // The live defect: the match selector pushed ?league=La Liga and the proxy's
@@ -34,5 +34,19 @@ describe("canonicalLeagueId", () => {
     expect(canonicalLeagueId("")).toBeNull();
     expect(canonicalLeagueId(null)).toBeNull();
     expect(canonicalLeagueId(undefined)).toBeNull();
+  });
+});
+
+describe("leagueDisplayName", () => {
+  it.each([
+    ["EPL", "Premier League"],
+    ["LA_LIGA", "La Liga"],
+    ["BUNDESLIGA", "Bundesliga"],
+    ["SERIE_A", "Serie A"],
+    ["LIGUE_1", "Ligue 1"],
+    ["EREDIVISIE", "Eredivisie"],
+    ["UCL", "UEFA Champions League"],
+  ])("maps %s to %s", (input, expected) => {
+    expect(leagueDisplayName(input)).toBe(expected);
   });
 });
