@@ -177,7 +177,7 @@ export default function HomePage() {
     // container-parity convention as /performance and /monitoring.
     <>
       <div className="container mx-auto">
-        <div className="mx-auto max-w-6xl space-y-8 sm:space-y-12">
+        <div className="mx-auto max-w-6xl space-y-6 sm:space-y-8">
           <ResearchModeBanner />
           {premiumEnabled ? <PremiumHome /> : <LegacyHome />}
         </div>
@@ -225,7 +225,7 @@ function PremiumHome() {
       </section>
 
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 text-left shadow-[0_35px_80px_rgba(2,6,23,0.6)] sm:p-10">
+      <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 text-left shadow-[0_35px_80px_rgba(2,6,23,0.6)] sm:px-10 sm:py-7">
         {/* items-center, not items-start: the right column (Model Pulse +
             Platform Status + pillars) runs far taller than the left
             column's headline/CTA stack, and items-start left a large empty

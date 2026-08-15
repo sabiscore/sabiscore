@@ -152,3 +152,155 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
     expect(screen.getByText(/Date not yet confirmed by the provider/i)).toBeInTheDocument();
   });
 });
+
+// ─── C9: per-league offseason detection ──────────────────────────────────────
+// When a specific league chip is selected and the global offseason flag is
+// false (other leagues are live), but the per-league /api/offseason query
+// returns OFF_SEASON, the panel should render LeagueOffseasonNotice instead
+// of the generic "No upcoming fixtures" message.
+//
+// Tests use a multi-route fetch mock that handles:
+//   /api/leagues          → league list
+//   /api/upcoming         → match response (0 fixtures, offseason: false)
+//   /api/offseason/{id}   → per-league offseason response
+
+function offseasonStatusResponse(
+  league: string,
+  seasonStatus: "OFF_SEASON" | "IN_SEASON" | "UNKNOWN",
+  nextSeasonStart: string | null = "2026-08-28",
+) {
+  return {
+    league,
+    league_slug: league.toLowerCase(),
+    season_status: seasonStatus,
+    current_season_label: null,
+    current_season_end: null,
+    next_season_start: nextSeasonStart,
+    next_season_start_estimated: false,
+    days_until_next_season: 13,
+    data_availability: {
+      historical_data: true,
+      live_odds: false,
+      live_standings: false,
+      live_form: false,
+      pi_ratings: false,
+      berrar_ratings: false,
+      market_drift: false,
+      match_context: false,
+    },
+    prediction_advisory: "Season not started.",
+    queried_at: new Date().toISOString(),
+  };
+}
+
+function makeMultiRouteFetch(seasonStatus: "OFF_SEASON" | "IN_SEASON" | "UNKNOWN") {
+  return vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.startsWith("/api/leagues")) {
+      return new Response(JSON.stringify(LEAGUES), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.startsWith("/api/offseason/")) {
+      const league = decodeURIComponent(url.split("/api/offseason/")[1]);
+      return new Response(JSON.stringify(offseasonStatusResponse(league, seasonStatus)), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    // All other routes → 0 fixtures, global offseason: false
+    return new Response(JSON.stringify(upcomingResponse(0)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+}
+
+describe("C9 — per-league offseason detection in UpcomingMatchesPanel", () => {
+  it("shows LeagueOffseasonNotice when league chip selected + 0 fixtures + per-league OFF_SEASON", async () => {
+    vi.stubGlobal("fetch", makeMultiRouteFetch("OFF_SEASON"));
+
+    renderPanel();
+
+    // Click the Bundesliga chip (a league that hasn't started yet)
+    const chip = await screen.findByRole("button", { name: /Bundesliga/i });
+    fireEvent.click(chip);
+
+    expect(await screen.findByText("Bundesliga — Off Season")).toBeInTheDocument();
+    expect(screen.queryByText(/No upcoming fixtures in the next/i)).not.toBeInTheDocument();
+  });
+
+  it("shows generic message when league chip selected + 0 fixtures + per-league IN_SEASON", async () => {
+    vi.stubGlobal("fetch", makeMultiRouteFetch("IN_SEASON"));
+
+    renderPanel();
+
+    const chip = await screen.findByRole("button", { name: /Bundesliga/i });
+    fireEvent.click(chip);
+
+    expect(await screen.findByText(/No upcoming fixtures in the next 14 days/i)).toBeInTheDocument();
+    expect(screen.queryByText("Bundesliga — Off Season")).not.toBeInTheDocument();
+  });
+
+  it("does not crash while per-league offseason query is loading", async () => {
+    // Mock returns the leagues list immediately but offseason endpoint hangs.
+    // The panel must render without errors while awaiting the offseason response.
+    let resolveOffseason!: (v: Response) => void;
+    const offseasonPending = new Promise<Response>((r) => { resolveOffseason = r; });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith("/api/leagues")) {
+          return new Response(JSON.stringify(LEAGUES), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (url.startsWith("/api/offseason/")) return offseasonPending;
+        return new Response(JSON.stringify(upcomingResponse(0)), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    renderPanel();
+
+    const chip = await screen.findByRole("button", { name: /Bundesliga/i });
+    fireEvent.click(chip);
+
+    // Should render the generic message (offseason query not yet resolved)
+    await waitFor(() =>
+      expect(screen.getByText(/No upcoming fixtures in the next 14 days/i)).toBeInTheDocument()
+    );
+
+    // Resolve to avoid act() warnings
+    resolveOffseason(
+      new Response(
+        JSON.stringify(offseasonStatusResponse("BUNDESLIGA", "OFF_SEASON")),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+  });
+
+  it("does NOT call the offseason endpoint when ALL leagues are shown (no chip selected)", async () => {
+    const fetchMock = makeMultiRouteFetch("OFF_SEASON");
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPanel();
+
+    // Wait for fixture list to load (no chip selected)
+    await waitFor(() => {
+      expect(screen.getByText(/No upcoming fixtures in the next 14 days/i)).toBeInTheDocument();
+    });
+
+    const offseasonCalls = (fetchMock.mock.calls as [string | URL | Request][])
+      .map(([url]) => String(url))
+      .filter((url) => url.startsWith("/api/offseason/"));
+
+    expect(offseasonCalls).toHaveLength(0);
+  });
+});

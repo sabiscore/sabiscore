@@ -5,6 +5,20 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - C9 season-aware league filter + homepage UX polish (2026-08-15)
+
+### Added
+
+- **C9 — per-league offseason detection in `UpcomingMatchesPanel`**: when a specific league chip is selected and the global offseason flag is `false` (other leagues are live), but the per-league `/api/offseason/{id}` query returns `OFF_SEASON`, the panel now renders `<LeagueOffseasonNotice>` with the correct per-league opener date instead of the generic "No upcoming fixtures in the next 14 days." message. Mirrors the identical `chipOffseasonData` pattern already in `BigMatchesCarousel`. Covered by 4 new Vitest tests (C9 describe block in `upcoming-matches-panel.test.tsx`). Test count: 186 (up from 157 pre-session).
+
+### Fixed
+
+- **Homepage dead space**: reduced outer section spacing from `space-y-8 sm:space-y-12` to `space-y-6 sm:space-y-8` and hero section vertical padding from `sm:p-10` (40px) to `sm:py-7` (28px). Collectively removes ~40px of void between the hero block and the "Explore a manual matchup" `<details>` accordion.
+- **Carousel fixture cards**: added league country flag (`CountryFlag` + league abbreviation) as a compact header row on each `BigMatchesCarousel` card. Fixtures from different leagues are now distinguishable at a glance in the "All" view. Team home name bumped from `text-[11px]` to `text-xs` for legibility.
+- **Mobile vs-row**: the compact selected-matchup bar (`sm:hidden`) now shows the selected league's country flag beside the fixture type label ("Verified fixture selected" / "Manual matchup selected").
+
+---
+
 ## Unreleased - Apex v3 activation candidate (2026-08-14)
 
 ### Added

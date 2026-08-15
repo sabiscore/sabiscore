@@ -268,6 +268,18 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                       : "border-slate-800/60 bg-slate-900/40 hover:bg-slate-900/70",
                   )}
                 >
+                  {/* League identity — flag helps distinguish cards when multiple leagues mix
+                      in the "All" view. CountryFlag via LEAGUE_CONFIG keyed by selectorLeague. */}
+                  {selectorLeague && LEAGUE_CONFIG[selectorLeague]?.countryCode && (
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <CountryFlag
+                        countryCode={LEAGUE_CONFIG[selectorLeague].countryCode}
+                        size={12}
+                        className="rounded-sm flex-shrink-0"
+                      />
+                      <span className="text-[9px] tracking-wide text-slate-600">{selectorLeague}</span>
+                    </div>
+                  )}
                   {isTopEdge && (
                     // isTopEdge ranks by edge_quality_score — a confidence/freshness/
                     // completeness composite (@/lib/edge-quality), never a market edge.
@@ -277,7 +289,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                       Highest evidence quality
                     </p>
                   )}
-                  <p className="text-[11px] font-semibold text-slate-100 truncate">{match.home_team}</p>
+                  <p className="text-xs font-semibold text-slate-100 truncate">{match.home_team}</p>
                   <p className="text-[10px] text-slate-500 truncate">vs {match.away_team}</p>
                   {match.match_date && (
                     <p className="text-[9px] text-slate-600 mt-0.5">
@@ -598,8 +610,15 @@ export function MatchSelector() {
                 <span className="text-xs uppercase text-slate-500">vs</span>
                 <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}
+              <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                {LEAGUE_CONFIG[league]?.countryCode && (
+                  <CountryFlag
+                    countryCode={LEAGUE_CONFIG[league].countryCode}
+                    size={12}
+                    className="rounded-sm flex-shrink-0"
+                  />
+                )}
+                <span>{selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}</span>
               </p>
             </div>
           )}

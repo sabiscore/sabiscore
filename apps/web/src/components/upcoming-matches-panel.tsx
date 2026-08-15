@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LEAGUE_COLORS } from "@/lib/league-colors";
-import { getUpcomingMatches, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
+import { getUpcomingMatches, getOffseasonStatus, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
@@ -338,6 +338,18 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
     staleTime: 5 * 60_000,
   });
 
+  // Per-league offseason check — only fires when a specific league chip is
+  // selected and the global `offseason` flag is false (i.e. some leagues are
+  // live but this one may not have started yet). Mirrors the pattern in
+  // BigMatchesCarousel. Edge-cached 1h by /api/offseason; never throws.
+  const { data: leagueOffseasonData } = useQuery({
+    queryKey: ["upcoming-panel-offseason", activeLeagueCode ?? activeLeague],
+    queryFn: () => getOffseasonStatus(activeLeagueCode ?? activeLeague ?? ""),
+    enabled: activeLeague !== undefined,
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
+  });
+
   // Derive off-season state from the matches response — avoids a redundant /api/offseason fetch.
   const isOffseason = Boolean(data?.offseason);
   const nextSeasonStart = data?.next_season_start ?? null;
@@ -459,6 +471,17 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
             leagueCode={activeLeagueCode}
             nextSeasonStart={data.next_season_start ?? null}
             nextSeasonStartEstimated={data.next_season_start_estimated}
+          />
+        ) : leagueOffseasonData?.season_status === "OFF_SEASON" ? (
+          // A specific league chip is selected, the global offseason flag is
+          // false (other leagues are live), but this league hasn't started yet.
+          // Show the per-league notice with its correct opener date rather than
+          // the generic "no upcoming fixtures" message.
+          <LeagueOffseasonNotice
+            leagueName={activeLeagueName}
+            leagueCode={activeLeagueCode}
+            nextSeasonStart={leagueOffseasonData.next_season_start ?? null}
+            nextSeasonStartEstimated={leagueOffseasonData.next_season_start_estimated}
           />
         ) : (
           // data_gap means the backend failed rather than genuinely having no
