@@ -46,6 +46,10 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
     kickoff reschedules propagate to both the legacy Match row and its stable
     canonical fixture. Settled rows are never rewritten by an upcoming feed.
 
+    Canonical reconciliation runs inside a per-fixture savepoint. A true
+    identity conflict therefore rolls back every canonical row staged by that
+    attempt without discarding the raw provider fixture or later batch items.
+
     Returns the number of new Match rows inserted.
     """
     from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
@@ -138,32 +142,31 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
         from .canonical_identity_service import ensure_canonical_fixture
 
         try:
-            await ensure_canonical_fixture(
-                session,
-                provider="football-data.org",
-                provider_event_id=match_id,
-                competition_id=league_id,
-                competition_name=league_name,
-                home_provider_id=home_id,
-                home_name=home_name,
-                away_provider_id=away_id,
-                away_name=away_name,
-                kickoff_utc=match_date,
-                season=season,
-                status="scheduled",
-                evidence={
-                    "source": raw.get("source") or "football-data.org",
-                    "provider_event_id": match_id,
-                    "provider_timestamp": raw_date,
-                    "reconciled_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
+            # SQLAlchemy flushes outer pending legacy writes before creating the
+            # SAVEPOINT. Canonical writes performed inside this block can then
+            # be rolled back independently on an identity conflict.
+            async with session.begin_nested():
+                await ensure_canonical_fixture(
+                    session,
+                    provider="football-data.org",
+                    provider_event_id=match_id,
+                    competition_id=league_id,
+                    competition_name=league_name,
+                    home_provider_id=home_id,
+                    home_name=home_name,
+                    away_provider_id=away_id,
+                    away_name=away_name,
+                    kickoff_utc=match_date,
+                    season=season,
+                    status="scheduled",
+                    evidence={
+                        "source": raw.get("source") or "football-data.org",
+                        "provider_event_id": match_id,
+                        "provider_timestamp": raw_date,
+                        "reconciled_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
         except ValueError as exc:
-            # A same-event kickoff reschedule is reconciled in place by
-            # ensure_canonical_fixture. Reaching this branch now means the
-            # provider event conflicts on stable identity attributes (team,
-            # competition, or a missing mapped fixture), so keep it isolated
-            # from the rest of the batch and fail closed for canonical mapping.
             logger.warning(
                 "fixture_sync: canonical identity conflict for match_id=%s (%s vs %s): %s",
                 match_id,
