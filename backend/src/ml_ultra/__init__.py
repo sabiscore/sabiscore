@@ -30,6 +30,7 @@ def _lazy_import(name: str) -> Any | None:
     if name in _available_components:
         return _available_components[name]
 
+    component: Any
     try:
         if name == "DiverseEnsemble":
             from .meta_learner import DiverseEnsemble

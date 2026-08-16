@@ -15,11 +15,11 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.core.database import Base
+from src.core.database import Base, Match
 from src.db import models as _db_models  # noqa: F401
 from src.db.models import CanonicalFixture
 
@@ -170,8 +170,11 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
 
     assert count == 1
 
+    # Use typed SQLAlchemy expressions for datetime columns. Raw text() on
+    # SQLite returns timestamp text and bypasses the DateTime result processor,
+    # which makes this cross-dialect contract assertion compare str to datetime.
     match_kickoff = (
-        await session.execute(text("SELECT match_date FROM matches WHERE id='fd-match-40'"))
+        await session.execute(select(Match.match_date).where(Match.id == "fd-match-40"))
     ).scalar_one()
     assert match_kickoff == datetime(2026, 8, 1, 18, 0)
 
@@ -187,8 +190,7 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
 
     canonical_kickoff = (
         await session.execute(
-            text("SELECT kickoff_utc FROM canonical_fixtures WHERE id=:fixture_id"),
-            {"fixture_id": original_mapping},
+            select(CanonicalFixture.kickoff_utc).where(CanonicalFixture.id == original_mapping)
         )
     ).scalar_one()
     assert canonical_kickoff == datetime(2026, 8, 1, 18, 0)
