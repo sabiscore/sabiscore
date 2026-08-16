@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Iterable, cast
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -172,7 +172,10 @@ async def apply_finished_match_to_elo(session: AsyncSession, match: Match) -> bo
         return False
 
     league = _league_key(str(match.league_id or ""))
-    match_date = _naive_utc(match.match_date)
+    raw_match_date = match.match_date
+    if not isinstance(raw_match_date, datetime):
+        raise TypeError(f"Match {match.id} has a non-datetime match_date")
+    match_date = _naive_utc(cast(datetime, raw_match_date))
     season = canonical_season(match_date)
     context = await get_elo_context(
         session,
