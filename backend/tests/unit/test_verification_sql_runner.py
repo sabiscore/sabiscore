@@ -55,7 +55,11 @@ def test_validator_skips_transaction_wrappers_and_rejects_writes() -> None:
     executable = validate_read_only_statements(statements)
     assert len(executable) == 2
 
-    for unsafe in ("UPDATE matches SET status='x'", "DELETE FROM matches", "INSERT INTO matches(id) VALUES('x')"):
+    for unsafe in (
+        "UPDATE matches SET status='x'",
+        "DELETE FROM matches",
+        "INSERT INTO matches(id) VALUES('x')",
+    ):
         with pytest.raises(ValueError, match="non-read-only"):
             validate_read_only_statements([unsafe])
 
@@ -66,6 +70,22 @@ def test_canonical_verification_files_are_nonempty_and_read_only() -> None:
         assert sql.strip(), f"{path.name} must never be committed empty"
         executable = validate_read_only_statements(split_sql_statements(sql))
         assert executable, f"{path.name} must contain at least one read-only query"
+
+
+def test_canonical_verification_files_have_one_transaction_wrapper() -> None:
+    for path in _CANONICAL_AUDITS:
+        statements = split_sql_statements(path.read_text(encoding="utf-8"))
+        normalized = [
+            " ".join(statement.strip().lower().split())
+            for statement in statements
+            if statement.strip()
+        ]
+        assert normalized.count("begin transaction read only") == 1, (
+            f"{path.name} must contain exactly one BEGIN TRANSACTION READ ONLY wrapper"
+        )
+        assert normalized.count("rollback") == 1, (
+            f"{path.name} must contain exactly one ROLLBACK wrapper"
+        )
 
 
 def test_local_compat_runner_cannot_restore_sqlite_fallback() -> None:
