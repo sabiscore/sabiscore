@@ -92,6 +92,28 @@ async def test_finished_match_creates_two_real_identity_snapshots_and_is_idempot
     assert rows[0].post_match_elo != rows[0].pre_match_elo
 
 
+async def test_malformed_match_date_fails_at_legacy_orm_boundary(session_factory) -> None:
+    async with session_factory() as session:
+        match = Match(
+            id="bad-date",
+            league_id="EPL",
+            home_team_id="arsenal",
+            away_team_id="chelsea",
+            match_date=datetime(2026, 8, 1, 15, 0),
+            season="2026/2027",
+            status="finished",
+            home_score=2,
+            away_score=1,
+        )
+        # The legacy declarative model is not Mapped[]-typed. Simulate malformed
+        # runtime data without flushing it through SQLite so the service boundary,
+        # rather than the dialect adapter, owns the failure semantics.
+        match.match_date = "2026-08-01T15:00:00"  # type: ignore[assignment]
+
+        with pytest.raises(TypeError, match="non-datetime match_date"):
+            await apply_finished_match_to_elo(session, match)
+
+
 async def test_incremental_sync_is_chronological_and_resolves_next_fixture(session_factory) -> None:
     async with session_factory() as session:
         await _seed_identity(session)
