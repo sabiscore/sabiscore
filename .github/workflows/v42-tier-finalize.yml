@@ -1,0 +1,81 @@
+name: v4.2 tier finalization
+
+on:
+  push:
+    branches:
+      - chore/v4-2-tier-finalize
+    paths:
+      - .github/workflows/v42-tier-finalize.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v42-tier-finalize
+  cancel-in-progress: false
+
+jobs:
+  apply-validate-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_BASE: ec6d14c8c9cc85380c1a6f13f64e8db59821e65a
+      TIER1_B64_GZ: H4sICJCdgWoAA3RpZXIxLnBhdGNoAO1WwW7jNhC95ysI9dLCmkiWIzt2s4GRUw+7RbDpnoJgQUljiY1EEiQdOyj67x3KciDLTrIL7GWB5iBB1ONj5s17IwMA4xHX2kYbzCJrcv8QaV7iubPbs9FoxLI33i+XDMbzcMpGdJ2x5fKMiUYr49g/7Aatu0F3p5WrRVk59i9bGdWwYBnlikASpbNRRijI0IHd44LfeySfuMurO6wxd8qcZmg8BGyHOdytCqw/oeMFd/yWS6xfofA4aDogaI8kolGPKBM13tbcrZRp7tZNw83za1weCrrDgt2BD/6vPdEfyGtX3Yq6tqfJXliqFgnaQw+oPqNFbvLKl3rDpcRXVDIdDnytkLXIA6IvmtBClq3iaN9Qa90hodlBX/TybkjSaThnoySd0c37of93VYgnltfc2j95gx+CVY1b5i+wMVyzkmu4CK4P99Cuj0I+DhcZqwyuPgS/PKERK4EFrMTWranM4AyG0N6RQtZCIrQnC4eNhZyKItX+XlsnVs/7R6PWsiDWZFuzrITS8ELQG3AKTCsK5M9cwkUcM1oSshClgpSe9BamTD/DhDnckq0btlK0z2IjMlUX3Sr1FWGexsw2C9px6e/tm4xbZLbihdrAffx1HOvt10lKF1Nm/Nc4TMZJmKRpGJ9P0t8emDNcWuGEkqxSJMXC5pzcdz8+j5MHOjlf24Vau7ZmSf3rloxvX9J/aKtJ4jg4G/1M6n2zUI3yIoHlK1z0ROsv/xgBT3Y0GNr3+tikn/FJ4Ibt/cz2fj5uyA3PH0m3E9BhciIfne8LVFSonDLUZnk6D8c+zLM4vDwOc0RpPuDer/RrG0a+NKJg/gK5qi312Yc+YXW5qERRoAwGygz3753ljaVMQV7b3WBTkSGjcez91hkkjqMZWQomQ1Ki1X3Stk/3c719YGut0eQ+hOSS/NF3diP8MT3nTSgm1+235SrS71A3Dsbve7ll/CIfpdrIY85O159Dl78MF5Je/y/NURUfxRPN9lwZ/KHi3CLNz1OCd+L05sdQmn7sDsbM1elfPNHpvL8h/o5+95GnxLdxn758H+6TC6/gu21Ju7akvYmf+Ik/jfcTfxLOwvEljftLmvZ+BtMxVJ4/mIr7D8mdDRLpCgAA
+      TIER3_B64_GZ: H4sICJCdgWoAA3RpZXIzLnBhdGNoAJ2WW2+iQBTH3/0UE59qlOJl24dut5Gqu5o12ljqy2bTDDBFshMgw6hNmn73ZUBghssA9UEnnP+5zPw4x1EUBUAV+n6gnpGhUujgs+Na16bnvjn2NQ06/X4fGFLFdAqUb7eDW9APv8dDMJ12QPaZL35qL2v9DnQPAb46QXKlKCYkVq/XHfC6N48gm3hH1ypIlcwmen0OOv1kHdZzckzqeO4d+MgeA3Bw7IMYMlUqzNYDKriH2D9A5QTxET2wFJw/jKTQwKgqSqaoixX4yDxiSJ1TZTBOUhft4GGrcmehrc7fh4Q6EFeFuJjlUXgEgWO7LJxw/L4XOIX9xkolsdUVeobEdVy7LMTFVBfBgq6NSFmA2FILjkJcuoXIUOfdtSCFig39bnkFsbH2oAsrwyMWIjtoOceAHXuaELOzipOQyMpCKWKvB8RUsWOoJ0SskLhCvX/IDUpavlrIOn88GtwMQT/+Ya2P3n2PUNaPAQX7xW6+mumv+vb3YvN8B3bIDGu+38ehBuCy0KOQD+BHvInl6tfydbbd7EPX1XaTbg1DA7HXdRm2LZilbyrbWzwCsMcYU/ROlT/VDd/7m3gY7JwMWyZWh9ejIecRHTnzihY1nhPO0/JobbJI3S/sJSdLNEn1ObM6GqaKXLV55SRVptUVc0VHTz2Xvf9Jx8aP4zdRiyBpj+tFAZSWTsYWjLhx2pQU5/IlXqJ/C2r5WqXsIH8aVQQzUTOOnF5OU8hex/T5aTF7WWv6al+E+pz9Q7Wgyv+vNcXK+3yJay5AC7CFcqVkA+FIqtByqmZseQc5XLEAnu4ZUvPAo11u1/PiRA2vC23GKLtdNB6jTMzwjVuP0Yvn5Kb5GE0rk4/ReL+VYzQ0q6NxkzHKlJMb6RiNc/FQXHSkBGIey2b7+rjQC2A2HnhEtA6NeJeRghGlzbuq4FfXTCU1FZEIojwQwSjpGFFX0ij5LML0g0HAc3jSdvpKWxdAPMW3YTAPb2stOiW5RDdtlkT/pXHHObcYdUKJ0q65KCWNc1E0G2+JWD7asqQiNu4pI/f5vfMf4+g+q80OAAA=
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify immutable base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
+          git diff --check "$EXPECTED_BASE" HEAD
+
+      - name: Configure release identity
+        run: |
+          git config user.name "SabiScore Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Apply and validate Tier 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$TIER1_B64_GZ" | base64 -d | gzip -d > /tmp/tier1.patch
+          git apply --check /tmp/tier1.patch
+          git apply /tmp/tier1.patch
+          git diff --check
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --filter @sabiscore/web typecheck
+          pnpm --filter @sabiscore/web lint
+          pnpm --filter @sabiscore/web test
+          git add apps/web/src/app/page.tsx
+          git commit -m "fix(web): wire authoritative mobile status and motion-safe CTA"
+
+      - name: Apply and validate Tier 3 tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$TIER3_B64_GZ" | base64 -d | gzip -d > /tmp/tier3.patch
+          git apply --check /tmp/tier3.patch
+          git apply /tmp/tier3.patch
+          git diff --check
+          pnpm --filter @sabiscore/web typecheck
+          pnpm --filter @sabiscore/web lint
+          pnpm --filter @sabiscore/web test
+          pnpm --filter @sabiscore/web build
+          git add apps/web/tailwind.config.ts apps/web/src/lib/verdict-tokens.ts
+          git commit -m "refactor(web): promote verdict signal tokens to Tailwind"
+
+      - name: Remove one-shot workflow and publish staging branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/v42-tier-finalize.yml
+          git commit -m "chore: remove one-shot v4.2 tier finalizer"
+          git diff --check "$EXPECTED_BASE" HEAD
+          git push origin HEAD:chore/v4-2-tier-finalize
