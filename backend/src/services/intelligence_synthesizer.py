@@ -43,6 +43,12 @@ class EnsemblePrediction:
     confidence: float
     league: str = ""
     model_version: str = ""
+    generation: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    manifest_sha256: Optional[str] = None
+    certification_state: str = "UNVERIFIED"
+    artifact_sha256: Optional[str] = None
+    coverage: str = "dedicated"
     calibration_method: str = "raw"   # "raw" | "isotonic" | "platt" | …
     calibration_applied: bool = False
     overlay_applied: bool = False
@@ -247,6 +253,12 @@ class FullMatchAnalysisResponse:
                 "top_outcome_probability": self.ensemble.confidence,
                 "league": self.ensemble.league,
                 "model_version": self.ensemble.model_version,
+                "generation": self.ensemble.generation,
+                "feature_schema_version": self.ensemble.feature_schema_version,
+                "manifest_sha256": self.ensemble.manifest_sha256,
+                "certification_state": self.ensemble.certification_state,
+                "artifact_sha256": self.ensemble.artifact_sha256,
+                "coverage": self.ensemble.coverage,
                 "calibration_method": self.ensemble.calibration_method,
                 "calibration_applied": self.ensemble.calibration_applied,
                 "overlay_applied": self.ensemble.overlay_applied,

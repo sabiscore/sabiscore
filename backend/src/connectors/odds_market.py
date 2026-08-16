@@ -7,7 +7,7 @@ latency or new dependencies.
 Relationship to ``features/market.py``
 ---------------------------------------
 ``backend/src/features/market.py::market_movement_features`` is the existing
-*production* Phase 8 feature (feeds the 86-feature model frame) and uses
+*production* Phase 8 feature (feeds the canonical Phase 8 model frame) and uses
 ``{"home", "draw", "away"}`` keys with opening/closing odds only.
 
 This module is a **separate, additive, Phase 9-candidate** layer that:

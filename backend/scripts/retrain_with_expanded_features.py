@@ -1,4 +1,4 @@
-"""Phase 8 retraining pipeline — 86-dim ensemble with temporal recency weighting.
+"""Phase 8 retraining pipeline — canonical 89-feature ensemble with temporal recency weighting.
 
 Usage
 -----
@@ -12,7 +12,7 @@ python backend/scripts/retrain_with_expanded_features.py \\
 
 Feature sets
   phase7 (65-dim)  — CANONICAL_FEATURES_65, per-league walk-forward
-  phase8 (86-dim)  — CANONICAL_FEATURES_86, Phase 8 features filled with
+  phase8 (89-feature canonical schema) — legacy CANONICAL_FEATURES_86 alias, Phase 8 features filled with
                      DEFAULT_FEATURE_VALUES_86 if absent from historical data
 
 Gates
@@ -195,7 +195,7 @@ def _multiclass_brier(y_true: np.ndarray, y_proba: np.ndarray) -> float:
 # ── feature helpers ───────────────────────────────────────────────────────────
 
 def _load_feature_registry_phase8() -> List[str]:
-    """Return CANONICAL_FEATURES_86 — the full Phase 8 training schema."""
+    """Return the legacy CANONICAL_FEATURES_86 alias for the full 89-feature Phase 8 training schema."""
     return list(CANONICAL_FEATURES_86)
 
 
@@ -771,7 +771,7 @@ def main() -> None:
         "--feature-set",
         choices=["phase7", "phase8"],
         default="phase8",
-        help="Feature schema to use (default: phase8 = 86-dim CANONICAL_FEATURES_86)",
+        help="Feature schema to use (default: phase8 = canonical 89-feature schema; legacy CANONICAL_FEATURES_86 alias)",
     )
     parser.add_argument(
         "--data",

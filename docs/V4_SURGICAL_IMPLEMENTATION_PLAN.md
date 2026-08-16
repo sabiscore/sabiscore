@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This pack finalizes the V4/Phase 9 candidate data-source layer for SabiScore without rewriting the current Phase 8 production architecture. It keeps the existing 86-feature inference path intact and adds a safer, more modular source layer for advanced xG, official fixtures/results, StatsBomb Open Data experiments, and market-efficiency features.
+This pack finalizes the V4/Phase 9 candidate data-source layer for SabiScore without rewriting the current Phase 8 production architecture. It keeps the existing canonical Phase 8 89-feature inference path (legacy 86-named aliases retained) intact and adds a safer, more modular source layer for advanced xG, official fixtures/results, StatsBomb Open Data experiments, and market-efficiency features.
 
 The upgrade is intentionally **shadow-first**:
 

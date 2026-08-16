@@ -4,6 +4,7 @@ import {
   describeEvidenceCode,
   fullMatchAnalysisSchema,
   groupEvidenceGaps,
+  isNarrativeRedundant,
   isRetryableInfrastructureError,
   mapFullAnalysisPresentation,
 } from "./full-analysis-contract";
@@ -39,6 +40,7 @@ function payload(overrides: Record<string, unknown> = {}) {
       probabilities_available: true,
       league: "EPL",
       model_version: "v5_phase7",
+      certification_state: "CERTIFIED",
       calibration_method: "isotonic",
       calibration_applied: true,
       overlay_applied: false,
@@ -309,6 +311,9 @@ describe("describeEvidenceCode", () => {
       "REQUIRED_MODEL_INPUTS_UNAVAILABLE",
       "MODEL_PREDICTION_UNAVAILABLE",
       "MODEL_PREDICTION_REDUCED_EVIDENCE",
+      "MODEL_GENERATION_UNCERTIFIED",
+      "MODEL_UNCERTAINTY_UNAVAILABLE",
+      "COHERENT_1X2_MARKET_UNAVAILABLE",
       "STALE_REQUIRED_EVIDENCE",
       // Advisory, not critical — an out-of-date optional enrichment source must
       // never read like a blocking failure, so it needs its own plain-language
@@ -358,6 +363,17 @@ describe("describeEvidenceCode", () => {
     expect(view.reason).toContain("could not be tied to a scheduled fixture");
     expect(view.reason).not.toContain("FIXTURE_IDENTITY_UNVERIFIED");
     expect(view.reason).not.toContain("FIXTURE IDENTITY UNVERIFIED");
+  });
+});
+
+describe("isNarrativeRedundant", () => {
+  it("suppresses empty and equivalent abstention copy", () => {
+    expect(isNarrativeRedundant("", "No bet")).toBe(true);
+    expect(isNarrativeRedundant("No bet — insufficient verified evidence.", "No bet - insufficient verified evidence")).toBe(true);
+  });
+
+  it("fails open when the narrative adds evidence detail", () => {
+    expect(isNarrativeRedundant("Market drift moved 4% after team news.", "No bet")).toBe(false);
   });
 });
 

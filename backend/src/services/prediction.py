@@ -25,12 +25,12 @@ except ImportError:
     _PHASE9_MARKET_AVAILABLE = False
 from ..data.transformers import FeatureTransformer
 from ..models.edge_detector import EdgeDetector
-from ..models.active_generation import active_artifact_path
+from ..models.active_generation import active_artifact_path, active_generation_is_certified
 from ..models.ensemble import SabiScoreEnsemble
 from ..monitoring.metrics import metrics_collector
 from ..schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ..schemas.value_bet import ValueBetResponse
-from ..services.rl_betting_agent import RLBettingAgent
+from ..services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
 from ..services.uncertainty_service import UncertaintyService
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,11 @@ class PredictionService:
         league_slug = self._slugify_league(request.league)
         cache_key = self._build_cache_key(match_id, league_slug)
 
+        generation_certified = active_generation_is_certified()
         cached = self._get_cached_prediction(cache_key)
         if cached is not None:
+            if not generation_certified:
+                cached = self._enforce_certification_gate(cached)
             metrics_collector.record_prediction(
                 duration_ms=(time.time() - start_time) * 1000,
                 confidence=cached.confidence,
@@ -137,10 +140,16 @@ class PredictionService:
         }
 
         bankroll = float(request.bankroll or self._default_bankroll)
-        value_bets = self._detect_value_bets(match_id, probabilities, request.odds, bankroll)
+        value_bets = (
+            self._detect_value_bets(match_id, probabilities, request.odds, bankroll)
+            if generation_certified
+            else []
+        )
         explanations = self._generate_explanations(feature_vector, ensemble, feature_frame)
         processing_ms = int((time.time() - start_time) * 1000)
         metadata = self._build_metadata(league_slug, ensemble, processing_ms, feature_context)
+        metadata["certification_state"] = "CERTIFIED" if generation_certified else "UNVERIFIED"
+        metadata["stake_permitted"] = generation_certified
 
         # UCL soft-coverage: inject LOW_EVIDENCE tier and caveat into metadata.
         # The generic model is used — no dedicated UCL ensemble exists.
@@ -181,6 +190,13 @@ class PredictionService:
             confidence=float(row["confidence"]),
             epistemic_unc=uncertainty_breakdown.epistemic_unc,
         )
+        if not generation_certified:
+            rl_recommendation = RLRecommendationPayload(
+                stake_fraction=0.0,
+                abstain=True,
+                reward_components=rl_recommendation.reward_components,
+                reason="Active model generation is not certified for public staking",
+            )
 
         # Wire uncertainty + completeness into metadata so fixtures.py contract check passes
         metadata["epistemic_uncertainty"] = uncertainty_breakdown.epistemic_unc
@@ -590,6 +606,31 @@ class PredictionService:
 
         results.sort(key=lambda item: item.edge_ngn, reverse=True)
         return results
+
+    @staticmethod
+    def _enforce_certification_gate(prediction: PredictionResponse) -> PredictionResponse:
+        """Fail closed for cached responses produced before certification gating existed."""
+        metadata = dict(prediction.metadata or {})
+        metadata["certification_state"] = "UNVERIFIED"
+        metadata["stake_permitted"] = False
+
+        rl_payload = prediction.rl_recommendation
+        if rl_payload is not None:
+            rl_payload = rl_payload.model_copy(
+                update={
+                    "stake_fraction": 0.0,
+                    "abstain": True,
+                    "reason": "Active model generation is not certified for public staking",
+                }
+            )
+
+        return prediction.model_copy(
+            update={
+                "value_bets": [],
+                "metadata": metadata,
+                "rl_recommendation": rl_payload,
+            }
+        )
 
     def _get_cached_prediction(self, cache_key: str) -> Optional[PredictionResponse]:
         try:

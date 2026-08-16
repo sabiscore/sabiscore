@@ -801,6 +801,12 @@ export interface UpcomingMatchPrediction {
   away_win: number;
   confidence: number;
   model_version: string;
+  generation?: string | null;
+  feature_schema_version?: string | null;
+  manifest_sha256?: string | null;
+  certification_state?: string;
+  artifact_sha256?: string | null;
+  coverage?: string;
 }
 
 export interface UpcomingMatchValueBet {
@@ -825,7 +831,8 @@ export interface UpcomingMatch {
   has_value: boolean;
   best_value_bet: UpcomingMatchValueBet | null;
   data_gaps: string[];
-  staleness_seconds: number;
+  staleness_seconds: number | null;
+  staleness_available?: boolean;
   source: string;
   /** Composite 0–1 edge quality: 0.40×confidence + 0.30×market_edge + 0.20×freshness + 0.10×completeness. */
   edge_quality_score: number | null;

@@ -4,15 +4,30 @@ import { describe, expect, it, vi } from "vitest";
 import type { BackendHealthPayload } from "@/lib/health-status";
 import { MobilePlatformSummary } from "./mobile-platform-summary";
 
-const { fetchPlatformHealth } = vi.hoisted(() => ({ fetchPlatformHealth: vi.fn() }));
+const { fetchPlatformHealth, fetchModelStatus } = vi.hoisted(() => ({
+  fetchPlatformHealth: vi.fn(),
+  fetchModelStatus: vi.fn(),
+}));
 
 vi.mock("@/lib/health-status", async () => {
   const actual = await vi.importActual<typeof import("@/lib/health-status")>("@/lib/health-status");
   return { ...actual, fetchPlatformHealth };
 });
 
+vi.mock("@/lib/model-status", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/model-status")>("@/lib/model-status");
+  return { ...actual, fetchModelStatus };
+});
+
 function renderSummary(payload: BackendHealthPayload) {
   fetchPlatformHealth.mockResolvedValueOnce(payload);
+  fetchModelStatus.mockResolvedValueOnce({
+    active_version: "v5_phase7",
+    generation: "v5_phase7-20260808",
+    certification_state: "UNVERIFIED",
+    promotion_state: "ACTIVE_FAIL_CLOSED",
+    manifest_valid: true,
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -22,7 +37,7 @@ function renderSummary(payload: BackendHealthPayload) {
 }
 
 describe("MobilePlatformSummary", () => {
-  it("keeps configured providers separate from live verification", async () => {
+  it("shows authoritative model/certification metadata and keeps provider live validation separate", async () => {
     renderSummary({
       backendStatus: "ok",
       backendChecks: {
@@ -40,9 +55,11 @@ describe("MobilePlatformSummary", () => {
 
     expect(
       await screen.findByLabelText(
-        "Core 4 of 4; providers 5 configured, 1 live-verified; models ready",
+        "Model v5_phase7; certification UNVERIFIED; providers 5 configured, 5 enabled; explicit live validation 1 verified",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("5 cfg · 1 live")).toBeInTheDocument();
+    expect(screen.getByText("v5_phase7")).toBeInTheDocument();
+    expect(screen.getByText("UNVERIFIED")).toBeInTheDocument();
+    expect(screen.getByText("5 cfg · 5 on")).toBeInTheDocument();
   });
 });

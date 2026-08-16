@@ -335,7 +335,7 @@ class Settings(BaseSettings):
     use_phase8_models: bool = Field(
         default=False,
         alias="USE_PHASE8_MODELS",
-        description="Enable loading v6_phase8 model artifacts with 86-feature support.",
+        description="Enable loading v6_phase8 model artifacts with canonical Phase 8 feature support.",
     )
     use_phase8_features: bool = Field(
         default=False,
@@ -615,7 +615,7 @@ class Settings(BaseSettings):
         pytest (backend/), uvicorn, Docker and Render. A CWD-relative artifact
         path therefore pointed at a directory that does not exist, and the
         consumers all fail *silently*: `_load_from_disk` skipped the missing
-        directory and fell through to the legacy 86-feature artifacts in
+        directory and fell through to the legacy Phase 8 artifacts in
         `<root>/models` (SCHEMA_MISMATCH → model_version="fallback" on every
         league, and no artifact at all for eredivisie), while EloEngine and
         StatsBombAggregator returned empty tables, pinning their features —

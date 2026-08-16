@@ -459,10 +459,9 @@ by design and cannot lean on them yet.
 
 ---
 
-## 13. Serving still has an unresolved canonical feature family — Elo/tactical remains
+## 13. Serving still has an unresolved canonical feature family — tactical remains; durable Elo code is ready for runtime backfill
 
-**Tier:** `NEXT` — head-to-head and home venue resolved 2026-08-11 (see below);
-Elo/tactical is the sole remaining sub-item, still blocked on item 10.
+**Tier:** `NEXT` — head-to-head and home venue resolved 2026-08-11; the Elo code path was corrected 2026-08-16 and now awaits production migration/backfill verification. Tactical/StatsBomb remains unresolved.
 **Owner:** unassigned.
 **Found:** 2026-08-08, while establishing the retrain's feature set.
 
@@ -493,19 +492,25 @@ The remaining missing family of genuine football evidence is:
 |---|---|---|
 | ~~Head-to-head~~ | ~~5~~ | **Resolved 2026-08-11** — see above. |
 | ~~Home venue record~~ | ~~4~~ | **Resolved 2026-08-11** — see above. |
-| Elo / tactical | 8 | Blocked on item 10 — the parquets are synthetically keyed. |
+| Elo | 4 | **Code-fixed 2026-08-16** — live serving now reads durable real-`Team.id` snapshots from PostgreSQL; production migration/backfill is still an operator verification gate. |
+| Tactical / StatsBomb | 4 | Still backed by the stale/synthetic offline cache; requires a separate corpus regeneration and point-in-time parity review. |
 
-**Blast radius:** prediction quality. The model no longer prices blind to the
-market, fixture history, or venue, but it still lacks Elo/tactical context.
-**Cost:** Elo depends on item 10 — the parquets must be re-keyed by real
-`Team.id` first. `backend/scripts/replay_elo_from_db.py` (added 2026-08-11) is a
-ready replay script for exactly that; it has not yet been run against a real
-database — running it is a separate runtime/operator action, not a remaining
-code-completeness gap.
-**Impact:** moderate — head-to-head and venue were the larger share of this item;
-Elo alone is a smaller remaining slice.
-**Priority:** medium. Run the Elo replay against a real DB, confirm
-`EloEngine.get_context()` returns non-neutral ratings, then retrain.
+**2026-08-16 update:** production Elo no longer depends on the local Parquet as its
+serving authority. Migration `0007_durable_elo_state` adds `elo_rating_snapshots`;
+`elo_state_service.py` reads/writes ratings by real `Team.id`; settlement applies
+newly finished matches idempotently and chronologically; and
+`replay_elo_from_db.py` now requires explicit `--apply` (default `--dry-run`) for
+historical backfill. The Parquet engine remains offline/backward-compatible tooling.
+
+**Blast radius:** prediction quality. Once migration + backfill are verified in the
+target DB, the four Elo features can resolve from durable real identity. Tactical /
+StatsBomb remains the residual family.
+**Cost:** production operator action: migrate, dry-run, apply backfill, then inspect
+readiness/Elo resolution. StatsBomb regeneration is separate.
+**Impact:** moderate until DATA_FED/VERIFIED in production; no fabrication because
+unresolved Elo remains a data gap.
+**Priority:** high for production backfill verification; medium/low for tactical
+regeneration depending on measured incremental value.
 
 ---
 
@@ -527,12 +532,9 @@ sync windows open. Blast radius was every prediction path via `get_league_policy
 
 ---
 
-## 10. Offline Elo / StatsBomb artifacts are frozen at 2024-06-02 — and synthetically keyed
+## 10. Offline Elo / StatsBomb artifacts were frozen at 2024-06-02 and synthetically keyed
 
-**Tier:** `FIX-NOW` (raised from `NEXT` on 2026-08-08) — the trigger this item was
-waiting for is moot: the artifacts cannot join to real fixtures at all, so no amount
-of elapsed season time makes them useful. Folded into item 12, which is the same
-root problem seen from the model side.
+**Tier:** `NEXT` — **Elo code path fixed 2026-08-16; production migration/backfill not yet independently verified.** StatsBomb remains offline debt. The historical incident below is retained because the legacy Parquet files still exist for offline/backward-compatible tooling.
 **Owner:** unassigned.
 **Found:** 2026-08-08, tracing why STALE_REQUIRED_EVIDENCE fired on 100% of fixtures.
 
@@ -570,6 +572,15 @@ loss on 6 of 65 features.
 as of vΩ.44 there are 12,765 real completed matches in the database to replay — so
 regenerating Elo is now a scripted replay rather than a data-sourcing problem.
 Regenerating StatsBomb needs the open-data corpus re-cloned (offline, large).
+
+**2026-08-16 durable-Elo correction:** live feature serving has been moved to the
+PostgreSQL `elo_rating_snapshots` authority rather than relying on this Parquet.
+Settlement now advances Elo from newly finished matches with match/team idempotency,
+and the historical replay script persists the same real-ID state only when
+`--apply` is explicitly supplied. This reaches **EXISTS/WIRED** in this snapshot;
+production `alembic upgrade head`, replay, row coverage, and live fixture resolution
+must still be observed before marking it DATA_FED/VERIFIED. The stale StatsBomb
+portion of this item remains unchanged.
 
 **2026-08-08 correction — blast radius was wider than "6 of 65 degraded" for one
 path.** `GET /api/v1/upcoming/matches` (the endpoint behind the homepage fixture

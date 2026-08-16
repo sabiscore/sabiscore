@@ -4,37 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { PredictionMatrix } from "@/components/brand/prediction-matrix";
 import { Tooltip } from "@/components/ui/ResponsibleGamblingTooltip";
-
-type ModelRecord = {
-  feature_schema_version?: unknown;
-  feature_count?: unknown;
-  served_head?: unknown;
-};
-
-type ModelStatus = {
-  active_version?: unknown;
-  generation?: unknown;
-  generation_hash?: unknown;
-  certification_state?: unknown;
-  promotion_state?: unknown;
-  validation_status?: unknown;
-  models?: Record<string, ModelRecord>;
-};
+import { fetchModelStatus, MODEL_STATUS_QUERY_KEY } from "@/lib/model-status";
 
 function unique(values: unknown[]): string {
   const normalized = [...new Set(values.filter((value) => value != null).map(String))];
   return normalized.length === 1 ? normalized[0] : normalized.length > 1 ? "Mixed" : "Unknown";
 }
 
-async function fetchModelStatus(): Promise<ModelStatus> {
-  const response = await fetch("/api/models/status", { cache: "no-store" });
-  if (!response.ok) throw new Error("Model status unavailable");
-  return response.json() as Promise<ModelStatus>;
-}
 
 export function ModelMetadataPanel() {
   const { data, isError, isPending } = useQuery({
-    queryKey: ["model-status"],
+    queryKey: MODEL_STATUS_QUERY_KEY,
     queryFn: fetchModelStatus,
     staleTime: 60_000,
   });

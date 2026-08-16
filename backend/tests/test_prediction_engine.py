@@ -6,7 +6,7 @@ Coverage:
   PE-3  _fallback_result returns uniform 0.333/0.334 probabilities, confidence=0
   PE-4  Probabilities always sum to 1.0 when model returns valid proba (v5 bundle)
   PE-5  Feature schema mismatch: shorter vector fails closed to fallback, never zero-padded
-  PE-6  Feature truncation: longer vector truncates with a logged warning
+  PE-6  Feature schema mismatch: longer vector fails closed, never truncates
   PE-7  Valid probability simplexes are preserved without repair
   PE-8  calculate_value_bets returns empty list when no outcome has edge >= min_edge_pct
   PE-9  calculate_value_bets identifies a high-edge outcome correctly
@@ -52,6 +52,10 @@ def _make_v5_bundle(proba=(0.50, 0.25, 0.25), n_features=58) -> _ArtifactBundle:
         calibrator=None,
         overlay=None,
         feature_columns=None,
+        model_version="v5_phase7",
+        generation="v5_phase7-test",
+        feature_schema_version=f"phase7_{n_features}",
+        manifest_sha256="test-manifest",
     )
 
 
@@ -72,6 +76,10 @@ def _make_v6_bundle(
         calibrator=calibrator,
         overlay=overlay,
         feature_columns=feature_columns,
+        model_version="v6_phase8",
+        generation="v6_phase8-test",
+        feature_schema_version=f"phase8_{n_features}",
+        manifest_sha256="test-manifest",
     )
 
 
@@ -154,23 +162,17 @@ def test_short_vector_fails_closed_not_padded(caplog):
 
 # ── PE-6 ──────────────────────────────────────────────────────────────────────
 
-def test_long_vector_truncated_with_warning(caplog):
-    """PE-6: An 86-dim vector is truncated to 58-dim with a warning log."""
+def test_long_vector_fails_closed_instead_of_truncating(caplog):
+    """PE-6: A wider vector cannot be silently truncated into an older schema."""
     import logging
     engine = PredictionEngine()
     bundle = _make_v5_bundle(n_features=58)
-    captured: Dict[str, Any] = {}
-    original_predict_proba = bundle.direct_model.predict_proba
-
-    def capturing_predict_proba(X):
-        captured["shape"] = X.shape
-        return original_predict_proba(X)
-
-    bundle.direct_model.predict_proba = capturing_predict_proba
-    with caplog.at_level(logging.WARNING, logger="src.models.prediction"):
-        engine._run_inference(bundle, FEATURES_86, "EPL")
-    assert captured["shape"] == (1, 58)
-    assert any("truncated" in r.message.lower() for r in caplog.records)
+    with caplog.at_level(logging.ERROR, logger="src.models.prediction"):
+        result = engine._run_inference(bundle, FEATURES_86, "EPL")
+    bundle.direct_model.predict_proba.assert_not_called()
+    assert result.model_version == "fallback"
+    assert result.model_dim == 86
+    assert any("SCHEMA_MISMATCH" in r.message for r in caplog.records)
 
 
 # ── PE-7 ──────────────────────────────────────────────────────────────────────
@@ -321,6 +323,31 @@ def test_wrap_artifact_v5_direct_model():
     assert bundle.models_dict is None
     assert bundle.calibrator is None
     assert bundle.overlay is None
+
+
+def test_wrap_artifact_preserves_manifest_provenance():
+    model = MagicMock()
+    model.predict_proba = MagicMock(return_value=np.array([[0.5, 0.25, 0.25]]))
+    bundle = PredictionEngine._wrap_artifact(
+        model,
+        "epl",
+        "<test>",
+        provenance={
+            "model_version": "v5_phase7",
+            "generation": "v5_phase7-20260808",
+            "feature_schema_version": "phase7_68",
+            "manifest_sha256": "abc123",
+            "certification_state": "UNVERIFIED",
+            "artifact_sha256": "def456",
+            "coverage": "dedicated",
+        },
+    )
+    assert bundle is not None
+    assert bundle.model_version == "v5_phase7"
+    assert bundle.generation == "v5_phase7-20260808"
+    assert bundle.feature_schema_version == "phase7_68"
+    assert bundle.manifest_sha256 == "abc123"
+    assert bundle.artifact_sha256 == "def456"
 
 
 # ── PE-17 ─────────────────────────────────────────────────────────────────────

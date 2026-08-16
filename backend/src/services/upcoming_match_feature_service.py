@@ -25,7 +25,6 @@ from ..core.config import settings
 from ..core.database import Match, MatchStats, Team
 from ..core.exceptions import SchemaMismatchError
 from ..core.league_policy import canonical_league_id
-from ..data.elo_engine import EloEngine
 from ..data.enrichment.statsbomb_aggregator import StatsBombAggregator
 from ..features.berrar_ratings import BerrarRatingSystem
 from ..features.form import weighted_form_features
@@ -55,6 +54,7 @@ from ..models.feature_registry import (
     derive_temporal_features,
 )
 from ..utils.season import canonical_season
+from .elo_state_service import get_elo_context
 from .odds_service import OddsService
 from .scraped_feature_store import ScrapedTeamFormStore
 from .team_identity import resolve_team_id
@@ -148,7 +148,7 @@ _VENUE_FEATURES = frozenset({
 
 
 class UpcomingMatchFeatureProjector:
-    """Project upcoming matches to canonical feature space (68 or 86 dimensions)."""
+    """Project upcoming matches to the active canonical feature schema."""
 
     def __init__(self, odds_service: OddsService | None = None) -> None:
         self._use_phase8 = settings.phase8_enabled
@@ -160,7 +160,6 @@ class UpcomingMatchFeatureProjector:
             use_phase7=settings.use_phase7_models,
             use_phase8=self._use_phase8,
         )
-        self.elo_engine = EloEngine()
         self.statsbomb = StatsBombAggregator()
         self.pi_engine = PiRatingSystem(
             parquet_path=settings.pi_ratings_parquet_path
@@ -178,7 +177,7 @@ class UpcomingMatchFeatureProjector:
         match_date: datetime,
     ) -> Dict[str, Any]:
         """
-        Project upcoming match to 58-dimensional feature vector.
+        Project an upcoming match to the active canonical feature vector.
 
         Args:
             match_dict: Normalized match from FootballDataAPIClient
@@ -457,7 +456,7 @@ class UpcomingMatchFeatureProjector:
         league: str,
         db: AsyncSession,
     ) -> Dict[str, Any]:
-        """Build 68-dim live feature vector with data gap and staleness metadata."""
+        """Build a live canonical feature vector with gap and staleness metadata."""
         match = await self._get_match(match_id, db)
         if match is None:
             raise ValueError(f"Unknown match_id: {match_id}")
@@ -479,7 +478,8 @@ class UpcomingMatchFeatureProjector:
             match_date,
         )
 
-        elo = self.elo_engine.get_context(
+        elo = await get_elo_context(
+            db,
             home_team_id=str(match.home_team_id),
             away_team_id=str(match.away_team_id),
             league=league,
@@ -581,7 +581,7 @@ class UpcomingMatchFeatureProjector:
         db: AsyncSession,
         match_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
-        """Build 68-dim live feature vector from team names without a DB match record.
+        """Build the active canonical live feature vector from team names without a DB match record.
 
         Used by the full-analysis endpoint when the caller passes a matchup string
         ("Arsenal vs Chelsea") instead of a database match ID (P7-E live data wiring).
@@ -591,7 +591,7 @@ class UpcomingMatchFeatureProjector:
         if match_date is None:
             # ponytail: naive, not datetime.now(timezone.utc) — EloEngine/StatsBombAggregator
             # compare against persisted naive timestamps; a tz-aware value here raises inside
-            # elo_engine.get_context(), which the caller's broad except then silently reports
+            # get_elo_context(), which the caller's broad except then silently reports
             # as "identity unverified" instead of the real cause.
             match_date = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -613,7 +613,8 @@ class UpcomingMatchFeatureProjector:
             match_date,
         )
 
-        elo = self.elo_engine.get_context(
+        elo = await get_elo_context(
+            db,
             home_team_id=str(home_team_id),
             away_team_id=str(away_team_id),
             league=league,

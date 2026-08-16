@@ -6,12 +6,13 @@
  * Displays only the canonical SabiScore provider registry:
  *   Football-Data.org | API-Football | Sportmonks | The Odds API | ESPN
  *
- * Status icons follow directive §17:
- *   ✓ Live        — VERIFIED
- *   ⚠ Stale       — PARTIAL / CONFIGURED_UNVERIFIED
- *   ✗ Unavailable — UNAVAILABLE / CIRCUIT_OPEN / INVALID
+ * Status semantics keep configuration separate from explicit live validation:
+ *   ✓ Live-validated — VERIFIED
+ *   ◌ Not validated  — CONFIGURED_UNVERIFIED (neutral, not an outage)
+ *   ⚠ Partial        — PARTIAL
+ *   ✗ Unavailable    — UNAVAILABLE / CIRCUIT_OPEN / INVALID / SCHEMA_INVALID
  *   ○ Not configured — UNCONFIGURED
- *   ⏸ Quota       — RATE_LIMITED
+ *   ⏸ Quota          — RATE_LIMITED
  *
  * Data comes from /api/providers/health (proxied to backend); never from
  * provider hosts directly.
@@ -33,6 +34,7 @@ type ProviderStatus =
   | "CIRCUIT_OPEN"
   | "RATE_LIMITED"
   | "INVALID"
+  | "SCHEMA_INVALID"
   | "CONFLICTING";
 
 interface ProviderRow {
@@ -66,20 +68,22 @@ function statusBadge(row: ProviderRow): { icon: string; label: string; className
   if (!row.enabled) return { icon: "○", label: "Not configured", className: "pm-off" };
   switch (row.status) {
     case "VERIFIED":
-      return { icon: "✓", label: "Live", className: "pm-live" };
+      return { icon: "✓", label: "Live-validated", className: "pm-live" };
     case "RATE_LIMITED":
       return { icon: "⏸", label: "Quota exhausted", className: "pm-quota" };
     case "CIRCUIT_OPEN":
     case "UNAVAILABLE":
     case "INVALID":
+    case "SCHEMA_INVALID":
       return { icon: "✗", label: "Unavailable", className: "pm-down" };
     case "UNCONFIGURED":
       return { icon: "○", label: "Not configured", className: "pm-off" };
     case "CONFLICTING":
       return { icon: "⚡", label: "Conflict", className: "pm-conflict" };
     case "PARTIAL":
+      return { icon: "⚠", label: "Partial evidence", className: "pm-stale" };
     case "CONFIGURED_UNVERIFIED":
-      return { icon: "⚠", label: "Stale", className: "pm-stale" };
+      return { icon: "◌", label: "Not live-validated", className: "pm-unverified" };
     default:
       return { icon: "?", label: row.status, className: "pm-off" };
   }
@@ -143,8 +147,8 @@ export function ProviderMeter() {
       )}
 
       <p className="pm-disclaimer">
-        Status reflects configuration at last probe. A provider marked ○ requires
-        its key to be set in the backend environment.
+        Configuration and live validation are separate. Routine health checks do not
+        spend provider quota; live validation appears only after an explicit operator probe.
       </p>
 
       <style>{`
@@ -187,6 +191,8 @@ export function ProviderMeter() {
         .pm-live .pm-label { color: #4ade80; }
         .pm-stale .pm-icon { color: #facc15; }
         .pm-stale .pm-label { color: #facc15; }
+        .pm-unverified .pm-icon { color: #94a3b8; }
+        .pm-unverified .pm-label { color: #94a3b8; }
         .pm-down .pm-icon { color: #f87171; }
         .pm-down .pm-label { color: #f87171; }
         .pm-quota .pm-icon { color: #c084fc; }

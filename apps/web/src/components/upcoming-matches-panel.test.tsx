@@ -31,7 +31,16 @@ function fixtures(count: number) {
     best_value_bet: null,
     data_quality: null,
     data_gaps: [],
-    staleness_seconds: 0,
+    // Real contract per lib/api.ts is `number | null`. A bare `0` here
+    // narrows via inference to exactly `number`, which is what let a later
+    // `staleness_seconds = null` assignment silently fail typecheck instead
+    // of exercising the "missing/malformed" freshness path it's meant to
+    // test. This fixture is intentionally a partial double (only the fields
+    // the component under test reads), so the fix is local to this one
+    // field rather than casting the whole object to the full UpcomingMatch
+    // interface.
+    staleness_seconds: 0 as number | null,
+    staleness_available: true,
     source: "postgres",
   }));
 }
@@ -103,6 +112,46 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
       "aria-expanded",
       "false",
     );
+  });
+
+
+  it("treats an explicit unavailable freshness flag as Unknown even when legacy age is zero", async () => {
+    const response = upcomingResponse(1);
+    response.upcoming_matches[0].staleness_seconds = 0;
+    response.upcoming_matches[0].staleness_available = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        return new Response(
+          JSON.stringify(url.startsWith("/api/leagues") ? LEAGUES : response),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    renderPanel();
+    expect(await screen.findByText("Unknown")).toBeInTheDocument();
+    expect(screen.queryByText("Fresh")).not.toBeInTheDocument();
+  });
+
+  it("renders missing freshness as Unknown rather than Fresh", async () => {
+    const response = upcomingResponse(1);
+    response.upcoming_matches[0].staleness_seconds = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        return new Response(
+          JSON.stringify(url.startsWith("/api/leagues") ? LEAGUES : response),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    renderPanel();
+    expect(await screen.findByText("Unknown")).toBeInTheDocument();
+    expect(screen.queryByText("Fresh")).not.toBeInTheDocument();
   });
 
   it("puts soft coverage in the UCL accessible name and shows a touch-visible legend", async () => {

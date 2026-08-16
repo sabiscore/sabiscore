@@ -18,22 +18,18 @@ const FLAG_CLASS_HEADER = "rounded-sm h-4 w-4 flex-shrink-0";
 const FLAG_CLASS_TEAM = "rounded-sm h-3.5 w-3.5 flex-shrink-0";
 
 /**
- * Head-to-head fun facts generator
+ * Neutral analysis-focus copy. These lines describe what the evidence gate may
+ * inspect; they never claim a historical fact or source is actually available.
  */
-function generateH2HFact(homeTeam: string, awayTeam: string): string {
-  const facts = [
-    `Both ${homeTeam} and ${awayTeam} will be looking to impose their style early`,
-    `Chance creation and finishing quality will shape this encounter`,
-    `Home advantage could be crucial in this fixture`,
-    `Both teams have quality players who can decide the match`,
-    `Previous meetings suggest this could be a close contest`,
-    `Form and momentum will be key factors in this match`,
-    `Set pieces could play an important role in this fixture`,
-    `The tactical battle between the managers will be fascinating`,
+function analysisFocus(homeTeam: string, awayTeam: string): string {
+  const focuses = [
+    `Checking verified form evidence for ${homeTeam} and ${awayTeam}`,
+    "Comparing team-strength signals only where source coverage is available",
+    "Checking whether a coherent 1X2 market is available for comparison",
+    "Reviewing evidence freshness before any actionability decision",
   ];
-  // Use deterministic selection based on team names
-  const hash = (homeTeam + awayTeam).split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-  return facts[hash % facts.length];
+  const hash = (homeTeam + awayTeam).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return focuses[hash % focuses.length];
 }
 
 interface MatchLoadingInterstitialProps {
@@ -50,8 +46,8 @@ interface MatchLoadingInterstitialProps {
  * 
  * A rich, engaging loading experience that:
  * - Shows animated team crests/colors
- * - Displays rotating fun facts and stats
- * - Provides a progressive confidence meter
+ * - Displays rotating evidence-safe status lines
+ * - Provides a loading-progress indicator (never model confidence)
  * - Creates smooth transitions to prediction screen
  * 
  * Design goals:
@@ -70,7 +66,7 @@ export function MatchLoadingInterstitial({
 }: MatchLoadingInterstitialProps) {
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const [progressValue, setProgressValue] = useState(0);
-  const [showH2HFact, setShowH2HFact] = useState(false);
+  const [showAnalysisFocus, setShowAnalysisFocus] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +79,7 @@ export function MatchLoadingInterstitial({
   const homeLogoMeta = useMemo(() => resolveTeamLogo(homeCanonical), [homeCanonical]);
   const awayLogoMeta = useMemo(() => resolveTeamLogo(awayCanonical), [awayCanonical]);
   const leagueConfig = useMemo(() => LEAGUE_CONFIG[league], [league]);
-  const h2hFact = useMemo(() => generateH2HFact(homeTeam, awayTeam), [homeTeam, awayTeam]);
+  const focusText = useMemo(() => analysisFocus(homeTeam, awayTeam), [homeTeam, awayTeam]);
   const homeCountryCode = homeTeamData.countryCode || leagueConfig?.countryCode;
   const awayCountryCode = awayTeamData.countryCode || leagueConfig?.countryCode;
 
@@ -118,9 +114,9 @@ export function MatchLoadingInterstitial({
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  // Show H2H fact after initial animation
+  // Show a neutral analysis-focus line after the initial animation
   useEffect(() => {
-    const timer = setTimeout(() => setShowH2HFact(true), 1500);
+    const timer = setTimeout(() => setShowAnalysisFocus(true), 1500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -316,9 +312,9 @@ export function MatchLoadingInterstitial({
         </div>
       </div>
 
-      {/* H2H Fun Fact */}
+      {/* Evidence-safe analysis focus — never a synthetic H2H/stat claim. */}
       <AnimatePresence mode="wait">
-        {showH2HFact && (
+        {showAnalysisFocus && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -326,7 +322,7 @@ export function MatchLoadingInterstitial({
             className="text-center mb-6"
           >
             <p className="text-sm text-slate-400 italic px-4">
-              &ldquo;{h2hFact}&rdquo;
+              {focusText}
             </p>
           </motion.div>
         )}

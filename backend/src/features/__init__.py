@@ -1,6 +1,6 @@
 """Phase 8 feature engineering modules.
 
-New features in this package extend CANONICAL_FEATURES_68 → CANONICAL_FEATURES_86.
+New features in this package extend CANONICAL_FEATURES_68 → the canonical Phase 8 89-feature schema (legacy CANONICAL_FEATURES_86 alias retained).
 All rating engines mirror the elo_engine.py pattern: parquet persistence, idempotent
 updates, chronological processing enforced by the caller.
 """

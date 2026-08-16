@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.database import (  # noqa: F401
@@ -278,6 +278,27 @@ class MatchPredictionLog(Base):
     )
 
 
+class EloRatingSnapshot(Base):
+    """Durable pre/post-match Elo state keyed to real Match/Team identities."""
+
+    __tablename__ = "elo_rating_snapshots"
+    __table_args__ = (
+        UniqueConstraint("match_id", "team_id", name="uq_elo_rating_match_team"),
+        Index("ix_elo_rating_team_league_date", "team_id", "league", "match_date"),
+        Index("ix_elo_rating_match", "match_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    match_id: Mapped[str] = mapped_column(String, ForeignKey("matches.id"), nullable=False)
+    team_id: Mapped[str] = mapped_column(String, ForeignKey("teams.id"), nullable=False)
+    pre_match_elo: Mapped[float] = mapped_column(Float, nullable=False)
+    post_match_elo: Mapped[float] = mapped_column(Float, nullable=False)
+    league: Mapped[str] = mapped_column(String, nullable=False)
+    season: Mapped[str] = mapped_column(String, nullable=False)
+    match_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 class ProviderHealthLog(Base):
     __tablename__ = "provider_health_log"
     __table_args__ = (
@@ -356,6 +377,7 @@ __all__ = [
     "ProviderEventMapping",
     "MarketSnapshot",
     "MatchPredictionLog",
+    "EloRatingSnapshot",
     "ProviderHealthLog",
     "ProviderCapabilityObservation",
     "CircuitState",

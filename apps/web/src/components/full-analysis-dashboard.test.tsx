@@ -123,6 +123,11 @@ describe("reduced-evidence display honesty", () => {
           calibration_method: "isotonic",
           calibration_applied: false,
           overlay_applied: false,
+          // Added with the manifest-authority provenance fields (model-status.ts /
+          // prediction.py's _ArtifactBundle) — this fixture predates them and was
+          // the one non-null-safety typecheck break the patch introduced elsewhere.
+          certification_state: "UNVERIFIED",
+          coverage: "dedicated",
         }}
       />,
     );

@@ -5,6 +5,37 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - v4.2 trust, provenance, and durable-Elo hardening (2026-08-16)
+
+### Added
+
+- Added manifest-backed inference provenance (`generation`, feature schema, manifest/artifact hashes, certification state, coverage) to the canonical prediction result and propagated it through full-analysis/upcoming contracts.
+- Added PostgreSQL `elo_rating_snapshots` (Alembic `0007_durable_elo_state`) as the durable live Elo authority, real-`Team.id` lookup/update service, settlement-coupled chronological updates, readiness observability, and an explicit `--dry-run`/`--apply` historical replay path.
+- Added shared frontend model-status and freshness contracts so desktop/mobile surfaces consume the same authoritative state and missing evidence cannot become a positive freshness claim.
+- Added a refined v4.2 execution prompt that makes distributed queues, CatBoost runtime, extra animation libraries, and local LLM workers evidence-triggered rather than mandatory production dependencies.
+
+### Fixed
+
+- Stopped deriving semantic model version from deserialized artifact shape and stopped silently truncating oversized feature vectors to an older model width; schema mismatch now fails closed.
+- Separated provider configuration/readiness from opt-in quota-consuming live validation; `CONFIGURED_UNVERIFIED` is neutral rather than an outage.
+- Prevented `null`/missing fixture staleness from rendering as `Fresh`.
+- Replaced hard-coded/approximate mobile operational status with active model version, certification, and provider configuration from authoritative queries.
+- Enforced active-generation certification on public value/Kelly output: research probabilities may remain visible, but uncertified generations cannot publish positive stake/value recommendations.
+- Removed pseudo H2H/loading claims generated from team names and made loading copy conditional on evidence availability.
+- Corrected current Phase-8 prose to the registry-authoritative 89-feature schema while retaining legacy `CANONICAL_FEATURES_86` identifiers only as compatibility aliases.
+
+### Validation evidence
+
+- `python scripts/verify_active_artifacts.py` — **PASS**: six hash-locked `v5_phase7-20260808` artifact pairs verified; certification remains `UNVERIFIED`.
+- `python -m compileall -q backend/src backend/scripts/replay_elo_from_db.py backend/tests` — **PASS**.
+- SQLAlchemy metadata smoke including `elo_rating_snapshots` — **PASS**.
+- TypeScript/TSX syntax transpilation of the changed source/test files with the available global TypeScript compiler — **PASS**.
+- Focused/full pytest — **BLOCKED in this sandbox**, not failed: the environment lacks the Python `redis` dependency.
+- pnpm lint/typecheck/test/build — **BLOCKED in this sandbox**, not failed: pnpm is not provisioned and registry access returned `EAI_AGAIN`.
+- No Git commit/push/deploy was performed from the uploaded archive because it contains no `.git` metadata and this sandbox cannot establish deployment parity.
+
+---
+
 ## Unreleased - C9 season-aware league filter + homepage UX polish (2026-08-15)
 
 ### Added

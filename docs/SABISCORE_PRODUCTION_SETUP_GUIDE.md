@@ -1182,6 +1182,33 @@ Frontend-only session. No backend files, Alembic, or betting-engine changes.
 - Sportmonks `probe()` now calls `/leagues` (cheapest call valid on every plan). Live-verified: bare `/sidelined` 404s in the subscribed API shape, so the old probe could never verify a valid token. All five providers report `configured` via `providers status`.
 - `docs/Public-ESPN-API-main/` (vendored read-only reference repo) is now gitignored.
 
+## v4.2 Durable Elo Activation (2026-08-16)
+
+Live Elo serving now uses PostgreSQL `elo_rating_snapshots` as the durable authority.
+`ELO_PARQUET_PATH` remains only for offline/backward-compatible tooling and must not
+be treated as persistent state on Render. Historical replay is deliberately
+fail-safe: it performs a dry run unless `--apply` is supplied explicitly.
+
+Run these steps against the intended production database only after the usual
+operator/change-control approval:
+
+```bash
+cd backend
+alembic upgrade head
+python scripts/replay_elo_from_db.py --dry-run
+python scripts/replay_elo_from_db.py --apply
+```
+
+Then verify the API readiness payload reports the Elo authority as `postgres` and
+non-zero row/team coverage when historical finished matches exist. Exercise at least
+one verified upcoming fixture and confirm its Elo context resolves by real `Team.id`
+rather than publishing a neutral default. Settlement subsequently advances Elo from
+newly finished matches idempotently, so no second independent Elo scheduler is
+required.
+
+Do not mark this capability DATA_FED/VERIFIED from code presence alone. Migration,
+backfill, row coverage, and a production-equivalent fixture lookup must be observed.
+
 ## Known Limitations
 
 - Live provider tests are opt-in with `PROVIDER_LIVE_TESTS=false` by default.
