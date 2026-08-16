@@ -6,6 +6,8 @@ Contracts verified:
   3. Malformed date — un-parseable match_date skips that match; valid ones still insert.
   4. Provider reschedules update mutable kickoff metadata without changing
      canonical identity or minting an orphan canonical fixture.
+  5. True identity conflicts roll back all canonical side effects while the
+     raw provider fixture and later batch entries still commit.
 """
 from __future__ import annotations
 
@@ -176,3 +178,55 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
     rows = (await session.execute(text("SELECT id FROM matches"))).fetchall()
     ids = {row[0] for row in rows}
     assert "fd-match-41" in ids
+
+
+async def test_identity_conflict_rolls_back_canonical_attempt_only(
+    session: AsyncSession,
+) -> None:
+    """A provider participant conflict cannot leak canonical rows from its savepoint."""
+    from src.services.fixture_sync_service import sync_upcoming_fixtures
+
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client([_match(50)])
+        await sync_upcoming_fixtures(session)
+
+    conflicting = _match(50, date="2026-08-02T18:00:00Z")
+    conflicting["home_team"] = "Different Team 50"
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client([conflicting, _match(51)])
+        count = await sync_upcoming_fixtures(session)
+
+    assert count == 1
+
+    # Raw provider data remains inspectable and the following fixture commits.
+    raw_home = (
+        await session.execute(
+            text(
+                "SELECT t.name FROM matches m JOIN teams t ON t.id=m.home_team_id "
+                "WHERE m.id='fd-match-50'"
+            )
+        )
+    ).scalar_one()
+    assert raw_home == "Different Team 50"
+    assert (
+        await session.execute(text("SELECT count(*) FROM matches WHERE id='fd-match-51'"))
+    ).scalar_one() == 1
+
+    # The failed canonical attempt did not repoint the durable event or leak a
+    # canonical team/fixture for the conflicting participant.
+    assert (
+        await session.execute(
+            text(
+                "SELECT count(*) FROM provider_event_mappings "
+                "WHERE provider='football-data.org' AND provider_event_id='fd-match-50'"
+            )
+        )
+    ).scalar_one() == 1
+    assert (
+        await session.execute(
+            text("SELECT count(*) FROM canonical_teams WHERE name='Different Team 50'")
+        )
+    ).scalar_one() == 0
+    assert (
+        await session.execute(text("SELECT count(*) FROM canonical_fixtures"))
+    ).scalar_one() == 2
