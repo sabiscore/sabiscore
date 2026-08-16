@@ -65,11 +65,11 @@ async def ensure_canonical_fixture(
 ) -> str:
     """Upsert a verified fixture and mappings without guessing ambiguous names.
 
-    A verified provider-event mapping is the durable identity anchor once it
-    exists. Kickoff time is mutable fixture metadata: legitimate reschedules
-    update the already-mapped canonical fixture in place, but only when the
-    competition and both canonical participants are unchanged. Participant or
-    competition drift remains a hard identity conflict.
+    A verified ``(provider, provider_event_id)`` mapping is the durable identity
+    anchor once it exists. Kickoff time is mutable fixture metadata: legitimate
+    reschedules update the already-mapped canonical fixture in place, but only
+    when the competition and both canonical participants are unchanged.
+    Participant or competition drift remains a hard identity conflict.
     """
 
     if not all((provider, provider_event_id, competition_id, home_name, away_name)):
@@ -144,21 +144,23 @@ async def ensure_canonical_fixture(
             mapping.evidence = evidence
             mapping.checked_at = now
 
-    # Make new canonical teams visible before any fixture insert/update that
-    # references them. This boundary also prevents FK ordering regressions.
     await session.flush()
 
+    # The provider event ID is the durable external anchor. Do not scope this
+    # lookup by the newly reported competition: doing so could mint a second
+    # mapping for the same external event if the provider reclassified it.
     event_mapping = (
         await session.execute(
             select(ProviderEventMapping).where(
                 ProviderEventMapping.provider == provider,
                 ProviderEventMapping.provider_event_id == provider_event_id,
-                ProviderEventMapping.competition == competition_id,
             )
         )
     ).scalar_one_or_none()
 
     if event_mapping is not None:
+        if event_mapping.competition != competition_id:
+            raise ValueError("provider event conflicts with an existing competition")
         mapped_fixture_id = event_mapping.canonical_fixture_id
         if not mapped_fixture_id:
             raise ValueError("provider event mapping has no canonical fixture")
@@ -172,8 +174,6 @@ async def ensure_canonical_fixture(
         ):
             raise ValueError("provider event conflicts with an existing canonical fixture")
 
-        # Same verified provider event + same participants = the same fixture.
-        # Keep the canonical PK stable and update mutable schedule metadata.
         mapped_fixture.kickoff_utc = kickoff_utc
         mapped_fixture.season = season
         mapped_fixture.status = status
