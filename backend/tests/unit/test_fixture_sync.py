@@ -5,7 +5,7 @@ Contracts verified:
   2. Unsupported competition — unknown league names are silently dropped.
   3. Malformed date — un-parseable match_date skips that match; valid ones still insert.
   4. Provider reschedules update mutable kickoff metadata without changing
-     canonical identity or minting an orphan canonical fixture.
+     canonical identity and safely remove only unreferenced legacy duplicates.
   5. True identity conflicts roll back all canonical side effects while the
      raw provider fixture and later batch entries still commit.
 """
@@ -21,6 +21,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base
 from src.db import models as _db_models  # noqa: F401
+from src.db.models import CanonicalFixture
 
 
 @pytest.fixture
@@ -136,6 +137,28 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
             )
         )
     ).scalar_one()
+    original_fixture = await session.get(CanonicalFixture, original_mapping)
+    assert original_fixture is not None
+
+    # Reproduce the exact legacy side effect observed in production: the old
+    # code staged a kickoff-derived duplicate before discovering the provider
+    # event was already mapped, and the caller later committed that orphan.
+    legacy_orphan_id = "fixture-legacy-reschedule-orphan"
+    session.add(
+        CanonicalFixture(
+            id=legacy_orphan_id,
+            competition_id=original_fixture.competition_id,
+            season=original_fixture.season,
+            home_team_id=original_fixture.home_team_id,
+            away_team_id=original_fixture.away_team_id,
+            kickoff_utc=datetime(2026, 8, 1, 18, 0),
+            status="scheduled",
+            reconciliation_status="VERIFIED",
+            reconciliation_confidence=1.0,
+            evidence={"provider_event_id": "fd-match-40", "source": "football-data.org"},
+        )
+    )
+    await session.commit()
 
     matches = [
         _match(40, date="2026-08-01T18:00:00Z"),
@@ -169,11 +192,12 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
         )
     ).scalar_one()
     assert canonical_kickoff == datetime(2026, 8, 1, 18, 0)
+    assert await session.get(CanonicalFixture, legacy_orphan_id) is None
 
     canonical_count = int(
         (await session.execute(text("SELECT count(*) FROM canonical_fixtures"))).scalar_one()
     )
-    assert canonical_count == 2, "reschedule minted an orphan canonical fixture"
+    assert canonical_count == 2, "reschedule left or minted an orphan canonical fixture"
 
     rows = (await session.execute(text("SELECT id FROM matches"))).fetchall()
     ids = {row[0] for row in rows}
@@ -198,7 +222,6 @@ async def test_identity_conflict_rolls_back_canonical_attempt_only(
 
     assert count == 1
 
-    # Raw provider data remains inspectable and the following fixture commits.
     raw_home = (
         await session.execute(
             text(
@@ -212,8 +235,6 @@ async def test_identity_conflict_rolls_back_canonical_attempt_only(
         await session.execute(text("SELECT count(*) FROM matches WHERE id='fd-match-51'"))
     ).scalar_one() == 1
 
-    # The failed canonical attempt did not repoint the durable event or leak a
-    # canonical team/fixture for the conflicting participant.
     assert (
         await session.execute(
             text(
