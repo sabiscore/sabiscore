@@ -74,16 +74,11 @@ def test_canonical_verification_files_are_nonempty_and_read_only() -> None:
 
 def test_canonical_verification_files_have_one_transaction_wrapper() -> None:
     for path in _CANONICAL_AUDITS:
-        statements = split_sql_statements(path.read_text(encoding="utf-8"))
-        normalized = [
-            " ".join(statement.strip().lower().split())
-            for statement in statements
-            if statement.strip()
-        ]
-        assert normalized.count("begin transaction read only") == 1, (
+        sql = path.read_text(encoding="utf-8").upper()
+        assert sql.count("BEGIN TRANSACTION READ ONLY;") == 1, (
             f"{path.name} must contain exactly one BEGIN TRANSACTION READ ONLY wrapper"
         )
-        assert normalized.count("rollback") == 1, (
+        assert sql.count("ROLLBACK;") == 1, (
             f"{path.name} must contain exactly one ROLLBACK wrapper"
         )
 
