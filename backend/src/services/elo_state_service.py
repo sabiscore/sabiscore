@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
@@ -196,7 +196,7 @@ async def apply_finished_match_to_elo(session: AsyncSession, match: Match) -> bo
     k_factor = float(settings.elo_k_base) * _league_importance(league)
     home_post = context.home_elo + k_factor * (home_actual - home_expected)
     away_post = context.away_elo + k_factor * (away_actual - away_expected)
-    created_at = datetime.utcnow()
+    created_at = _naive_utc(datetime.now(timezone.utc))
 
     session.add_all(
         [
