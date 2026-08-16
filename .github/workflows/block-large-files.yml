@@ -11,12 +11,24 @@ permissions:
 
 jobs:
   scan:
-    name: Reject newly introduced files over 10 MB
+    name: Reject repository hygiene violations
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Reject tracked pytest scratch artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t scratch_paths < <(git ls-files | grep -E '(^|/)\.pytest_tmp[^/]*/' || true)
+          if (( ${#scratch_paths[@]} > 0 )); then
+            printf 'Tracked pytest scratch artifacts are forbidden:\n' >&2
+            printf '  %s\n' "${scratch_paths[@]}" >&2
+            exit 1
+          fi
+          echo "No tracked pytest scratch artifacts found."
 
       - name: Find newly added or modified large files
         env:

@@ -1,6 +1,6 @@
 -- backend/scripts/verify_elo.sql
 -- Read-only production evidence audit for durable real-identity Elo.
--- Run with psql against the production-equivalent PostgreSQL database.
+-- Run against the production-equivalent PostgreSQL database.
 -- This script MUST NOT be used to advance/replay state.
 
 BEGIN TRANSACTION READ ONLY;

@@ -61,6 +61,7 @@ apps/web/sabiscore.db
 # Testing
 coverage/
 .pytest_cache/
+.pytest_tmp*/
 .coverage
 docs/Sabi-Engine-Upgrade-docs
 # Vendored upstream reference repo (read-only endpoint intelligence, not a dependency)
@@ -164,6 +165,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.pytest_tmp*/
 test-results/
 
 # Jupyter Notebook
