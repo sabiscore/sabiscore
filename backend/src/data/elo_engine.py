@@ -1,4 +1,10 @@
-"""Phase 7-A Elo rating engine with pre-match snapshots and idempotent updates."""
+"""Phase 7-A Elo rating engine with pre-match snapshots and idempotent updates.
+
+Offline/backward-compatible research tooling only. Production feature serving
+reads durable state from PostgreSQL via ``src.services.elo_state_service``
+(migration 0007_durable_elo_state) — this module and its Parquet cache are not
+read by anything in the live prediction path.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import pandas as pd
 
@@ -38,6 +44,20 @@ class EloContext:
     def resolved(self) -> bool:
         """True only when both sides have real ratings backing the context."""
         return self.home_resolved and self.away_resolved
+
+
+@dataclass(frozen=True)
+class EloSeedMatch:
+    """One finished match to replay through :meth:`EloEngine.seed_from_matches`."""
+
+    match_id: str
+    home_team_id: str
+    away_team_id: str
+    home_goals: int
+    away_goals: int
+    league: str
+    season: str
+    match_date: datetime
 
 
 class EloEngine:
@@ -103,10 +123,15 @@ class EloEngine:
         league: str,
         season: str,
         match_date: datetime,
+        persist: bool = True,
     ) -> Dict[str, float]:
         """Apply a post-match update while preserving pre-match snapshots.
 
         Idempotent by match_id: if the match already exists for both teams, no-op.
+
+        ``persist=False`` stages the update in the in-memory cache without
+        writing to disk — used by :meth:`seed_from_matches` so a multi-season
+        replay does one parquet write at the end instead of one per match.
         """
         table = self._load_table()
         existing = table[table["match_id"] == match_id]
@@ -155,7 +180,10 @@ class EloEngine:
 
         updated = pd.concat([table, pd.DataFrame([home_row, away_row])], ignore_index=True)
         updated = updated[self._columns]
-        self._persist(updated)
+        if persist:
+            self._persist(updated)
+        else:
+            self._cache = updated
 
         return {
             "home_pre": float(home_pre),
@@ -163,6 +191,40 @@ class EloEngine:
             "home_post": float(home_post),
             "away_post": float(away_post),
         }
+
+    def seed_from_matches(self, matches: Iterable[EloSeedMatch]) -> int:
+        """Bulk-replay finished matches to build real (non-neutral) ratings.
+
+        Without this, ``_get_pre_and_trend`` never finds prior history for any
+        team, every context falls back to the neutral 1500/1500 baseline, and
+        ``elo_difference``/``*_trend_5``/``elo_momentum_cross`` are correctly
+        reported as data gaps rather than published as a fabricated "0
+        difference" (INV-01) — on every fixture, forever, since nothing else
+        ever calls :meth:`update_after_match`. Ratings depend on chronological
+        order, so matches are sorted by date first; idempotent by match_id via
+        the same no-op path ``update_after_match`` already uses. Persists once
+        at the end, not per match — a per-match parquet rewrite would be O(n^2)
+        disk I/O for a multi-season replay.
+
+        Returns the number of matches actually applied (excludes ones already
+        present from a prior run).
+        """
+        before = len(self._load_table())
+        for m in sorted(matches, key=lambda item: item.match_date):
+            self.update_after_match(
+                match_id=m.match_id,
+                home_team_id=m.home_team_id,
+                away_team_id=m.away_team_id,
+                home_goals=m.home_goals,
+                away_goals=m.away_goals,
+                league=m.league,
+                season=m.season,
+                match_date=m.match_date,
+                persist=False,
+            )
+        final_table = self._load_table()
+        self._persist(final_table)
+        return (len(final_table) - before) // 2  # two rows (home+away) per match
 
     def _expected_scores(self, home_elo: float, away_elo: float) -> Tuple[float, float]:
         home_adv = float(settings.elo_home_advantage)
