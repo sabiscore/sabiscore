@@ -128,26 +128,52 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
 
         from .canonical_identity_service import ensure_canonical_fixture
 
-        await ensure_canonical_fixture(
-            session,
-            provider="football-data.org",
-            provider_event_id=match_id,
-            competition_id=league_id,
-            competition_name=league_name,
-            home_provider_id=home_id,
-            home_name=home_name,
-            away_provider_id=away_id,
-            away_name=away_name,
-            kickoff_utc=match_date,
-            season=canonical_season(match_date),
-            status="scheduled",
-            evidence={
-                "source": raw.get("source") or "football-data.org",
-                "provider_event_id": match_id,
-                "provider_timestamp": raw_date,
-                "reconciled_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        try:
+            await ensure_canonical_fixture(
+                session,
+                provider="football-data.org",
+                provider_event_id=match_id,
+                competition_id=league_id,
+                competition_name=league_name,
+                home_provider_id=home_id,
+                home_name=home_name,
+                away_provider_id=away_id,
+                away_name=away_name,
+                kickoff_utc=match_date,
+                season=canonical_season(match_date),
+                status="scheduled",
+                evidence={
+                    "source": raw.get("source") or "football-data.org",
+                    "provider_event_id": match_id,
+                    "provider_timestamp": raw_date,
+                    "reconciled_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except ValueError:
+            # Canonical fixture identity is partly derived from kickoff_utc
+            # (canonical_identity_service._stable_id), so a legitimate
+            # reschedule (broadcaster/league moves the kickoff time) makes a
+            # previously-mapped provider event recompute to a different
+            # fixture_id, and ensure_canonical_fixture() correctly refuses to
+            # silently repoint the mapping. Left uncaught here, this aborted
+            # the WHOLE sync_upcoming_fixtures() batch every tick (observed
+            # in production 2026-08-16: "provider event conflicts with an
+            # existing canonical fixture", zero fixtures synced that tick) —
+            # the same one-poison-record-wedges-the-batch class as the Elo
+            # self-play defect fixed earlier this session. Skip identity
+            # reconciliation for just this fixture and keep going; the Match
+            # row above (raw scheduling data) still commits normally. A
+            # kickoff-independent identity key is a separate, larger change
+            # — see docs/DEBT.md.
+            logger.warning(
+                "fixture_sync: canonical identity conflict for match_id=%s "
+                "(%s vs %s) — likely a reschedule; skipping identity "
+                "reconciliation for this fixture",
+                match_id,
+                home_name,
+                away_name,
+            )
+            metrics_collector.increment("fixture_sync.identity_conflicts")
 
     await session.commit()
     duration_ms = (time.perf_counter() - started_at) * 1000

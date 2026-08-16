@@ -125,3 +125,35 @@ async def test_synced_league_id_is_canonical(session: AsyncSession) -> None:
     assert match_league_ids <= {"EPL", "EREDIVISIE"}, (
         f"Match league_ids contain non-canonical values: {match_league_ids}"
     )
+
+
+async def test_canonical_identity_conflict_does_not_wedge_the_batch(session: AsyncSession) -> None:
+    """A rescheduled fixture (same provider_event_id, new kickoff_utc) recomputes a
+    different canonical fixture_id and ensure_canonical_fixture() correctly refuses
+    to repoint the existing mapping. Before the fix, that ValueError propagated out
+    of the loop, aborted session.commit() for the whole tick, and silently dropped
+    every other fixture in the same batch too — observed in production 2026-08-16.
+    """
+    from src.services.fixture_sync_service import sync_upcoming_fixtures
+
+    # First sync establishes the canonical mapping for fd-match-40 at its initial kickoff.
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client([_match(40, date="2026-07-15T15:00:00Z")])
+        await sync_upcoming_fixtures(session)
+
+    # Second sync: fd-match-40 comes back rescheduled (different kickoff_utc — the
+    # exact trigger for the conflict) alongside an unrelated new fixture, fd-match-41.
+    matches = [
+        _match(40, date="2026-08-01T18:00:00Z"),  # reschedule — triggers the conflict
+        _match(41),                                 # must still sync despite the above
+    ]
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client(matches)
+        count = await sync_upcoming_fixtures(session)  # must not raise
+
+    assert count == 1  # fd-match-41 inserted; fd-match-40 already existed as a Match row
+    from sqlalchemy import text
+
+    rows = (await session.execute(text("SELECT id FROM matches"))).fetchall()
+    ids = {row[0] for row in rows}
+    assert "fd-match-41" in ids, "batch was wedged — the fixture after the conflict never committed"
