@@ -18,6 +18,7 @@ _CANONICAL_AUDITS = (
     _BACKEND_DIR / "scripts" / "verify_clv_settlement.sql",
     _BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql",
 )
+_LOCAL_COMPAT_RUNNER = _BACKEND_DIR / "scripts" / "run_verification_sql_local.py"
 
 
 def test_normalize_postgres_url_requires_postgres() -> None:
@@ -65,3 +66,11 @@ def test_canonical_verification_files_are_nonempty_and_read_only() -> None:
         assert sql.strip(), f"{path.name} must never be committed empty"
         executable = validate_read_only_statements(split_sql_statements(sql))
         assert executable, f"{path.name} must contain at least one read-only query"
+
+
+def test_local_compat_runner_cannot_restore_sqlite_fallback() -> None:
+    source = _LOCAL_COMPAT_RUNNER.read_text(encoding="utf-8")
+    assert "from run_verification_sql import main" in source
+    assert "sqlite+aiosqlite" not in source
+    assert "SABISCORE_ALLOW_INSECURE_FALLBACK" not in source
+    assert "src.db.session" not in source
