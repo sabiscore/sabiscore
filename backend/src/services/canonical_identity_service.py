@@ -7,13 +7,15 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import (
     CanonicalCompetition,
     CanonicalFixture,
     CanonicalTeam,
+    MarketSnapshot,
+    MatchPredictionLog,
     ProviderEventMapping,
     ProviderTeamMapping,
 )
@@ -45,6 +47,75 @@ async def canonical_fixture_id_for_provider_event(
             )
         )
     ).scalars().first()
+
+
+async def _remove_unreferenced_reschedule_orphans(
+    session: AsyncSession,
+    *,
+    mapped_fixture_id: str,
+    provider_event_id: str,
+    competition_id: str,
+    home_team_id: str,
+    away_team_id: str,
+    kickoff_utc: datetime,
+) -> int:
+    """Delete only duplicate fixtures provably left by the old reschedule bug.
+
+    The pre-fix writer could insert a kickoff-derived canonical fixture and then
+    discover that ``provider_event_id`` was already mapped to an older fixture.
+    Because the caller caught the conflict and committed the batch, that new
+    fixture survived without a provider mapping. A candidate is safe to remove
+    only when all stable identity fields and provider-event evidence match the
+    verified reschedule and no mapping, market snapshot, or prediction log
+    references it.
+    """
+
+    candidates = (
+        (
+            await session.execute(
+                select(CanonicalFixture).where(
+                    CanonicalFixture.id != mapped_fixture_id,
+                    CanonicalFixture.competition_id == competition_id,
+                    CanonicalFixture.home_team_id == home_team_id,
+                    CanonicalFixture.away_team_id == away_team_id,
+                    CanonicalFixture.kickoff_utc == kickoff_utc,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    removed = 0
+    for candidate in candidates:
+        candidate_evidence = candidate.evidence or {}
+        if candidate_evidence.get("provider_event_id") != provider_event_id:
+            continue
+
+        has_event_mapping = bool(
+            await session.scalar(
+                select(
+                    exists().where(ProviderEventMapping.canonical_fixture_id == candidate.id)
+                )
+            )
+        )
+        has_market_snapshot = bool(
+            await session.scalar(
+                select(exists().where(MarketSnapshot.canonical_fixture_id == candidate.id))
+            )
+        )
+        has_prediction = bool(
+            await session.scalar(
+                select(exists().where(MatchPredictionLog.canonical_fixture_id == candidate.id))
+            )
+        )
+        if has_event_mapping or has_market_snapshot or has_prediction:
+            continue
+
+        await session.delete(candidate)
+        removed += 1
+
+    return removed
 
 
 async def ensure_canonical_fixture(
@@ -80,6 +151,39 @@ async def ensure_canonical_fixture(
         kickoff_utc = kickoff_utc.astimezone(timezone.utc).replace(tzinfo=None)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
+    # Resolve the durable provider-event anchor before staging canonical rows.
+    # This catches competition drift without leaving pending side effects.
+    event_mapping = (
+        await session.execute(
+            select(ProviderEventMapping).where(
+                ProviderEventMapping.provider == provider,
+                ProviderEventMapping.provider_event_id == provider_event_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if event_mapping is not None and event_mapping.competition != competition_id:
+        raise ValueError("provider event conflicts with an existing competition")
+
+    team_ids = [
+        _stable_id("team", competition_id, home_name),
+        _stable_id("team", competition_id, away_name),
+    ]
+
+    mapped_fixture: CanonicalFixture | None = None
+    if event_mapping is not None:
+        mapped_fixture_id = event_mapping.canonical_fixture_id
+        if not mapped_fixture_id:
+            raise ValueError("provider event mapping has no canonical fixture")
+        mapped_fixture = await session.get(CanonicalFixture, mapped_fixture_id)
+        if mapped_fixture is None:
+            raise ValueError("provider event mapping references a missing canonical fixture")
+        if (
+            mapped_fixture.competition_id != competition_id
+            or mapped_fixture.home_team_id != team_ids[0]
+            or mapped_fixture.away_team_id != team_ids[1]
+        ):
+            raise ValueError("provider event conflicts with an existing canonical fixture")
+
     competition = await session.get(CanonicalCompetition, competition_id)
     if competition is None:
         session.add(
@@ -93,13 +197,10 @@ async def ensure_canonical_fixture(
             )
         )
 
-    team_ids: list[str] = []
-    for provider_team_id, team_name in (
-        (home_provider_id, home_name),
-        (away_provider_id, away_name),
+    for provider_team_id, team_name, team_id in (
+        (home_provider_id, home_name, team_ids[0]),
+        (away_provider_id, away_name, team_ids[1]),
     ):
-        team_id = _stable_id("team", competition_id, team_name)
-        team_ids.append(team_id)
         if await session.get(CanonicalTeam, team_id) is None:
             session.add(
                 CanonicalTeam(
@@ -146,34 +247,8 @@ async def ensure_canonical_fixture(
 
     await session.flush()
 
-    # The provider event ID is the durable external anchor. Do not scope this
-    # lookup by the newly reported competition: doing so could mint a second
-    # mapping for the same external event if the provider reclassified it.
-    event_mapping = (
-        await session.execute(
-            select(ProviderEventMapping).where(
-                ProviderEventMapping.provider == provider,
-                ProviderEventMapping.provider_event_id == provider_event_id,
-            )
-        )
-    ).scalar_one_or_none()
-
-    if event_mapping is not None:
-        if event_mapping.competition != competition_id:
-            raise ValueError("provider event conflicts with an existing competition")
-        mapped_fixture_id = event_mapping.canonical_fixture_id
-        if not mapped_fixture_id:
-            raise ValueError("provider event mapping has no canonical fixture")
-        mapped_fixture = await session.get(CanonicalFixture, mapped_fixture_id)
-        if mapped_fixture is None:
-            raise ValueError("provider event mapping references a missing canonical fixture")
-        if (
-            mapped_fixture.competition_id != competition_id
-            or mapped_fixture.home_team_id != team_ids[0]
-            or mapped_fixture.away_team_id != team_ids[1]
-        ):
-            raise ValueError("provider event conflicts with an existing canonical fixture")
-
+    if event_mapping is not None and mapped_fixture is not None:
+        mapped_fixture_id = mapped_fixture.id
         mapped_fixture.kickoff_utc = kickoff_utc
         mapped_fixture.season = season
         mapped_fixture.status = status
@@ -185,6 +260,16 @@ async def ensure_canonical_fixture(
         event_mapping.reconciliation_confidence = 1.0
         event_mapping.evidence = evidence
         event_mapping.checked_at = now
+
+        await _remove_unreferenced_reschedule_orphans(
+            session,
+            mapped_fixture_id=mapped_fixture_id,
+            provider_event_id=provider_event_id,
+            competition_id=competition_id,
+            home_team_id=team_ids[0],
+            away_team_id=team_ids[1],
+            kickoff_utc=kickoff_utc,
+        )
         return mapped_fixture_id
 
     fixture_id = _stable_id(
