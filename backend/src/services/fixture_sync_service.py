@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -124,12 +125,17 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
             inserted += 1
         elif (match.status or "").lower() not in SETTLED_MATCH_STATUSES:
             previous_kickoff = match.match_date
-            match.league_id = league_id
-            match.home_team_id = home_id
-            match.away_team_id = away_id
-            match.match_date = match_date
-            match.season = season
-            match.status = "scheduled"
+            # Match is a legacy SQLAlchemy model whose class attributes are
+            # typed as Column[T]. Runtime instance assignment is valid, but
+            # static analysis cannot infer the descriptor boundary. Keep the
+            # escape hatch tightly scoped to mutation of this loaded instance.
+            runtime_match = cast(Any, match)
+            runtime_match.league_id = league_id
+            runtime_match.home_team_id = home_id
+            runtime_match.away_team_id = away_id
+            runtime_match.match_date = match_date
+            runtime_match.season = season
+            runtime_match.status = "scheduled"
             if previous_kickoff != match_date:
                 metrics_collector.increment("fixture_sync.reschedules")
                 logger.info(
@@ -222,9 +228,10 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
             already_settled += 1
             continue
 
-        match.status = "finished"
-        match.home_score = home_score
-        match.away_score = away_score
+        runtime_match = cast(Any, match)
+        runtime_match.status = "finished"
+        runtime_match.home_score = home_score
+        runtime_match.away_score = away_score
         updated += 1
 
     await session.commit()
