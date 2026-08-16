@@ -92,13 +92,8 @@ jobs:
         working-directory: backend
         run: alembic upgrade head
 
-      - name: Alembic schema drift check (advisory — legacy index declaration debt)
+      - name: Alembic schema drift check
         working-directory: backend
-        # Non-blocking: this repo carries known legacy index-declaration drift
-        # between migration-created indexes and ORM declarations. Keep the drift
-        # report visible while allowing downstream quality gates (zero-fab + tests)
-        # to execute and enforce correctness on each PR.
-        continue-on-error: true
         run: alembic check
 
       - name: Zero-fabrication scan
