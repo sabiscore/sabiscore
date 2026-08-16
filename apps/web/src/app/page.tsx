@@ -19,6 +19,7 @@ import {
 import { BestBetSpotlight } from "@/components/best-bet-spotlight";
 import { MatchSelector } from "@/components/match-selector";
 import { ModelMetadataPanel } from "@/components/model-metadata-panel";
+import { MobilePlatformSummary } from "@/components/mobile-platform-summary";
 import { PlatformHealthPills } from "@/components/platform-health-pills";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
@@ -256,9 +257,9 @@ function PremiumHome() {
             <div className="flex flex-wrap gap-4">
               <Link
                 href="#verified-fixtures"
-                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-6 py-3 text-sm font-semibold text-slate-950 sm:px-8 sm:text-base shadow-[0_10px_35px_rgba(0,212,255,0.35)] transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_10px_35px_rgba(0,212,255,0.35)] motion-safe:transition motion-safe:hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-cyan-200 sm:px-8 sm:text-base"
               >
-                Review verified fixtures
+                Back to verified fixtures
               </Link>
               <Link
                 href="/docs"
@@ -269,19 +270,8 @@ function PremiumHome() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 lg:hidden">
-            <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-300">Model</p>
-              <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-300">Training</p>
-              <p className="mt-1 text-sm font-semibold text-slate-300">Unknown</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-slate-900/70 p-3">
-              <p className="text-[9px] uppercase tracking-wider text-slate-300">Live score</p>
-              <p className="mt-1 text-sm font-semibold text-slate-300">Pending</p>
-            </div>
+          <div className="lg:hidden">
+            <MobilePlatformSummary />
           </div>
 
           <div className="hidden flex-col gap-6 rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-[0_20px_60px_rgba(3,7,18,0.8)] sm:p-6 lg:flex">
