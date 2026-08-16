@@ -1,5 +1,73 @@
 # SabiScore Debt Ledger
 
+## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, data fix deferred
+
+**Tier:** mitigation = `FIXED` this session. Root-cause data fix = `NEXT` — no
+operator credential needed, but requires investigating the team-alias
+resolution path, not a one-line change.
+**Found:** 2026-08-16, via a live `/health/ready` baseline check ahead of the
+Elo Postgres backfill runbook in item 13 — `checks.elo` showed `rows: 0` and
+`components.settlement` showed `outcome: "error"`, `last_success_at: null`,
+hours after migration `0007_durable_elo_state` deployed.
+
+**Root cause, confirmed via read-only production queries.** 26 rows in
+`matches` have `home_team_id == away_team_id` — a team recorded as playing
+itself. All 26 belong to exactly two clubs, one occurrence roughly every
+season since 2019/2020: `fd-team-serie_a:fc_internazionale_milano` (16 rows)
+and `fd-team-la_liga:rcd_espanyol_de_barcelona` (10 rows). The exact failing
+insert:
+
+```text
+duplicate key value violates unique constraint "uq_elo_rating_match_team"
+DETAIL: Key (match_id, team_id)=(fdco-3d01b70f3b802e7b, fd-team-serie_a:fc_internazionale_milano) already exists.
+```
+
+`sync_elo_from_finished_matches` processes matches oldest-first; the earliest
+self-play row (Inter Milan, 2019-09-21) sits ahead of most of the corpus, so
+every hourly settlement tick reached the same poison record, and
+`apply_finished_match_to_elo`'s bulk insert of `[home_row, away_row]`
+collided with itself on `(match_id, team_id)`. The failed flush aborted the
+whole session — not just that one match — so `elo_rating_snapshots` stayed
+at exactly 0 rows through every single tick since the migration deployed.
+This is the "one poison record blocks the whole batch" failure class the
+roadmap document's dead-letter-queue rationale names, and the same shape as
+the 2026-08-08 fixture-sync 429-on-first-competition incident.
+
+**Mitigation shipped (`291c06a`):** `apply_finished_match_to_elo` now checks
+`home_team_id == away_team_id` before attempting the insert, logs a warning,
+increments `elo.update.skipped_self_play`, and returns `False` instead of
+crashing. `sync_elo_from_finished_matches` now returns a `skipped` count
+alongside `processed`, surfaced through `settlement_service`'s existing
+`/health` wiring with no new plumbing. Regression tests:
+`test_self_play_match_is_skipped_not_crashed`,
+`test_sync_skips_self_play_match_and_still_processes_the_rest`
+(`backend/tests/unit/test_durable_elo_state.py`) — the second proves a good
+match in the same batch as a self-play match still gets its snapshots
+committed, i.e. the batch is no longer wedge-able by this bug.
+
+**Not done — deliberately deferred.** The 26 corrupt `matches` rows
+themselves are untouched; this fix only stops them from blocking everything
+else. Root cause is unconfirmed — most likely a team-alias/name-resolution
+bug specific to these two clubs in the historical CSV ingestion path
+(`historical_backfill_service.py` / `providers/reconciliation.py`), given it
+recurs almost exactly once per season for the same two teams rather than
+being randomly distributed. Needs investigation before either correcting the
+26 rows in place or re-ingesting them correctly; a same-session data mutation
+was explicitly out of scope (production data fix, not authorized this turn).
+
+**Blast radius:** was 100% of the durable-Elo backfill (item 13) — now
+scoped down to exactly these 26 matches' own Elo history staying an honest
+data gap (`home_resolved`/`away_resolved` correctly `False` for them; INV-01
+unaffected — no fabricated rating is ever produced for a self-play match).
+**Cost:** mitigation, done. Root-cause fix: investigation + a targeted data
+correction, no credential/operator dependency, size unknown until the
+alias-resolution bug is found.
+**Priority:** high for the root-cause investigation — every future season
+these two clubs play will add another one of these rows if the ingestion bug
+isn't fixed, even though the mitigation means it won't wedge anything again.
+
+---
+
 ## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401, operator action required)
 
 **Tier:** log leak = `FIXED` this session. Key validity = `FIX-NOW` / P0 —
@@ -501,6 +569,16 @@ serving authority. Migration `0007_durable_elo_state` adds `elo_rating_snapshots
 newly finished matches idempotently and chronologically; and
 `replay_elo_from_db.py` now requires explicit `--apply` (default `--dry-run`) for
 historical backfill. The Parquet engine remains offline/backward-compatible tooling.
+
+**2026-08-16 update (2):** the backfill wasn't merely awaiting verification —
+it was permanently wedged at 0 rows by a data-integrity bug. See item 23 for
+the full diagnosis and the shipped mitigation. With that fix in, the hourly
+settlement-coupled trickle (`sync_elo_from_finished_matches`, 500/tick) can
+make real forward progress against the ~12,760 good matches; full coverage
+is expected in roughly a day of background operation, no operator `--apply`
+required unless faster coverage is wanted. Re-check `checks.elo.rows` in
+`/health/ready` before treating this item as resolved — it was still
+unverified as of this update.
 
 **Blast radius:** prediction quality. Once migration + backfill are verified in the
 target DB, the four Elo features can resolve from durable real identity. Tactical /
