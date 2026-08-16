@@ -1,0 +1,13 @@
+{
+  "date": "20260612",
+  "version": "v6_phase8",
+  "baseline_compared": "C:\\Users\\UBEC-DC-ANAMBRA\\Documents\\sabiscore\\backend\\.pytest_tmp_apex_v2_escalated\\test_delta_file_written_when_d0\\baseline_v8_20260610.json",
+  "per_league_delta": {
+    "epl": {
+      "epl": {
+        "rps": -0.005,
+        "draw_f1": 0.03
+      }
+    }
+  }
+}
