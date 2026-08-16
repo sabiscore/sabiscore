@@ -35,7 +35,8 @@ from ..core.database import (  # noqa: F401
 class ProviderRequestSummary(Base):
     __tablename__ = "provider_request_summaries"
     __table_args__ = (
-        # ponytail: no indexes here — they're already on the table in database.py; extend_existing=True would duplicate them
+        Index("ix_provider_request_provider_time", "provider", "acquired_at"),
+        Index("ix_provider_request_status", "status"),
         {"extend_existing": True},
     )
 
@@ -59,7 +60,7 @@ class ProviderRequestSummary(Base):
 class ProviderCapabilityRecord(Base):
     __tablename__ = "provider_capabilities"
     __table_args__ = (
-        # ponytail: index already on table in database.py; avoid duplication via extend_existing
+        Index("ix_provider_capability_provider_comp", "provider", "competition"),
         {"extend_existing": True},
     )
 
@@ -83,7 +84,7 @@ class ProviderCapabilityRecord(Base):
 class ProviderQuotaObservation(Base):
     __tablename__ = "provider_quota_observations"
     __table_args__ = (
-        # ponytail: index already in database.py
+        Index("ix_provider_quota_provider_time", "provider", "observed_at"),
         {"extend_existing": True},
     )
 
@@ -112,7 +113,7 @@ class CanonicalCompetition(Base):
 class CanonicalTeam(Base):
     __tablename__ = "canonical_teams"
     __table_args__ = (
-        # ponytail: index already in database.py
+        Index("ix_canonical_teams_competition_name", "competition_id", "name"),
         {"extend_existing": True},
     )
 
@@ -133,7 +134,7 @@ class CanonicalTeam(Base):
 class CanonicalFixture(Base):
     __tablename__ = "canonical_fixtures"
     __table_args__ = (
-        # ponytail: index already in database.py
+        Index("ix_canonical_fixtures_comp_kickoff", "competition_id", "kickoff_utc"),
         {"extend_existing": True},
     )
 
@@ -159,7 +160,8 @@ class CanonicalFixture(Base):
 class ProviderEventMapping(Base):
     __tablename__ = "provider_event_mappings"
     __table_args__ = (
-        # ponytail: indexes already in database.py
+        Index("ix_provider_event_provider_id", "provider", "provider_event_id"),
+        Index("ix_provider_event_fixture", "canonical_fixture_id"),
         {"extend_existing": True},
     )
 
@@ -205,7 +207,9 @@ class ProviderTeamMapping(Base):
 class MarketSnapshot(Base):
     __tablename__ = "market_snapshots"
     __table_args__ = (
-        # ponytail: indexes already in database.py
+        Index("ix_market_snapshots_fixture_time", "canonical_fixture_id", "captured_at"),
+        Index("ix_market_snapshots_bookmaker", "bookmaker"),
+        Index("ix_market_snapshots_match_id", "match_id"),
         {"extend_existing": True},
     )
 
