@@ -19,11 +19,6 @@ from .team_identity import resolve_team_id
 
 logger = logging.getLogger(__name__)
 
-# Human-readable league name (as returned by FootballDataAPIClient.TOP_COMPETITIONS)
-# mapped to (canonical_league_id, country). Closed set — only supported competitions.
-# IMPORTANT: the second tuple element is the canonical SabiScore league_id (as used
-# by league_policy, model_fetcher, full_analysis, etc.) — NOT the fd.org competition
-# code. Migration 0006_canonical_league_ids renamed any existing fd.org code rows.
 _LEAGUE_META: dict[str, tuple[str, str]] = {
     "EPL":        ("EPL",        "England"),
     "La Liga":    ("LA_LIGA",    "Spain"),
@@ -34,12 +29,6 @@ _LEAGUE_META: dict[str, tuple[str, str]] = {
     "UCL":        ("UCL",        "Europe"),
 }
 
-
-# How far ahead fixtures are seeded. The readiness capability probe imports this
-# so the two horizons can never drift apart: a probe window narrower than the sync
-# window leaves the probe with nothing to test even when fixtures exist (observed
-# 2026-08-08 — 28 required-league fixtures seeded, probe still reporting
-# "unverified_no_fixtures" against its own hardcoded 7 days).
 SYNC_HORIZON_DAYS = 14
 _FOOTBALL_DATA_SYNC_LIMITER = asyncio.Lock()
 
@@ -51,12 +40,17 @@ def _team_id(team_name: str, league_id: str) -> str:
 
 
 async def sync_upcoming_fixtures(session: AsyncSession) -> int:
-    """Fetch upcoming fixtures and upsert League/Team/Match rows.
+    """Fetch upcoming fixtures and upsert League/Team/Match/canonical rows.
+
+    Existing *unsettled* provider fixtures are refreshed in place so verified
+    kickoff reschedules propagate to both the legacy Match row and its stable
+    canonical fixture. Settled rows are never rewritten by an upcoming feed.
 
     Returns the number of new Match rows inserted.
     """
     from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
     from ..core.database import League, Team, Match
+    from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
     started_at = time.perf_counter()
     client = FootballDataAPIClient()
@@ -77,18 +71,14 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
         league_name: str = raw.get("league", "")
         meta = _LEAGUE_META.get(league_name)
         if not meta:
-            continue  # unsupported competition — fail closed
+            continue
 
         league_id, country = meta
 
-        # League upsert
         if not await session.get(League, league_id):
             session.add(League(id=league_id, name=league_name, country=country))
             await session.flush()
 
-        # Team upserts — resolve against existing rows first (exact / affix-stripped /
-        # fuzzy match) so a re-sync doesn't mint a second ID for a team already known
-        # under a slightly different name; only mint fd-team-* on a genuine miss.
         home_name: str = raw.get("home_team", "")
         away_name: str = raw.get("away_team", "")
         home_id = (await resolve_team_id(home_name, session) if home_name else None) or _team_id(
@@ -102,7 +92,6 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
                 session.add(Team(id=tid, name=tname, league_id=league_id))
         await session.flush()
 
-        # Match upsert
         match_id: str = raw.get("id", "")
         if not match_id:
             continue
@@ -114,17 +103,37 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
             logger.debug("fixture_sync: unparseable date %r — skipping %s", raw_date, match_id)
             continue
 
-        if not await session.get(Match, match_id):
-            session.add(Match(
-                id=match_id,
-                league_id=league_id,
-                home_team_id=home_id,
-                away_team_id=away_id,
-                match_date=match_date,
-                season=canonical_season(match_date),
-                status="scheduled",
-            ))
+        season = canonical_season(match_date)
+        match = await session.get(Match, match_id)
+        if match is None:
+            session.add(
+                Match(
+                    id=match_id,
+                    league_id=league_id,
+                    home_team_id=home_id,
+                    away_team_id=away_id,
+                    match_date=match_date,
+                    season=season,
+                    status="scheduled",
+                )
+            )
             inserted += 1
+        elif (match.status or "").lower() not in SETTLED_MATCH_STATUSES:
+            previous_kickoff = match.match_date
+            match.league_id = league_id
+            match.home_team_id = home_id
+            match.away_team_id = away_id
+            match.match_date = match_date
+            match.season = season
+            match.status = "scheduled"
+            if previous_kickoff != match_date:
+                metrics_collector.increment("fixture_sync.reschedules")
+                logger.info(
+                    "fixture_sync: provider reschedule applied for match_id=%s (%s -> %s)",
+                    match_id,
+                    previous_kickoff,
+                    match_date,
+                )
 
         from .canonical_identity_service import ensure_canonical_fixture
 
@@ -140,7 +149,7 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
                 away_provider_id=away_id,
                 away_name=away_name,
                 kickoff_utc=match_date,
-                season=canonical_season(match_date),
+                season=season,
                 status="scheduled",
                 evidence={
                     "source": raw.get("source") or "football-data.org",
@@ -149,29 +158,18 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
                     "reconciled_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
-        except ValueError:
-            # Canonical fixture identity is partly derived from kickoff_utc
-            # (canonical_identity_service._stable_id), so a legitimate
-            # reschedule (broadcaster/league moves the kickoff time) makes a
-            # previously-mapped provider event recompute to a different
-            # fixture_id, and ensure_canonical_fixture() correctly refuses to
-            # silently repoint the mapping. Left uncaught here, this aborted
-            # the WHOLE sync_upcoming_fixtures() batch every tick (observed
-            # in production 2026-08-16: "provider event conflicts with an
-            # existing canonical fixture", zero fixtures synced that tick) —
-            # the same one-poison-record-wedges-the-batch class as the Elo
-            # self-play defect fixed earlier this session. Skip identity
-            # reconciliation for just this fixture and keep going; the Match
-            # row above (raw scheduling data) still commits normally. A
-            # kickoff-independent identity key is a separate, larger change
-            # — see docs/DEBT.md.
+        except ValueError as exc:
+            # A same-event kickoff reschedule is reconciled in place by
+            # ensure_canonical_fixture. Reaching this branch now means the
+            # provider event conflicts on stable identity attributes (team,
+            # competition, or a missing mapped fixture), so keep it isolated
+            # from the rest of the batch and fail closed for canonical mapping.
             logger.warning(
-                "fixture_sync: canonical identity conflict for match_id=%s "
-                "(%s vs %s) — likely a reschedule; skipping identity "
-                "reconciliation for this fixture",
+                "fixture_sync: canonical identity conflict for match_id=%s (%s vs %s): %s",
                 match_id,
                 home_name,
                 away_name,
+                exc,
             )
             metrics_collector.increment("fixture_sync.identity_conflicts")
 
@@ -191,11 +189,7 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
 async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> dict[str, int]:
     """Fetch recently finished fixtures and settle matching Match rows.
 
-    Looks up each result by the same deterministic fd-{id} scheme
-    sync_upcoming_fixtures already wrote — no team/fixture identity
-    re-resolution needed, only a keyed lookup. Never creates a Match row (a
-    fixture never synced as upcoming is a fixture-sync coverage gap, not this
-    function's job) and never re-writes a row already settled (idempotent).
+    Never creates a Match row and never rewrites a row already settled.
     """
     from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
     from ..core.database import Match
@@ -215,7 +209,7 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
         home_score = raw.get("home_score")
         away_score = raw.get("away_score")
         if not match_id or home_score is None or away_score is None:
-            continue  # belt-and-suspenders — _normalize_result already filters these
+            continue
 
         match = await session.get(Match, match_id)
         if match is None:
@@ -235,14 +229,7 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
 
 
 async def run_fixture_sync() -> None:
-    """Entry point for the background sync loop — swallows all errors.
-
-    Called immediately at boot and then every _FIXTURE_SYNC_INTERVAL_SECONDS
-    (api/main.py), so a failed tick self-corrects on the next one rather than
-    leaving the platform with zero fixtures until the next deploy. Failures are
-    recorded via the same metrics_collector GET /metrics already surfaces
-    (docs/DEBT.md item 3), rather than a bespoke tracking dict.
-    """
+    """Entry point for the background sync loop — swallows all errors."""
     from ..db.session import AsyncSessionLocal
     from ..monitoring.metrics import metrics_collector
 
