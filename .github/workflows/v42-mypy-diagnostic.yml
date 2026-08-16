@@ -1,0 +1,40 @@
+name: v4.2 MyPy Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/v42-mypy-diagnostic
+    paths:
+      - .github/workflows/v42-mypy-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+      - name: Diagnose durable Elo types
+        working-directory: backend
+        shell: bash
+        run: |
+          set +e
+          output="$(python -m mypy src/services/elo_state_service.py --no-pretty --no-color-output 2>&1)"
+          status=$?
+          printf '%s\n' "$output"
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^([^:]+):([0-9]+):[[:space:]]error:[[:space:]](.*)$ ]]; then
+              echo "::error file=backend/${BASH_REMATCH[1]},line=${BASH_REMATCH[2]},title=MyPy::${BASH_REMATCH[3]}"
+            fi
+          done <<< "$output"
+          summary="$(printf '%s\n' "$output" | tail -n 1)"
+          echo "::notice title=MyPySummary::$summary"
+          exit $status
