@@ -333,6 +333,34 @@ def _prime_prediction_service_cache(models: dict) -> None:
         logger.warning("Startup: could not prime prediction cache: %s", exc)
 
 
+def _prime_prediction_engine_cache(models: dict, generation: dict) -> None:
+    """Reuse strict-startup v5 estimators in the canonical request-path cache."""
+    try:
+        from ..models.prediction import PredictionEngine
+
+        primed = sum(
+            1
+            for league, model in models.items()
+            if PredictionEngine.prime_cache(league, model, generation=generation)
+        )
+        if primed:
+            logger.info(
+                "Startup: PredictionEngine cache reused %d/%d validated league models",
+                primed,
+                len(models),
+            )
+        else:
+            logger.info(
+                "Startup: PredictionEngine cache reuse not applicable to generation=%s",
+                generation.get("active_version") or "unknown",
+            )
+    except Exception as exc:
+        # Cache reuse is a performance optimization only. Never turn a valid strict
+        # startup model load into downtime; PredictionEngine retains its fail-closed
+        # manifest loader when priming is unavailable.
+        logger.warning("Startup: could not prime PredictionEngine cache: %s", exc)
+
+
 def _startup_load_models_strict(app: FastAPI) -> None:
     """Load one validated ensemble per league before serving requests."""
     global model_instance, model_load_in_progress
@@ -389,6 +417,7 @@ def _startup_load_models_strict(app: FastAPI) -> None:
     model_load_in_progress = False
 
     _prime_prediction_service_cache(models)
+    _prime_prediction_engine_cache(models, generation)
     logger.info(
         "Startup: strict model initialization complete (%s, leagues=%s)",
         model_version,

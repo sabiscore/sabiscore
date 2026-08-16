@@ -631,25 +631,86 @@ class PredictionEngine:
         return bets
 
     @classmethod
-    def prime_cache(cls, league: str, model: Any) -> None:
-        """Pre-load a model artifact into the class cache (called from app startup).
+    def prime_cache(
+        cls,
+        league: str,
+        model: Any,
+        *,
+        generation: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Prime request-path cache from a model already validated at startup.
 
-        Accepts both a direct sklearn model (v5 artifacts) and a v6_phase8 artifact
-        dict.  The raw value is normalised into an ``_ArtifactBundle`` before storage.
+        The active v5 generation is loaded eagerly through ``SabiScoreEnsemble``
+        during FastAPI startup. Reusing its base learners here avoids deserializing
+        the same large artifact again on the first request while preserving the
+        PredictionEngine's equal-weight base-learner semantics and manifest
+        provenance.
+
+        Future generations may carry calibrators/overlays that the startup wrapper
+        does not retain. When a generation descriptor is supplied, startup priming
+        is therefore intentionally limited to ``v5_phase7``; every other generation
+        falls back to the canonical raw-artifact loader rather than dropping payload.
+        Calls without ``generation`` retain the legacy generic priming behavior used
+        by tests and offline tooling.
         """
         slug = _LEAGUE_SLUG.get(league, league.lower().replace(" ", "_"))
-        bundle = cls._wrap_artifact(model, slug, "<startup>")
+        provenance: Optional[Dict[str, Any]] = None
+
+        if generation is not None:
+            active_version = str(generation.get("active_version") or "").strip()
+            if active_version != "v5_phase7":
+                logger.info(
+                    "PredictionEngine: startup cache reuse skipped for generation=%s",
+                    active_version or "unknown",
+                )
+                return False
+
+            manifest_entry = generation.get("artifacts", {}).get(slug)
+            if not isinstance(manifest_entry, dict):
+                logger.warning(
+                    "PredictionEngine: cannot prime %s without a manifest artifact entry",
+                    slug,
+                )
+                return False
+            provenance = {
+                "model_version": active_version,
+                "generation": generation.get("generation"),
+                "feature_schema_version": generation.get("feature_schema_version"),
+                "manifest_sha256": generation.get("manifest_sha256"),
+                "certification_state": str(
+                    generation.get("certification_state") or "UNVERIFIED"
+                ),
+                "artifact_sha256": manifest_entry.get("artifact_sha256"),
+                "coverage": "dedicated",
+            }
+
+        raw = model
+        models_dict = getattr(model, "models", None)
+        if not isinstance(model, dict) and isinstance(models_dict, dict) and models_dict:
+            raw = {
+                # Copy only lightweight containers. Estimator objects remain shared
+                # with the strict startup model, eliminating a second deserialization.
+                "models": dict(models_dict),
+                "feature_columns": list(getattr(model, "feature_columns", []) or []),
+            }
+
+        bundle = cls._wrap_artifact(raw, slug, "<startup>", provenance=provenance)
         if bundle is None:
-            # Legacy path: treat as direct model if wrap fails
+            # Legacy path: treat as direct model if wrap fails.
             bundle = _ArtifactBundle(
                 direct_model=model if callable(getattr(model, "predict_proba", None)) else None,
                 models_dict=None,
                 calibrator=None,
                 overlay=None,
                 feature_columns=None,
+                **(provenance or {}),
             )
+            if bundle.direct_model is None:
+                return False
+
         with cls._lock:
             cls._model_cache[slug] = bundle
+        return True
 
     @classmethod
     def clear_cache(cls) -> None:
