@@ -165,3 +165,77 @@ async def test_incremental_sync_is_chronological_and_resolves_next_fixture(sessi
     assert row_count == 4
     assert context.resolved is True
     assert context.home_elo != 1500.0
+
+
+async def test_self_play_match_is_skipped_not_crashed(session_factory) -> None:
+    """Corrupt fixture data (home_team_id == away_team_id) must not raise —
+    observed live in production 2026-08-16: 26 matches recorded a team playing
+    itself, and inserting both "sides" collided on the (match_id, team_id)
+    unique constraint, aborting the whole sync_elo_from_finished_matches batch
+    every single run so elo_rating_snapshots stayed at 0 rows indefinitely."""
+    async with session_factory() as session:
+        await _seed_identity(session)
+        match = Match(
+            id="self-play",
+            league_id="EPL",
+            home_team_id="arsenal",
+            away_team_id="arsenal",
+            match_date=datetime(2026, 8, 1, 15, 0),
+            season="2026/2027",
+            status="finished",
+            home_score=0,
+            away_score=2,
+        )
+        session.add(match)
+        await session.flush()
+
+        assert await apply_finished_match_to_elo(session, match) is False
+
+        rows = (
+            await session.execute(
+                select(EloRatingSnapshot).where(EloRatingSnapshot.match_id == "self-play")
+            )
+        ).scalars().all()
+    assert rows == []
+
+
+async def test_sync_skips_self_play_match_and_still_processes_the_rest(session_factory) -> None:
+    async with session_factory() as session:
+        await _seed_identity(session)
+        base = datetime(2026, 8, 1, 15, 0)
+        session.add_all(
+            [
+                Match(
+                    id="good",
+                    league_id="EPL",
+                    home_team_id="arsenal",
+                    away_team_id="chelsea",
+                    match_date=base,
+                    season="2026/2027",
+                    status="finished",
+                    home_score=2,
+                    away_score=0,
+                ),
+                Match(
+                    id="self-play",
+                    league_id="EPL",
+                    home_team_id="arsenal",
+                    away_team_id="arsenal",
+                    match_date=base - timedelta(days=1),  # ordered first
+                    season="2026/2027",
+                    status="finished",
+                    home_score=0,
+                    away_score=2,
+                ),
+            ]
+        )
+        await session.commit()
+
+        result = await sync_elo_from_finished_matches(session)
+        row_count = int(
+            (await session.execute(select(func.count(EloRatingSnapshot.id)))).scalar_one()
+        )
+
+    assert result["processed"] == 1
+    assert result["skipped"] == 1
+    assert row_count == 2  # the "good" match's two snapshots — batch was not wedged

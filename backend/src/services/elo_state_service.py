@@ -170,6 +170,21 @@ async def apply_finished_match_to_elo(session: AsyncSession, match: Match) -> bo
         raise RuntimeError(f"Partial Elo state for match_id={match.id}")
     if match.home_score is None or match.away_score is None:
         return False
+    if str(match.home_team_id) == str(match.away_team_id):
+        # Corrupt fixture data (a team recorded as playing itself), not a real
+        # result — inserting both sides would collide on the (match_id, team_id)
+        # unique constraint and, left uncaught, aborts the whole batch's flush,
+        # permanently wedging sync_elo_from_finished_matches on the first such
+        # row it ever encounters (observed in production 2026-08-16: 0 rows
+        # ever committed). Skip and keep going; the real-data fix is separate.
+        logger.warning(
+            "Elo skip: match_id=%s has identical home/away team_id=%s — "
+            "corrupt fixture data (self-play), not a real result",
+            match.id,
+            match.home_team_id,
+        )
+        metrics_collector.increment("elo.update.skipped_self_play")
+        return False
 
     league = _league_key(str(match.league_id or ""))
     raw_match_date = match.match_date
@@ -256,13 +271,18 @@ async def sync_elo_from_finished_matches(
     ).scalars().all()
 
     processed = 0
+    skipped = 0
     for match in matches:
         if await apply_finished_match_to_elo(session, match):
             processed += 1
+        else:
+            skipped += 1
     await session.commit()
     metrics_collector.increment("elo.sync.runs")
     metrics_collector.increment("elo.sync.processed", processed)
-    return {"processed": processed, "limit": limit}
+    if skipped:
+        metrics_collector.increment("elo.sync.skipped", skipped)
+    return {"processed": processed, "skipped": skipped, "limit": limit}
 
 
 async def elo_state_health(session: AsyncSession) -> dict[str, object]:
