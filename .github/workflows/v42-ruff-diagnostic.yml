@@ -18,9 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-      - working-directory: backend
-        run: pip install -r requirements-dev.txt
+      - run: pip install ruff
       - name: Ruff GitHub annotations
         working-directory: backend
         run: ruff check src --select E4,E7,E9,F --output-format=github
