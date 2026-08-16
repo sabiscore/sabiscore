@@ -1,0 +1,120 @@
+name: Backend Test Diagnostics
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-test-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Backend pytest cohort diagnostics
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sabi
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: sabiscore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sabi -d sabiscore_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://sabi:test_password@localhost:5432/sabiscore_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: test-secret-key-for-ci-only-please-rotate
+      PROVIDER_LIVE_TESTS: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Diagnose fixture sync tests
+        id: fixture_sync
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/unit/test_fixture_sync.py -q
+
+      - name: Diagnose canonical identity tests
+        id: canonical_identity
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/unit/test_canonical_identity_service.py -q
+
+      - name: Diagnose verification runner tests
+        id: verification_runner
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/unit/test_verification_sql_runner.py -q
+
+      - name: Diagnose Ultra availability tests
+        id: ultra_availability
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/unit/test_ml_ultra_availability.py -q
+
+      - name: Diagnose untouched unit tests
+        id: untouched_unit
+        continue-on-error: true
+        working-directory: backend
+        run: >-
+          python -m pytest tests/unit -q
+          --ignore=tests/unit/test_fixture_sync.py
+          --ignore=tests/unit/test_canonical_identity_service.py
+          --ignore=tests/unit/test_verification_sql_runner.py
+          --ignore=tests/unit/test_ml_ultra_availability.py
+
+      - name: Diagnose non-unit backend tests
+        id: non_unit
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests -q --ignore=tests/unit
+
+      - name: Fail if any diagnostic cohort failed
+        if: always()
+        shell: bash
+        run: |
+          echo "fixture_sync=${{ steps.fixture_sync.outcome }}"
+          echo "canonical_identity=${{ steps.canonical_identity.outcome }}"
+          echo "verification_runner=${{ steps.verification_runner.outcome }}"
+          echo "ultra_availability=${{ steps.ultra_availability.outcome }}"
+          echo "untouched_unit=${{ steps.untouched_unit.outcome }}"
+          echo "non_unit=${{ steps.non_unit.outcome }}"
+          test "${{ steps.fixture_sync.outcome }}" = success
+          test "${{ steps.canonical_identity.outcome }}" = success
+          test "${{ steps.verification_runner.outcome }}" = success
+          test "${{ steps.ultra_availability.outcome }}" = success
+          test "${{ steps.untouched_unit.outcome }}" = success
+          test "${{ steps.non_unit.outcome }}" = success
