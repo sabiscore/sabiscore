@@ -61,29 +61,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Diagnose fixture sync tests
-        id: fixture_sync
+      - name: Diagnose changed PR12 unit tests
+        id: changed_unit
         continue-on-error: true
         working-directory: backend
-        run: python -m pytest tests/unit/test_fixture_sync.py -q
-
-      - name: Diagnose canonical identity tests
-        id: canonical_identity
-        continue-on-error: true
-        working-directory: backend
-        run: python -m pytest tests/unit/test_canonical_identity_service.py -q
-
-      - name: Diagnose verification runner tests
-        id: verification_runner
-        continue-on-error: true
-        working-directory: backend
-        run: python -m pytest tests/unit/test_verification_sql_runner.py -q
-
-      - name: Diagnose Ultra availability tests
-        id: ultra_availability
-        continue-on-error: true
-        working-directory: backend
-        run: python -m pytest tests/unit/test_ml_ultra_availability.py -q
+        run: >-
+          python -m pytest -q
+          tests/unit/test_fixture_sync.py
+          tests/unit/test_canonical_identity_service.py
+          tests/unit/test_verification_sql_runner.py
+          tests/unit/test_ml_ultra_availability.py
 
       - name: Diagnose untouched unit tests
         id: untouched_unit
@@ -96,25 +83,36 @@ jobs:
           --ignore=tests/unit/test_verification_sql_runner.py
           --ignore=tests/unit/test_ml_ultra_availability.py
 
-      - name: Diagnose non-unit backend tests
-        id: non_unit
+      - name: Diagnose top-level backend tests
+        id: top_level
         continue-on-error: true
         working-directory: backend
-        run: python -m pytest tests -q --ignore=tests/unit
+        shell: bash
+        run: python -m pytest tests/*.py -q
+
+      - name: Diagnose integration tests
+        id: integration
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/integration -q
+
+      - name: Diagnose provider tests
+        id: providers
+        continue-on-error: true
+        working-directory: backend
+        run: python -m pytest tests/providers -q
 
       - name: Fail if any diagnostic cohort failed
         if: always()
         shell: bash
         run: |
-          echo "fixture_sync=${{ steps.fixture_sync.outcome }}"
-          echo "canonical_identity=${{ steps.canonical_identity.outcome }}"
-          echo "verification_runner=${{ steps.verification_runner.outcome }}"
-          echo "ultra_availability=${{ steps.ultra_availability.outcome }}"
+          echo "changed_unit=${{ steps.changed_unit.outcome }}"
           echo "untouched_unit=${{ steps.untouched_unit.outcome }}"
-          echo "non_unit=${{ steps.non_unit.outcome }}"
-          test "${{ steps.fixture_sync.outcome }}" = success
-          test "${{ steps.canonical_identity.outcome }}" = success
-          test "${{ steps.verification_runner.outcome }}" = success
-          test "${{ steps.ultra_availability.outcome }}" = success
+          echo "top_level=${{ steps.top_level.outcome }}"
+          echo "integration=${{ steps.integration.outcome }}"
+          echo "providers=${{ steps.providers.outcome }}"
+          test "${{ steps.changed_unit.outcome }}" = success
           test "${{ steps.untouched_unit.outcome }}" = success
-          test "${{ steps.non_unit.outcome }}" = success
+          test "${{ steps.top_level.outcome }}" = success
+          test "${{ steps.integration.outcome }}" = success
+          test "${{ steps.providers.outcome }}" = success
