@@ -1,0 +1,61 @@
+name: v4.2 backend quality fix
+
+on:
+  push:
+    branches:
+      - feat/v42-ci-ruff-fix
+    paths:
+      - .github/workflows/v42-ci-ruff-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Apply surgical Elo quality correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/src/services/elo_state_service.py')
+          text = path.read_text()
+          text = text.replace('from sqlalchemy import and_, exists, func, select', 'from sqlalchemy import exists, func, select')
+          text = text.replace('created_at = datetime.utcnow()', 'created_at = _naive_utc(datetime.now(timezone.utc))')
+          path.write_text(text)
+          PY
+          git diff --check
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements-dev.txt
+      - name: Ruff
+        working-directory: backend
+        run: ruff check src --select E4,E7,E9,F
+      - name: Zero-fabrication timestamp scan
+        working-directory: backend
+        run: '! grep -rn "datetime\\.utcnow" src --include="*.py" --exclude="database.py"'
+      - name: Compile
+        working-directory: backend
+        run: python -m compileall -q src
+      - name: Commit validated correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "SabiScore Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add backend/src/services/elo_state_service.py
+          git commit -m "fix(elo): satisfy canonical backend quality gates"
+          git rm .github/workflows/v42-ci-ruff-fix.yml
+          git commit -m "chore: remove one-shot backend quality fixer"
+          git push origin HEAD:feat/v42-ci-ruff-fix
