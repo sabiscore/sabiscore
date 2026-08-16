@@ -301,7 +301,14 @@ class UpcomingMatchService:
             matches = matches_response.get("matches", [])
             source = matches_response.get("source", "unknown")
         except Exception as e:
-            logger.error(f"Failed to get upcoming matches: {e}")
+            logger.error("Failed to get upcoming matches: %s", e, exc_info=True)
+            try:
+                await db.rollback()
+            except Exception:
+                logger.exception(
+                    "Failed to recover upcoming-match session after base-query error"
+                )
+                raise
             return {
                 "upcoming_matches": [],
                 "total": 0,
@@ -359,6 +366,12 @@ class UpcomingMatchService:
                 if is_synthetic:
                     data_gaps.append("required_model_inputs_unavailable")
                 publishable = not is_fallback and not is_synthetic
+                certification_state = str(
+                    predictions.get("certification_state") or "UNVERIFIED"
+                ).upper()
+                stake_permitted = publishable and certification_state == "CERTIFIED"
+                if publishable and not stake_permitted:
+                    data_gaps.append("model_generation_uncertified")
 
                 # 3. Get odds
                 odds = await odds_service.get_match_odds(
@@ -368,10 +381,11 @@ class UpcomingMatchService:
                 )
                 odds_available = {"home_win", "draw", "away_win"}.issubset(odds)
 
-                # 4. Calculate value bets — never on a fabricated fallback or
-                # synthetic-input prediction, even against real odds.
+                # 4. Calculate value bets only when the forecast is real *and* the
+                # active generation is certified for public staking. Research
+                # probabilities remain visible while certification is fail-closed.
                 value_bets = []
-                if include_value_bets and odds_available and publishable:
+                if include_value_bets and odds_available and stake_permitted:
                     value_bets = PredictionEngine.calculate_value_bets(
                         predictions, odds, league=match.get("league", "")
                     )
@@ -383,8 +397,9 @@ class UpcomingMatchService:
                 match["has_value"] = len(value_bets) > 0
                 match["best_value_bet"] = value_bets[0] if value_bets else None
                 match["data_quality"] = data_quality
-                match["data_gaps"] = data_gaps
-                match["staleness_seconds"] = features_result.get("staleness_seconds", 0)
+                match["data_gaps"] = sorted(set(data_gaps))
+                match["staleness_seconds"] = features_result.get("staleness_seconds")
+                match["staleness_available"] = features_result.get("staleness_seconds") is not None
                 match["source"] = str(match.get("source", source))
 
                 if value_bets:
@@ -397,8 +412,23 @@ class UpcomingMatchService:
 
             except Exception as e:
                 logger.warning(
-                    f"Failed to enrich match {match.get('id')}: {e}", exc_info=True
+                    "Failed to enrich match %s: %s",
+                    match.get("match_id") or match.get("id"),
+                    e,
+                    exc_info=True,
                 )
+                # Feature enrichment performs database reads.  A DBAPI error can
+                # invalidate the transaction; because this loop deliberately
+                # continues to the next fixture, recover the session first or the
+                # next query will raise PendingRollbackError.  rollback() is safe
+                # for a read-only transaction and is a no-op when nothing is open.
+                try:
+                    await db.rollback()
+                except Exception:
+                    logger.exception(
+                        "Failed to recover upcoming-match session after enrichment error"
+                    )
+                    raise
                 # Still include match without predictions
                 match["predictions"] = None
                 match["odds"] = None
@@ -408,7 +438,8 @@ class UpcomingMatchService:
                 match["data_gaps"] = sorted(
                     set(match.get("data_gaps", [])) | {"prediction_failed"}
                 )
-                match["staleness_seconds"] = 0
+                match["staleness_seconds"] = None
+                match["staleness_available"] = False
                 match["match_id"] = str(match.get("match_id") or match.get("id") or "")
                 match["source"] = str(match.get("source", source))
                 enriched_matches.append(match)

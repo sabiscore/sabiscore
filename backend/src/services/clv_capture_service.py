@@ -33,6 +33,25 @@ _KICKOFF_MATCH_TOLERANCE_MINUTES = 10
 _last_result: dict[str, Any] = {"outcome": "never_run"}
 
 
+def _utc_naive(value: datetime) -> datetime:
+    """Return ``value`` as naive UTC for timezone-naive PostgreSQL columns.
+
+    SabiScore's legacy ``matches.match_date`` and ``market_snapshots`` timestamp
+    columns are ``TIMESTAMP WITHOUT TIME ZONE``.  asyncpg rejects an aware
+    ``datetime`` bound to those columns (``can't subtract offset-naive and
+    offset-aware datetimes``), while SQLite accepts it and therefore hid the
+    production-only failure.
+
+    Naive inputs are already interpreted as UTC by the existing storage
+    contract.  Aware inputs are converted to UTC *before* dropping tzinfo;
+    simply calling ``replace(tzinfo=None)`` on a non-UTC offset would change the
+    instant represented by the timestamp.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def last_clv_capture_result() -> dict[str, Any]:
     """Sync accessor for /health — a copy, never the live dict (matches
     settlement_service.last_settlement_result's convention)."""
@@ -79,8 +98,15 @@ def _match_events_to_fixtures(
         by_event.setdefault(event_id, []).append(record)
         ts = record.get("provider_event_timestamp")
         if ts and event_id not in event_kickoff:
-            parsed = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
-            event_kickoff[event_id] = parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+            try:
+                parsed = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
+                if isinstance(parsed, datetime):
+                    event_kickoff[event_id] = _utc_naive(parsed)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "clv_capture: ignoring invalid provider event timestamp",
+                    extra={"provider_event_id": event_id},
+                )
 
     matched: dict[Any, list[dict[str, Any]]] = {}
     for event_id, event_records in by_event.items():
@@ -112,7 +138,19 @@ async def run_clv_capture_pass(provider: Any = None) -> dict[str, Any]:
 
     try:
         async with AsyncSessionLocal() as session:
-            counts = await _capture_due_fixtures(session, provider=provider)
+            try:
+                counts = await _capture_due_fixtures(session, provider=provider)
+            except Exception:
+                # A DBAPI/flush/commit failure leaves SQLAlchemy in partial-
+                # rollback state until rollback() is called.  Do this explicitly
+                # before the pooled connection is released; relying only on
+                # context-manager close made the production failure harder to
+                # reason about and can surface later as PendingRollbackError.
+                try:
+                    await session.rollback()
+                except Exception:
+                    logger.exception("clv_capture_pass: rollback failed")
+                raise
         _last_result = {"outcome": "ok", "checked_at": checked_at, **counts}
     except Exception as exc:
         logger.exception("clv_capture_pass: unhandled error")
@@ -136,7 +174,7 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
     from ..db.models import MarketSnapshot
     from ..providers.the_odds_api import TheOddsAPIProvider, devig_probabilities
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # ponytail: Match.match_date is naive UTC
+    now = _utc_naive(datetime.now(timezone.utc))  # Match.match_date is naive UTC
     window_start = now - timedelta(minutes=_CAPTURE_GRACE_MINUTES)
     window_end = now + timedelta(minutes=_CAPTURE_LOOKAHEAD_MINUTES)
 
@@ -237,7 +275,9 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
                     draw_implied_prob_devigged=d_prob,
                     away_implied_prob_devigged=a_prob,
                     is_closing_line=True,
-                    captured_at=datetime.now(timezone.utc),
+                    # MarketSnapshot.captured_at is TIMESTAMP WITHOUT TIME ZONE.
+                    # Bind a UTC-naive datetime explicitly for asyncpg.
+                    captured_at=_utc_naive(datetime.now(timezone.utc)),
                     coherent=True,
                     executable=False,
                     provenance={

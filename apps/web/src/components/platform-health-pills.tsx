@@ -64,8 +64,8 @@ export function PlatformHealthPills() {
       <HealthPill
         icon={Activity}
         label="Providers"
-        value={health ? `${health.configured} configured · ${health.live} live-verified` : "Checking"}
-        status={health && health.live === health.configured && health.configured > 0 ? "Ready" : health?.configured ? "Partial" : "Unavailable"}
+        value={health ? `${health.configured} configured · ${health.enabled} enabled` : "Checking"}
+        status={health?.providerActivation.label ?? "Unavailable"}
       />
       <HealthPill
         icon={BarChart3}

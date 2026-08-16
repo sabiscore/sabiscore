@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LEAGUE_COLORS } from "@/lib/league-colors";
-import { getUpcomingMatches, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
+import { getUpcomingMatches, getOffseasonStatus, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
 import { canonicalLeagueId, leagueDisplayName } from "@/lib/league";
+import { mapEvidenceFreshness } from "@/lib/freshness";
 
 // ─── League types (from /api/v1/leagues) ─────────────────────────────────────
 
@@ -102,7 +103,6 @@ function LeagueFilterBar({
             )}
           >
             <span className="font-semibold">{displayName}</span>
-            <span className="font-mono uppercase tracking-wider opacity-70">{leagueCode}</span>
             {league.coverage === "SOFT" && (
               <span aria-hidden="true" className="text-[9px] opacity-70">~</span>
             )}
@@ -160,17 +160,9 @@ function formatMatchDate(dateStr: string) {
   }
 }
 
-function freshnessLabel(stalenessSeconds?: number) {
-  const age = stalenessSeconds ?? 0;
-  if (age <= 0) {
-    // "Live" would claim match state; this measures data freshness only,
-    // and the backing query only ever returns status:"scheduled" fixtures.
-    return { label: "Fresh", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" };
-  }
-  if (age < 86400) {
-    return { label: "Recent", className: "border-amber-500/30 bg-amber-500/10 text-amber-300" };
-  }
-  return { label: "Stale", className: "border-rose-500/30 bg-rose-500/10 text-rose-300" };
+export function freshnessLabel(stalenessSeconds?: number | null, available?: boolean) {
+  const freshness = mapEvidenceFreshness({ stalenessSeconds, available });
+  return { label: freshness.label, className: freshness.className };
 }
 
 /**
@@ -224,7 +216,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
     : `/match/${encodeURIComponent(`${match.home_team} vs ${match.away_team}`)}?league=${encodeURIComponent(match.league)}`;
   const conf = match.predictions?.confidence ?? null;
   const edge = match.best_value_bet?.edge_pct ?? null;
-  const freshness = freshnessLabel(match.staleness_seconds);
+  const freshness = freshnessLabel(match.staleness_seconds, match.staleness_available);
   const hasDataGaps = Boolean(match.data_gaps && match.data_gaps.length > 0);
   const eqs = match.edge_quality_score ?? null;
   const clv = match.clv_pct ?? null;
@@ -234,7 +226,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
   const valueLabelPart = match.has_value ? " · value bet" : "";
   const freshnessAria = ` · ${freshness.label.toLowerCase()} data`;
   const partialAria = hasDataGaps ? " · partial intelligence" : "";
-  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${match.league} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}`;
+  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${leagueDisplayName(match.league)} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}`;
 
   // `min-w-0` on the Link below is load-bearing: the row is a grid item, and
   // grid items default to min-width:auto (their min-content), so at a 360px
@@ -254,7 +246,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
           {match.away_team}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={leagueChip(match.league)}>{match.league}</span>
+          <span className={leagueChip(match.league)}>{leagueDisplayName(match.league)}</span>
           <span className="text-[10px] text-slate-300">
             {formatMatchDate(match.match_date)}
             {" · "}
@@ -336,6 +328,18 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
     queryKey: ["upcomingMatches", activeLeague ?? "all"],
     queryFn: () => fetchUpcoming(activeLeague),
     staleTime: 5 * 60_000,
+  });
+
+  // Per-league offseason check — only fires when a specific league chip is
+  // selected and the global `offseason` flag is false (i.e. some leagues are
+  // live but this one may not have started yet). Mirrors the pattern in
+  // BigMatchesCarousel. Edge-cached 1h by /api/offseason; never throws.
+  const { data: leagueOffseasonData } = useQuery({
+    queryKey: ["upcoming-panel-offseason", activeLeagueCode ?? activeLeague],
+    queryFn: () => getOffseasonStatus(activeLeagueCode ?? activeLeague ?? ""),
+    enabled: activeLeague !== undefined,
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   });
 
   // Derive off-season state from the matches response — avoids a redundant /api/offseason fetch.
@@ -459,6 +463,17 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
             leagueCode={activeLeagueCode}
             nextSeasonStart={data.next_season_start ?? null}
             nextSeasonStartEstimated={data.next_season_start_estimated}
+          />
+        ) : leagueOffseasonData?.season_status === "OFF_SEASON" ? (
+          // A specific league chip is selected, the global offseason flag is
+          // false (other leagues are live), but this league hasn't started yet.
+          // Show the per-league notice with its correct opener date rather than
+          // the generic "no upcoming fixtures" message.
+          <LeagueOffseasonNotice
+            leagueName={activeLeagueName}
+            leagueCode={activeLeagueCode}
+            nextSeasonStart={leagueOffseasonData.next_season_start ?? null}
+            nextSeasonStartEstimated={leagueOffseasonData.next_season_start_estimated}
           />
         ) : (
           // data_gap means the backend failed rather than genuinely having no

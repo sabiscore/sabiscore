@@ -261,7 +261,18 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     session = AsyncSessionLocal()
     try:
         yield session
-        await session.commit()
+        # Endpoints occasionally convert an internal exception into a degraded
+        # response.  If that exception came from a DB flush/execute, SQLAlchemy
+        # can be left in partial-rollback state even though no exception escapes
+        # the endpoint.  Never attempt commit() on that poisoned transaction.
+        if session.in_transaction():
+            if session.is_active:
+                await session.commit()
+            else:
+                logger.warning(
+                    "Database session left in failed transaction state; rolling back before release"
+                )
+                await session.rollback()
     except Exception:
         await session.rollback()
         raise

@@ -5,6 +5,51 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - v4.2 trust, provenance, and durable-Elo hardening (2026-08-16)
+
+### Added
+
+- Added manifest-backed inference provenance (`generation`, feature schema, manifest/artifact hashes, certification state, coverage) to the canonical prediction result and propagated it through full-analysis/upcoming contracts.
+- Added PostgreSQL `elo_rating_snapshots` (Alembic `0007_durable_elo_state`) as the durable live Elo authority, real-`Team.id` lookup/update service, settlement-coupled chronological updates, readiness observability, and an explicit `--dry-run`/`--apply` historical replay path.
+- Added shared frontend model-status and freshness contracts so desktop/mobile surfaces consume the same authoritative state and missing evidence cannot become a positive freshness claim.
+- Added a refined v4.2 execution prompt that makes distributed queues, CatBoost runtime, extra animation libraries, and local LLM workers evidence-triggered rather than mandatory production dependencies.
+
+### Fixed
+
+- Stopped deriving semantic model version from deserialized artifact shape and stopped silently truncating oversized feature vectors to an older model width; schema mismatch now fails closed.
+- Separated provider configuration/readiness from opt-in quota-consuming live validation; `CONFIGURED_UNVERIFIED` is neutral rather than an outage.
+- Prevented `null`/missing fixture staleness from rendering as `Fresh`.
+- Replaced hard-coded/approximate mobile operational status with active model version, certification, and provider configuration from authoritative queries.
+- Enforced active-generation certification on public value/Kelly output: research probabilities may remain visible, but uncertified generations cannot publish positive stake/value recommendations.
+- Removed pseudo H2H/loading claims generated from team names and made loading copy conditional on evidence availability.
+- Corrected current Phase-8 prose to the registry-authoritative 89-feature schema while retaining legacy `CANONICAL_FEATURES_86` identifiers only as compatibility aliases.
+
+### Validation evidence
+
+- `python scripts/verify_active_artifacts.py` — **PASS**: six hash-locked `v5_phase7-20260808` artifact pairs verified; certification remains `UNVERIFIED`.
+- `python -m compileall -q backend/src backend/scripts/replay_elo_from_db.py backend/tests` — **PASS**.
+- SQLAlchemy metadata smoke including `elo_rating_snapshots` — **PASS**.
+- TypeScript/TSX syntax transpilation of the changed source/test files with the available global TypeScript compiler — **PASS**.
+- Focused/full pytest — **BLOCKED in this sandbox**, not failed: the environment lacks the Python `redis` dependency.
+- pnpm lint/typecheck/test/build — **BLOCKED in this sandbox**, not failed: pnpm is not provisioned and registry access returned `EAI_AGAIN`.
+- No Git commit/push/deploy was performed from the uploaded archive because it contains no `.git` metadata and this sandbox cannot establish deployment parity.
+
+---
+
+## Unreleased - C9 season-aware league filter + homepage UX polish (2026-08-15)
+
+### Added
+
+- **C9 — per-league offseason detection in `UpcomingMatchesPanel`**: when a specific league chip is selected and the global offseason flag is `false` (other leagues are live), but the per-league `/api/offseason/{id}` query returns `OFF_SEASON`, the panel now renders `<LeagueOffseasonNotice>` with the correct per-league opener date instead of the generic "No upcoming fixtures in the next 14 days." message. Mirrors the identical `chipOffseasonData` pattern already in `BigMatchesCarousel`. Covered by 4 new Vitest tests (C9 describe block in `upcoming-matches-panel.test.tsx`). Test count: 186 (up from 157 pre-session).
+
+### Fixed
+
+- **Homepage dead space**: reduced outer section spacing from `space-y-8 sm:space-y-12` to `space-y-6 sm:space-y-8` and hero section vertical padding from `sm:p-10` (40px) to `sm:py-7` (28px). Collectively removes ~40px of void between the hero block and the "Explore a manual matchup" `<details>` accordion.
+- **Carousel fixture cards**: added league country flag (`CountryFlag` + league abbreviation) as a compact header row on each `BigMatchesCarousel` card. Fixtures from different leagues are now distinguishable at a glance in the "All" view. Team home name bumped from `text-[11px]` to `text-xs` for legibility.
+- **Mobile vs-row**: the compact selected-matchup bar (`sm:hidden`) now shows the selected league's country flag beside the fixture type label ("Verified fixture selected" / "Manual matchup selected").
+
+---
+
 ## Unreleased - Apex v3 activation candidate (2026-08-14)
 
 ### Added
@@ -33,6 +78,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   target without ignores or relaxed configuration.
 - Prevented the research market-comparison empty state from stretching to the
   adjacent card stack.
+- Fixed three live instances of `edge_quality_score` (a confidence/freshness/
+  completeness composite, never a market edge) being presented as if it were
+  one: `BigMatchesCarousel`'s "🔥 Top Edge Today" celebratory badge on the
+  homepage/`/match` selector is now a neutral "Highest evidence quality" label
+  with no emoji and no certified-looking green fill; `InsightsTeaseStrip`'s
+  tease card no longer reports a bare "High/Medium/Low Edge" tier (now reuses
+  `edgeQualityLabel()`, "{tier} quality"); `Phase8AnalyticsPanel`'s feature-
+  freshness chip no longer renders the literal string "LIVE"/"Live" for data
+  fetched within the last hour on the primary `/match/[id]` result page (now
+  "FRESH"/"Fresh", matching the vocabulary already used elsewhere on the same
+  page). Guarded by a new repo-wide copy-contract assertion plus two new
+  focused unit tests.
 
 ### Evidence status
 

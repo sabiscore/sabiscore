@@ -68,8 +68,18 @@ export interface ProviderActivationStats {
   configured: number;
   enabled: number;
   live: number;
+  degraded: number;
   label: "Ready" | "Partial" | "Unavailable";
 }
+
+const DEGRADED_PROVIDER_STATUSES = new Set([
+  "INVALID",
+  "UNAVAILABLE",
+  "CIRCUIT_OPEN",
+  "RATE_LIMITED",
+  "SCHEMA_INVALID",
+  "CONFLICTING",
+]);
 
 export function isHealthyBackendStatus(status: unknown): boolean {
   return typeof status === "string" && READY_STATUSES.has(status.toLowerCase());
@@ -117,14 +127,17 @@ export function deriveProviderActivation(
   const live = providers.filter((provider) =>
     provider.enabled === true && String(provider.status).toUpperCase() === "VERIFIED"
   ).length;
+  const degraded = providers.filter((provider) =>
+    provider.enabled === true && DEGRADED_PROVIDER_STATUSES.has(String(provider.status).toUpperCase())
+  ).length;
   const label =
-    configured > 0 && enabled === configured
+    configured > 0 && enabled === configured && degraded === 0
       ? "Ready"
       : enabled > 0
         ? "Partial"
         : "Unavailable";
 
-  return { total: providers.length, configured, enabled, live, label };
+  return { total: providers.length, configured, enabled, live, degraded, label };
 }
 
 export function derivePlatformHealth(payload: BackendHealthPayload) {

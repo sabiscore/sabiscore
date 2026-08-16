@@ -203,8 +203,73 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
 
     enriched = response["upcoming_matches"][0]
     assert enriched["staleness_seconds"] == 54321  # not silently defaulted to 0
+    assert enriched["staleness_available"] is True
     assert "elo_difference" in enriched["data_gaps"]
     assert "home_pressing_intensity" in enriched["data_gaps"]
+
+
+async def test_uncertified_generation_exposes_forecast_but_never_value_or_stake():
+    """Research probabilities may remain visible while public betting action is fail-closed."""
+    future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    fake_api_client = MagicMock()
+    fake_db = MagicMock(name="db")
+    mocked_prediction = MagicMock()
+    mocked_prediction.to_dict.return_value = {
+        "home_win": 0.60,
+        "draw": 0.22,
+        "away_win": 0.18,
+        "model_version": "v5_phase7",
+        "certification_state": "UNVERIFIED",
+        "confidence": 0.60,
+    }
+
+    with patch(
+        "src.services.upcoming_match_service.UpcomingMatchFeatureProjector"
+    ) as MockProjector, patch(
+        "src.services.upcoming_match_service.PredictionEngine"
+    ) as MockPredictionEngine, patch(
+        "src.services.upcoming_match_service.OddsService"
+    ) as MockOddsService, patch(
+        "src.services.upcoming_match_service.cache_manager"
+    ) as MockCache:
+        MockCache.get.return_value = None
+        MockProjector.return_value.build_live_feature_vector = AsyncMock(
+            return_value={
+                "features": np.zeros(68, dtype=np.float32),
+                "data_gaps": [],
+                "data_quality": {"is_synthetic": False},
+                "staleness_seconds": 120,
+            }
+        )
+        MockPredictionEngine.return_value.predict = AsyncMock(return_value=mocked_prediction)
+        MockOddsService.return_value.get_match_odds = AsyncMock(
+            return_value={"home_win": 2.4, "draw": 4.0, "away_win": 6.0, "source": "test"}
+        )
+
+        service = UpcomingMatchService(api_client=fake_api_client)
+        service.get_upcoming_matches = AsyncMock(return_value={
+            "matches": [{
+                "id": "uncertified-1",
+                "home_team": "Home FC",
+                "away_team": "Away FC",
+                "league": "EPL",
+                "match_date": future_date,
+                "status": "scheduled",
+                "source": "database",
+            }],
+            "source": "database",
+        })
+        response = await service.get_upcoming_matches_with_predictions(
+            db=fake_db, league="EPL", days_ahead=3, limit=5, include_value_bets=True
+        )
+
+    enriched = response["upcoming_matches"][0]
+    assert enriched["predictions"] is not None
+    assert enriched["predictions"]["certification_state"] == "UNVERIFIED"
+    assert enriched["value_bets"] == []
+    assert enriched["best_value_bet"] is None
+    assert enriched["has_value"] is False
+    assert "model_generation_uncertified" in enriched["data_gaps"]
 
 
 async def test_cached_or_db_fixture_discovery_never_calls_provider_or_model():
@@ -309,3 +374,49 @@ async def test_db_rows_satisfy_response_schema_without_predictions():
             assert validated.offseason is False
     finally:
         await engine.dispose()
+
+
+async def test_enrichment_failure_rolls_back_session_before_continuing() -> None:
+    """A swallowed per-fixture DB error must not poison the next fixture query."""
+    future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    fake_db = AsyncMock(name="db")
+
+    with patch(
+        "src.services.upcoming_match_service.UpcomingMatchFeatureProjector"
+    ) as MockProjector, patch(
+        "src.services.upcoming_match_service.PredictionEngine"
+    ), patch(
+        "src.services.upcoming_match_service.cache_manager"
+    ) as MockCache:
+        MockCache.get.return_value = None
+        MockProjector.return_value.build_live_feature_vector = AsyncMock(
+            side_effect=RuntimeError("db transaction failed")
+        )
+
+        service = UpcomingMatchService()
+        service.get_upcoming_matches = AsyncMock(
+            return_value={
+                "matches": [
+                    {
+                        "match_id": "fd-rollback-1",
+                        "home_team": "Home FC",
+                        "away_team": "Away FC",
+                        "league": "EPL",
+                        "match_date": future_date,
+                        "status": "scheduled",
+                        "source": "database",
+                    }
+                ],
+                "source": "database",
+            }
+        )
+
+        response = await service.get_upcoming_matches_with_predictions(
+            db=fake_db,
+            league="EPL",
+            days_ahead=3,
+            limit=5,
+        )
+
+    fake_db.rollback.assert_awaited_once()
+    assert response["upcoming_matches"][0]["data_gaps"] == ["prediction_failed"]

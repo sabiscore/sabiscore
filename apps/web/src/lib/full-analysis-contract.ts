@@ -17,6 +17,7 @@ const predictionStatusSchema = z.enum([
 
 const predictionSourceSchema = z.enum([
   "CERTIFIED_MODEL",
+  "UNCERTIFIED_MODEL",
   "DIAGNOSTIC_BASELINE",
   "NONE",
 ]);
@@ -32,6 +33,12 @@ const ensembleSchema = z
     probabilities_available: z.boolean(),
     league: z.string(),
     model_version: z.string(),
+    generation: z.string().nullable().optional(),
+    feature_schema_version: z.string().nullable().optional(),
+    manifest_sha256: z.string().nullable().optional(),
+    certification_state: z.string().default("UNVERIFIED"),
+    artifact_sha256: z.string().nullable().optional(),
+    coverage: z.string().default("dedicated"),
     calibration_method: z.string(),
     calibration_applied: z.boolean(),
     overlay_applied: z.boolean(),
@@ -193,7 +200,9 @@ export const fullMatchAnalysisSchema = z
       });
     }
     const expectedSource = {
-      AVAILABLE: "CERTIFIED_MODEL",
+      AVAILABLE: value.ensemble.certification_state === "CERTIFIED"
+        ? "CERTIFIED_MODEL"
+        : "UNCERTIFIED_MODEL",
       REDUCED_EVIDENCE_BASELINE: "DIAGNOSTIC_BASELINE",
       UNAVAILABLE: "NONE",
     }[value.prediction_status];
@@ -391,6 +400,8 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   REQUIRED_MODEL_INPUTS_UNAVAILABLE:
     "the inputs the model requires — recent form, head-to-head, and a coherent market — are not available",
   MODEL_PREDICTION_UNAVAILABLE: "the certified model could not produce a prediction",
+  MODEL_GENERATION_UNCERTIFIED: "this model hasn't passed certification yet",
+  MODEL_UNCERTAINTY_UNAVAILABLE: "confidence range not available for this fixture",
   MODEL_PREDICTION_REDUCED_EVIDENCE:
     "only a diagnostic baseline was produced, not a certified prediction",
   STALE_REQUIRED_EVIDENCE: "the required evidence is too old to rely on",
@@ -398,7 +409,7 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
     "an optional enrichment source is out of date, so a little supporting detail is missing",
   LEAGUE_POLICY_UNAVAILABLE: "this competition has no calibrated staking policy yet",
   COHERENT_1X2_MARKET_UNAVAILABLE:
-    "no consistent home/draw/away price is available yet to compare the model against",
+    "no stable market price to compare against yet",
 };
 
 /** Title-case a backend code so an unmapped value still reads as words, not an enum. */
@@ -415,6 +426,27 @@ function titleCaseCode(code: string): string {
  */
 export function describeEvidenceCode(code: string): string {
   return EVIDENCE_CODE_COPY[code] ?? titleCaseCode(code);
+}
+
+export function isNarrativeRedundant(
+  narrative: string | null | undefined,
+  reason: string | null | undefined,
+): boolean {
+  if (!narrative?.trim()) return true;
+  if (!reason?.trim()) return false;
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/\(s\)/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const normalizedNarrative = normalize(narrative);
+  const normalizedReason = normalize(reason);
+  return (
+    normalizedNarrative === normalizedReason ||
+    normalizedNarrative.includes(normalizedReason) ||
+    normalizedReason.includes(normalizedNarrative)
+  );
 }
 
 export function mapFullAnalysisPresentation(

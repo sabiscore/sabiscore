@@ -1,6 +1,6 @@
 """Phase 9 candidate feature builders: hybrid xG + market efficiency.
 
-These functions produce optional additive features. The existing 86-feature
+These functions produce optional additive features. The existing canonical Phase 8 89-feature
 model frame ignores them until the feature registry and model artifacts are
 intentionally expanded through the walk-forward retraining gate (see
 ``backend/scripts/retrain_with_expanded_features.py`` and

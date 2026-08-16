@@ -154,7 +154,7 @@ export default function DocsPage() {
                 <p className="text-slate-400">Soft-loading wrapper splits torch implementation from the FastAPI boot path. Backend starts cleanly on Render without GPU wheels.</p>
               </div>
               <div className="space-y-1">
-                <p className="font-semibold text-slate-200">Phase 2 — 86-dim retrain scaffold</p>
+                <p className="font-semibold text-slate-200">Phase 2 — canonical 89-feature retrain scaffold</p>
                 <p className="text-slate-400">Auto-detects candidate feature availability for shadow evaluation. RPS ≤ 0.210 remains a promotion threshold pending live validation.</p>
               </div>
               <div className="space-y-1">

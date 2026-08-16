@@ -18,6 +18,7 @@ from ...schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ...schemas.value_bet import ValueBetResponse
 from ...core.database import Prediction as PredictionModel
 from ...core.cache import cache_manager
+from ...models.active_generation import active_generation_is_certified
 from ...services.prediction_log_service import (
     PredictionLogCapture,
     deterministic_input_hash,
@@ -26,6 +27,38 @@ from ...services.prediction_log_service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/predictions", tags=["predictions"])
+
+
+def _fail_closed_if_uncertified(response: PredictionResponse) -> PredictionResponse:
+    """Strip all public staking authority from cached/stored uncertified outputs.
+
+    Redis and database payloads can outlive a deployment. Re-validating the
+    current active-generation certification here prevents a pre-gate cached
+    Kelly/value result from resurfacing after a fail-closed release.
+    """
+    if active_generation_is_certified():
+        return response
+
+    metadata = dict(response.metadata or {})
+    metadata["certification_state"] = "UNVERIFIED"
+    metadata["stake_permitted"] = False
+    rl = response.rl_recommendation
+    rl_payload = None
+    if rl is not None:
+        rl_payload = rl.model_copy(
+            update={
+                "stake_fraction": 0.0,
+                "abstain": True,
+                "reason": "Active model generation is not certified for public staking",
+            }
+        )
+    return response.model_copy(
+        update={
+            "value_bets": [],
+            "rl_recommendation": rl_payload,
+            "metadata": metadata,
+        }
+    )
 
 # Rate limiting configuration
 RATE_LIMIT_REQUESTS = 100  # requests per window
@@ -204,8 +237,10 @@ async def create_prediction(
         except Exception as log_exc:
             logger.debug("Failed to prepare prediction log payload: %s", log_exc)
         
-        return result
+        return _fail_closed_if_uncertified(result)
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error generating prediction: {e}", exc_info=True)
         raise HTTPException(
@@ -233,8 +268,8 @@ async def get_prediction(
         if cached_result:
             logger.info(f"Cache hit for prediction {match_id}")
             if isinstance(cached_result, dict):
-                return PredictionResponse(**cached_result)
-            return cached_result
+                return _fail_closed_if_uncertified(PredictionResponse(**cached_result))
+            return _fail_closed_if_uncertified(cached_result)
         
         # Fetch from database
         from sqlalchemy import select
@@ -285,7 +320,7 @@ async def get_prediction(
         # Cache for 30 minutes
         cache_manager.set(cache_key, response, ttl=1800)
         
-        return response
+        return _fail_closed_if_uncertified(response)
         
     except HTTPException:
         raise

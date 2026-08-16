@@ -11,6 +11,7 @@ import {
   mapFullAnalysisPresentation,
   describeEvidenceCode,
   groupEvidenceGaps,
+  isNarrativeRedundant,
   type FullMatchAnalysisResponse,
   type FullMatchEloContext,
   type FullMatchUncertainty,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
+import { mapEvidenceFreshness } from "@/lib/freshness";
 
 // ─── Verdict description copy (Phase 3) ──────────────────────────────────────
 
@@ -350,7 +352,8 @@ function EnhancedMatchHero({
           {/* WP-F: suppress alarming STALE badge when no live evidence was produced.
               A baseline/reduced-evidence response references historical training data,
               not a live evidence bundle — "810d ago" is meaningless and alarming. */}
-          {presentation.isReducedEvidenceBaseline || (data.staleness_seconds ?? 0) >= 365 * 86400 ? (
+          {presentation.isReducedEvidenceBaseline ||
+          (data.staleness_available && data.staleness_seconds >= 365 * 86400) ? (
             <span
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/40 bg-slate-800/40 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
               title="Evidence freshness: time since team statistics were last updated from providers."
@@ -359,14 +362,12 @@ function EnhancedMatchHero({
             </span>
           ) : (
             <FreshnessPill
-              tag={data.freshness_tag ?? (data.staleness_seconds > 0 ? (data.staleness_seconds < 86400 ? "RECENT" : "STALE") : "LIVE")}
-              stalenessSecs={data.staleness_seconds ?? 0}
+              tag={data.freshness_tag}
+              stalenessSecs={data.staleness_seconds}
+              available={data.staleness_available}
             />
           )}
-          <PredictionAgePill
-            generatedAt={data.generated_at}
-            stalenessSecs={data.staleness_seconds ?? 0}
-          />
+          <PredictionAgePill generatedAt={data.generated_at} />
           {/* Phase F: UCL soft-coverage badge */}
           {league === "UCL" && (
             <span
@@ -440,46 +441,44 @@ function DashboardSkeleton() {
 function FreshnessPill({
   tag,
   stalenessSecs,
+  available,
 }: {
   tag: "LIVE" | "RECENT" | "STALE" | "UNKNOWN";
-  stalenessSecs: number;
+  stalenessSecs: number | null | undefined;
+  available: boolean;
 }) {
-  const config = {
-    // "Live" would claim match state; this measures evidence-data freshness only.
-    LIVE: { label: "Fresh", dot: "bg-emerald-400", text: "text-emerald-300", border: "border-emerald-500/25 bg-emerald-500/8" },
-    RECENT: { label: "Recent", dot: "bg-amber-400", text: "text-amber-300", border: "border-amber-500/25 bg-amber-500/8" },
-    STALE: { label: "Stale", dot: "bg-rose-400", text: "text-rose-300", border: "border-rose-500/25 bg-rose-500/8" },
-    UNKNOWN: { label: "Unknown", dot: "bg-slate-500", text: "text-slate-300", border: "border-slate-600/30 bg-slate-700/20" },
-  }[tag];
-  const ageLabel =
-    stalenessSecs === 0 ? "" :
-    stalenessSecs < 3600 ? ` · ${Math.round(stalenessSecs / 60)}m ago` :
-    stalenessSecs < 86400 ? ` · ${Math.round(stalenessSecs / 3600)}h ago` :
-    ` · ${Math.round(stalenessSecs / 86400)}d ago`;
+  const freshness = mapEvidenceFreshness({
+    stalenessSeconds: stalenessSecs,
+    available,
+    tag,
+  });
+  const dot = {
+    LIVE: "bg-emerald-400",
+    RECENT: "bg-amber-400",
+    STALE: "bg-rose-400",
+    UNKNOWN: "bg-slate-500",
+  }[freshness.tag];
   return (
     <span
-      className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider", config.border, config.text)}
+      aria-label={freshness.ariaLabel}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+        freshness.className,
+      )}
     >
-      <span className="sr-only">Data freshness: </span>
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} aria-hidden />
-      {config.label}{ageLabel}
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} aria-hidden />
+      {freshness.label}{freshness.ageLabel}
     </span>
   );
 }
 
 // ─── Prediction age pill (CE-5) ──────────────────────────────────────────────
 
-function PredictionAgePill({
-  generatedAt,
-  stalenessSecs,
-}: {
-  generatedAt: string;
-  stalenessSecs: number;
-}) {
-  const ageSecs =
-    stalenessSecs > 0
-      ? stalenessSecs
-      : Math.round((Date.now() - new Date(generatedAt).getTime()) / 1000);
+function PredictionAgePill({ generatedAt }: { generatedAt: string }) {
+  const generatedMs = new Date(generatedAt).getTime();
+  const ageSecs = Number.isFinite(generatedMs)
+    ? Math.max(0, Math.round((Date.now() - generatedMs) / 1000))
+    : 0;
 
   const title = `Prediction generated at ${new Date(generatedAt).toLocaleString()}. Regenerate for latest signal.`;
 
@@ -1554,7 +1553,7 @@ function FullAnalysisDashboardInner({
         awayTeam={awayTeam}
       />
 
-      <ActionabilityStrip data={data} />
+      {presentation.stakePermitted && <ActionabilityStrip data={data} />}
 
       {/* ── WP-E: Evidence status card (why no prediction, structured breakdown) ── */}
       <EvidenceStatusCard data={data} />
@@ -1564,8 +1563,10 @@ function FullAnalysisDashboardInner({
         <ActionabilityEvidencePanel actionability={data.actionability} />
       )}
 
-      {/* ── Narrative ── */}
-      <NarrativeBlock text={data.narrative ?? ""} />
+      {/* ── Narrative: suppress only when it restates the already-visible decision reason ── */}
+      {!isNarrativeRedundant(data.narrative, presentation.reason) && (
+        <NarrativeBlock text={data.narrative ?? ""} />
+      )}
 
       {/* ── Data gap banner ── */}
       <DataGapBanner gaps={data.data_gaps} />

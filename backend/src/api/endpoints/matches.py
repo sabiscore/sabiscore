@@ -54,7 +54,7 @@ async def get_upcoming_matches(
         if service_payload.get("matches"):
             match_responses = [
                 MatchSummary(
-                    id=m["id"],
+                    id=str(m.get("match_id") or m.get("id") or ""),
                     home_team=m["home_team"],
                     away_team=m["away_team"],
                     league=m["league"],

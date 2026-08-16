@@ -252,3 +252,58 @@ async def test_run_clv_capture_pass_genuine_exception_yields_error(factory) -> N
         result = await clv_capture_service.run_clv_capture_pass()
 
     assert result["outcome"] == "error"
+
+
+def test_utc_naive_converts_offset_aware_datetime_to_same_utc_instant() -> None:
+    """Regression for Render/asyncpg: DB-bound timestamps are naive UTC.
+
+    ``TIMESTAMP WITHOUT TIME ZONE`` cannot accept an aware datetime through
+    asyncpg.  Conversion must preserve the instant, not merely strip tzinfo.
+    """
+    from datetime import timedelta, timezone
+
+    from src.services.clv_capture_service import _utc_naive
+
+    plus_one = timezone(timedelta(hours=1))
+    source = datetime(2026, 8, 16, 21, 12, tzinfo=plus_one)
+
+    assert _utc_naive(source) == datetime(2026, 8, 16, 20, 12)
+    assert _utc_naive(source).tzinfo is None
+
+
+def test_utc_naive_preserves_existing_naive_utc_contract() -> None:
+    from src.services.clv_capture_service import _utc_naive
+
+    source = datetime(2026, 8, 16, 20, 12)
+
+    assert _utc_naive(source) is source
+
+
+async def test_capture_pass_explicitly_rolls_back_failed_transaction() -> None:
+    """A failed commit/flush must be reset before the pooled session is closed."""
+    from src.services import clv_capture_service
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.rollback = AsyncMock()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    fake_session = FakeSession()
+
+    def factory():
+        return fake_session
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory), patch.object(
+        clv_capture_service,
+        "_capture_due_fixtures",
+        new=AsyncMock(side_effect=RuntimeError("database write failed")),
+    ):
+        result = await clv_capture_service.run_clv_capture_pass()
+
+    assert result["outcome"] == "error"
+    fake_session.rollback.assert_awaited_once()

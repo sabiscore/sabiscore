@@ -46,6 +46,20 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        conviction: {
+          high: "hsl(var(--conviction-high) / <alpha-value>)",
+          actionable: "hsl(var(--conviction-actionable) / <alpha-value>)",
+          speculative: "hsl(var(--conviction-speculative) / <alpha-value>)",
+          hold: "hsl(var(--conviction-hold) / <alpha-value>)",
+          partial: "hsl(var(--conviction-partial) / <alpha-value>)",
+        },
+        signal: {
+          positive: "hsl(var(--signal-positive) / <alpha-value>)",
+          warning: "hsl(var(--signal-warning) / <alpha-value>)",
+          danger: "hsl(var(--signal-danger) / <alpha-value>)",
+          stale: "hsl(var(--signal-stale) / <alpha-value>)",
+          "data-gap": "hsl(var(--signal-data-gap) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

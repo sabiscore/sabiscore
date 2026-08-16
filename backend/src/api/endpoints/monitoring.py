@@ -518,6 +518,27 @@ async def readiness_check(
         checks["models"] = {"status": "error", "message": str(e), "models_loaded": False}
         ready = False
     
+    # Durable Elo state is informational for platform readiness: a newly migrated
+    # environment can serve honest fail-closed predictions while the historical
+    # replay is still pending. Surface the authority and coverage without turning
+    # missing Elo history into a platform outage.
+    try:
+        from ...services.elo_state_service import elo_state_health
+
+        checks["elo"] = {
+            "status": "informational",
+            **(await elo_state_health(db)),
+        }
+    except Exception as exc:
+        logger.warning("Elo state health unavailable: %s", redact_text(exc))
+        checks["elo"] = {
+            "status": "informational_unavailable",
+            "authority": "postgres",
+            "rows": None,
+            "unique_teams": None,
+            "last_match_date": None,
+        }
+
     # Provide an explicit top-level models boolean and optional model_error
     models_status = checks.get("models", {})
     models_loaded_flag = bool(models_status.get("models_loaded", False))

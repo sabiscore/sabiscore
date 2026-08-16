@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { getUpcomingMatches, type UpcomingMatch } from "@/lib/api";
+import { edgeQualityLabel } from "@/lib/edge-quality";
 import { cn } from "@/lib/utils";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -47,7 +48,9 @@ function buildCards(matchId: string, league: string, match: UpcomingMatch | null
 
   if (match?.edge_quality_score != null) {
     const pct = Math.round(match.edge_quality_score * 100);
-    const tier = pct >= 67 ? "High Edge" : pct >= 33 ? "Medium Edge" : "Low Edge";
+    // edge_quality_score is a confidence/freshness/completeness composite, not a
+    // market edge (@/lib/edge-quality) — the tier must say "quality", never bare "Edge".
+    const tier = `${edgeQualityLabel(match.edge_quality_score)} quality`;
     const accent = pct >= 67 ? "text-emerald-300" : pct >= 33 ? "text-amber-300" : "text-slate-400";
     cards.push({ label: "Edge Quality", value: `${pct}%`, sub: tier, accent });
   }

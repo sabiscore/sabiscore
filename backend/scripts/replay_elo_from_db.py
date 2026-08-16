@@ -1,107 +1,116 @@
-"""Replay Elo ratings from real Match table rows.
+"""Backfill durable Elo snapshots from real Match/Team identities.
 
-Replaces the synthetically-keyed parquet (keyed by placeholder IDs like
-"bundesliga_home_0") with ratings keyed by real Team.id values, enabling
-EloEngine.get_context() to return non-neutral (non-1500/1500) ratings for
-all teams that appear in the DB.
+Usage (from backend/):
+    python scripts/replay_elo_from_db.py --dry-run
+    python scripts/replay_elo_from_db.py --apply
 
-Usage (from backend/ directory):
-    python scripts/replay_elo_from_db.py [--dry-run]
-
-Requirements:
-    - DATABASE_URL env var pointing to a Postgres or SQLite DB with Match rows
-    - The Elo parquet output path from settings (elo_parquet_path)
-
-The replay is idempotent: update_after_match() skips a match_id that already
-exists in the parquet. Run again after new matches settle to extend the table.
+The authoritative production state is ``elo_rating_snapshots`` in PostgreSQL.
+The legacy Parquet Elo engine remains offline/backward-compatible tooling only.
 """
+
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 from pathlib import Path
 
-# Allow running from backend/ or backend/scripts/
+from sqlalchemy import func, select
+
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(_BACKEND_DIR / "src") not in sys.path:
+if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
-    sys.path.insert(0, str(_BACKEND_DIR / "src"))
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./sabiscore.db")
-os.environ.setdefault("ALLOW_SQLITE_FALLBACK", "true")
+os.environ.setdefault("SABISCORE_ALLOW_INSECURE_FALLBACK", "true")
+os.environ.setdefault("APP_ENV", "development")
 
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
-
-from src.core.config import settings  # noqa: E402
 from src.core.database import Match  # noqa: E402
-from src.data.elo_engine import EloEngine  # noqa: E402
-from src.utils.season import canonical_season  # noqa: E402
+from src.db.models import EloRatingSnapshot  # noqa: E402
+from src.db.session import close_db, init_db  # noqa: E402
+from src.services.elo_state_service import apply_finished_match_to_elo  # noqa: E402
 
 
-def _sync_engine():
-    """Return a synchronous SQLAlchemy engine derived from the async DATABASE_URL."""
-    url = str(settings.database_url).replace("+asyncpg", "").replace("+aiosqlite", "")
-    return create_engine(url)
+async def _run(*, apply: bool) -> int:
+    await init_db()
+    from src.db import session as db_session
 
+    session_factory = db_session.AsyncSessionLocal
+    if session_factory is None:
+        raise RuntimeError("Async database session is unavailable")
 
-def replay(dry_run: bool = False) -> None:
-    engine = _sync_engine()
-    elo = EloEngine()
+    try:
+        async with session_factory() as session:
+            matches = (
+                await session.execute(
+                    select(Match)
+                    .where(
+                        func.lower(Match.status) == "finished",
+                        Match.home_score.is_not(None),
+                        Match.away_score.is_not(None),
+                        Match.league_id.is_not(None),
+                    )
+                    .order_by(Match.match_date.asc(), Match.id.asc())
+                )
+            ).scalars().all()
 
-    with Session(engine) as session:
-        matches = (
-            session.query(Match)
-            .filter(Match.status == "finished")
-            .order_by(Match.match_date.asc())
-            .all()
-        )
-
-    if not matches:
-        print("No finished matches found in the database.")
-        return
-
-    print(f"Replaying Elo over {len(matches)} finished matches...")
-    processed = skipped = 0
-
-    for m in matches:
-        if m.home_score is None or m.away_score is None:
-            skipped += 1
-            continue
-        match_date = m.match_date
-        season = canonical_season(match_date)
-        # league_id is canonical (EPL, LA_LIGA, ...) after migration 0006
-        league = (m.league_id or "").lower().replace("_", " ").replace(" ", "_")
-        if not league:
-            skipped += 1
-            continue
-        if not dry_run:
-            elo.update_after_match(
-                match_id=str(m.id),
-                home_team_id=str(m.home_team_id),
-                away_team_id=str(m.away_team_id),
-                home_goals=int(m.home_score),
-                away_goals=int(m.away_score),
-                league=league,
-                season=season,
-                match_date=match_date,
+            existing_matches = set(
+                (
+                    await session.execute(
+                        select(EloRatingSnapshot.match_id).distinct()
+                    )
+                ).scalars().all()
             )
-        processed += 1
 
-    parquet_path = Path(settings.elo_parquet_path)
-    print(f"Processed: {processed}  Skipped (no score / no league): {skipped}")
-    if dry_run:
-        print("[dry-run] No parquet written.")
-    else:
-        print(f"Elo parquet written to: {parquet_path}")
-        table = elo._load_table()
-        unique_teams = table["team_id"].nunique()
-        print(f"  Rows: {len(table)}  Unique teams: {unique_teams}")
+            eligible = [match for match in matches if str(match.id) not in existing_matches]
+            print(
+                f"finished={len(matches)} existing_elo_matches={len(existing_matches)} "
+                f"eligible={len(eligible)} mode={'apply' if apply else 'dry-run'}"
+            )
+            if not apply:
+                if eligible:
+                    first, last = eligible[0], eligible[-1]
+                    print(
+                        "eligible_range="
+                        f"{first.match_date.isoformat()}..{last.match_date.isoformat()}"
+                    )
+                return 0
+
+            processed = 0
+            for match in eligible:
+                if await apply_finished_match_to_elo(session, match):
+                    processed += 1
+            await session.commit()
+
+            row_count = int(
+                (
+                    await session.execute(select(func.count(EloRatingSnapshot.id)))
+                ).scalar_one()
+            )
+            team_count = int(
+                (
+                    await session.execute(
+                        select(func.count(func.distinct(EloRatingSnapshot.team_id)))
+                    )
+                ).scalar_one()
+            )
+            print(
+                f"processed={processed} rows={row_count} unique_teams={team_count} authority=postgres"
+            )
+            return 0
+    finally:
+        await close_db()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Replay durable Elo state from finished DB matches")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--dry-run", action="store_true", help="Report eligible matches without mutation")
+    mode.add_argument("--apply", action="store_true", help="Persist missing Elo snapshots")
+    args = parser.parse_args()
+    return asyncio.run(_run(apply=bool(args.apply)))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Replay Elo ratings from DB matches")
-    parser.add_argument("--dry-run", action="store_true", help="Parse matches but do not write parquet")
-    args = parser.parse_args()
-    replay(dry_run=args.dry_run)
+    raise SystemExit(main())

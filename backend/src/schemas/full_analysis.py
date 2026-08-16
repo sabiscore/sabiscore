@@ -17,6 +17,7 @@ class PredictionStatus(str, Enum):
 
 class PredictionSource(str, Enum):
     CERTIFIED_MODEL = "CERTIFIED_MODEL"
+    UNCERTIFIED_MODEL = "UNCERTIFIED_MODEL"
     DIAGNOSTIC_BASELINE = "DIAGNOSTIC_BASELINE"
     NONE = "NONE"
 
@@ -36,6 +37,12 @@ class FullMatchEnsembleResponse(BaseModel):
     probabilities_available: bool
     league: str
     model_version: str
+    generation: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    manifest_sha256: Optional[str] = None
+    certification_state: str = "UNVERIFIED"
+    artifact_sha256: Optional[str] = None
+    coverage: str = "dedicated"
     calibration_method: str
     calibration_applied: bool
     overlay_applied: bool
@@ -191,7 +198,11 @@ class FullMatchAnalysisResponseSchema(BaseModel):
         if self.probabilities_available != (self.prediction_status == PredictionStatus.AVAILABLE):
             raise ValueError("prediction_status and probabilities_available must agree")
         expected_source = {
-            PredictionStatus.AVAILABLE: PredictionSource.CERTIFIED_MODEL,
+            PredictionStatus.AVAILABLE: (
+                PredictionSource.CERTIFIED_MODEL
+                if self.ensemble.certification_state == "CERTIFIED"
+                else PredictionSource.UNCERTIFIED_MODEL
+            ),
             PredictionStatus.REDUCED_EVIDENCE_BASELINE: PredictionSource.DIAGNOSTIC_BASELINE,
             PredictionStatus.UNAVAILABLE: PredictionSource.NONE,
         }[self.prediction_status]

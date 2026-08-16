@@ -85,6 +85,12 @@ async def run_settlement_pass() -> dict[str, Any]:
 
         async with AsyncSessionLocal() as session:
             sync_counts = await sync_settled_results(session)
+            # Elo is a derived state transition from authoritative finished-match
+            # results. Keep it coupled to settlement so retries are ordered and
+            # idempotent instead of introducing a second independent scheduler.
+            from .elo_state_service import sync_elo_from_finished_matches
+
+            elo_counts = await sync_elo_from_finished_matches(session)
             records = await get_settled_predictions(session)
 
         # Pure Python, no DB — deliberately outside the session block above.
@@ -95,6 +101,7 @@ async def run_settlement_pass() -> dict[str, Any]:
             "checked_at": checked_at,
             "last_success_at": checked_at,
             "sync": sync_counts,
+            "elo": elo_counts,
             "settled_predictions_total": len(records),
             "walk_forward": validation,
             "consecutive_failures": 0,

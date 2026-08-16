@@ -107,6 +107,7 @@ async def test_run_settlement_pass_composes_sync_and_validation(factory) -> None
 
     assert result["outcome"] == "ok"
     assert result["sync"] == {"updated": 0, "unmatched": 0, "already_settled": 0}
+    assert result["elo"]["processed"] == 10
     assert result["settled_predictions_total"] == 10
     assert result["walk_forward"]["skipped"] is False
     assert result["consecutive_failures"] == 0

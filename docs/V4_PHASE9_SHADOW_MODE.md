@@ -139,7 +139,7 @@ from src.connectors import OptaConnector, BetfairConnector, PinnacleConnector, F
 
 | Existing (Phase 8)                                   | New (Phase 9 candidate)                              | Relationship |
 |-------------------------------------------------------|-------------------------------------------------------|---|
-| `features/market.py::market_movement_features`        | `connectors/odds_market.py::compute_market_features`  | Different key convention (`home/draw/away` vs `home_win/draw/away_win`), different outputs (5 drift features feeding the 86-dim model vs. EV/edge/CLV/margin for metadata). No name collisions; documented in both modules' docstrings. |
+| `features/market.py::market_movement_features`        | `connectors/odds_market.py::compute_market_features`  | Different key convention (`home/draw/away` vs `home_win/draw/away_win`), different outputs (5 drift features feeding the canonical Phase 8 model vs. EV/edge/CLV/margin for metadata). No name collisions; documented in both modules' docstrings. |
 | `settings.football_data_api_key` (already existed)    | `connectors/football_data_org.py`                     | Connector reads the existing setting; **no rename**. |
 | `settings.statsbomb_cache_path` (Phase 8 parquet cache)| `connectors/statsbomb_open.py` (open-data JSON loader)| Distinct artifacts; loader does not read/write the Phase 8 cache path. |
 | `connectors/{opta,betfair,pinnacle}.py` (aiohttp, live)| `connectors/{base,football_data_org,...}.py` (httpx, async) | Coexist in the same package via merged `__init__.py`; zero overlap in responsibilities. |
@@ -156,7 +156,7 @@ from src.connectors import OptaConnector, BetfairConnector, PinnacleConnector, F
 | `power_method_probs` produces wrong "sharp" probabilities | **Found and fixed during integration testing** (see §6, "Bug fix"). Binary-search direction was inverted, converging to a near-uniform distribution instead of the correct margin-proportional one. Fixed + regression test added (`test_favourite_gets_uplift_vs_proportional`). |
 | `statsbomb-open-data` registry entry reports `enabled=true` even with no open-data clone present | Documented limitation (see §7). Low risk: this source is `request_time_safe=False` (never auto-invoked) and the registry is informational-only. Phase 9.1 follow-up: dedicated `statsbomb_open_data_root` setting. |
 | football-data.org free-tier rate limits (10 req/min) | `AsyncJSONClient.get_json_with_rate_limit_backoff` honours `Retry-After` on HTTP 429 with capped sleep. Connector is offline/batch-only (`request_time_safe=False`) — never called from the live request path. |
-| Existing 86-feature model accidentally retrained on new columns | Hybrid xG / market features are **not** added to `feature_frame` / `feature_vector` anywhere — only to `metadata`. The walk-forward retraining scripts remain the only path to feature-frame changes, and are not touched by this PR. |
+| Existing canonical Phase 8 model accidentally retrained on new columns | Hybrid xG / market features are **not** added to `feature_frame` / `feature_vector` anywhere — only to `metadata`. The walk-forward retraining scripts remain the only path to feature-frame changes, and are not touched by this PR. |
 
 ## 5. Testing strategy
 

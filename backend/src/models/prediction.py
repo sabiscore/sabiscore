@@ -1,4 +1,4 @@
-"""PredictionEngine — canonical 86-dim inference surface for Phase 8.
+"""PredictionEngine — canonical manifest-governed inference surface.
 
 Replaces the deprecated ``PredictionService`` in
 ``backend/src/services/prediction_service.py`` which hard-truncated feature
@@ -6,15 +6,15 @@ vectors to 58 dimensions.  All new callers should use this module.
 
 Feature-dimension policy
 ------------------------
-Trained models may expect 58, 65, or 86 features depending on the artifact
-version.  ``PredictionEngine`` queries the model's ``n_features_in_`` attribute
-(sklearn convention) and automatically pads or truncates the caller-supplied
-vector to match.  A warning is emitted when truncation is needed so that a
-future retraining on the full 86-dim set is visible in logs.
+Trained generations may expect different exact feature schemas. The engine
+queries the loaded artifact for its expected width but never pads or truncates a
+live request: any width mismatch fails closed. Phase 8 currently has 89
+canonical features (68 Phase 7 + 21 Phase 8); legacy ``86`` names are compatibility
+aliases only and must not drive inference behavior.
 
 Phase D — Calibration integration
 ----------------------------------
-v6_phase8 artifacts are dicts containing:
+Candidate ensemble artifacts may be dictionaries containing:
   - ``models``: dict of named base learners (RF, XGB, LGBM, optional CatBoost)
   - ``calibrator``: ``FittedCalibrator`` from ``calibration.py``
   - ``bivariate_poisson_overlay``: ``BivariatePoissonDrawOverlay``
@@ -40,7 +40,7 @@ from ..core.cache import cache_manager
 from ..core.config import settings
 from ..core.league_policy import LeaguePolicyUnavailableError, get_league_policy
 from ..core.redaction import redact_text
-from .active_generation import ActiveGenerationError, active_artifact_path
+from .active_generation import ActiveGenerationError, load_active_generation
 
 # ── Soft import: calibration module (requires scipy / sklearn) ─────────────────
 _apply_calibrator = None
@@ -118,6 +118,12 @@ class PredictionResult:
     calibration_method: str
     calibration_applied: bool = False
     overlay_applied: bool = False
+    generation: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    manifest_sha256: Optional[str] = None
+    certification_state: str = "UNVERIFIED"
+    artifact_sha256: Optional[str] = None
+    coverage: str = "dedicated"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -130,17 +136,30 @@ class PredictionResult:
             "calibration_method": self.calibration_method,
             "calibration_applied": self.calibration_applied,
             "overlay_applied": self.overlay_applied,
+            "generation": self.generation,
+            "feature_schema_version": self.feature_schema_version,
+            "manifest_sha256": self.manifest_sha256,
+            "certification_state": self.certification_state,
+            "artifact_sha256": self.artifact_sha256,
+            "coverage": self.coverage,
         }
 
 
 @dataclass
 class _ArtifactBundle:
-    """Internal holder for a loaded v6_phase8 artifact or older direct model."""
-    direct_model: Optional[Any]           # v5 and earlier: sklearn model with predict_proba
-    models_dict: Optional[Dict[str, Any]] # v6: dict of named base learners
-    calibrator: Optional[Any]             # FittedCalibrator | None
-    overlay: Optional[Any]                # BivariatePoissonDrawOverlay | None
-    feature_columns: Optional[List[str]]  # canonical feature list from artifact
+    """Loaded model plus manifest-authoritative production provenance."""
+    direct_model: Optional[Any]
+    models_dict: Optional[Dict[str, Any]]
+    calibrator: Optional[Any]
+    overlay: Optional[Any]
+    feature_columns: Optional[List[str]]
+    model_version: str = "unknown"
+    generation: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    manifest_sha256: Optional[str] = None
+    certification_state: str = "UNVERIFIED"
+    artifact_sha256: Optional[str] = None
+    coverage: str = "dedicated"
 
 
 # ── Engine ─────────────────────────────────────────────────────────────────────
@@ -175,8 +194,8 @@ class PredictionEngine:
         Parameters
         ----------
         features:
-            Live feature vector.  May be 58, 65, or 86 dimensions — the engine
-            aligns to the model's actual ``n_features_in_`` automatically.
+            Live feature vector. Its width must exactly match the active artifact
+            schema; the engine never pads or truncates live evidence.
         league:
             League name (e.g. ``"EPL"``, ``"Premier League"``).
         match_id:
@@ -221,10 +240,22 @@ class PredictionEngine:
         import pickle
 
         try:
-            manifested = active_artifact_path(slug)
+            generation = load_active_generation()
         except ActiveGenerationError as exc:
             logger.error("PredictionEngine: active generation rejected: %s", redact_text(exc))
             return None
+
+        manifest_entry = generation.get("artifacts", {}).get(slug)
+        manifested = manifest_entry.get("artifact_path") if manifest_entry else None
+        provenance = {
+            "model_version": str(generation.get("active_version") or "unknown"),
+            "generation": generation.get("generation"),
+            "feature_schema_version": generation.get("feature_schema_version"),
+            "manifest_sha256": generation.get("manifest_sha256"),
+            "certification_state": str(generation.get("certification_state") or "UNVERIFIED"),
+            "artifact_sha256": manifest_entry.get("artifact_sha256") if manifest_entry else None,
+            "coverage": "dedicated" if manifest_entry else "generic",
+        }
 
         search_dirs = [settings.phase7_models_path, settings.models_path]
         for directory in search_dirs:
@@ -252,7 +283,7 @@ class PredictionEngine:
                             except Exception:
                                 with open(candidate, "rb") as handle:
                                     raw = pickle.load(handle)
-                            bundle = self._wrap_artifact(raw, slug, candidate)
+                            bundle = self._wrap_artifact(raw, slug, candidate, provenance=provenance)
                             if bundle is not None:
                                 logger.info("PredictionEngine: loaded %s from %s", slug, candidate)
                                 return bundle
@@ -262,7 +293,13 @@ class PredictionEngine:
         return None
 
     @staticmethod
-    def _wrap_artifact(raw: Any, slug: str, path: Any) -> Optional["_ArtifactBundle"]:
+    def _wrap_artifact(
+        raw: Any,
+        slug: str,
+        path: Any,
+        *,
+        provenance: Optional[Dict[str, Any]] = None,
+    ) -> Optional["_ArtifactBundle"]:
         """Normalise a loaded artifact into an _ArtifactBundle.
 
         Handles two artifact shapes:
@@ -284,6 +321,7 @@ class PredictionEngine:
                 calibrator=raw.get("calibrator"),
                 overlay=raw.get("bivariate_poisson_overlay"),
                 feature_columns=raw.get("feature_columns"),
+                **(provenance or {}),
             )
         if callable(getattr(raw, "predict_proba", None)):
             return _ArtifactBundle(
@@ -292,6 +330,7 @@ class PredictionEngine:
                 calibrator=None,
                 overlay=None,
                 feature_columns=None,
+                **(provenance or {}),
             )
         return None
 
@@ -330,8 +369,8 @@ class PredictionEngine:
         if actual_dim < expected_dim:
             # A narrower vector than the model expects means real feature slots
             # would be zero-filled — fabricating signal the model was trained to
-            # receive, not just carrying forward an older-but-valid subset (that's
-            # the truncation branch below, which stays as-is). Fail closed via the
+            # receive. Width mismatch in either direction fails closed; schema
+            # adaptation belongs in an explicit, versioned projection layer.
             # same _fallback_result() this function already uses for "no bundle" /
             # "inference raised" — model_version="fallback" is the established,
             # already-checked signal (full_analysis.py, upcoming_match_service.py)
@@ -343,11 +382,12 @@ class PredictionEngine:
             )
             return self._fallback_result(input_dim=actual_dim)
         elif actual_dim > expected_dim:
-            features = features[:expected_dim]
-            logger.warning(
-                "PredictionEngine: truncated %d → %d for %s (retrain recommended)",
-                actual_dim, expected_dim, league,
+            logger.error(
+                "PredictionEngine: SCHEMA_MISMATCH — %d features supplied, %s model expects %d; "
+                "refusing to truncate candidate/live evidence into an older serving schema",
+                actual_dim, league, expected_dim,
             )
+            return self._fallback_result(input_dim=actual_dim)
 
         X = features.reshape(1, -1)
 
@@ -378,7 +418,7 @@ class PredictionEngine:
             )
             return self._fallback_result(input_dim=expected_dim)
 
-        model_version = "v6_phase8" if is_dict_artifact else "v5_phase7"
+        model_version = bundle.model_version
         calibration_method = "none"
         calibration_applied = False
         overlay_applied = False
@@ -476,6 +516,12 @@ class PredictionEngine:
             calibration_method=calibration_method if calibration_applied else "raw",
             calibration_applied=calibration_applied,
             overlay_applied=overlay_applied,
+            generation=bundle.generation,
+            feature_schema_version=bundle.feature_schema_version,
+            manifest_sha256=bundle.manifest_sha256,
+            certification_state=bundle.certification_state,
+            artifact_sha256=bundle.artifact_sha256,
+            coverage=bundle.coverage,
         )
 
     @staticmethod
@@ -525,6 +571,7 @@ class PredictionEngine:
             calibration_method="uniform",
             calibration_applied=False,
             overlay_applied=False,
+            coverage="fallback",
         )
 
     # ── Cache management ───────────────────────────────────────────────────────

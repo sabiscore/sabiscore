@@ -163,6 +163,12 @@ def _empty_ensemble(league: str) -> EnsemblePrediction:
         confidence=0.0,
         league=league,
         model_version="unavailable",
+        generation=None,
+        feature_schema_version=None,
+        manifest_sha256=None,
+        certification_state="UNVERIFIED",
+        artifact_sha256=None,
+        coverage="unavailable",
         calibration_method="unavailable",
         calibration_applied=False,
         overlay_applied=False,
@@ -206,6 +212,12 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
         confidence=max(h, d, a),
         league=league,
         model_version=str(pred.get("model_version", "")),
+        generation=pred.get("generation"),
+        feature_schema_version=pred.get("feature_schema_version"),
+        manifest_sha256=pred.get("manifest_sha256"),
+        certification_state=str(pred.get("certification_state") or "UNVERIFIED"),
+        artifact_sha256=pred.get("artifact_sha256"),
+        coverage=str(pred.get("coverage") or "dedicated"),
         calibration_method=str(pred.get("calibration_method", "raw")),
         calibration_applied=bool(pred.get("calibration_applied", False)),
         overlay_applied=bool(pred.get("overlay_applied", False)),
@@ -627,10 +639,16 @@ async def get_full_analysis(
     if data_quality.get("is_synthetic"):
         reduced_evidence_input = True
         critical_gaps.append("REQUIRED_MODEL_INPUTS_UNAVAILABLE")
+    raw_staleness = live.get("staleness_seconds")
     staleness_available = bool(
-        live.get("staleness_available", "staleness_seconds" in live)
+        live.get("staleness_available", raw_staleness is not None)
+        and raw_staleness is not None
     )
-    staleness_seconds = int(live.get("staleness_seconds", 0))
+    try:
+        staleness_seconds = max(0, int(raw_staleness)) if staleness_available else 0
+    except (TypeError, ValueError):
+        staleness_available = False
+        staleness_seconds = 0
 
     # Two different things used to share one gate, and the wrong one was critical.
     #
@@ -687,8 +705,12 @@ async def get_full_analysis(
             raw_pred = {}
 
     ensemble = _ensemble_from_prediction(raw_pred, league)
-    prediction_status = PredictionStatus.AVAILABLE
-    prediction_source = PredictionSource.CERTIFIED_MODEL
+    # `.certification_state` must never be read before the None-check below —
+    # _ensemble_from_prediction returns None on missing/malformed probabilities
+    # (e.g. every real-world "fixture unavailable" fallback), and this branch
+    # order previously evaluated the CERTIFIED_MODEL/UNCERTIFIED_MODEL check
+    # first, crashing with AttributeError on the exact reduced-evidence path
+    # this endpoint's whole contract exists to serve safely.
     if ensemble is None:
         critical_gaps.append("MODEL_PREDICTION_UNAVAILABLE")
         ensemble = _empty_ensemble(league)
@@ -698,6 +720,13 @@ async def get_full_analysis(
         critical_gaps.append("MODEL_PREDICTION_REDUCED_EVIDENCE")
         prediction_status = PredictionStatus.REDUCED_EVIDENCE_BASELINE
         prediction_source = PredictionSource.DIAGNOSTIC_BASELINE
+    else:
+        prediction_status = PredictionStatus.AVAILABLE
+        prediction_source = (
+            PredictionSource.CERTIFIED_MODEL
+            if ensemble.certification_state == "CERTIFIED"
+            else PredictionSource.UNCERTIFIED_MODEL
+        )
     features_dict = live.get("features_dict", {})
 
     # Layer 2: BNN uncertainty

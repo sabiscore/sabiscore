@@ -260,20 +260,36 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                     });
                   }}
                   disabled={!selectorLeague}
-                  aria-label={`${match.home_team} vs ${match.away_team}${isTopEdge ? " — Top Edge Today" : ""}`}
+                  aria-label={`${match.home_team} vs ${match.away_team}${isTopEdge ? " — highest evidence quality" : ""}`}
                   className={cn(
                     "flex-shrink-0 w-[180px] rounded-xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 hover:border-slate-600/60 min-h-[44px] disabled:cursor-not-allowed disabled:opacity-50",
                     isTopEdge
-                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      ? "border-indigo-400/30 bg-indigo-500/10"
                       : "border-slate-800/60 bg-slate-900/40 hover:bg-slate-900/70",
                   )}
                 >
+                  {/* League identity — flag helps distinguish cards when multiple leagues mix
+                      in the "All" view. CountryFlag via LEAGUE_CONFIG keyed by selectorLeague. */}
+                  {selectorLeague && LEAGUE_CONFIG[selectorLeague]?.countryCode && (
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <CountryFlag
+                        countryCode={LEAGUE_CONFIG[selectorLeague].countryCode}
+                        size={12}
+                        className="rounded-sm flex-shrink-0"
+                      />
+                      <span className="text-[9px] tracking-wide text-slate-600">{selectorLeague}</span>
+                    </div>
+                  )}
                   {isTopEdge && (
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 mb-1">
-                      🔥 Top Edge Today
+                    // isTopEdge ranks by edge_quality_score — a confidence/freshness/
+                    // completeness composite (@/lib/edge-quality), never a market edge.
+                    // No celebratory styling/emoji: that visual weight is reserved for
+                    // states that have actually cleared calibration.
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-300 mb-1">
+                      Highest evidence quality
                     </p>
                   )}
-                  <p className="text-[11px] font-semibold text-slate-100 truncate">{match.home_team}</p>
+                  <p className="text-xs font-semibold text-slate-100 truncate">{match.home_team}</p>
                   <p className="text-[10px] text-slate-500 truncate">vs {match.away_team}</p>
                   {match.match_date && (
                     <p className="text-[9px] text-slate-600 mt-0.5">
@@ -594,8 +610,15 @@ export function MatchSelector() {
                 <span className="text-xs uppercase text-slate-500">vs</span>
                 <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}
+              <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                {LEAGUE_CONFIG[league]?.countryCode && (
+                  <CountryFlag
+                    countryCode={LEAGUE_CONFIG[league].countryCode}
+                    size={12}
+                    className="rounded-sm flex-shrink-0"
+                  />
+                )}
+                <span>{selectedFixture ? "Verified fixture selected" : "Manual matchup selected"}</span>
               </p>
             </div>
           )}

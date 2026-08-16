@@ -6,7 +6,7 @@ clean interface to the open StatsBomb JSON exports and, when ``kloppy`` is
 installed, allows event serialisation via the kloppy standard object model.
 
 This is distinct from ``settings.statsbomb_cache_path`` (the Phase 8
-``statsbomb_features_cache.parquet`` artifact consumed by the 86-feature
+``statsbomb_features_cache.parquet`` artifact consumed by the canonical Phase 8
 model). That artifact is produced offline by the existing Phase 8 pipeline;
 this loader is a research/ablation tool for *additional* StatsBomb open-data
 matches and does not write to or read from that production cache path.

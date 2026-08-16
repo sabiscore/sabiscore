@@ -7,6 +7,10 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const PROHIBITED_COPY =
   /\b(lock|banker|guaranteed|sure bet|free money|execute immediately)\b/i;
 const EIGHTH_KELLY = /⅛|\b1\/8\b|one-eighth|eighth[- ]kelly/i;
+// edge_quality_score is a confidence/freshness/completeness composite, never a
+// market edge (@/lib/edge-quality) — this exact phrase + celebratory framing
+// previously shipped on BigMatchesCarousel's top-ranked card (match-selector.tsx).
+const TOP_EDGE_TODAY = /top edge today/i;
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -31,5 +35,9 @@ describe("public copy contract", () => {
 
   it("contains no one-eighth-Kelly language", () => {
     expect(matchingFiles(EIGHTH_KELLY)).toEqual([]);
+  });
+
+  it("never labels the top edge_quality_score fixture as a celebratory market edge", () => {
+    expect(matchingFiles(TOP_EDGE_TODAY)).toEqual([]);
   });
 });

@@ -113,6 +113,9 @@
         value: "1.0"
       - key: PHASE7_MODELS_PATH
         value: "/opt/render/project/src/backend/models"
+      # Legacy/offline Elo cache only. Live serving authority is PostgreSQL
+      # elo_rating_snapshots (migration 0007); do not treat Render filesystem
+      # Parquet as durable production state.
       - key: ELO_PARQUET_PATH
         value: "/opt/render/project/src/data/processed/elo_ratings.parquet"
       - key: STATSBOMB_CACHE_PATH

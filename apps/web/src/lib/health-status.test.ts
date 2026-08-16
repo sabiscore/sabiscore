@@ -46,6 +46,7 @@ describe("platform provider health", () => {
     expect(health.configured).toBe(2);
     expect(health.enabled).toBe(2);
     expect(health.live).toBe(1);
+    expect(health.degraded).toBe(0);
     expect(health.modelsReady).toBe(true);
     expect(health.providerActivation.label).toBe("Ready");
   });
@@ -59,6 +60,20 @@ describe("platform provider health", () => {
       configured: 2,
       enabled: 1,
       live: 0,
+      degraded: 0,
+      label: "Partial",
+    });
+  });
+
+  it("treats intentional configured-unverified status as neutral but real negative evidence as degraded", () => {
+    expect(deriveProviderActivation([
+      { configured: true, enabled: true, status: "CONFIGURED_UNVERIFIED" },
+      { configured: true, enabled: true, status: "RATE_LIMITED" },
+    ])).toMatchObject({
+      configured: 2,
+      enabled: 2,
+      live: 0,
+      degraded: 1,
       label: "Partial",
     });
   });

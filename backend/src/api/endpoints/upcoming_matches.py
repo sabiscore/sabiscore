@@ -55,7 +55,12 @@ def _compute_edge_quality_score(match: Dict[str, Any]) -> Optional[float]:
     """
     predictions = match.get("predictions")
     best_bet = match.get("best_value_bet")
-    staleness = int(match.get("staleness_seconds", 0))
+    raw_staleness = match.get("staleness_seconds")
+    staleness = (
+        float(raw_staleness)
+        if isinstance(raw_staleness, (int, float)) and raw_staleness >= 0
+        else None
+    )
 
     if predictions is None and best_bet is None:
         return None
@@ -64,7 +69,12 @@ def _compute_edge_quality_score(match: Dict[str, Any]) -> Optional[float]:
     edge_pct = float(best_bet.get("edge_pct", 0.0)) if best_bet else 0.0
     market_edge = min(1.0, edge_pct / 10.0)
     threshold = float(getattr(settings, "live_threshold_seconds", 3600))
-    freshness = max(0.0, 1.0 - staleness / threshold) if threshold > 0 else 1.0
+    # Unknown freshness must never receive a positive freshness contribution.
+    freshness = (
+        max(0.0, 1.0 - staleness / threshold)
+        if staleness is not None and threshold > 0
+        else 0.0
+    )
     # An explicitly-empty list means "computed, no gaps" (→1.0); a missing key
     # means "never computed" (→0.0). Distinct cases, deliberately not merged.
     data_gaps = match.get("data_gaps")
@@ -107,8 +117,14 @@ class PredictionSchema(BaseModel):
     home_win: float
     draw: float
     away_win: float
-    model_version: str = "1.0.0"
-    calibration_method: str = "isotonic"
+    model_version: str = "unavailable"
+    generation: Optional[str] = None
+    feature_schema_version: Optional[str] = None
+    manifest_sha256: Optional[str] = None
+    certification_state: str = "UNVERIFIED"
+    artifact_sha256: Optional[str] = None
+    coverage: str = "dedicated"
+    calibration_method: str = "raw"
     confidence: float
 
 
@@ -178,7 +194,8 @@ class UpcomingMatchSchema(BaseModel):
     best_value_bet: Optional[ValueBetSchema] = None
     data_quality: Optional[DataQualitySchema] = None
     data_gaps: List[str] = Field(default_factory=list)
-    staleness_seconds: int = 0
+    staleness_seconds: Optional[int] = None
+    staleness_available: bool = False
     source: str = "unknown"
     edge_quality_score: Optional[float] = None
     clv_pct: Optional[float] = None
@@ -359,6 +376,15 @@ async def get_upcoming_matches(
         )
     except Exception as exc:
         metrics_collector.increment("upcoming.request.failure")
+        # This endpoint intentionally degrades to a structured DATA_GAP response
+        # instead of re-raising.  A swallowed DB exception can therefore leave
+        # the request session in SQLAlchemy's partial-rollback state; explicitly
+        # reset it before the dependency finalizer runs, otherwise its commit can
+        # raise PendingRollbackError and replace this useful failure response.
+        try:
+            await db.rollback()
+        except Exception:
+            logger.exception("Failed to roll back upcoming-matches request session")
         logger.error("Error fetching upcoming matches: %s", type(exc).__name__, exc_info=True)
         # Carry the exception CLASS NAME (never the message — it can contain row
         # data) into the response. Without it this handler reported every distinct
