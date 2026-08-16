@@ -1,6 +1,6 @@
 ﻿# SabiScore Production Setup Guide
 
-Last updated: 2026-08-14
+Last updated: 2026-08-16
 
 This is the authoritative setup and deployment guide for the finalized production shape.
 
@@ -1209,6 +1209,24 @@ required.
 Do not mark this capability DATA_FED/VERIFIED from code presence alone. Migration,
 backfill, row coverage, and a production-equivalent fixture lookup must be observed.
 
+**2026-08-16 update — `--apply` is an optional accelerant, not a required step.**
+A live `/health/ready` check found `checks.elo.rows: 0` hours after this migration
+deployed: 26 `matches` rows have `home_team_id == away_team_id` (a team recorded
+as playing itself — 16× Inter Milan, 10× Espanyol, one per season since
+2019/2020), and inserting both "sides" of a self-play match collided with itself
+on the `(match_id, team_id)` unique constraint, aborting the *entire* sync
+batch's commit every single hourly tick with zero forward progress (see
+`docs/DEBT.md` item 23). `apply_finished_match_to_elo` now skips a self-play
+match (logs a warning, increments `elo.update.skipped_self_play`) instead of
+attempting the doomed insert, so both the hourly settlement-coupled trickle
+*and* a manual `--apply` now make real progress against the ~12,760 good
+matches. Given the trickle already runs unconditionally every hour at 500
+matches/tick with zero operator involvement, `--apply` above is only worth
+running if faster full coverage is specifically wanted — re-check
+`checks.elo.rows` after ~24-30h before assuming it's stuck. The 26 corrupt
+`matches` rows themselves are untouched; their Elo history correctly stays an
+unresolved data gap.
+
 ## Known Limitations
 
 - Live provider tests are opt-in with `PROVIDER_LIVE_TESTS=false` by default.
@@ -1219,3 +1237,9 @@ backfill, row coverage, and a production-equivalent fixture lookup must be obser
   are run successfully in an environment with those dependencies.
 - Do not delete non-master branches until open PRs are merged or closed, branch
   backups are retained, and the full release gate is green.
+- A rescheduled fixture (kickoff time changed by the provider after the first
+  sync) can still fail canonical-identity reconciliation — `fixture_sync_service`
+  skips just that one fixture and logs it (`fixture_sync.identity_conflicts`
+  metric) rather than losing the whole sync tick, but its canonical identity
+  stays unreconciled until the identity key stops depending on kickoff time
+  (`docs/DEBT.md` item 24). Its raw scheduling data (`Match` row) is unaffected.

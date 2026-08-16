@@ -1,5 +1,64 @@
 # SabiScore Debt Ledger
 
+## 24. Rescheduled fixtures wedged the whole fixture-sync tick; mitigation shipped, identity-hash root cause deferred
+
+**Tier:** mitigation = `FIXED` this session. Root cause = `NEXT` — a
+kickoff-independent canonical fixture identity key, not a one-line change.
+**Found:** 2026-08-16, in a fresh Render deploy log: `fixture_sync: unhandled
+error — continuing without fixture data`, traceback ending in
+`canonical_identity_service.ensure_canonical_fixture` raising `ValueError:
+provider event conflicts with an existing canonical fixture`.
+
+**Root cause.** `ensure_canonical_fixture`'s `fixture_id` is
+`_stable_id("fixture", competition_id, kickoff_utc.isoformat(), home_name,
+away_name)` — a hash that includes the exact kickoff timestamp. A legitimate
+reschedule (broadcaster/league moves the kickoff time, which happens
+routinely) changes `kickoff_utc` on the next sync for the same
+`provider_event_id`, recomputes a different `fixture_id`, and
+`ensure_canonical_fixture` correctly refuses to silently repoint the
+existing `ProviderEventMapping` to a new fixture. That refusal is right in
+isolation, but `sync_upcoming_fixtures()` called it with no per-fixture
+try/except inside its loop, and the loop's single `session.commit()` sits
+after the loop — so the raised exception propagated out before commit,
+losing every fixture in that tick's batch, not just the rescheduled one.
+Same failure shape as item 23 (Elo self-play), found the same day.
+
+**Mitigation shipped (`35ca7bb`):** `sync_upcoming_fixtures()` now catches
+`ValueError` around the `ensure_canonical_fixture` call, logs a warning with
+the `match_id`/team names, increments `fixture_sync.identity_conflicts`, and
+continues to the next fixture. The conflicting fixture's raw `Match` row
+(already flushed earlier in the same loop iteration) still commits — only
+canonical-identity reconciliation is skipped for that one fixture. Regression
+test: `test_canonical_identity_conflict_does_not_wedge_the_batch`
+(`backend/tests/unit/test_fixture_sync.py`) — seeds a fixture, resyncs it
+with a different kickoff time alongside an unrelated new fixture, and asserts
+the second fixture still commits.
+
+**Not done — deliberately deferred.** The identity hash still includes
+`kickoff_utc`, so a rescheduled fixture's canonical identity stays
+unreconciled indefinitely (not just once) until a kickoff-independent key is
+adopted — most likely `(competition_id, season, home_name, away_name)`,
+which stays stable across a reschedule for SabiScore's supported
+competitions (each is round-robin — at most one home/away meeting per
+season pair — so this remains disambiguating; UCL's occasional
+same-pairing-twice edge case was judged too rare to design around here).
+Changing the hash affects new canonical-identity generation broadly, not
+just the conflict path, so it's out of scope for a same-session defensive
+fix.
+
+**Blast radius:** was every fixture in whichever sync tick happened to
+include a rescheduled fixture (all of them, not just the reschedule) — now
+scoped to just that one fixture's canonical-identity reconciliation staying
+incomplete (its `Match` row and scheduling data are unaffected).
+**Cost:** mitigation, done. Root-cause fix: change `_stable_id`'s inputs in
+`canonical_identity_service.py`, re-verify no existing dependents assume
+kickoff-derived IDs, size small-to-medium.
+**Priority:** medium — reschedules are routine in football, so this will
+recur regularly until the identity key changes, but the mitigation means it
+no longer costs an entire sync tick's fixtures each time.
+
+---
+
 ## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, data fix deferred
 
 **Tier:** mitigation = `FIXED` this session. Root-cause data fix = `NEXT` — no

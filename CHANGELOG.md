@@ -5,6 +5,27 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - one-poison-record batch wedges fixed: Elo self-play, fixture reschedules (2026-08-16)
+
+Follow-on to the v4.2 hardening below, found via a live `/health/ready` baseline
+check run ahead of the Elo Postgres backfill runbook, then confirmed against a
+fresh Render deploy log.
+
+### Fixed
+
+- `apply_finished_match_to_elo` now skips a match where `home_team_id == away_team_id` (a team recorded as playing itself — 26 such rows exist in production, 16× Inter Milan, 10× Espanyol) instead of attempting a doomed two-row insert that collided with itself on the `(match_id, team_id)` unique constraint and aborted the *entire* hourly Elo-sync batch. `elo_rating_snapshots` had stayed at exactly 0 rows for hours despite migration `0007_durable_elo_state` being live; this was why. `docs/DEBT.md` item 23.
+- `sync_upcoming_fixtures` now catches a canonical-identity conflict (a rescheduled fixture's kickoff-derived `fixture_id` no longer matching its existing `ProviderEventMapping`) per-fixture instead of letting it abort the whole sync tick before `session.commit()`. `docs/DEBT.md` item 24.
+- Added `EloEngine.seed_from_matches()` to the legacy offline Parquet engine (research/reproducibility tooling only — not the production Postgres authority) with a clarifying module-docstring disclaimer.
+
+### Validation evidence
+
+- `cd backend && python -m pytest tests -q` — **1349 passed, 13 skipped, 0 failed** (up from 1347 pre-session; 2 new tests: `test_self_play_match_is_skipped_not_crashed`, `test_sync_skips_self_play_match_and_still_processes_the_rest`, `test_canonical_identity_conflict_does_not_wedge_the_batch`).
+- `ruff check` on all touched files — clean.
+- Live read-only production queries (`elo_rating_snapshots`, `matches`) confirmed the root cause and its scope (26 rows, two clubs, one per season since 2019/2020) before any fix was written.
+- Commits: `2857143`, `291c06a`, `09dfcda`, `35ca7bb`.
+
+---
+
 ## Unreleased - v4.2 trust, provenance, and durable-Elo hardening (2026-08-16)
 
 ### Added
