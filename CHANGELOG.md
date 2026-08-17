@@ -5,6 +5,38 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Elo backfill progress + the_odds_api rotation confirmed live (2026-08-17)
+
+Read-only production audit, no code changed. Answers two questions left open
+by the 2026-08-16 session and by several operator-supplied planning documents
+this week.
+
+### Confirmed
+
+- Durable Elo backfill is climbing correctly after the self-play fix: 18,646
+  rows / 9,323 matches / 134 teams, zero integrity violations. Five of six
+  leagues are 74–77% processed; **Eredivisie's 0/324 is verified real and
+  explained, not a defect** — its matches are all dated 2025-08-08 onward,
+  and `sync_elo_from_finished_matches` processes the oldest unprocessed match
+  *globally across all leagues* before reaching anything that recent. Clears
+  naturally in roughly 7 more hourly passes at the observed rate.
+- `the_odds_api`'s reported key rotation is independently confirmed working,
+  not just reported: zero auth errors in production logs since before
+  2026-08-14, `clv_capture.outcome` flipped from `never_run` to `ok`, and 4
+  real closing-line `market_snapshots` rows captured 2026-08-16.
+
+### Validation evidence
+
+- Live read-only queries against production Postgres (`dpg-d9pfv3pt0dsc73djciog-a`)
+  via `verify_elo.sql`'s integrity/per-league-coverage sections and a direct
+  `market_snapshots` count.
+- Render log query, `srv-d95kkffaqgkc73f8003g`, 2026-08-14T00:00–2026-08-17T03:00 UTC,
+  zero `401`/`Unauthorized`/odds-error matches.
+- `docs/DEBT.md` item 22 updated in place; no new item needed for the Elo
+  finding (self-resolving, not debt).
+
+---
+
 ## Unreleased - one-poison-record batch wedges fixed: Elo self-play, fixture reschedules (2026-08-16)
 
 Follow-on to the v4.2 hardening below, found via a live `/health/ready` baseline
