@@ -18,7 +18,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +36,7 @@ PRE_MATCH_INTERMEDIATE = "PRE_MATCH_INTERMEDIATE"
 PRE_MATCH_CLOSING = "PRE_MATCH_CLOSING"
 POST_KICKOFF_REJECTED = "POST_KICKOFF_REJECTED"
 _PRE_MATCH_CLOSING_SUPERSEDED = "PRE_MATCH_CLOSING_SUPERSEDED"
+_STALE_CLOSING_REJECTED = "STALE_CLOSING_REJECTED"
 
 _KICKOFF_MATCH_TOLERANCE_MINUTES = 10
 _CLOSING_WINDOW_MINUTES = 5
@@ -71,7 +72,8 @@ class MarketBoardCaptureResult:
 
 @dataclass(frozen=True)
 class _FixtureCandidate:
-    match: Match
+    match_id: str
+    kickoff: datetime
     home_name: str
     away_name: str
 
@@ -95,12 +97,7 @@ def _parse_datetime(value: object) -> datetime | None:
 
 
 def _team_key(value: object) -> str:
-    """Conservative team-name key used only to narrow fixture identity.
-
-    Home/away orientation must still match exactly after normalization and the
-    provider kickoff must independently fall inside the tolerance window. Any
-    remaining ambiguity fails closed.
-    """
+    """Conservative team-name key used only to narrow fixture identity."""
     key = re.sub(r"[^a-z0-9]", "", str(value).casefold())
     for prefix in ("afc", "cf"):
         if key.startswith(prefix) and len(key) > len(prefix) + 2:
@@ -113,8 +110,8 @@ def _team_key(value: object) -> str:
     return key
 
 
-def _same_prices(row: OddsHistory, *, home: float, draw: float, away: float) -> bool:
-    return row.home_win == home and row.draw == draw and row.away_win == away
+def _same_prices(row: Any, *, home: float, draw: float, away: float) -> bool:
+    return bool(row.home_win == home and row.draw == draw and row.away_win == away)
 
 
 def _classify_observation(
@@ -155,10 +152,21 @@ async def _fixture_candidates(
             )
         )
     ).all()
-    return [
-        _FixtureCandidate(match=row[0], home_name=str(row[1]), away_name=str(row[2]))
-        for row in rows
-    ]
+
+    candidates: list[_FixtureCandidate] = []
+    for row in rows:
+        runtime_match = cast(Any, row[0])
+        if not isinstance(runtime_match.match_date, datetime):
+            continue
+        candidates.append(
+            _FixtureCandidate(
+                match_id=str(runtime_match.id),
+                kickoff=utc_naive(runtime_match.match_date),
+                home_name=str(row[1]),
+                away_name=str(row[2]),
+            )
+        )
+    return candidates
 
 
 def _match_record(
@@ -175,7 +183,7 @@ def _match_record(
         for candidate in candidates
         if _team_key(candidate.home_name) == home_key
         and _team_key(candidate.away_name) == away_key
-        and abs((utc_naive(candidate.match.match_date) - event_kickoff).total_seconds())
+        and abs((candidate.kickoff - event_kickoff).total_seconds())
         <= _KICKOFF_MATCH_TOLERANCE_MINUTES * 60
     ]
     if len(matches) == 1:
@@ -197,36 +205,47 @@ def _valid_record(record: dict[str, Any]) -> tuple[float, float, float] | None:
     return home, draw, away
 
 
-async def _supersede_previous_closing(
+async def _current_closings(
+    session: AsyncSession,
+    *,
+    match_id: str,
+) -> list[MarketSnapshot]:
+    return list(
+        (
+            (
+                await session.execute(
+                    select(MarketSnapshot)
+                    .where(
+                        MarketSnapshot.match_id == match_id,
+                        MarketSnapshot.is_closing_line.is_(True),
+                    )
+                    .order_by(MarketSnapshot.captured_at.desc(), MarketSnapshot.id.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+    )
+
+
+async def _supersede_previous_closings(
     session: AsyncSession,
     *,
     match_id: str,
     captured_at: datetime,
-) -> None:
-    previous = (
-        (
-            await session.execute(
-                select(MarketSnapshot)
-                .where(
-                    MarketSnapshot.match_id == match_id,
-                    MarketSnapshot.is_closing_line.is_(True),
-                    MarketSnapshot.captured_at < captured_at,
-                )
-                .order_by(MarketSnapshot.captured_at.desc(), MarketSnapshot.id.desc())
-                .limit(1)
-            )
-        )
-        .scalars()
-        .first()
-    )
-    if previous is None:
-        return
+) -> str | None:
+    """Supersede every earlier current close; reject out-of-order close writes."""
+    previous_rows = await _current_closings(session, match_id=match_id)
+    if any(row.captured_at >= captured_at for row in previous_rows):
+        return _STALE_CLOSING_REJECTED
 
-    provenance = dict(previous.provenance or {})
-    provenance["evidence_class"] = _PRE_MATCH_CLOSING_SUPERSEDED
-    provenance["superseded_at"] = captured_at.isoformat()
-    previous.provenance = provenance
-    previous.is_closing_line = False
+    for previous in previous_rows:
+        provenance = dict(previous.provenance or {})
+        provenance["evidence_class"] = _PRE_MATCH_CLOSING_SUPERSEDED
+        provenance["superseded_at"] = captured_at.isoformat()
+        previous.provenance = provenance
+        previous.is_closing_line = False
+    return None
 
 
 async def _persist_record(
@@ -247,7 +266,7 @@ async def _persist_record(
             await session.execute(
                 select(OddsHistory)
                 .where(
-                    OddsHistory.match_id == candidate.match.id,
+                    OddsHistory.match_id == candidate.match_id,
                     OddsHistory.bookmaker == bookmaker,
                     OddsHistory.market_type == "match_odds",
                 )
@@ -262,7 +281,7 @@ async def _persist_record(
     captured_at = utc_naive(observed_at)
     classification = _classify_observation(
         captured_at=captured_at,
-        kickoff=candidate.match.match_date,
+        kickoff=candidate.kickoff,
         has_prior_observation=latest is not None,
     )
     if classification == POST_KICKOFF_REJECTED:
@@ -279,14 +298,16 @@ async def _persist_record(
         return "DEDUPED"
 
     if classification == PRE_MATCH_CLOSING:
-        await _supersede_previous_closing(
+        closing_guard = await _supersede_previous_closings(
             session,
-            match_id=candidate.match.id,
+            match_id=candidate.match_id,
             captured_at=captured_at,
         )
+        if closing_guard is not None:
+            return closing_guard
 
     history = OddsHistory(
-        match_id=candidate.match.id,
+        match_id=candidate.match_id,
         bookmaker=bookmaker,
         market_type="match_odds",
         home_win=home,
@@ -297,11 +318,12 @@ async def _persist_record(
     )
     session.add(history)
     await session.flush()
+    runtime_history = cast(Any, history)
 
     canonical_fixture_id = await canonical_fixture_id_for_provider_event(
         session,
         provider="football-data.org",
-        provider_event_id=candidate.match.id,
+        provider_event_id=candidate.match_id,
     )
     provider_timestamp = _parse_datetime(record.get("bookmaker_last_update"))
     h_prob, d_prob, a_prob = devig_probabilities(home, draw, away)
@@ -313,7 +335,7 @@ async def _persist_record(
         "provider_event_timestamp": record.get("provider_event_timestamp"),
         "provider_captured_at": record.get("captured_at"),
         "bookmaker_last_update": record.get("bookmaker_last_update"),
-        "odds_history_id": history.id,
+        "odds_history_id": runtime_history.id,
         "fixture_match_method": "home_away_identity_plus_kickoff_tolerance",
         "provider_executable": bool(record.get("executable")),
     }
@@ -323,7 +345,7 @@ async def _persist_record(
     session.add(
         MarketSnapshot(
             canonical_fixture_id=canonical_fixture_id,
-            match_id=candidate.match.id,
+            match_id=candidate.match_id,
             provider="the_odds_api",
             bookmaker=bookmaker,
             market_type="1X2",
@@ -388,7 +410,7 @@ async def persist_market_board(
                 result.unmatched += 1
             continue
 
-        result.matched_match_ids.add(candidate.match.id)
+        result.matched_match_ids.add(candidate.match_id)
         try:
             async with session.begin_nested():
                 classification = await _persist_record(
@@ -401,7 +423,7 @@ async def persist_market_board(
             result.write_errors += 1
             logger.exception(
                 "market_observation: isolated observation write failed",
-                extra={"match_id": candidate.match.id, "league": league},
+                extra={"match_id": candidate.match_id, "league": league},
             )
             continue
 
@@ -411,14 +433,14 @@ async def persist_market_board(
             result.intermediate += 1
         elif classification == PRE_MATCH_CLOSING:
             result.closing += 1
-            result.closing_match_ids.add(candidate.match.id)
+            result.closing_match_ids.add(candidate.match_id)
         elif classification == POST_KICKOFF_REJECTED:
             result.rejected_post_kickoff += 1
             logger.warning(
                 "market_observation: rejected observation at/after kickoff",
-                extra={"match_id": candidate.match.id, "league": league},
+                extra={"match_id": candidate.match_id, "league": league},
             )
-        elif classification == "DEDUPED":
+        elif classification in {"DEDUPED", _STALE_CLOSING_REJECTED}:
             result.deduped += 1
         else:
             result.invalid += 1
