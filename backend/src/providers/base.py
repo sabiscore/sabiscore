@@ -6,11 +6,13 @@ quota state, freshness, and provenance are handled in one backend-only layer.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import random
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from enum import Enum
 from typing import Any, Mapping, Protocol
 
@@ -44,6 +46,69 @@ class TrustTier(str, Enum):
     OPEN_DATA = "OPEN_DATA"
     UNOFFICIAL_PUBLIC = "UNOFFICIAL_PUBLIC"
     USER_CONFIRMED = "USER_CONFIRMED"
+
+
+class ProviderTransportKind(str, Enum):
+    """Sanitized failure classes at the shared HTTP boundary."""
+
+    TIMEOUT = "TIMEOUT"
+    NETWORK = "NETWORK"
+    RATE_LIMITED = "RATE_LIMITED"
+    AUTHENTICATION = "AUTHENTICATION"
+    CLIENT_ERROR = "CLIENT_ERROR"
+    SERVER_ERROR = "SERVER_ERROR"
+    INVALID_RESPONSE = "INVALID_RESPONSE"
+    CIRCUIT_OPEN = "CIRCUIT_OPEN"
+
+
+class ProviderTransportError(RuntimeError):
+    """Typed provider transport failure without credential-bearing request data.
+
+    The exception intentionally carries only normalized status metadata. Request
+    URLs, headers, response bodies, and credentials never become exception
+    attributes, so callers may safely convert it into durable provider evidence.
+    """
+
+    def __init__(
+        self,
+        kind: ProviderTransportKind,
+        *,
+        status_code: int | None = None,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        self.kind = kind
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(self.safe_message)
+
+    @property
+    def error_code(self) -> str:
+        return f"TRANSPORT_{self.kind.value}"
+
+    @property
+    def provider_status(self) -> ProviderStatus:
+        if self.kind is ProviderTransportKind.RATE_LIMITED:
+            return ProviderStatus.RATE_LIMITED
+        if self.kind is ProviderTransportKind.CIRCUIT_OPEN:
+            return ProviderStatus.CIRCUIT_OPEN
+        return ProviderStatus.UNAVAILABLE
+
+    @property
+    def safe_message(self) -> str:
+        parts = [f"provider_transport:{self.kind.value.lower()}"]
+        if self.status_code is not None:
+            parts.append(f"status={self.status_code}")
+        if self.retry_after_seconds is not None:
+            parts.append(f"retry_after={self.retry_after_seconds:.3f}s")
+        return " ".join(parts)
+
+    def warning_tokens(self) -> list[str]:
+        tokens = [f"transport_kind:{self.kind.value}"]
+        if self.status_code is not None:
+            tokens.append(f"http_status:{self.status_code}")
+        if self.retry_after_seconds is not None:
+            tokens.append(f"retry_after_seconds:{self.retry_after_seconds:.3f}")
+        return tokens
 
 
 class ProviderQuota(BaseModel):
@@ -132,6 +197,35 @@ def stable_hash(payload: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def parse_retry_after_seconds(
+    value: str | None,
+    *,
+    now: datetime | None = None,
+) -> float | None:
+    """Parse Retry-After delta-seconds or HTTP-date into a non-negative delay."""
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        seconds = float(raw)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        reference = now or utc_now()
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=timezone.utc)
+        seconds = (retry_at.astimezone(timezone.utc) - reference.astimezone(timezone.utc)).total_seconds()
+    if seconds < 0:
+        return None
+    return seconds
+
+
 class CircuitBreaker:
     """Small in-memory circuit breaker for provider parse/HTTP failures."""
 
@@ -170,6 +264,12 @@ class BaseProvider:
     enabled = False
     timeout_seconds = 8.0
     max_retries = 2
+    # Match the existing football-data.org safety ceiling while allowing each
+    # provider to override the bound if a tighter request-time budget is needed.
+    max_retry_after_seconds = 60.0
+    # A rate-limit retry is deliberately single-shot. Repeated 429 responses
+    # return control to the caller rather than multiplying provider wait time.
+    max_rate_limit_retries = 1
 
     def __init__(
         self,
@@ -292,6 +392,71 @@ class BaseProvider:
                 redact_text(exc),
             )
 
+    def _http_failure(self, response: httpx.Response) -> ProviderTransportError | None:
+        status = response.status_code
+        if 200 <= status < 300:
+            return None
+        if status == 429:
+            return ProviderTransportError(
+                ProviderTransportKind.RATE_LIMITED,
+                status_code=status,
+                retry_after_seconds=parse_retry_after_seconds(response.headers.get("Retry-After")),
+            )
+        if status in (401, 403):
+            return ProviderTransportError(ProviderTransportKind.AUTHENTICATION, status_code=status)
+        if 400 <= status < 500 or 300 <= status < 400:
+            return ProviderTransportError(ProviderTransportKind.CLIENT_ERROR, status_code=status)
+        if status >= 500:
+            return ProviderTransportError(ProviderTransportKind.SERVER_ERROR, status_code=status)
+        return ProviderTransportError(ProviderTransportKind.INVALID_RESPONSE, status_code=status)
+
+    @staticmethod
+    def _counts_toward_breaker(error: ProviderTransportError) -> bool:
+        return error.kind in {
+            ProviderTransportKind.TIMEOUT,
+            ProviderTransportKind.NETWORK,
+            ProviderTransportKind.RATE_LIMITED,
+            ProviderTransportKind.AUTHENTICATION,
+            ProviderTransportKind.SERVER_ERROR,
+            ProviderTransportKind.INVALID_RESPONSE,
+        }
+
+    def _record_transport_failure(self, error: ProviderTransportError) -> None:
+        if self._counts_toward_breaker(error):
+            self.breaker.record_failure()
+
+    def _should_retry_transport_failure(self, error: ProviderTransportError, attempt: int) -> bool:
+        if self.breaker.open:
+            return False
+        if error.kind in {
+            ProviderTransportKind.TIMEOUT,
+            ProviderTransportKind.NETWORK,
+            ProviderTransportKind.SERVER_ERROR,
+        }:
+            return attempt < self.max_retries
+        if error.kind is ProviderTransportKind.RATE_LIMITED:
+            retry_after = error.retry_after_seconds
+            return (
+                attempt < self.max_rate_limit_retries
+                and retry_after is not None
+                and retry_after <= self.max_retry_after_seconds
+            )
+        return False
+
+    async def _sleep_for_transport_failure(self, error: ProviderTransportError, attempt: int) -> None:
+        if error.kind is ProviderTransportKind.RATE_LIMITED and error.retry_after_seconds is not None:
+            await asyncio.sleep(error.retry_after_seconds)
+            return
+        await self._sleep_with_jitter(attempt)
+
+    def _log_transport_failure(self, url: str, error: ProviderTransportError) -> None:
+        logger.warning(
+            "provider_request_failed provider=%s url=%s error=%s",
+            self.provider_id,
+            redact_url(url),
+            error.safe_message,
+        )
+
     async def _get_json(
         self,
         url: str,
@@ -300,8 +465,8 @@ class BaseProvider:
         params: Mapping[str, Any] | None = None,
     ) -> tuple[Any, httpx.Headers]:
         if self.breaker.open:
-            raise RuntimeError(f"{self.provider_id} circuit breaker is open")
-        last_exc: Exception | None = None
+            raise ProviderTransportError(ProviderTransportKind.CIRCUIT_OPEN)
+
         for attempt in range(self.max_retries + 1):
             try:
                 if self._http_client is not None:
@@ -314,25 +479,61 @@ class BaseProvider:
                 else:
                     async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
                         response = await client.get(url, headers=dict(headers or {}), params=params)
-                if response.status_code == 429:
-                    self.breaker.record_failure()
-                    raise RuntimeError("rate_limited")
-                response.raise_for_status()
-                self.breaker.record_success()
-                return response.json(), response.headers
-            except Exception as exc:  # pragma: no cover - network path
-                last_exc = exc
-                self.breaker.record_failure()
-                if attempt < self.max_retries:
-                    await self._sleep_with_jitter(attempt)
-        safe_url = redact_url(url)
-        # httpx exception messages embed the full request URL (with query string) —
-        # scrub them before they reach any log sink.
-        safe_error = redact_text(str(last_exc)) if last_exc else None
-        logger.warning("provider_request_failed provider=%s url=%s error=%s", self.provider_id, safe_url, safe_error)
-        raise last_exc or RuntimeError("provider_request_failed")
+            except httpx.TimeoutException:
+                error = ProviderTransportError(ProviderTransportKind.TIMEOUT)
+            except httpx.TransportError:
+                error = ProviderTransportError(ProviderTransportKind.NETWORK)
+            except httpx.RequestError:
+                error = ProviderTransportError(ProviderTransportKind.NETWORK)
+            else:
+                error = self._http_failure(response)
+                if error is None:
+                    try:
+                        payload = response.json()
+                    except (json.JSONDecodeError, ValueError):
+                        error = ProviderTransportError(
+                            ProviderTransportKind.INVALID_RESPONSE,
+                            status_code=response.status_code,
+                        )
+                    else:
+                        self.breaker.record_success()
+                        return payload, response.headers
+
+            self._record_transport_failure(error)
+            if self._should_retry_transport_failure(error, attempt):
+                await self._sleep_for_transport_failure(error, attempt)
+                continue
+            self._log_transport_failure(url, error)
+            raise error
+
+        # Every retry branch either returns or raises. Keep an explicit fail-closed
+        # guard so future loop edits cannot accidentally return an untyped value.
+        raise ProviderTransportError(ProviderTransportKind.NETWORK)
+
+    def _transport_failure_result(self, operation: str, error: Exception) -> ProviderResult:
+        """Convert typed transport failures to a stable public ProviderResult."""
+        if isinstance(error, ProviderTransportError):
+            return ProviderResult(
+                provider=self.provider_id,
+                operation=operation,
+                status=error.provider_status,
+                trust_tier=self.trust_tier,
+                warnings=error.warning_tokens(),
+                error_code=error.error_code,
+            )
+        return ProviderResult(
+            provider=self.provider_id,
+            operation=operation,
+            status=ProviderStatus.UNAVAILABLE,
+            trust_tier=self.trust_tier,
+            error_code=type(error).__name__,
+        )
+
+    @staticmethod
+    def _transport_status(error: Exception) -> ProviderStatus:
+        if isinstance(error, ProviderTransportError):
+            return error.provider_status
+        return ProviderStatus.UNAVAILABLE
 
     async def _sleep_with_jitter(self, attempt: int) -> None:
-        import asyncio
-
         await asyncio.sleep(min(2.0, 0.25 * (2**attempt)) + random.random() * 0.1)
