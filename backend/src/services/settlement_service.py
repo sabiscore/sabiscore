@@ -60,10 +60,12 @@ def last_settlement_result() -> dict[str, Any]:
     return result
 
 
-async def run_settlement_pass() -> dict[str, Any]:
-    """sync_settled_results() -> get_settled_predictions() -> walk_forward_validate(),
-    against one session. Never raises — every failure lands in the returned/stored
-    dict, matching the swallow-and-log convention run_fixture_sync() already uses.
+async def run_settlement_pass(provider: Any = None) -> dict[str, Any]:
+    """sync_settled_results() -> get_settled_predictions() -> walk_forward_validate().
+
+    Production passes the same lifespan-owned ``football_data_org`` provider
+    used by fixture sync. Never raises — every failure lands in the returned/
+    stored dict, matching the swallow-and-log convention run_fixture_sync() uses.
     """
     global _last_result
 
@@ -84,18 +86,10 @@ async def run_settlement_pass() -> dict[str, Any]:
         from ..models.active_generation import active_model_version
         from ..repositories.fixtures import get_settled_predictions
 
-        # Scope accuracy evidence to the generation actually serving. Pooling
-        # generations would report a walk-forward score for a model that never
-        # existed and would inflate the sample size gating certification.
-        # Raises if the active generation cannot be resolved, which the outer
-        # handler records as an error — no metric beats a cross-generation one.
         model_version = active_model_version()
 
         async with AsyncSessionLocal() as session:
-            sync_counts = await sync_settled_results(session)
-            # Elo is a derived state transition from authoritative finished-match
-            # results. Keep it coupled to settlement so retries are ordered and
-            # idempotent instead of introducing a second independent scheduler.
+            sync_counts = await sync_settled_results(session, provider=provider)
             from .elo_state_service import sync_elo_from_finished_matches
 
             elo_counts = await sync_elo_from_finished_matches(session)
@@ -103,7 +97,6 @@ async def run_settlement_pass() -> dict[str, Any]:
                 session, model_version=model_version
             )
 
-        # Pure Python, no DB — deliberately outside the session block above.
         validation = get_walk_forward_registry().walk_forward_validate(records)
 
         _last_result = {
