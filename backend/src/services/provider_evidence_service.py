@@ -285,7 +285,7 @@ async def latest_provider_evidence(
             func.row_number()
             .over(
                 partition_by=ProviderHealthLog.provider,
-                order_by=(ProviderHealthLog.checked_at.desc(), ProviderHealthLog.id.desc()),
+                order_by=[ProviderHealthLog.checked_at.desc(), ProviderHealthLog.id.desc()],
             )
             .label("rn"),
         )
