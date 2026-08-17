@@ -182,18 +182,7 @@ class TheOddsAPIProvider(BaseProvider):
                 },
             )
         except Exception as exc:
-            status = (
-                ProviderStatus.RATE_LIMITED
-                if "rate_limited" in str(exc)
-                else ProviderStatus.UNAVAILABLE
-            )
-            return ProviderResult(
-                provider=self.provider_id,
-                operation="odds",
-                status=status,
-                trust_tier=self.trust_tier,
-                error_code=type(exc).__name__,
-            )
+            return self._transport_failure_result("odds", exc)
 
         raw_events: list[dict[str, Any]] = payload if isinstance(payload, list) else []
         quota = self._quota_from_headers(headers)
@@ -253,8 +242,8 @@ class TheOddsAPIProvider(BaseProvider):
                 params={"apiKey": self.api_key, "all": "false"},
             )
             return ProviderStatus.VERIFIED
-        except Exception:  # pragma: no cover - network path
-            return ProviderStatus.UNAVAILABLE
+        except Exception as exc:  # pragma: no cover - network path
+            return self._transport_status(exc)
 
     # ------------------------------------------------------------------ #
     # Internals                                                            #
