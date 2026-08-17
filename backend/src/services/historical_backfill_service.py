@@ -24,10 +24,12 @@ football-data.org — the provider fixture sync reads — uses legal names
 ("Manchester United FC", "Athletic Club", "FC Internazionale Milano"). Measured
 against live production team rows, exact + affix-stripped matching alone joins only
 23% of teams. This module therefore resolves in three stages (exact-normalised →
-unique token-prefix → curated alias) and **always fails closed on ambiguity**:
-"Milan" matches both "AC Milan" and "Internazionale Milano" by prefix, so it is
-refused rather than guessed. An unresolved team simply gets no history — which
-surfaces honestly as reduced evidence — never a wrong join.
+unique token-prefix → curated alias) and **always fails closed on ambiguity**.
+Loose prefix matching is directional from the incoming football-data.co.uk name
+toward a richer legal name, and single-token source names never use loose prefix
+matching. An unresolved team simply gets reduced evidence — never a wrong join —
+and a final match-level invariant rejects any identity collision that would
+otherwise make a club play itself.
 """
 
 from __future__ import annotations
@@ -106,6 +108,7 @@ _TEAM_ALIASES: Dict[str, str] = {
     "tottenham hotspur": "tottenham",
     "manchester united": "man united",
     "manchester city": "man city",
+    "leeds united": "leeds",
     # Netherlands
     "nec": "nijmegen",
     "psv": "psv eindhoven",
@@ -161,10 +164,13 @@ def _token_compatible(left: str, right: str) -> bool:
 
 
 def _tokens_prefix_match(shorter: Sequence[str], longer: Sequence[str]) -> bool:
-    """True when every token of ``shorter`` prefix-matches a distinct ``longer`` token.
+    """True when every source token prefix-matches a distinct candidate token.
 
-    Bridges "Man United" ↔ "Manchester United" and "AZ" ↔ "AZ Alkmaar". Used only
-    behind a uniqueness guard, because on its own it is deliberately loose.
+    This helper is intentionally used in one direction by ``TeamIndex.resolve``:
+    the incoming football-data.co.uk token set may abbreviate the provider legal
+    name, but a shorter provider candidate must never consume a richer source
+    identity. Single-token source names require exact/curated evidence rather than
+    this loose fallback.
     """
     pool = list(longer)
     for token in shorter:
@@ -234,9 +240,9 @@ class TeamIndex:
         matches = {
             team_id
             for cand_tokens, team_id in self._tokens
-            if _tokens_prefix_match(*(
-                (tokens, cand_tokens) if len(tokens) <= len(cand_tokens) else (cand_tokens, tokens)
-            ))
+            if len(tokens) >= 2
+            and len(tokens) <= len(cand_tokens)
+            and _tokens_prefix_match(tokens, cand_tokens)
         }
         if len(matches) == 1:
             return next(iter(matches))
@@ -348,6 +354,7 @@ class BackfillReport:
     teams_created: int = 0
     teams_resolved: int = 0
     skipped_unparseable: int = 0
+    identity_conflicts_skipped: int = 0
     leagues: Dict[str, int] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, object]:
@@ -359,6 +366,7 @@ class BackfillReport:
             "teams_created": self.teams_created,
             "teams_resolved": self.teams_resolved,
             "skipped_unparseable": self.skipped_unparseable,
+            "identity_conflicts_skipped": self.identity_conflicts_skipped,
             "leagues": dict(self.leagues),
         }
 
@@ -401,8 +409,26 @@ async def backfill_historical_matches(
     if not parsed:
         return report
 
+    # Filter persisted ids before resolving or creating any Team rows. The boot
+    # backfill is intentionally idempotent: already-ingested history must be a
+    # true no-op rather than minting fallback teams for source spellings that are
+    # no longer needed by any pending match.
+    existing_ids = set(
+        (
+            await session.execute(
+                select(Match.id).where(Match.id.in_([m.match_id for m in parsed]))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    pending = [m for m in parsed if m.match_id not in existing_ids]
+    report.matches_existing = len(parsed) - len(pending)
+    if not pending:
+        return report
+
     # Leagues first — Team and Match both carry an FK to it.
-    needed_leagues = {m.league_id for m in parsed}
+    needed_leagues = {m.league_id for m in pending}
     for league_id in sorted(needed_leagues):
         if not await session.get(League, league_id):
             country = next(
@@ -413,8 +439,12 @@ async def backfill_historical_matches(
 
     index = TeamIndex((await session.execute(select(Team.id, Team.name))).all())
 
-    # Resolve every distinct (league, name) once rather than per row.
-    distinct_teams = {(m.league_id, name) for m in parsed for name in (m.home_team, m.away_team)}
+    # Resolve every distinct (league, name) needed by pending rows once rather than
+    # per row. Persisted matches were filtered above specifically so this phase can
+    # never create teams as a side effect of an idempotent re-run.
+    distinct_teams = {
+        (m.league_id, name) for m in pending for name in (m.home_team, m.away_team)
+    }
     team_ids: Dict[Tuple[str, str], str] = {}
     for league_id, name in sorted(distinct_teams):
         resolved = index.resolve(name)
@@ -430,28 +460,34 @@ async def backfill_historical_matches(
         index.add(new_id, name)
     await session.flush()
 
-    existing_ids = set(
-        (
-            await session.execute(
-                select(Match.id).where(Match.id.in_([m.match_id for m in parsed]))
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    for item in parsed:
+    for item in pending:
         match_id = item.match_id
         if match_id in existing_ids:
+            # Guard duplicate source rows encountered after a pending match has
+            # already been staged during this run.
             report.matches_existing += 1
             continue
+
+        home_team_id = team_ids[(item.league_id, item.home_team)]
+        away_team_id = team_ids[(item.league_id, item.away_team)]
+        if home_team_id == away_team_id:
+            report.identity_conflicts_skipped += 1
+            logger.warning(
+                "historical_backfill: refusing identity collision for %s: %r vs %r -> %s",
+                match_id,
+                item.home_team,
+                item.away_team,
+                home_team_id,
+            )
+            continue
+
         existing_ids.add(match_id)  # guard against duplicate rows within the CSVs
         session.add(
             Match(
                 id=match_id,
                 league_id=item.league_id,
-                home_team_id=team_ids[(item.league_id, item.home_team)],
-                away_team_id=team_ids[(item.league_id, item.away_team)],
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
                 match_date=item.match_date,
                 season=canonical_season(item.match_date),
                 status="finished",
