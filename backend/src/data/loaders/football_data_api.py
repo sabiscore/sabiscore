@@ -1,7 +1,7 @@
 """Compatibility adapter over the canonical football-data.org provider.
 
 This module intentionally owns no HTTP client. Production background sync must
-inject the lifespan-owned ``football_data_org`` provider so request pooling,
+reuse the lifespan-owned ``football_data_org`` provider so request pooling,
 transport classification, Retry-After handling, circuit breaking, and durable
 provider evidence all flow through one observable boundary.
 """
@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from ...core.config import settings
-from ...providers.base import ProviderResult, ProviderStatus
+from ...providers.base import ProviderStatus
 from ...providers.football_data_org import FootballDataOrgProvider
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,15 @@ class FootballDataAPIClient:
         # api_key/timeout_seconds remain accepted for source compatibility only.
         # Creating another credential-bearing HTTP client here would recreate
         # the production split SAB-14 is explicitly removing.
+        if provider is None and not getattr(settings, "mock_mode", False):
+            try:
+                from ...providers.registry import get_runtime_provider
+
+                runtime_provider = get_runtime_provider("football_data_org")
+            except (KeyError, RuntimeError):
+                runtime_provider = None
+            if isinstance(runtime_provider, FootballDataOrgProvider):
+                provider = runtime_provider
         self.provider = provider
         self.api_key = api_key
         self.timeout = timeout_seconds
