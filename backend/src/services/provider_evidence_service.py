@@ -132,6 +132,11 @@ class ProviderEvidenceRecorder:
 
         warnings = _safe_warnings(result.warnings)
         error_code = redact_text(result.error_code)[:255] if result.error_code else None
+        raw_snapshot_id = (
+            redact_text(result.raw_snapshot_id)[:255]
+            if result.raw_snapshot_id
+            else None
+        )
         acquired_at = _utc_naive(result.acquired_at) or datetime.now(timezone.utc).replace(tzinfo=None)
         provider_timestamp = _utc_naive(result.provider_timestamp)
         quota_reset_at = _utc_naive(result.quota.reset_at)
@@ -161,7 +166,7 @@ class ProviderEvidenceRecorder:
             quota_cost=result.quota.cost,
             warnings=warnings or None,
             error_code=error_code,
-            raw_snapshot_id=result.raw_snapshot_id,
+            raw_snapshot_id=raw_snapshot_id,
             response_hash=response_hash,
         )
         health = ProviderHealthLog(
@@ -175,7 +180,7 @@ class ProviderEvidenceRecorder:
                 "operation": result.operation,
                 "record_count": len(result.records),
                 "circuit_open": circuit_open,
-                "raw_snapshot_present": bool(result.raw_snapshot_id),
+                "raw_snapshot_present": bool(raw_snapshot_id),
                 "quota_observed": any(
                     value is not None
                     for value in (
@@ -212,12 +217,18 @@ class ProviderEvidenceRecorder:
 
         try:
             async with AsyncSessionLocal() as session:
-                session.add_all(rows)
-                await session.commit()
+                try:
+                    session.add_all(rows)
+                    await session.commit()
+                except Exception:
+                    # Explicitly reset any failed DBAPI transaction before this
+                    # short-lived telemetry session releases its connection.
+                    await session.rollback()
+                    raise
             return True
         except Exception as exc:
             # Never let telemetry persistence poison the provider path or the
-            # request transaction. This recorder owns its own short-lived session.
+            # caller's transaction. This recorder owns its own isolated session.
             logger.warning(
                 "provider_evidence_persist_failed provider=%s operation=%s error=%s",
                 result.provider,
