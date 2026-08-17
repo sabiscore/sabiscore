@@ -5,6 +5,12 @@
 
 BEGIN TRANSACTION READ ONLY;
 
+-- PR #25 merged at this UTC boundary and fixed the historical resolver path that
+-- produced the known fdco self-play residuals. A row is treated as a known
+-- residual only when both its creation and last mutation predate that fix.
+-- This prevents a future fdco-prefixed writer collision from being hidden merely
+-- because it shares the historical provider-ID prefix.
+
 -- 1. Integrity and replay-idempotency summary.
 WITH eligible_finished AS (
     SELECT m.id, m.league_id, m.home_team_id, m.away_team_id, m.match_date
@@ -52,6 +58,28 @@ upcoming_resolution AS (
                  AND e.match_date < u.match_date
            ) AS away_resolved
     FROM upcoming u
+),
+self_play AS (
+    SELECT m.*
+    FROM matches m
+    WHERE m.home_team_id IS NOT NULL
+      AND m.home_team_id = m.away_team_id
+),
+historical_fdco_residual AS (
+    SELECT m.*
+    FROM self_play m
+    WHERE m.id LIKE 'fdco-%'
+      AND m.created_at < TIMESTAMP '2026-08-17 08:47:46'
+      AND COALESCE(m.updated_at, m.created_at) < TIMESTAMP '2026-08-17 08:47:46'
+),
+post_pr25_or_nonhistorical_self_play AS (
+    SELECT m.*
+    FROM self_play m
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM historical_fdco_residual residual
+        WHERE residual.id = m.id
+    )
 )
 SELECT metric, value
 FROM (
@@ -91,12 +119,21 @@ FROM (
       FROM elo_rating_snapshots e JOIN matches m ON m.id = e.match_id
       WHERE e.league <> m.league_id
     UNION ALL SELECT 'finished_self_play_matches_excluded', count(*)::text
-      FROM matches m
+      FROM self_play m
       WHERE lower(m.status) = 'finished'
         AND m.home_score IS NOT NULL
         AND m.away_score IS NOT NULL
-        AND m.home_team_id IS NOT NULL
-        AND m.home_team_id = m.away_team_id
+    UNION ALL SELECT 'historical_fdco_self_play_matches', count(*)::text
+      FROM historical_fdco_residual
+    UNION ALL SELECT 'non_historical_self_play_matches', count(*)::text
+      FROM post_pr25_or_nonhistorical_self_play
+    UNION ALL SELECT 'post_pr25_self_play_matches', count(*)::text
+      FROM post_pr25_or_nonhistorical_self_play
+      WHERE created_at >= TIMESTAMP '2026-08-17 08:47:46'
+         OR COALESCE(updated_at, created_at) >= TIMESTAMP '2026-08-17 08:47:46'
+    UNION ALL SELECT 'scheduled_self_play_matches', count(*)::text
+      FROM self_play
+      WHERE lower(status) = 'scheduled'
     UNION ALL SELECT 'scheduled_upcoming_matches', count(*)::text FROM upcoming
     UNION ALL SELECT 'upcoming_home_elo_resolved', count(*) FILTER (WHERE home_resolved)::text FROM upcoming_resolution
     UNION ALL SELECT 'upcoming_away_elo_resolved', count(*) FILTER (WHERE away_resolved)::text FROM upcoming_resolution
@@ -212,5 +249,52 @@ FROM ordered
 WHERE previous_match_date IS NOT NULL
 ORDER BY gap DESC NULLS LAST
 LIMIT 50;
+
+-- 7. Self-play provenance. The known residual class is bounded by both the fdco
+-- source prefix and the PR #25 fix time. Any self-play row created or modified at
+-- or after the fix is mechanically classified as a new integrity incident.
+SELECT m.id AS match_id,
+       m.league_id,
+       m.match_date,
+       m.status,
+       m.home_team_id,
+       m.away_team_id,
+       m.created_at,
+       m.updated_at,
+       CASE
+           WHEN m.id LIKE 'fdco-%'
+            AND m.created_at < TIMESTAMP '2026-08-17 08:47:46'
+            AND COALESCE(m.updated_at, m.created_at) < TIMESTAMP '2026-08-17 08:47:46'
+               THEN 'HISTORICAL_FDCO_RESIDUAL'
+           ELSE 'POST_PR25_OR_NON_HISTORICAL_WRITER'
+       END AS provenance_class
+FROM matches m
+WHERE m.home_team_id IS NOT NULL
+  AND m.home_team_id = m.away_team_id
+ORDER BY provenance_class, m.match_date, m.id;
+
+-- 8. Fail-closed self-play gate. The portable verification runner exits non-zero
+-- if any self-play row falls outside the proven pre-PR25 residual class. The
+-- denominator depends on the aggregate result so PostgreSQL evaluates the error
+-- only for an actual violation; the healthy zero-violation path returns 1.
+WITH violations AS (
+    SELECT count(*)::bigint AS violation_count
+    FROM matches m
+    WHERE m.home_team_id IS NOT NULL
+      AND m.home_team_id = m.away_team_id
+      AND NOT (
+          m.id LIKE 'fdco-%'
+          AND m.created_at < TIMESTAMP '2026-08-17 08:47:46'
+          AND COALESCE(m.updated_at, m.created_at) < TIMESTAMP '2026-08-17 08:47:46'
+      )
+)
+SELECT 'self_play_post_pr25_integrity' AS gate,
+       violation_count,
+       CASE
+           WHEN violation_count = 0 THEN 1
+           ELSE violation_count::integer
+                / ((violation_count - violation_count)::integer)
+       END AS pass
+FROM violations;
 
 ROLLBACK;
