@@ -1,7 +1,6 @@
 """
 Enhanced health check endpoint with comprehensive system status.
 """
-import json
 import logging
 import os
 from fastapi import APIRouter, Depends, Response, Request
@@ -20,10 +19,8 @@ from ...core.redaction import redact_text
 from ...db.session import check_db_connection
 from ...db.session import _alembic_head_revision
 from ...db.session import get_async_session
-from ...repositories.fixtures import get_next_upcoming_fixture
 from ...services.clv_capture_service import last_clv_capture_result
 from ...services.settlement_service import last_settlement_result
-from .full_analysis import get_full_analysis
 
 try:
     import psutil
@@ -292,78 +289,31 @@ def liveness_check(response: Response) -> Dict[str, str]:
     }
 
 
-_CAPABILITY_CACHE_KEY = "readiness:capability_probe:v1"
-_CAPABILITY_TTL_SECONDS = 900  # ponytail: single free-tier dyno — cheap relative to ~14min keepalive cadence
-
-
-async def _compute_capability(db: AsyncSession) -> Dict[str, Any]:
-    """Attempt a real prediction for the next upcoming fixture — component liveness
-    (DB/migrations/cache/models) never proves the system can actually produce one."""
-    from ...services.fixture_sync_service import SYNC_HORIZON_DAYS
-
-    fixture = await get_next_upcoming_fixture(
-        db, leagues=_resolve_required_leagues(), within_days=SYNC_HORIZON_DAYS
-    )
-    now = datetime.now(timezone.utc).isoformat()
-    if fixture is None:
-        return {
-            "status": "unverified_no_fixtures",
-            "message": f"No upcoming fixture in the {SYNC_HORIZON_DAYS}-day horizon for a required league",
-            "match_id": None,
-            "league": None,
-            "checked_at": now,
-        }
-    try:
-        analysis = await get_full_analysis(match_id=fixture.id, league=fixture.league_id, db=db)
-        identity_ok = "FIXTURE_IDENTITY_UNVERIFIED" not in analysis.get("evidence_quality", {}).get("critical_gaps", [])
-        prediction_status = analysis.get("prediction_status")
-
-        if prediction_status == "AVAILABLE" and identity_ok:
-            status = "verified"
-            message = "Live pipeline produced a verified 1X2 triple"
-        elif identity_ok:
-            # ponytail: the pipeline ran end-to-end and fail-closed correctly —
-            # a fixture days out simply has no odds/lineups published yet. That is
-            # not an outage, and must never paint the readiness ring red. Only a
-            # raised exception or an identity failure earns "failed".
-            status = "unverified_insufficient_evidence"
-            message = f"Pipeline ran; evidence incomplete (prediction_status={prediction_status})"
-        else:
-            status = "failed"
-            message = f"prediction_status={prediction_status} identity_verified={identity_ok}"
-    except Exception as exc:
-        logger.error("Readiness capability probe failed for %s: %s", fixture.id, exc)
-        status, message = "failed", str(exc)
+def _side_effect_free_capability_state(*, ready: bool) -> Dict[str, Any]:
+    """Report capability semantics without executing prediction/provider paths."""
+    if ready:
+        status = "not_probed_by_readiness"
+        message = (
+            "Readiness verifies infrastructure and loaded-model state only; "
+            "prediction capability and certification are evaluated separately"
+        )
+    else:
+        status = "skipped_not_ready"
+        message = (
+            "Prediction capability is not evaluated because core readiness checks "
+            "are not green"
+        )
     return {
         "status": status,
         "message": message,
-        "match_id": fixture.id,
-        "league": fixture.league_id,
-        "checked_at": now,
+        "scope": "informational",
+        "external_io": False,
+        "evidence_write": False,
+        "match_id": None,
+        "league": None,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "cache_hit": False,
     }
-
-
-async def _check_capability(db: AsyncSession) -> Dict[str, Any]:
-    cached = cache.get(_CAPABILITY_CACHE_KEY) if cache else None
-    if cached:
-        try:
-            parsed = json.loads(cached) if isinstance(cached, str) else cached
-            return {**parsed, "cache_hit": True}
-        except Exception:
-            pass
-
-    result = await _compute_capability(db)
-    result["cache_hit"] = False
-    if cache:
-        try:
-            cache.set(
-                _CAPABILITY_CACHE_KEY,
-                json.dumps({k: v for k, v in result.items() if k != "cache_hit"}),
-                ttl=_CAPABILITY_TTL_SECONDS,
-            )
-        except Exception as exc:
-            logger.debug("Capability probe cache write failed: %s", exc)
-    return result
 
 
 @router.get("/health/ready")
@@ -375,6 +325,9 @@ async def readiness_check(
     """
     Readiness probe for Kubernetes/container orchestration.
     Checks if service is ready to accept traffic.
+
+    The probe is intentionally side-effect free: prediction capability is a
+    separate evidence concern and is never exercised by load-balancer health.
     """
     ready = True
     checks = {}
@@ -546,31 +499,7 @@ async def readiness_check(
     if models_status.get("status") in ("not_ready", "error"):
         model_error_message = models_status.get("message")
 
-    # Capability probing is meaningful only after the core readiness gates pass.
-    # When infra is already not ready, probing the prediction path just burns quota,
-    # warms model state, and adds noisy warnings to a probe that is going to 503.
-    if ready:
-        try:
-            capability = await _check_capability(db)
-        except Exception as exc:
-            logger.error("Capability probe raised unexpectedly: %s", exc)
-            capability = {
-                "status": "failed",
-                "message": str(exc),
-                "match_id": None,
-                "league": None,
-                "checked_at": datetime.now(timezone.utc).isoformat(),
-                "cache_hit": False,
-            }
-    else:
-        capability = {
-            "status": "skipped_not_ready",
-            "message": "Capability probe skipped because core readiness checks are not yet green",
-            "match_id": None,
-            "league": None,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
-            "cache_hit": False,
-        }
+    capability = _side_effect_free_capability_state(ready=ready)
 
     payload: Dict[str, Any] = {
         "status": "ok" if ready else "not_ready",
