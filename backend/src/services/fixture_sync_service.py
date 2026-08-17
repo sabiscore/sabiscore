@@ -1,8 +1,8 @@
 """Seed the matches table with upcoming fixtures from football-data.org.
 
-Called once at startup as a non-blocking background task. Only runs when
-FOOTBALL_DATA_API_KEY is configured. Failures are logged and silently
-swallowed so they never prevent the API from serving requests.
+Production acquisition is injected from the application lifespan provider
+registry. The compatibility loader owns normalization only; it never opens an
+independent HTTP client.
 """
 from __future__ import annotations
 
@@ -40,8 +40,16 @@ def _team_id(team_name: str, league_id: str) -> str:
     return f"fd-team-{slug}"
 
 
-async def sync_upcoming_fixtures(session: AsyncSession) -> int:
+async def sync_upcoming_fixtures(
+    session: AsyncSession,
+    *,
+    provider: Any = None,
+) -> int:
     """Fetch upcoming fixtures and upsert League/Team/Match/canonical rows.
+
+    ``provider`` must be the lifespan-owned ``football_data_org`` provider in
+    production. Keeping it injectable makes persistence tests deterministic;
+    the normalization adapter fails closed if no real provider is supplied.
 
     Existing *unsettled* provider fixtures are refreshed in place so verified
     kickoff reschedules propagate to both the legacy Match row and its stable
@@ -58,7 +66,7 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
     from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
     started_at = time.perf_counter()
-    client = FootballDataAPIClient()
+    client = FootballDataAPIClient(provider=provider)
     try:
         async with _FOOTBALL_DATA_SYNC_LIMITER:
             matches_raw = await client.get_upcoming_matches(days_ahead=SYNC_HORIZON_DAYS, limit=50)
@@ -125,10 +133,6 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
             inserted += 1
         elif (match.status or "").lower() not in SETTLED_MATCH_STATUSES:
             previous_kickoff = match.match_date
-            # Match is a legacy SQLAlchemy model whose class attributes are
-            # typed as Column[T]. Runtime instance assignment is valid, but
-            # static analysis cannot infer the descriptor boundary. Keep the
-            # escape hatch tightly scoped to mutation of this loaded instance.
             runtime_match = cast(Any, match)
             runtime_match.league_id = league_id
             runtime_match.home_team_id = home_id
@@ -148,9 +152,6 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
         from .canonical_identity_service import ensure_canonical_fixture
 
         try:
-            # SQLAlchemy flushes outer pending legacy writes before creating the
-            # SAVEPOINT. Canonical writes performed inside this block can then
-            # be rolled back independently on an identity conflict.
             async with session.begin_nested():
                 await ensure_canonical_fixture(
                     session,
@@ -195,7 +196,12 @@ async def sync_upcoming_fixtures(session: AsyncSession) -> int:
     return inserted
 
 
-async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> dict[str, int]:
+async def sync_settled_results(
+    session: AsyncSession,
+    *,
+    days_back: int = 3,
+    provider: Any = None,
+) -> dict[str, int]:
     """Fetch recently finished fixtures and settle matching Match rows.
 
     Never creates a Match row and never rewrites a row already settled.
@@ -204,7 +210,7 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
     from ..core.database import Match
     from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
-    client = FootballDataAPIClient()
+    client = FootballDataAPIClient(provider=provider)
     try:
         async with _FOOTBALL_DATA_SYNC_LIMITER:
             results_raw = await client.get_recent_results(days_back=days_back, limit=100)
@@ -238,7 +244,7 @@ async def sync_settled_results(session: AsyncSession, *, days_back: int = 3) -> 
     return {"updated": updated, "unmatched": unmatched, "already_settled": already_settled}
 
 
-async def run_fixture_sync() -> None:
+async def run_fixture_sync(provider: Any = None) -> None:
     """Entry point for the background sync loop — swallows all errors."""
     from ..db.session import AsyncSessionLocal
     from ..monitoring.metrics import metrics_collector
@@ -249,7 +255,7 @@ async def run_fixture_sync() -> None:
 
     try:
         async with AsyncSessionLocal() as session:
-            count = await sync_upcoming_fixtures(session)
+            count = await sync_upcoming_fixtures(session, provider=provider)
             logger.info("fixture_sync: %d new upcoming fixtures seeded", count)
     except Exception as exc:
         logger.exception("fixture_sync: unhandled error — continuing without fixture data")
