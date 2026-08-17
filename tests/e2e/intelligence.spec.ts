@@ -10,7 +10,7 @@ test.describe('/intelligence smoke', () => {
   test('renders the betting intelligence workspace chrome', async ({ page }) => {
     await page.goto('/intelligence');
 
-    await expect(page.getByRole('heading', { name: 'Betting Intelligence' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SabiScore Match Intelligence' })).toBeVisible();
     await expect(page.getByText('Fixture Discovery')).toBeVisible();
     await expect(page.getByLabel('Competition')).toBeVisible();
     await expect(page.getByPlaceholder('Search team')).toBeVisible();

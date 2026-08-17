@@ -31,7 +31,7 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
     const matchup = matchupLabelFor(id, home, away);
     return {
       title: `${matchup} — Match Intelligence`,
-      description: `Evidence-led match intelligence for ${matchup} in ${league || "EPL"}.`,
+      description: `Evidence-led SabiScore Match Intelligence for ${matchup} in ${league || "EPL"}.`,
     };
   } catch {
     return {
@@ -69,11 +69,15 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
       <header className="flex flex-col gap-3 border-b border-slate-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
-            Authoritative full analysis
+            SabiScore Match Intelligence
           </p>
           <h1 id="match-analysis-title" className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
             {matchup}
           </h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-400">
+            Forecast, uncertainty, and football evidence are shown independently from Market Intelligence.
+            Odds-derived edge, EV, CLV, and stake context require verified market evidence and remain fail-closed.
+          </p>
         </div>
         <span
           className={`inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold ${
