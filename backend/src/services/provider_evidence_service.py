@@ -300,7 +300,9 @@ async def latest_provider_evidence(
         checked_at = row["checked_at"]
         age_seconds = None
         if isinstance(checked_at, datetime):
-            age_seconds = max(0.0, (now - _utc_naive(checked_at)).total_seconds())
+            checked_at_utc = _utc_naive(checked_at)
+            if checked_at_utc is not None:
+                age_seconds = max(0.0, (now - checked_at_utc).total_seconds())
         details = row["details"] if isinstance(row["details"], dict) else {}
         output[provider] = {
             "state": _evidence_state(row["status"]),
