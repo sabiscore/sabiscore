@@ -97,17 +97,24 @@ def _parse_datetime(value: object) -> datetime | None:
 
 
 def _team_key(value: object) -> str:
-    """Conservative team-name key used only to narrow fixture identity."""
-    key = re.sub(r"[^a-z0-9]", "", str(value).casefold())
-    for prefix in ("afc", "cf"):
-        if key.startswith(prefix) and len(key) > len(prefix) + 2:
-            key = key[len(prefix) :]
-            break
-    for suffix in ("footballclub", "soccerclub", "afc", "fc", "cf", "sc"):
-        if key.endswith(suffix) and len(key) > len(suffix) + 2:
-            key = key[: -len(suffix)]
-            break
-    return key
+    """Conservative team-name key used only to narrow fixture identity.
+
+    Strip club affixes as complete tokens before compaction. Compacting first
+    made names ending in a vowel plus ``FC`` ambiguous with the longer ``AFC``
+    suffix (for example ``Chelsea FC`` became ``chelseafc`` and was reduced to
+    ``chelse``), causing valid provider records to fail closed as unmatched.
+    """
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
+    tokens = normalized.split()
+    if not tokens:
+        return ""
+
+    if tokens[0] in {"afc", "cf"} and len(tokens) > 1:
+        tokens = tokens[1:]
+    if tokens[-1] in {"footballclub", "soccerclub", "afc", "fc", "cf", "sc"} and len(tokens) > 1:
+        tokens = tokens[:-1]
+
+    return "".join(tokens)
 
 
 def _same_prices(row: Any, *, home: float, draw: float, away: float) -> bool:
