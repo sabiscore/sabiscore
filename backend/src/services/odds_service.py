@@ -4,13 +4,12 @@ import logging
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.cache import cache_manager
-from ..core.config import settings
 from ..core.league_policy import LeaguePolicyUnavailableError, canonical_league_id
 from ..core.redaction import redact_text
 from ..db.models import Odds
@@ -31,11 +30,22 @@ class OddsService:
         provider: TheOddsAPIProvider | None = None,
     ) -> None:
         self.cache = cache_backend or cache_manager
-        self.provider = provider or TheOddsAPIProvider(
-            api_key=settings.the_odds_api_key,
-            enabled=settings.enable_the_odds_api_provider,
-            live_tests=settings.provider_live_tests,
-        )
+        if provider is None:
+            # Fallback/direct callers must use the same instrumented provider
+            # boundary as FastAPI lifespan callers. Constructing a raw
+            # TheOddsAPIProvider here bypassed registry observation wrappers, so
+            # a successful provider request could remain UNKNOWN in durable
+            # provider evidence even though the application consumed the data.
+            # build_provider_registry() is side-effect free at construction time:
+            # it performs no network or DB I/O and its recorder acquires a DB
+            # session lazily only after a provider operation completes.
+            from ..providers.registry import build_provider_registry
+
+            provider = cast(
+                TheOddsAPIProvider,
+                build_provider_registry().get("the_odds_api"),
+            )
+        self.provider = provider
 
     async def close(self) -> None:
         return None
@@ -113,12 +123,12 @@ class OddsService:
     ) -> Dict[str, Any]:
         """
         Get odds for a specific match by team names.
-        
+
         Args:
             home_team: Home team name
             away_team: Away team name
             league: League identifier
-            
+
         Returns:
             Dictionary with home_win, draw, away_win odds
         """
@@ -229,12 +239,12 @@ class OddsService:
     ) -> List[Dict[str, Any]]:
         """
         Get historical odds movement for a match.
-        
+
         Args:
             db: Database session
             match_id: Match identifier
             hours: Hours of history to retrieve
-            
+
         Returns:
             List of odds snapshots with timestamps
         """
