@@ -10,11 +10,9 @@ import hashlib
 import json
 import logging
 import random
-import time
 from datetime import datetime, timezone
 from enum import Enum
-from functools import wraps
-from typing import Any, Awaitable, Callable, Concatenate, Mapping, ParamSpec, Protocol, TypeVar
+from typing import Any, Mapping, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
@@ -338,42 +336,3 @@ class BaseProvider:
         import asyncio
 
         await asyncio.sleep(min(2.0, 0.25 * (2**attempt)) + random.random() * 0.1)
-
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-
-
-def observed_provider_call(
-    func: Callable[Concatenate[BaseProvider, _P], Awaitable[_R]],
-) -> Callable[Concatenate[BaseProvider, _P], Awaitable[_R]]:
-    """Observe a public provider operation without changing its semantics.
-
-    Normal ProviderResult outcomes, including disabled/unconfigured/rate-limited
-    results, are persisted through the configured sink. Truly unexpected
-    exceptions are observed and then re-raised exactly as before. Failure of the
-    observation sink itself is swallowed by BaseProvider so telemetry can never
-    poison the evidence request path.
-    """
-
-    @wraps(func)
-    async def wrapper(self: BaseProvider, *args: _P.args, **kwargs: _P.kwargs) -> _R:
-        started = time.perf_counter()
-        try:
-            result = await func(self, *args, **kwargs)
-        except Exception as exc:
-            await self._observe_exception(
-                func.__name__,
-                exc,
-                (time.perf_counter() - started) * 1000,
-            )
-            raise
-
-        if isinstance(result, ProviderResult):
-            await self._observe_result(
-                result,
-                (time.perf_counter() - started) * 1000,
-            )
-        return result
-
-    return wrapper
