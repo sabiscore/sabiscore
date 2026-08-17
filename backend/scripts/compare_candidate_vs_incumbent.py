@@ -15,9 +15,9 @@ Usage:
 """
 from __future__ import annotations
 
-import logging
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,9 @@ from scripts.train_on_real_matches import (  # noqa: E402
     derive_apex_market_features,
     evaluate,
     load_matches,
+)
+from src.models.promotion_evidence import (  # noqa: E402
+    validate_promotion_feature_evidence,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -90,8 +93,12 @@ def main() -> int:
     training_report = json.loads(
         (candidate_dir / "training_report_real.json").read_text(encoding="utf-8")
     )
-    availability_report = json.loads(
-        (candidate_dir / "feature_availability_matrix.json").read_text(encoding="utf-8")
+    availability_report = validate_promotion_feature_evidence(
+        json.loads(
+            (candidate_dir / "feature_availability_matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
     )
 
     dataset = build_dataset(load_matches(_BACKEND_ROOT / "data" / "cache"))
@@ -135,8 +142,12 @@ def main() -> int:
             row[label] = metrics
             logger.info(
                 "%-12s %-10s %7.4f %8.4f %8.4f %8.4f",
-                league, label, metrics["accuracy"], metrics["rps"],
-                metrics["brier"], metrics["log_loss"],
+                league,
+                label,
+                metrics["accuracy"],
+                metrics["rps"],
+                metrics["brier"],
+                metrics["log_loss"],
             )
 
         if "incumbent" in row and "candidate" in row:
@@ -150,8 +161,7 @@ def main() -> int:
                 "candidate_wins": delta > 0,
                 "market_baseline_rps": candidate_evidence["baseline_rps_market"],
                 "candidate_beats_market_baseline": (
-                    row["candidate"]["rps"]
-                    < candidate_evidence["baseline_rps_market"]
+                    row["candidate"]["rps"] < candidate_evidence["baseline_rps_market"]
                 ),
                 "responsive_features": candidate_evidence["responsive_features"],
                 "coherent_price_perturbation": _coherent_price_perturbation(
@@ -161,7 +171,9 @@ def main() -> int:
             }
             logger.info(
                 "%-12s %-10s RPS %+0.4f  -> %s",
-                "", "delta", -delta,
+                "",
+                "delta",
+                -delta,
                 "CANDIDATE BETTER" if delta > 0 else "incumbent better",
             )
         logger.info("")
@@ -183,7 +195,9 @@ def main() -> int:
             },
             "input_responsiveness": {
                 "status": (
-                    "PASS" if all(row["responsive_features"] > 0 for row in league_rows) else "FAIL"
+                    "PASS"
+                    if all(row["responsive_features"] > 0 for row in league_rows)
+                    else "FAIL"
                 ),
                 "minimum_responsive_features": min(
                     row["responsive_features"] for row in league_rows
