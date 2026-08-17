@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from src.core.database import Base
 from src.db.models import ProviderHealthLog, ProviderQuotaObservation, ProviderRequestSummary
 from src.providers.base import BaseProvider, ProviderQuota, ProviderResult, ProviderStatus, TrustTier
-from src.providers.registry import ProviderRegistry
+from src.providers.registry import ProviderRegistry, _returns_provider_result
+from src.providers.the_odds_api import TheOddsAPIProvider
 from src.services.provider_evidence_service import ProviderEvidenceRecorder, latest_provider_evidence
 
 
@@ -136,7 +137,15 @@ class _DummyProvider(BaseProvider):
         raise RuntimeError("Bearer should-not-leak")
 
 
-async def test_registry_proxy_observes_provider_results_without_changing_return() -> None:
+def test_real_odds_operation_is_recognized_as_observable_provider_result() -> None:
+    provider = TheOddsAPIProvider(api_key="test", enabled=True)
+
+    assert _returns_provider_result(provider.odds) is True
+    assert _returns_provider_result(provider.health) is False
+    assert _returns_provider_result(provider.capabilities) is False
+
+
+async def test_registry_observes_provider_results_without_changing_identity_or_return() -> None:
     sink = SimpleNamespace(
         record_result=AsyncMock(return_value=True),
         record_exception=AsyncMock(return_value=True),
@@ -144,14 +153,17 @@ async def test_registry_proxy_observes_provider_results_without_changing_return(
     provider = _DummyProvider(enabled=True, observation_sink=sink)
     registry = ProviderRegistry([provider])
 
-    result = await registry.get("dummy").fixtures()
+    resolved = registry.get("dummy")
+    result = await resolved.fixtures()
 
+    assert resolved is provider
+    assert isinstance(resolved, _DummyProvider)
     assert result.status is ProviderStatus.VERIFIED
     sink.record_result.assert_awaited_once()
     sink.record_exception.assert_not_awaited()
 
 
-async def test_registry_proxy_observes_then_reraises_unexpected_exception() -> None:
+async def test_registry_observes_then_reraises_unexpected_exception() -> None:
     sink = SimpleNamespace(
         record_result=AsyncMock(return_value=True),
         record_exception=AsyncMock(return_value=True),
