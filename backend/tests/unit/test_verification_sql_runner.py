@@ -87,10 +87,21 @@ def test_elo_audit_distinguishes_residual_from_new_self_play_writers() -> None:
     sql = (_BACKEND_DIR / "scripts" / "verify_elo.sql").read_text(encoding="utf-8")
     assert "historical_fdco_self_play_matches" in sql
     assert "non_historical_self_play_matches" in sql
+    assert "post_pr25_self_play_matches" in sql
     assert "scheduled_self_play_matches" in sql
     assert "HISTORICAL_FDCO_RESIDUAL" in sql
-    assert "NON_HISTORICAL_WRITER" in sql
+    assert "POST_PR25_OR_NON_HISTORICAL_WRITER" in sql
     assert "m.id LIKE 'fdco-%'" in sql
+    assert "TIMESTAMP '2026-08-17 08:47:46'" in sql
+    assert "COALESCE(m.updated_at, m.created_at)" in sql
+
+
+def test_elo_audit_has_fail_closed_post_pr25_self_play_gate() -> None:
+    sql = (_BACKEND_DIR / "scripts" / "verify_elo.sql").read_text(encoding="utf-8")
+    assert "self_play_post_pr25_integrity" in sql
+    assert "violation_count = 0" in sql
+    assert "violation_count::integer" in sql
+    assert "(violation_count - violation_count)::integer" in sql
 
 
 def test_local_compat_runner_cannot_restore_sqlite_fallback() -> None:
