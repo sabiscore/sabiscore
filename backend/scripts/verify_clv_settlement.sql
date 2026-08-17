@@ -1,6 +1,6 @@
 -- backend/scripts/verify_clv_settlement.sql
--- Read-only production verification for prediction -> settlement -> closing line -> CLV.
--- Closing odds are evaluation evidence only; this script never creates betting actionability.
+-- Read-only production verification for prediction -> market lifecycle -> settlement -> CLV.
+-- Market evidence is diagnostic only; this script never creates betting actionability.
 -- A legitimate closing line must be observed strictly before fixture kickoff.
 
 BEGIN TRANSACTION READ ONLY;
@@ -98,8 +98,33 @@ FROM (
         AND abs((home_probability + draw_probability + away_probability) - 1.0) <= 0.001
     UNION ALL SELECT 'max_prediction_simplex_error', coalesce(max(abs((home_probability + draw_probability + away_probability) - 1.0))::text, 'NULL') FROM eligible
     UNION ALL SELECT 'settled_eligible_predictions', count(*)::text FROM settled
+
+    -- Numerical market stream consumed by Phase-8 market drift.
+    UNION ALL SELECT 'odds_history_rows', count(*)::text FROM odds_history
+    UNION ALL SELECT 'match_odds_history_rows', count(*)::text FROM odds_history WHERE market_type = 'match_odds'
+    UNION ALL SELECT 'match_odds_distinct_matches', count(DISTINCT match_id)::text FROM odds_history WHERE market_type = 'match_odds'
+    UNION ALL SELECT 'match_odds_earliest_observation', coalesce(min(timestamp)::text, 'NULL') FROM odds_history WHERE market_type = 'match_odds'
+    UNION ALL SELECT 'match_odds_latest_observation', coalesce(max(timestamp)::text, 'NULL') FROM odds_history WHERE market_type = 'match_odds'
+
+    -- Evidence/provenance lifecycle. Nonclosing no longer means "opening": it
+    -- may be opening, intermediate, or a superseded closing candidate.
     UNION ALL SELECT 'market_snapshot_rows', count(*)::text FROM market_snapshots
-    UNION ALL SELECT 'opening_nonclosing_snapshot_rows', count(*)::text FROM market_snapshots WHERE is_closing_line IS FALSE
+    UNION ALL SELECT 'nonclosing_snapshot_rows', count(*)::text FROM market_snapshots WHERE is_closing_line IS FALSE
+    UNION ALL SELECT 'pre_match_opening_snapshot_rows', count(*)::text
+      FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'PRE_MATCH_OPENING'
+    UNION ALL SELECT 'pre_match_intermediate_snapshot_rows', count(*)::text
+      FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'PRE_MATCH_INTERMEDIATE'
+    UNION ALL SELECT 'superseded_closing_snapshot_rows', count(*)::text
+      FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'PRE_MATCH_CLOSING_SUPERSEDED'
+    UNION ALL SELECT 'unclassified_nonclosing_snapshot_rows', count(*)::text
+      FROM market_snapshots
+      WHERE is_closing_line IS FALSE
+        AND coalesce(provenance ->> 'evidence_class', '') NOT IN (
+            'PRE_MATCH_OPENING',
+            'PRE_MATCH_INTERMEDIATE',
+            'PRE_MATCH_CLOSING_SUPERSEDED'
+        )
+
     UNION ALL SELECT 'closing_snapshot_rows', count(*)::text FROM closing
     UNION ALL SELECT 'coherent_closing_snapshot_rows', count(*)::text FROM closing WHERE coherent IS TRUE
     UNION ALL SELECT 'valid_pre_kickoff_closing_snapshot_rows', count(*)::text FROM valid_closing
@@ -118,7 +143,8 @@ FROM (
           AND away_implied_prob_devigged BETWEEN 0 AND 1
           AND abs((home_implied_prob_devigged + draw_implied_prob_devigged + away_implied_prob_devigged) - 1.0) <= 0.001
       )
-    UNION ALL SELECT 'matches_with_multiple_closing_rows', count(DISTINCT match_id)::text FROM closing WHERE closing_rows_per_match > 1
+    UNION ALL SELECT 'matches_with_multiple_current_closing_rows', count(DISTINCT match_id)::text
+      FROM closing WHERE closing_rows_per_match > 1
     UNION ALL SELECT 'closing_captured_after_kickoff', count(*)::text
       FROM closing WHERE kickoff IS NOT NULL AND captured_at > kickoff
     UNION ALL SELECT 'closing_captured_more_than_60m_after_kickoff', count(*)::text
@@ -133,9 +159,9 @@ FROM (
 ) q
 ORDER BY metric;
 
--- Per-prediction evidence chain. Only a valid pre-kickoff closing snapshot may
--- populate closing_snapshot_id. Invalid temporal rows remain visible above via
--- audit counts but never enter the CLV chain.
+-- Per-prediction evidence chain. Only a valid current pre-kickoff closing snapshot
+-- may populate closing_snapshot_id. Superseded and invalid temporal rows remain
+-- auditable above but never enter the CLV chain.
 WITH eligible AS (
     SELECT p.*, m.match_date, m.status AS match_status, m.home_score, m.away_score
     FROM match_prediction_logs p
