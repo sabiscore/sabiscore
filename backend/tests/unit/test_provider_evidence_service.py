@@ -1,7 +1,7 @@
 """Provider evidence persistence and registry-observation regressions."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -19,7 +19,11 @@ from src.db.models import (
 from src.providers.base import BaseProvider, ProviderQuota, ProviderResult, ProviderStatus, TrustTier
 from src.providers.registry import ProviderRegistry, _returns_provider_result
 from src.providers.the_odds_api import TheOddsAPIProvider
-from src.services.provider_evidence_service import ProviderEvidenceRecorder, latest_provider_evidence
+from src.services.provider_evidence_service import (
+    PROVIDER_EVIDENCE_STALE_SECONDS,
+    ProviderEvidenceRecorder,
+    latest_provider_evidence,
+)
 
 
 @pytest.fixture
@@ -103,11 +107,16 @@ async def test_recorder_db_not_ready_is_non_disruptive() -> None:
 
 async def test_latest_evidence_zero_observations_is_unknown(factory) -> None:
     async with factory() as session:
-        evidence = await latest_provider_evidence(session, ["test_provider"])
+        evidence = await latest_provider_evidence(
+            session,
+            ["test_provider"],
+            now=datetime(2026, 8, 17, 0, 30, tzinfo=timezone.utc),
+        )
 
     assert evidence["test_provider"]["state"] == "UNKNOWN"
     assert evidence["test_provider"]["observations"] == 0
     assert evidence["test_provider"]["last_observed_at"] is None
+    assert evidence["test_provider"]["stale_after_seconds"] == PROVIDER_EVIDENCE_STALE_SECONDS
 
 
 async def test_latest_evidence_uses_latest_persisted_status(factory) -> None:
@@ -122,12 +131,61 @@ async def test_latest_evidence_uses_latest_persisted_status(factory) -> None:
         await recorder.record_result(second, duration_ms=10.0, circuit_open=False)
 
     async with factory() as session:
-        evidence = await latest_provider_evidence(session, ["test_provider"])
+        evidence = await latest_provider_evidence(
+            session,
+            ["test_provider"],
+            now=datetime(2026, 8, 17, 0, 30, tzinfo=timezone.utc),
+        )
 
     assert evidence["test_provider"]["state"] == "LIVE_VERIFIED"
     assert evidence["test_provider"]["status"] == "VERIFIED"
     assert evidence["test_provider"]["observations"] == 2
     assert evidence["test_provider"]["operation"] == "fixtures"
+    assert evidence["test_provider"]["age_seconds"] == pytest.approx(1800.0)
+
+
+@pytest.mark.parametrize(
+    ("age", "expected_state"),
+    [
+        (timedelta(seconds=PROVIDER_EVIDENCE_STALE_SECONDS), "LIVE_VERIFIED"),
+        (timedelta(seconds=PROVIDER_EVIDENCE_STALE_SECONDS + 1), "STALE"),
+    ],
+)
+async def test_latest_verified_evidence_fails_closed_after_freshness_boundary(
+    factory,
+    age: timedelta,
+    expected_state: str,
+) -> None:
+    recorder = ProviderEvidenceRecorder()
+    observed_at = datetime(2026, 8, 17, 0, 0, tzinfo=timezone.utc)
+    result = _result(ProviderStatus.VERIFIED)
+    result.acquired_at = observed_at
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        await recorder.record_result(result, duration_ms=10.0, circuit_open=False)
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session,
+            ["test_provider"],
+            now=observed_at + age,
+        )
+
+    row = evidence["test_provider"]
+    assert row["state"] == expected_state
+    assert row["status"] == "VERIFIED"
+    assert row["age_seconds"] == pytest.approx(age.total_seconds())
+    assert row["stale_after_seconds"] == PROVIDER_EVIDENCE_STALE_SECONDS
+
+
+async def test_latest_evidence_rejects_nonpositive_stale_threshold(factory) -> None:
+    async with factory() as session:
+        with pytest.raises(ValueError, match="stale_after_seconds must be positive"):
+            await latest_provider_evidence(
+                session,
+                ["test_provider"],
+                stale_after_seconds=0,
+            )
 
 
 class _DummyProvider(BaseProvider):
