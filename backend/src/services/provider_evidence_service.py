@@ -20,7 +20,13 @@ from sqlalchemy import func, select
 
 from ..core.redaction import redact_text
 from ..db.models import ProviderHealthLog, ProviderQuotaObservation, ProviderRequestSummary
-from ..providers.base import ProviderResult, ProviderStatus, TrustTier, stable_hash
+from ..providers.base import (
+    ProviderResult,
+    ProviderStatus,
+    ProviderTransportError,
+    TrustTier,
+    stable_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,22 +101,23 @@ class ProviderEvidenceRecorder:
         duration_ms: float,
         circuit_open: bool,
     ) -> bool:
-        safe_error = redact_text(error)
-        lowered = safe_error.casefold()
-        if "rate_limited" in lowered:
-            status = ProviderStatus.RATE_LIMITED
-        elif circuit_open or "circuit breaker is open" in lowered:
-            status = ProviderStatus.CIRCUIT_OPEN
+        if isinstance(error, ProviderTransportError):
+            status = error.provider_status
+            warnings = error.warning_tokens()
+            error_code = error.error_code
         else:
-            status = ProviderStatus.UNAVAILABLE
+            safe_error = redact_text(error)
+            status = ProviderStatus.CIRCUIT_OPEN if circuit_open else ProviderStatus.UNAVAILABLE
+            warnings = [safe_error]
+            error_code = type(error).__name__
 
         result = ProviderResult(
             provider=provider,
             operation=operation,
             status=status,
             trust_tier=trust_tier,
-            warnings=[safe_error],
-            error_code=type(error).__name__,
+            warnings=warnings,
+            error_code=error_code,
         )
         return await self._persist(
             result,
