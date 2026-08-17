@@ -10,8 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.core.database import Base
-from src.db.models import ProviderHealthLog, ProviderQuotaObservation, ProviderRequestSummary
+from src.db.models import (
+    Base,
+    ProviderHealthLog,
+    ProviderQuotaObservation,
+    ProviderRequestSummary,
+)
 from src.providers.base import BaseProvider, ProviderQuota, ProviderResult, ProviderStatus, TrustTier
 from src.providers.registry import ProviderRegistry, _returns_provider_result
 from src.providers.the_odds_api import TheOddsAPIProvider
@@ -21,6 +25,12 @@ from src.services.provider_evidence_service import ProviderEvidenceRecorder, lat
 @pytest.fixture
 async def factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    expected_tables = {
+        ProviderRequestSummary.__tablename__,
+        ProviderHealthLog.__tablename__,
+        ProviderQuotaObservation.__tablename__,
+    }
+    assert expected_tables.issubset(Base.metadata.tables)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
