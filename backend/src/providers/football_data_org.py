@@ -166,8 +166,8 @@ class FootballDataOrgProvider(BaseProvider):
                 headers={"X-Auth-Token": self.api_key or ""},
             )
             return ProviderStatus.VERIFIED
-        except Exception:  # pragma: no cover - network path
-            return ProviderStatus.UNAVAILABLE
+        except Exception as exc:  # pragma: no cover - network path
+            return self._transport_status(exc)
 
     # ------------------------------------------------------------------ #
     # Internals                                                            #
@@ -196,14 +196,7 @@ class FootballDataOrgProvider(BaseProvider):
         )
 
     def _network_failure(self, operation: str, exc: Exception) -> ProviderResult:
-        status = ProviderStatus.RATE_LIMITED if "rate_limited" in str(exc) else ProviderStatus.UNAVAILABLE
-        return ProviderResult(
-            provider=self.provider_id,
-            operation=operation,
-            status=status,
-            trust_tier=self.trust_tier,
-            error_code=type(exc).__name__,
-        )
+        return self._transport_failure_result(operation, exc)
 
     def _normalize_match(self, *, raw: dict[str, Any], competition: str) -> FixtureRecord:
         try:

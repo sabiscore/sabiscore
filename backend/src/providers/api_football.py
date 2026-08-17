@@ -301,8 +301,8 @@ class APIFootballProvider(BaseProvider):
                 headers={"x-apisports-key": self.api_key or ""},
             )
             return ProviderStatus.VERIFIED
-        except Exception:  # pragma: no cover - network path
-            return ProviderStatus.UNAVAILABLE
+        except Exception as exc:  # pragma: no cover - network path
+            return self._transport_status(exc)
 
     # ------------------------------------------------------------------ #
     # Internals                                                            #
@@ -331,14 +331,7 @@ class APIFootballProvider(BaseProvider):
         )
 
     def _network_failure(self, operation: str, exc: Exception) -> ProviderResult:
-        status = ProviderStatus.RATE_LIMITED if "rate_limited" in str(exc) else ProviderStatus.UNAVAILABLE
-        return ProviderResult(
-            provider=self.provider_id,
-            operation=operation,
-            status=status,
-            trust_tier=self.trust_tier,
-            error_code=type(exc).__name__,
-        )
+        return self._transport_failure_result(operation, exc)
 
     def _logical_error(self, operation: str, payload: Any) -> ProviderResult | None:
         """API-Football returns HTTP 200 with a populated `errors` field on logical failures."""

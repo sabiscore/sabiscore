@@ -165,8 +165,8 @@ class SportmonksProvider(BaseProvider):
                 headers={"Authorization": self.api_key},
             )
             return ProviderStatus.VERIFIED
-        except Exception:  # pragma: no cover - network path
-            return ProviderStatus.UNAVAILABLE
+        except Exception as exc:  # pragma: no cover - network path
+            return self._transport_status(exc)
 
     # ------------------------------------------------------------------ #
     # Internals                                                            #
@@ -185,14 +185,7 @@ class SportmonksProvider(BaseProvider):
         return None
 
     def _network_failure(self, operation: str, exc: Exception) -> ProviderResult:
-        status = ProviderStatus.RATE_LIMITED if "rate_limited" in str(exc) else ProviderStatus.UNAVAILABLE
-        return ProviderResult(
-            provider=self.provider_id,
-            operation=operation,
-            status=status,
-            trust_tier=self.trust_tier,
-            error_code=type(exc).__name__,
-        )
+        return self._transport_failure_result(operation, exc)
 
     def _normalize_sidelined(self, raw: dict[str, Any]) -> SidelinedRecord:
         sideline = raw.get("sideline") if isinstance(raw, dict) else None
