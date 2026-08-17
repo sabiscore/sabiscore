@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...db.session import get_async_session
 from ...providers import ProviderRegistry
 from ...providers.registry import get_provider_registry
-from ...services.provider_evidence_service import latest_provider_evidence
+from ...services.provider_evidence_service import (
+    PROVIDER_EVIDENCE_STALE_SECONDS,
+    latest_provider_evidence,
+)
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
@@ -67,6 +70,8 @@ async def providers_evidence(
 
     Zero observations is `UNKNOWN`, never success. This endpoint does not turn a
     configured credential or a successful historical probe into live evidence.
+    Evidence older than the deterministic freshness threshold is `STALE` even
+    when its historical provider result was VERIFIED.
     """
     if provider:
         try:
@@ -81,12 +86,14 @@ async def providers_evidence(
     return {
         "providers": evidence,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "stale_after_seconds": PROVIDER_EVIDENCE_STALE_SECONDS,
         "semantics": {
             "UNKNOWN": "no durable provider-operation observation exists",
             "CONFIGURED": "latest observed result was configured but not live-verified",
-            "LIVE_VERIFIED": "latest observed provider operation returned VERIFIED",
+            "LIVE_VERIFIED": "latest observed provider operation returned VERIFIED and remains within the freshness threshold",
             "DEGRADED": "latest observed provider operation returned partial/invalid/conflicting evidence",
             "RATE_LIMITED": "latest observed provider operation was rate-limited",
+            "STALE": "latest durable provider-operation observation is older than the freshness threshold; its historical status remains available separately",
             "UNAVAILABLE": "latest observed provider operation was unavailable/unconfigured/circuit-open",
         },
     }

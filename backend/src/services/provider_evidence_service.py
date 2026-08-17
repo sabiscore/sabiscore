@@ -24,6 +24,13 @@ from ..providers.base import ProviderResult, ProviderStatus, TrustTier, stable_h
 
 logger = logging.getLogger(__name__)
 
+# Durable provider-operation evidence is not perpetual proof of current provider
+# health. One hour matches the slowest production result-settlement observation
+# cadence while remaining deliberately conservative for the five-minute odds
+# capture path. Evidence older than this is surfaced as STALE regardless of the
+# last underlying provider status; that raw status remains separately visible.
+PROVIDER_EVIDENCE_STALE_SECONDS = 3600
+
 
 def _utc_naive(value: datetime | None) -> datetime | None:
     if value is None:
@@ -241,12 +248,20 @@ class ProviderEvidenceRecorder:
 async def latest_provider_evidence(
     session: Any,
     provider_ids: Iterable[str],
+    *,
+    now: datetime | None = None,
+    stale_after_seconds: int = PROVIDER_EVIDENCE_STALE_SECONDS,
 ) -> dict[str, dict[str, Any]]:
-    """Return latest persisted evidence per provider.
+    """Return latest persisted evidence per provider with deterministic freshness.
 
     Zero observations is explicitly UNKNOWN. Configuration state is intentionally
     not consulted here: this surface answers what has actually been observed.
+    Any persisted observation older than ``stale_after_seconds`` is surfaced as
+    STALE while its raw provider ``status`` remains available for audit.
     """
+    if stale_after_seconds <= 0:
+        raise ValueError("stale_after_seconds must be positive")
+
     provider_list = list(dict.fromkeys(str(provider) for provider in provider_ids))
     output: dict[str, dict[str, Any]] = {
         provider: {
@@ -255,6 +270,7 @@ async def latest_provider_evidence(
             "observations": 0,
             "last_observed_at": None,
             "age_seconds": None,
+            "stale_after_seconds": stale_after_seconds,
             "latency_ms": None,
             "operation": None,
             "error_code": None,
@@ -293,7 +309,9 @@ async def latest_provider_evidence(
         .subquery()
     )
     result = await session.execute(select(ranked).where(ranked.c.rn == 1))
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    reference_now = _utc_naive(now or datetime.now(timezone.utc))
+    if reference_now is None:  # defensive; the expression above is always a datetime
+        raise RuntimeError("unable to derive provider evidence reference time")
 
     for row in result.mappings().all():
         provider = str(row["provider"])
@@ -302,14 +320,18 @@ async def latest_provider_evidence(
         if isinstance(checked_at, datetime):
             checked_at_utc = _utc_naive(checked_at)
             if checked_at_utc is not None:
-                age_seconds = max(0.0, (now - checked_at_utc).total_seconds())
+                age_seconds = max(0.0, (reference_now - checked_at_utc).total_seconds())
         details = row["details"] if isinstance(row["details"], dict) else {}
+        state = _evidence_state(row["status"])
+        if age_seconds is not None and age_seconds > stale_after_seconds:
+            state = "STALE"
         output[provider] = {
-            "state": _evidence_state(row["status"]),
+            "state": state,
             "status": row["status"],
             "observations": int(counts.get(provider, 0)),
             "last_observed_at": checked_at.isoformat() if isinstance(checked_at, datetime) else None,
             "age_seconds": age_seconds,
+            "stale_after_seconds": stale_after_seconds,
             "latency_ms": row["latency_ms"],
             "operation": details.get("operation"),
             "error_code": row["error_code"],
@@ -319,6 +341,7 @@ async def latest_provider_evidence(
 
 
 __all__ = [
+    "PROVIDER_EVIDENCE_STALE_SECONDS",
     "ProviderEvidenceRecorder",
     "latest_provider_evidence",
 ]
