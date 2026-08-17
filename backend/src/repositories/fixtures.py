@@ -111,10 +111,31 @@ def build_settled_predictions_query(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    model_version: str | None = None,
 ) -> Select[Any]:
-    """Join the most recent logged prediction per settled fixture to its result."""
+    """Join the most recent logged prediction per settled fixture to its result.
+
+    ``model_version`` restricts the join to a single model generation. Pooling
+    generations is a zero-fabrication violation: accuracy/RPS computed across
+    two models describes a system that never existed, and it silently inflates
+    the sample size gating certification. Production callers pass the active
+    generation; ``None`` is for ad-hoc research queries only.
+
+    The filter is applied inside ``latest_per_match`` as well as on the outer
+    select. Filtering only the outer select would first pick the newest
+    prediction per match across *all* generations and then discard it, losing a
+    match that holds a valid prediction for the requested generation behind a
+    newer one from a different generation. This is not hypothetical: production
+    match ``fd-564632`` carries both a ``v5_phase7`` and a ``v6_phase8`` row.
+    """
 
     validated_limit = _validated_limit(limit)
+
+    latest_per_match_filters = [MatchPredictionLog.created_at < Match.match_date]
+    if model_version:
+        latest_per_match_filters.append(
+            MatchPredictionLog.model_version == model_version
+        )
 
     latest_per_match = (
         select(
@@ -122,7 +143,7 @@ def build_settled_predictions_query(
             func.max(MatchPredictionLog.created_at).label("latest_created_at"),
         )
         .join(Match, MatchPredictionLog.match_id == Match.id)
-        .where(MatchPredictionLog.created_at < Match.match_date)
+        .where(*latest_per_match_filters)
         .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
@@ -152,6 +173,8 @@ def build_settled_predictions_query(
         )
     )
 
+    if model_version:
+        statement = statement.where(MatchPredictionLog.model_version == model_version)
     if league:
         statement = statement.where(func.lower(Match.league_id) == league.lower())
     if started_at is not None:
@@ -169,11 +192,16 @@ async def get_settled_predictions(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    model_version: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return settled-fixture records shaped for
     ``model_registry.ModelRegistry.walk_forward_validate()``:
     ``{"date": ISO str, "outcome": 0|1|2, "probs": [p_home, p_draw, p_away]}``,
     where outcome is 0=home_win, 1=draw, 2=away_win.
+
+    Pass ``model_version`` to scope the records to one model generation — see
+    ``build_settled_predictions_query`` for why pooling generations is a
+    zero-fabrication violation rather than a larger sample.
     """
 
     result = await session.execute(
@@ -182,6 +210,7 @@ async def get_settled_predictions(
             league=league,
             started_at=started_at,
             ended_at=ended_at,
+            model_version=model_version,
         )
     )
 

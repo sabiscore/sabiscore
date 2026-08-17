@@ -1,5 +1,81 @@
 # SabiScore Debt Ledger
 
+## 25. Certification/staking phases are blocked by evidence volume, not by engineering
+
+**Tier:** `ACCEPTED` — this is the system working. Recorded so the next session
+does not re-derive it, and does not mistake "cheap to flip" for "ready".
+**Found:** 2026-08-17, while attempting the certification → staking-activation
+sequence end to end.
+
+Certification, staking activation, retraining promotion, and shadow production
+cannot legitimately start yet, and the blocker in every case is accumulated
+real evidence, not missing code:
+
+| Gate | Floor | Actual (2026-08-17) |
+|---|---|---|
+| `walk_forward_validate` | 10 records (`n_splits * 2`) | **3** for the active `v5_phase7` generation |
+| `MIN_RECORDS_FOR_DECOMPOSITION` | 10 pooled | 3 |
+| `_MIN_CLV_SAMPLE_SIZE` | 10 joined | 4 closing lines exist; 2 are post-kickoff and correctly excluded |
+| `compare_candidate_vs_incumbent` | 7 gates PASS | 3 FAIL (`serving_feature_availability`, `no_league_regression`, `market_baseline`) |
+
+⚠️ **The "8/9 settled predictions" figure previously visible on `/health` was a
+cross-generation pooled count** — 7 `v5_phase7` + 6 `v6_phase8`. Scoped to the
+generation actually serving, the real figure is **3**. Fixed this session; see
+the entry below. Do not read the pre-fix number as progress toward the floor.
+
+**Do not** attempt to unblock any of these by lowering a threshold, pooling
+generations, widening a sample, or hand-editing `certification_state`. Each of
+those is an explicit non-negotiable invariant. The only legitimate unblock is
+elapsed season time producing real settled fixtures.
+
+**Also confirmed absent and correctly so:** there is no shadow *model*
+inference path (candidate ‖ incumbent, both logged). `PHASE8_ENRICHMENT_SHADOW`
+is a genuine *feature* shadow; `PHASE9_SHADOW_ONLY` stamps metadata and gates
+nothing; `PHASE8_CANARY_PCT` is declared in `config.py` and `render.yaml` with
+**zero consumers** in `backend/src` — a dead flag whose docstring promises a
+mirror of `PHASE7_CANARY_PCT` that was never written. Building shadow inference
+before a candidate can pass its offline gates would be premature.
+
+**Priority:** none — time-gated. Re-check when the active generation reaches 10
+settled predictions.
+
+---
+
+## 26. `feature_availability_matrix.json` has a consumer but no matching producer
+
+**Tier:** `NEXT` — blocks any real retraining/promotion cycle the moment one is
+attempted. Not yet fixed; found 2026-08-17 while auditing the promotion path.
+
+`compare_candidate_vs_incumbent.py:203` reads
+`availability_report["promotion_gate"]` to decide the
+`serving_feature_availability` gate. The committed generator,
+`backend/scripts/generate_feature_availability_matrix.py`, emits a **different,
+coarser schema** keyed by competition and family — top-level keys
+`generated_at` / `feature_schema_changed` / `settlement_gate` / `competitions`,
+with **no `promotion_gate` and no `summary`**. The rich per-feature file
+currently checked in at `backend/models/candidate/feature_availability_matrix.json`
+(42 KB, one record per feature with `training_source`, `serving_source`,
+`freshness_contract`, `defaulted_training_slot`, …) has **no producer in the
+repo** — a grep for its distinctive keys returns only that one consumer.
+
+**Consequence:** regenerating the matrix with the committed generator and
+re-running the comparison would `KeyError`. The promotion gate is currently
+un-runnable end to end, which is masked only because nobody has needed to run
+it since the candidate was quarantined.
+
+**Related:** `backend/models/candidate/candidate_manifest.json` has zero
+producers *and* zero consumers — hand-maintained, referenced by nothing.
+
+**Fix:** make the generator emit the per-feature schema the comparison script
+actually consumes (including `promotion_gate` and `summary`), or change the
+consumer to compute the gate from the coarse schema. Prefer the former — the
+per-feature file is the closest thing this repo has to a real feature contract.
+**Trigger:** before the next retraining cycle. Do not attempt a promotion
+without closing this first; the gate cannot currently be trusted because it
+cannot currently run.
+
+---
+
 ## 24. Rescheduled fixtures wedged the whole fixture-sync tick; mitigation shipped, identity-hash root cause deferred
 
 **Tier:** mitigation = `FIXED` this session. Root cause = `NEXT` — a

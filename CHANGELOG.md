@@ -5,6 +5,53 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - certification integrity: earn the verdict, don't assert it (2026-08-17)
+
+Two defects found while working the certification/staking activation phase.
+Both would have corrupted certification at the moment it became possible, and
+both were fixed *ahead of* their trigger rather than after.
+
+### Fixed
+
+- **Accuracy evidence no longer pools model generations.**
+  `build_settled_predictions_query` had no `model_version` filter, so
+  `walk_forward_validate` scored `v5_phase7` and `v6_phase8` predictions as one
+  population and `/health`'s `settled_predictions_total` counted them together.
+  Production holds 7 `v5_phase7` + 6 `v6_phase8` rows; the certification gate
+  fires at 10. The filter is applied inside `latest_per_match` **and** on the
+  outer select — an outer-only filter silently drops a match whose valid
+  in-generation prediction sits behind a newer foreign-generation row
+  (production match `fd-564632` has exactly that shape). Verified by reverting
+  the subquery half and watching the regression test fail.
+- **`certification_state` is now validated and must be earned.** The manifest
+  hash-locked every artifact but left the verdict about them as unvalidated
+  free text — hand-editing `"UNVERIFIED"` → `"CERTIFIED"` switched on value-bet
+  computation, Kelly staking, and `stake: ENABLED` across 18+ consumer sites
+  with no gate consulted, while `comparison_report.json` sat alongside reading
+  `promotion_permitted: false` with 3 failing gates. `load_active_generation()`
+  now rejects unknown states and requires a `CERTIFIED` claim to carry
+  hash-verified `certification_evidence` whose own gates all passed. Because
+  `verify_active_artifacts.py` calls the loader and runs in Render's
+  `buildCommand`, an unearned certification claim now **fails the deploy**.
+
+### Added
+
+- `active_model_version()` — fails closed rather than returning a permissive
+  `None`, which would have silently restored the pooling it exists to prevent.
+- `backend/tests/unit/test_certification_integrity.py` (8 tests) and
+  `backend/tests/unit/test_settled_predictions_generation_scope.py` (4 tests).
+
+### Validation evidence
+
+- `python -m pytest tests -q` — **1404 passed, 14 skipped, 0 failed**.
+- `python scripts/check_mypy_ceiling.py --ceiling 784` — **769 ≤ 784**, ceiling
+  unchanged and not raised.
+- `python scripts/verify_active_artifacts.py` — passes; the guard is
+  backward-compatible with the current `UNVERIFIED` state.
+- `ruff check` on all touched files — clean.
+
+---
+
 ## Unreleased - Elo backfill progress + the_odds_api rotation confirmed live (2026-08-17)
 
 Read-only production audit, no code changed. Answers two questions left open

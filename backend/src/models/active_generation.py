@@ -20,6 +20,17 @@ class ActiveGenerationError(RuntimeError):
 DEFAULT_MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
 MANIFEST_NAME = "active_generation.json"
 
+# certification_state is the single string that switches on value-bet
+# computation, Kelly staking, and the public `stake: ENABLED` signal across
+# every consumer. Until now the manifest protected the *artifacts* with SHA-256
+# while leaving the *verdict* as unvalidated free text, so a one-character edit
+# could claim certification that no evaluation ever granted. These two
+# constants close that asymmetry: the state must be a known value, and the
+# CERTIFIED claim must carry hash-verified evidence that earned it.
+UNVERIFIED = "UNVERIFIED"
+CERTIFIED = "CERTIFIED"
+ALLOWED_CERTIFICATION_STATES = frozenset({UNVERIFIED, CERTIFIED})
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -79,12 +90,69 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
             "metadata_path": metadata,
         }
 
+    _verify_certification_claim(payload, root)
+
     return {
         **payload,
         "manifest_path": manifest_path,
         "manifest_sha256": _sha256(manifest_path),
         "artifacts": verified,
     }
+
+
+def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
+    """Reject a certification verdict that no evaluation actually granted.
+
+    ``UNVERIFIED`` is the safe default and requires nothing. ``CERTIFIED``
+    switches on staking everywhere, so it must be backed by a hash-verified
+    promotion report whose own gates all passed. Without this, promotion is a
+    one-word text edit — the artifacts are tamper-evident but the verdict about
+    them was not.
+    """
+
+    state = payload.get("certification_state", UNVERIFIED)
+    if state not in ALLOWED_CERTIFICATION_STATES:
+        raise ActiveGenerationError(
+            f"Unknown certification_state {state!r}; expected one of "
+            f"{sorted(ALLOWED_CERTIFICATION_STATES)}"
+        )
+    if state != CERTIFIED:
+        return
+
+    evidence = payload.get("certification_evidence")
+    if not isinstance(evidence, dict):
+        raise ActiveGenerationError(
+            "certification_state is CERTIFIED but no certification_evidence is declared"
+        )
+
+    report_path = _safe_file(root, evidence.get("report"))
+    expected_hash = str(evidence.get("report_sha256") or "").lower()
+    if _sha256(report_path) != expected_hash:
+        raise ActiveGenerationError("Certification evidence hash mismatch")
+
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActiveGenerationError("Certification evidence is unreadable or invalid") from exc
+
+    if not isinstance(report, dict) or report.get("promotion_permitted") is not True:
+        raise ActiveGenerationError(
+            "Certification evidence does not grant promotion "
+            "(promotion_permitted is not true)"
+        )
+
+    gates = report.get("gates")
+    if not isinstance(gates, dict) or not gates:
+        raise ActiveGenerationError("Certification evidence declares no promotion gates")
+    failed = sorted(
+        name
+        for name, gate in gates.items()
+        if not isinstance(gate, dict) or gate.get("status") != "PASS"
+    )
+    if failed:
+        raise ActiveGenerationError(
+            f"Certification evidence has failing gates: {', '.join(failed)}"
+        )
 
 
 def active_artifact_path(league_slug: str, models_dir: Path | None = None) -> Path | None:
@@ -103,9 +171,27 @@ def active_generation_is_certified(models_dir: Path | None = None) -> bool:
     return generation.get("certification_state") == "CERTIFIED"
 
 
+def active_model_version(models_dir: Path | None = None) -> str:
+    """Return the serving generation's model version (e.g. ``v5_phase7``).
+
+    Deliberately raises instead of returning a permissive default. Callers use
+    this to scope accuracy/CLV evidence to a single generation; a ``None``
+    fallback would silently restore the cross-generation pooling that scoping
+    exists to prevent, and would do so precisely when provenance is least
+    trustworthy. No metric is safer than a metric describing two models at once.
+    """
+
+    generation = load_active_generation(models_dir)
+    version = str(generation.get("active_version") or "").strip()
+    if not version:
+        raise ActiveGenerationError("Active generation does not declare active_version")
+    return version
+
+
 __all__ = [
     "ActiveGenerationError",
     "active_artifact_path",
     "active_generation_is_certified",
+    "active_model_version",
     "load_active_generation",
 ]

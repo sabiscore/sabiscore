@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ...db.session import get_async_session
+from ...models.active_generation import active_model_version
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
@@ -236,13 +237,21 @@ async def _walk_forward_summary(
     if window is not None:
         started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
 
+    # Scope to the serving generation. Pooling generations would report an
+    # accuracy/RPS series for a model that never existed — see
+    # build_settled_predictions_query. Raising here is deliberate: the caller
+    # surfaces it rather than silently publishing a cross-generation metric.
+    model_version = active_model_version()
+
     records = await get_settled_predictions(
         db,
         league=_resolve_league_filter(league),
         started_at=started_at,
+        model_version=model_version,
     )
     return {
         "records": records,
+        "model_version": model_version,
         "validation": get_walk_forward_registry().walk_forward_validate(records),
     }
 
