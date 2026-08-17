@@ -127,12 +127,32 @@ isn't fixed, even though the mitigation means it won't wedge anything again.
 
 ---
 
-## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401, operator action required)
+## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **key rotation now confirmed working, 2026-08-17**
 
-**Tier:** log leak = `FIXED` this session. Key validity = `FIX-NOW` / P0 —
-operator-only, blocks CLV capture (item 6) and any market-benchmark work.
+**Tier:** log leak = `FIXED`. Key validity = `RESOLVED` — confirmed via live
+production evidence, not just an operator report. CLV capture (item 6) is
+unblocked and has real data.
 **Found:** 2026-08-13/14, from an operator-supplied Render deploy log
 (2026-08-13T23:22–23:26 UTC) pasted into a chat session.
+**Resolved (confirmed 2026-08-17):** a live Render log query for
+`srv-d95kkffaqgkc73f8003g` across 2026-08-14T00:00–2026-08-17T03:00 UTC found
+**zero** `401`/`Unauthorized`/odds-error entries — the entire window the
+2026-08-13/14 incident excerpt came from and everything since. Positive
+evidence, not just absence of errors: a live `odds_service` log line
+`Cache hit for live odds: LA_LIGA` (2026-08-16T23:10:13Z, only possible after
+a prior successful fetch populated the cache), `GET /health` `components.
+clv_capture.outcome` now reads `"ok"` (was the documented `"never_run"`), and
+a direct read-only query against `market_snapshots` on the production DB
+(`dpg-d9pfv3pt0dsc73djciog-a`) returned **4 real rows, all
+`is_closing_line=true`**, captured 2026-08-16T10:06–17:05 UTC. The rotation
+reported across several operator-supplied documents this week is therefore
+independently confirmed, not just repeated. Still below `clv_service.py`'s
+`_MIN_CLV_SAMPLE_SIZE=10` floor for a real CLV summary — that's a volume gate
+working correctly, not a defect. Formal `status: VERIFIED` on the provider
+still requires an explicit `providers doctor --provider the_odds_api
+--validate-live` probe (unrun — needs the real key, which isn't accessible
+from a read-only audit context); this evidence is operational, not the
+formal probe result.
 
 Two findings from the same log excerpt:
 
