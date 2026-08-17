@@ -1,6 +1,7 @@
 -- backend/scripts/verify_clv_settlement.sql
 -- Read-only production verification for prediction -> settlement -> closing line -> CLV.
 -- Closing odds are evaluation evidence only; this script never creates betting actionability.
+-- A legitimate closing line must be observed strictly before fixture kickoff.
 
 BEGIN TRANSACTION READ ONLY;
 
@@ -24,14 +25,18 @@ settled AS (
 ),
 closing AS (
     SELECT ms.*,
+           m.match_date AS kickoff,
            count(*) OVER (PARTITION BY ms.match_id) AS closing_rows_per_match
     FROM market_snapshots ms
+    LEFT JOIN matches m ON m.id = ms.match_id
     WHERE ms.is_closing_line IS TRUE
 ),
 valid_closing AS (
     SELECT *
     FROM closing
-    WHERE coherent IS TRUE
+    WHERE kickoff IS NOT NULL
+      AND captured_at < kickoff
+      AND coherent IS TRUE
       AND home_odds > 1
       AND draw_odds > 1
       AND away_odds > 1
@@ -97,10 +102,16 @@ FROM (
     UNION ALL SELECT 'opening_nonclosing_snapshot_rows', count(*)::text FROM market_snapshots WHERE is_closing_line IS FALSE
     UNION ALL SELECT 'closing_snapshot_rows', count(*)::text FROM closing
     UNION ALL SELECT 'coherent_closing_snapshot_rows', count(*)::text FROM closing WHERE coherent IS TRUE
+    UNION ALL SELECT 'valid_pre_kickoff_closing_snapshot_rows', count(*)::text FROM valid_closing
+    UNION ALL SELECT 'closing_match_join_missing', count(*)::text FROM closing WHERE kickoff IS NULL
+    UNION ALL SELECT 'closing_captured_at_or_after_kickoff', count(*)::text
+      FROM closing WHERE kickoff IS NOT NULL AND captured_at >= kickoff
     UNION ALL SELECT 'invalid_closing_market_rows', count(*)::text
       FROM closing
       WHERE NOT (
-          coherent IS TRUE
+          kickoff IS NOT NULL
+          AND captured_at < kickoff
+          AND coherent IS TRUE
           AND home_odds > 1 AND draw_odds > 1 AND away_odds > 1
           AND home_implied_prob_devigged BETWEEN 0 AND 1
           AND draw_implied_prob_devigged BETWEEN 0 AND 1
@@ -109,11 +120,9 @@ FROM (
       )
     UNION ALL SELECT 'matches_with_multiple_closing_rows', count(DISTINCT match_id)::text FROM closing WHERE closing_rows_per_match > 1
     UNION ALL SELECT 'closing_captured_after_kickoff', count(*)::text
-      FROM closing c JOIN matches m ON m.id = c.match_id
-      WHERE c.captured_at > m.match_date
+      FROM closing WHERE kickoff IS NOT NULL AND captured_at > kickoff
     UNION ALL SELECT 'closing_captured_more_than_60m_after_kickoff', count(*)::text
-      FROM closing c JOIN matches m ON m.id = c.match_id
-      WHERE c.captured_at > m.match_date + interval '60 minutes'
+      FROM closing WHERE kickoff IS NOT NULL AND captured_at > kickoff + interval '60 minutes'
     UNION ALL SELECT 'settled_predictions_with_valid_closing_join', count(*)::text FROM joined
     UNION ALL SELECT 'distinct_settled_matches_with_valid_closing_join', count(DISTINCT match_id)::text FROM joined
     UNION ALL SELECT 'clv_sample_size', count(*)::text FROM joined
@@ -124,7 +133,9 @@ FROM (
 ) q
 ORDER BY metric;
 
--- Per-prediction evidence chain. Missing snapshot IDs remain NULL.
+-- Per-prediction evidence chain. Only a valid pre-kickoff closing snapshot may
+-- populate closing_snapshot_id. Invalid temporal rows remain visible above via
+-- audit counts but never enter the CLV chain.
 WITH eligible AS (
     SELECT p.*, m.match_date, m.status AS match_status, m.home_score, m.away_score
     FROM match_prediction_logs p
@@ -136,7 +147,22 @@ closing AS (
            row_number() OVER (PARTITION BY ms.match_id ORDER BY ms.captured_at DESC, ms.id DESC) AS rn,
            count(*) OVER (PARTITION BY ms.match_id) AS closing_rows_per_match
     FROM market_snapshots ms
+    JOIN matches m ON m.id = ms.match_id
     WHERE ms.is_closing_line IS TRUE
+      AND ms.coherent IS TRUE
+      AND ms.captured_at < m.match_date
+      AND ms.home_odds > 1
+      AND ms.draw_odds > 1
+      AND ms.away_odds > 1
+      AND ms.home_implied_prob_devigged BETWEEN 0 AND 1
+      AND ms.draw_implied_prob_devigged BETWEEN 0 AND 1
+      AND ms.away_implied_prob_devigged BETWEEN 0 AND 1
+      AND abs(
+          ms.home_implied_prob_devigged
+        + ms.draw_implied_prob_devigged
+        + ms.away_implied_prob_devigged
+        - 1.0
+      ) <= 0.001
 )
 SELECT e.id AS prediction_id,
        e.match_id,

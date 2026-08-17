@@ -100,14 +100,9 @@ async def get_settled_fixtures(
 # canonical_fixtures spine, which nothing in this codebase populates today, so
 # joining through it here would silently return zero rows forever.
 #
-# One caveat this v1 accepts rather than solves: a match can accumulate
-# several prediction_logs over time (re-requested predictions); this join
-# takes the MOST RECENT one per match regardless of whether it was logged
-# before or after kickoff. There is currently no automatic pre-kickoff
-# inference job (create_prediction() is manually/API-triggered), so this is
-# not yet a live evaluation-integrity risk — but a future scheduled prediction
-# job should either log a kickoff-relative flag or this query should gain a
-# `MatchPredictionLog.created_at < Match.match_date` filter.
+# A prediction is eligible only when it was created before kickoff. This is
+# enforced inside latest_per_match so the chosen row cannot be a post-kickoff
+# re-request.
 
 
 def build_settled_predictions_query(
@@ -220,11 +215,11 @@ async def get_settled_predictions(
 # (ix_match_prediction_logs_match_time, ix_market_snapshots_match_id). See
 # docs/adr/0004-clv-capture.md, Addendum 2.
 #
-# Same latest-log-regardless-of-kickoff-timing caveat as
-# build_settled_predictions_query above: takes the most recent prediction log
-# per match without checking it was logged before the closing line was
-# captured. Not yet a live risk for the same reason stated there — no
-# automatic pre-kickoff inference job exists today.
+# Temporal integrity is strict on both sides of the join:
+# - prediction.created_at must be before the selected closing snapshot;
+# - closing_snapshot.captured_at must be strictly before fixture kickoff.
+# Historical rows observed at or after kickoff remain in storage for audit but
+# are structurally incapable of entering CLV evaluation.
 
 
 def build_clv_records_query(
@@ -234,10 +229,12 @@ def build_clv_records_query(
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
 ) -> Select[Any]:
-    """Join the most recent logged prediction per match to its most recent
-    captured closing line. Unlike build_settled_predictions_query, does NOT
-    require the match to be finished — a closing line exists as soon as
-    clv_capture_service captures it near kickoff, independent of the result.
+    """Join the most recent pre-close prediction per match to its latest valid
+    pre-kickoff closing line.
+
+    Unlike build_settled_predictions_query, this does NOT require the match to
+    be finished — a legitimate closing line exists as soon as capture runs
+    before kickoff, independent of the result.
     """
 
     validated_limit = _validated_limit(limit)
@@ -247,7 +244,12 @@ def build_clv_records_query(
             MarketSnapshot.match_id,
             func.max(MarketSnapshot.captured_at).label("latest_captured_at"),
         )
-        .where(MarketSnapshot.is_closing_line.is_(True))
+        .join(Match, MarketSnapshot.match_id == Match.id)
+        .where(
+            MarketSnapshot.is_closing_line.is_(True),
+            MarketSnapshot.coherent.is_(True),
+            MarketSnapshot.captured_at < Match.match_date,
+        )
         .group_by(MarketSnapshot.match_id)
         .subquery()
     )
@@ -299,6 +301,8 @@ def build_clv_records_query(
         )
         .where(
             MarketSnapshot.is_closing_line.is_(True),
+            MarketSnapshot.coherent.is_(True),
+            MarketSnapshot.captured_at < Match.match_date,
             MarketSnapshot.home_implied_prob_devigged.is_not(None),
             MarketSnapshot.draw_implied_prob_devigged.is_not(None),
             MarketSnapshot.away_implied_prob_devigged.is_not(None),
@@ -361,7 +365,7 @@ async def get_next_upcoming_fixture(
 ) -> Match | None:
     """Earliest scheduled fixture in the horizon — feeds the readiness capability probe."""
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # ponytail: match_date is TIMESTAMP WITHOUT TIME ZONE
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     end_date = now + timedelta(days=within_days)
     statement = select(Match).where(
         Match.match_date >= now,
