@@ -81,7 +81,15 @@ async def run_settlement_pass() -> dict[str, Any]:
 
     try:
         from .fixture_sync_service import sync_settled_results
+        from ..models.active_generation import active_model_version
         from ..repositories.fixtures import get_settled_predictions
+
+        # Scope accuracy evidence to the generation actually serving. Pooling
+        # generations would report a walk-forward score for a model that never
+        # existed and would inflate the sample size gating certification.
+        # Raises if the active generation cannot be resolved, which the outer
+        # handler records as an error — no metric beats a cross-generation one.
+        model_version = active_model_version()
 
         async with AsyncSessionLocal() as session:
             sync_counts = await sync_settled_results(session)
@@ -91,7 +99,9 @@ async def run_settlement_pass() -> dict[str, Any]:
             from .elo_state_service import sync_elo_from_finished_matches
 
             elo_counts = await sync_elo_from_finished_matches(session)
-            records = await get_settled_predictions(session)
+            records = await get_settled_predictions(
+                session, model_version=model_version
+            )
 
         # Pure Python, no DB — deliberately outside the session block above.
         validation = get_walk_forward_registry().walk_forward_validate(records)
@@ -102,6 +112,7 @@ async def run_settlement_pass() -> dict[str, Any]:
             "last_success_at": checked_at,
             "sync": sync_counts,
             "elo": elo_counts,
+            "model_version": model_version,
             "settled_predictions_total": len(records),
             "walk_forward": validation,
             "consecutive_failures": 0,
