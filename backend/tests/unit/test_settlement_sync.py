@@ -2,7 +2,8 @@
 fixture_sync_service.sync_settled_results().
 
 Contracts verified:
-  1. _normalize_result: well-formed FINISHED record parses; missing id/score → None.
+  1. _normalize_result: well-formed canonical provider record parses; missing
+     event id/score -> None.
   2. sync_settled_results: updates a matched non-settled Match; idempotent on
      re-sync; unmatched results are skipped, never create a row; a malformed
      record is dropped without blocking valid siblings; a provider outage
@@ -56,6 +57,20 @@ def _result(match_id: str, home_score: int, away_score: int) -> dict:
     }
 
 
+def _provider_record(
+    event_id: str | None,
+    home_score: int | None,
+    away_score: int | None,
+) -> dict:
+    return {
+        "coherent": True,
+        "provider_event_id": event_id,
+        "kickoff_utc": "2026-08-07T15:00:00Z",
+        "home_score": home_score,
+        "away_score": away_score,
+    }
+
+
 def _mock_client(results: list) -> AsyncMock:
     mock = AsyncMock()
     mock.get_recent_results.return_value = results
@@ -69,7 +84,7 @@ def _mock_client(results: list) -> AsyncMock:
 
 def test_normalize_result_valid_finished_record() -> None:
     client = FootballDataAPIClient()
-    raw = {"id": 12345, "utcDate": "2026-08-07T15:00:00Z", "score": {"fullTime": {"home": 2, "away": 1}}}
+    raw = _provider_record("12345", 2, 1)
     assert client._normalize_result(raw) == {
         "id": "fd-12345",
         "match_date": "2026-08-07T15:00:00Z",
@@ -81,13 +96,13 @@ def test_normalize_result_valid_finished_record() -> None:
 
 def test_normalize_result_missing_score_is_none() -> None:
     client = FootballDataAPIClient()
-    raw = {"id": 1, "utcDate": "2026-08-07T15:00:00Z", "score": {"fullTime": {"home": None, "away": None}}}
+    raw = _provider_record("1", None, None)
     assert client._normalize_result(raw) is None
 
 
 def test_normalize_result_missing_id_is_none() -> None:
     client = FootballDataAPIClient()
-    raw = {"utcDate": "2026-08-07T15:00:00Z", "score": {"fullTime": {"home": 1, "away": 0}}}
+    raw = _provider_record(None, 1, 0)
     assert client._normalize_result(raw) is None
 
 
