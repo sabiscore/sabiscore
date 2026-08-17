@@ -109,9 +109,27 @@ def _team_key(value: object) -> str:
     if not tokens:
         return ""
 
-    if tokens[0] in {"afc", "cf"} and len(tokens) > 1:
+    if tokens[:3] == ["a", "f", "c"]:
+        tokens = tokens[3:]
+    elif tokens[:2] == ["c", "f"]:
+        tokens = tokens[2:]
+    elif tokens[0] in {"afc", "cf"} and len(tokens) > 1:
         tokens = tokens[1:]
-    if tokens[-1] in {"footballclub", "soccerclub", "afc", "fc", "cf", "sc"} and len(tokens) > 1:
+
+    if len(tokens) > 2 and tokens[-3:] == ["a", "f", "c"]:
+        tokens = tokens[:-3]
+    elif len(tokens) > 1 and tokens[-2:] in (["f", "c"], ["c", "f"], ["s", "c"]):
+        tokens = tokens[:-2]
+    elif len(tokens) > 2 and tokens[-2:] in (["football", "club"], ["soccer", "club"]):
+        tokens = tokens[:-2]
+    elif tokens and tokens[-1] in {
+        "footballclub",
+        "soccerclub",
+        "afc",
+        "fc",
+        "cf",
+        "sc",
+    } and len(tokens) > 1:
         tokens = tokens[:-1]
 
     return "".join(tokens)
