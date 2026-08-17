@@ -1,31 +1,36 @@
-"""Football-Data.org v4 client for upcoming fixtures."""
+"""Compatibility adapter over the canonical football-data.org provider.
+
+This module intentionally owns no HTTP client. Production background sync must
+reuse the lifespan-owned ``football_data_org`` provider so request pooling,
+transport classification, Retry-After handling, circuit breaking, and durable
+provider evidence all flow through one observable boundary.
+"""
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-import httpx
-
-from ...connectors.base import AsyncJSONClient, ConnectorError, ConnectorRateLimitError
 from ...core.config import settings
+from ...providers.base import ProviderStatus
+from ...providers.football_data_org import FootballDataOrgProvider
 
 logger = logging.getLogger(__name__)
 
-# Free tier is 10 requests/minute, so the quota window resets within a minute.
-# Waiting longer than that on a boot background task buys nothing.
-_RATE_LIMIT_MAX_WAIT_SECONDS = 60.0
-
 
 class FootballDataAPIError(RuntimeError):
-    """Raised when Football-Data.org API requests fail."""
+    """Raised when canonical football-data.org acquisition yields no usable data."""
 
 
 class FootballDataAPIClient:
-    """Fetch and normalize upcoming football fixtures from Football-Data.org."""
+    """Normalize canonical provider records for legacy fixture/settlement consumers.
 
-    BASE_URL = "https://api.football-data.org/v4"
+    The class name is retained to keep the storage-domain adapter small and to
+    avoid mixing provider record shapes into SQLAlchemy persistence code. It is
+    no longer a network client: ``provider`` is the sole request authority.
+    """
+
     TOP_COMPETITIONS = {
         "PL": "EPL",
         "PD": "La Liga",
@@ -35,10 +40,37 @@ class FootballDataAPIClient:
         "DED": "Eredivisie",
         "CL": "UCL",
     }
+    CANONICAL_BY_CODE = {
+        "PL": "EPL",
+        "PD": "LA_LIGA",
+        "BL1": "BUNDESLIGA",
+        "SA": "SERIE_A",
+        "FL1": "LIGUE_1",
+        "DED": "EREDIVISIE",
+        "CL": "UCL",
+    }
 
-    def __init__(self, api_key: Optional[str] = None, timeout_seconds: Optional[int] = None):
-        self.api_key = api_key or settings.football_data_api_key
-        self.timeout = timeout_seconds or max(int(settings.request_timeout), 10)
+    def __init__(
+        self,
+        provider: FootballDataOrgProvider | None = None,
+        api_key: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+    ) -> None:
+        # api_key/timeout_seconds remain accepted for source compatibility only.
+        # Creating another credential-bearing HTTP client here would recreate
+        # the production split SAB-14 is explicitly removing.
+        if provider is None and not getattr(settings, "mock_mode", False):
+            try:
+                from ...providers.registry import get_runtime_provider
+
+                runtime_provider = get_runtime_provider("football_data_org")
+            except (KeyError, RuntimeError):
+                runtime_provider = None
+            if isinstance(runtime_provider, FootballDataOrgProvider):
+                provider = runtime_provider
+        self.provider = provider
+        self.api_key = api_key
+        self.timeout = timeout_seconds
 
     async def get_upcoming_matches(
         self,
@@ -46,12 +78,8 @@ class FootballDataAPIClient:
         limit: int = 20,
         league: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Return normalized upcoming matches for supported top leagues/competitions."""
         if getattr(settings, "mock_mode", False):
             return self._mock_matches(days_ahead=days_ahead, limit=limit, league=league)
-
-        if not self.api_key:
-            raise FootballDataAPIError("FOOTBALL_DATA_API_KEY is not configured")
 
         now = datetime.now(timezone.utc)
         return await self._fetch_competitions(
@@ -60,7 +88,26 @@ class FootballDataAPIClient:
             date_to=(now + timedelta(days=max(days_ahead, 1))).date().isoformat(),
             status="SCHEDULED",
             limit=limit,
-            normalizer=self._normalize_match,
+            settled=False,
+        )
+
+    async def get_recent_results(
+        self,
+        days_back: int = 3,
+        limit: int = 20,
+        league: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        if getattr(settings, "mock_mode", False):
+            return self._mock_results(days_back=days_back, limit=limit)
+
+        now = datetime.now(timezone.utc)
+        return await self._fetch_competitions(
+            competitions=self._resolve_competitions(league),
+            date_from=(now - timedelta(days=max(days_back, 1))).date().isoformat(),
+            date_to=now.date().isoformat(),
+            status="FINISHED",
+            limit=limit,
+            settled=True,
         )
 
     async def _fetch_competitions(
@@ -71,98 +118,76 @@ class FootballDataAPIClient:
         date_to: str,
         status: str,
         limit: int,
-        normalizer: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]],
+        settled: bool,
     ) -> List[Dict[str, Any]]:
-        """Fetch one status window across competitions, isolating per-competition failure.
+        """Fetch one request per competition through the injected provider.
 
-        The free tier allows 10 requests/minute and this issues one request per
-        competition, so hitting the quota mid-loop is routine rather than
-        exceptional. Previously any single failure raised and discarded every
-        competition already collected *and* every one not yet attempted —
-        observed in production 2026-08-08, where a 429 on the first competition
-        seeded 0 fixtures across all seven leagues.
-
-        Failures are now isolated per competition. A 429 that survives the
-        Retry-After backoff means the quota is genuinely spent, so the loop stops
-        rather than burning further requests, but still returns what it collected.
-        Raises only when every competition failed and nothing came back at all.
+        Partial progress is retained. A genuine RATE_LIMITED/CIRCUIT_OPEN state
+        stops the loop because further requests in the same quota window cannot
+        improve evidence; ordinary per-competition failures remain isolated.
         """
+        provider = self.provider
+        if provider is None:
+            raise FootballDataAPIError(
+                "canonical football-data.org provider is required outside mock mode"
+            )
+
         normalized: List[Dict[str, Any]] = []
         failures: List[str] = []
 
-        async with AsyncJSONClient(
-            base_url=self.BASE_URL,
-            headers={"X-Auth-Token": self.api_key},
-            timeout_seconds=float(self.timeout),
-        ) as client:
-            for index, competition in enumerate(competitions):
-                params = {
-                    "dateFrom": date_from,
-                    "dateTo": date_to,
-                    "status": status,
-                    "limit": limit,
-                }
-                try:
-                    payload = await client.get_json_with_rate_limit_backoff(
-                        f"/competitions/{competition}/matches",
-                        params=params,
-                        max_wait_seconds=_RATE_LIMIT_MAX_WAIT_SECONDS,
-                    )
-                except ConnectorRateLimitError:
-                    # ponytail: quota genuinely spent (the 429 survived a full
-                    # Retry-After wait) — further requests only waste it.
-                    failures.append(f"{competition}: rate limited")
-                    logger.warning(
-                        "football_data: quota exhausted at %s — keeping %d match(es) from %d competition(s)",
-                        competition,
-                        len(normalized),
-                        index,
-                    )
-                    break
-                except (ConnectorError, httpx.HTTPError) as exc:
-                    failures.append(f"{competition}: {type(exc).__name__}")
-                    logger.warning("football_data: %s unavailable: %s", competition, exc)
-                    continue
+        for index, competition_code in enumerate(competitions):
+            canonical = self.CANONICAL_BY_CODE[competition_code]
+            result = await provider.fixtures(
+                competition=canonical,
+                date_from=date_from,
+                date_to=date_to,
+                status=status,
+                limit=limit,
+            )
 
-                for match in payload.get("matches", []):
-                    item = normalizer(match)
-                    if item:
-                        normalized.append(item)
+            if result.status in {ProviderStatus.RATE_LIMITED, ProviderStatus.CIRCUIT_OPEN}:
+                failures.append(f"{competition_code}: {result.status.value.lower()}")
+                logger.warning(
+                    "football_data: %s at %s — keeping %d match(es) from %d competition(s)",
+                    result.status.value.lower(),
+                    competition_code,
+                    len(normalized),
+                    index,
+                )
+                break
+
+            if result.status in {
+                ProviderStatus.UNAVAILABLE,
+                ProviderStatus.UNCONFIGURED,
+                ProviderStatus.INVALID,
+                ProviderStatus.CONFLICTING,
+            }:
+                failures.append(
+                    f"{competition_code}: {result.error_code or result.status.value.lower()}"
+                )
+                logger.warning(
+                    "football_data: %s unavailable: %s",
+                    competition_code,
+                    result.error_code or result.status.value,
+                )
+                continue
+
+            for record in result.records:
+                item = (
+                    self._normalize_result(record)
+                    if settled
+                    else self._normalize_match(record, competition_code=competition_code)
+                )
+                if item is not None:
+                    normalized.append(item)
 
         if failures and not normalized:
             raise FootballDataAPIError(
                 f"Football-Data API returned no data ({'; '.join(failures)})"
             )
 
-        normalized.sort(key=lambda x: x.get("match_date") or "")
+        normalized.sort(key=lambda item: item.get("match_date") or "")
         return normalized[:limit]
-
-    async def get_recent_results(
-        self,
-        days_back: int = 3,
-        limit: int = 20,
-        league: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """Return normalized recently-finished matches with final scores.
-
-        Mirrors get_upcoming_matches's request shape but queries the *past*
-        for status=FINISHED, and extracts scores instead of discarding them.
-        """
-        if getattr(settings, "mock_mode", False):
-            return self._mock_results(days_back=days_back, limit=limit)
-
-        if not self.api_key:
-            raise FootballDataAPIError("FOOTBALL_DATA_API_KEY is not configured")
-
-        now = datetime.now(timezone.utc)
-        return await self._fetch_competitions(
-            competitions=self._resolve_competitions(league),
-            date_from=(now - timedelta(days=max(days_back, 1))).date().isoformat(),
-            date_to=now.date().isoformat(),
-            status="FINISHED",
-            limit=limit,
-            normalizer=self._normalize_result,
-        )
 
     def _resolve_competitions(self, league: Optional[str]) -> List[str]:
         if not league:
@@ -187,50 +212,45 @@ class FootballDataAPIClient:
         code = reverse_map.get(normalized)
         return [code] if code else list(self.TOP_COMPETITIONS.keys())
 
-    def _normalize_match(self, raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        home = (raw.get("homeTeam") or {}).get("name")
-        away = (raw.get("awayTeam") or {}).get("name")
-        utc_date = raw.get("utcDate")
-        comp_code = ((raw.get("competition") or {}).get("code") or "").upper()
-        league = self.TOP_COMPETITIONS.get(comp_code, (raw.get("competition") or {}).get("name") or "Unknown")
-
-        if not home or not away or not utc_date:
+    def _normalize_match(
+        self,
+        record: Dict[str, Any],
+        *,
+        competition_code: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not record.get("coherent"):
             return None
-
-        match_id = raw.get("id")
-        if match_id is None:
+        event_id = record.get("provider_event_id")
+        home = record.get("home_team")
+        away = record.get("away_team")
+        kickoff = record.get("kickoff_utc")
+        if not event_id or not home or not away or not kickoff:
             return None
-
         return {
-            "id": f"fd-{match_id}",
+            "id": f"fd-{event_id}",
             "home_team": str(home),
             "away_team": str(away),
-            "league": league,
-            "match_date": utc_date,
-            "match_round": str(raw.get("stage") or raw.get("matchday") or "") or None,
+            "league": self.TOP_COMPETITIONS[competition_code],
+            "match_date": str(kickoff),
+            "match_round": record.get("match_round"),
             "venue": None,
             "status": "scheduled",
             "has_odds": False,
             "source": "football-data.org",
         }
 
-    def _normalize_result(self, raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Extract {id, match_date, home_score, away_score, status} from a
-        finished match's raw v4 payload. None on any missing field — covers
-        postponed/awarded oddities that still slip through the status filter.
-        """
-        match_id = raw.get("id")
-        utc_date = raw.get("utcDate")
-        full_time = ((raw.get("score") or {}).get("fullTime")) or {}
-        home_score = full_time.get("home")
-        away_score = full_time.get("away")
-
-        if match_id is None or not utc_date or home_score is None or away_score is None:
+    def _normalize_result(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not record.get("coherent"):
             return None
-
+        event_id = record.get("provider_event_id")
+        kickoff = record.get("kickoff_utc")
+        home_score = record.get("home_score")
+        away_score = record.get("away_score")
+        if event_id is None or not kickoff or home_score is None or away_score is None:
+            return None
         return {
-            "id": f"fd-{match_id}",
-            "match_date": utc_date,
+            "id": f"fd-{event_id}",
+            "match_date": str(kickoff),
             "home_score": home_score,
             "away_score": away_score,
             "status": "finished",
@@ -255,7 +275,12 @@ class FootballDataAPIClient:
             )
         return result[:limit]
 
-    def _mock_matches(self, days_ahead: int, limit: int, league: Optional[str]) -> List[Dict[str, Any]]:
+    def _mock_matches(
+        self,
+        days_ahead: int,
+        limit: int,
+        league: Optional[str],
+    ) -> List[Dict[str, Any]]:
         now = datetime.now(timezone.utc)
         samples = [
             ("Arsenal", "Chelsea", "EPL"),

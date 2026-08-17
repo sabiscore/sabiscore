@@ -1,9 +1,9 @@
 """football-data.org canonical fixture/standing provider.
 
 Operational client: fixtures + standings via X-Auth-Token header auth.
-Mirrors the the_odds_api.py shape — disabled/unconfigured guard, competition
-mapping fail-closed, never-raise normalization (coherent=False + reason
-instead of an exception), standard ProviderResult envelope.
+All request-time football-data.org acquisition is routed through this provider
+so the lifespan-owned HTTP pool, transport semantics, and durable evidence
+instrumentation remain authoritative.
 """
 
 from __future__ import annotations
@@ -24,13 +24,13 @@ from .base import (
 )
 
 COMPETITIONS = {
-    "EPL": "PL",          # Premier League
-    "LA_LIGA": "PD",       # Primera Division
-    "SERIE_A": "SA",       # Serie A
-    "BUNDESLIGA": "BL1",   # Bundesliga
-    "LIGUE_1": "FL1",      # Ligue 1
-    "EREDIVISIE": "DED",   # Dutch Eredivisie (free tier)
-    "UCL": "CL",           # UEFA Champions League (free tier)
+    "EPL": "PL",
+    "LA_LIGA": "PD",
+    "SERIE_A": "SA",
+    "BUNDESLIGA": "BL1",
+    "LIGUE_1": "FL1",
+    "EREDIVISIE": "DED",
+    "UCL": "CL",
 }
 
 
@@ -45,6 +45,9 @@ class FixtureRecord(BaseModel):
     kickoff_utc: datetime | None = None
     status: str
     season_id: int | None = None
+    match_round: str | None = None
+    home_score: int | None = None
+    away_score: int | None = None
     coherent: bool
     rejection_reason: str | None = None
 
@@ -86,34 +89,68 @@ class FootballDataOrgProvider(BaseProvider):
             for competition in COMPETITIONS
         ]
 
-    async def fixtures(self, *, competition: str) -> ProviderResult:
+    async def fixtures(
+        self,
+        *,
+        competition: str,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> ProviderResult:
+        """Fetch one competition's match window through the canonical gateway.
+
+        Optional filters mirror the v4 endpoint parameters used by the fixture
+        and settlement background jobs. Keeping the operation per competition
+        preserves the historical seven-request tick and gives the registry one
+        durable observation for each real upstream request.
+        """
         guard = self._guard("fixtures")
         if guard is not None:
             return guard
-        code = COMPETITIONS.get(competition.upper())
+        canonical_competition = competition.upper()
+        code = COMPETITIONS.get(canonical_competition)
         if code is None:
             return self._unsupported_competition("fixtures", competition)
+
+        params: dict[str, Any] = {}
+        if date_from is not None:
+            params["dateFrom"] = date_from
+        if date_to is not None:
+            params["dateTo"] = date_to
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = int(limit)
 
         try:
             payload, headers = await self._get_json(
                 f"{self.base_url}/competitions/{code}/matches",
                 headers={"X-Auth-Token": self.api_key or ""},
+                params=params or None,
             )
         except Exception as exc:
             return self._network_failure("fixtures", exc)
 
         raw_matches_any = payload.get("matches") if isinstance(payload, dict) else None
         raw_matches: list[dict[str, Any]] = raw_matches_any if isinstance(raw_matches_any, list) else []
-        records = [self._normalize_match(raw=m, competition=competition.upper()) for m in raw_matches]
+        records = [
+            self._normalize_match(raw=match, competition=canonical_competition)
+            for match in raw_matches
+        ]
 
         return ProviderResult(
             provider=self.provider_id,
             operation="fixtures",
             status=ProviderStatus.VERIFIED if records else ProviderStatus.PARTIAL,
             trust_tier=self.trust_tier,
-            records=[r.model_dump(mode="json") for r in records],
+            records=[record.model_dump(mode="json") for record in records],
             quota=self._quota_from_headers(headers),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {record.rejection_reason}"
+                for record in records
+                if not record.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
         )
 
@@ -143,7 +180,11 @@ class FootballDataOrgProvider(BaseProvider):
             table = table if isinstance(table, list) else []
             for row in table:
                 records.append(
-                    self._normalize_standings_row(raw=row, competition=competition.upper(), standings_type="TOTAL")
+                    self._normalize_standings_row(
+                        raw=row,
+                        competition=competition.upper(),
+                        standings_type="TOTAL",
+                    )
                 )
 
         return ProviderResult(
@@ -168,10 +209,6 @@ class FootballDataOrgProvider(BaseProvider):
             return ProviderStatus.VERIFIED
         except Exception as exc:  # pragma: no cover - network path
             return self._transport_status(exc)
-
-    # ------------------------------------------------------------------ #
-    # Internals                                                            #
-    # ------------------------------------------------------------------ #
 
     def _guard(self, operation: str) -> ProviderResult | None:
         if not self.enabled or not self.configured:
@@ -217,8 +254,16 @@ class FootballDataOrgProvider(BaseProvider):
                 coherent=False,
                 rejection_reason="missing_field_team_or_id",
             )
+
         raw_season = raw.get("season")
         season: dict[str, Any] = raw_season if isinstance(raw_season, dict) else {}
+        score = raw.get("score") if isinstance(raw.get("score"), dict) else {}
+        full_time = score.get("fullTime") if isinstance(score, dict) else {}
+        full_time = full_time if isinstance(full_time, dict) else {}
+        stage = raw.get("stage")
+        matchday = raw.get("matchday")
+        match_round = str(stage or matchday or "") or None
+
         return FixtureRecord(
             provider_event_id=event_id,
             competition=competition,
@@ -229,6 +274,9 @@ class FootballDataOrgProvider(BaseProvider):
             kickoff_utc=_parse_ts(raw.get("utcDate")),
             status=str(raw.get("status") or "UNKNOWN").upper(),
             season_id=season.get("id"),
+            match_round=match_round,
+            home_score=_as_int(full_time.get("home")),
+            away_score=_as_int(full_time.get("away")),
             coherent=True,
         )
 
@@ -266,7 +314,6 @@ class FootballDataOrgProvider(BaseProvider):
         )
 
     def _quota_from_headers(self, headers: Any) -> ProviderQuota:
-        # football-data.org returns per-minute remaining; daily limit from config.
         from ..core.config import settings
 
         remaining_minute = headers.get("X-Requests-Available-Minute") if headers else None
@@ -276,15 +323,28 @@ class FootballDataOrgProvider(BaseProvider):
             try:
                 from datetime import timezone as _tz
                 import datetime as _dt
+
                 reset_at = _dt.datetime.fromtimestamp(int(reset_header), tz=_tz.utc)
             except (ValueError, OSError):
                 pass
-        limit = settings.football_data_daily_request_limit
         return ProviderQuota(
-            limit=limit,
-            remaining=int(remaining_minute) if remaining_minute and str(remaining_minute).isdigit() else None,
+            limit=settings.football_data_daily_request_limit,
+            remaining=(
+                int(remaining_minute)
+                if remaining_minute and str(remaining_minute).isdigit()
+                else None
+            ),
             reset_at=reset_at,
         )
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_ts(value: Any) -> datetime | None:
