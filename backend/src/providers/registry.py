@@ -63,10 +63,16 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
             __operation: str = name,
             **kwargs: Any,
         ) -> Any:
+            # Provider instances are shared across concurrent requests. The base
+            # transport observation is task-local, but it must still be cleared at
+            # every observable operation boundary so a prior probe/direct request
+            # in the same task cannot be attributed to a guard-only result.
+            provider._clear_transport_observation()
             started = time.perf_counter()
             try:
                 result = await __method(*args, **kwargs)
             except Exception as exc:
+                provider._clear_transport_observation()
                 await provider._observe_exception(
                     __operation,
                     exc,
@@ -75,10 +81,13 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
                 raise
 
             if isinstance(result, ProviderResult):
+                result = provider._attach_transport_observation(result)
                 await provider._observe_result(
                     result,
                     (time.perf_counter() - started) * 1000,
                 )
+            else:
+                provider._clear_transport_observation()
             return result
 
         observed.__name__ = getattr(attribute, "__name__", name)

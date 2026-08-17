@@ -8,7 +8,7 @@ instrumentation remain authoritative.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ from .base import (
     ProviderStatus,
     TrustTier,
     stable_hash,
+    utc_now,
 )
 
 COMPETITIONS = {
@@ -321,11 +322,12 @@ class FootballDataOrgProvider(BaseProvider):
         reset_at = None
         if reset_header:
             try:
-                from datetime import timezone as _tz
-                import datetime as _dt
-
-                reset_at = _dt.datetime.fromtimestamp(int(reset_header), tz=_tz.utc)
-            except (ValueError, OSError):
+                # football-data.org defines X-RequestCounter-Reset as delta
+                # seconds until the request counter resets, not a Unix epoch.
+                reset_seconds = int(reset_header)
+                if reset_seconds >= 0:
+                    reset_at = utc_now() + timedelta(seconds=reset_seconds)
+            except (TypeError, ValueError, OverflowError):
                 pass
         return ProviderQuota(
             limit=settings.football_data_daily_request_limit,

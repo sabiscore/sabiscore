@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import random
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from enum import Enum
@@ -159,6 +160,11 @@ class ProviderResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     error_code: str | None = None
     raw_snapshot_id: str | None = None
+    # Sanitized transport outcome. Successful HTTP status is captured at the
+    # shared HTTP boundary and attached by the registry instrumentation. Typed
+    # failures populate the same fields without retaining URL/header/body data.
+    http_status_code: int | None = None
+    http_status_category: str | None = None
 
 
 class ProviderObservationSink(Protocol):
@@ -288,6 +294,13 @@ class BaseProvider:
         # per-call client only when constructed directly (e.g. unit tests).
         self._http_client = http_client
         self._observation_sink = observation_sink
+        # The lifespan registry can call one provider concurrently for multiple
+        # competitions. A ContextVar keeps final successful HTTP status bound to
+        # the current async task instead of using racy provider-instance state.
+        self._transport_observation: ContextVar[tuple[int, str] | None] = ContextVar(
+            f"sabiscore_provider_transport_{self.provider_id}_{id(self)}",
+            default=None,
+        )
 
     @property
     def configured(self) -> bool:
@@ -391,6 +404,35 @@ class BaseProvider:
                 operation,
                 redact_text(exc),
             )
+
+    @staticmethod
+    def _http_status_category(status_code: int | None) -> str | None:
+        if status_code is None:
+            return None
+        if 100 <= status_code < 200:
+            return "INFORMATIONAL"
+        if 200 <= status_code < 300:
+            return "SUCCESS"
+        if 300 <= status_code < 400:
+            return "REDIRECTION"
+        if 400 <= status_code < 500:
+            return "CLIENT_ERROR"
+        if 500 <= status_code < 600:
+            return "SERVER_ERROR"
+        return "UNKNOWN"
+
+    def _clear_transport_observation(self) -> None:
+        self._transport_observation.set(None)
+
+    def _attach_transport_observation(self, result: ProviderResult) -> ProviderResult:
+        observation = self._transport_observation.get()
+        self._transport_observation.set(None)
+        if observation is None or result.http_status_code is not None:
+            return result
+        status_code, category = observation
+        result.http_status_code = status_code
+        result.http_status_category = category
+        return result
 
     def _http_failure(self, response: httpx.Response) -> ProviderTransportError | None:
         status = response.status_code
@@ -497,6 +539,12 @@ class BaseProvider:
                         )
                     else:
                         self.breaker.record_success()
+                        self._transport_observation.set(
+                            (
+                                response.status_code,
+                                self._http_status_category(response.status_code) or "UNKNOWN",
+                            )
+                        )
                         return payload, response.headers
 
             self._record_transport_failure(error)
@@ -520,6 +568,8 @@ class BaseProvider:
                 trust_tier=self.trust_tier,
                 warnings=error.warning_tokens(),
                 error_code=error.error_code,
+                http_status_code=error.status_code,
+                http_status_category=self._http_status_category(error.status_code),
             )
         return ProviderResult(
             provider=self.provider_id,
