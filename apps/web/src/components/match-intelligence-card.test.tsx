@@ -13,7 +13,13 @@ function fixture(overrides: Partial<MatchIntelligenceFixture> = {}): MatchIntell
     kickoffUtc: '2026-08-15T15:00:00Z',
     league: 'EPL',
     predictionAvailable: true,
-    prediction: { home_win: 0.5, draw: 0.25, away_win: 0.25, confidence: 0.7 },
+    prediction: {
+      home_win: 0.5,
+      draw: 0.25,
+      away_win: 0.25,
+      confidence: 0.7,
+      model_version: 'v6_phase8',
+    },
     edge_pct: 5.0,
     ...overrides,
   };
@@ -26,20 +32,17 @@ describe('MatchIntelligenceCard', () => {
     expect(screen.getByTestId('away-team')).toHaveTextContent('Chelsea');
   });
 
-  it('shows the value-bet edge badge at the 4.2 threshold', () => {
-    render(<MatchIntelligenceCard fixture={fixture({ edge_pct: 4.2 })} />);
-    expect(screen.getByLabelText('Value bet identified')).toBeInTheDocument();
-    expect(screen.getByText('+4.2% edge')).toBeInTheDocument();
+  it('renders match probabilities and model provenance', () => {
+    render(<MatchIntelligenceCard fixture={fixture()} />);
+    expect(screen.getByLabelText('Match outcome probabilities')).toBeInTheDocument();
+    expect(screen.getByText('Model v6_phase8')).toBeInTheDocument();
   });
 
-  it('hides the value-bet badge below the 4.2 threshold', () => {
-    render(<MatchIntelligenceCard fixture={fixture({ edge_pct: 1.0 })} />);
-    expect(screen.queryByLabelText('Value bet identified')).not.toBeInTheDocument();
-  });
-
-  it('hides the value-bet badge when edge_pct is undefined', () => {
-    render(<MatchIntelligenceCard fixture={fixture({ edge_pct: undefined })} />);
-    expect(screen.queryByLabelText('Value bet identified')).not.toBeInTheDocument();
+  it('never infers a value-bet claim from edge_pct alone', () => {
+    render(<MatchIntelligenceCard fixture={fixture({ edge_pct: 99 })} />);
+    expect(screen.queryByText(/value bet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/edge/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Match outcome probabilities')).toBeInTheDocument();
   });
 
   it('renders the unavailable reason instead of probability bars when prediction is unavailable', () => {
