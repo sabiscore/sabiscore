@@ -1,4 +1,4 @@
-"""Provider gateway discovery, health, capabilities, and quota endpoints."""
+"""Provider gateway discovery, health, capabilities, quota, and evidence endpoints."""
 
 from __future__ import annotations
 
@@ -6,9 +6,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...db.session import get_async_session
 from ...providers import ProviderRegistry
 from ...providers.registry import get_provider_registry
+from ...services.provider_evidence_service import latest_provider_evidence
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
@@ -39,6 +42,11 @@ async def providers_health(
     provider: str | None = Query(default=None),
     registry: ProviderRegistry = Depends(get_provider_registry),
 ) -> dict[str, Any]:
+    """Return current configured/probe state from provider objects.
+
+    This remains distinct from `/providers/evidence`, which is backed only by
+    durable observations of completed provider operations.
+    """
     try:
         rows = [await registry.get(provider).health()] if provider else await registry.health()
     except KeyError as exc:
@@ -46,6 +54,41 @@ async def providers_health(
     return {
         "providers": [row.model_dump(mode="json") for row in rows],
         "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/evidence")
+async def providers_evidence(
+    provider: str | None = Query(default=None),
+    registry: ProviderRegistry = Depends(get_provider_registry),
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Return durable provider-operation evidence.
+
+    Zero observations is `UNKNOWN`, never success. This endpoint does not turn a
+    configured credential or a successful historical probe into live evidence.
+    """
+    if provider:
+        try:
+            registry.get(provider)
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown provider") from exc
+        provider_ids = [provider]
+    else:
+        provider_ids = [item.provider_id for item in registry.list()]
+
+    evidence = await latest_provider_evidence(db, provider_ids)
+    return {
+        "providers": evidence,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "semantics": {
+            "UNKNOWN": "no durable provider-operation observation exists",
+            "CONFIGURED": "latest observed result was configured but not live-verified",
+            "LIVE_VERIFIED": "latest observed provider operation returned VERIFIED",
+            "DEGRADED": "latest observed provider operation returned partial/invalid/conflicting evidence",
+            "RATE_LIMITED": "latest observed provider operation was rate-limited",
+            "UNAVAILABLE": "latest observed provider operation was unavailable/unconfigured/circuit-open",
+        },
     }
 
 

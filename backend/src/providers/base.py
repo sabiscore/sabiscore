@@ -12,7 +12,7 @@ import logging
 import random
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
@@ -24,6 +24,7 @@ from ..core.redaction import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 class ProviderStatus(str, Enum):
     VERIFIED = "VERIFIED"
@@ -95,6 +96,33 @@ class ProviderResult(BaseModel):
     raw_snapshot_id: str | None = None
 
 
+class ProviderObservationSink(Protocol):
+    """Persistence boundary for provider evidence.
+
+    Implementations must be best-effort: an observability outage must never
+    change the provider result returned to the caller.
+    """
+
+    async def record_result(
+        self,
+        result: ProviderResult,
+        *,
+        duration_ms: float,
+        circuit_open: bool,
+    ) -> bool: ...
+
+    async def record_exception(
+        self,
+        *,
+        provider: str,
+        operation: str,
+        trust_tier: TrustTier,
+        error: Exception,
+        duration_ms: float,
+        circuit_open: bool,
+    ) -> bool: ...
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -150,6 +178,7 @@ class BaseProvider:
         enabled: bool = False,
         live_tests: bool = False,
         http_client: httpx.AsyncClient | None = None,
+        observation_sink: ProviderObservationSink | None = None,
     ) -> None:
         self.api_key = api_key
         self.enabled = enabled
@@ -158,6 +187,7 @@ class BaseProvider:
         # Lifespan-owned client when injected by the registry; falls back to a
         # per-call client only when constructed directly (e.g. unit tests).
         self._http_client = http_client
+        self._observation_sink = observation_sink
 
     @property
     def configured(self) -> bool:
@@ -217,6 +247,50 @@ class BaseProvider:
                 }
             ),
         }
+
+    async def _observe_result(self, result: ProviderResult, duration_ms: float) -> None:
+        sink = self._observation_sink
+        if sink is None:
+            return
+        try:
+            await sink.record_result(
+                result,
+                duration_ms=duration_ms,
+                circuit_open=self.breaker.open,
+            )
+        except Exception as exc:  # pragma: no cover - defensive isolation
+            logger.warning(
+                "provider_observation_failed provider=%s operation=%s error=%s",
+                self.provider_id,
+                result.operation,
+                redact_text(exc),
+            )
+
+    async def _observe_exception(
+        self,
+        operation: str,
+        error: Exception,
+        duration_ms: float,
+    ) -> None:
+        sink = self._observation_sink
+        if sink is None:
+            return
+        try:
+            await sink.record_exception(
+                provider=self.provider_id,
+                operation=operation,
+                trust_tier=self.trust_tier,
+                error=error,
+                duration_ms=duration_ms,
+                circuit_open=self.breaker.open,
+            )
+        except Exception as exc:  # pragma: no cover - defensive isolation
+            logger.warning(
+                "provider_exception_observation_failed provider=%s operation=%s error=%s",
+                self.provider_id,
+                operation,
+                redact_text(exc),
+            )
 
     async def _get_json(
         self,
