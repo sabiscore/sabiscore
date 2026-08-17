@@ -108,6 +108,7 @@ _TEAM_ALIASES: Dict[str, str] = {
     "tottenham hotspur": "tottenham",
     "manchester united": "man united",
     "manchester city": "man city",
+    "leeds united": "leeds",
     # Netherlands
     "nec": "nijmegen",
     "psv": "psv eindhoven",
@@ -408,8 +409,26 @@ async def backfill_historical_matches(
     if not parsed:
         return report
 
+    # Filter persisted ids before resolving or creating any Team rows. The boot
+    # backfill is intentionally idempotent: already-ingested history must be a
+    # true no-op rather than minting fallback teams for source spellings that are
+    # no longer needed by any pending match.
+    existing_ids = set(
+        (
+            await session.execute(
+                select(Match.id).where(Match.id.in_([m.match_id for m in parsed]))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    pending = [m for m in parsed if m.match_id not in existing_ids]
+    report.matches_existing = len(parsed) - len(pending)
+    if not pending:
+        return report
+
     # Leagues first — Team and Match both carry an FK to it.
-    needed_leagues = {m.league_id for m in parsed}
+    needed_leagues = {m.league_id for m in pending}
     for league_id in sorted(needed_leagues):
         if not await session.get(League, league_id):
             country = next(
@@ -420,8 +439,12 @@ async def backfill_historical_matches(
 
     index = TeamIndex((await session.execute(select(Team.id, Team.name))).all())
 
-    # Resolve every distinct (league, name) once rather than per row.
-    distinct_teams = {(m.league_id, name) for m in parsed for name in (m.home_team, m.away_team)}
+    # Resolve every distinct (league, name) needed by pending rows once rather than
+    # per row. Persisted matches were filtered above specifically so this phase can
+    # never create teams as a side effect of an idempotent re-run.
+    distinct_teams = {
+        (m.league_id, name) for m in pending for name in (m.home_team, m.away_team)
+    }
     team_ids: Dict[Tuple[str, str], str] = {}
     for league_id, name in sorted(distinct_teams):
         resolved = index.resolve(name)
@@ -437,19 +460,11 @@ async def backfill_historical_matches(
         index.add(new_id, name)
     await session.flush()
 
-    existing_ids = set(
-        (
-            await session.execute(
-                select(Match.id).where(Match.id.in_([m.match_id for m in parsed]))
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    for item in parsed:
+    for item in pending:
         match_id = item.match_id
         if match_id in existing_ids:
+            # Guard duplicate source rows encountered after a pending match has
+            # already been staged during this run.
             report.matches_existing += 1
             continue
 
