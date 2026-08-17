@@ -204,11 +204,44 @@ class OddsService:
 
     @staticmethod
     def _team_key(value: object) -> str:
-        key = re.sub(r"[^a-z0-9]", "", str(value).casefold())
-        for suffix in ("footballclub", "soccerclub", "afc", "fc"):
-            if key.endswith(suffix) and len(key) > len(suffix) + 2:
-                return key[: -len(suffix)]
-        return key
+        """Normalize club-affix variants without fuzzy identity matching.
+
+        Strip club affixes as complete tokens before compaction. Compacting first
+        makes names ending in a vowel plus ``FC`` ambiguous with the longer
+        ``AFC`` suffix (for example ``Chelsea FC`` -> ``chelseafc`` ->
+        ``chelse``), while omitting ``CF``/``SC`` leaves common provider/store
+        variants unmatched. These semantics intentionally mirror the strict
+        market-lifecycle matcher; they never guess between distinct club names.
+        """
+        normalized = re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
+        tokens = normalized.split()
+        if not tokens:
+            return ""
+
+        if tokens[:3] == ["a", "f", "c"]:
+            tokens = tokens[3:]
+        elif tokens[:2] == ["c", "f"]:
+            tokens = tokens[2:]
+        elif tokens[0] in {"afc", "cf"} and len(tokens) > 1:
+            tokens = tokens[1:]
+
+        if len(tokens) > 2 and tokens[-3:] == ["a", "f", "c"]:
+            tokens = tokens[:-3]
+        elif len(tokens) > 1 and tokens[-2:] in (["f", "c"], ["c", "f"], ["s", "c"]):
+            tokens = tokens[:-2]
+        elif len(tokens) > 2 and tokens[-2:] in (["football", "club"], ["soccer", "club"]):
+            tokens = tokens[:-2]
+        elif tokens and tokens[-1] in {
+            "footballclub",
+            "soccerclub",
+            "afc",
+            "fc",
+            "cf",
+            "sc",
+        } and len(tokens) > 1:
+            tokens = tokens[:-1]
+
+        return "".join(tokens)
 
     @staticmethod
     def _coherent_snapshot(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -241,7 +274,7 @@ class OddsService:
         Get historical odds movement for a match.
 
         Args:
-            db: Database session
+            db: Async database session
             match_id: Match identifier
             hours: Hours of history to retrieve
 
