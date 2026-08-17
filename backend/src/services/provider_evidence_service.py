@@ -75,6 +75,146 @@ def _evidence_state(status: str | None) -> str:
     return "UNKNOWN"
 
 
+def _record_identity(record: dict[str, Any]) -> str | None:
+    """Return one provider/canonical event identity without guessing team matches."""
+    for key in ("canonical_fixture_id", "provider_event_id", "fixture_id"):
+        value = record.get(key)
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            return normalized
+    return None
+
+
+def _distinct_events(records: Iterable[dict[str, Any]]) -> int:
+    identities = {identity for record in records if (identity := _record_identity(record))}
+    return len(identities)
+
+
+def _coverage_summary(result: ProviderResult) -> dict[str, Any]:
+    """Derive usable coverage from normalized records, never raw count alone."""
+    records = list(result.records)
+    has_coherent = any("coherent" in record for record in records)
+    coherent = [record for record in records if record.get("coherent") is True]
+    has_executable = any("executable" in record for record in records)
+    executable = [record for record in records if record.get("executable") is True]
+
+    if result.operation == "odds" or has_executable:
+        if has_executable:
+            usable = executable
+            basis = "executable"
+        elif has_coherent:
+            usable = coherent
+            basis = "coherent"
+        else:
+            usable = []
+            basis = "unavailable"
+    elif has_coherent:
+        usable = coherent
+        basis = "coherent"
+    else:
+        usable = records
+        basis = "records"
+
+    if not records:
+        state = "EMPTY"
+    elif usable:
+        state = "USABLE"
+    else:
+        state = "UNUSABLE"
+
+    settled_records = sum(
+        1
+        for record in coherent if has_coherent
+        if record.get("home_score") is not None and record.get("away_score") is not None
+    )
+
+    return {
+        "state": state,
+        "basis": basis,
+        "total_records": len(records),
+        "coherent_records": len(coherent) if has_coherent else None,
+        "executable_records": len(executable) if has_executable else None,
+        "usable_records": len(usable),
+        "total_events": _distinct_events(records),
+        "coherent_events": _distinct_events(coherent) if has_coherent else None,
+        "executable_events": _distinct_events(executable) if has_executable else None,
+        "usable_events": _distinct_events(usable),
+        "settled_records": settled_records if has_coherent else None,
+    }
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return _utc_naive(value)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return _utc_naive(parsed)
+
+
+def _latest_source_timestamp(result: ProviderResult) -> datetime | None:
+    """Return latest upstream update timestamp only when records expose one.
+
+    Kickoff/event time is deliberately excluded: it describes the event, not
+    freshness of the provider response. Odds bookmaker last-update timestamps are
+    valid freshness evidence; explicit ProviderResult.provider_timestamp remains
+    authoritative when a provider supplies it.
+    """
+    candidates: list[datetime] = []
+    provider_timestamp = _utc_naive(result.provider_timestamp)
+    if provider_timestamp is not None:
+        candidates.append(provider_timestamp)
+
+    for record in result.records:
+        for key in ("bookmaker_last_update", "source_updated_at", "provider_timestamp", "last_update"):
+            parsed = _parse_datetime(record.get(key))
+            if parsed is not None:
+                candidates.append(parsed)
+
+    return max(candidates) if candidates else None
+
+
+def _transport_summary(result: ProviderResult) -> dict[str, Any]:
+    status_code = result.http_status_code
+    category = result.http_status_category
+    if status_code is not None:
+        outcome = "SUCCESS" if 200 <= status_code < 300 else "FAILURE"
+    elif str(result.error_code or "").startswith("TRANSPORT_"):
+        outcome = "FAILURE"
+    else:
+        outcome = "UNKNOWN"
+    return {
+        "outcome": outcome,
+        "http_status_code": status_code,
+        "http_status_category": category,
+    }
+
+
+def _quota_summary(result: ProviderResult, quota_reset_at: datetime | None) -> dict[str, Any]:
+    observed = any(
+        value is not None
+        for value in (
+            result.quota.limit,
+            result.quota.remaining,
+            result.quota.reset_at,
+            result.quota.cost,
+        )
+    )
+    return {
+        "observed": observed,
+        "limit": result.quota.limit,
+        "remaining": result.quota.remaining,
+        "reset_at": quota_reset_at.isoformat() if quota_reset_at is not None else None,
+        "cost": result.quota.cost,
+        "rate_limited": result.status is ProviderStatus.RATE_LIMITED,
+    }
+
+
 class ProviderEvidenceRecorder:
     """Persist provider outcomes using the application async session factory."""
 
@@ -105,11 +245,13 @@ class ProviderEvidenceRecorder:
             status = error.provider_status
             warnings = error.warning_tokens()
             error_code = error.error_code
+            http_status_code = error.status_code
         else:
             safe_error = redact_text(error)
             status = ProviderStatus.CIRCUIT_OPEN if circuit_open else ProviderStatus.UNAVAILABLE
             warnings = [safe_error]
             error_code = type(error).__name__
+            http_status_code = None
 
         result = ProviderResult(
             provider=provider,
@@ -118,6 +260,10 @@ class ProviderEvidenceRecorder:
             trust_tier=trust_tier,
             warnings=warnings,
             error_code=error_code,
+            http_status_code=http_status_code,
+            http_status_category=(
+                _http_status_category(http_status_code) if http_status_code is not None else None
+            ),
         )
         return await self._persist(
             result,
@@ -154,6 +300,10 @@ class ProviderEvidenceRecorder:
         acquired_at = _utc_naive(result.acquired_at) or datetime.now(timezone.utc).replace(tzinfo=None)
         provider_timestamp = _utc_naive(result.provider_timestamp)
         quota_reset_at = _utc_naive(result.quota.reset_at)
+        coverage = _coverage_summary(result)
+        source_latest_at = _latest_source_timestamp(result)
+        transport = _transport_summary(result)
+        quota_details = _quota_summary(result, quota_reset_at)
         response_hash = stable_hash(
             {
                 "provider": result.provider,
@@ -164,6 +314,8 @@ class ProviderEvidenceRecorder:
                 "records": result.records,
                 "warnings": warnings,
                 "error_code": error_code,
+                "http_status_code": result.http_status_code,
+                "http_status_category": result.http_status_category,
             }
         )
 
@@ -192,31 +344,23 @@ class ProviderEvidenceRecorder:
             error_code=error_code,
             details={
                 "operation": result.operation,
+                # Backward-compatible raw count; consumers must use `coverage`
+                # for usable data instead of interpreting this field as coverage.
                 "record_count": len(result.records),
+                "coverage": coverage,
+                "transport": transport,
+                "quota": quota_details,
+                "source_latest_at": (
+                    source_latest_at.isoformat() if source_latest_at is not None else None
+                ),
                 "circuit_open": circuit_open,
                 "raw_snapshot_present": bool(raw_snapshot_id),
-                "quota_observed": any(
-                    value is not None
-                    for value in (
-                        result.quota.limit,
-                        result.quota.remaining,
-                        result.quota.reset_at,
-                        result.quota.cost,
-                    )
-                ),
+                "quota_observed": quota_details["observed"],
             },
         )
 
         rows: list[Any] = [summary, health]
-        if any(
-            value is not None
-            for value in (
-                result.quota.limit,
-                result.quota.remaining,
-                result.quota.reset_at,
-                result.quota.cost,
-            )
-        ):
+        if quota_details["observed"]:
             rows.append(
                 ProviderQuotaObservation(
                     provider=result.provider,
@@ -281,6 +425,39 @@ async def latest_provider_evidence(
             "latency_ms": None,
             "operation": None,
             "error_code": None,
+            "transport": {
+                "outcome": "UNKNOWN",
+                "http_status_code": None,
+                "http_status_category": None,
+            },
+            "coverage": {
+                "state": "UNKNOWN",
+                "basis": None,
+                "total_records": None,
+                "coherent_records": None,
+                "executable_records": None,
+                "usable_records": None,
+                "total_events": None,
+                "coherent_events": None,
+                "executable_events": None,
+                "usable_events": None,
+                "settled_records": None,
+            },
+            "quota": {
+                "observed": False,
+                "limit": None,
+                "remaining": None,
+                "reset_at": None,
+                "cost": None,
+                "rate_limited": False,
+            },
+            "freshness": {
+                "observation_age_seconds": None,
+                "observation_stale_after_seconds": stale_after_seconds,
+                "observation_stale": None,
+                "source_latest_at": None,
+                "source_age_seconds": None,
+            },
         }
         for provider in provider_list
     }
@@ -330,8 +507,44 @@ async def latest_provider_evidence(
                 age_seconds = max(0.0, (reference_now - checked_at_utc).total_seconds())
         details = row["details"] if isinstance(row["details"], dict) else {}
         state = _evidence_state(row["status"])
-        if age_seconds is not None and age_seconds > stale_after_seconds:
+        is_stale = age_seconds is not None and age_seconds > stale_after_seconds
+        if is_stale:
             state = "STALE"
+
+        transport = details.get("transport") if isinstance(details.get("transport"), dict) else {
+            "outcome": "UNKNOWN",
+            "http_status_code": None,
+            "http_status_category": None,
+        }
+        coverage = details.get("coverage") if isinstance(details.get("coverage"), dict) else {
+            "state": "UNKNOWN",
+            "basis": None,
+            "total_records": details.get("record_count"),
+            "coherent_records": None,
+            "executable_records": None,
+            "usable_records": None,
+            "total_events": None,
+            "coherent_events": None,
+            "executable_events": None,
+            "usable_events": None,
+            "settled_records": None,
+        }
+        quota = details.get("quota") if isinstance(details.get("quota"), dict) else {
+            "observed": bool(details.get("quota_observed")),
+            "limit": None,
+            "remaining": None,
+            "reset_at": None,
+            "cost": None,
+            "rate_limited": str(row["status"] or "").upper() == ProviderStatus.RATE_LIMITED.value,
+        }
+        source_latest_at_raw = details.get("source_latest_at")
+        source_latest_at = _parse_datetime(source_latest_at_raw)
+        source_age_seconds = (
+            max(0.0, (reference_now - source_latest_at).total_seconds())
+            if source_latest_at is not None
+            else None
+        )
+
         output[provider] = {
             "state": state,
             "status": row["status"],
@@ -342,9 +555,35 @@ async def latest_provider_evidence(
             "latency_ms": row["latency_ms"],
             "operation": details.get("operation"),
             "error_code": row["error_code"],
+            "transport": transport,
+            "coverage": coverage,
+            "quota": quota,
+            "freshness": {
+                "observation_age_seconds": age_seconds,
+                "observation_stale_after_seconds": stale_after_seconds,
+                "observation_stale": is_stale,
+                "source_latest_at": (
+                    source_latest_at.isoformat() if source_latest_at is not None else None
+                ),
+                "source_age_seconds": source_age_seconds,
+            },
         }
 
     return output
+
+
+def _http_status_category(status_code: int) -> str:
+    if 100 <= status_code < 200:
+        return "INFORMATIONAL"
+    if 200 <= status_code < 300:
+        return "SUCCESS"
+    if 300 <= status_code < 400:
+        return "REDIRECTION"
+    if 400 <= status_code < 500:
+        return "CLIENT_ERROR"
+    if 500 <= status_code < 600:
+        return "SERVER_ERROR"
+    return "UNKNOWN"
 
 
 __all__ = [
