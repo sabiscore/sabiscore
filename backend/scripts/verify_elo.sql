@@ -97,6 +97,21 @@ FROM (
         AND m.away_score IS NOT NULL
         AND m.home_team_id IS NOT NULL
         AND m.home_team_id = m.away_team_id
+    UNION ALL SELECT 'historical_fdco_self_play_matches', count(*)::text
+      FROM matches m
+      WHERE m.home_team_id IS NOT NULL
+        AND m.home_team_id = m.away_team_id
+        AND m.id LIKE 'fdco-%'
+    UNION ALL SELECT 'non_historical_self_play_matches', count(*)::text
+      FROM matches m
+      WHERE m.home_team_id IS NOT NULL
+        AND m.home_team_id = m.away_team_id
+        AND m.id NOT LIKE 'fdco-%'
+    UNION ALL SELECT 'scheduled_self_play_matches', count(*)::text
+      FROM matches m
+      WHERE lower(m.status) = 'scheduled'
+        AND m.home_team_id IS NOT NULL
+        AND m.home_team_id = m.away_team_id
     UNION ALL SELECT 'scheduled_upcoming_matches', count(*)::text FROM upcoming
     UNION ALL SELECT 'upcoming_home_elo_resolved', count(*) FILTER (WHERE home_resolved)::text FROM upcoming_resolution
     UNION ALL SELECT 'upcoming_away_elo_resolved', count(*) FILTER (WHERE away_resolved)::text FROM upcoming_resolution
@@ -212,5 +227,25 @@ FROM ordered
 WHERE previous_match_date IS NOT NULL
 ORDER BY gap DESC NULLS LAST
 LIMIT 50;
+
+-- 7. Self-play provenance. Known residual fdco rows remain visible, while any
+-- non-historical writer collision is mechanically distinguishable and must be
+-- treated as a new integrity incident. This audit never rewrites either class.
+SELECT m.id AS match_id,
+       m.league_id,
+       m.match_date,
+       m.status,
+       m.home_team_id,
+       m.away_team_id,
+       m.created_at,
+       m.updated_at,
+       CASE
+           WHEN m.id LIKE 'fdco-%' THEN 'HISTORICAL_FDCO_RESIDUAL'
+           ELSE 'NON_HISTORICAL_WRITER'
+       END AS provenance_class
+FROM matches m
+WHERE m.home_team_id IS NOT NULL
+  AND m.home_team_id = m.away_team_id
+ORDER BY provenance_class, m.match_date, m.id;
 
 ROLLBACK;
