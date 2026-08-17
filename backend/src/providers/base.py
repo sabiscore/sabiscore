@@ -528,8 +528,8 @@ class BaseProvider:
             except httpx.RequestError:
                 error = ProviderTransportError(ProviderTransportKind.NETWORK)
             else:
-                error = self._http_failure(response)
-                if error is None:
+                response_error = self._http_failure(response)
+                if response_error is None:
                     try:
                         payload = response.json()
                     except (json.JSONDecodeError, ValueError):
@@ -546,6 +546,8 @@ class BaseProvider:
                             )
                         )
                         return payload, response.headers
+                else:
+                    error = response_error
 
             self._record_transport_failure(error)
             if self._should_retry_transport_failure(error, attempt):
