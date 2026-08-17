@@ -6,6 +6,7 @@ shared city/name token to bind both sides of a fixture to one Team id.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -13,16 +14,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.core.database import Base, Match, Team
-from src.services.historical_backfill_service import TeamIndex, backfill_historical_matches
+from src.core.database import Base, League, Match, Team
+from src.services.historical_backfill_service import (
+    TeamIndex,
+    backfill_historical_matches,
+    historical_match_id,
+)
 
 
 @pytest.mark.parametrize(
     "rows,probe",
     [
-        ([('inter', 'FC Internazionale Milano')], 'Milan'),
-        ([('espanyol', 'RCD Espanyol de Barcelona')], 'Barcelona'),
-        ([('paris-fc', 'Paris FC')], 'Paris SG'),
+        ([("inter", "FC Internazionale Milano")], "Milan"),
+        ([("espanyol", "RCD Espanyol de Barcelona")], "Barcelona"),
+        ([("paris-fc", "Paris FC")], "Paris SG"),
     ],
 )
 def test_shared_place_tokens_do_not_resolve_to_a_different_club(rows, probe):
@@ -86,3 +91,49 @@ async def test_backfill_guard_skips_collision_even_if_resolver_regresses(
     assert report.matches_inserted == 0
     assert report.identity_conflicts_skipped == 1
     assert (await session.execute(select(Match))).scalars().all() == []
+
+
+async def test_existing_match_is_filtered_before_team_creation(
+    session: AsyncSession, tmp_path: Path
+):
+    """An idempotent boot must not mint fallback teams for already-ingested history."""
+    match_date = datetime(2024, 8, 16)
+    match_id = historical_match_id("EPL", match_date, "Ghost Home", "Ghost Away")
+
+    session.add(League(id="EPL", name="Premier League", country="England"))
+    session.add_all(
+        [
+            Team(id="canonical-home", name="Canonical Home", league_id="EPL"),
+            Team(id="canonical-away", name="Canonical Away", league_id="EPL"),
+        ]
+    )
+    session.add(
+        Match(
+            id=match_id,
+            league_id="EPL",
+            home_team_id="canonical-home",
+            away_team_id="canonical-away",
+            match_date=match_date,
+            season="2024-25",
+            status="finished",
+            home_score=1,
+            away_score=0,
+        )
+    )
+    await session.commit()
+
+    before_team_ids = set((await session.execute(select(Team.id))).scalars().all())
+    (tmp_path / "fd_E0_2425.csv").write_text(
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
+        "E0,16/08/2024,Ghost Home,Ghost Away,1,0\n",
+        encoding="utf-8",
+    )
+
+    report = await backfill_historical_matches(session, cache_dir=tmp_path)
+    after_team_ids = set((await session.execute(select(Team.id))).scalars().all())
+
+    assert report.matches_inserted == 0
+    assert report.matches_existing == 1
+    assert report.teams_created == 0
+    assert report.teams_resolved == 0
+    assert after_team_ids == before_team_ids
