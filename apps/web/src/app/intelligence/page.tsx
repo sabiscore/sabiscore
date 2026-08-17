@@ -1,7 +1,7 @@
 import { BettingIntelligenceDashboard } from "@/components/betting-intelligence-dashboard";
 
 export const metadata = {
-  title: "SabiScore Match Intelligence",
+  title: "Match Intelligence",
   description:
     "Evidence-first match forecasts with Market Intelligence shown only when verified canonical odds are available.",
 };

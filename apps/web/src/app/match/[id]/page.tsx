@@ -30,12 +30,12 @@ export async function generateMetadata({ params, searchParams }: PageProps) {
     const { league, home, away } = resolvedSearchParams || {};
     const matchup = matchupLabelFor(id, home, away);
     return {
-      title: `${matchup} — SabiScore Match Intelligence`,
+      title: `${matchup} — Match Intelligence`,
       description: `Evidence-led SabiScore Match Intelligence for ${matchup} in ${league || "EPL"}.`,
     };
   } catch {
     return {
-      title: "SabiScore Match Intelligence",
+      title: "Match Intelligence",
       description: "Evidence-led match intelligence and explicit availability states.",
     };
   }
