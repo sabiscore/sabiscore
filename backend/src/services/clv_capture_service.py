@@ -106,6 +106,7 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
     from ..core.database import Match
     from ..core.league_policy import LeaguePolicyUnavailableError, canonical_league_id
     from ..db.models import MarketSnapshot
+    from ..monitoring.metrics import metrics_collector
 
     now = _utc_naive(datetime.now(timezone.utc))
     window_end = now + timedelta(minutes=_CAPTURE_LOOKAHEAD_MINUTES)
@@ -143,6 +144,7 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
         "ambiguous_market": 0,
         "write_errors": 0,
     }
+    metrics_collector.set_gauge("market.capture.due", float(len(due)))
     if not due:
         return counts
 
@@ -189,6 +191,17 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
         provider = build_provider_registry().get("the_odds_api")
 
     matched_due_ids: set[str] = set()
+    lifecycle_metric_keys = (
+        "opening",
+        "intermediate",
+        "closing",
+        "deduped",
+        "post_kickoff_rejected",
+        "invalid_market",
+        "unmatched_market",
+        "ambiguous_market",
+        "write_errors",
+    )
     for league, matches in by_league.items():
         try:
             competition = canonical_league_id(league)
@@ -207,23 +220,28 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
         )
 
         board_counts = board.as_counts()
-        for key in (
-            "opening",
-            "intermediate",
-            "closing",
-            "deduped",
-            "post_kickoff_rejected",
-            "invalid_market",
-            "unmatched_market",
-            "ambiguous_market",
-            "write_errors",
-        ):
-            counts[key] += board_counts[key]
+        for key in lifecycle_metric_keys:
+            value = board_counts[key]
+            counts[key] += value
+            if value:
+                metrics_collector.increment(f"market.lifecycle.{key}", value)
 
         matched_due_ids.update(board.matched_match_ids & pending_due_ids)
-        counts["captured"] += len(board.closing_match_ids & pending_due_ids)
-        counts["refreshed_closing"] += len(board.closing_match_ids & already_captured_ids)
+        newly_captured = len(board.closing_match_ids & pending_due_ids)
+        refreshed = len(board.closing_match_ids & already_captured_ids)
+        counts["captured"] += newly_captured
+        counts["refreshed_closing"] += refreshed
+        if newly_captured:
+            metrics_collector.increment("market.capture.new_closing", newly_captured)
+        if refreshed:
+            metrics_collector.increment("market.capture.refreshed_closing", refreshed)
 
     counts["unmatched"] = len(pending_due_ids - matched_due_ids)
+    if counts["unmatched"]:
+        metrics_collector.increment("market.capture.unmatched_due", counts["unmatched"])
+    if counts["unsupported_league"]:
+        metrics_collector.increment(
+            "market.capture.unsupported_league", counts["unsupported_league"]
+        )
     await session.commit()
     return counts
