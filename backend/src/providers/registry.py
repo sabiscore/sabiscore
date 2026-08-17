@@ -37,58 +37,68 @@ def _returns_provider_result(method: Any) -> bool:
     return "ProviderResult" in str(annotation)
 
 
-class _ObservedProvider:
-    """Transparent async-operation proxy around a concrete provider.
+def _instrument_provider(provider: BaseProvider) -> BaseProvider:
+    """Wrap public ProviderResult operations in-place, preserving object identity.
 
-    The proxy exists only inside the registry, which is the production provider
-    gateway. Directly-constructed providers used by isolated tests/CLI tools keep
-    their original semantics. Attribute/property access (breaker, provider_id,
-    normalization helpers, etc.) is delegated unchanged.
+    Several call sites and tests legitimately rely on concrete provider type and
+    helper attributes, so registry observability must not replace providers with
+    proxy objects. Only public async methods whose declared return type is a
+    ProviderResult are wrapped; health/capabilities/quota/doctor remain separate
+    configuration/diagnostic operations and are not recorded as provider data
+    evidence.
     """
+    if bool(getattr(provider, "_provider_evidence_instrumented", False)):
+        return provider
 
-    def __init__(self, provider: BaseProvider) -> None:
-        self._provider = provider
-
-    def __getattr__(self, name: str) -> Any:
-        attribute = getattr(self._provider, name)
+    for name in dir(provider):
+        if name.startswith("_"):
+            continue
+        attribute = getattr(provider, name)
         if not inspect.iscoroutinefunction(attribute) or not _returns_provider_result(attribute):
-            return attribute
+            continue
 
         @wraps(attribute)
-        async def observed(*args: Any, **kwargs: Any) -> Any:
+        async def observed(
+            *args: Any,
+            __method: Any = attribute,
+            __operation: str = name,
+            **kwargs: Any,
+        ) -> Any:
             started = time.perf_counter()
             try:
-                result = await attribute(*args, **kwargs)
+                result = await __method(*args, **kwargs)
             except Exception as exc:
-                await self._provider._observe_exception(
-                    name,
+                await provider._observe_exception(
+                    __operation,
                     exc,
                     (time.perf_counter() - started) * 1000,
                 )
                 raise
 
             if isinstance(result, ProviderResult):
-                await self._provider._observe_result(
+                await provider._observe_result(
                     result,
                     (time.perf_counter() - started) * 1000,
                 )
             return result
 
-        return observed
+        setattr(provider, name, observed)
+
+    setattr(provider, "_provider_evidence_instrumented", True)
+    return provider
 
 
 class ProviderRegistry:
     def __init__(self, providers: Iterable[BaseProvider]) -> None:
-        # Wrapping is safe even when a provider has no sink: BaseProvider's
-        # observation methods become no-ops. This keeps direct registry tests
-        # deterministic while giving build_provider_registry() one central
-        # production instrumentation point.
-        self.providers = [_ObservedProvider(provider) for provider in providers]
+        # Instrument the actual provider objects instead of introducing a proxy;
+        # this preserves isinstance()/identity expectations and all existing
+        # provider helper/property access.
+        self.providers = [_instrument_provider(provider) for provider in providers]
 
-    def list(self) -> builtins.list[Any]:
+    def list(self) -> builtins.list[BaseProvider]:
         return list(self.providers)
 
-    def get(self, provider_id: str) -> Any:
+    def get(self, provider_id: str) -> BaseProvider:
         for provider in self.providers:
             if getattr(provider, "provider_id", None) == provider_id:
                 return provider
