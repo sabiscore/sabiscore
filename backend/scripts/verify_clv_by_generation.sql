@@ -1,5 +1,6 @@
 -- backend/scripts/verify_clv_by_generation.sql
 -- Read-only provenance guard: never pool CLV evidence across model versions.
+-- A legitimate closing line must be observed strictly before fixture kickoff.
 
 BEGIN TRANSACTION READ ONLY;
 
@@ -15,14 +16,22 @@ WITH settled AS (
 closing AS (
     SELECT ms.*
     FROM market_snapshots ms
+    JOIN matches m ON m.id = ms.match_id
     WHERE ms.is_closing_line IS TRUE
       AND ms.coherent IS TRUE
+      AND ms.captured_at < m.match_date
       AND ms.home_odds > 1
       AND ms.draw_odds > 1
       AND ms.away_odds > 1
       AND ms.home_implied_prob_devigged BETWEEN 0 AND 1
       AND ms.draw_implied_prob_devigged BETWEEN 0 AND 1
       AND ms.away_implied_prob_devigged BETWEEN 0 AND 1
+      AND abs(
+          ms.home_implied_prob_devigged
+        + ms.draw_implied_prob_devigged
+        + ms.away_implied_prob_devigged
+        - 1.0
+      ) <= 0.001
 ),
 joined AS (
     SELECT s.model_version,
@@ -51,5 +60,13 @@ SELECT model_version,
 FROM joined
 GROUP BY model_version
 ORDER BY model_version;
+
+-- Invalid temporal rows remain in storage for forensic audit but are excluded
+-- from the `closing` CTE above and therefore cannot contribute to CLV.
+SELECT count(*) AS closing_rows_at_or_after_kickoff
+FROM market_snapshots ms
+JOIN matches m ON m.id = ms.match_id
+WHERE ms.is_closing_line IS TRUE
+  AND ms.captured_at >= m.match_date;
 
 ROLLBACK;
