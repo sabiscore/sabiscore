@@ -6,8 +6,7 @@ import asyncio
 import builtins
 import inspect
 import time
-from functools import wraps
-from typing import Any, Iterable
+from typing import Any, Iterable, get_args, get_type_hints
 
 import httpx
 from fastapi import Request
@@ -28,13 +27,26 @@ from .sportmonks import SportmonksProvider
 from .the_odds_api import TheOddsAPIProvider
 
 
+def _annotation_contains_provider_result(annotation: Any) -> bool:
+    """Return whether a resolved annotation contains ProviderResult."""
+    if annotation is ProviderResult:
+        return True
+    return any(_annotation_contains_provider_result(arg) for arg in get_args(annotation))
+
+
 def _returns_provider_result(method: Any) -> bool:
-    """Recognize provider operations without a hard-coded method-name list."""
+    """Recognize ProviderResult operations using resolved type hints.
+
+    Provider modules use postponed annotations, so inspecting the raw signature
+    can yield strings instead of runtime types. ``get_type_hints`` resolves those
+    annotations against the declaring module and lets instrumentation fail closed
+    when a method cannot be resolved.
+    """
     try:
-        annotation = inspect.signature(method).return_annotation
-    except (TypeError, ValueError):
+        annotation = get_type_hints(method).get("return")
+    except (NameError, TypeError):
         return False
-    return "ProviderResult" in str(annotation)
+    return _annotation_contains_provider_result(annotation)
 
 
 def _instrument_provider(provider: BaseProvider) -> BaseProvider:
@@ -57,7 +69,6 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
         if not inspect.iscoroutinefunction(attribute) or not _returns_provider_result(attribute):
             continue
 
-        @wraps(attribute)
         async def observed(
             *args: Any,
             __method: Any = attribute,
@@ -82,6 +93,10 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
                 )
             return result
 
+        # Preserve useful diagnostics without functools.wraps' ParamSpec typing
+        # fighting this intentionally dynamic instance-level instrumentation.
+        observed.__name__ = getattr(attribute, "__name__", name)
+        observed.__doc__ = getattr(attribute, "__doc__", None)
         setattr(provider, name, observed)
 
     setattr(provider, "_provider_evidence_instrumented", True)
@@ -142,36 +157,41 @@ def build_provider_registry(
 
         observation_sink = ProviderEvidenceRecorder()
 
-    common = {
-        "live_tests": settings.provider_live_tests,
-        "http_client": http_client,
-        "observation_sink": observation_sink,
-    }
     return ProviderRegistry(
         [
             ESPNProvider(
                 enabled=settings.enable_espn_provider,
-                **common,
+                live_tests=settings.provider_live_tests,
+                http_client=http_client,
+                observation_sink=observation_sink,
             ),
             FootballDataOrgProvider(
                 api_key=settings.football_data_api_key,
                 enabled=settings.enable_football_data_provider,
-                **common,
+                live_tests=settings.provider_live_tests,
+                http_client=http_client,
+                observation_sink=observation_sink,
             ),
             APIFootballProvider(
                 api_key=settings.api_football_key,
                 enabled=settings.enable_api_football_provider,
-                **common,
+                live_tests=settings.provider_live_tests,
+                http_client=http_client,
+                observation_sink=observation_sink,
             ),
             SportmonksProvider(
                 api_key=settings.sportmonks_api_key,
                 enabled=settings.enable_sportmonks_provider,
-                **common,
+                live_tests=settings.provider_live_tests,
+                http_client=http_client,
+                observation_sink=observation_sink,
             ),
             TheOddsAPIProvider(
                 api_key=settings.the_odds_api_key,
                 enabled=settings.enable_the_odds_api_provider,
-                **common,
+                live_tests=settings.provider_live_tests,
+                http_client=http_client,
+                observation_sink=observation_sink,
             ),
         ]
     )
