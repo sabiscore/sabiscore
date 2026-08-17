@@ -28,7 +28,7 @@ function FullAnalysisFallback() {
   return (
     <div className="rounded-2xl border border-slate-800/50 bg-slate-900/30 p-6 text-center">
       <p className="text-sm text-slate-300">
-        Phase 7 intelligence unavailable for this match.
+        Match Intelligence unavailable for this fixture.
       </p>
     </div>
   );
@@ -55,11 +55,11 @@ export function FullAnalysisSection({
   if (!enabled) return null;
 
   return (
-    <section aria-label="Phase 7 unified intelligence">
+    <section aria-label="SabiScore Match Intelligence">
       <div className="flex items-center gap-3 mb-5">
         <div className="h-px flex-1 bg-slate-800/60" />
         <span className="text-[11px] uppercase tracking-[0.35em] text-slate-300 font-semibold">
-          Intelligence · 6-Layer Analysis
+          Match Intelligence · 6-Layer Analysis
         </span>
         <div className="h-px flex-1 bg-slate-800/60" />
       </div>
