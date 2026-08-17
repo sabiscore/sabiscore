@@ -39,7 +39,7 @@ def _generation(*, certification_state: str = "UNVERIFIED") -> dict:
 def test_unverified_generation_can_be_runtime_ready_but_never_stake_permitted() -> None:
     request = _request(models_loaded=True, loaded_leagues=["epl", "la_liga"])
 
-    with patch("src.api.endpoints.health.load_active_generation", return_value=_generation()):
+    with patch("src.api.endpoints.health._validated_generation", return_value=_generation()):
         result = _model_readiness(request)
 
     assert result["status"] == "healthy"
@@ -51,7 +51,7 @@ def test_unverified_generation_can_be_runtime_ready_but_never_stake_permitted() 
 def test_missing_required_runtime_model_fails_readiness() -> None:
     request = _request(models_loaded=True, loaded_leagues=["epl"])
 
-    with patch("src.api.endpoints.health.load_active_generation", return_value=_generation()):
+    with patch("src.api.endpoints.health._validated_generation", return_value=_generation()):
         result = _model_readiness(request)
 
     assert result["status"] == "unhealthy"
@@ -64,7 +64,7 @@ def test_certified_generation_requires_runtime_readiness_before_stake_permission
     request = _request(models_loaded=False, loaded_leagues=["epl", "la_liga"])
 
     with patch(
-        "src.api.endpoints.health.load_active_generation",
+        "src.api.endpoints.health._validated_generation",
         return_value=_generation(certification_state="CERTIFIED"),
     ):
         result = _model_readiness(request)
