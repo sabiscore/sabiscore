@@ -26,10 +26,10 @@ against live production team rows, exact + affix-stripped matching alone joins o
 23% of teams. This module therefore resolves in three stages (exact-normalised →
 unique token-prefix → curated alias) and **always fails closed on ambiguity**.
 Loose prefix matching is directional from the incoming football-data.co.uk name
-toward a richer legal name, and single-token source names never prefix-match a
-multi-token candidate. An unresolved team simply gets reduced evidence — never a
-wrong join — and a final match-level invariant rejects any identity collision that
-would otherwise make a club play itself.
+toward a richer legal name, and single-token source names never use loose prefix
+matching. An unresolved team simply gets reduced evidence — never a wrong join —
+and a final match-level invariant rejects any identity collision that would
+otherwise make a club play itself.
 """
 
 from __future__ import annotations
@@ -168,8 +168,8 @@ def _tokens_prefix_match(shorter: Sequence[str], longer: Sequence[str]) -> bool:
     This helper is intentionally used in one direction by ``TeamIndex.resolve``:
     the incoming football-data.co.uk token set may abbreviate the provider legal
     name, but a shorter provider candidate must never consume a richer source
-    identity. Single-token source names require exact/curated evidence before a
-    multi-token candidate is accepted.
+    identity. Single-token source names require exact/curated evidence rather than
+    this loose fallback.
     """
     pool = list(longer)
     for token in shorter:
@@ -239,8 +239,8 @@ class TeamIndex:
         matches = {
             team_id
             for cand_tokens, team_id in self._tokens
-            if len(tokens) <= len(cand_tokens)
-            and not (len(tokens) == 1 and len(cand_tokens) > 1)
+            if len(tokens) >= 2
+            and len(tokens) <= len(cand_tokens)
             and _tokens_prefix_match(tokens, cand_tokens)
         }
         if len(matches) == 1:
