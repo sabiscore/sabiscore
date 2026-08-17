@@ -83,6 +83,16 @@ def test_canonical_verification_files_have_one_transaction_wrapper() -> None:
         )
 
 
+def test_elo_audit_distinguishes_residual_from_new_self_play_writers() -> None:
+    sql = (_BACKEND_DIR / "scripts" / "verify_elo.sql").read_text(encoding="utf-8")
+    assert "historical_fdco_self_play_matches" in sql
+    assert "non_historical_self_play_matches" in sql
+    assert "scheduled_self_play_matches" in sql
+    assert "HISTORICAL_FDCO_RESIDUAL" in sql
+    assert "NON_HISTORICAL_WRITER" in sql
+    assert "m.id LIKE 'fdco-%'" in sql
+
+
 def test_local_compat_runner_cannot_restore_sqlite_fallback() -> None:
     source = _LOCAL_COMPAT_RUNNER.read_text(encoding="utf-8")
     assert "from run_verification_sql import main" in source
