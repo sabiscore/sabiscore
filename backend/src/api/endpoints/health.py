@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -15,6 +16,19 @@ from ...models.active_generation import ActiveGenerationError, load_active_gener
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+
+
+@lru_cache(maxsize=1)
+def _validated_generation() -> Dict[str, Any]:
+    """Hash-validate the committed generation once per process.
+
+    The active generation is deployment-atomic and cannot legitimately change
+    underneath a running process. Re-hashing every model artifact on every
+    readiness probe would turn a cheap orchestration endpoint into repeated
+    full-file I/O. Startup already enforces the same authority; this cached
+    fallback keeps the endpoint independently truthful without a hot-path scan.
+    """
+    return load_active_generation()
 
 
 @router.get("/health", status_code=status.HTTP_200_OK)
@@ -42,7 +56,7 @@ def _model_readiness(request: Request) -> Dict[str, Any]:
     loaded_leagues = sorted(str(league) for league in loaded_models)
 
     try:
-        generation = load_active_generation()
+        generation = _validated_generation()
     except ActiveGenerationError as exc:
         return {
             "status": "unhealthy",
