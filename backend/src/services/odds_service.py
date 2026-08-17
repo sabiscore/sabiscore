@@ -274,7 +274,7 @@ class OddsService:
         Get historical odds movement for a match.
 
         Args:
-            db: Async database session
+            db: Database session
             match_id: Match identifier
             hours: Hours of history to retrieve
 
