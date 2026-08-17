@@ -26,6 +26,8 @@ from .football_data_org import FootballDataOrgProvider
 from .sportmonks import SportmonksProvider
 from .the_odds_api import TheOddsAPIProvider
 
+_RUNTIME_PROVIDER_REGISTRY: "ProviderRegistry | None" = None
+
 
 def _annotation_contains_provider_result(annotation: Any) -> bool:
     """Return whether a resolved annotation contains ProviderResult."""
@@ -35,13 +37,7 @@ def _annotation_contains_provider_result(annotation: Any) -> bool:
 
 
 def _returns_provider_result(method: Any) -> bool:
-    """Recognize ProviderResult operations using resolved type hints.
-
-    Provider modules use postponed annotations, so inspecting the raw signature
-    can yield strings instead of runtime types. ``get_type_hints`` resolves those
-    annotations against the declaring module and lets instrumentation fail closed
-    when a method cannot be resolved.
-    """
+    """Recognize ProviderResult operations using resolved type hints."""
     try:
         annotation = get_type_hints(method).get("return")
     except (NameError, TypeError):
@@ -50,15 +46,7 @@ def _returns_provider_result(method: Any) -> bool:
 
 
 def _instrument_provider(provider: BaseProvider) -> BaseProvider:
-    """Wrap public ProviderResult operations in-place, preserving object identity.
-
-    Several call sites and tests legitimately rely on concrete provider type and
-    helper attributes, so registry observability must not replace providers with
-    proxy objects. Only public async methods whose declared return type is a
-    ProviderResult are wrapped; health/capabilities/quota/doctor remain separate
-    configuration/diagnostic operations and are not recorded as provider data
-    evidence.
-    """
+    """Wrap public ProviderResult operations in-place, preserving object identity."""
     if bool(getattr(provider, "_provider_evidence_instrumented", False)):
         return provider
 
@@ -93,8 +81,6 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
                 )
             return result
 
-        # Preserve useful diagnostics without functools.wraps' ParamSpec typing
-        # fighting this intentionally dynamic instance-level instrumentation.
         observed.__name__ = getattr(attribute, "__name__", name)
         observed.__doc__ = getattr(attribute, "__doc__", None)
         setattr(provider, name, observed)
@@ -105,9 +91,6 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
 
 class ProviderRegistry:
     def __init__(self, providers: Iterable[BaseProvider]) -> None:
-        # Instrument the actual provider objects instead of introducing a proxy;
-        # this preserves isinstance()/identity expectations and all existing
-        # provider helper/property access.
         self.providers = [_instrument_provider(provider) for provider in providers]
 
     def list(self) -> builtins.list[BaseProvider]:
@@ -142,22 +125,18 @@ def build_provider_registry(
 ) -> ProviderRegistry:
     """Build the canonical provider set.
 
-    `http_client` should be the single application-lifespan client (see
-    `app.state.http_client` in `api/main.py`) so providers share one pooled
-    connection instead of opening a new client per request. Left optional so
-    tests and CLI tools can construct a registry without a running app.
-
-    Provider observation persistence is also injected at this boundary. The
-    recorder is stateless and lazily acquires the async DB session only when a
-    provider operation finishes, so registry construction can still happen
-    before `init_db()` during application lifespan startup.
+    When a shared ``http_client`` is supplied, this is the application-lifespan
+    registry. Keep its identity available to background jobs that are not FastAPI
+    request handlers; they must never open an independent provider transport.
     """
+    global _RUNTIME_PROVIDER_REGISTRY
+
     if observation_sink is None:
         from ..services.provider_evidence_service import ProviderEvidenceRecorder
 
         observation_sink = ProviderEvidenceRecorder()
 
-    return ProviderRegistry(
+    registry = ProviderRegistry(
         [
             ESPNProvider(
                 enabled=settings.enable_espn_provider,
@@ -195,13 +174,24 @@ def build_provider_registry(
             ),
         ]
     )
+    if http_client is not None:
+        _RUNTIME_PROVIDER_REGISTRY = registry
+    return registry
+
+
+def get_runtime_provider(provider_id: str) -> BaseProvider:
+    """Return the provider owned by the active application lifespan.
+
+    Background workers run outside a request context, so they cannot use the
+    FastAPI dependency. Failing closed here prevents an accidental fallback to a
+    second HTTP client if lifespan initialization has not established the gateway.
+    """
+    registry = _RUNTIME_PROVIDER_REGISTRY
+    if registry is None:
+        raise RuntimeError("lifespan provider registry is not initialized")
+    return registry.get(provider_id)
 
 
 def get_provider_registry(request: Request) -> ProviderRegistry:
-    """FastAPI dependency returning the lifespan-owned registry from app.state.
-
-    Use via `Depends(get_provider_registry)` in endpoints instead of calling
-    `build_provider_registry()` directly, so requests share the one pooled
-    httpx client created at startup.
-    """
+    """FastAPI dependency returning the lifespan-owned registry from app.state."""
     return request.app.state.provider_registry
