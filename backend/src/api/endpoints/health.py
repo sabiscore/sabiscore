@@ -2,27 +2,42 @@
 
 import logging
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.cache import cache_manager
 from ...core.config import settings
 from ...db.session import get_async_session
+from ...models.active_generation import ActiveGenerationError, load_active_generation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
+@lru_cache(maxsize=1)
+def _validated_generation() -> Dict[str, Any]:
+    """Hash-validate the committed generation once per process.
+
+    The active generation is deployment-atomic and cannot legitimately change
+    underneath a running process. Re-hashing every model artifact on every
+    readiness probe would turn a cheap orchestration endpoint into repeated
+    full-file I/O. Startup already enforces the same authority; this cached
+    fallback keeps the endpoint independently truthful without a hot-path scan.
+    """
+    return load_active_generation()
+
+
 @router.get("/health", status_code=status.HTTP_200_OK)
 async def health_check() -> Dict[str, Any]:
-    """
-    Basic liveness probe - returns OK if service is running.
-    
-    Used by container orchestrators (Kubernetes, Docker) to determine
-    if the service should be restarted.
+    """Basic process-liveness probe.
+
+    This endpoint deliberately does not claim dependency, model-performance, or
+    provider health. Those belong to readiness/diagnostic surfaces backed by
+    direct observations.
     """
     return {
         "status": "healthy",
@@ -33,31 +48,74 @@ async def health_check() -> Dict[str, Any]:
     }
 
 
+def _model_readiness(request: Request) -> Dict[str, Any]:
+    """Return hash-validated model runtime state without performance claims."""
+    app_state = request.app.state
+    runtime_loaded = bool(getattr(app_state, "models_loaded", False))
+    loaded_models = getattr(app_state, "models", {}) or {}
+    loaded_leagues = sorted(str(league) for league in loaded_models)
+
+    try:
+        generation = _validated_generation()
+    except ActiveGenerationError as exc:
+        return {
+            "status": "unhealthy",
+            "runtime_loaded": runtime_loaded,
+            "manifest_valid": False,
+            "loaded_leagues": loaded_leagues,
+            "error": str(exc),
+            "certification_state": "UNVERIFIED",
+            "stake_permitted": False,
+        }
+
+    artifacts = generation.get("artifacts", {})
+    required_leagues = sorted(
+        league
+        for league, entry in artifacts.items()
+        if bool(entry.get("required", False))
+    )
+    missing_required = sorted(set(required_leagues) - set(loaded_leagues))
+    runtime_ready = runtime_loaded and not missing_required
+    certification_state = str(generation.get("certification_state") or "UNVERIFIED")
+
+    return {
+        "status": "healthy" if runtime_ready else "unhealthy",
+        "runtime_loaded": runtime_loaded,
+        "manifest_valid": True,
+        "generation": generation.get("generation"),
+        "active_version": generation.get("active_version"),
+        "feature_schema_version": generation.get("feature_schema_version"),
+        "certification_state": certification_state,
+        "promotion_state": generation.get("promotion_state"),
+        "required_leagues": required_leagues,
+        "loaded_leagues": loaded_leagues,
+        "missing_required_leagues": missing_required,
+        "prediction_capability": "AVAILABLE" if runtime_ready else "BLOCKED",
+        "stake_permitted": runtime_ready and certification_state == "CERTIFIED",
+    }
+
+
 @router.get("/ready", status_code=status.HTTP_200_OK)
 async def readiness_check(
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_async_session),
 ) -> Dict[str, Any]:
-    """
-    Comprehensive readiness probe - checks all critical dependencies.
-    
-    Returns 200 if ready to accept traffic, 503 if not ready.
-    Checks:
-    - Database connectivity
-    - Redis cache availability
-    - Model loading status (if applicable)
-    
-    Used by load balancers to route traffic only to healthy instances.
+    """Readiness probe backed by direct dependency and runtime observations.
+
+    Operational readiness is intentionally separate from model certification:
+    an UNVERIFIED generation may be loaded for fail-closed research inference,
+    while staking remains disabled. Missing/tampered model artifacts or required
+    runtime models do fail readiness.
     """
     checks: Dict[str, Any] = {
         "database": {"status": "unknown", "latency_ms": None},
         "cache": {"status": "unknown", "latency_ms": None},
-        "models": {"status": "unknown", "loaded": False},
+        "models": {"status": "unknown", "runtime_loaded": False},
     }
-    
-    all_healthy = True
 
-    # Check database
+    critical_healthy = True
+
     try:
         start = datetime.now(timezone.utc)
         result = await db.execute(text("SELECT 1"))
@@ -66,21 +124,19 @@ async def readiness_check(
         checks["database"] = {
             "status": "healthy",
             "latency_ms": round(latency, 2),
-            "url": settings.database_url.split("@")[-1] if "@" in settings.database_url else "sqlite",
         }
     except Exception as exc:
         logger.error("Database health check failed: %s", exc)
         checks["database"] = {"status": "unhealthy", "error": str(exc)}
-        all_healthy = False
+        critical_healthy = False
 
-    # Check cache
     try:
         start = datetime.now(timezone.utc)
         test_key = "health:check"
         cache_manager.set(test_key, "ok", ttl=5)
         result = cache_manager.get(test_key)
         latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
-        
+
         if result == "ok":
             checks["cache"] = {
                 "status": "healthy",
@@ -88,66 +144,22 @@ async def readiness_check(
                 "backend": "redis" if settings.redis_host else "memory",
             }
         else:
-            checks["cache"] = {"status": "degraded", "message": "cache read/write mismatch"}
-            
-    except Exception as exc:
-        logger.error("Cache health check failed: %s", exc)
-        checks["cache"] = {"status": "unhealthy", "error": str(exc)}
-        # Cache failure is non-critical - don't fail readiness
-        checks["cache"]["status"] = "degraded"
-
-    # Check model loading status from app state
-    try:
-        # Note: We can't access request context here easily without passing it through
-        # For now, check if models directory exists and has artifacts
-        models_path = settings.models_path
-        if models_path.exists():
-            # Check for V2 model first
-            v2_model = models_path / "sabiscore_production_v2.joblib"
-            if v2_model.exists():
-                checks["models"] = {
-                    "status": "healthy",
-                    "loaded": True,
-                    "version": "v2",
-                    "model_file": "sabiscore_production_v2.joblib",
-                    "features": 58,
-                    "accuracy": "52.80%",
-                }
-            else:
-                # Fall back to legacy ensemble models
-                model_files = list(models_path.glob("*_ensemble.pkl"))
-                if model_files:
-                    checks["models"] = {
-                        "status": "healthy",
-                        "loaded": True,
-                        "version": "legacy",
-                        "count": len(model_files),
-                        "models": [f.stem for f in model_files],
-                    }
-                else:
-                    checks["models"] = {
-                        "status": "degraded",
-                        "loaded": False,
-                        "message": "No model artifacts found",
-                    }
-        else:
-            checks["models"] = {
+            checks["cache"] = {
                 "status": "degraded",
-                "loaded": False,
-                "message": "Models directory missing",
+                "message": "cache read/write mismatch",
             }
     except Exception as exc:
-        logger.warning("Model check failed: %s", exc)
-        checks["models"] = {"status": "unknown", "error": str(exc)}
+        logger.error("Cache health check failed: %s", exc)
+        checks["cache"] = {"status": "degraded", "error": str(exc)}
 
-    # Determine overall status (models degrade readiness when missing)
-    models_status = checks.get("models", {}).get("status")
-    if not all_healthy or models_status != "healthy":
+    checks["models"] = _model_readiness(request)
+    if checks["models"].get("status") != "healthy":
+        critical_healthy = False
+
+    if not critical_healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        # expose why we're unhealthy for easier diagnostics
-        reason = "models" if models_status != "healthy" else "dependencies"
-        overall_status = f"unhealthy:{reason}"
-    elif any(check.get("status") == "degraded" for check in checks.values()):
+        overall_status = "unhealthy"
+    elif checks["cache"].get("status") == "degraded":
         overall_status = "degraded"
     else:
         overall_status = "healthy"
@@ -156,67 +168,56 @@ async def readiness_check(
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "checks": checks,
-        "ready": all_healthy and models_status == "healthy",
+        "ready": critical_healthy,
+        "capabilities": {
+            "prediction": checks["models"].get("prediction_capability", "BLOCKED"),
+            "stake": "ENABLED" if checks["models"].get("stake_permitted") else "DISABLED",
+        },
     }
 
 
 @router.get("/metrics")
 async def metrics_endpoint() -> Dict[str, Any]:
+    """Explicitly report that request/model/cache counters are not instrumented.
+
+    Returning literal zeros would falsely assert observed zero activity. Until a
+    metrics backend owns these counters, absence is UNKNOWN rather than success.
     """
-    Prometheus-compatible metrics endpoint.
-    
-    Returns key operational metrics:
-    - Request counts
-    - Error rates
-    - Model performance
-    - Cache hit rates
-    """
-    # TODO: Integrate with prometheus_client for proper metrics
-    # For now, return basic stats
-    
     return {
+        "status": "not_instrumented",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "uptime_seconds": 0,  # TODO: Track actual uptime
-        "predictions_total": 0,
-        "predictions_errors_total": 0,
-        "cache_hits_total": 0,
-        "cache_misses_total": 0,
-        "database_connections_active": 0,
+        "uptime_seconds": None,
+        "predictions_total": None,
+        "predictions_errors_total": None,
+        "cache_hits_total": None,
+        "cache_misses_total": None,
+        "database_connections_active": None,
     }
 
 
 @router.get("/startup")
-async def startup_status() -> Dict[str, Any]:
-    """
-    Startup probe - indicates if application has finished initializing.
-    
-    Returns info about initialization status including:
-    - Model loading progress
-    - Database migrations
-    - Cache warmup
-    """
-    models_path = settings.models_path
-    metadata_path = models_path / "models_metadata.json"
-    
-    initialization = {
-        "models_loaded": metadata_path.exists(),
-        "database_ready": True,  # Assumed if we got here
-        "cache_ready": True,
+async def startup_status(request: Request) -> Dict[str, Any]:
+    """Expose startup/model initialization facts available from application state."""
+    app_state = request.app.state
+    models_loaded = bool(getattr(app_state, "models_loaded", False))
+    model_load_in_progress = bool(getattr(app_state, "model_load_in_progress", False))
+    model_error = getattr(app_state, "model_load_error_message", None)
+
+    initialization: Dict[str, Any] = {
+        "models_loaded": models_loaded,
+        "model_load_in_progress": model_load_in_progress,
+        "model_version": getattr(app_state, "model_version", None),
+        "leagues_loaded": list(getattr(app_state, "leagues_loaded", []) or []),
+        "model_load_error": model_error,
+        # This endpoint does not perform dependency probes. Consumers requiring
+        # DB/cache truth must use /ready instead of treating reachability as proof.
+        "database_ready": "unknown_use_ready_probe",
+        "cache_ready": "unknown_use_ready_probe",
     }
-    
-    if metadata_path.exists():
-        try:
-            import json
-            with open(metadata_path, "r") as f:
-                metadata = json.load(f)
-            initialization["models_metadata"] = metadata
-        except Exception as exc:
-            logger.warning("Failed to read model metadata: %s", exc)
-    
-    all_ready = all(initialization.values())
-    
+
+    startup_ready = models_loaded and not model_load_in_progress and model_error is None
     return {
-        "status": "ready" if all_ready else "initializing",
+        "status": "ready" if startup_ready else "initializing",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "initialization": initialization,
     }
