@@ -35,6 +35,7 @@ PRE_MATCH_OPENING = "PRE_MATCH_OPENING"
 PRE_MATCH_INTERMEDIATE = "PRE_MATCH_INTERMEDIATE"
 PRE_MATCH_CLOSING = "PRE_MATCH_CLOSING"
 POST_KICKOFF_REJECTED = "POST_KICKOFF_REJECTED"
+_PRE_MATCH_CLOSING_SUPERSEDED = "PRE_MATCH_CLOSING_SUPERSEDED"
 
 _KICKOFF_MATCH_TOLERANCE_MINUTES = 10
 _CLOSING_WINDOW_MINUTES = 5
@@ -113,11 +114,7 @@ def _team_key(value: object) -> str:
 
 
 def _same_prices(row: OddsHistory, *, home: float, draw: float, away: float) -> bool:
-    return (
-        row.home_win == home
-        and row.draw == draw
-        and row.away_win == away
-    )
+    return row.home_win == home and row.draw == draw and row.away_win == away
 
 
 def _classify_observation(
@@ -200,6 +197,38 @@ def _valid_record(record: dict[str, Any]) -> tuple[float, float, float] | None:
     return home, draw, away
 
 
+async def _supersede_previous_closing(
+    session: AsyncSession,
+    *,
+    match_id: str,
+    captured_at: datetime,
+) -> None:
+    previous = (
+        (
+            await session.execute(
+                select(MarketSnapshot)
+                .where(
+                    MarketSnapshot.match_id == match_id,
+                    MarketSnapshot.is_closing_line.is_(True),
+                    MarketSnapshot.captured_at < captured_at,
+                )
+                .order_by(MarketSnapshot.captured_at.desc(), MarketSnapshot.id.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if previous is None:
+        return
+
+    provenance = dict(previous.provenance or {})
+    provenance["evidence_class"] = _PRE_MATCH_CLOSING_SUPERSEDED
+    provenance["superseded_at"] = captured_at.isoformat()
+    previous.provenance = provenance
+    previous.is_closing_line = False
+
+
 async def _persist_record(
     session: AsyncSession,
     *,
@@ -238,8 +267,23 @@ async def _persist_record(
     )
     if classification == POST_KICKOFF_REJECTED:
         return classification
-    if latest is not None and _same_prices(latest, home=home, draw=draw, away=away):
+
+    # Unchanged opening/intermediate prices are not new numerical evidence.
+    # Closing is different: even an unchanged price needs a fresh observation
+    # timestamp proving it was still the final eligible pre-kickoff line.
+    if (
+        classification != PRE_MATCH_CLOSING
+        and latest is not None
+        and _same_prices(latest, home=home, draw=draw, away=away)
+    ):
         return "DEDUPED"
+
+    if classification == PRE_MATCH_CLOSING:
+        await _supersede_previous_closing(
+            session,
+            match_id=candidate.match.id,
+            captured_at=captured_at,
+        )
 
     history = OddsHistory(
         match_id=candidate.match.id,
