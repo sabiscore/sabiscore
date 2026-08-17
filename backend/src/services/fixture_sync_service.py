@@ -55,9 +55,14 @@ async def sync_upcoming_fixtures(
     kickoff reschedules propagate to both the legacy Match row and its stable
     canonical fixture. Settled rows are never rewritten by an upcoming feed.
 
+    Team identity must remain distinct before either the legacy ``Match`` row or
+    canonical identity rows are staged. A resolver collision therefore fails
+    closed at the raw persistence boundary rather than relying on the later
+    canonical savepoint to reject it after a self-play ``Match`` already exists.
+
     Canonical reconciliation runs inside a per-fixture savepoint. A true
-    identity conflict therefore rolls back every canonical row staged by that
-    attempt without discarding the raw provider fixture or later batch items.
+    canonical identity conflict rolls back every canonical row staged by that
+    attempt without discarding unrelated later batch items.
 
     Returns the number of new Match rows inserted.
     """
@@ -87,11 +92,6 @@ async def sync_upcoming_fixtures(
             continue
 
         league_id, country = meta
-
-        if not await session.get(League, league_id):
-            session.add(League(id=league_id, name=league_name, country=country))
-            await session.flush()
-
         home_name: str = raw.get("home_team", "")
         away_name: str = raw.get("away_team", "")
         home_id = (await resolve_team_id(home_name, session) if home_name else None) or _team_id(
@@ -100,6 +100,26 @@ async def sync_upcoming_fixtures(
         away_id = (await resolve_team_id(away_name, session) if away_name else None) or _team_id(
             away_name, league_id
         )
+
+        if home_id == away_id:
+            match_id = str(raw.get("id") or "")
+            logger.error(
+                "fixture_sync: refusing self-play identity collision match_id=%s league=%s "
+                "home=%r away=%r resolved_team_id=%s",
+                match_id or "<missing>",
+                league_id,
+                home_name,
+                away_name,
+                home_id,
+            )
+            metrics_collector.increment("fixture_sync.identity_conflicts")
+            metrics_collector.increment("fixture_sync.self_play_rejected")
+            continue
+
+        if not await session.get(League, league_id):
+            session.add(League(id=league_id, name=league_name, country=country))
+            await session.flush()
+
         for tid, tname in [(home_id, home_name), (away_id, away_name)]:
             if tname and not await session.get(Team, tid):
                 session.add(Team(id=tid, name=tname, league_id=league_id))
