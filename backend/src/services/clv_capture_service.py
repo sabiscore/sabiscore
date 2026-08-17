@@ -21,13 +21,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ponytail: simple constants, not configurable — tighten later if odds prove
-# to move meaningfully inside the window. Lookahead is how far before kickoff
-# a fixture becomes "due"; grace catches up after a dyno sleep/restart; match
-# tolerance bounds how far a provider event's kickoff timestamp may drift from
-# a candidate fixture's match_date and still count as the same fixture.
+# A fixture becomes eligible only shortly before kickoff. There is deliberately
+# no post-kickoff grace period: a price observed at/after kickoff is not a closing
+# pre-match line and must never be relabelled as one. The scheduler may miss a
+# kickoff after a sleep/restart; that evidence is irrecoverable and is preferable
+# to fabricating temporal provenance.
 _CAPTURE_LOOKAHEAD_MINUTES = 10
-_CAPTURE_GRACE_MINUTES = 60
 _KICKOFF_MATCH_TOLERANCE_MINUTES = 10
 
 _last_result: dict[str, Any] = {"outcome": "never_run"}
@@ -37,19 +36,28 @@ def _utc_naive(value: datetime) -> datetime:
     """Return ``value`` as naive UTC for timezone-naive PostgreSQL columns.
 
     SabiScore's legacy ``matches.match_date`` and ``market_snapshots`` timestamp
-    columns are ``TIMESTAMP WITHOUT TIME ZONE``.  asyncpg rejects an aware
+    columns are ``TIMESTAMP WITHOUT TIME ZONE``. asyncpg rejects an aware
     ``datetime`` bound to those columns (``can't subtract offset-naive and
     offset-aware datetimes``), while SQLite accepts it and therefore hid the
     production-only failure.
 
     Naive inputs are already interpreted as UTC by the existing storage
-    contract.  Aware inputs are converted to UTC *before* dropping tzinfo;
+    contract. Aware inputs are converted to UTC *before* dropping tzinfo;
     simply calling ``replace(tzinfo=None)`` on a non-UTC offset would change the
     instant represented by the timestamp.
     """
     if value.tzinfo is None:
         return value
     return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _is_strictly_pre_kickoff(captured_at: datetime, kickoff: datetime) -> bool:
+    """True only when the observation happened strictly before kickoff.
+
+    Equality is rejected. This helper centralizes the temporal evidence rule so
+    the write path and its regression tests cannot disagree about the boundary.
+    """
+    return _utc_naive(captured_at) < _utc_naive(kickoff)
 
 
 def last_clv_capture_result() -> dict[str, Any]:
@@ -71,7 +79,6 @@ def _fd_code_to_canonical() -> dict[str, str]:
     """
     from .fixture_sync_service import _LEAGUE_META
 
-    # ponytail: identity map — _LEAGUE_META[name] = (canonical_id, country) after WP-A
     return {code: code for _name, (code, _country) in _LEAGUE_META.items()}
 
 
@@ -142,7 +149,7 @@ async def run_clv_capture_pass(provider: Any = None) -> dict[str, Any]:
                 counts = await _capture_due_fixtures(session, provider=provider)
             except Exception:
                 # A DBAPI/flush/commit failure leaves SQLAlchemy in partial-
-                # rollback state until rollback() is called.  Do this explicitly
+                # rollback state until rollback() is called. Do this explicitly
                 # before the pooled connection is released; relying only on
                 # context-manager close made the production failure harder to
                 # reason about and can surface later as PendingRollbackError.
@@ -175,15 +182,16 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
     from ..providers.the_odds_api import TheOddsAPIProvider, devig_probabilities
 
     now = _utc_naive(datetime.now(timezone.utc))  # Match.match_date is naive UTC
-    window_start = now - timedelta(minutes=_CAPTURE_GRACE_MINUTES)
     window_end = now + timedelta(minutes=_CAPTURE_LOOKAHEAD_MINUTES)
 
+    # Strictly future fixtures only. A scheduler wake after kickoff cannot recover
+    # a pre-match close and must not manufacture one from an in-play observation.
     due = (
         (
             await session.execute(
                 select(Match).where(
                     Match.status == "scheduled",
-                    Match.match_date >= window_start,
+                    Match.match_date > now,
                     Match.match_date <= window_end,
                 )
             )
@@ -198,6 +206,7 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
         "already_captured": 0,
         "unsupported_league": 0,
         "unmatched": 0,
+        "post_kickoff_rejected": 0,
     }
     if not due:
         return counts
@@ -261,9 +270,21 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
             away = selected["away_odds"]
             h_prob, d_prob, a_prob = devig_probabilities(home, draw, away)
 
+            # Re-check the boundary after the provider request. A fixture can be
+            # selected pre-kickoff and cross kickoff while network I/O is in
+            # flight. Such a response is in-play evidence and must be rejected.
+            captured_at = _utc_naive(datetime.now(timezone.utc))
+            if not _is_strictly_pre_kickoff(captured_at, match.match_date):
+                counts["post_kickoff_rejected"] += 1
+                logger.warning(
+                    "clv_capture: rejected observation at/after kickoff",
+                    extra={"match_id": match.id, "league": league},
+                )
+                continue
+
             session.add(
                 MarketSnapshot(
-                    canonical_fixture_id=None,  # ADR-0004 addendum — no populated canonical_fixtures row exists yet
+                    canonical_fixture_id=None,
                     match_id=match.id,
                     provider="the_odds_api",
                     bookmaker=str(selected.get("bookmaker") or "unknown"),
@@ -275,16 +296,15 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
                     draw_implied_prob_devigged=d_prob,
                     away_implied_prob_devigged=a_prob,
                     is_closing_line=True,
-                    # MarketSnapshot.captured_at is TIMESTAMP WITHOUT TIME ZONE.
-                    # Bind a UTC-naive datetime explicitly for asyncpg.
-                    captured_at=_utc_naive(datetime.now(timezone.utc)),
+                    captured_at=captured_at,
                     coherent=True,
                     executable=False,
                     provenance={
                         "source": "the_odds_api",
                         "bookmaker": selected.get("bookmaker"),
                         "provider_event_id": selected.get("provider_event_id"),
-                        "captured_at": selected.get("captured_at"),
+                        "provider_captured_at": selected.get("captured_at"),
+                        "evidence_class": "PRE_MATCH_CLOSING",
                     },
                 )
             )
