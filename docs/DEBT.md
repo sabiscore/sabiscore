@@ -1,5 +1,263 @@
 # SabiScore Debt Ledger
 
+## 30. The full test suite makes a live network call and overwrites a committed data file
+
+**Tier:** `NEXT` — test-hygiene defect, no production impact, but it silently
+dirties the working tree and depends on a third-party host being up.
+**Found:** 2026-08-18, incidentally — a routine `git status` after an unrelated
+change showed `data/cache/football_data/E0_2324.csv` modified with 380 changed
+rows that nothing in that change had touched.
+
+`FootballDataEnhancedScraper` (`backend/src/data/scrapers/football_data_scraper.py:133`)
+caches to `CACHE_DIR / "football_data" / f"{league_code}_{season}.csv"` with a
+24-hour TTL (`_is_cache_valid`, `:166-172`). The committed
+`E0_2324.csv` is far older than that, so a full `pytest tests` run finds the
+cache stale, **fetches from football-data.co.uk over the network**, and
+rewrites the committed file — in the observed case appending `source` and
+`scraped_at` columns (`,football-data.co.uk,2026-08-18T19:13:31.479992`) to
+every row, because the upstream schema has moved on since the file was
+committed.
+
+Three separate problems in one:
+1. A test suite that reaches the public internet is non-hermetic — it fails
+   offline, and its result depends on a third party's uptime and schema.
+2. It mutates a **committed** file, so an unrelated change appears to touch
+   380 rows of match data. Anyone running the suite before committing could
+   sweep that into an unrelated commit without noticing.
+3. The rewritten schema differs from the committed one, so the mutation is not
+   even idempotent — it is a silent data-format change.
+
+**Fix:** point the scraper's cache at a gitignored/temp directory under test,
+or inject a fixture cache and assert no network access (the repo already has
+the offline-provider discipline for this — `PROVIDER_LIVE_TESTS=false`). The
+committed CSV should be treated as a read-only fixture, not a warm cache.
+**Workaround until then:** `git restore data/cache/football_data/` after any
+full-suite run; check `git status` before committing.
+**Not fixed in the session that found it** — unrelated to that change's scope,
+and picking the right isolation mechanism deserves its own decision.
+
+---
+
+## 29. Phase 8 has no training-time feature computation — a v6_phase8 retrain today would ship a false-confidence artifact
+
+**Tier:** `PARTIALLY RESOLVED 2026-08-18` — 15 of the 21 columns now replay
+real values; 6 remain structurally underivable and are explicitly declared as
+such. Found 2026-08-18 via a dedicated train/serve parity audit (requested
+before any Phase 8 activation work, specifically to avoid this class of
+mistake), fixed the same session.
+
+**What shipped (fix (a) below):** `backend/src/features/phase8_historical.py`
+replays `PiRatingSystem`, `BerrarRatingSystem` and `weighted_form_features`
+chronologically over the real `fd_*.csv` corpus, calling the *same* engine
+classes serving calls rather than reimplementing their arithmetic. Wired into
+`backend/scripts/train_on_real_matches.py` behind an opt-in `--include-phase8`
+flag (68 → 89 features). Measured on the real EPL corpus (2,571 rows), the 15
+replayed columns now carry **489–2,506 distinct values each** where every one
+of the 21 was previously a single constant; the existing 68-feature path is
+byte-identical, verified by asserting `X89[:, :68] == X68`. Artifacts are
+written as `*_ensemble_v6_phase8.pkl`, never over the `v5_phase7` filenames,
+because `prediction.py`'s `_wrap_artifact` infers provenance from artifact
+shape and a mislabelled file would make shape and filename disagree.
+`train_league` now also refuses to train when the matrix width and the supplied
+feature-name list disagree, so an 89-wide vector cannot be labelled 68.
+`model_metadata` records `phase8_features_replayed` / `phase8_features_defaulted`
+so a future promotion review can see the 15/6 split without re-deriving it.
+Covered by `backend/tests/unit/test_phase8_historical.py` (11 tests) — the
+load-bearing ones assert genuine *variance* and no-leakage, because a
+shape-only "21 columns present" assertion would have passed under the original
+defect.
+
+⚠️ **Finding surfaced by actually computing the values:** `pi_attack_diff` and
+`pi_defense_diff` are **mathematically always identical**. The Pi update rule
+moves each team's defense by the exact negative of its attack, so
+`ad - hd ≡ ha - aa`. Two of the 21 Phase 8 features are therefore one feature.
+This is an upstream property of `PiRatingSystem` that holds identically at
+serving time — **do not "fix" it in the replay**, which would create the exact
+train/serve divergence this work exists to prevent. It is a candidate for
+`ENSEMBLE_CORRELATION_PRUNE_THRESHOLD` (0.92) to prune at promotion time, or
+for a deliberate, both-sides change to the engine. Invisible until now
+precisely because the column was constant.
+
+**The serving side is real and reasonably close to ready**: all 5 Phase 8
+feature families (Pi-ratings, Berrar ratings, EWMA form, market drift, match
+importance — 21 fields, `PHASE8_FEATURES_21` in
+`backend/src/models/feature_registry.py:284-330`) are genuinely computed from
+live data in `_inject_phase8_features()`
+(`backend/src/services/upcoming_match_feature_service.py:707-921`), point-in-time
+correct (`Match.match_date < match_date`, strict inequality), gap- and
+freshness-tracked. This part is closer to canary-ready than expected.
+
+**The training side does not exist.** No script anywhere in the repo runs
+`PiRatingSystem`/`BerrarRatingSystem`/`weighted_form_features`/
+`compute_market_drift`/`compute_match_context` over historical rows.
+`backend/scripts/retrain_with_expanded_features.py`'s `_inject_phase8_proxies`
+(`:202-228`) fills all 21 Phase 8 columns with a **constant registry default**
+wherever the column is absent — confirmed the checked-in
+`backend/data/processed/epl_training.csv` has 0 of 236 columns matching any
+Phase 8 field name. `backend/scripts/train_on_real_matches.py` (the pipeline
+that actually produced the shipped `v5_phase7` artifacts) never touches
+Phase 8 at all.
+
+**Consequence:** running `retrain_with_expanded_features.py --feature-set
+phase8` against the checked-in data today would produce a model whose 21
+Phase 8 columns carry **zero variance during training** (tree learners cannot
+split on a constant column — the model learns nothing from them) while at
+serving time those same 21 slots would carry real, live, varying values. That
+candidate would report `feature_count: 89` / `feature_schema_version:
+phase8_89` in its metadata while being functionally no better than the
+existing 68-feature model — a false-confidence artifact that could pass a
+naive "89 features present" check while carrying none of the claimed signal.
+**No test would catch this** — `grep -rln "phase8" backend/tests -i` and
+`grep -rln "parity" backend/tests -i` have zero file overlap; the only
+Phase8-named test file (`test_phase8_features_endpoint.py`) covers registry
+invariants and endpoint response shape, not serving-vs-training equivalence.
+
+**`docs/apex_feature_availability.md` is not evidence either way** — it's a
+one-shot doc (single commit `e9b7ad6`, 2026-08-10, never regenerated) whose
+generator imports the same 68-feature-only `train_on_real_matches.py`
+pipeline. It contains 68 features per league, zero Phase 8 fields. Anyone
+reading it for Phase 8 go/no-go is reading the wrong document — it isn't
+stale, it never had Phase 8 in scope.
+
+**Two more standing gaps, lower priority than the training pipeline:**
+Pi-ratings and Berrar ratings' parquet artifacts
+(`data/processed/pi_ratings.parquet`, `data/processed/berrar_ratings.parquet`)
+don't exist on disk and nothing backfills them — those two families would
+serve cold-start neutral state (Pi 0.0/0.0, Berrar 1500/1500) for every team
+if activated today, not real fitted ratings. `PHASE8_CANARY_PCT` has zero
+consumers anywhere in `backend/src` (reconfirmed) — flipping it does nothing;
+the MD5-hash routing scheme its docstring promises was never written.
+`PHASE8_ENRICHMENT_SHADOW` only guards 2 of the 5 families (market drift,
+match importance) and is itself gated behind the master flag already being
+on — there's no way to shadow-observe Pi/Berrar/EWMA before flipping
+`USE_PHASE8_FEATURES`.
+
+**Not an immediate production risk today** — `active_generation.json` pins
+`feature_schema_version: "phase7_68"` and the shipped ensembles physically
+have 68 input columns, so flipping `USE_PHASE8_FEATURES` on today only
+changes the separate `/matches/upcoming/{id}/phase8-features` analytics-panel
+endpoint response, not the live verdict/staking model. The landmine is
+specifically in the *retraining* step, the moment someone trusts a
+`v6_phase8` candidate's metadata without checking this.
+
+**Fix, in priority order:** ~~(a) build a historical Phase 8
+feature-engineering pass~~ **DONE 2026-08-18** (see above); (b) add a
+train/serve parity test scoped to the 21 Phase 8 names — partially covered by
+`test_phase8_historical.py`'s contract test, but a true parity test comparing a
+serving vector against a training vector for the same fixture is still absent;
+(c) regenerate `apex_feature_availability.md` against a pipeline that includes
+the 89-feature schema so it can serve as real per-league Phase 8 go/no-go
+evidence; (d) backfill the Pi/Berrar parquet artifacts for *serving* — the
+replay above is deliberately training-only (in-memory, `parquet_path=None`,
+keyed by CSV team-name strings), so production serving still cold-starts both
+engines at neutral. Closing (d) means replaying the same engines over the DB's
+`Match` table keyed by canonical `Team.id` — near-identical to
+`replay_elo_from_db.py`, and a natural follow-up now that the replay logic
+exists.
+**Trigger:** (b)/(c) before a `v6_phase8` candidate is promoted; (d) before
+`USE_PHASE8_FEATURES` is flipped on in production, since without it the Pi and
+Berrar families would serve neutral values for every team.
+
+**Still true and unchanged:** market drift (5) and match importance (1) remain
+underivable from the historical corpus (see the two bullets above), so a
+`--include-phase8` artifact trains on 15 real + 6 constant Phase 8 columns.
+That is honest and declared in the artifact's own metadata — but it does mean
+those 6 still teach the model nothing, and a promotion review must not read
+`feature_count: 89` as "89 informative features".
+
+---
+
+## 28. S3 evidence-storage 403 confirmed with real local credentials — narrows to a genuine IAM problem
+
+**Tier:** `NEXT` (operator-only — AWS IAM console access required; not
+agent-doable from here). Not new *scope*, but new *evidence*.
+
+**Found 2026-08-18.** Ran `pnpm --filter @sabiscore/scraper storage:probe`
+locally with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` sourced silently from
+the local `.env`/`backend/.env` files (values never read/displayed — sourced
+into the subprocess environment only; the agent never saw them). Result:
+
+```json
+{ "ok": false, "error_code": "s3_authorization_failed", "http_status": 403 }
+```
+
+This is materially stronger evidence than the 2026-08-14 finding it confirms.
+`storageFailureCode()` (`apps/scraper/src/storage.mjs:40-46`) only reaches
+`s3_authorization_failed` *after* `SABISCORE_ARTIFACT_BUCKET` was present
+(otherwise `probeImmutableStorage` throws `s3_bucket_not_configured` before
+any network call — line 232) and a real `PutObject`/`HeadObject` call reached
+AWS and got 403 back. So this run used a real bucket name and a real access
+key/secret pair, and AWS itself rejected the request — this rules out "nobody
+has tried with real credentials yet" as an explanation. The remaining
+candidates are exactly what `docs/S3_EVIDENCE_STORAGE_RUNBOOK.md` already
+names: the IAM policy on `sabiscore-render-evidence-writer` isn't actually
+attached/correct, the account/region doesn't match the bucket
+(`sabiscore-artifacts-prod-uswest2`, `us-west-2`), or `BucketOwnerEnforced`
+object ownership is blocking this principal.
+
+**Not agent-doable from here** — diagnosing which of those three it is
+requires reading the real IAM policy document and bucket ownership settings in
+the AWS console, which needs operator access this environment doesn't have.
+**Do not** attempt to work around the 403 (e.g., relaxing `BucketOwnerEnforced`,
+loosening the IAM policy scope, or switching to a different credential path)
+without operator sign-off — the policy is deliberately least-privilege
+(`infra/aws/evidence-storage.yaml:63-84`: only `GetObject`/`PutObject` scoped
+to `raw/*`/`processed/*`/`manifests/*`, no `List`/`Delete`).
+
+---
+
+## 27. LazyMotion adoption — measured, not worth the rewrite right now
+
+**Tier:** `ACCEPTED` (deferred, with a threshold). Not a defect; recorded so
+the next session doesn't re-raise this as unmeasured.
+
+**Background:** 16 files in `apps/web/src` import the full `motion` export
+from `framer-motion` (`useReducedMotion`/`AnimatePresence`-only imports don't
+count); 0 use `LazyMotion`/`domAnimation`. One component
+(`insights-tease-strip.tsx`) briefly switched to `m`/`LazyMotion` and was
+**deliberately reverted** back to `motion` for codebase consistency (see
+`CHANGELOG.md`), not because it failed.
+
+**Measured 2026-08-18** via the already-wired `ANALYZE=true pnpm --filter
+@sabiscore/web build` (no prior session had actually run this before deciding
+whether the migration was worth it). Current route table vs. the last logged
+one (`CLAUDE.md` vΩ.25):
+
+| Route | vΩ.25 | Now (2026-08-18) |
+|---|---|---|
+| shared baseline | 103 kB | 103 kB (unchanged) |
+| `/match` | 207 kB | 210 kB |
+| `/match/[id]` | 158 kB | 151 kB |
+| `/monitoring` | 145 kB | **103 kB** — now equals the shared baseline |
+| `/intelligence` | 142 kB | 152 kB |
+| `/performance` | 127 kB | 128 kB |
+
+`/monitoring` dropping to exactly the shared baseline shows the codebase's
+established mitigation (route-level `next/dynamic({ ssr:false })`, already
+used for `RollingAccuracyChart`/`MatchLoadingExperience`/etc. per vΩ.24-25)
+is already doing real work on at least one previously-heavy route — without
+touching `framer-motion` at all. Inspecting `.next/analyze/client.html`
+confirms `framer-motion`'s modules are bundled **per-route**, not merged into
+the 103 kB shared chunk, so each route only pays for it if that route's own
+component tree imports it — the same effect `LazyMotion` would provide,
+already happening via Next's route-based code splitting.
+`experimental.optimizePackageImports` in `next.config.js:52` already includes
+`framer-motion`, giving Next's own barrel-import tree-shaking without the
+`m.`-prefix rewrite.
+
+**Decision:** no route regressed materially since vΩ.25 (most held steady or
+improved), the codebase already tried `LazyMotion` once and walked it back,
+and the remaining per-route weight isn't cleanly attributable to
+`framer-motion` alone (recharts and other data-viz deps are equally present on
+the heaviest routes and already get the dynamic-import treatment separately).
+A 16-file `motion`→`m` + provider-wrapper rewrite isn't justified by this
+measurement. **Revisit only if** a future `ANALYZE=true` build shows a route's
+First Load JS regress by ≥20 kB with `framer-motion` modules newly appearing
+in the *shared* chunk (not per-route) — that would mean route splitting
+stopped isolating it and `LazyMotion` would actually pay for itself.
+
+---
+
 ## 25. Certification/staking phases are blocked by evidence volume, not by engineering
 
 **Tier:** `ACCEPTED` — this is the system working. Recorded so the next session
@@ -41,38 +299,42 @@ settled predictions.
 
 ---
 
-## 26. `feature_availability_matrix.json` has a consumer but no matching producer
+## 26. `feature_availability_matrix.json` producer/consumer mismatch — RESOLVED (was already fixed when filed; ledger was stale)
 
-**Tier:** `NEXT` — blocks any real retraining/promotion cycle the moment one is
-attempted. Not yet fixed; found 2026-08-17 while auditing the promotion path.
+**Tier:** `CLOSED`. **Filed 2026-08-17 05:53 (commit `c256852`) describing a real
+bug that was already fixed 66 minutes later, 2026-08-17 06:59 (commit
+`f985946`, "fix(promotion): make feature evidence deterministic (#24)"), which
+never came back to close this entry.** Re-verified 2026-08-18: no code action
+needed, only this write-up was stale.
 
-`compare_candidate_vs_incumbent.py:203` reads
-`availability_report["promotion_gate"]` to decide the
-`serving_feature_availability` gate. The committed generator,
-`backend/scripts/generate_feature_availability_matrix.py`, emits a **different,
-coarser schema** keyed by competition and family — top-level keys
-`generated_at` / `feature_schema_changed` / `settlement_gate` / `competitions`,
-with **no `promotion_gate` and no `summary`**. The rich per-feature file
-currently checked in at `backend/models/candidate/feature_availability_matrix.json`
-(42 KB, one record per feature with `training_source`, `serving_source`,
-`freshness_contract`, `defaulted_training_slot`, …) has **no producer in the
-repo** — a grep for its distinctive keys returns only that one consumer.
+Original claim: the committed generator (`generate_feature_availability_matrix.py`)
+emitted a coarser schema than `compare_candidate_vs_incumbent.py:203` consumed,
+so regenerating and comparing would `KeyError`. That mismatch no longer exists —
+`f985946` deleted the old coarse-schema generator and rewired both the producer
+(`backend/scripts/generate_feature_availability_matrix.py`) and the consumer
+(`backend/scripts/compare_candidate_vs_incumbent.py:96-102,216-219`) through one
+shared schema, `backend/src/models/promotion_evidence.py`
+(`build_promotion_feature_evidence` / `validate_promotion_feature_evidence`).
+Confirmed by re-reading the checked-in `backend/models/candidate/feature_availability_matrix.json`:
+its top-level keys are exactly `schema, training_rows, selection, summary,
+promotion_gate, features` — the shape the consumer expects, not the old coarse
+one. Confirmed by rerunning the dedicated regression suite added in the same
+commit: `backend/tests/unit/test_promotion_feature_evidence.py` — **6 passed**.
 
-**Consequence:** regenerating the matrix with the committed generator and
-re-running the comparison would `KeyError`. The promotion gate is currently
-un-runnable end to end, which is masked only because nobody has needed to run
-it since the candidate was quarantined.
+Item #25's own evidence table (filed the same day, after this fix) already
+shows `compare_candidate_vs_incumbent` running and reporting real gate results
+(`serving_feature_availability` genuinely `FAIL`, not a crash) — only possible
+if this item was already fixed by the time #25 was written. That table is the
+correct current signal for retraining-gate status, not this entry.
 
-**Related:** `backend/models/candidate/candidate_manifest.json` has zero
-producers *and* zero consumers — hand-maintained, referenced by nothing.
+**Still open, smaller, unrelated:** `backend/models/candidate/candidate_manifest.json`
+still has zero producers and zero consumers anywhere in `backend/` (reconfirmed
+2026-08-18) — hand-maintained, referenced by nothing. Not blocking anything
+today; revisit only if something starts depending on it.
 
-**Fix:** make the generator emit the per-feature schema the comparison script
-actually consumes (including `promotion_gate` and `summary`), or change the
-consumer to compute the gate from the coarse schema. Prefer the former — the
-per-feature file is the closest thing this repo has to a real feature contract.
-**Trigger:** before the next retraining cycle. Do not attempt a promotion
-without closing this first; the gate cannot currently be trusted because it
-cannot currently run.
+**Lesson for next session:** re-verify a `docs/DEBT.md` claim against current
+code before acting on it — a ledger entry can go stale within the same day it
+was filed if a later, unrelated-looking commit happens to fix it.
 
 ---
 
@@ -229,6 +491,20 @@ still requires an explicit `providers doctor --provider the_odds_api
 --validate-live` probe (unrun — needs the real key, which isn't accessible
 from a read-only audit context); this evidence is operational, not the
 formal probe result.
+
+**Attempted 2026-08-18, still unrun against the real credential.** Ran
+`providers doctor --provider the_odds_api --validate-live` locally
+(`ALLOW_SQLITE_FALLBACK=true` to get past the CLI's DB-import boundary — the
+local `DATABASE_URL` points at a Render-internal hostname unreachable outside
+Render's network, an existing local-tooling gap, not new). Result: **HTTP 401**
+against whatever `THE_ODDS_API_KEY`/`ODDS_API_KEY` is in local `backend/.env`.
+**Does not contradict the resolution above.** The rotated key lives in Render's
+environment; nothing establishes that local `backend/.env` was ever updated
+with the same value after the 2026-08-17 rotation, and the production evidence
+above (real cache hits, real `market_snapshots` rows, `clv_capture.outcome:
+"ok"`) is all *later* than this session's local 401. The formal `VERIFIED`
+probe still needs to run somewhere holding the real Render-configured key (a
+Render shell, not a local checkout) — still not accessible from here.
 
 Two findings from the same log excerpt:
 

@@ -5,6 +5,121 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 8 training columns are real for the first time (2026-08-18)
+
+Closes the training half of `docs/DEBT.md` item 29. Phase 8's 21 features were
+computed at serving time but never for training — `retrain_with_expanded_features.py`
+filled all 21 with constant registry defaults, so a `v6_phase8` candidate would
+have reported `feature_count: 89` while 21 of those columns taught the model
+nothing (a tree learner cannot split on a constant).
+
+### Added
+
+- `backend/src/features/phase8_historical.py` — chronological replay of
+  `PiRatingSystem`, `BerrarRatingSystem` and `weighted_form_features` over the
+  real `fd_*.csv` corpus. Calls the *same* engine classes serving calls rather
+  than reimplementing their arithmetic; a divergent second copy is the exact
+  failure this exists to prevent. Sorts internally (both engines document a
+  chronological requirement neither validates) but realigns to the caller's
+  input order, so `rows[i]` always matches `matches[i]`.
+- `--include-phase8` on `backend/scripts/train_on_real_matches.py` — widens the
+  vector 68 → 89 and writes `*_ensemble_v6_phase8.pkl`, never over the
+  `v5_phase7` filenames (`prediction.py`'s `_wrap_artifact` infers provenance
+  from artifact shape; a mislabelled file makes shape and filename disagree).
+- `APEX_FEATURES_89` in `feature_registry.py` — the Apex-ordered 89 list,
+  mirroring `APEX_FEATURES_68`'s existing relationship to `CANONICAL_FEATURES_68`.
+- `backend/tests/unit/test_phase8_historical.py` (11 tests). The load-bearing
+  ones assert genuine *variance* and no-leakage — a shape-only "21 columns
+  present" assertion would have passed under the original defect.
+
+### Measured
+
+- On the real EPL corpus (2,571 rows), the 15 replayed columns now carry
+  **489–2,506 distinct values each**, where all 21 were previously a single
+  constant.
+- The existing 68-feature path is **byte-identical**, asserted directly
+  (`X89[:, :68] == X68`) rather than assumed.
+
+### Honest limits
+
+- Only **15 of 21** columns are replayed. Market drift (5) and match importance
+  (1) are structurally underivable from this corpus — `compute_market_drift`
+  gates staleness against wall-clock `now` and the corpus holds one opening
+  price per match rather than a movement series; `compute_match_context` reads
+  `LeagueStanding`, which has no season or as-of-date column and so cannot
+  answer what standings looked like before a past fixture. Both stay at their
+  registry default and are declared in `model_metadata` as
+  `phase8_features_defaulted`, so a promotion review cannot read
+  `feature_count: 89` as "89 informative features".
+- The replay is **training-only** (in-memory, `parquet_path=None`). Production
+  serving still cold-starts Pi/Berrar at neutral; backfilling those parquets is
+  tracked as item 29(d).
+
+### Found while building
+
+- `pi_attack_diff` and `pi_defense_diff` are **mathematically always identical**
+  — the Pi update moves defense as the exact negative of attack. Two of the 21
+  Phase 8 features are one feature. Upstream engine property, true at serving
+  too, so deliberately *not* changed here; recorded as a
+  `ENSEMBLE_CORRELATION_PRUNE_THRESHOLD` candidate. Invisible until the column
+  stopped being constant.
+- A test caught the replay's own first draft wedging the whole batch on one
+  malformed date — the sort key ran before the per-record handler. Same defect
+  class as `docs/DEBT.md` items 23/24, in the module written to avoid it.
+
+### Validation evidence
+
+- `python -m pytest tests -q` — **1458 passed, 14 skipped, 0 failed**.
+- `python scripts/check_mypy_ceiling.py --ceiling 784` — **767 ≤ 784**, ceiling
+  untouched.
+- `ruff check` on all touched files — clean.
+
+---
+
+## Unreleased - stale debt-ledger entry retired, two items measured (2026-08-18)
+
+Targeted the Ground Truth audit's four remaining open items. Two turned out
+already-resolved, one was measured rather than assumed, one has no
+agent-doable action left.
+
+### Fixed
+
+- **`docs/DEBT.md` item #26 retired — it described a bug already fixed 66
+  minutes after being filed.** `feature_availability_matrix.json`'s
+  producer/consumer schema mismatch (commit `c256852`) was closed by commit
+  `f985946` the same day, which never came back to update the ledger. Both
+  sides now share one schema (`backend/src/models/promotion_evidence.py`);
+  reconfirmed by rerunning `test_promotion_feature_evidence.py` (6/6 passed).
+  No code changed here — only the stale write-up.
+
+### Investigated, no action taken
+
+- **S3 evidence-storage 403** — every code/template/doc artifact
+  (`infra/aws/evidence-storage.yaml`, `docs/S3_EVIDENCE_STORAGE_RUNBOOK.md`,
+  the mocked `storage:probe` tests) already accurately documents this as an
+  AWS-IAM/Render-secret boundary with no local/agent-doable next step.
+- **`the_odds_api --validate-live`** — ran locally (`ALLOW_SQLITE_FALLBACK=true`
+  to clear the CLI's DB-import boundary, an existing local-tooling gap). Got
+  HTTP 401 against the local `backend/.env` key, which is not evidence about
+  the already-rotated production key on Render — recorded in `docs/DEBT.md`
+  item 22 without overwriting the existing production evidence. The formal
+  probe still needs to run from an environment holding the real Render key.
+
+### Added
+
+- `docs/DEBT.md` item #27 — measured the LazyMotion/`framer-motion` bundle
+  question instead of leaving it as an assumed "nice-to-have."
+  `ANALYZE=true pnpm --filter @sabiscore/web build` shows no route regressed
+  materially since the last logged table (vΩ.25); `/monitoring` dropped to
+  exactly the shared 103 kB baseline via the codebase's existing
+  `next/dynamic` route-splitting pattern. `framer-motion` bundles per-route,
+  not into the shared chunk, and is already in
+  `next.config.js`'s `optimizePackageImports`. Deferred the 16-file
+  `motion`→`m`+`LazyMotion` rewrite (previously tried once and reverted) with
+  an explicit re-measurement trigger.
+
+---
+
 ## Unreleased - certification integrity: earn the verdict, don't assert it (2026-08-17)
 
 Two defects found while working the certification/staking activation phase.
