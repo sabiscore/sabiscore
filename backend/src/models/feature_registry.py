@@ -338,6 +338,12 @@ CANONICAL_FEATURES_89: List[str] = [
     *PHASE8_FEATURES_21,
 ]
 
+# The Apex-ordered equivalent, mirroring APEX_FEATURES_68's relationship to
+# CANONICAL_FEATURES_68 (the Apex market block replaces the legacy one in place).
+# train_on_real_matches.py builds its X matrix from the Apex ordering, so a
+# Phase 8 training run needs this list rather than CANONICAL_FEATURES_89.
+APEX_FEATURES_89: List[str] = [*APEX_FEATURES_68, *PHASE8_FEATURES_21]
+
 # Deprecated aliases — the counts in these names are wrong (they hold 21, 89 and 89
 # respectively). Retained, not deleted: all are imported across production code
 # (`api/endpoints/phase8_features.py`) and tests, so removing them is a breaking

@@ -84,14 +84,27 @@ if _FEATURE_SPEC is None or _FEATURE_SPEC.loader is None:
 _FEATURE_REGISTRY = importlib.util.module_from_spec(_FEATURE_SPEC)
 _FEATURE_SPEC.loader.exec_module(_FEATURE_REGISTRY)
 APEX_FEATURES_68 = _FEATURE_REGISTRY.APEX_FEATURES_68
+APEX_FEATURES_89 = _FEATURE_REGISTRY.APEX_FEATURES_89
 CANONICAL_FEATURES_68 = _FEATURE_REGISTRY.CANONICAL_FEATURES_68
 DEFAULT_FEATURE_VALUES_68 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_68
+DEFAULT_FEATURE_VALUES_89 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_89
 derive_combination_features = _FEATURE_REGISTRY.derive_combination_features
 derive_last5_form_features = _FEATURE_REGISTRY.derive_last5_form_features
 derive_league_features = _FEATURE_REGISTRY.derive_league_features
 derive_apex_market_features = _FEATURE_REGISTRY.derive_apex_market_features
 derive_market_features = _FEATURE_REGISTRY.derive_market_features
 derive_temporal_features = _FEATURE_REGISTRY.derive_temporal_features
+
+# src/features/ is free of database imports at module scope (market.py and
+# match_context.py guard theirs behind TYPE_CHECKING), so this is a plain import
+# rather than another spec_from_file_location dance. src/models/ is NOT — its
+# __init__ pulls in core.database, which is why the registry above is loaded by
+# path instead.
+from src.features.phase8_historical import (  # noqa: E402 - after the sys.path bootstrap
+    RESOLVED_FEATURES as PHASE8_RESOLVED_FEATURES,
+    UNRESOLVED_FEATURES as PHASE8_UNRESOLVED_FEATURES,
+    compute_phase8_training_columns,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("retrain")
@@ -238,7 +251,7 @@ def load_matches(cache_dir: Path) -> List[dict]:
     return rows
 
 
-def build_dataset(matches: List[dict]) -> Dict[str, dict]:
+def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str, dict]:
     """Walk forward in time, emitting one feature row per match with enough history.
 
     History is keyed per (league, team) and updated only AFTER the row is
@@ -251,6 +264,14 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
     never see a closing line for a future fixture, so training on closing
     prices would teach the model to lean on a systematically more-informed
     signal than serving can ever supply.
+
+    ``include_phase8`` widens the vector from 68 to 89 by replaying the Phase 8
+    rating/form engines over the same corpus (see
+    ``src.features.phase8_historical``). 15 of the 21 Phase 8 columns carry real
+    replayed values; the remaining 6 — market drift and match importance —
+    cannot be honestly derived from this corpus and stay at their registry
+    default, exactly like any other unresolved slot. The replay is a separate
+    chronological pass over ``matches`` and is aligned to it by index.
     """
     histories: Dict[str, TeamHistory] = defaultdict(TeamHistory)
     out: Dict[str, dict] = defaultdict(
@@ -260,13 +281,29 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
     odds_rows = 0
     total_rows = 0
 
-    for m in matches:
+    feature_names = APEX_FEATURES_89 if include_phase8 else APEX_FEATURES_68
+    base_defaults = DEFAULT_FEATURE_VALUES_89 if include_phase8 else DEFAULT_FEATURE_VALUES_68
+    phase8_rows: List[Dict[str, float]] = []
+    if include_phase8:
+        replay = compute_phase8_training_columns(matches)
+        phase8_rows = replay.rows
+        logger.info("Phase 8 replay: %s", replay.summary())
+        logger.info(
+            "Phase 8 columns computed from history: %d (%s)",
+            len(PHASE8_RESOLVED_FEATURES), ", ".join(PHASE8_RESOLVED_FEATURES),
+        )
+        logger.info(
+            "Phase 8 columns left at registry default (not derivable from this corpus): %d (%s)",
+            len(PHASE8_UNRESOLVED_FEATURES), ", ".join(PHASE8_UNRESOLVED_FEATURES),
+        )
+
+    for idx, m in enumerate(matches):
         league, hist = m["league"], histories[m["league"]]
         home_stats = hist.stats(m["home"], is_home=True)
         away_stats = hist.stats(m["away"], is_home=False)
 
         if home_stats is not None and away_stats is not None:
-            features = dict(DEFAULT_FEATURE_VALUES_68)
+            features = dict(base_defaults)
 
             features.update(derive_last5_form_features(
                 home_stats["home_form_5"], home_stats["home_win_rate_5"], is_home=True,
@@ -295,6 +332,12 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
                 away_goals_against_avg=features["away_goals_against_avg"],
             ))
 
+            if include_phase8:
+                # Aligned to `matches` by index; an empty dict (skipped record)
+                # leaves every Phase 8 slot at its registry default rather than
+                # substituting an invented value.
+                features.update(phase8_rows[idx])
+
             market_features = None
             if m.get("odds") is not None:
                 try:
@@ -309,7 +352,7 @@ def build_dataset(matches: List[dict]) -> Dict[str, dict]:
                 features.update(market_features)
                 odds_rows += 1
                 label = 0 if m["hg"] > m["ag"] else 1 if m["hg"] == m["ag"] else 2
-                out[league]["X"].append([features[name] for name in APEX_FEATURES_68])
+                out[league]["X"].append([features[name] for name in feature_names])
                 out[league]["X_incumbent"].append(
                     [incumbent_features[name] for name in CANONICAL_FEATURES_68]
                 )
@@ -506,12 +549,26 @@ def _fit_temperature(meta_model: Any, meta_features: Any, y_calibration: np.ndar
     return TemperatureScaledMetaModel(meta_model, float(result.x))
 
 
-def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]:
+def train_league(
+    league: str,
+    data: dict,
+    holdout_season: str,
+    feature_names: Optional[List[str]] = None,
+) -> Optional[dict]:
     from lightgbm import LGBMClassifier
     from sklearn.ensemble import RandomForestClassifier
     from xgboost import XGBClassifier
 
+    # The vector's own width decides the schema — a caller cannot mislabel an
+    # 89-wide matrix as 68 (or vice versa) by passing the wrong list.
+    feature_names = list(feature_names or APEX_FEATURES_68)
+
     X = np.asarray(data["X"], dtype=np.float32)
+    if X.ndim == 2 and X.shape[1] != len(feature_names):
+        raise ValueError(
+            f"{league}: feature matrix is {X.shape[1]} wide but {len(feature_names)} "
+            "names were supplied — refusing to train a mislabelled artifact"
+        )
     y = np.asarray(data["y"], dtype=np.int64)
     seasons = np.asarray(data["seasons"])
     dates = np.asarray(data["dates"], dtype=object)
@@ -595,7 +652,7 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
     prior = np.tile(np.bincount(y_train, minlength=3) / len(y_train), (len(y_test), 1))
     metrics["baseline_accuracy_home"] = home_rate
     metrics["baseline_rps_trainprior"] = ranked_probability_score(y_test, prior)
-    market_columns = [APEX_FEATURES_68.index(name) for name in (
+    market_columns = [feature_names.index(name) for name in (
         "market_prob_home", "market_prob_draw", "market_prob_away"
     )]
     metrics["baseline_rps_market"] = ranked_probability_score(y_test, X_test[:, market_columns])
@@ -616,18 +673,18 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
 
     logger.info(
         "  %-12s train=%5d test=%4d | avg: acc=%.4f rps=%.4f | stacked: acc=%.4f rps=%.4f "
-        "| home-only %.4f prior-rps %.4f market-rps %.4f responsive=%d/68",
+        "| home-only %.4f prior-rps %.4f market-rps %.4f responsive=%d/%d",
         league, metrics["train_n"], metrics["n"], metrics["accuracy"], metrics["rps"],
         metrics["stacked"]["accuracy"], metrics["stacked"]["rps"],
         metrics["baseline_accuracy_home"], metrics["baseline_rps_trainprior"],
         metrics["baseline_rps_market"],
-        metrics["responsive_features"],
+        metrics["responsive_features"], len(feature_names),
     )
 
     return {
         "models": models,
         "meta_model": meta_model,
-        "feature_columns": list(APEX_FEATURES_68),
+        "feature_columns": list(feature_names),
         "is_trained": True,
         "model_metadata": {
             "accuracy": metrics["stacked"]["accuracy"],
@@ -636,8 +693,21 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
             "rps": metrics["stacked"]["rps"],
             "calibration_error": metrics["stacked"]["calibration_error"],
             "trained_at": datetime.now().isoformat(),
-            "feature_count": len(APEX_FEATURES_68),
-            "feature_schema_version": "apex_v1_68",
+            "feature_count": len(feature_names),
+            "feature_schema_version": f"apex_v1_{len(feature_names)}",
+            # The honesty record for docs/DEBT.md item 29: a bare
+            # feature_count: 89 would let a reader assume all 21 Phase 8 columns
+            # carry learned signal. These two lists say which actually varied in
+            # training and which were a constant registry default, so a future
+            # promotion review can see it without re-deriving it.
+            **(
+                {
+                    "phase8_features_replayed": list(PHASE8_RESOLVED_FEATURES),
+                    "phase8_features_defaulted": list(PHASE8_UNRESOLVED_FEATURES),
+                }
+                if len(feature_names) == len(APEX_FEATURES_89)
+                else {}
+            ),
             "served_head": "stacked_logistic_regression",
             "validation_status": "UNVERIFIED_CANDIDATE",
             "training_samples": metrics["train_n"],
@@ -660,7 +730,11 @@ def train_league(league: str, data: dict, holdout_season: str) -> Optional[dict]
     }
 
 
-def train_pooled(dataset: Dict[str, dict], holdout_season: str) -> Optional[dict]:
+def train_pooled(
+    dataset: Dict[str, dict],
+    holdout_season: str,
+    feature_names: Optional[List[str]] = None,
+) -> Optional[dict]:
     """One model over every league, for leagues too small to train alone.
 
     Eredivisie has a single committed season (306 matches, none in the holdout),
@@ -676,7 +750,7 @@ def train_pooled(dataset: Dict[str, dict], holdout_season: str) -> Optional[dict
         for key in pooled:
             pooled[key].extend(data[key])
     logger.info("\nPooled model over %d leagues, %d rows", len(dataset), len(pooled["y"]))
-    return train_league("POOLED", pooled, holdout_season)
+    return train_league("POOLED", pooled, holdout_season, feature_names=feature_names)
 
 
 def main() -> int:
@@ -684,6 +758,17 @@ def main() -> int:
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
     ap.add_argument("--out-dir", type=Path, default=_BACKEND_ROOT / "models" / "candidate")
     ap.add_argument("--holdout-season", default="2526")
+    ap.add_argument(
+        "--include-phase8",
+        action="store_true",
+        help=(
+            "Widen the vector from 68 to 89 by replaying the Phase 8 rating/form "
+            "engines over the corpus. 15 of the 21 Phase 8 columns get real "
+            "values; market drift and match importance (6) are not derivable "
+            "from this corpus and stay at their registry default. Writes "
+            "v6_phase8 artifacts, never over the v5_phase7 filenames."
+        ),
+    )
     args = ap.parse_args()
 
     import joblib
@@ -694,24 +779,33 @@ def main() -> int:
         logger.error("No matches parsed — nothing to train on.")
         return 1
 
-    dataset = build_dataset(matches)
+    feature_names = APEX_FEATURES_89 if args.include_phase8 else APEX_FEATURES_68
+    # The generation tag is part of the filename because prediction.py's
+    # _wrap_artifact infers provenance from artifact shape; writing an 89-wide
+    # model over a v5_phase7 filename would make the two disagree.
+    artifact_suffix = "v6_phase8" if args.include_phase8 else "v5_phase7"
+    dataset = build_dataset(matches, include_phase8=args.include_phase8)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("\nTemporal holdout: season %s\n", args.holdout_season)
     report: Dict[str, dict] = {}
     trained: set = set()
     for league in sorted(dataset):
-        bundle = train_league(league, dataset[league], args.holdout_season)
+        bundle = train_league(
+            league, dataset[league], args.holdout_season, feature_names=feature_names
+        )
         if bundle is None:
             continue
         report[league] = bundle.pop("_metrics")
         trained.add(league)
-        joblib.dump(bundle, args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_v5_phase7.pkl")
+        joblib.dump(
+            bundle, args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl"
+        )
 
     # Cover whatever was too small to fit on its own.
     uncovered = sorted(set(dataset) - trained)
     if uncovered:
-        pooled_bundle = train_pooled(dataset, args.holdout_season)
+        pooled_bundle = train_pooled(dataset, args.holdout_season, feature_names=feature_names)
         if pooled_bundle is not None:
             report["POOLED"] = pooled_bundle.pop("_metrics")
             pooled_bundle["model_metadata"]["pooled_fallback_for"] = uncovered
@@ -721,14 +815,16 @@ def main() -> int:
             )
             for league in uncovered:
                 joblib.dump(
-                    pooled_bundle, args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_v5_phase7.pkl"
+                    pooled_bundle,
+                    args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
                 )
                 logger.info("  %s -> pooled model (own history: %d rows, no holdout)",
                             league, len(dataset[league]["y"]))
 
-    (args.out_dir / "training_report_real.json").write_text(
-        json.dumps(report, indent=2), encoding="utf-8"
+    report_name = (
+        "training_report_real_phase8.json" if args.include_phase8 else "training_report_real.json"
     )
+    (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
     logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0
