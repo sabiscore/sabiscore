@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// GitHub's hosted Ubuntu runner already ships Google Chrome. In CI, use the
+// branded system channel so the release gate does not depend on downloading a
+// second ~300 MB Chromium/Headless-Shell toolchain from Playwright's CDN.
+// Local development keeps Playwright's normal bundled Chromium semantics.
+const ciChromeChannel = process.env.CI ? { channel: 'chrome' as const } : {};
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
@@ -9,7 +15,11 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
-    video: 'retain-on-failure',
+    // Playwright video recording requires its private FFmpeg bundle even when
+    // the browser itself comes from the system Chrome channel. Keep CI free of
+    // that extra CDN dependency; traces + screenshots still preserve failure
+    // evidence. Local runs retain video-on-failure for richer debugging.
+    video: process.env.CI ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   // Release gate names this "Playwright desktop smoke" / "Playwright mobile
@@ -18,11 +28,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium', ...ciChromeChannel },
     },
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { ...devices['Pixel 5'], ...ciChromeChannel },
     },
   ],
   webServer: {
