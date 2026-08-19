@@ -219,6 +219,7 @@ jobs:
   playwright-smoke:
     name: Playwright Smoke (backend-independent)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: web-quality
     env:
       NEXT_TELEMETRY_DISABLED: "1"
@@ -244,9 +245,6 @@ jobs:
 
       - name: Build web
         run: pnpm --filter @sabiscore/web build
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run smoke tests
         run: pnpm exec playwright test tests/e2e/intelligence.spec.ts --project=chromium --project=mobile-chrome
