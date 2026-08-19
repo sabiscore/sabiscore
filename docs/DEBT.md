@@ -2,8 +2,19 @@
 
 ## 30. The full test suite makes a live network call and overwrites a committed data file
 
-**Tier:** `NEXT` — test-hygiene defect, no production impact, but it silently
-dirties the working tree and depends on a third-party host being up.
+**Tier:** `RESOLVED 2026-08-19`. `test_download_season_data` and
+`test_pinnacle_odds_extraction` (`backend/tests/test_scrapers.py`) now take a
+`tmp_path` fixture and point `scraper.cache_dir` at it before calling
+`download_season_data`, so a stale-cache miss fetches (or fails to fetch, both
+fine — `download_season_data`'s own documented fallback is an empty
+DataFrame) into an isolated temp directory instead of the committed
+`data/cache/football_data/E0_2324.csv`. No new fixture, no env var, no
+network-mocking framework — the scraper already exposed `cache_dir` as a
+plain instance attribute.
+
+**Original description (for context):** test-hygiene defect, no production
+impact, but it silently dirties the working tree and depends on a
+third-party host being up.
 **Found:** 2026-08-18, incidentally — a routine `git status` after an unrelated
 change showed `data/cache/football_data/E0_2324.csv` modified with 380 changed
 rows that nothing in that change had touched.
@@ -397,22 +408,25 @@ no longer costs an entire sync tick's fixtures each time.
 
 ---
 
-## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, data fix deferred
+## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, root cause confirmed, repair script ready
 
-**Tier:** mitigation = `FIXED` this session. Root-cause data fix = `NEXT` — no
-operator credential needed, but requires investigating the team-alias
-resolution path, not a one-line change.
+**Tier:** mitigation = `FIXED`. Root cause = `CONFIRMED 2026-08-19`, **not a
+live code defect** — see below. Repair script = `EXISTS, dry-run-equivalent
+verified live, --apply pending production DB write access` (operator step,
+tracked separately from this investigation).
 **Found:** 2026-08-16, via a live `/health/ready` baseline check ahead of the
 Elo Postgres backfill runbook in item 13 — `checks.elo` showed `rows: 0` and
 `components.settlement` showed `outcome: "error"`, `last_success_at: null`,
 hours after migration `0007_durable_elo_state` deployed.
 
-**Root cause, confirmed via read-only production queries.** 26 rows in
-`matches` have `home_team_id == away_team_id` — a team recorded as playing
-itself. All 26 belong to exactly two clubs, one occurrence roughly every
-season since 2019/2020: `fd-team-serie_a:fc_internazionale_milano` (16 rows)
-and `fd-team-la_liga:rcd_espanyol_de_barcelona` (10 rows). The exact failing
-insert:
+**Root cause, confirmed via read-only production queries (updated 2026-08-19,
+corrects the per-team count below).** 26 rows in `matches` have
+`home_team_id == away_team_id` — a team recorded as playing itself. Three
+clubs now show up, not two — `fd-team-ligue_1:paris_fc` (2 rows, both dated
+2026, the newest and most recent occurrences) had not yet appeared when this
+item was first written: `fd-team-serie_a:fc_internazionale_milano` (14 rows),
+`fd-team-la_liga:rcd_espanyol_de_barcelona` (10 rows),
+`fd-team-ligue_1:paris_fc` (2 rows). The exact failing insert:
 
 ```text
 duplicate key value violates unique constraint "uq_elo_rating_match_team"
@@ -442,26 +456,68 @@ alongside `processed`, surfaced through `settlement_service`'s existing
 match in the same batch as a self-play match still gets its snapshots
 committed, i.e. the batch is no longer wedge-able by this bug.
 
-**Not done — deliberately deferred.** The 26 corrupt `matches` rows
-themselves are untouched; this fix only stops them from blocking everything
-else. Root cause is unconfirmed — most likely a team-alias/name-resolution
-bug specific to these two clubs in the historical CSV ingestion path
-(`historical_backfill_service.py` / `providers/reconciliation.py`), given it
-recurs almost exactly once per season for the same two teams rather than
-being randomly distributed. Needs investigation before either correcting the
-26 rows in place or re-ingesting them correctly; a same-session data mutation
-was explicitly out of scope (production data fix, not authorized this turn).
+**Root cause, confirmed 2026-08-19 — this is legacy corrupted data, not a
+live bug.** Re-ran `historical_backfill_service.TeamIndex.resolve()` (today's
+code, unchanged) against the *real* production `teams` rows for all three
+colliding pairs (`AC Milan`/`FC Internazionale Milano`,
+`FC Barcelona`/`RCD Espanyol de Barcelona`,
+`Paris Saint-Germain FC`/`Paris FC`) and it resolves every one of the six
+teams to its own, distinct id — no collision reproduces under today's
+resolver. Confirmed further via `historical_match_id()` (which hashes the raw
+CSV team-name strings, not any resolved id): recomputing it from the raw
+`Milan`/`Inter`, `Espanol`/`Barcelona`, and `Paris SG`/`Paris FC` rows in the
+already-committed `fd_I1_*.csv` / `fd_SP1_*.csv` / `fd_F1_*.csv` corpus
+reproduces the exact corrupted `match_id`s (e.g. `fdco-3d01b70f3b802e7b`)
+byte-for-byte. The resolver bug that originally mis-assigned these 26 rows
+was fixed by an earlier session (`78c2272`, PR #25 — the alias table's
+`"fc"`-as-noise-token stripping and curated aliases); it just never
+retroactively corrected rows already committed under the older, buggier
+version. Given the Paris FC rows are from the *current* (2025-26) season,
+this pairing wasn't fully closed until recently and could plausibly recur —
+worth a spot re-check next time `identity_conflicts_skipped` shows a nonzero
+count in a fresh `backfill_historical_matches()` run.
+
+**Repair script:** `backend/scripts/repair_self_play_matches.py`
+(`--dry-run`/`--apply`, same convention as `replay_elo_from_db.py`) — a thin
+CLI wrapper; the actual logic lives in
+`backend/src/services/self_play_repair_service.py` (same split as
+`elo_state_service.py`/`replay_elo_from_db.py`, and for the identical
+reason: the CLI script sets `os.environ.setdefault(...)` at import time,
+which is fine standalone but pollutes the shared process env the moment a
+test imports it — confirmed live when the first draft of this repair broke
+`test_sqlite_fallback_requires_explicit_opt_in_outside_tests` by leaking
+`SABISCORE_ALLOW_INSECURE_FALLBACK=true` process-wide). Recovers each
+corrupted row's original raw team names via `historical_match_id`
+(name-keyed, so independent of any resolved id), re-resolves them through a
+`TeamIndex` seeded from the live `teams` table, and only updates a row when
+the new resolution yields two distinct ids — anything still ambiguous or
+unrecoverable is skipped and reported, never guessed. Unit-tested
+(`backend/tests/unit/test_repair_self_play_matches.py`, importing the service
+module directly, not the script): repairs a known collision, dry-run reports
+without mutating, skips a row with no matching CSV, skips a row that still
+collides after re-resolution.
+
+**Not done.** `--apply` has not been run against production — this
+environment has no local `DATABASE_URL` credential for the production
+database (correctly gated; not attempted). The dry-run's expected output was
+independently verified via read-only production queries during this
+investigation: 26 corrupted rows found, all 26 repairable, 0 skipped, with
+before/after ids matching this section's descriptions exactly. Running
+`--apply` is an operator step against production data — do it with the real
+`DATABASE_URL`, review the printed per-row plan first, then re-query
+`SELECT count(*) FROM matches WHERE home_team_id = away_team_id` to confirm
+it drops to 0. No separate Elo action needed afterward —
+`sync_elo_from_finished_matches` picks the corrected matches up on its next
+hourly tick.
 
 **Blast radius:** was 100% of the durable-Elo backfill (item 13) — now
 scoped down to exactly these 26 matches' own Elo history staying an honest
 data gap (`home_resolved`/`away_resolved` correctly `False` for them; INV-01
 unaffected — no fabricated rating is ever produced for a self-play match).
-**Cost:** mitigation, done. Root-cause fix: investigation + a targeted data
-correction, no credential/operator dependency, size unknown until the
-alias-resolution bug is found.
-**Priority:** high for the root-cause investigation — every future season
-these two clubs play will add another one of these rows if the ingestion bug
-isn't fixed, even though the mitigation means it won't wedge anything again.
+**Cost:** mitigation, done. Root-cause investigation, done. Repair script,
+done and tested. Remaining cost is one operator-run `--apply` invocation.
+**Priority:** medium — the mitigation means it can no longer wedge anything,
+and the repair is ready whenever production DB write access is available.
 
 ---
 

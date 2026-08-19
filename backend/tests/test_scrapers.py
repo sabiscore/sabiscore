@@ -77,22 +77,29 @@ class TestFootballDataScraper:
         assert "SP1" in scraper.LEAGUE_CODES["La Liga"]
         assert "I1" in scraper.LEAGUE_CODES["Serie A"]
     
-    def test_download_season_data(self):
+    def test_download_season_data(self, tmp_path):
         """Test fetching historical data (using cache/fallback)."""
         scraper = FootballDataEnhancedScraper()
-        
+        # Redirect the cache to an isolated temp dir so a stale-cache miss can
+        # never fetch over the network and overwrite the committed fixture in
+        # data/cache/football_data/ (see docs/DEBT.md item 30).
+        scraper.cache_dir = tmp_path / "football_data"
+        scraper.cache_dir.mkdir(parents=True, exist_ok=True)
+
         # This may use cache or return empty DataFrame if remote fails
         df = scraper.download_season_data("EPL", "2324", use_cache=True)
-        
+
         assert hasattr(df, 'columns')  # Is a DataFrame
         # If data exists, should have expected columns
         if len(df) > 0:
             assert "home_team" in df.columns or "HomeTeam" in df.columns
-    
-    def test_pinnacle_odds_extraction(self):
+
+    def test_pinnacle_odds_extraction(self, tmp_path):
         """Test that Pinnacle odds columns exist in standardized output."""
         scraper = FootballDataEnhancedScraper()
-        
+        scraper.cache_dir = tmp_path / "football_data"
+        scraper.cache_dir.mkdir(parents=True, exist_ok=True)
+
         df = scraper.download_season_data("EPL", "2324", use_cache=True)
         
         if len(df) > 0:
