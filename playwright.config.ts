@@ -15,7 +15,11 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
-    video: 'retain-on-failure',
+    // Playwright video recording requires its private FFmpeg bundle even when
+    // the browser itself comes from the system Chrome channel. Keep CI free of
+    // that extra CDN dependency; traces + screenshots still preserve failure
+    // evidence. Local runs retain video-on-failure for richer debugging.
+    video: process.env.CI ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   // Release gate names this "Playwright desktop smoke" / "Playwright mobile
