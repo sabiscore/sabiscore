@@ -453,12 +453,11 @@ no longer costs an entire sync tick's fixtures each time.
 
 ---
 
-## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, root cause confirmed, repair script ready
+## 23. 26 matches record a team playing itself — wedged the Elo backfill; code mitigation shipped, root cause confirmed, repair executed — `RESOLVED 2026-08-19`
 
-**Tier:** mitigation = `FIXED`. Root cause = `CONFIRMED 2026-08-19`, **not a
-live code defect** — see below. Repair script = `EXISTS, dry-run-equivalent
-verified live, --apply pending production DB write access` (operator step,
-tracked separately from this investigation).
+**Tier:** `RESOLVED 2026-08-19`. Mitigation = `FIXED`. Root cause =
+`CONFIRMED`, **not a live code defect** — see below. Repair = **executed
+against production**, verified.
 **Found:** 2026-08-16, via a live `/health/ready` baseline check ahead of the
 Elo Postgres backfill runbook in item 13 — `checks.elo` showed `rows: 0` and
 `components.settlement` showed `outcome: "error"`, `last_success_at: null`,
@@ -552,32 +551,41 @@ module directly, not the script): repairs a known collision, dry-run reports
 without mutating, skips a row with no matching CSV, skips a row that still
 collides after re-resolution.
 
-**Not done.** `--apply` has not been run against production — this
-environment has no local `DATABASE_URL` credential for the production
-database (correctly gated; not attempted). The dry-run's expected output was
-independently verified via read-only production queries during this
-investigation: 26 corrupted rows found, all 26 repairable, 0 skipped, with
-before/after ids matching this section's descriptions exactly. Running
-`--apply` is an operator step against production data — do it with the real
-`DATABASE_URL`, review the printed per-row plan first, then re-query
-`SELECT count(*) FROM matches WHERE home_team_id = away_team_id` to confirm
-it drops to 0. No separate Elo action needed afterward —
-`sync_elo_from_finished_matches` picks the corrected matches up on its next
-hourly tick.
+**Done — 2026-08-19.** `--apply` was run against the live production
+database (`dpg-d9pfv3pt0dsc73djciog-a`, `sabiscore_db_v2`). Output matched
+the dry-run exactly: `corrupted_rows_found=26 repaired=26 skipped=0`, all 26
+per-row repairs matching this section's descriptions (SERIE_A 14 rows
+Milan↔Inter, LA_LIGA 10 rows Espanyol↔Barcelona, LIGUE_1 2 rows Paris
+SG↔Paris FC). Verified independently via a **separate, read-only** path
+(Render's hosted-Postgres query tool, not the script that wrote the rows):
+`SELECT count(*) FROM matches WHERE home_team_id = away_team_id` read `26`
+immediately before the run and `0` immediately after. No separate Elo action
+needed — `sync_elo_from_finished_matches` will pick the 26 corrected matches
+up on its next hourly settlement tick.
+
+⚠️ **Operational finding, same incident:** `backend/.env`'s `DATABASE_URL`
+turned out to be stale — it named a Postgres instance id
+(`dpg-d95kg3e7r5hc73eh7g6g-a`) that no longer resolves at all (DNS failure,
+not the item-31 internal-vs-external-hostname case), and that doesn't match
+the one live instance Render's API lists for this workspace
+(`dpg-d9pfv3pt0dsc73djciog-a`, free tier, created 2026-08-05, expires
+2026-09-04 — free-tier Render Postgres instances rotate). The correct
+external connection string (`<instance-id>.oregon-postgres.render.com`, per
+item 31's hostname convention) was obtained from Render's dashboard and
+passed via `--database-url` rather than relying on `.env`. **Re-check
+`backend/.env`'s `DATABASE_URL` against Render's dashboard before trusting
+it for the next local operator script** — this is a free-tier database, so
+this drift will recur on the next rotation.
 
 **Blast radius:** was 100% of the durable-Elo backfill (item 13) — now
-scoped down to exactly these 26 matches' own Elo history staying an honest
-data gap (`home_resolved`/`away_resolved` correctly `False` for them; INV-01
-unaffected — no fabricated rating is ever produced for a self-play match).
-Re-measured 2026-08-19: item 13's backfill is **complete** (12,762/12,762
-eligible, all integrity gates zero), so these 26 matches are now the *only*
-finished matches with no Elo history. Repairing them adds 26 matches / 52
-snapshot rows and takes Elo coverage to genuinely 100% of the corpus.
-Distribution confirmed by live query: SERIE_A 14, LA_LIGA 10, LIGUE_1 2.
+fully closed. Item 13's backfill was already complete (12,762/12,762
+eligible, all integrity gates zero) before this repair; these 26 matches
+were the only finished matches with no Elo history. Repairing them takes Elo
+coverage to genuinely 100% of the corpus once the next hourly settlement
+tick processes them.
 **Cost:** mitigation, done. Root-cause investigation, done. Repair script,
-done and tested. Remaining cost is one operator-run `--apply` invocation.
-**Priority:** medium — the mitigation means it can no longer wedge anything,
-and the repair is ready whenever production DB write access is available.
+done and tested. `--apply`, done and verified.
+**Priority:** closed.
 
 ---
 
@@ -1076,7 +1084,7 @@ by design and cannot lean on them yet.
 
 ## 13. Serving still has an unresolved canonical feature family — tactical remains; durable Elo code is ready for runtime backfill
 
-**Tier:** Elo = `RESOLVED 2026-08-19` — backfill is **complete in production**, verified by read-only query: 12,762 of 12,762 eligible finished matches processed (100%), 25,524 snapshot rows (exactly 2 per match), 160 teams, cursor at 2026-08-17. All eight mandatory integrity gates read **zero** (`partial_one_row_matches`, `processed_not_exactly_two_rows`, `duplicate_match_team_pairs`, `orphan_snapshot_match_ids`, `orphan_snapshot_team_ids`, `snapshot_team_not_home_or_away`, `snapshot_match_date_mismatch`, `snapshot_league_mismatch`). Per-league: EPL 2,660 / LA_LIGA 2,655 / SERIE_A 2,646 / LIGUE_1 2,335 / BUNDESLIGA 2,142 / **EREDIVISIE 324** — Eredivisie was 0/324 at the 2026-08-17 audit and self-resolved exactly as the global-FIFO ordering predicted, confirming that entry's "do not special-case a league" call was right. The only matches still absent from Elo are the 26 self-play rows in item 23, which are correctly excluded rather than fabricated. Head-to-head and home venue resolved 2026-08-11. Tactical/StatsBomb remains unresolved (`NEXT`).
+**Tier:** Elo = `RESOLVED 2026-08-19` — backfill is **complete in production**, verified by read-only query: 12,762 of 12,762 eligible finished matches processed (100%), 25,524 snapshot rows (exactly 2 per match), 160 teams, cursor at 2026-08-17. All eight mandatory integrity gates read **zero** (`partial_one_row_matches`, `processed_not_exactly_two_rows`, `duplicate_match_team_pairs`, `orphan_snapshot_match_ids`, `orphan_snapshot_team_ids`, `snapshot_team_not_home_or_away`, `snapshot_match_date_mismatch`, `snapshot_league_mismatch`). Per-league: EPL 2,660 / LA_LIGA 2,655 / SERIE_A 2,646 / LIGUE_1 2,335 / BUNDESLIGA 2,142 / **EREDIVISIE 324** — Eredivisie was 0/324 at the 2026-08-17 audit and self-resolved exactly as the global-FIFO ordering predicted, confirming that entry's "do not special-case a league" call was right. The 26 self-play rows named here were repaired in production 2026-08-19 (item 23, now `RESOLVED`) and will reach 100% Elo coverage on the next hourly settlement tick. Head-to-head and home venue resolved 2026-08-11. Tactical/StatsBomb remains unresolved (`NEXT`).
 **Owner:** unassigned.
 **Found:** 2026-08-08, while establishing the retrain's feature set.
 
