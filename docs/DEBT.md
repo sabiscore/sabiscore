@@ -1,5 +1,50 @@
 # SabiScore Debt Ledger
 
+## 31. `database.py`'s Postgres connection failure replaced the driver's real error with an unactionable string — FIXED 2026-08-19
+
+**Tier:** `RESOLVED 2026-08-19`.
+**Found:** while an operator ran `scripts/repair_self_play_matches.py` against
+production and got, in full:
+
+```text
+File "backend/src/core/database.py", line 113, in <module>
+    raise Exception("PostgreSQL connection test failed")
+Exception: PostgreSQL connection test failed
+```
+
+Nothing in that names a cause. `_test_connection(eng) -> bool` catches the
+driver exception, logs it at `logger.warning`, and returns `False`; the caller
+then raised a fresh generic `Exception` with no `__cause__`. Any caller that
+has not configured logging — CLI scripts, alembic, a bare `python -c` import —
+therefore sees the *only* diagnostic discarded. The real message in this case
+was `FATAL: password authentication failed for user "sabiscore_db_v2_user"`,
+which is entirely self-explaining.
+
+**Fix:** the PostgreSQL branch now connects inline (`with engine.connect()`)
+instead of routing through `_test_connection()`, so the driver's own exception
+propagates untouched. `_test_connection()` is unchanged and still used by the
+two SQLite paths, where a bool is the right shape and the warning is reachable.
+`_db_available` semantics are unaffected — it defaults `True` and was never
+assigned on the Postgres success path.
+
+**Diagnostic value confirmed by reproduction**, not assumed: re-running the
+same command with a deliberately wrong password now surfaces
+`sqlalchemy.exc.OperationalError: ... FATAL: password authentication failed for
+user "..."`. An SSL hypothesis was tested and **disproved** first — probing the
+Render external host across `sslmode=prefer|disable|require` showed `prefer`
+(psycopg's default) reaching authentication, so TLS and network were never the
+problem. Recording that here because "Render external Postgres needs SSL" is a
+plausible-sounding wrong answer that would have cost a cycle.
+
+⚠️ **Render hostname gotcha, same incident:** `dpg-<id>-a` is Render's
+*internal* hostname and does not resolve outside their network (verified:
+`gaierror`). External access needs `dpg-<id>-a.<region>-postgres.render.com`
+(here `oregon`), which resolves. Both forms appear in Render's dashboard; only
+the external one works from a developer machine.
+
+---
+
+
 ## 30. The full test suite makes a live network call and overwrites a committed data file
 
 **Tier:** `RESOLVED 2026-08-19`. `test_download_season_data` and
@@ -478,7 +523,7 @@ worth a spot re-check next time `identity_conflicts_skipped` shows a nonzero
 count in a fresh `backfill_historical_matches()` run.
 
 **Repair script:** `backend/scripts/repair_self_play_matches.py`
-(`--dry-run`/`--apply`, same convention as `replay_elo_from_db.py`) — a thin
+(`--dry-run`/`--apply`/`--database-url`) — a thin
 CLI wrapper; the actual logic lives in
 `backend/src/services/self_play_repair_service.py` (same split as
 `elo_state_service.py`/`replay_elo_from_db.py`, and for the identical
@@ -486,7 +531,17 @@ reason: the CLI script sets `os.environ.setdefault(...)` at import time,
 which is fine standalone but pollutes the shared process env the moment a
 test imports it — confirmed live when the first draft of this repair broke
 `test_sqlite_fallback_requires_explicit_opt_in_outside_tests` by leaking
-`SABISCORE_ALLOW_INSECURE_FALLBACK=true` process-wide). Recovers each
+`SABISCORE_ALLOW_INSECURE_FALLBACK=true` process-wide). It also deliberately
+does **not** copy `replay_elo_from_db.py`'s
+`os.environ.setdefault("DATABASE_URL", "sqlite...")` bootstrap: that pattern
+wins over `backend/.env` (env vars outrank dotenv in pydantic-settings), so a
+data-repair tool run without an explicit target would silently point at an
+empty local SQLite file and report `corrupted_rows_found=0` — indistinguishable
+from a clean production database. Instead `--database-url` sets the target
+explicitly (also sidestepping shell-specific env syntax: `VAR=x cmd` is
+POSIX-only and fails in PowerShell), and the resolved target is echoed with the
+password redacted. ⚠️ `replay_elo_from_db.py` still carries the original
+unsafe bootstrap — worth the same treatment next time it is touched. Recovers each
 corrupted row's original raw team names via `historical_match_id`
 (name-keyed, so independent of any resolved id), re-resolves them through a
 `TeamIndex` seeded from the live `teams` table, and only updates a row when
@@ -514,6 +569,11 @@ hourly tick.
 scoped down to exactly these 26 matches' own Elo history staying an honest
 data gap (`home_resolved`/`away_resolved` correctly `False` for them; INV-01
 unaffected — no fabricated rating is ever produced for a self-play match).
+Re-measured 2026-08-19: item 13's backfill is **complete** (12,762/12,762
+eligible, all integrity gates zero), so these 26 matches are now the *only*
+finished matches with no Elo history. Repairing them adds 26 matches / 52
+snapshot rows and takes Elo coverage to genuinely 100% of the corpus.
+Distribution confirmed by live query: SERIE_A 14, LA_LIGA 10, LIGUE_1 2.
 **Cost:** mitigation, done. Root-cause investigation, done. Repair script,
 done and tested. Remaining cost is one operator-run `--apply` invocation.
 **Priority:** medium — the mitigation means it can no longer wedge anything,
@@ -1016,7 +1076,7 @@ by design and cannot lean on them yet.
 
 ## 13. Serving still has an unresolved canonical feature family — tactical remains; durable Elo code is ready for runtime backfill
 
-**Tier:** `NEXT` — head-to-head and home venue resolved 2026-08-11; the Elo code path was corrected 2026-08-16 and now awaits production migration/backfill verification. Tactical/StatsBomb remains unresolved.
+**Tier:** Elo = `RESOLVED 2026-08-19` — backfill is **complete in production**, verified by read-only query: 12,762 of 12,762 eligible finished matches processed (100%), 25,524 snapshot rows (exactly 2 per match), 160 teams, cursor at 2026-08-17. All eight mandatory integrity gates read **zero** (`partial_one_row_matches`, `processed_not_exactly_two_rows`, `duplicate_match_team_pairs`, `orphan_snapshot_match_ids`, `orphan_snapshot_team_ids`, `snapshot_team_not_home_or_away`, `snapshot_match_date_mismatch`, `snapshot_league_mismatch`). Per-league: EPL 2,660 / LA_LIGA 2,655 / SERIE_A 2,646 / LIGUE_1 2,335 / BUNDESLIGA 2,142 / **EREDIVISIE 324** — Eredivisie was 0/324 at the 2026-08-17 audit and self-resolved exactly as the global-FIFO ordering predicted, confirming that entry's "do not special-case a league" call was right. The only matches still absent from Elo are the 26 self-play rows in item 23, which are correctly excluded rather than fabricated. Head-to-head and home venue resolved 2026-08-11. Tactical/StatsBomb remains unresolved (`NEXT`).
 **Owner:** unassigned.
 **Found:** 2026-08-08, while establishing the retrain's feature set.
 

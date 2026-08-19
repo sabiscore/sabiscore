@@ -437,7 +437,7 @@ async def backfill_historical_matches(
             session.add(League(id=league_id, name=league_id.replace("_", " ").title(), country=country))
     await session.flush()
 
-    index = TeamIndex((await session.execute(select(Team.id, Team.name))).all())
+    index = TeamIndex((await session.execute(select(Team.id, Team.name))).tuples().all())
 
     # Resolve every distinct (league, name) needed by pending rows once rather than
     # per row. Persisted matches were filtered above specifically so this phase can
