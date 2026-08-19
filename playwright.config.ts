@@ -1,5 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// GitHub's hosted Ubuntu runner already ships Google Chrome. In CI, use the
+// branded system channel so the release gate does not depend on downloading a
+// second ~300 MB Chromium/Headless-Shell toolchain from Playwright's CDN.
+// Local development keeps Playwright's normal bundled Chromium semantics.
+const ciChromeChannel = process.env.CI ? { channel: 'chrome' as const } : {};
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
@@ -18,11 +24,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium', ...ciChromeChannel },
     },
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: { ...devices['Pixel 5'], ...ciChromeChannel },
     },
   ],
   webServer: {
