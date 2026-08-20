@@ -6,7 +6,9 @@ import {
   derivePlatformHealth,
   isHealthyBackendStatus,
   liveMetricLabel,
+  mergeProviderEvidence,
   normalizeCapabilityStatus,
+  normalizeProviderEvidence,
 } from "./health-status";
 
 describe("health status normalization", () => {
@@ -32,15 +34,105 @@ describe("health status normalization", () => {
   });
 });
 
+describe("provider evidence normalization", () => {
+  it("normalizes the backend provider-keyed evidence object", () => {
+    expect(normalizeProviderEvidence({
+      football_data_org: {
+        state: "LIVE_VERIFIED",
+        status: "VERIFIED",
+        observations: 12,
+      },
+      the_odds_api: {
+        state: "STALE",
+        status: "VERIFIED",
+        observations: 4,
+      },
+    })).toEqual([
+      {
+        provider: "football_data_org",
+        state: "LIVE_VERIFIED",
+        status: "VERIFIED",
+        observations: 12,
+      },
+      {
+        provider: "the_odds_api",
+        state: "STALE",
+        status: "VERIFIED",
+        observations: 4,
+      },
+    ]);
+  });
+
+  it("fails closed for malformed evidence payloads", () => {
+    expect(normalizeProviderEvidence(null)).toEqual([]);
+    expect(normalizeProviderEvidence("LIVE_VERIFIED")).toEqual([]);
+    expect(normalizeProviderEvidence({ football_data_org: null })).toEqual([]);
+  });
+
+  it("merges registry configuration with durable evidence without losing raw status", () => {
+    expect(mergeProviderEvidence(
+      [
+        {
+          provider: "football_data_org",
+          configured: true,
+          enabled: true,
+          status: "CONFIGURED_UNVERIFIED",
+          trust_tier: "OFFICIAL_AUTHENTICATED",
+        },
+        {
+          provider: "espn",
+          configured: true,
+          enabled: true,
+          status: "CONFIGURED_UNVERIFIED",
+        },
+      ],
+      {
+        football_data_org: {
+          state: "LIVE_VERIFIED",
+          status: "VERIFIED",
+          observations: 386,
+        },
+        espn: {
+          state: "UNKNOWN",
+          status: null,
+          observations: 0,
+        },
+      },
+    )).toEqual([
+      {
+        provider: "football_data_org",
+        configured: true,
+        enabled: true,
+        status: "LIVE_VERIFIED",
+        state: "LIVE_VERIFIED",
+        trust_tier: "OFFICIAL_AUTHENTICATED",
+        observations: 386,
+        registry_status: "CONFIGURED_UNVERIFIED",
+        evidence_status: "VERIFIED",
+      },
+      {
+        provider: "espn",
+        configured: true,
+        enabled: true,
+        status: "UNKNOWN",
+        state: "UNKNOWN",
+        observations: 0,
+        registry_status: "CONFIGURED_UNVERIFIED",
+        evidence_status: null,
+      },
+    ]);
+  });
+});
+
 describe("platform provider health", () => {
   it("keeps configured, enabled, and live provider counts distinct", () => {
     const health = derivePlatformHealth({
       backendStatus: "ok",
       backendChecks: { models: { status: "ready" } },
       providers: [
-        { configured: true, enabled: true, status: "VERIFIED" },
-        { configured: true, enabled: true, status: "CONFIGURED_UNVERIFIED" },
-        { configured: false, enabled: false, status: "UNCONFIGURED" },
+        { configured: true, enabled: true, status: "LIVE_VERIFIED" },
+        { configured: true, enabled: true, status: "UNKNOWN" },
+        { configured: false, enabled: false, status: "UNKNOWN" },
       ],
     });
     expect(health.configured).toBe(2);
@@ -48,32 +140,46 @@ describe("platform provider health", () => {
     expect(health.live).toBe(1);
     expect(health.degraded).toBe(0);
     expect(health.modelsReady).toBe(true);
-    expect(health.providerActivation.label).toBe("Ready");
+    expect(health.providerActivation.label).toBe("Partial");
   });
 
-  it("reports a partial provider state until every configured provider is enabled", () => {
+  it("reports ready only when every configured enabled provider is live-verified", () => {
     expect(deriveProviderActivation([
-      { configured: true, enabled: true, status: "CONFIGURED_UNVERIFIED" },
-      { configured: true, enabled: false, status: "UNAVAILABLE" },
+      { configured: true, enabled: true, status: "LIVE_VERIFIED" },
+      { configured: true, enabled: true, state: "LIVE_VERIFIED", status: "VERIFIED" },
     ])).toMatchObject({
       total: 2,
       configured: 2,
-      enabled: 1,
-      live: 0,
+      enabled: 2,
+      live: 2,
+      degraded: 0,
+      label: "Ready",
+    });
+  });
+
+  it("reports partial while configured providers lack live evidence", () => {
+    expect(deriveProviderActivation([
+      { configured: true, enabled: true, status: "LIVE_VERIFIED" },
+      { configured: true, enabled: true, status: "UNKNOWN" },
+    ])).toMatchObject({
+      configured: 2,
+      enabled: 2,
+      live: 1,
       degraded: 0,
       label: "Partial",
     });
   });
 
-  it("treats intentional configured-unverified status as neutral but real negative evidence as degraded", () => {
+  it("treats durable rate-limit and stale evidence as degraded", () => {
     expect(deriveProviderActivation([
-      { configured: true, enabled: true, status: "CONFIGURED_UNVERIFIED" },
+      { configured: true, enabled: true, status: "LIVE_VERIFIED" },
       { configured: true, enabled: true, status: "RATE_LIMITED" },
+      { configured: true, enabled: true, state: "STALE", status: "VERIFIED" },
     ])).toMatchObject({
-      configured: 2,
-      enabled: 2,
-      live: 0,
-      degraded: 1,
+      configured: 3,
+      enabled: 3,
+      live: 1,
+      degraded: 2,
       label: "Partial",
     });
   });
