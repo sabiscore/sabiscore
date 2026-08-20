@@ -5,6 +5,123 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Release-SHA parity, semantic-identity repair manifest, and certification-gated CLV/value-scan (2026-08-20)
+
+Five-patch bundle applied on top of `2beb31e`. Code merges in full; the
+production-mutation-capable repair CLI (Patch 4) ships in `--review`-only
+practice — its `--apply` path requires a live, human-reviewed manifest, a
+separately-issued authorization id, and a literal confirmation token that
+this session neither has nor fabricates.
+
+### Fixed
+
+- **`backendCapability` was structurally always `null` in production.**
+  `apps/web/src/app/api/health/route.ts` read `data.capability` (singular)
+  from the backend's `/health/ready` response, but `health.py` has only ever
+  emitted `"capabilities"` (plural) — confirmed by grep, there is no singular
+  key anywhere in the endpoint. The existing Vitest fixtures stubbed the
+  *wrong* shape too (`capability: {...}`), so nothing caught it. Fixed to
+  read `data.capabilities ?? data.capability`, backward compatible with any
+  caller still on the old shape. Regression test added
+  (`route.test.ts`: "surfaces exact backend/Vercel SHAs and canonical
+  readiness capabilities").
+- `backend/scripts/replay_elo_from_db.py` carried the same implicit
+  `os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///...")` +
+  `SABISCORE_ALLOW_INSECURE_FALLBACK=true` bootstrap that
+  `repair_self_play_matches.py` deliberately avoided last session — flagged
+  there as "worth the same treatment next time it is touched." Removed; the
+  script now resolves `DATABASE_URL` through the normal settings chain (or an
+  explicit `--database-url`), echoes the redacted target before connecting,
+  and fails loudly instead of silently reporting `eligible=0` against an
+  empty local database. 3 new regression tests
+  (`test_replay_elo_from_db_cli.py`).
+
+### Added
+
+- **Exact release-SHA parity.** `/health`, `/health/ready`, and `/health/startup`
+  all gain `release_sha` — `RENDER_GIT_COMMIT` (Render-injected) or the
+  `SABISCORE_RELEASE_SHA` fallback, validated as a real 40-character hex SHA
+  or `null` (never a truncated/fabricated value). `apps/web`'s `/api/health`
+  gains `vercelSha` (`process.env.VERCEL_GIT_COMMIT_SHA`, unsliced).
+  `backend/scripts/verify_release_sha_parity.py` is a new fail-closed CLI
+  that fetches both endpoints and asserts GitHub master SHA == Render SHA ==
+  Vercel SHA == the SHA the frontend proxy itself observed from the backend —
+  four independent readings of the same deploy, not one healthy-looking
+  process assumed to imply the others.
+- **Source-backed semantic-identity repair manifest.**
+  `historical_identity_repair_manifest_service.py` extends the existing
+  audit (`historical_identity_audit_service.py`, PR #40) into a deterministic,
+  read-only, SHA-256-hashed repair plan: for every audit finding, it recovers
+  the original football-data.co.uk source row, cross-checks league/date/score
+  against the persisted `Match`, and re-resolves both team names under
+  today's league-scoped `TeamIndex`. An entry is `repair_ready` only when the
+  source agrees with the persisted row and both teams resolve to two
+  *distinct* ids — anything else is a named blocker, never a guess.
+  `scripts/build_semantic_identity_repair_manifest.py` prints/writes it;
+  `--require-complete` exits 2 unless every affected match is repair-ready.
+  Never mutates — PostgreSQL transactions are explicitly `READ ONLY` and
+  rolled back.
+- **Certification-gated CLV and public value-bet scanning.**
+  `GET /api/v1/value-bet-scan` previously trusted whatever `verdict`/
+  `stake_permitted` a *persisted* prediction payload carried — a stale or
+  legacy row could still read `stake_permitted: true` after a model
+  generation rolls back. It now calls `_certified_value_generation()` first
+  (the same hash-validated `active_generation.json` authority `/health`
+  already uses) and returns a `RESEARCH_ONLY` empty response with a named
+  `reason` whenever the active generation isn't `CERTIFIED` — live-verified
+  against the real deployed generation, which is `UNVERIFIED` today, so this
+  endpoint now correctly answers `RESEARCH_ONLY` in production rather than a
+  false `OK`. Both prediction-log queries are additionally scoped to the
+  certified `model_version`, closing the same gap for CLV:
+  `get_clv_records()`/`build_clv_records_query()` gain an optional
+  `model_version` filter (applied inside the latest-prediction subquery *and*
+  on the outer select — filtering only outside would let a newer foreign
+  generation's row hide a valid older one for the requested generation), and
+  `GET /api/v1/model-performance` now passes the walk-forward generation's own
+  `model_version` through, so a CLV figure can never silently pool two model
+  generations' predictions together.
+
+### Not executed this session (by design)
+
+- `backend/src/services/historical_identity_repair_service.py` +
+  `scripts/repair_semantic_identity_and_rebuild_elo.py` ship as reviewable
+  code only. The service plans a full path-dependent Elo rebuild (Elo is
+  order-dependent — correcting only the directly-affected `Match` rows would
+  leave every later opponent's rating contaminated) from the earliest
+  affected UTC day forward, per league, and binds `--apply` to two SHA-256
+  digests (the manifest and the replay plan) recomputed under a PostgreSQL
+  `SHARE ROW EXCLUSIVE` table lock at apply time, plus an explicit
+  `--authorization-id` and a literal `--confirm
+  APPLY_SEMANTIC_IDENTITY_AND_REBUILD_ELO` token. No hash, authorization id,
+  or confirmation was fabricated to exercise this path — `--review` (its
+  default) is the only mode this session ran, and it is read-only
+  (`SET TRANSACTION READ ONLY`, always rolled back). Extensive postcondition
+  checks (population, per-match snapshot count, team-id/league/timestamp
+  integrity, re-hashed match sequence) guard the eventual `--apply` run
+  regardless.
+
+### Verification
+
+- Backend: mypy ceiling 767 ≤ 784 (unchanged from the ceiling, no new debt);
+  `ruff check src/ scripts/` clean; full suite **1526 passed, 14 skipped, 0
+  failed** (same 14 pre-existing Redis/PostgreSQL/integration-only skips);
+  `verify_active_artifacts.py` passes (6 hash-locked pairs,
+  `v5_phase7-20260808`, `UNVERIFIED`).
+- Frontend: `pnpm lint` / `pnpm typecheck` clean; `pnpm test` 224 passed (204
+  web + 20 scraper); `NODE_ENV=production pnpm build` succeeds.
+- `alembic upgrade head`/`check` not run locally — no migration files in this
+  bundle, and the only reachable `DATABASE_URL` is Render's internal hostname
+  (documented, pre-existing local-environment limitation, unrelated to this
+  change); relies on GitHub Actions CI's real PostgreSQL service for that gate.
+- Patch-bundle integrity: 2 of 5 patch files (the SAB-22 manifest hardening
+  and the repair/rebuild service) applied via `git apply` byte-for-byte
+  matching their declared `checksums.json` SHA-256. The other 3 had a
+  transcription defect (structurally failed `git apply --check`, confirmed
+  by a short-by-a-few-bytes size mismatch against the declared digest) and
+  were instead applied as verified `Read`+`Edit` operations against the real
+  file contents, then proven correct by the full test/lint/typecheck/build
+  run above rather than by hash equality.
+
 ## Unreleased - Self-play match identity repaired; Postgres errors surface their real cause (2026-08-19)
 
 Closes `docs/DEBT.md` items 23 and 31.

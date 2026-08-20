@@ -257,6 +257,7 @@ def build_clv_records_query(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    model_version: str | None = None,
 ) -> Select[Any]:
     """Join the most recent pre-close prediction per match to its latest valid
     pre-kickoff closing line.
@@ -282,6 +283,12 @@ def build_clv_records_query(
         .group_by(MarketSnapshot.match_id)
         .subquery()
     )
+    latest_prediction_filters = [
+        MatchPredictionLog.created_at
+        < latest_closing_line.c.latest_captured_at
+    ]
+    if model_version:
+        latest_prediction_filters.append(MatchPredictionLog.model_version == model_version)
     latest_prediction = (
         select(
             MatchPredictionLog.match_id,
@@ -291,10 +298,7 @@ def build_clv_records_query(
             latest_closing_line,
             latest_closing_line.c.match_id == MatchPredictionLog.match_id,
         )
-        .where(
-            MatchPredictionLog.created_at
-            < latest_closing_line.c.latest_captured_at
-        )
+        .where(*latest_prediction_filters)
         .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
@@ -337,7 +341,8 @@ def build_clv_records_query(
             MarketSnapshot.away_implied_prob_devigged.is_not(None),
         )
     )
-
+    if model_version:
+        statement = statement.where(MatchPredictionLog.model_version == model_version)
     if league:
         statement = statement.where(func.lower(Match.league_id) == league.lower())
     if started_at is not None:
@@ -355,6 +360,7 @@ async def get_clv_records(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    model_version: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return prediction/closing-line pairs shaped for
     ``services.clv_service.compute_clv_summary()``:
@@ -367,6 +373,7 @@ async def get_clv_records(
             league=league,
             started_at=started_at,
             ended_at=ended_at,
+            model_version=model_version,
         )
     )
 

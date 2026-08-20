@@ -11,15 +11,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const ORIGINAL_BACKEND_URL = process.env.SABISCORE_BACKEND_URL;
+const ORIGINAL_VERCEL_GIT_COMMIT_SHA = process.env.VERCEL_GIT_COMMIT_SHA;
 
 beforeEach(() => {
   process.env.SABISCORE_BACKEND_URL = "https://backend.test";
+  delete process.env.VERCEL_GIT_COMMIT_SHA;
   vi.resetModules();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   process.env.SABISCORE_BACKEND_URL = ORIGINAL_BACKEND_URL;
+  if (ORIGINAL_VERCEL_GIT_COMMIT_SHA === undefined) {
+    delete process.env.VERCEL_GIT_COMMIT_SHA;
+  } else {
+    process.env.VERCEL_GIT_COMMIT_SHA = ORIGINAL_VERCEL_GIT_COMMIT_SHA;
+  }
 });
 
 /** Stubs readiness; ancillary calls return 404 unless a test overrides them. */
@@ -107,6 +114,28 @@ describe("/api/health backend status discrimination", () => {
     expect(body.brierScore).toBeNull();
     expect(body.avgEdgePct).toBeNull();
     expect(body.performanceStatus).toBe("PENDING");
+  });
+
+  it("surfaces exact backend/Vercel SHAs and canonical readiness capabilities", async () => {
+    const sha = "2beb31e0d4ed8c340fa55ea0063af93daae1d4f7";
+    process.env.VERCEL_GIT_COMMIT_SHA = sha;
+    stubReadiness({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        status: "healthy",
+        release_sha: sha,
+        checks: { database: { status: "healthy" } },
+        capabilities: { prediction: "AVAILABLE", stake: "DISABLED" },
+      }),
+    });
+
+    const body = await getHealth();
+
+    expect(body.backendSha).toBe(sha);
+    expect(body.backendCapability).toEqual({ prediction: "AVAILABLE", stake: "DISABLED" });
+    expect(body.vercelSha).toBe(sha);
+    expect(body.sha).toBe(sha.slice(0, 7));
   });
 
   it("does not erase healthy readiness when every ancillary endpoint rejects", async () => {

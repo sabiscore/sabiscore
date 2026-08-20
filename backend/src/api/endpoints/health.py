@@ -1,6 +1,8 @@
 """Health check and readiness probe endpoints for orchestration and monitoring."""
 
 import logging
+import os
+import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict
@@ -16,6 +18,21 @@ from ...models.active_generation import ActiveGenerationError, load_active_gener
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+
+
+def _release_sha() -> str | None:
+    """Return an exact deploy SHA only when runtime metadata is trustworthy.
+
+    Render injects ``RENDER_GIT_COMMIT`` for Git-backed services.  The explicit
+    ``SABISCORE_RELEASE_SHA`` fallback supports non-Render/local release
+    verification without ever inventing a revision.  Malformed/truncated values
+    are UNKNOWN rather than being presented as exact parity evidence.
+    """
+
+    raw = os.getenv("RENDER_GIT_COMMIT") or os.getenv("SABISCORE_RELEASE_SHA")
+    candidate = raw.strip() if raw else ""
+    return candidate.lower() if _GIT_SHA_RE.fullmatch(candidate) else None
 
 
 @lru_cache(maxsize=1)
@@ -45,6 +62,7 @@ async def health_check() -> Dict[str, Any]:
         "version": settings.app_version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "environment": settings.app_env,
+        "release_sha": _release_sha(),
     }
 
 
@@ -167,6 +185,7 @@ async def readiness_check(
     return {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "release_sha": _release_sha(),
         "checks": checks,
         "ready": critical_healthy,
         "capabilities": {
@@ -219,5 +238,6 @@ async def startup_status(request: Request) -> Dict[str, Any]:
     return {
         "status": "ready" if startup_ready else "initializing",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "release_sha": _release_sha(),
         "initialization": initialization,
     }
