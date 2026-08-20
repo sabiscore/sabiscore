@@ -454,7 +454,7 @@ async def backfill_historical_matches(
     await session.flush()
 
     indexes = _team_indexes_by_league(
-        (await session.execute(select(Team.id, Team.name, Team.league_id))).all()
+        (await session.execute(select(Team.id, Team.name, Team.league_id))).tuples().all()
     )
 
     # Resolve every distinct (league, name) needed by pending rows once rather than

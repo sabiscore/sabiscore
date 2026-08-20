@@ -107,10 +107,16 @@ else:
     # Try PostgreSQL first
     try:
         engine = _create_postgres_engine(_sync_url)
-        if _test_connection(engine):
-            logger.info("PostgreSQL connection successful")
-        else:
-            raise Exception("PostgreSQL connection test failed")
+        # Connect inline rather than via _test_connection(): that helper returns a
+        # bool and swallows the driver's exception into a logger.warning, so the
+        # raise below used to surface a bare "PostgreSQL connection test failed"
+        # with no cause attached. Callers that configure no logging (CLI scripts,
+        # alembic) then saw an unactionable error for what is usually a precise,
+        # self-explaining driver message ("password authentication failed for
+        # user X", "no pg_hba.conf entry", "could not translate host name").
+        with engine.connect() as _conn:
+            _conn.execute(text("SELECT 1"))
+        logger.info("PostgreSQL connection successful")
     except Exception as exc:
         if not _sqlite_fallback_allowed():
             logger.error("PostgreSQL unavailable and SQLite fallback is not explicitly allowed")

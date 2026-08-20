@@ -5,6 +5,50 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Self-play match identity repaired; Postgres errors surface their real cause (2026-08-19)
+
+Closes `docs/DEBT.md` items 23 and 31.
+
+### Fixed
+
+- `backend/src/core/database.py` — the PostgreSQL startup branch now connects
+  inline (`with engine.connect(): conn.execute(text("SELECT 1"))`) instead of
+  routing through `_test_connection()`, which caught the driver's exception,
+  logged it at `logger.warning`, and returned a bare `bool`. Callers with no
+  logging configured (CLI scripts, Alembic) previously saw only
+  `Exception: PostgreSQL connection test failed`; the real driver message
+  (e.g. `FATAL: password authentication failed for user "..."`) now
+  propagates untouched. The two SQLite paths are unchanged.
+
+### Added
+
+- `backend/src/services/self_play_repair_service.py` +
+  `backend/scripts/repair_self_play_matches.py` (`--dry-run`/`--apply`/
+  `--database-url`) — repairs legacy `matches` rows where
+  `home_team_id == away_team_id`. Recovers each corrupted row's original raw
+  CSV team names via the name-keyed `historical_match_id` hash and
+  re-resolves them under today's (already-fixed) `TeamIndex`; a row is only
+  ever repaired when re-resolution yields two distinct ids, otherwise it is
+  skipped and reported — never guessed. 4 new unit tests
+  (`backend/tests/unit/test_repair_self_play_matches.py`).
+
+### Executed against production
+
+- `--apply` was run against the live database on 2026-08-19:
+  `corrupted_rows_found=26 repaired=26 skipped=0` (SERIE_A 14, LA_LIGA 10,
+  LIGUE_1 2), independently verified via a read-only query
+  (`home_team_id = away_team_id` count: 26 → 0). Root cause confirmed as
+  legacy corrupted data from a resolver bug already fixed by PR #25
+  (`78c2272`) — today's `TeamIndex` re-resolves all six teams correctly, so
+  this is a one-time data repair, not a live code defect.
+
+### Test hygiene
+
+- `backend/tests/test_scrapers.py` — `test_download_season_data` and
+  `test_pinnacle_odds_extraction` now redirect `scraper.cache_dir` to
+  `tmp_path`, so a stale-cache miss can no longer fetch over the network and
+  overwrite the committed `data/cache/football_data/E0_2324.csv` fixture.
+
 ## Unreleased - Phase 8 training columns are real for the first time (2026-08-18)
 
 Closes the training half of `docs/DEBT.md` item 29. Phase 8's 21 features were
