@@ -1805,9 +1805,21 @@ is now `sync: false` (operator-managed, matching how the replacement was
 actually provisioned) and the `databases:` block is removed. No data was lost
 by this correction — the old instance was already unreachable (DNS failure)
 before the replacement existed, so there was nothing live to migrate.
-**Still worth confirming, operator-only:** that `sabiscore_db_v2` is on a plan
-that won't hit the same 30-day free-tier expiry (if it's also `plan: free`,
-this will recur).
+**⚠️ CONFIRMED 2026-08-21, and it recurs.** Queried live via the Render
+Postgres API (`GET` on `dpg-d9pfv3pt0dsc73djciog-a`, no dashboard needed):
+`"plan":"free"`, `"expiresAt":"2026-09-04T09:17:03Z"`. This is the *exact same
+failure mode* that killed `sabiscore-db` on 2026-08-05, about to repeat on the
+instance that replaced it — **14 days out from this update.** Free-tier
+Render Postgres cannot be upgraded to a paid plan in place; the only paths
+are (a) provision a new paid-plan instance and migrate data before the
+deadline, or (b) let it expire and rebuild from `fixture_sync_service`'s
+periodic re-sync + a fresh Elo replay — which would silently discard the
+2026-08-19 self-play repair, the full 12,790-match/25,580-row Elo backfill
+confirmed complete this same session, and any `elo_rating_snapshots` history
+that took ~2 weeks of background settlement ticks to accumulate. **Trigger:
+operator action before 2026-09-04.** Not agent-doable — plan changes need the
+Render dashboard/billing, and provisioning a replacement is a real-money,
+real-data decision that must not be made unilaterally.
 
 **Original entry, 2026-08-05 (kept for the incident record):**
 Render PostgreSQL `sabiscore-db` no longer resolved and the API was crash-looping.
