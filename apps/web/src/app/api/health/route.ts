@@ -63,7 +63,10 @@ export async function GET() {
           const data = JSON.parse(readinessBody) as Record<string, unknown>;
           backendStatus = (data.status as string) ?? (readinessRes.ok ? "unknown" : "degraded");
           backendChecks = (data.checks as Record<string, unknown>) ?? {};
-          backendCapability = (data.capability as Record<string, unknown>) ?? null;
+          backendCapability = (
+            (data.capabilities as Record<string, unknown> | undefined) ??
+            (data.capability as Record<string, unknown> | undefined)
+          ) ?? null;
           backendSha = typeof data.release_sha === "string" ? data.release_sha : null;
         } catch {
           backendStatus = "unavailable";
@@ -151,6 +154,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       modelVersion: modelCheck?.model_version ?? null,
       sha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+      vercelSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
     },
     {
       status: 200,

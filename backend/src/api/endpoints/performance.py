@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from functools import lru_cache
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -15,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ...db.session import get_async_session
-from ...models.active_generation import active_model_version
+from ...models.active_generation import (
+    ActiveGenerationError,
+    CERTIFIED,
+    active_model_version,
+    load_active_generation,
+)
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
 from ...services.settlement_service import get_walk_forward_registry
@@ -58,6 +64,26 @@ class ValueBetScanResponse(BaseModel):
     deadline_ms: int = 2500
 
 
+@lru_cache(maxsize=1)
+def _certified_value_generation() -> tuple[bool, str | None, str]:
+    """Return the immutable serving generation only when certification is valid.
+
+    Persisted prediction payloads are not an authority for production activation:
+    a stale/legacy row may still contain ``stake_permitted=true``.  The
+    hash-validated active-generation manifest is the release gate.
+    """
+    try:
+        generation = load_active_generation()
+    except ActiveGenerationError:
+        return False, None, "active_generation_invalid"
+    if generation.get("certification_state") != CERTIFIED:
+        return False, None, "model_not_certified"
+    model_version = str(generation.get("active_version") or "").strip()
+    if not model_version:
+        return False, None, "active_generation_missing_version"
+    return True, model_version, "certified"
+
+
 @router.get("/value-bet-scan", response_model=ValueBetScanResponse)
 async def value_bet_scan(
     days: int = Query(7, ge=1, le=14),
@@ -71,6 +97,26 @@ async def value_bet_scan(
     for each upcoming fixture.
     """
 
+    certified, model_version, gate_reason = _certified_value_generation()
+    if not certified or not model_version:
+        # Public market-value candidates remain unavailable until immutable
+        # certification evidence is active.  Do not trust a persisted payload to
+        # switch this endpoint on.
+        return ValueBetScanResponse(
+            fixtures=[],
+            total=0,
+            days=days,
+            data_gap=False,
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            status="RESEARCH_ONLY",
+            reason=gate_reason,
+            retryable=False,
+            source="certification_gate",
+            freshness={},
+            provenance=["models/active_generation.json"],
+            deadline_ms=int(_VALUE_SCAN_DB_DEADLINE_SECONDS * 1000),
+        )
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     end = now + timedelta(days=days)
     max_age_seconds = 900
@@ -81,7 +127,10 @@ async def value_bet_scan(
             MatchPredictionLog.match_id.label("match_id"),
             func.max(MatchPredictionLog.created_at).label("created_at"),
         )
-        .where(MatchPredictionLog.created_at >= cutoff)
+        .where(
+            MatchPredictionLog.created_at >= cutoff,
+            MatchPredictionLog.model_version == model_version,
+        )
         .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
@@ -104,7 +153,11 @@ async def value_bet_scan(
         .join(Match, Match.id == MatchPredictionLog.match_id)
         .outerjoin(home, home.id == Match.home_team_id)
         .outerjoin(away, away.id == Match.away_team_id)
-        .where(Match.match_date >= now, Match.match_date <= end)
+        .where(
+            Match.match_date >= now,
+            Match.match_date <= end,
+            MatchPredictionLog.model_version == model_version,
+        )
         .order_by(MatchPredictionLog.created_at.desc())
         .limit(500)
     )
@@ -284,7 +337,7 @@ async def model_performance(
 
     result = await _walk_forward_summary(db, league=league, window=window)
     records, validation = result["records"], result["validation"]
-
+    model_version = str(result["model_version"])
     # CLV has its own data floor, independent of walk-forward's — a season can
     # have plenty of captured closing lines and too few *finished* matches for
     # RPS, or vice versa. Computed unconditionally so neither gates the other.
@@ -293,6 +346,7 @@ async def model_performance(
         db,
         league=_resolve_league_filter(league),
         started_at=started_at,
+        model_version=model_version,
     )
     clv = compute_clv_summary(clv_records)
 

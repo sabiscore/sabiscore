@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 import pytest
 
-from src.api.endpoints.health import _model_readiness, metrics_endpoint
+from src.api.endpoints.health import (
+    _model_readiness,
+    _release_sha,
+    metrics_endpoint,
+)
 
 
 def _request(*, models_loaded: bool, loaded_leagues: list[str]):
@@ -34,6 +38,34 @@ def _generation(*, certification_state: str = "UNVERIFIED") -> dict:
             "eredivisie": {"required": False},
         },
     }
+
+
+def test_release_sha_prefers_render_runtime_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    render_sha = "2beb31e0d4ed8c340fa55ea0063af93daae1d4f7"
+    fallback_sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    monkeypatch.setenv("RENDER_GIT_COMMIT", render_sha.upper())
+    monkeypatch.setenv("SABISCORE_RELEASE_SHA", fallback_sha)
+
+    assert _release_sha() == render_sha
+
+
+def test_release_sha_uses_explicit_fallback_when_render_metadata_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fallback_sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    monkeypatch.setenv("SABISCORE_RELEASE_SHA", fallback_sha)
+
+    assert _release_sha() == fallback_sha
+
+
+def test_release_sha_rejects_truncated_or_malformed_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abc123")
+    monkeypatch.delenv("SABISCORE_RELEASE_SHA", raising=False)
+
+    assert _release_sha() is None
 
 
 def test_unverified_generation_can_be_runtime_ready_but_never_stake_permitted() -> None:

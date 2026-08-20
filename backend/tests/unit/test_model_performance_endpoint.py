@@ -284,9 +284,14 @@ async def test_model_performance_summary_200_once_seeded(session: AsyncSession) 
 
 async def test_value_bet_scan_reads_only_fresh_persisted_actionable_rows(
     session: AsyncSession,
+    monkeypatch,
 ) -> None:
     from src.api.endpoints.performance import value_bet_scan
 
+    monkeypatch.setattr(
+        "src.api.endpoints.performance._certified_value_generation",
+        lambda: (True, "v5_phase7", "certified"),
+    )
     now = datetime.now().replace(microsecond=0)
     session.add_all(
         [
@@ -357,3 +362,27 @@ async def test_value_bet_scan_reads_only_fresh_persisted_actionable_rows(
     assert payload["fixtures"][0]["match_id"] == "fd-actionable"
     assert payload["fixtures"][0]["edge_pct"] == pytest.approx(4.55)
     assert payload["source"] == "persisted_prediction_logs"
+
+
+async def test_value_bet_scan_is_fail_closed_while_generation_unverified(
+    monkeypatch,
+) -> None:
+    from unittest.mock import AsyncMock
+    from src.api.endpoints import performance
+
+    monkeypatch.setattr(
+        performance,
+        "_certified_value_generation",
+        lambda: (False, None, "model_not_certified"),
+    )
+    db = AsyncMock()
+
+    response = await performance.value_bet_scan(days=7, limit=50, db=db)
+    payload = response.model_dump()
+
+    assert payload["fixtures"] == []
+    assert payload["total"] == 0
+    assert payload["status"] == "RESEARCH_ONLY"
+    assert payload["reason"] == "model_not_certified"
+    assert payload["source"] == "certification_gate"
+    db.execute.assert_not_awaited()

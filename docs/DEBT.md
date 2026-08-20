@@ -1,5 +1,133 @@
 # SabiScore Debt Ledger
 
+## 34. Semantic-identity repair is manifest-complete and hash-gated; `--apply` still requires a live, human-reviewed run — NEXT (operator-gated)
+
+**Tier:** `NEXT`. Code complete, tested, and merged 2026-08-20. Blocked only
+on an operator running `--review` against production and supplying the two
+resulting SHA-256 digests plus an authorization id — nothing here is
+agent-doable without live production credentials this session doesn't have.
+
+**Context.** `historical_identity_audit_service.py` (PR #40) already finds
+semantic-identity drift beyond the simple self-play case closed in item 23 —
+matches where a source team name was mis-resolved to the *wrong distinct*
+team, not to itself. This session adds the two missing pieces to actually
+repair it:
+
+1. `historical_identity_repair_manifest_service.py` — for every audit
+   finding, recovers the original football-data.co.uk row, checks
+   league/date/score agreement against the persisted `Match`, and
+   re-resolves both team names under today's league-scoped `TeamIndex`. An
+   entry is `repair_ready` only when the source agrees and both teams
+   resolve to two *distinct* ids; every other case is a named blocker
+   (`source_score_mismatch`, `target_home_unresolved`,
+   `target_identity_collision`, …), never a guess. The whole manifest is
+   canonicalized and SHA-256 hashed. Read-only — `SET TRANSACTION READ ONLY`,
+   always rolled back.
+2. `historical_identity_repair_service.py` — plans a **full path-dependent
+   Elo rebuild**, not a spot fix. Elo is order-dependent: correcting only the
+   directly-affected `Match` rows (or deleting only their own snapshots)
+   would leave every later opponent's rating built on a wrong intermediate
+   state. The plan replaces every `EloRatingSnapshot` from the start of the
+   earliest affected UTC day forward, per league, replayed in deterministic
+   `(match_date, id)` order — same idea as `replay_elo_from_db.py`, scoped to
+   exactly the affected window.
+
+**Why `--apply` is intentionally not runnable by copying a value in.**
+`apply_semantic_identity_and_rebuild_elo()` re-derives both the manifest and
+the replay-plan SHA-256 *inside* the transaction, under a PostgreSQL
+`LOCK TABLE matches, elo_rating_snapshots IN SHARE ROW EXCLUSIVE MODE`, and
+aborts if either digest has moved since review — so a value copied from an
+earlier review, or a manifest that drifted because new matches synced in the
+meantime, cannot silently apply against a different reality than what was
+reviewed. `scripts/repair_semantic_identity_and_rebuild_elo.py --apply`
+additionally requires a non-empty `--authorization-id` and the literal
+`--confirm APPLY_SEMANTIC_IDENTITY_AND_REBUILD_ELO` token. Extensive
+postconditions run after the rebuild: exact match/snapshot population,
+per-match team-id/league/timestamp integrity, and a final
+`audit_historical_semantic_identity()` re-run that must return zero residual
+findings.
+
+**Trigger to close:** an operator runs
+`python scripts/repair_semantic_identity_and_rebuild_elo.py --review`
+against production, confirms `blocked: false` and `complete: true`, records
+the two printed SHA-256 digests, then runs `--apply` with those digests plus
+a real authorization id. Until then this is inert, reviewable code — no
+production data has been touched by this item.
+
+---
+
+## 33. Public CLV and value-bet-scan trusted a persisted payload's own claims instead of the certified-generation authority — FIXED 2026-08-20
+
+**Tier:** `RESOLVED 2026-08-20`.
+**Found:** while wiring release-SHA parity, a read of `value_bet_scan`
+(`GET /api/v1/value-bet-scan`) showed it gated candidates only on the
+*persisted* `MatchPredictionLog.payload`'s own `verdict`/`stake_permitted`
+fields — with no check against which model generation is actually
+`CERTIFIED` today. A row written under a since-decertified or rolled-back
+generation could still read `stake_permitted: true` and would have kept
+surfacing on this public endpoint indefinitely. `/health`'s own
+`_validated_generation()` already solved exactly this for readiness two
+sessions ago (`models/active_generation.py`, hash-validated, `CERTIFIED`
+state), but `performance.py` never adopted it.
+
+**Fix:** new `_certified_value_generation()` (same `@lru_cache(maxsize=1)`
+shape as `health.py`'s `_validated_generation()`, justified the same way —
+the active generation is deployment-atomic) calls the existing
+`load_active_generation()`/`CERTIFIED` authority. `value_bet_scan` now
+returns a `RESEARCH_ONLY` response with a named `reason`
+(`model_not_certified` / `active_generation_invalid` /
+`active_generation_missing_version`) and **does not touch the database at
+all** whenever certification isn't valid — confirmed live: today's real
+active generation is `v5_phase7-20260808 (UNVERIFIED)`
+(`verify_active_artifacts.py`), so this endpoint now correctly answers
+`RESEARCH_ONLY` in production instead of a false `OK`. Both prediction-log
+queries inside `value_bet_scan` are additionally scoped to
+`MatchPredictionLog.model_version == <certified version>`, closing the
+identical gap for CLV: `get_clv_records()`/`build_clv_records_query()` gain
+an optional `model_version` filter, applied **both** inside the
+latest-prediction subquery and on the outer select — filtering only outside
+would let a newer foreign generation's row silently hide a valid older row
+for the requested generation, so both predicates are load-bearing (pinned by
+`test_clv_generation_scope.py`'s assertion that the filter string appears at
+least twice in the compiled SQL). `GET /api/v1/model-performance` now passes
+the walk-forward result's own `model_version` through to `get_clv_records`,
+so a reported CLV figure can never silently pool two model generations'
+predictions.
+
+---
+
+## 32. `backendCapability` was structurally always `null` in production; `replay_elo_from_db.py`'s SQLite-fallback debt closed — FIXED 2026-08-20
+
+**Tier:** `RESOLVED 2026-08-20`.
+**Found:** while adding exact release-SHA parity checks, a direct read of
+`apps/web/src/app/api/health/route.ts` against the real
+`backend/src/api/endpoints/health.py` showed a field-name mismatch:
+`route.ts` read `data.capability` (singular) from `/health/ready`'s JSON
+body, but `health.py`'s `readiness_check()` has only ever emitted
+`"capabilities"` (plural) — confirmed by grepping the whole file for
+`"capabilit` and finding exactly one match. **`backendCapability` in the
+`/api/health` response has therefore been structurally `null` on every real
+production request.** The existing Vitest coverage never caught this because
+its own stubbed fixtures mocked the *wrong* shape too
+(`capability: {status: "failed"}`), so the test suite and the bug agreed
+with each other while both disagreed with the real backend.
+
+**Fix:** `backendCapability` now reads
+`data.capabilities ?? data.capability`, preferring the real plural key and
+falling back to the singular one a caller might still send — backward
+compatible, not a breaking rename. New regression test asserts the plural
+key round-trips end to end. Also closes a debt callout from the previous
+session's item 23 entry: `replay_elo_from_db.py` carried the identical
+implicit-SQLite-fallback pattern (`os.environ.setdefault("DATABASE_URL",
+"sqlite+aiosqlite:///...")` + `SABISCORE_ALLOW_INSECURE_FALLBACK=true`) that
+`repair_self_play_matches.py` deliberately avoided, flagged there as "worth
+the same treatment next time it is touched." Removed; the script now
+resolves `DATABASE_URL` through the normal settings chain or an explicit
+`--database-url`, echoes the redacted target, and fails loudly instead of
+silently reporting `eligible=0` against an empty local database.
+
+---
+
 ## 31. `database.py`'s Postgres connection failure replaced the driver's real error with an unactionable string — FIXED 2026-08-19
 
 **Tier:** `RESOLVED 2026-08-19`.
