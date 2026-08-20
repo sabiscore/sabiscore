@@ -4,7 +4,12 @@
  */
 
 import { NextResponse } from "next/server";
-import { backendHealthIssues, isHealthyBackendStatus } from "@/lib/health-status";
+import {
+  backendHealthIssues,
+  isHealthyBackendStatus,
+  mergeProviderEvidence,
+  type ProviderHealthRow,
+} from "@/lib/health-status";
 import { RPS_PROMOTION_GATE } from "@/lib/model-gates";
 import { isHtmlBody } from "@/lib/proxy-utils";
 
@@ -12,6 +17,8 @@ export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.SABISCORE_BACKEND_URL;
+const READINESS_TIMEOUT_MS = 15_000;
+const ANCILLARY_TIMEOUT_MS = 5_000;
 
 type PerformanceSummary = {
   status?: string;
@@ -21,27 +28,35 @@ type PerformanceSummary = {
   generated_at?: string;
 };
 
+function backendFetch(path: string, timeoutMs: number) {
+  return fetch(`${BACKEND_URL}${path}`, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { Accept: "application/json" },
+    cache: "no-store" as const,
+  });
+}
+
 export async function GET() {
   let backendStatus = "unavailable";
   let backendChecks: Record<string, unknown> = {};
   let backendCapability: Record<string, unknown> | null = null;
   let backendSha: string | null = null;
-  let providers: Array<Record<string, unknown>> = [];
+  let providers: ProviderHealthRow[] = [];
   let performance: PerformanceSummary = { status: "METRICS_UNAVAILABLE" };
 
   if (BACKEND_URL) {
-    try {
-      const requestOptions = {
-        signal: AbortSignal.timeout(5000),
-        headers: { Accept: "application/json" },
-        cache: "no-store" as const,
-      };
-      const [readinessRes, providersRes, performanceRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/health/ready`, requestOptions),
-        fetch(`${BACKEND_URL}/api/v1/providers/health`, requestOptions),
-        fetch(`${BACKEND_URL}/api/v1/model-performance/summary`, requestOptions),
+    const [readinessResult, providerRegistryResult, providerEvidenceResult, performanceResult] =
+      await Promise.allSettled([
+        backendFetch("/health/ready", READINESS_TIMEOUT_MS),
+        backendFetch("/api/v1/providers/health", ANCILLARY_TIMEOUT_MS),
+        backendFetch("/api/v1/providers/evidence", ANCILLARY_TIMEOUT_MS),
+        backendFetch("/api/v1/model-performance/summary", ANCILLARY_TIMEOUT_MS),
       ]);
 
+    // Readiness is authoritative for backend process/data readiness. Provider or
+    // performance endpoint failure must never erase a valid readiness response.
+    if (readinessResult.status === "fulfilled") {
+      const readinessRes = readinessResult.value;
       const readinessBody = await readinessRes.text().catch(() => "");
       if (!isHtmlBody(readinessBody)) {
         try {
@@ -54,15 +69,36 @@ export async function GET() {
           backendStatus = "unavailable";
         }
       }
+    }
 
-      if (providersRes.ok) {
-        const providerData = (await providersRes.json()) as { providers?: unknown };
-        providers = Array.isArray(providerData.providers)
-          ? providerData.providers as Array<Record<string, unknown>>
+    let providerRegistry: ProviderHealthRow[] = [];
+    if (providerRegistryResult.status === "fulfilled" && providerRegistryResult.value.ok) {
+      try {
+        const providerData = (await providerRegistryResult.value.json()) as { providers?: unknown };
+        providerRegistry = Array.isArray(providerData.providers)
+          ? providerData.providers.filter(
+              (row): row is ProviderHealthRow =>
+                typeof row === "object" && row !== null && !Array.isArray(row),
+            )
           : [];
+      } catch {
+        providerRegistry = [];
       }
+    }
 
-      const performanceBody = await performanceRes.text().catch(() => "");
+    let providerEvidence: unknown = null;
+    if (providerEvidenceResult.status === "fulfilled" && providerEvidenceResult.value.ok) {
+      try {
+        const evidenceData = (await providerEvidenceResult.value.json()) as { providers?: unknown };
+        providerEvidence = evidenceData.providers ?? null;
+      } catch {
+        providerEvidence = null;
+      }
+    }
+    providers = mergeProviderEvidence(providerRegistry, providerEvidence);
+
+    if (performanceResult.status === "fulfilled") {
+      const performanceBody = await performanceResult.value.text().catch(() => "");
       if (!isHtmlBody(performanceBody)) {
         try {
           performance = JSON.parse(performanceBody) as PerformanceSummary;
@@ -70,8 +106,6 @@ export async function GET() {
           performance = { status: "METRICS_UNAVAILABLE" };
         }
       }
-    } catch {
-      backendStatus = "unavailable";
     }
   }
 
