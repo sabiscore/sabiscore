@@ -11,7 +11,7 @@ Usage from backend/:
     python scripts/run_verification_sql.py
     python scripts/run_verification_sql.py scripts/verify_elo.sql
     python scripts/run_verification_sql.py \
-        scripts/verify_clv_settlement.sql scripts/verify_clv_by_generation.sql
+        scripts/verify_semantic_identity.sql scripts/verify_clv_settlement.sql
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from sqlalchemy.pool import NullPool
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _DEFAULT_FILES = (
     _BACKEND_DIR / "scripts" / "verify_elo.sql",
+    _BACKEND_DIR / "scripts" / "verify_semantic_identity.sql",
     _BACKEND_DIR / "scripts" / "verify_clv_settlement.sql",
     _BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql",
 )
@@ -263,7 +264,7 @@ def main() -> int:
     parser.add_argument(
         "files",
         nargs="*",
-        help="SQL files to execute; defaults to all canonical Phase-2 verification files",
+        help="SQL files to execute; defaults to all canonical production verification files",
     )
     args = parser.parse_args()
 
