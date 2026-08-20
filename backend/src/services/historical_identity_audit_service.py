@@ -39,10 +39,10 @@ class SemanticIdentityFinding:
     match_date: str
     match_league: str
     stored_home_team_id: str
-    stored_home_team_name: str
+    stored_home_team_name: str | None
     stored_home_team_league: str | None
     stored_away_team_id: str
-    stored_away_team_name: str
+    stored_away_team_name: str | None
     stored_away_team_league: str | None
     home_league_mismatch: bool
     away_league_mismatch: bool
@@ -107,7 +107,8 @@ async def audit_historical_semantic_identity(
     Only deterministic ``fdco-*`` historical matches are in scope. A Team whose
     declared league differs from the Match league is never reinterpreted here;
     the original CSV identity is attached for an operator-visible repair
-    manifest. Missing source evidence remains an explicit finding.
+    manifest. Missing Team rows and missing source evidence remain explicit
+    findings rather than disappearing through an inner join or guessed fallback.
     """
     source_index = build_historical_source_index(cache_dir)
     home_team = aliased(Team, name="semantic_home_team")
@@ -126,11 +127,13 @@ async def audit_historical_semantic_identity(
                 away_team.name,
                 away_team.league_id,
             )
-            .join(home_team, home_team.id == Match.home_team_id)
-            .join(away_team, away_team.id == Match.away_team_id)
+            .outerjoin(home_team, home_team.id == Match.home_team_id)
+            .outerjoin(away_team, away_team.id == Match.away_team_id)
             .where(
                 Match.id.like("fdco-%"),
                 or_(
+                    home_team.id.is_(None),
+                    away_team.id.is_(None),
                     home_team.league_id != Match.league_id,
                     away_team.league_id != Match.league_id,
                     home_team.league_id.is_(None),
@@ -160,12 +163,16 @@ async def audit_historical_semantic_identity(
                 match_date=match_date.isoformat(),
                 match_league=str(match_league),
                 stored_home_team_id=str(stored_home_id),
-                stored_home_team_name=str(stored_home_name),
+                stored_home_team_name=(
+                    str(stored_home_name) if stored_home_name is not None else None
+                ),
                 stored_home_team_league=(
                     str(stored_home_league) if stored_home_league is not None else None
                 ),
                 stored_away_team_id=str(stored_away_id),
-                stored_away_team_name=str(stored_away_name),
+                stored_away_team_name=(
+                    str(stored_away_name) if stored_away_name is not None else None
+                ),
                 stored_away_team_league=(
                     str(stored_away_league) if stored_away_league is not None else None
                 ),
