@@ -71,6 +71,31 @@ class StandingsRecord(BaseModel):
     rejection_reason: str | None = None
 
 
+def _fixture_request_context(
+    *,
+    competition: str,
+    date_from: str | None,
+    date_to: str | None,
+    status: str | None,
+) -> dict[str, str]:
+    """Return only non-secret dimensions needed to interpret one match query."""
+    context = {"competition": competition.upper()}
+    if status:
+        normalized_status = status.upper()
+        context["match_status"] = normalized_status
+        if normalized_status in {"SCHEDULED", "TIMED"}:
+            context["query_intent"] = "UPCOMING"
+        elif normalized_status == "FINISHED":
+            context["query_intent"] = "RESULTS"
+        else:
+            context["query_intent"] = "MATCHES"
+    if date_from:
+        context["date_from"] = date_from
+    if date_to:
+        context["date_to"] = date_to
+    return context
+
+
 class FootballDataOrgProvider(BaseProvider):
     provider_id = "football_data_org"
     display_name = "football-data.org"
@@ -104,15 +129,24 @@ class FootballDataOrgProvider(BaseProvider):
         Optional filters mirror the v4 endpoint parameters used by the fixture
         and settlement background jobs. Keeping the operation per competition
         preserves the historical seven-request tick and gives the registry one
-        durable observation for each real upstream request.
+        durable observation for each real upstream request. Request dimensions
+        are retained as sanitized evidence so an empty UCL or FINISHED query is
+        not confused with provider-wide availability.
         """
+        canonical_competition = competition.upper()
+        request_context = _fixture_request_context(
+            competition=canonical_competition,
+            date_from=date_from,
+            date_to=date_to,
+            status=status,
+        )
         guard = self._guard("fixtures")
         if guard is not None:
-            return guard
-        canonical_competition = competition.upper()
+            return guard.model_copy(update={"request_context": request_context})
         code = COMPETITIONS.get(canonical_competition)
         if code is None:
-            return self._unsupported_competition("fixtures", competition)
+            result = self._unsupported_competition("fixtures", competition)
+            return result.model_copy(update={"request_context": request_context})
 
         params: dict[str, Any] = {}
         if date_from is not None:
@@ -131,7 +165,8 @@ class FootballDataOrgProvider(BaseProvider):
                 params=params or None,
             )
         except Exception as exc:
-            return self._network_failure("fixtures", exc)
+            result = self._network_failure("fixtures", exc)
+            return result.model_copy(update={"request_context": request_context})
 
         raw_matches_any = payload.get("matches") if isinstance(payload, dict) else None
         raw_matches: list[dict[str, Any]] = raw_matches_any if isinstance(raw_matches_any, list) else []
@@ -153,15 +188,22 @@ class FootballDataOrgProvider(BaseProvider):
                 if not record.coherent
             ],
             raw_snapshot_id=stable_hash(payload),
+            request_context=request_context,
         )
 
     async def standings(self, *, competition: str) -> ProviderResult:
+        canonical_competition = competition.upper()
+        request_context = {
+            "competition": canonical_competition,
+            "query_intent": "STANDINGS",
+        }
         guard = self._guard("standings")
         if guard is not None:
-            return guard
-        code = COMPETITIONS.get(competition.upper())
+            return guard.model_copy(update={"request_context": request_context})
+        code = COMPETITIONS.get(canonical_competition)
         if code is None:
-            return self._unsupported_competition("standings", competition)
+            result = self._unsupported_competition("standings", competition)
+            return result.model_copy(update={"request_context": request_context})
 
         try:
             payload, headers = await self._get_json(
@@ -169,7 +211,8 @@ class FootballDataOrgProvider(BaseProvider):
                 headers={"X-Auth-Token": self.api_key or ""},
             )
         except Exception as exc:
-            return self._network_failure("standings", exc)
+            result = self._network_failure("standings", exc)
+            return result.model_copy(update={"request_context": request_context})
 
         raw_groups_any = payload.get("standings") if isinstance(payload, dict) else None
         raw_groups: list[dict[str, Any]] = raw_groups_any if isinstance(raw_groups_any, list) else []
@@ -183,7 +226,7 @@ class FootballDataOrgProvider(BaseProvider):
                 records.append(
                     self._normalize_standings_row(
                         raw=row,
-                        competition=competition.upper(),
+                        competition=canonical_competition,
                         standings_type="TOTAL",
                     )
                 )
@@ -197,6 +240,7 @@ class FootballDataOrgProvider(BaseProvider):
             quota=self._quota_from_headers(headers),
             warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
             raw_snapshot_id=stable_hash(payload),
+            request_context=request_context,
         )
 
     async def probe(self) -> ProviderStatus:

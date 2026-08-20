@@ -22,7 +22,7 @@ afterEach(() => {
   process.env.SABISCORE_BACKEND_URL = ORIGINAL_BACKEND_URL;
 });
 
-/** Stubs the readiness call; the providers call always 404s (irrelevant here). */
+/** Stubs readiness; ancillary calls return 404 unless a test overrides them. */
 function stubReadiness(response: { ok: boolean; status: number; body: string }) {
   vi.stubGlobal(
     "fetch",
@@ -106,6 +106,38 @@ describe("/api/health backend status discrimination", () => {
     expect(body.accuracy).toBeNull();
     expect(body.brierScore).toBeNull();
     expect(body.avgEdgePct).toBeNull();
+    expect(body.performanceStatus).toBe("PENDING");
+  });
+
+  it("does not erase healthy readiness when every ancillary endpoint rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        const href = String(url);
+        if (href.includes("/health/ready")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+            text: async () => JSON.stringify({
+              status: "ok",
+              release_sha: "abc123",
+              checks: { database: { status: "ready" } },
+              capability: { status: "research_only" },
+            }),
+          };
+        }
+        throw new Error("ancillary endpoint unavailable");
+      }),
+    );
+
+    const body = await getHealth();
+
+    expect(body.backendStatus).toBe("ok");
+    expect(body.status).toBe("healthy");
+    expect(body.backendSha).toBe("abc123");
+    expect(body.backendChecks).toMatchObject({ database: { status: "ready" } });
+    expect(body.providers).toEqual([]);
     expect(body.performanceStatus).toBe("PENDING");
   });
 });

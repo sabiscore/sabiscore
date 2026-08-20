@@ -28,6 +28,8 @@ def _collision_fixture(*, match_id: str = "fd-self-play-guard") -> dict[str, obj
     return {
         "id": match_id,
         "league": "Serie A",
+        "home_provider_team_id": 108,
+        "away_provider_team_id": 98,
         "home_team": "FC Internazionale Milano",
         "away_team": "AC Milan",
         "match_date": "2026-08-30T18:45:00Z",
@@ -41,6 +43,7 @@ async def test_sync_rejects_resolver_collision_before_any_fixture_write(
     """Two distinct provider names resolving to one Team.id must fail closed."""
     fetch = AsyncMock(return_value=[_collision_fixture()])
     resolve = AsyncMock(return_value="fd-team-serie_a:fc_internazionale_milano")
+    bind = AsyncMock(return_value=True)
     canonical = AsyncMock()
 
     with (
@@ -49,6 +52,7 @@ async def test_sync_rejects_resolver_collision_before_any_fixture_write(
             new=fetch,
         ),
         patch("src.services.fixture_sync_service.resolve_team_id", new=resolve),
+        patch("src.services.fixture_sync_service.bind_provider_elo_team_id", new=bind),
         patch("src.services.canonical_identity_service.ensure_canonical_fixture", new=canonical),
     ):
         inserted = await sync_upcoming_fixtures(session, provider=object())
@@ -94,6 +98,7 @@ async def test_sync_does_not_rewrite_existing_fixture_into_self_play(
 
     fetch = AsyncMock(return_value=[_collision_fixture(match_id="fd-existing-distinct")])
     resolve = AsyncMock(return_value="fd-team-serie_a:fc_internazionale_milano")
+    bind = AsyncMock(return_value=True)
     canonical = AsyncMock()
 
     with (
@@ -102,6 +107,7 @@ async def test_sync_does_not_rewrite_existing_fixture_into_self_play(
             new=fetch,
         ),
         patch("src.services.fixture_sync_service.resolve_team_id", new=resolve),
+        patch("src.services.fixture_sync_service.bind_provider_elo_team_id", new=bind),
         patch("src.services.canonical_identity_service.ensure_canonical_fixture", new=canonical),
     ):
         inserted = await sync_upcoming_fixtures(session, provider=object())

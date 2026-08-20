@@ -27,9 +27,11 @@ against live production team rows, exact + affix-stripped matching alone joins o
 unique token-prefix → curated alias) and **always fails closed on ambiguity**.
 Loose prefix matching is directional from the incoming football-data.co.uk name
 toward a richer legal name, and single-token source names never use loose prefix
-matching. An unresolved team simply gets reduced evidence — never a wrong join —
-and a final match-level invariant rejects any identity collision that would
-otherwise make a club play itself.
+matching. Resolution is also scoped to the source competition: a Team row owned by
+another league is never eligible, even when its normalized name is an exact match.
+An unresolved team simply gets reduced evidence — never a wrong join — and a final
+match-level invariant rejects any identity collision that would otherwise make a
+club play itself.
 """
 
 from __future__ import annotations
@@ -188,9 +190,9 @@ def _tokens_prefix_match(shorter: Sequence[str], longer: Sequence[str]) -> bool:
 class TeamIndex:
     """Resolve football-data.co.uk short names to existing ``Team.id`` values.
 
-    Built once from all known teams, then queried in-memory — ``team_identity.
-    resolve_team_id()`` re-reads the whole teams table per call, which is fine for
-    one fixture but not for ~26k historical team references.
+    The backfill owns one index per league. Keeping the matcher itself unaware of
+    database models makes the normalization logic cheap and testable while the
+    caller enforces the competition boundary before any candidate enters it.
     """
 
     def __init__(self, rows: Iterable[Tuple[str, str]]) -> None:
@@ -376,6 +378,20 @@ def _historical_team_id(team_name: str, league_id: str) -> str:
     return f"fdco-team-{league_id.lower()}-{slug or 'unknown'}"
 
 
+def _team_indexes_by_league(rows: Iterable[Tuple[str, str, str | None]]) -> Dict[str, TeamIndex]:
+    """Build isolated resolver indexes so cross-league Team rows are ineligible."""
+    indexes: Dict[str, TeamIndex] = {}
+    for team_id, team_name, league_id in rows:
+        if not league_id:
+            continue
+        index = indexes.get(league_id)
+        if index is None:
+            index = TeamIndex(())
+            indexes[league_id] = index
+        index.add(team_id, team_name)
+    return indexes
+
+
 async def backfill_historical_matches(
     session: AsyncSession,
     *,
@@ -437,16 +453,23 @@ async def backfill_historical_matches(
             session.add(League(id=league_id, name=league_id.replace("_", " ").title(), country=country))
     await session.flush()
 
-    index = TeamIndex((await session.execute(select(Team.id, Team.name))).tuples().all())
+    indexes = _team_indexes_by_league(
+        (await session.execute(select(Team.id, Team.name, Team.league_id))).tuples().all()
+    )
 
     # Resolve every distinct (league, name) needed by pending rows once rather than
     # per row. Persisted matches were filtered above specifically so this phase can
-    # never create teams as a side effect of an idempotent re-run.
+    # never create teams as a side effect of an idempotent re-run. Each source
+    # league sees only Team rows owned by that same league.
     distinct_teams = {
         (m.league_id, name) for m in pending for name in (m.home_team, m.away_team)
     }
     team_ids: Dict[Tuple[str, str], str] = {}
     for league_id, name in sorted(distinct_teams):
+        index = indexes.get(league_id)
+        if index is None:
+            index = TeamIndex(())
+            indexes[league_id] = index
         resolved = index.resolve(name)
         if resolved is not None:
             team_ids[(league_id, name)] = resolved

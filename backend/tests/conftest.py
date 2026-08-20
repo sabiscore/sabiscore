@@ -5,6 +5,7 @@ import types
 from unittest.mock import MagicMock
 
 from src.core.cache import RedisCache
+from src.db import provider_elo_team_mapping as _provider_elo_team_mapping  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
