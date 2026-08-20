@@ -39,6 +39,8 @@ def _match(n: int, league: str = "EPL", date: str = "2026-07-15T15:00:00Z") -> d
     return {
         "id": f"fd-match-{n}",
         "league": league,
+        "home_provider_team_id": n * 10,
+        "away_provider_team_id": n * 10 + 1,
         "home_team": f"TeamA {n}",
         "away_team": f"TeamB {n}",
         "match_date": date,
