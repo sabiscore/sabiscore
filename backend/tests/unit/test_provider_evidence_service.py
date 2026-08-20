@@ -54,6 +54,12 @@ def _result(status: ProviderStatus = ProviderStatus.VERIFIED) -> ProviderResult:
         quota=ProviderQuota(limit=100, remaining=91, cost=1),
         warnings=["Bearer secret-token", "apiKey=secret-value"],
         raw_snapshot_id="abc123",
+        request_context={
+            "competition": "EPL",
+            "query_intent": "UPCOMING",
+            "match_status": "SCHEDULED",
+            "token": "must-not-persist",
+        },
     )
 
 
@@ -89,6 +95,12 @@ async def test_recorder_persists_sanitized_request_health_and_quota(factory) -> 
     assert health.latency_ms == pytest.approx(12.5)
     assert health.details["record_count"] == 1
     assert health.details["operation"] == "fixtures"
+    assert health.details["request_context"] == {
+        "competition": "EPL",
+        "query_intent": "UPCOMING",
+        "match_status": "SCHEDULED",
+    }
+    assert "token" not in health.details["request_context"]
     assert health.details["circuit_open"] is False
 
 
@@ -117,6 +129,8 @@ async def test_latest_evidence_zero_observations_is_unknown(factory) -> None:
     assert evidence["test_provider"]["observations"] == 0
     assert evidence["test_provider"]["last_observed_at"] is None
     assert evidence["test_provider"]["stale_after_seconds"] == PROVIDER_EVIDENCE_STALE_SECONDS
+    assert evidence["test_provider"]["contexts"] == []
+    assert evidence["test_provider"]["context_count"] == 0
 
 
 async def test_latest_evidence_uses_latest_persisted_status(factory) -> None:
@@ -142,6 +156,7 @@ async def test_latest_evidence_uses_latest_persisted_status(factory) -> None:
     assert evidence["test_provider"]["observations"] == 2
     assert evidence["test_provider"]["operation"] == "fixtures"
     assert evidence["test_provider"]["age_seconds"] == pytest.approx(1800.0)
+    assert evidence["test_provider"]["context_count"] == 1
 
 
 @pytest.mark.parametrize(

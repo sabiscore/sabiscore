@@ -74,6 +74,231 @@ async def test_registry_attaches_sanitized_success_http_status() -> None:
     sink.record_exception.assert_not_awaited()
 
 
+async def test_football_data_fixture_result_retains_request_context() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["status"] == "SCHEDULED"
+        return httpx.Response(200, json={"matches": []}, request=request)
+
+    sink = SimpleNamespace(
+        record_result=AsyncMock(return_value=True),
+        record_exception=AsyncMock(return_value=True),
+    )
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = FootballDataOrgProvider(
+        api_key="test",
+        enabled=True,
+        http_client=client,
+        observation_sink=sink,
+    )
+    registry = ProviderRegistry([provider])
+    try:
+        result = await registry.get("football_data_org").fixtures(
+            competition="UCL",
+            date_from="2026-08-20",
+            date_to="2026-08-27",
+            status="SCHEDULED",
+            limit=50,
+        )
+    finally:
+        await client.aclose()
+
+    assert result.status is ProviderStatus.PARTIAL
+    assert result.http_status_code == 200
+    assert result.request_context == {
+        "competition": "UCL",
+        "query_intent": "UPCOMING",
+        "match_status": "SCHEDULED",
+        "date_from": "2026-08-20",
+        "date_to": "2026-08-27",
+    }
+    observed = sink.record_result.await_args.args[0]
+    assert observed.request_context == result.request_context
+
+
+async def test_http_200_empty_fixture_window_is_live_with_empty_coverage(factory) -> None:
+    observed_at = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
+    result = ProviderResult(
+        provider="football_data_org",
+        operation="fixtures",
+        status=ProviderStatus.PARTIAL,
+        trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        acquired_at=observed_at,
+        http_status_code=200,
+        http_status_category="SUCCESS",
+        records=[],
+        request_context={
+            "competition": "UCL",
+            "query_intent": "UPCOMING",
+            "match_status": "SCHEDULED",
+        },
+    )
+    recorder = ProviderEvidenceRecorder()
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        await recorder.record_result(result, duration_ms=9.0, circuit_open=False)
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session,
+            ["football_data_org"],
+            now=observed_at + timedelta(minutes=1),
+        )
+
+    row = evidence["football_data_org"]
+    assert row["state"] == "LIVE_VERIFIED"
+    assert row["status"] == "PARTIAL"
+    assert row["transport"]["outcome"] == "SUCCESS"
+    assert row["coverage"]["state"] == "EMPTY"
+    assert row["coverage_summary"] == {
+        "state": "EMPTY",
+        "contexts": 1,
+        "usable_contexts": 0,
+        "empty_contexts": 1,
+        "unusable_contexts": 0,
+        "unknown_contexts": 0,
+    }
+    assert row["contexts"][0]["request_context"]["competition"] == "UCL"
+
+
+async def test_context_aggregation_prevents_last_empty_query_from_dominating(factory) -> None:
+    recorder = ProviderEvidenceRecorder()
+    base = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
+
+    observations = [
+        ProviderResult(
+            provider="football_data_org",
+            operation="fixtures",
+            status=ProviderStatus.VERIFIED,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+            acquired_at=base,
+            http_status_code=200,
+            http_status_category="SUCCESS",
+            records=[{"provider_event_id": "epl-1", "coherent": True}],
+            request_context={
+                "competition": "EPL",
+                "query_intent": "UPCOMING",
+                "match_status": "SCHEDULED",
+            },
+        ),
+        ProviderResult(
+            provider="football_data_org",
+            operation="fixtures",
+            status=ProviderStatus.PARTIAL,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+            acquired_at=base + timedelta(seconds=1),
+            http_status_code=200,
+            http_status_category="SUCCESS",
+            records=[],
+            request_context={
+                "competition": "UCL",
+                "query_intent": "UPCOMING",
+                "match_status": "SCHEDULED",
+            },
+        ),
+        ProviderResult(
+            provider="football_data_org",
+            operation="fixtures",
+            status=ProviderStatus.PARTIAL,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+            acquired_at=base + timedelta(seconds=2),
+            http_status_code=200,
+            http_status_category="SUCCESS",
+            records=[],
+            request_context={
+                "competition": "EREDIVISIE",
+                "query_intent": "RESULTS",
+                "match_status": "FINISHED",
+            },
+        ),
+    ]
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        for result in observations:
+            await recorder.record_result(result, duration_ms=7.0, circuit_open=False)
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session,
+            ["football_data_org"],
+            now=base + timedelta(minutes=2),
+        )
+
+    row = evidence["football_data_org"]
+    assert row["status"] == "PARTIAL"  # raw latest observation remains auditable.
+    assert row["coverage"]["state"] == "EMPTY"
+    assert row["state"] == "LIVE_VERIFIED"
+    assert row["context_count"] == 3
+    assert row["coverage_summary"] == {
+        "state": "PARTIAL",
+        "contexts": 3,
+        "usable_contexts": 1,
+        "empty_contexts": 2,
+        "unusable_contexts": 0,
+        "unknown_contexts": 0,
+    }
+    context_keys = {
+        (
+            context["request_context"].get("competition"),
+            context["request_context"].get("query_intent"),
+        )
+        for context in row["contexts"]
+    }
+    assert context_keys == {
+        ("EPL", "UPCOMING"),
+        ("UCL", "UPCOMING"),
+        ("EREDIVISIE", "RESULTS"),
+    }
+
+
+async def test_rate_limited_context_remains_provider_wide_operational_signal(factory) -> None:
+    recorder = ProviderEvidenceRecorder()
+    base = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
+    live = ProviderResult(
+        provider="football_data_org",
+        operation="fixtures",
+        status=ProviderStatus.VERIFIED,
+        trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        acquired_at=base,
+        http_status_code=200,
+        http_status_category="SUCCESS",
+        records=[{"provider_event_id": "fx-1", "coherent": True}],
+        request_context={
+            "competition": "EPL",
+            "query_intent": "UPCOMING",
+            "match_status": "SCHEDULED",
+        },
+    )
+    limited = ProviderResult(
+        provider="football_data_org",
+        operation="fixtures",
+        status=ProviderStatus.RATE_LIMITED,
+        trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        acquired_at=base + timedelta(seconds=1),
+        http_status_code=429,
+        http_status_category="CLIENT_ERROR",
+        error_code="TRANSPORT_RATE_LIMITED",
+        records=[],
+        request_context={
+            "competition": "LA_LIGA",
+            "query_intent": "UPCOMING",
+            "match_status": "SCHEDULED",
+        },
+    )
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        await recorder.record_result(live, duration_ms=7.0, circuit_open=False)
+        await recorder.record_result(limited, duration_ms=7.0, circuit_open=False)
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session,
+            ["football_data_org"],
+            now=base + timedelta(minutes=1),
+        )
+
+    assert evidence["football_data_org"]["state"] == "RATE_LIMITED"
+
+
 async def test_http_200_with_zero_usable_odds_is_not_coverage_success(factory) -> None:
     observed_at = datetime(2026, 8, 17, 18, 0, tzinfo=timezone.utc)
     result = ProviderResult(
