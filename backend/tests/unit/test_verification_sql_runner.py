@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from scripts.run_verification_sql import (
+    _DEFAULT_FILES,
     _normalize_postgres_url,
     split_sql_statements,
     validate_read_only_statements,
@@ -15,6 +16,7 @@ from scripts.run_verification_sql import (
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _CANONICAL_AUDITS = (
     _BACKEND_DIR / "scripts" / "verify_elo.sql",
+    _BACKEND_DIR / "scripts" / "verify_semantic_identity.sql",
     _BACKEND_DIR / "scripts" / "verify_clv_settlement.sql",
     _BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql",
 )
@@ -64,6 +66,10 @@ def test_validator_skips_transaction_wrappers_and_rejects_writes() -> None:
             validate_read_only_statements([unsafe])
 
 
+def test_default_runner_includes_every_canonical_audit() -> None:
+    assert tuple(_DEFAULT_FILES) == _CANONICAL_AUDITS
+
+
 def test_canonical_verification_files_are_nonempty_and_read_only() -> None:
     for path in _CANONICAL_AUDITS:
         sql = path.read_text(encoding="utf-8")
@@ -99,6 +105,18 @@ def test_elo_audit_distinguishes_residual_from_new_self_play_writers() -> None:
 def test_elo_audit_has_fail_closed_post_pr25_self_play_gate() -> None:
     sql = (_BACKEND_DIR / "scripts" / "verify_elo.sql").read_text(encoding="utf-8")
     assert "self_play_post_pr25_integrity" in sql
+    assert "violation_count = 0" in sql
+    assert "violation_count::integer" in sql
+    assert "(violation_count - violation_count)::integer" in sql
+
+
+def test_semantic_identity_audit_has_fail_closed_gate() -> None:
+    sql = (_BACKEND_DIR / "scripts" / "verify_semantic_identity.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "semantic_historical_identity_integrity" in sql
+    assert "historical_matches_with_semantic_identity_mismatch" in sql
+    assert "elo_snapshot_team_league_mismatch" in sql
     assert "violation_count = 0" in sql
     assert "violation_count::integer" in sql
     assert "(violation_count - violation_count)::integer" in sql
