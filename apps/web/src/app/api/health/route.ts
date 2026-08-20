@@ -4,7 +4,12 @@
  */
 
 import { NextResponse } from "next/server";
-import { backendHealthIssues, isHealthyBackendStatus } from "@/lib/health-status";
+import {
+  backendHealthIssues,
+  isHealthyBackendStatus,
+  mergeProviderEvidence,
+  type ProviderHealthRow,
+} from "@/lib/health-status";
 import { RPS_PROMOTION_GATE } from "@/lib/model-gates";
 import { isHtmlBody } from "@/lib/proxy-utils";
 
@@ -26,7 +31,7 @@ export async function GET() {
   let backendChecks: Record<string, unknown> = {};
   let backendCapability: Record<string, unknown> | null = null;
   let backendSha: string | null = null;
-  let providers: Array<Record<string, unknown>> = [];
+  let providers: ProviderHealthRow[] = [];
   let performance: PerformanceSummary = { status: "METRICS_UNAVAILABLE" };
 
   if (BACKEND_URL) {
@@ -36,9 +41,10 @@ export async function GET() {
         headers: { Accept: "application/json" },
         cache: "no-store" as const,
       };
-      const [readinessRes, providersRes, performanceRes] = await Promise.all([
+      const [readinessRes, providerRegistryRes, providerEvidenceRes, performanceRes] = await Promise.all([
         fetch(`${BACKEND_URL}/health/ready`, requestOptions),
         fetch(`${BACKEND_URL}/api/v1/providers/health`, requestOptions),
+        fetch(`${BACKEND_URL}/api/v1/providers/evidence`, requestOptions),
         fetch(`${BACKEND_URL}/api/v1/model-performance/summary`, requestOptions),
       ]);
 
@@ -55,12 +61,31 @@ export async function GET() {
         }
       }
 
-      if (providersRes.ok) {
-        const providerData = (await providersRes.json()) as { providers?: unknown };
-        providers = Array.isArray(providerData.providers)
-          ? providerData.providers as Array<Record<string, unknown>>
-          : [];
+      let providerRegistry: ProviderHealthRow[] = [];
+      if (providerRegistryRes.ok) {
+        try {
+          const providerData = (await providerRegistryRes.json()) as { providers?: unknown };
+          providerRegistry = Array.isArray(providerData.providers)
+            ? providerData.providers.filter(
+                (row): row is ProviderHealthRow =>
+                  typeof row === "object" && row !== null && !Array.isArray(row),
+              )
+            : [];
+        } catch {
+          providerRegistry = [];
+        }
       }
+
+      let providerEvidence: unknown = null;
+      if (providerEvidenceRes.ok) {
+        try {
+          const evidenceData = (await providerEvidenceRes.json()) as { providers?: unknown };
+          providerEvidence = evidenceData.providers ?? null;
+        } catch {
+          providerEvidence = null;
+        }
+      }
+      providers = mergeProviderEvidence(providerRegistry, providerEvidence);
 
       const performanceBody = await performanceRes.text().catch(() => "");
       if (!isHtmlBody(performanceBody)) {
