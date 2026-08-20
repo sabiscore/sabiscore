@@ -49,6 +49,43 @@ async def canonical_fixture_id_for_provider_event(
     ).scalars().first()
 
 
+async def _provider_team_anchor(
+    session: AsyncSession,
+    *,
+    provider: str,
+    provider_team_id: str,
+    competition_id: str,
+    team_name: str,
+) -> tuple[str, ProviderTeamMapping | None]:
+    """Resolve canonical team identity from stable provider ID before name.
+
+    A provider team ID is the durable external anchor. Once a verified mapping
+    exists, later legal-name/localization changes must not mint a new canonical
+    team. New provider IDs still use the deterministic competition+name hash and
+    are bound below in the same transaction.
+    """
+    mapping = (
+        await session.execute(
+            select(ProviderTeamMapping).where(
+                ProviderTeamMapping.provider == provider,
+                ProviderTeamMapping.provider_team_id == provider_team_id,
+                ProviderTeamMapping.competition == competition_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if mapping is None:
+        return _stable_id("team", competition_id, team_name), None
+    if mapping.reconciliation_status != "VERIFIED" or not mapping.canonical_team_id:
+        raise ValueError("provider team mapping is not verified")
+
+    canonical_team = await session.get(CanonicalTeam, mapping.canonical_team_id)
+    if canonical_team is None:
+        raise ValueError("provider team mapping references a missing canonical team")
+    if canonical_team.competition_id != competition_id:
+        raise ValueError("provider team mapping conflicts with competition")
+    return canonical_team.id, mapping
+
+
 async def _remove_unreferenced_reschedule_orphans(
     session: AsyncSession,
     *,
@@ -136,15 +173,27 @@ async def ensure_canonical_fixture(
 ) -> str:
     """Upsert a verified fixture and mappings without guessing ambiguous names.
 
-    A verified ``(provider, provider_event_id)`` mapping is the durable identity
-    anchor once it exists. Kickoff time is mutable fixture metadata: legitimate
-    reschedules update the already-mapped canonical fixture in place, but only
-    when the competition and both canonical participants are unchanged.
-    Participant or competition drift remains a hard identity conflict.
+    Verified provider event/team IDs are durable identity anchors once they
+    exist. Kickoff and provider display names are mutable metadata: legitimate
+    reschedules/name changes update those fields without changing canonical
+    participants. Competition or provider-ID participant drift remains a hard
+    identity conflict.
     """
 
-    if not all((provider, provider_event_id, competition_id, home_name, away_name)):
+    if not all(
+        (
+            provider,
+            provider_event_id,
+            competition_id,
+            home_provider_id,
+            away_provider_id,
+            home_name,
+            away_name,
+        )
+    ):
         raise ValueError("canonical identity requires explicit provider and fixture fields")
+    if home_provider_id == away_provider_id:
+        raise ValueError("home and away provider team IDs must be distinct")
     if _key(home_name) == _key(away_name):
         raise ValueError("home and away teams must be distinct")
     if kickoff_utc.tzinfo is not None:
@@ -164,10 +213,23 @@ async def ensure_canonical_fixture(
     if event_mapping is not None and event_mapping.competition != competition_id:
         raise ValueError("provider event conflicts with an existing competition")
 
-    team_ids = [
-        _stable_id("team", competition_id, home_name),
-        _stable_id("team", competition_id, away_name),
-    ]
+    home_team_id, home_mapping = await _provider_team_anchor(
+        session,
+        provider=provider,
+        provider_team_id=home_provider_id,
+        competition_id=competition_id,
+        team_name=home_name,
+    )
+    away_team_id, away_mapping = await _provider_team_anchor(
+        session,
+        provider=provider,
+        provider_team_id=away_provider_id,
+        competition_id=competition_id,
+        team_name=away_name,
+    )
+    if home_team_id == away_team_id:
+        raise ValueError("provider team mappings collapse home and away identity")
+    team_ids = [home_team_id, away_team_id]
 
     mapped_fixture: CanonicalFixture | None = None
     if event_mapping is not None:
@@ -197,9 +259,9 @@ async def ensure_canonical_fixture(
             )
         )
 
-    for provider_team_id, team_name, team_id in (
-        (home_provider_id, home_name, team_ids[0]),
-        (away_provider_id, away_name, team_ids[1]),
+    for provider_team_id, team_name, team_id, mapping in (
+        (home_provider_id, home_name, team_ids[0], home_mapping),
+        (away_provider_id, away_name, team_ids[1], away_mapping),
     ):
         if await session.get(CanonicalTeam, team_id) is None:
             session.add(
@@ -213,15 +275,6 @@ async def ensure_canonical_fixture(
                     updated_at=now,
                 )
             )
-        mapping = (
-            await session.execute(
-                select(ProviderTeamMapping).where(
-                    ProviderTeamMapping.provider == provider,
-                    ProviderTeamMapping.provider_team_id == provider_team_id,
-                    ProviderTeamMapping.competition == competition_id,
-                )
-            )
-        ).scalar_one_or_none()
         if mapping is None:
             session.add(
                 ProviderTeamMapping(
@@ -236,8 +289,6 @@ async def ensure_canonical_fixture(
                     checked_at=now,
                 )
             )
-        elif mapping.canonical_team_id != team_id:
-            raise ValueError("provider team conflicts with an existing canonical team")
         else:
             mapping.provider_team_name = team_name
             mapping.reconciliation_status = "VERIFIED"

@@ -228,6 +228,12 @@ class FootballDataAPIClient:
             return None
         return {
             "id": f"fd-{event_id}",
+            # Preserve upstream football-data.org team IDs all the way to
+            # persistence. They are the stable provider identity; the old
+            # adapter dropped them and later mislabeled application Team IDs as
+            # provider IDs in provider_team_mappings.
+            "home_provider_team_id": record.get("home_team_id"),
+            "away_provider_team_id": record.get("away_team_id"),
             "home_team": str(home),
             "away_team": str(away),
             "league": self.TOP_COMPETITIONS[competition_code],

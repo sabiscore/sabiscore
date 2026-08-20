@@ -6,8 +6,8 @@ Contracts verified:
   3. Malformed date — un-parseable match_date skips that match; valid ones still insert.
   4. Provider reschedules update mutable kickoff metadata without changing
      canonical identity and safely remove only unreferenced legacy duplicates.
-  5. True identity conflicts roll back all canonical side effects while the
-     raw provider fixture and later batch entries still commit.
+  5. Provider display-name drift does not silently re-key an existing raw
+     scheduled Match while canonical provider identity remains stable.
 """
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ def _match(n: int, league: str = "EPL", date: str = "2026-07-15T15:00:00Z") -> d
     return {
         "id": f"fd-match-{n}",
         "league": league,
+        "home_provider_team_id": n * 10,
+        "away_provider_team_id": n * 10 + 1,
         "home_team": f"TeamA {n}",
         "away_team": f"TeamB {n}",
         "match_date": date,
@@ -140,9 +142,6 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
     original_fixture = await session.get(CanonicalFixture, original_mapping)
     assert original_fixture is not None
 
-    # Reproduce the exact legacy side effect observed in production: the old
-    # code staged a kickoff-derived duplicate before discovering the provider
-    # event was already mapped, and the caller later committed that orphan.
     legacy_orphan_id = "fixture-legacy-reschedule-orphan"
     session.add(
         CanonicalFixture(
@@ -170,9 +169,6 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
 
     assert count == 1
 
-    # Use typed SQLAlchemy expressions for datetime columns. Raw text() on
-    # SQLite returns timestamp text and bypasses the DateTime result processor,
-    # which makes this cross-dialect contract assertion compare str to datetime.
     match_kickoff = (
         await session.execute(select(Match.match_date).where(Match.id == "fd-match-40"))
     ).scalar_one()
@@ -206,20 +202,19 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
     assert "fd-match-41" in ids
 
 
-async def test_identity_conflict_rolls_back_canonical_attempt_only(
+async def test_provider_name_drift_preserves_raw_identity_and_canonical_anchor(
     session: AsyncSession,
 ) -> None:
-    """A provider participant conflict cannot leak canonical rows from its savepoint."""
     from src.services.fixture_sync_service import sync_upcoming_fixtures
 
     with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
         MockCls.return_value = _mock_client([_match(50)])
         await sync_upcoming_fixtures(session)
 
-    conflicting = _match(50, date="2026-08-02T18:00:00Z")
-    conflicting["home_team"] = "Different Team 50"
+    changed_name = _match(50, date="2026-08-02T18:00:00Z")
+    changed_name["home_team"] = "Different Team 50"
     with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
-        MockCls.return_value = _mock_client([conflicting, _match(51)])
+        MockCls.return_value = _mock_client([changed_name, _match(51)])
         count = await sync_upcoming_fixtures(session)
 
     assert count == 1
@@ -232,7 +227,7 @@ async def test_identity_conflict_rolls_back_canonical_attempt_only(
             )
         )
     ).scalar_one()
-    assert raw_home == "Different Team 50"
+    assert raw_home == "TeamA 50"
     assert (
         await session.execute(text("SELECT count(*) FROM matches WHERE id='fd-match-51'"))
     ).scalar_one() == 1
