@@ -123,4 +123,41 @@ FROM snapshot_identity
 WHERE team_league IS NULL OR team_league <> snapshot_league
 ORDER BY match_date, match_id, team_id;
 
+-- Fail-closed release gate. The summary and exact rows above remain visible for
+-- diagnosis, while this final SELECT makes the portable verification runner fail
+-- mechanically whenever either persisted Match participants or Elo snapshots
+-- violate their Team league ownership. The healthy path returns 1.
+WITH violations AS (
+    SELECT (
+        (
+            SELECT count(*)
+            FROM matches m
+            LEFT JOIN teams ht ON ht.id = m.home_team_id
+            LEFT JOIN teams at ON at.id = m.away_team_id
+            WHERE m.id LIKE 'fdco-%'
+              AND (
+                  ht.league_id IS NULL
+                  OR at.league_id IS NULL
+                  OR ht.league_id <> m.league_id
+                  OR at.league_id <> m.league_id
+              )
+        )
+        +
+        (
+            SELECT count(*)
+            FROM elo_rating_snapshots e
+            LEFT JOIN teams t ON t.id = e.team_id
+            WHERE t.league_id IS NULL OR t.league_id <> e.league
+        )
+    )::bigint AS violation_count
+)
+SELECT 'semantic_historical_identity_integrity' AS gate,
+       violation_count,
+       CASE
+           WHEN violation_count = 0 THEN 1
+           ELSE violation_count::integer
+                / ((violation_count - violation_count)::integer)
+       END AS pass
+FROM violations;
+
 ROLLBACK;
