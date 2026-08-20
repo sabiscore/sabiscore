@@ -10,6 +10,7 @@ from sqlalchemy import engine_from_config, pool
 from src.core.config import settings
 from src.core.database import Base
 from src.db import models as _db_models  # noqa: F401
+from src.db import provider_elo_team_mapping as _provider_elo_team_mapping  # noqa: F401
 
 config = context.config
 
