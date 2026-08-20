@@ -18,18 +18,23 @@ export type CapabilityStatus =
   | "failed"
   | "unknown";
 
+export interface ProviderHealthRow extends Record<string, unknown> {
+  provider?: unknown;
+  display_name?: unknown;
+  configured?: unknown;
+  enabled?: unknown;
+  status?: unknown;
+  state?: unknown;
+  evidence_status?: unknown;
+  registry_status?: unknown;
+}
+
 export interface BackendHealthPayload {
   backendStatus?: unknown;
   timestamp?: unknown;
   backendChecks?: Record<string, BackendReadinessCheck | unknown>;
   backendCapability?: { status?: unknown; message?: unknown };
-  providers?: Array<{
-    provider?: unknown;
-    display_name?: unknown;
-    configured?: unknown;
-    enabled?: unknown;
-    status?: unknown;
-  }>;
+  providers?: ProviderHealthRow[];
 }
 
 export const PLATFORM_HEALTH_QUERY_KEY = ["platform-health"] as const;
@@ -72,14 +77,95 @@ export interface ProviderActivationStats {
   label: "Ready" | "Partial" | "Unavailable";
 }
 
+const LIVE_PROVIDER_STATUSES = new Set(["LIVE_VERIFIED", "VERIFIED"]);
 const DEGRADED_PROVIDER_STATUSES = new Set([
+  "DEGRADED",
   "INVALID",
   "UNAVAILABLE",
   "CIRCUIT_OPEN",
   "RATE_LIMITED",
   "SCHEMA_INVALID",
   "CONFLICTING",
+  "STALE",
 ]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function providerId(row: ProviderHealthRow): string | null {
+  return typeof row.provider === "string" && row.provider.trim()
+    ? row.provider.trim()
+    : null;
+}
+
+function providerOperationalStatus(provider: ProviderHealthRow): string {
+  const raw = provider.state ?? provider.status;
+  return String(raw ?? "UNKNOWN").toUpperCase();
+}
+
+export function normalizeProviderEvidence(raw: unknown): ProviderHealthRow[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .filter(isRecord)
+      .map((row) => ({ ...row }));
+  }
+  if (!isRecord(raw)) return [];
+
+  return Object.entries(raw).flatMap(([provider, value]) => {
+    if (!isRecord(value)) return [];
+    const explicitProvider =
+      typeof value.provider === "string" && value.provider.trim()
+        ? value.provider.trim()
+        : provider;
+    return [{ ...value, provider: explicitProvider }];
+  });
+}
+
+export function mergeProviderEvidence(
+  registry: ProviderHealthRow[],
+  rawEvidence: unknown,
+): ProviderHealthRow[] {
+  const evidence = normalizeProviderEvidence(rawEvidence);
+  const evidenceByProvider = new Map<string, ProviderHealthRow>();
+  for (const row of evidence) {
+    const id = providerId(row);
+    if (id) evidenceByProvider.set(id, row);
+  }
+
+  const registryIds = new Set<string>();
+  const merged = registry.map((row) => {
+    const id = providerId(row);
+    if (id) registryIds.add(id);
+    const observed = id ? evidenceByProvider.get(id) : undefined;
+    const operationalState = observed?.state ?? "UNKNOWN";
+    return {
+      ...row,
+      ...(observed ?? {}),
+      registry_status: row.status ?? null,
+      evidence_status: observed?.status ?? null,
+      status: operationalState,
+      state: operationalState,
+    } satisfies ProviderHealthRow;
+  });
+
+  for (const row of evidence) {
+    const id = providerId(row);
+    if (!id || registryIds.has(id)) continue;
+    const operationalState = row.state ?? "UNKNOWN";
+    merged.push({
+      ...row,
+      configured: false,
+      enabled: false,
+      registry_status: null,
+      evidence_status: row.status ?? null,
+      status: operationalState,
+      state: operationalState,
+    });
+  }
+
+  return merged;
+}
 
 export function isHealthyBackendStatus(status: unknown): boolean {
   return typeof status === "string" && READY_STATUSES.has(status.toLowerCase());
@@ -125,13 +211,13 @@ export function deriveProviderActivation(
   const configured = providers.filter((provider) => provider.configured === true).length;
   const enabled = providers.filter((provider) => provider.enabled === true).length;
   const live = providers.filter((provider) =>
-    provider.enabled === true && String(provider.status).toUpperCase() === "VERIFIED"
+    provider.enabled === true && LIVE_PROVIDER_STATUSES.has(providerOperationalStatus(provider))
   ).length;
   const degraded = providers.filter((provider) =>
-    provider.enabled === true && DEGRADED_PROVIDER_STATUSES.has(String(provider.status).toUpperCase())
+    provider.enabled === true && DEGRADED_PROVIDER_STATUSES.has(providerOperationalStatus(provider))
   ).length;
   const label =
-    configured > 0 && enabled === configured && degraded === 0
+    configured > 0 && enabled === configured && live === enabled && degraded === 0
       ? "Ready"
       : enabled > 0
         ? "Partial"
