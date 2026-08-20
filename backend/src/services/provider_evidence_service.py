@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from sqlalchemy import func, select
 
@@ -37,6 +37,22 @@ logger = logging.getLogger(__name__)
 # last underlying provider status; that raw status remains separately visible.
 PROVIDER_EVIDENCE_STALE_SECONDS = 3600
 
+# Context is intentionally tiny and whitelisted. Providers may attach only these
+# non-secret request dimensions; everything else is dropped before persistence.
+_PROVIDER_REQUEST_CONTEXT_KEYS = (
+    "competition",
+    "query_intent",
+    "match_status",
+    "date_from",
+    "date_to",
+    "season",
+    "market_type",
+)
+# A context-aware health surface needs only the latest observation per small set
+# of operation/competition/intent streams. Bound the query so telemetry cannot
+# turn a health request into an unbounded historical scan.
+_PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER = 128
+
 
 def _utc_naive(value: datetime | None) -> datetime | None:
     if value is None:
@@ -52,7 +68,34 @@ def _safe_warnings(values: Iterable[object]) -> list[str]:
     return [redact_text(value)[:500] for value in list(values)[:50]]
 
 
-def _evidence_state(status: str | None) -> str:
+def _safe_request_context(values: Mapping[str, object] | None) -> dict[str, str]:
+    if not isinstance(values, Mapping):
+        return {}
+    context: dict[str, str] = {}
+    for key in _PROVIDER_REQUEST_CONTEXT_KEYS:
+        value = values.get(key)
+        if value is None:
+            continue
+        normalized = redact_text(value).strip()[:100]
+        if normalized:
+            context[key] = normalized
+    return context
+
+
+def _evidence_state(
+    status: str | None,
+    *,
+    transport: Mapping[str, object] | None = None,
+    coverage: Mapping[str, object] | None = None,
+) -> str:
+    """Map one observation to operational state without hiding data coverage.
+
+    A successful HTTP request returning zero records is real provider liveness and
+    real EMPTY coverage at the same time. Treating that as provider-wide failure
+    caused the final UCL/FINISHED request in a multi-competition cycle to erase
+    six successful requests. EMPTY remains explicit in ``coverage``/``contexts``;
+    transport availability is not fabricated from record count.
+    """
     normalized = str(status or "").upper()
     if normalized == ProviderStatus.VERIFIED.value:
         return "LIVE_VERIFIED"
@@ -60,8 +103,13 @@ def _evidence_state(status: str | None) -> str:
         return "CONFIGURED"
     if normalized == ProviderStatus.RATE_LIMITED.value:
         return "RATE_LIMITED"
+    if normalized == ProviderStatus.PARTIAL.value:
+        transport_outcome = str((transport or {}).get("outcome") or "").upper()
+        coverage_state = str((coverage or {}).get("state") or "").upper()
+        if transport_outcome == "SUCCESS" and coverage_state == "EMPTY":
+            return "LIVE_VERIFIED"
+        return "DEGRADED"
     if normalized in {
-        ProviderStatus.PARTIAL.value,
         ProviderStatus.INVALID.value,
         ProviderStatus.CONFLICTING.value,
     }:
@@ -126,7 +174,8 @@ def _coverage_summary(result: ProviderResult) -> dict[str, Any]:
 
     settled_records = sum(
         1
-        for record in coherent if has_coherent
+        for record in coherent
+        if has_coherent
         if record.get("home_score") is not None and record.get("away_score") is not None
     )
 
@@ -171,7 +220,12 @@ def _latest_source_timestamp(result: ProviderResult) -> datetime | None:
         candidates.append(provider_timestamp)
 
     for record in result.records:
-        for key in ("bookmaker_last_update", "source_updated_at", "provider_timestamp", "last_update"):
+        for key in (
+            "bookmaker_last_update",
+            "source_updated_at",
+            "provider_timestamp",
+            "last_update",
+        ):
             parsed = _parse_datetime(record.get(key))
             if parsed is not None:
                 candidates.append(parsed)
@@ -212,6 +266,179 @@ def _quota_summary(result: ProviderResult, quota_reset_at: datetime | None) -> d
         "reset_at": quota_reset_at.isoformat() if quota_reset_at is not None else None,
         "cost": result.quota.cost,
         "rate_limited": result.status is ProviderStatus.RATE_LIMITED,
+    }
+
+
+def _default_transport() -> dict[str, Any]:
+    return {
+        "outcome": "UNKNOWN",
+        "http_status_code": None,
+        "http_status_category": None,
+    }
+
+
+def _default_coverage(record_count: object = None) -> dict[str, Any]:
+    return {
+        "state": "UNKNOWN",
+        "basis": None,
+        "total_records": record_count,
+        "coherent_records": None,
+        "executable_records": None,
+        "usable_records": None,
+        "total_events": None,
+        "coherent_events": None,
+        "executable_events": None,
+        "usable_events": None,
+        "settled_records": None,
+    }
+
+
+def _default_quota() -> dict[str, Any]:
+    return {
+        "observed": False,
+        "limit": None,
+        "remaining": None,
+        "reset_at": None,
+        "cost": None,
+        "rate_limited": False,
+    }
+
+
+def _materialize_evidence_row(
+    row: Mapping[str, Any],
+    *,
+    reference_now: datetime,
+    stale_after_seconds: int,
+) -> dict[str, Any]:
+    checked_at = row.get("checked_at")
+    age_seconds = None
+    if isinstance(checked_at, datetime):
+        checked_at_utc = _utc_naive(checked_at)
+        if checked_at_utc is not None:
+            age_seconds = max(0.0, (reference_now - checked_at_utc).total_seconds())
+
+    details_raw = row.get("details")
+    details = details_raw if isinstance(details_raw, dict) else {}
+    transport_raw = details.get("transport")
+    transport = transport_raw if isinstance(transport_raw, dict) else _default_transport()
+    coverage_raw = details.get("coverage")
+    coverage = (
+        coverage_raw
+        if isinstance(coverage_raw, dict)
+        else _default_coverage(details.get("record_count"))
+    )
+    quota_raw = details.get("quota")
+    quota = quota_raw if isinstance(quota_raw, dict) else _default_quota()
+    if not isinstance(quota_raw, dict):
+        quota["observed"] = bool(details.get("quota_observed"))
+        quota["rate_limited"] = (
+            str(row.get("status") or "").upper() == ProviderStatus.RATE_LIMITED.value
+        )
+
+    state = _evidence_state(row.get("status"), transport=transport, coverage=coverage)
+    is_stale = age_seconds is not None and age_seconds > stale_after_seconds
+    if is_stale:
+        state = "STALE"
+
+    source_latest_at = _parse_datetime(details.get("source_latest_at"))
+    source_age_seconds = (
+        max(0.0, (reference_now - source_latest_at).total_seconds())
+        if source_latest_at is not None
+        else None
+    )
+    request_context_raw = details.get("request_context")
+    request_context = _safe_request_context(
+        request_context_raw if isinstance(request_context_raw, Mapping) else None
+    )
+
+    return {
+        "state": state,
+        "status": row.get("status"),
+        "last_observed_at": (
+            checked_at.isoformat() if isinstance(checked_at, datetime) else None
+        ),
+        "age_seconds": age_seconds,
+        "stale_after_seconds": stale_after_seconds,
+        "latency_ms": row.get("latency_ms"),
+        "operation": details.get("operation"),
+        "request_context": request_context,
+        "error_code": row.get("error_code"),
+        "transport": transport,
+        "coverage": coverage,
+        "quota": quota,
+        "freshness": {
+            "observation_age_seconds": age_seconds,
+            "observation_stale_after_seconds": stale_after_seconds,
+            "observation_stale": is_stale,
+            "source_latest_at": (
+                source_latest_at.isoformat() if source_latest_at is not None else None
+            ),
+            "source_age_seconds": source_age_seconds,
+        },
+    }
+
+
+def _context_identity(evidence: Mapping[str, Any]) -> tuple[str, str, str, str] | None:
+    context_raw = evidence.get("request_context")
+    if not isinstance(context_raw, Mapping) or not context_raw:
+        return None
+    operation = str(evidence.get("operation") or "")
+    competition = str(context_raw.get("competition") or "")
+    query_intent = str(context_raw.get("query_intent") or "")
+    match_status = str(context_raw.get("match_status") or "")
+    if not any((competition, query_intent, match_status)):
+        return None
+    return operation, competition, query_intent, match_status
+
+
+def _aggregate_context_state(contexts: Iterable[Mapping[str, Any]]) -> str:
+    states = [str(context.get("state") or "UNKNOWN") for context in contexts]
+    if not states:
+        return "UNKNOWN"
+    if "RATE_LIMITED" in states:
+        return "RATE_LIMITED"
+    if all(state == "LIVE_VERIFIED" for state in states):
+        return "LIVE_VERIFIED"
+    if all(state == "STALE" for state in states):
+        return "STALE"
+    if all(state == "UNAVAILABLE" for state in states):
+        return "UNAVAILABLE"
+    if all(state == "CONFIGURED" for state in states):
+        return "CONFIGURED"
+    if all(state == "UNKNOWN" for state in states):
+        return "UNKNOWN"
+    return "DEGRADED"
+
+
+def _aggregate_context_coverage(contexts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    rows = list(contexts)
+    coverage_states = [
+        str((row.get("coverage") or {}).get("state") or "UNKNOWN")
+        if isinstance(row.get("coverage"), Mapping)
+        else "UNKNOWN"
+        for row in rows
+    ]
+    usable = coverage_states.count("USABLE")
+    empty = coverage_states.count("EMPTY")
+    unusable = coverage_states.count("UNUSABLE")
+    unknown = coverage_states.count("UNKNOWN")
+    if rows and usable == len(rows):
+        state = "USABLE"
+    elif usable > 0:
+        state = "PARTIAL"
+    elif unusable > 0:
+        state = "UNUSABLE"
+    elif empty > 0 and unknown == 0:
+        state = "EMPTY"
+    else:
+        state = "UNKNOWN"
+    return {
+        "state": state,
+        "contexts": len(rows),
+        "usable_contexts": usable,
+        "empty_contexts": empty,
+        "unusable_contexts": unusable,
+        "unknown_contexts": unknown,
     }
 
 
@@ -291,13 +518,16 @@ class ProviderEvidenceRecorder:
             return False
 
         warnings = _safe_warnings(result.warnings)
+        request_context = _safe_request_context(result.request_context)
         error_code = redact_text(result.error_code)[:255] if result.error_code else None
         raw_snapshot_id = (
             redact_text(result.raw_snapshot_id)[:255]
             if result.raw_snapshot_id
             else None
         )
-        acquired_at = _utc_naive(result.acquired_at) or datetime.now(timezone.utc).replace(tzinfo=None)
+        acquired_at = _utc_naive(result.acquired_at) or datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )
         provider_timestamp = _utc_naive(result.provider_timestamp)
         quota_reset_at = _utc_naive(result.quota.reset_at)
         coverage = _coverage_summary(result)
@@ -310,6 +540,7 @@ class ProviderEvidenceRecorder:
                 "operation": result.operation,
                 "status": result.status.value,
                 "trust_tier": result.trust_tier.value,
+                "request_context": request_context,
                 "provider_timestamp": provider_timestamp,
                 "records": result.records,
                 "warnings": warnings,
@@ -344,6 +575,7 @@ class ProviderEvidenceRecorder:
             error_code=error_code,
             details={
                 "operation": result.operation,
+                "request_context": request_context,
                 # Backward-compatible raw count; consumers must use `coverage`
                 # for usable data instead of interpreting this field as coverage.
                 "record_count": len(result.records),
@@ -403,12 +635,13 @@ async def latest_provider_evidence(
     now: datetime | None = None,
     stale_after_seconds: int = PROVIDER_EVIDENCE_STALE_SECONDS,
 ) -> dict[str, dict[str, Any]]:
-    """Return latest persisted evidence per provider with deterministic freshness.
+    """Return persisted provider evidence with deterministic freshness/context.
 
     Zero observations is explicitly UNKNOWN. Configuration state is intentionally
     not consulted here: this surface answers what has actually been observed.
-    Any persisted observation older than ``stale_after_seconds`` is surfaced as
-    STALE while its raw provider ``status`` remains available for audit.
+    Request-context streams are aggregated independently so one final empty UCL
+    or FINISHED request cannot replace evidence from every other competition.
+    EMPTY coverage remains visible and is never re-labeled as fixture coverage.
     """
     if stale_after_seconds <= 0:
         raise ValueError("stale_after_seconds must be positive")
@@ -424,33 +657,21 @@ async def latest_provider_evidence(
             "stale_after_seconds": stale_after_seconds,
             "latency_ms": None,
             "operation": None,
-            "error_code": None,
-            "transport": {
-                "outcome": "UNKNOWN",
-                "http_status_code": None,
-                "http_status_category": None,
-            },
-            "coverage": {
+            "request_context": {},
+            "contexts": [],
+            "context_count": 0,
+            "coverage_summary": {
                 "state": "UNKNOWN",
-                "basis": None,
-                "total_records": None,
-                "coherent_records": None,
-                "executable_records": None,
-                "usable_records": None,
-                "total_events": None,
-                "coherent_events": None,
-                "executable_events": None,
-                "usable_events": None,
-                "settled_records": None,
+                "contexts": 0,
+                "usable_contexts": 0,
+                "empty_contexts": 0,
+                "unusable_contexts": 0,
+                "unknown_contexts": 0,
             },
-            "quota": {
-                "observed": False,
-                "limit": None,
-                "remaining": None,
-                "reset_at": None,
-                "cost": None,
-                "rate_limited": False,
-            },
+            "error_code": None,
+            "transport": _default_transport(),
+            "coverage": _default_coverage(),
+            "quota": _default_quota(),
             "freshness": {
                 "observation_age_seconds": None,
                 "observation_stale_after_seconds": stale_after_seconds,
@@ -476,6 +697,7 @@ async def latest_provider_evidence(
 
     ranked = (
         select(
+            ProviderHealthLog.id.label("id"),
             ProviderHealthLog.provider.label("provider"),
             ProviderHealthLog.status.label("status"),
             ProviderHealthLog.checked_at.label("checked_at"),
@@ -492,82 +714,62 @@ async def latest_provider_evidence(
         .where(ProviderHealthLog.provider.in_(provider_list))
         .subquery()
     )
-    result = await session.execute(select(ranked).where(ranked.c.rn == 1))
     reference_now = _utc_naive(now or datetime.now(timezone.utc))
     if reference_now is None:  # defensive; the expression above is always a datetime
         raise RuntimeError("unable to derive provider evidence reference time")
 
-    for row in result.mappings().all():
+    latest_result = await session.execute(select(ranked).where(ranked.c.rn == 1))
+    for row in latest_result.mappings().all():
         provider = str(row["provider"])
-        checked_at = row["checked_at"]
-        age_seconds = None
-        if isinstance(checked_at, datetime):
-            checked_at_utc = _utc_naive(checked_at)
-            if checked_at_utc is not None:
-                age_seconds = max(0.0, (reference_now - checked_at_utc).total_seconds())
-        details = row["details"] if isinstance(row["details"], dict) else {}
-        state = _evidence_state(row["status"])
-        is_stale = age_seconds is not None and age_seconds > stale_after_seconds
-        if is_stale:
-            state = "STALE"
-
-        transport = details.get("transport") if isinstance(details.get("transport"), dict) else {
-            "outcome": "UNKNOWN",
-            "http_status_code": None,
-            "http_status_category": None,
-        }
-        coverage = details.get("coverage") if isinstance(details.get("coverage"), dict) else {
-            "state": "UNKNOWN",
-            "basis": None,
-            "total_records": details.get("record_count"),
-            "coherent_records": None,
-            "executable_records": None,
-            "usable_records": None,
-            "total_events": None,
-            "coherent_events": None,
-            "executable_events": None,
-            "usable_events": None,
-            "settled_records": None,
-        }
-        quota = details.get("quota") if isinstance(details.get("quota"), dict) else {
-            "observed": bool(details.get("quota_observed")),
-            "limit": None,
-            "remaining": None,
-            "reset_at": None,
-            "cost": None,
-            "rate_limited": str(row["status"] or "").upper() == ProviderStatus.RATE_LIMITED.value,
-        }
-        source_latest_at_raw = details.get("source_latest_at")
-        source_latest_at = _parse_datetime(source_latest_at_raw)
-        source_age_seconds = (
-            max(0.0, (reference_now - source_latest_at).total_seconds())
-            if source_latest_at is not None
-            else None
+        latest = _materialize_evidence_row(
+            row,
+            reference_now=reference_now,
+            stale_after_seconds=stale_after_seconds,
         )
+        output[provider].update(latest)
+        output[provider]["observations"] = int(counts.get(provider, 0))
 
-        output[provider] = {
-            "state": state,
-            "status": row["status"],
-            "observations": int(counts.get(provider, 0)),
-            "last_observed_at": checked_at.isoformat() if isinstance(checked_at, datetime) else None,
-            "age_seconds": age_seconds,
-            "stale_after_seconds": stale_after_seconds,
-            "latency_ms": row["latency_ms"],
-            "operation": details.get("operation"),
-            "error_code": row["error_code"],
-            "transport": transport,
-            "coverage": coverage,
-            "quota": quota,
-            "freshness": {
-                "observation_age_seconds": age_seconds,
-                "observation_stale_after_seconds": stale_after_seconds,
-                "observation_stale": is_stale,
-                "source_latest_at": (
-                    source_latest_at.isoformat() if source_latest_at is not None else None
-                ),
-                "source_age_seconds": source_age_seconds,
-            },
-        }
+    # Retain a bounded recent slice per provider, then select the newest row per
+    # stable context identity in Python. Date windows remain visible metadata but
+    # are deliberately excluded from identity so each scheduled/results stream
+    # evolves instead of creating an unbounded new context on every day.
+    recent_result = await session.execute(
+        select(ranked).where(ranked.c.rn <= _PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER)
+    )
+    contexts_by_provider: dict[
+        str,
+        dict[tuple[str, str, str, str], tuple[int, dict[str, Any]]],
+    ] = {provider: {} for provider in provider_list}
+    for row in recent_result.mappings().all():
+        provider = str(row["provider"])
+        evidence = _materialize_evidence_row(
+            row,
+            reference_now=reference_now,
+            stale_after_seconds=stale_after_seconds,
+        )
+        identity = _context_identity(evidence)
+        if identity is None:
+            continue
+        rank = int(row["rn"])
+        current = contexts_by_provider[provider].get(identity)
+        if current is None or rank < current[0]:
+            contexts_by_provider[provider][identity] = (rank, evidence)
+
+    for provider, context_map in contexts_by_provider.items():
+        contexts = [entry[1] for entry in context_map.values()]
+        contexts.sort(
+            key=lambda row: (
+                str(row.get("operation") or ""),
+                str((row.get("request_context") or {}).get("competition") or ""),
+                str((row.get("request_context") or {}).get("query_intent") or ""),
+                str((row.get("request_context") or {}).get("match_status") or ""),
+            )
+        )
+        output[provider]["contexts"] = contexts
+        output[provider]["context_count"] = len(contexts)
+        output[provider]["coverage_summary"] = _aggregate_context_coverage(contexts)
+        if contexts:
+            output[provider]["state"] = _aggregate_context_state(contexts)
 
     return output
 
