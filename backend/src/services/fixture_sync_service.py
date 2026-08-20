@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, Callable, cast
 from uuid import uuid4
 
 from redis.exceptions import RedisError
@@ -98,8 +98,13 @@ async def _claim_fixture_sync_lease() -> tuple[bool, str | None]:
             if recently_completed is not None:
                 return False, None
 
+            # ``cache.redis_client`` is constructed as the synchronous
+            # ``redis.Redis`` client. redis-py's shared sync/async overloads can
+            # otherwise confuse static inference when the bound method is
+            # passed through ``asyncio.to_thread``.
+            sync_set = cast(Callable[..., Any], client.set)
             acquired = await asyncio.to_thread(
-                client.set,
+                sync_set,
                 _FIXTURE_SYNC_LEASE_KEY,
                 token,
                 nx=True,
