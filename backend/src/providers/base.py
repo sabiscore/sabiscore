@@ -160,6 +160,10 @@ class ProviderResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     error_code: str | None = None
     raw_snapshot_id: str | None = None
+    # Small, provider-authored, non-secret request dimensions such as competition
+    # and match status. The recorder applies its own whitelist/redaction before
+    # persistence; raw URLs, headers, credentials and payloads are never allowed.
+    request_context: dict[str, str] = Field(default_factory=dict)
     # Sanitized transport outcome. Successful HTTP status is captured at the
     # shared HTTP boundary and attached by the registry instrumentation. Typed
     # failures populate the same fields without retaining URL/header/body data.
