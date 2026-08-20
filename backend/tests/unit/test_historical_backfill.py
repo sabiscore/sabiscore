@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.core.database import Base, Match, Team
+from src.core.database import Base, League, Match, Team
 from src.services.historical_backfill_service import (
     TeamIndex,
     backfill_historical_matches,
@@ -229,6 +229,60 @@ async def test_backfill_joins_onto_existing_fixture_sync_teams(
     assert match.home_team_id == "fd-team-epl:manchester_united_fc"
     # Arsenal was genuinely unknown, so exactly one new team row is minted.
     assert report.teams_created == 1
+
+
+async def test_backfill_same_name_other_league_cannot_poison_valid_local_identity(
+    session: AsyncSession, tmp_path: Path
+):
+    """An exact duplicate name in another league must not make EPL resolution ambiguous."""
+    session.add_all(
+        [
+            League(id="EPL", name="Premier League", country="England"),
+            League(id="BUNDESLIGA", name="Bundesliga", country="Germany"),
+            Team(id="epl-arsenal", name="Arsenal FC", league_id="EPL"),
+            Team(id="foreign-arsenal", name="Arsenal FC", league_id="BUNDESLIGA"),
+        ]
+    )
+    await session.commit()
+    (tmp_path / "fd_E0_2425.csv").write_text(
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
+        "E0,17/08/2024,Arsenal,Chelsea,2,1\n",
+        encoding="utf-8",
+    )
+
+    report = await backfill_historical_matches(session, cache_dir=tmp_path)
+    match = (await session.execute(select(Match))).scalars().one()
+
+    assert match.home_team_id == "epl-arsenal"
+    assert match.home_team_id != "foreign-arsenal"
+    assert report.teams_resolved == 1
+
+
+async def test_backfill_other_league_only_candidate_is_never_reused(
+    session: AsyncSession, tmp_path: Path
+):
+    """A globally exact name match is still ineligible when Team.league_id differs."""
+    session.add_all(
+        [
+            League(id="BUNDESLIGA", name="Bundesliga", country="Germany"),
+            Team(id="foreign-arsenal", name="Arsenal FC", league_id="BUNDESLIGA"),
+        ]
+    )
+    await session.commit()
+    (tmp_path / "fd_E0_2425.csv").write_text(
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
+        "E0,17/08/2024,Arsenal,Chelsea,2,1\n",
+        encoding="utf-8",
+    )
+
+    report = await backfill_historical_matches(session, cache_dir=tmp_path)
+    match = (await session.execute(select(Match))).scalars().one()
+    local = await session.get(Team, match.home_team_id)
+
+    assert match.home_team_id == "fdco-team-epl-arsenal"
+    assert match.home_team_id != "foreign-arsenal"
+    assert local is not None and local.league_id == "EPL"
+    assert report.teams_created == 2  # Arsenal and Chelsea are both new to EPL.
 
 
 async def test_backfill_reports_nothing_when_cache_dir_absent(session: AsyncSession, tmp_path: Path):
