@@ -6,6 +6,7 @@
 
 BEGIN TRANSACTION READ ONLY;
 
+-- Summary gate. Certified historical Elo requires every value below to be zero.
 WITH historical_matches AS (
     SELECT m.*
     FROM matches m
@@ -64,6 +65,25 @@ FROM (
 ORDER BY metric;
 
 -- Exact historical Match participant violations.
+WITH historical_matches AS (
+    SELECT m.*
+    FROM matches m
+    WHERE m.id LIKE 'fdco-%'
+),
+match_identity AS (
+    SELECT m.id,
+           m.match_date,
+           m.league_id,
+           m.home_team_id,
+           ht.name AS home_team_name,
+           ht.league_id AS home_team_league,
+           m.away_team_id,
+           at.name AS away_team_name,
+           at.league_id AS away_team_league
+    FROM historical_matches m
+    LEFT JOIN teams ht ON ht.id = m.home_team_id
+    LEFT JOIN teams at ON at.id = m.away_team_id
+)
 SELECT id AS match_id,
        match_date,
        league_id AS match_league,
@@ -81,6 +101,17 @@ WHERE home_team_league IS NULL
 ORDER BY match_date, id;
 
 -- Exact Elo snapshot semantic violations. A certified state must return zero.
+WITH snapshot_identity AS (
+    SELECT e.id,
+           e.match_id,
+           e.team_id,
+           e.league AS snapshot_league,
+           t.name AS team_name,
+           t.league_id AS team_league,
+           e.match_date
+    FROM elo_rating_snapshots e
+    LEFT JOIN teams t ON t.id = e.team_id
+)
 SELECT id AS snapshot_id,
        match_id,
        team_id,
