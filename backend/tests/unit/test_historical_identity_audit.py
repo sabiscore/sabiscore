@@ -206,3 +206,40 @@ async def test_missing_source_record_remains_explicit_in_manifest(
     assert findings[0].source_record_found is False
     assert findings[0].source_home_team is None
     assert summarize_semantic_identity_findings(findings)["source_records_missing"] == 1
+
+
+async def test_missing_team_row_remains_explicit_in_manifest(
+    session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    """An orphan participant must not disappear from the Python audit via JOIN."""
+    _write_epl_source(tmp_path)
+    await _seed_leagues(session)
+    session.add(Team(id="arsenal", name="Arsenal", league_id="EPL"))
+    match_id = historical_match_id(
+        "EPL", datetime(2025, 8, 10), "West Ham", "Arsenal"
+    )
+    session.add(
+        Match(
+            id=match_id,
+            league_id="EPL",
+            home_team_id="missing-west-ham",
+            away_team_id="arsenal",
+            match_date=datetime(2025, 8, 10),
+            season="2025/2026",
+            status="finished",
+            home_score=1,
+            away_score=2,
+        )
+    )
+    await session.commit()
+
+    findings = await audit_historical_semantic_identity(session, cache_dir=tmp_path)
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.home_league_mismatch is True
+    assert finding.stored_home_team_id == "missing-west-ham"
+    assert finding.stored_home_team_name is None
+    assert finding.stored_home_team_league is None
+    assert finding.source_record_found is True
+    assert finding.source_home_team == "West Ham"
