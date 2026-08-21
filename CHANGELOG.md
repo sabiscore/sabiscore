@@ -5,6 +5,39 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 3 feature-contract identity (2026-08-21)
+
+### Fixed
+
+- `active_generation.json`'s `feature_schema_version` is now validated instead
+  of being unvalidated free text. The manifest hash-protects every artifact's
+  bytes, but the field naming the feature contract those artifacts were trained
+  against was read by nobody — the same asymmetry the certification check
+  already closes for the promotion verdict.
+- `load_active_generation()` resolves the declared schema against
+  `FEATURE_SCHEMA_VERSIONS` and checks each league's already-hash-verified
+  metadata `feature_count` against the contract width. Unknown, empty, absent,
+  and null schema strings all fail closed.
+
+### Safety
+
+- Relabelling a 68-column generation as `phase8_89` previously passed every
+  gate. Six consumers republish the string as provenance, and `prediction.py`
+  answers a feature-width mismatch with a fallback result rather than raising,
+  so the relabel would have silently degraded every prediction to fallback
+  while `/health` reported the false schema as fact. It now fails the Render
+  build via `verify_active_artifacts.py`.
+- Additive and fail-closed; the committed `phase7_68` generation is unaffected.
+
+### Skills
+
+- Removed the last references to `frontend-design-auditor`, a skill folded into
+  `accessibility-system-architect`, `frontend-product-design-architect` and
+  `component-quality-gate` during an earlier consolidation. `registry.json`
+  gained its missing `nexus` entry, `elite-skill-forge`'s path was corrected,
+  and `make validate-strict` now runs in CI so registry/filesystem drift fails
+  the build instead of accumulating silently.
+
 ## Unreleased - Phase 2 market trust boundary (2026-08-21)
 
 ### Fixed
