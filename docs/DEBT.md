@@ -1,9 +1,79 @@
 # SabiScore Debt Ledger
 
+## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
+
+**Tier:** `NEXT` — **the single hard blocker on Phase 4.** Not a serving
+defect; nothing in production reads this gate. But it makes the entire
+candidate-promotion path a no-op, so Phase 4 cannot complete regardless of how
+good a candidate is.
+**Found:** 2026-08-22, while transcribing the in-code certification thresholds
+for a frozen policy artifact (APEX directive §9). Surfaced by asking "what
+would a *passing* candidate look like?" rather than reading why the current
+one failed.
+
+`promotion_evidence._expected_gate()` returns `PASS` only when
+`training_defaulted_slots`, `serving_schema_misaligned_slots` **and**
+`always_data_gap_slots` are all zero.
+`compare_candidate_vs_incumbent.py` then sets
+`promotion_permitted = all(gate == "PASS")`.
+
+`PHASE7_FEATURES_ALWAYS_DATA_GAP` holds four features — `shot_quality_diff`,
+`elo_league_adjusted`, `key_passes_under_pressure_diff`, `set_piece_xg_diff` —
+and **all four are present as slots in both `CANONICAL_FEATURES_68` and
+`APEX_FEATURES_68`** (verified directly, not inferred). They are there
+deliberately and permanently: `PHASE7_FEATURES_10`'s own comment records that
+deleting the slots in June broke every artifact, and the certified model
+served `model_version="fallback"` on every single inference for two months as
+a result.
+
+**So `always_data_gap_slots` is structurally 4 and can never be 0, and
+`serving_feature_availability` can never be `PASS`, and `promotion_permitted`
+can never be `true`.** A flawless candidate — zero silent defaults, zero
+positional misalignment, trained on 10,000 rows — still fails. Pinned by
+`backend/tests/unit/test_promotion_gate_satisfiability.py`, which isolates the
+cause to exactly this one counter (zeroing only that term flips the same
+summary to `PASS`).
+
+**Two deliberate decisions collided.** Keeping the four slots was right.
+Blocking on silent training defaults was right. But the gate conflates a
+*declared, dispositioned, permanent* gap with a *silent, undeclared* default,
+and only the second is disqualifying. The feature contract shipped in #68/#69
+already draws exactly this distinction: `always_data_gap` features get the
+`DEFER_UNTIL_DATA_EXISTS` disposition, which is an accepted state, not a
+failure.
+
+⚠️ **NOT FIXED IN THIS SESSION, DELIBERATELY.** Relaxing a certification gate
+after observing a failing result is what APEX §23 forbids ("lower
+certification thresholds after seeing results") and §9 rules out ("do not
+choose thresholds after seeing results"). That the change would be *correct*
+does not make it safe to make autonomously, and the honest thing is to stop at
+the boundary rather than reason my way across it.
+
+**Weighing against that:** the fix would not promote anything today. The
+current candidate independently fails `no_league_regression` (3/6 leagues) and
+`market_baseline` (0/6 leagues beat the market RPS), and carries 11 misaligned
+slots from item 37. So this is a deadlock repair, not threshold-shopping — but
+it is still a threshold change, and it needs a human to say so.
+
+**Exact next operation (requires authorization):** drop
+`always_data_gap_slots` from the `blockers` tuple in
+`promotion_evidence._expected_gate()` (`:117-123`), leaving
+`training_defaulted_slots`, `serving_schema_misaligned_slots` and
+`training_rows > 0`. Then invert the three tests in
+`test_promotion_gate_satisfiability.py` from "pins the deadlock" to "pins the
+repair", and record the count of declared gaps in the evidence summary so a
+reviewer still sees `4` rather than losing the signal entirely.
+**Trigger:** before any Phase 4 candidate can be promoted — i.e. now, but
+under explicit authorization.
+
+---
+
 ## 37. `train_on_real_matches.py`'s default market block does not match the shipped artifacts' own recorded one
 
-**Tier:** `NEXT` — not a live defect (nothing retrains automatically), but a
-loaded gun for the next Phase 4 candidate.
+**Tier:** `NEXT` — **blocks Phase 4 outright.** Not a live serving defect
+(nothing retrains automatically), but a structural deadlock: the promotion
+gate already refuses every candidate this script produces, and will keep
+refusing until the schema disagreement is resolved. See the correction below.
 **Found:** 2026-08-21, while deriving `training_source` for the feature
 contract (item 36). Surfaced *because* the attribution work forced the
 question "which code actually trained this slot?" for every feature.
@@ -22,16 +92,34 @@ draw_probability, market_confidence, ev_home, ev_draw, ev_away`. That is
 `CANONICAL_FEATURES_68`, not `APEX_FEATURES_68`.
 
 **Seven of the fourteen names are identical between the two blocks**
-(`market_prob_home/draw/away`, `log_odds_home/draw/away`, `odds_ratio`), which
-is why the discrepancy has stayed invisible: a name-keyed check passes, and
-only the seven *positions* that differ carry different semantics.
+(`market_prob_home/draw/away`, `log_odds_home/draw/away`, `odds_ratio`), so any
+*name-keyed* check passes; only the positions differ, at 11 of the 68 slots.
 
-**Consequence if unaddressed:** re-running the training script today produces a
-candidate whose market block is positionally incompatible with the schema
-`active_generation.json` declares (`phase7_68`). `train_league()` already
-refuses a width/name-count mismatch (`:567`), but both blocks are 14 wide, so
-that guard does not fire — the artifact would train and load and simply mean
-something different in seven slots than serving supplies.
+⚠️ **CORRECTED 2026-08-22, same session, before the claim could mislead
+anyone.** The first draft of this entry said the discrepancy "stayed
+invisible" and framed it as an undetected danger. **That is wrong, and
+checking it was the point.** `promotion_evidence._expected_gate()` already
+blocks on exactly this: it counts
+`candidate_position_matches_current_serving_schema` and reports
+`serving_schema_misaligned_slots`. The live
+`backend/models/candidate/comparison_report.json` reads **11**, and
+`APEX_FEATURES_68` differs from `CANONICAL_FEATURES_68` at exactly **11**
+positions (indices 20-30) — verified by direct comparison, not inferred. That
+gate is `FAIL`, and it is one of the three reasons
+`promotion_permitted: false`.
+
+**The real consequence, restated accurately:** this is not a lurking danger,
+it is a **structural deadlock**. While `train_on_real_matches.py` defaults to
+the Apex block and `active_generation.json` declares `phase7_68`, every
+candidate the script produces is auto-blocked by the availability gate on 11
+misaligned slots. No amount of modelling improvement can clear it — the
+schemas simply disagree. Someone must decide which block the next generation
+uses.
+
+What remains true from the original entry: `train_league()`'s width guard
+(`:567`) genuinely does not fire, because both blocks are 14 wide; and the
+seven shared names mean a name-keyed check passes. The positional gate is what
+catches it, not the width guard.
 
 **Why the contract does not paper over it:** `_training_source()` in
 `models/feature_registry.py` returns `UNDECLARED` for the legacy market block

@@ -81,10 +81,34 @@ serving availability, market baseline, and no-league-regression. Its manifest
 therefore remains `promotion_permitted: false`; these metrics are research
 evidence, not production certification.
 
+The serving-availability failure has two distinct causes, worth separating:
+`serving_schema_misaligned_slots: 11` is real and specific — the training
+script builds `APEX_FEATURES_68` while the active manifest declares
+`phase7_68` (`CANONICAL_FEATURES_68`), and the two differ at exactly indices
+20-30 (`docs/DEBT.md` item 37). `always_data_gap_slots: 4` is the structural
+issue above and would fail any candidate whatsoever.
+
 Eredivisie coverage is pooled fallback. UCL is generic coverage and its verdict
 is capped at `ACTIONABLE` until a dedicated certified model/policy exists.
 
 ## Promotion gates
+
+**Authoritative source:** `backend/src/models/certification_policy.py`
+(policy v1.0.0, SHA-256
+`41cb77031e3c23b744866e3b41e34e6c239445c98e5d20ad170ab918ff8f3dab`). That
+module is the frozen transcription of the thresholds actually applied by
+`compare_candidate_vs_incumbent.py` and `promotion_evidence._expected_gate()`;
+`test_certification_policy.py` fails if the two drift. The prose below
+summarises the wider release expectations and is **not** the machine-checked
+bar — cite the policy hash, not this list, in any certification manifest.
+
+⚠️ **The `serving_feature_availability` gate is currently unsatisfiable by
+construction** (`docs/DEBT.md` item 38): it requires `always_data_gap_slots ==
+0`, but all four `PHASE7_FEATURES_ALWAYS_DATA_GAP` features are permanent slots
+in every 68-wide schema. No candidate can be promoted until that is
+deliberately resolved. Read `promotion_permitted: false` on the current
+candidate as "blocked on three gates *and* structurally blocked", not as a
+close-run verdict.
 
 - deterministic train/serve parity and dual-loader compatibility;
 - valid finite probability simplexes without repair;
