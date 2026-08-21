@@ -1,6 +1,6 @@
 """Quarantine legacy market closings captured at or after kickoff.
 
-Revision ID: 0009_quarantine_post_kickoff_closings
+Revision ID: 0009_quarantine_market_closings
 Revises: 0008_provider_elo_team_identity
 
 The current market-observation writer rejects observations at kickoff or later.
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0009_quarantine_post_kickoff_closings"
+revision = "0009_quarantine_market_closings"
 down_revision = "0008_provider_elo_team_identity"
 branch_labels = None
 depends_on = None
