@@ -133,9 +133,9 @@ async def semantic_repair_review(
         manifest = await build_semantic_identity_repair_manifest(db)
         summary = dict(manifest.summary)
         review_ready = bool(
-            summary.get("complete")
-            and int(summary.get("source_records_missing", 0)) == 0
-            and int(summary.get("repair_blocked_matches", 0)) == 0
+            summary.get("complete") is True
+            and summary.get("source_records_missing") == 0
+            and summary.get("repair_blocked_matches") == 0
         )
         replacements = _proposed_replacement_summary(manifest.entries)
 
