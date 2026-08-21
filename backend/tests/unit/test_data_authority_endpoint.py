@@ -5,6 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import Response
+
 from src.api.endpoints import data_authority
 
 
@@ -70,6 +72,7 @@ async def test_non_postgres_data_authority_never_invents_database_name() -> None
 async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutation() -> (
     None
 ):
+    response = Response()
     db = MagicMock()
     db.get_bind.return_value = SimpleNamespace(
         dialect=SimpleNamespace(name="postgresql")
@@ -152,8 +155,9 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
             new=AsyncMock(return_value=plan),
         ),
     ):
-        payload = await data_authority.semantic_repair_review(db)
+        payload = await data_authority.semantic_repair_review(response, db)
 
+    assert response.headers["cache-control"] == "no-store"
     assert payload["read_only"] is True
     assert payload["blocked"] is False
     assert payload["manifest"]["repair_manifest_sha256"] == "a" * 64
@@ -193,6 +197,7 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
 async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete() -> (
     None
 ):
+    response = Response()
     db = MagicMock()
     db.get_bind.return_value = SimpleNamespace(
         dialect=SimpleNamespace(name="postgresql")
@@ -223,8 +228,9 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
             data_authority, "build_semantic_elo_repair_plan", new=plan_builder
         ),
     ):
-        payload = await data_authority.semantic_repair_review(db)
+        payload = await data_authority.semantic_repair_review(response, db)
 
+    assert response.headers["cache-control"] == "no-store"
     assert payload["blocked"] is True
     assert payload["reason"] == "SEMANTIC_REPAIR_MANIFEST_INCOMPLETE"
     assert payload["replay_plan"] is None
@@ -235,13 +241,15 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
 
 
 async def test_semantic_repair_review_requires_postgres() -> None:
+    response = Response()
     db = MagicMock()
     db.get_bind.return_value = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
     db.execute = AsyncMock()
     db.rollback = AsyncMock()
 
-    payload = await data_authority.semantic_repair_review(db)
+    payload = await data_authority.semantic_repair_review(response, db)
 
+    assert response.headers["cache-control"] == "no-store"
     assert payload["blocked"] is True
     assert payload["reason"] == "POSTGRES_REQUIRED"
     assert payload["manifest"] is None
