@@ -1,6 +1,84 @@
 # SabiScore Debt Ledger
 
+## 36. Phase 3 feature contract: identity is now enforced, but the contract itself is still three incompatible artifacts
+
+**Tier:** `NEXT` — no fail-open risk remains at the manifest boundary; this is
+about the contract's *content*, not its enforcement.
+**Found:** 2026-08-21, while implementing the Phase 3 identity gate.
+
+The gate shipped this session closes the enforcement half: a manifest can no
+longer declare a feature contract its artifacts cannot honour (see the
+`feature_schema_version` entry in `CLAUDE.md`). What it does **not** do is give
+Phase 3 the machine-readable contract the directive's §7.1 actually asks for.
+
+**What exists today, spread across three mutually incompatible shapes:**
+
+1. `backend/src/models/feature_registry.py` — Python `List[str]` name lists plus
+   `DEFAULT_FEATURE_VALUES_*` floats. **No per-feature metadata at all**: no
+   dtype, source, unit, normalization, expected range, or temporal validity.
+2. `backend/models/candidate/feature_availability_matrix.json` — 14 fields per
+   feature including `training_source`, `serving_source`, `freshness_contract`,
+   `serving_status`.
+3. `docs/apex_feature_availability.json` — a *third*, richer schema with
+   `family`, `temporal_validity`, `default_gap_behavior`,
+   `serving_projection_coverage`.
+
+⚠️ **Producer drift is a live landmine.** The checked-in
+`feature_availability_matrix.json` carries `serving_status`,
+`freshness_contract` and rich per-feature source strings that the current
+producer (`models/promotion_evidence.py`) **does not emit at all** —
+regenerating it today would silently *lose* exactly the semantics Phase 3
+needs. `docs/apex_feature_availability.json`'s generator does not exist in the
+repo at all (grep for `default_gap_behavior` under `backend/` returns nothing).
+Item 26 declared the producer/consumer mismatch "RESOLVED"; that closure was
+about the consumer not `KeyError`-ing, **not** about field parity.
+
+**Also missing for §7.1:** the four required dispositions
+(`REMOVE` / `REDESIGN` / `REPLACE_WITH_OBSERVABLE_PROXY` /
+`DEFER_UNTIL_DATA_EXISTS`) exist nowhere. `promotion_evidence._classification`
+has a 4-value vocabulary but it is *descriptive* (`SCHEMA_MISMATCH`,
+`ALWAYS_DATA_GAP`, `TRAINING_DEFAULT_ONLY`, `ALIGNED_OBSERVED_SIGNAL`), not a
+disposition. 24 `defaulted_training_slot` + 10 `UNWIRED_DEFAULT` + 11
+`UNAVAILABLE_SCHEMA_MISALIGNED` features currently carry no disposition.
+
+**Also missing for §7.3:** `promotion_evidence._contract_hash` hashes **only the
+ordered name list** — not dtypes, sources, or transforms — so it cannot serve as
+the `feature_contract_sha256` the directive specifies. And nothing anywhere
+hashes a feature *vector*, so the "same historical cutoff → identical hash"
+parity requirement has no mechanism yet. This is the same gap item 29's fix (b)
+names from the Phase 8 side ("a true parity test comparing a serving vector
+against a training vector for the same fixture is still absent").
+
+⚠️ **Do not close this by hand-writing 21 metadata fields × 89 features.** Most
+of that metadata does not exist anywhere today, and inventing plausible values
+for `lookahead_risk` / `availability_time` / `unit` would be fabrication on the
+exact surface Phase 3 exists to make trustworthy. The honest path is a generator
+that derives what is derivable from real code and marks the rest explicitly
+undeclared.
+
+**Trigger:** before any `v6_phase8` candidate is evaluated for promotion — that
+is the moment a contract with unstated dispositions becomes load-bearing.
+
+---
+
 ## 35. `fixture_sync.identity_rebind_pending` has zero consumers — the drift it correctly detects just accumulates in warning logs
+
+> ⚠️ **Correction (2026-08-21):** fix (a) below — "surface
+> `identity_rebind_pending` in `/health` or `/metrics`" — **is already done and
+> was when this item was filed.** `metrics_collector.increment()` writes to
+> `_counters`, `get_summary()` returns `"counters": dict(self._counters)`, and
+> `GET /metrics` returns that under `production.counters`. The grep that found
+> "exactly one line" matched only `backend/src`, missing that the collector is a
+> generic sink whose consumers are the endpoint, not the call site.
+>
+> **The underlying complaint still stands, restated accurately:** `MetricsCollector`
+> is an in-process, in-memory counter that `reset()` clears and that starts at
+> zero on every boot — and Render runs a single worker that restarts on every
+> deploy. So it reports *rebind events observed since this process started*, not
+> *how many matches are currently drifted*. A process-lifetime event counter
+> cannot answer the backlog question, which is why the same 11 matches re-warn on
+> every deploy forever with no visible total. Fix (a) should therefore be read as
+> **"expose a durable backlog gauge"**, not "add a counter" — the counter exists.
 
 **Tier:** `NEXT` — low urgency, no data-corruption risk (the guard fails
 closed exactly as designed).
