@@ -239,3 +239,11 @@ ssl/*.crt
 .playwright-mcp/
 /homepage-full.png
 /match-page.png
+
+.neon
+.pytest_runs/
+/skills-lock.json
+# Ignore IDE / build tool local property files but NOT Sonar config
+*.properties
+!sonar-project.properties
+!**/sonar-project.properties
