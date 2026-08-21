@@ -1,5 +1,61 @@
 # SabiScore Debt Ledger
 
+## 35. `fixture_sync.identity_rebind_pending` has zero consumers — the drift it correctly detects just accumulates in warning logs
+
+**Tier:** `NEXT` — low urgency, no data-corruption risk (the guard fails
+closed exactly as designed).
+**Found:** 2026-08-21, incidentally, reading a Render deploy log for an
+unrelated database-migration verification.
+
+`fixture_sync_service.py` (`sync_upcoming_fixtures` / `_upsert_fixtures`,
+~line 387) already does the right thing when re-syncing an unsettled match:
+if the freshly-resolved team ids (`_resolve_upcoming_team_id`, the live
+provider-identity path added in PR #39) disagree with the already-persisted
+`match.home_team_id`/`away_team_id`, it logs a warning, increments
+`fixture_sync.identity_rebind_pending`, and **leaves the row unchanged**
+rather than guessing which id is correct — the same fail-closed instinct as
+every other identity guard in this codebase. Observed live, one deploy,
+9 distinct matches, all in the same shape:
+
+```text
+match_id=fd-560548 stored=(fd-team-epl:manchester_city_fc,fdco-team-epl-bournemouth)
+                    verified=(fdco-team-epl-man_city,fdco-team-epl-bournemouth)
+```
+
+The pattern across all 9 is consistent: the **stored** side is the older
+`fd-team-<league>:<slug>` convention (colon separator, full slug — predates
+PR #39's live-identity bridge), the **verified** side is the current
+`fdco-team-<league>-<slug>` convention `_resolve_upcoming_team_id` and
+`historical_backfill_service._historical_team_id()` both use today. These
+read like the same real-world clubs under two ID generations, not genuine
+conflicts — but the guard is right not to assume that from inside a fixture
+sync loop; confirming it needs the same kind of source-backed manifest this
+session's item 34 already built for the semantic-identity case, not a
+second ad hoc heuristic.
+
+**The actual gap:** `grep -rn identity_rebind_pending backend/src` finds
+exactly one line — the increment itself. No dashboard reads it, no alert
+fires on it, nothing reconciles it. A backlog of "pending reconciliation"
+matches can grow indefinitely with the only visible trace being scattered
+WARNING log lines on whichever deploy happens to touch them.
+**Blast radius:** low today — Elo/prediction features for a flagged match
+keep serving from whichever id was already persisted, so nothing silently
+breaks. It does mean the same match can be flagged repeatedly across
+deploys/sync ticks without ever resolving, and the *count* of unresolved
+identity drift in the system is currently invisible.
+**Fix, in priority order:** (a) surface `identity_rebind_pending` in
+`/health` or `/metrics` so the backlog size is at least visible; (b) decide
+whether a source-backed reconciliation manifest (mirroring item 34's
+`historical_identity_repair_manifest_service.py` pattern) is the right tool
+for the *live* fixture-sync case too, or whether a lighter one-time backfill
+of the 9 (and any others already accumulated) `fd-team-` rows to the
+`fdco-team-` convention closes it outright.
+**Trigger:** revisit once item 34's semantic-identity infrastructure is
+actually exercised — the two problems are close enough in shape that
+solving one well likely informs the other.
+
+---
+
 ## 34. Semantic-identity repair is manifest-complete and hash-gated; `--apply` still requires a live, human-reviewed run — NEXT (operator-gated)
 
 **Tier:** `NEXT`. Code complete, tested, and merged 2026-08-20. Blocked only
@@ -1820,6 +1876,51 @@ that took ~2 weeks of background settlement ticks to accumulate. **Trigger:
 operator action before 2026-09-04.** Not agent-doable — plan changes need the
 Render dashboard/billing, and provisioning a replacement is a real-money,
 real-data decision that must not be made unilaterally.
+
+**✅ RESOLVED 2026-08-21 — migrated to `sabiscore-db-v3`, cutover verified, no
+data lost.** Provisioned `sabiscore-db-v3` (`dpg-da3p8qv10e5c738vls1g-a`,
+plan `basic_256mb`, region `oregon`, PostgreSQL 18, **no expiry**) via the
+Render API. Data moved with `docker run postgres:18 pg_dump --no-owner
+--no-privileges --clean --if-exists | docker run -i postgres:18 psql
+-v ON_ERROR_STOP=1` (no local `pg_dump`/`psql` install; no local Render CLI
+either), piped directly between two containers so nothing touched disk or
+PowerShell's text encoding. Run twice: the first pass overlapped with live
+background writes on `v2` (`matches` grew 12,790 → 12,851 mid-migration —
+the write-during-migration gap this entry warned about was real, not
+theoretical), so the *exact same* idempotent command was re-run immediately
+before cutover, closing the gap to zero.
+
+**Verified independently, not assumed** — two problems surfaced during
+verification and both were resolved before trusting the result: (1) Render's
+own read-only query tool fails with `SSL/TLS required` against `v3`
+specifically (consistent on retry; `v2` is unaffected) — worked around by
+having the operator verify row counts directly via the same
+`docker run postgres:18 psql` pattern instead. (2) Post-cutover, `matches`/
+`elo_rating_snapshots`/`market_snapshots` read identically on both instances
+by construction (the copy made them identical), so row counts alone can't
+prove *which* instance is live — resolved with `get_metrics
+active_connections` over the cutover window: `v3` held a steady 3–4
+connections throughout (including before the deploy completed, plausibly a
+warm pool from the health-checked new deploy), `v2` read `0` for the entire
+window bar one incidental blip from this session's own diagnostic query.
+Combined with the live `/health/ready` (`release_sha` matching the deploy
+log's own build-identity line, `database: Connected`, `migrations: head
+0009_quarantine_market_closings` applied cleanly, `elo.rows: 25580`) this is
+conclusive: production is on `v3`.
+
+**Not yet done, non-urgent:** `DATABASE_URL` on the `sabiscore-api` service
+was set to `v3`'s *external* connection string (the one that also works from
+outside Render, used for the migration itself) rather than the *internal*
+one. Both work — the deploy log and live health checks confirm full
+functionality either way — but internal stays inside Render's network
+(lower latency, no public-internet hop, no egress transfer). Switch it via
+the dashboard's "Internal Database URL" field on `v3` when convenient; no
+functional urgency.
+
+`sabiscore-db-v2` is confirmed idle (0 active connections) and safe to
+delete once the operator is comfortable — recommended to leave it running a
+few days as a free rollback path before removing it, well ahead of its own
+2026-09-04 expiry.
 
 **Original entry, 2026-08-05 (kept for the incident record):**
 Render PostgreSQL `sabiscore-db` no longer resolved and the API was crash-looping.
