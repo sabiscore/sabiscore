@@ -98,25 +98,41 @@ async def test_manifest_resolves_known_residuals_and_is_hash_stable(
     first = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
     second = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
 
+    assert first.schema_version == 2
     assert first.manifest_sha256 == second.manifest_sha256
     assert len(first.manifest_sha256) == 64
     assert first.summary["affected_matches"] == 2
     assert first.summary["repair_ready_matches"] == 2
     assert first.summary["repair_blocked_matches"] == 0
     assert first.summary["source_records_missing"] == 0
+    assert first.summary["source_evidence_hashed"] == 2
+    assert first.summary["replay_required_matches"] == 2
     assert first.summary["complete"] is True
 
     by_id = {entry.match_id: entry for entry in first.entries}
     west_ham = by_id[west_ham_match_id]
     assert west_ham.repair_ready is True
+    assert west_ham.repair_status == "READY"
+    assert west_ham.blocking_reason is None
     assert west_ham.target_home_team_id == "west-ham"
     assert west_ham.target_away_team_id == "arsenal"
+    assert west_ham.source_fixture_id == west_ham_match_id
+    assert west_ham.source_evidence_sha256 is not None
+    assert len(west_ham.source_evidence_sha256) == 64
+    assert west_ham.source_evidence_sha256 == by_id[west_ham_match_id].source_evidence_sha256
+    assert west_ham.repair_reason == "home_cross_league_identity"
+    assert west_ham.replay_required is True
     assert west_ham.blockers == ()
 
     villa = by_id[villa_match_id]
     assert villa.repair_ready is True
+    assert villa.repair_status == "READY"
     assert villa.target_home_team_id == "chelsea"
     assert villa.target_away_team_id == "aston-villa"
+    assert villa.source_fixture_id == villa_match_id
+    assert villa.source_evidence_sha256 is not None
+    assert villa.repair_reason == "away_cross_league_identity"
+    assert villa.replay_required is True
 
 
 async def test_manifest_blocks_when_persisted_score_disagrees_with_source(
@@ -135,7 +151,12 @@ async def test_manifest_blocks_when_persisted_score_disagrees_with_source(
     entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
 
     assert entry.repair_ready is False
+    assert entry.repair_status == "BLOCKED"
+    assert entry.blocking_reason is not None
     assert "source_score_mismatch" in entry.blockers
+    assert "source_score_mismatch" in entry.blocking_reason
+    assert entry.source_evidence_sha256 is not None
+    assert entry.replay_required is True
     assert manifest.summary["complete"] is False
 
 
@@ -155,8 +176,10 @@ async def test_manifest_blocks_when_source_team_cannot_resolve_in_match_league(
     entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
 
     assert entry.repair_ready is False
+    assert entry.repair_status == "BLOCKED"
     assert entry.target_home_team_id is None
     assert "target_home_unresolved" in entry.blockers
+    assert entry.source_evidence_sha256 is not None
 
 
 async def test_manifest_is_read_only(
