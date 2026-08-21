@@ -7,13 +7,18 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 
 ## SAB-22 manifest-v3 candidate evidence from 2026-08-21
 
-- Candidate work is isolated on `fix/sab22-semantic-repair-v3`, based on exact
-  `origin/master` SHA `317337f61a0605afc2c3c8a95a019013c1587ace`.
-  The root checkout's unrelated `.gitignore` modification remains untouched.
-- The last live manifest-v2 review reported 518 affected EPL matches, 236
+- The repair was developed from exact `origin/master` SHA
+  `317337f61a0605afc2c3c8a95a019013c1587ace`, merged through PR #57, and
+  followed by the direct-backend `Cache-Control: no-store` correction in PR #59.
+  Render and Vercel both deployed final code SHA
+  `06de645a2dc57d1d10dbe53d0427e463dc10ef76`; Render deploy
+  `dep-da3t763l550s73dqhavg` was `live` and Vercel deployment
+  `dpl_EBDaKGb4swsw6TRH4xdg7qPyj1Y8` was production `READY`. The root
+  checkout's unrelated `.gitignore` modification remained untouched.
+- The superseded live manifest-v2 review reported 518 affected EPL matches, 236
   repair-ready, and 282 blocked. Source rows existed for all 518. The measured
   unresolved names were West Ham, Man City, and Ipswich; these are the only
-  identity cases addressed by this candidate.
+  identity cases addressed by manifest v3.
 - Manifest schema v3 hashes deterministic source-linked Team creations. The
   apply service locks Team/Match/Elo tables, creates reviewed targets before
   optimistic Match updates, verifies exact counts, and retains full chronological
@@ -27,13 +32,28 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   Alembic gates remain unavailable locally.
 - A read-only Render export of the production identity population was loaded into
   an ignored, disposable local SQLite snapshot and deleted after verification.
-  Manifest v3 reported `affected_matches: 518`, `repair_ready_matches: 518`,
-  `repair_blocked_matches: 0`, `source_records_missing: 0`, and exactly one
-  `fdco-team-epl-west_ham` creation with 266 participant references. This is
-  local candidate evidence, not a live deployed-v3 review or authorization hash.
-- No production data was mutated. Class-C apply remains blocked until the merged
-  exact SHA produces a complete live manifest and replay plan and a separate
-  authorization binds both hashes plus backup and rollback evidence.
+  That reproduction matched the subsequently deployed live review.
+- Direct Render and Vercel-proxied reviews on final code SHA `06de645a` both
+  returned HTTP 200 with `Cache-Control: no-store`, `read_only: true`, schema v3,
+  `affected_matches: 518`, `repair_ready_matches: 518`,
+  `repair_blocked_matches: 0`, `source_records_missing: 0`, and `complete: true`.
+  Both reported exactly one `fdco-team-epl-west_ham` creation with 266 source
+  fixture ids, 266 source-evidence hashes, and 266 participant references.
+- The production repair candidate hashes are manifest
+  `a1eae47c4d5b86fb3b0eda2bc997f219533561f0913cd584ecc49839cfa72b62`
+  and replay plan
+  `9bf816061704b6c45aacdc3080eba4d25dcc0d5e007c834687f66d02d7d87bd4`.
+  They identify a candidate only and do not authorize mutation.
+- Final health through the Vercel deployment returned HTTP 200 and `no-store`,
+  reported backend SHA `06de645a2dc57d1d10dbe53d0427e463dc10ef76`,
+  PostgreSQL and Redis ready, Alembic head/applied
+  `0009_quarantine_market_closings`, and strict league models loaded. The
+  provider-health proxy remained non-probing and fail-closed: all five registry
+  entries were `CONFIGURED_UNVERIFIED` with `live_probe_not_run` warnings.
+- No production data was mutated. The live review retained
+  `production_mutation_authorized: false`. Class-C apply remains blocked until a
+  fresh authorization binds both hashes, the exact targets, a backup/snapshot
+  reference, rollback procedure, and authorization id.
 
 ## Integration pass evidence from 2026-08-14 (post-`e0f89ae`)
 
