@@ -5,6 +5,27 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 2 generation-scoped CLV hardening (2026-08-21)
+
+### Fixed
+
+- Settlement and CLV repository reads now require a non-empty model generation;
+  the former permissive default could pool rows from systems that never served as
+  one model and inflate certification sample counts.
+- Canonical CLV verification SQL now selects one latest valid pre-kickoff closing
+  snapshot per match and one latest pre-close prediction per match and generation.
+  CLV aggregates are emitted only by generation; the pooled diagnostic aggregate
+  was removed from the general lifecycle audit.
+- Backend evidence and decision routes are centrally marked
+  `Cache-Control: no-store`, including direct provider-evidence and
+  model-performance responses.
+
+### Safety
+
+- This change performs no provider call, migration, model promotion, settlement,
+  market-evidence rewrite, or production-data mutation. Value scanning, Kelly,
+  and staking remain certification-gated and disabled.
+
 ## Unreleased - SAB-22 semantic-repair manifest v3 (2026-08-21)
 
 ### Fixed

@@ -122,6 +122,26 @@ def test_semantic_identity_audit_has_fail_closed_gate() -> None:
     assert "(violation_count - violation_count)::integer" in sql
 
 
+def test_clv_audits_select_one_chain_per_match_and_generation() -> None:
+    generation_sql = (
+        _BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql"
+    ).read_text(encoding="utf-8").lower()
+    settlement_sql = (
+        _BACKEND_DIR / "scripts" / "verify_clv_settlement.sql"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "partition by p.match_id, p.model_version" in generation_sql
+    assert "where prediction_rank = 1" in generation_sql
+    assert "where closing_rank = 1" in generation_sql
+    assert "p.created_at < c.captured_at" in generation_sql
+    assert "group by model_version" in generation_sql
+
+    assert "partition by p.match_id, p.model_version" in settlement_sql
+    assert "where e.prediction_rank = 1" in settlement_sql
+    assert "clv_mean_diagnostic_only" not in settlement_sql
+    assert "'clv_sample_size'" not in settlement_sql
+
+
 def test_local_compat_runner_cannot_restore_sqlite_fallback() -> None:
     source = _LOCAL_COMPAT_RUNNER.read_text(encoding="utf-8")
     assert "from run_verification_sql import main" in source

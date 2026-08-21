@@ -159,7 +159,7 @@ async def test_clv_join_uses_latest_valid_pre_kickoff_snapshot_only(factory) -> 
             ]
         )
         await session.commit()
-        records = await get_clv_records(session)
+        records = await get_clv_records(session, model_version="v5_phase7")
 
     assert len(records) == 1
     assert records[0]["model_probs"] == pytest.approx([0.5, 0.3, 0.2])
