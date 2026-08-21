@@ -146,7 +146,7 @@ After generating a new skill, suggest the most relevant existing skills to pair 
 | Cluster | Skills |
 |---|---|
 | Editor & Environment | vscode-cognitive-os, vscode-ai-agent-stack, vscode-monorepo-forge, vscode-debug-profiler, typescript-config-surgeon, git-workflow-architect |
-| Frontend Design | design-token-system-architect, frontend-product-design-architect, frontend-design-auditor, accessibility-system-architect, component-quality-gate, motion-performance-architect, motion-interaction-architect, data-visualization-architect |
+| Frontend Design | design-token-system-architect, frontend-product-design-architect, accessibility-system-architect, component-quality-gate, motion-performance-architect, motion-interaction-architect, data-visualization-architect |
 | Backend Engineering | backend-domain-model-architect, effect-ts-layer-architect, prisma-database-architect, bullmq-job-architect, api-automation-architect, api-contract-governance-architect, backend-systems-auditor, opentelemetry-observability-architect, edge-cache-architecture-architect |
 | Application Layer | nextjs-performance-architect, security-hardening-auditor, testing-strategy-architect, ai-feature-architect, prompt-engineering-architect, release-incident-operations-architect |
 | Mobile & Meta | react-native-expo-architect, elite-skill-forge |

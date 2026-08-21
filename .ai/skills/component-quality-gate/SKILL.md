@@ -263,6 +263,6 @@ After the audit, always produce the corrected component with:
 
 ## Skill Chain
 
-**Feeds into**: `testing-strategy-architect` (test templates from the gate feed directly into the test suite) → `frontend-design-auditor` (visual findings loop back for design correction).
+**Feeds into**: `testing-strategy-architect` (test templates from the gate feed directly into the test suite) → `frontend-product-design-architect` (visual findings loop back for design correction).
 
 **Creative combination**: Pair with `design-token-system-architect` and `motion-interaction-architect` for a complete component lifecycle — tokens define the palette, motion defines the behaviour, the quality gate validates both.

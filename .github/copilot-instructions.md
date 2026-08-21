@@ -24,7 +24,7 @@ Never blind-load the full suite. NEXUS selects only what the task requires.
 | Cluster | Skills |
 |---|---|
 | **1 · Editor & Env** | `vscode-cognitive-os` · `vscode-ai-agent-stack` · `vscode-monorepo-forge` · `vscode-debug-profiler` · `typescript-config-surgeon` · `git-workflow-architect` |
-| **2 · Frontend Design** | `design-token-system-architect` · `frontend-product-design-architect` · `frontend-design-auditor` · `accessibility-system-architect` · `component-quality-gate` · `motion-performance-architect` · `motion-interaction-architect` · `data-visualization-architect` |
+| **2 · Frontend Design** | `design-token-system-architect` · `frontend-product-design-architect` · `accessibility-system-architect` · `component-quality-gate` · `motion-performance-architect` · `motion-interaction-architect` · `data-visualization-architect` |
 | **3 · Backend Engineering** | `backend-domain-model-architect` · `effect-ts-layer-architect` · `prisma-database-architect` · `bullmq-job-architect` · `api-automation-architect` · `api-contract-governance-architect` · `backend-systems-auditor` · `opentelemetry-observability-architect` · `edge-cache-architecture-architect` |
 | **4 · Application Layer** | `nextjs-performance-architect` · `security-hardening-auditor` · `testing-strategy-architect` · `ai-feature-architect` · `prompt-engineering-architect` · `release-incident-operations-architect` |
 | **5 · Mobile & Meta** | `react-native-expo-architect` · `elite-skill-forge` |

@@ -403,7 +403,7 @@ theme immediately with no flash.
 
 ## Skill Chain
 
-**Feeds into**: `frontend-design-auditor` (token system gives the auditor a reference baseline for all measurements) → `component-quality-gate` (components are checked against the token system) → `motion-interaction-architect` (motion tokens are a natural extension of the design token system).
+**Feeds into**: `accessibility-system-architect` (the token system gives contrast and focus-state checks a reference baseline to measure against) → `component-quality-gate` (components are checked against the token system) → `motion-interaction-architect` (motion tokens are a natural extension of the design token system).
 
 **Creative combination**: Design tokens → motion tokens → component audit forms a complete "design system in a day" chain. Run `design-token-system-architect` to establish the palette, `motion-interaction-architect` to extend it with animation tokens, then `component-quality-gate` on every component to enforce compliance.
 
@@ -411,4 +411,4 @@ theme immediately with no flash.
 
 **The "Cross-Platform Token" pattern**: Generate tokens with `design-token-system-architect` as CSS custom properties for web, then have `react-native-expo-architect` convert them to a `tokens.ts` file for Expo's `StyleSheet`. One source of truth, two platforms, zero drift.
 
-**The "Dark Mode First" pattern**: Run `design-token-system-architect` with dark mode as the primary surface (not an afterthought), then `frontend-design-auditor` to verify contrast ratios in both modes, then `testing-strategy-architect` to add theme-switching tests. Dark mode that's designed in, not bolted on.
+**The "Dark Mode First" pattern**: Run `design-token-system-architect` with dark mode as the primary surface (not an afterthought), then `accessibility-system-architect` to verify contrast ratios in both modes, then `testing-strategy-architect` to add theme-switching tests. Dark mode that's designed in, not bolted on.
