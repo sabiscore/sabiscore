@@ -1,7 +1,10 @@
 [run]
 branch = True
-source = 
+relative_files = True
+
+source =
     src
+
 omit =
     src/api/websocket.py
     src/cli/*
@@ -12,12 +15,18 @@ omit =
     src/ml_ultra/*
     src/scrapers/*
 
+
 [report]
 show_missing = True
 skip_covered = False
+
 exclude_lines =
     pragma: no cover
     if __name__ == .__main__.
     raise NotImplementedError
     except ImportError
     except Exception as e
+
+
+[xml]
+output = coverage.xml

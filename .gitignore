@@ -239,3 +239,8 @@ ssl/*.crt
 .playwright-mcp/
 /homepage-full.png
 /match-page.png
+
+.neon
+.pytest_runs/
+/skills-lock.json
+*.properties
