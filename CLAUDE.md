@@ -4,7 +4,7 @@
 This repository is governed by a modular AI skill system located in:
 
 ```
-.ai/skills/          ← 39-skill domain suite
+.ai/skills/          ← 38-skill domain suite (39th, elite-skill-forge, lives in .github/skills/)
 .claude/skills/      ← Claude Code slash commands (nexus, forge, audit)
 ```
 
@@ -125,7 +125,7 @@ No other skill may be invoked before NEXUS has run.
 > | Tool | Location | Purpose |
 > |---|---|---|
 > | NEXUS | `NEXUS.md` / `.claude/skills/nexus/` | Routes tasks → selects skill graphs → orders execution |
-> | `elite-skill-forge` | `.ai/skills/elite-skill-forge/` | Generates new SKILL.md files from domain descriptions |
+> | `elite-skill-forge` | `.github/skills/elite-skill-forge/` | Generates new SKILL.md files from domain descriptions |
 
 ---
 

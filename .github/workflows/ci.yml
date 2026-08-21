@@ -30,6 +30,17 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
           GITLEAKS_EXTRA_ARGS: "--redact --verbose"
 
+  skill-registry:
+    name: Skill Registry Drift Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: make validate-strict (schema + filesystem existence)
+        run: make validate-strict
+
   backend-quality:
     name: Backend Lint, Typecheck, Tests
     runs-on: ubuntu-latest

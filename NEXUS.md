@@ -496,7 +496,6 @@ When skills produce conflicting recommendations, resolve in this order:
 |---|---|
 | `design-token-system-architect` | Primitive → semantic → component tokens, dark mode, Tailwind |
 | `frontend-product-design-architect` | IA, hierarchy, conversion flow, storytelling, responsive composition |
-| `frontend-design-auditor` | Gestalt principles, WCAG AA, design critique, Linear/Stripe/Vercel quality bar |
 | `accessibility-system-architect` | Keyboard parity, semantic HTML, ARIA patterns, reduced motion, WCAG 2.2 |
 | `component-quality-gate` | Component a11y, performance, Storybook generation, prop contract review |
 | `motion-performance-architect` | Motion strategy, performance budgets, compositing rules, anti-patterns |

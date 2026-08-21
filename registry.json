@@ -1,8 +1,8 @@
 {
   "$schema": "./registry.schema.json",
   "schemaVersion": "2.0.0",
-  "suiteVersion": "2.1.0",
-  "updatedAt": "2026-08-05",
+  "suiteVersion": "2.2.0",
+  "updatedAt": "2026-08-21",
   "stack": {
     "frontend":      "Next.js 15, React 19 + RSC, Tailwind CSS v4",
     "mobile":        "React Native, Expo SDK 54, Reanimated v4, EAS",
@@ -194,28 +194,6 @@
       "tags": ["ux", "layout", "hierarchy", "conversion", "responsive"]
     },
     {
-      "name": "frontend-design-auditor",
-      "version": "1.1.0",
-      "description": "Audits and elevates web UI designs and components using Gestalt principles, WCAG AA, and Linear/Stripe/Vercel quality standards.",
-      "cluster": 2,
-      "clusterName": "Frontend Design",
-      "installOrder": 9,
-      "filePath": ".ai/skills/frontend-design-auditor/SKILL.md",
-      "triggers": [
-        "audit my UI design",
-        "make this look better",
-        "is this accessible",
-        "design feedback for my component",
-        "how would Linear design this",
-        "visual hierarchy review",
-        "apply Gestalt principles"
-      ],
-      "dependencies": [],
-      "pairedWith": ["frontend-product-design-architect", "accessibility-system-architect", "component-quality-gate"],
-      "verticals": ["all"],
-      "tags": ["design-audit", "gestalt", "wcag", "critique"]
-    },
-    {
       "name": "accessibility-system-architect",
       "version": "2.0.0",
       "description": "Designs accessibility as a system: ARIA patterns, keyboard parity, focus management, reduced motion, and WCAG 2.2 AA by construction.",
@@ -256,7 +234,7 @@
         "review this TSX component"
       ],
       "dependencies": ["accessibility-system-architect"],
-      "pairedWith": ["testing-strategy-architect", "frontend-design-auditor", "motion-interaction-architect"],
+      "pairedWith": ["testing-strategy-architect", "motion-interaction-architect"],
       "verticals": ["all"],
       "tags": ["components", "storybook", "a11y", "performance", "props"]
     },
@@ -685,7 +663,7 @@
       "cluster": 5,
       "clusterName": "Mobile & Meta",
       "installOrder": 31,
-      "filePath": ".ai/skills/elite-skill-forge/SKILL.md",
+      "filePath": ".github/skills/elite-skill-forge/SKILL.md",
       "triggers": [
         "make a skill for this task or domain",
         "create a Claude skill that does X",
@@ -743,7 +721,6 @@
       "dependencies": ["prompt-engineering-architect"],
       "pairedWith": ["bullmq-job-architect", "real-time-systems-architect", "opentelemetry-observability-architect", "security-hardening-auditor"],
       "verticals": ["SwarmX"],
-      "claudeCodeCommand": "nexus",
       "tags": ["multi-agent", "swarmx", "orchestration", "llm-routing", "tool-registry"]
     },
     {
@@ -837,6 +814,29 @@
       "pairedWith": ["data-visualization-architect", "accessibility-system-architect", "component-quality-gate"],
       "verticals": ["SabiScore"],
       "tags": ["dashboard", "design-system", "verdict-styling", "sabiscore", "accessibility"]
+    },
+    {
+      "name": "nexus",
+      "version": "2.0.0",
+      "description": "Central task-routing engine: classifies intent, selects the minimum sufficient skill graph, orders execution, and resolves cross-skill conflicts before any other skill runs.",
+      "cluster": 1,
+      "clusterName": "Editor & Environment",
+      "installOrder": 40,
+      "filePath": ".ai/skills/nexus/SKILL.md",
+      "triggers": [
+        "run NEXUS",
+        "route this through NEXUS",
+        "what skills for this",
+        "classify this task",
+        "which skills should I use",
+        "begin task",
+        "start working on"
+      ],
+      "dependencies": [],
+      "pairedWith": [],
+      "verticals": ["all"],
+      "claudeCodeCommand": "nexus",
+      "tags": ["orchestration", "routing", "meta", "skill-selection"]
     }
   ]
 }
