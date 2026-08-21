@@ -31,7 +31,7 @@ jobs:
           GITLEAKS_EXTRA_ARGS: "--redact --verbose"
 
   backend-quality:
-    name: Backend Lint, Typecheck, Tests, Coverage, Sonar
+    name: Backend Lint, Typecheck, Tests
     runs-on: ubuntu-latest
     needs: security
 
