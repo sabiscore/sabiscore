@@ -167,11 +167,12 @@ async def test_capture_skips_fixture_outside_network_trigger_window(factory) -> 
     mock_provider.odds.assert_not_called()
 
 
-async def test_current_closing_does_not_trigger_provider_request_by_itself(factory) -> None:
+async def test_current_closing_keeps_triggering_final_pre_kickoff_refresh(factory) -> None:
     from src.services.clv_capture_service import run_clv_capture_pass
 
     kickoff = _due_kickoff(4)
     await _seed_match(factory, match_id="fd-ded-3", league_id="EREDIVISIE", kickoff=kickoff)
+    first_captured_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=30)
     async with factory() as session:
         session.add(
             MarketSnapshot(
@@ -183,7 +184,7 @@ async def test_current_closing_does_not_trigger_provider_request_by_itself(facto
                 draw_odds=3.4,
                 away_odds=3.8,
                 is_closing_line=True,
-                captured_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                captured_at=first_captured_at,
                 coherent=True,
                 executable=False,
                 provenance={"evidence_class": "PRE_MATCH_CLOSING"},
@@ -192,12 +193,30 @@ async def test_current_closing_does_not_trigger_provider_request_by_itself(facto
         await session.commit()
 
     mock_provider = AsyncMock()
+    mock_provider.odds.return_value = _provider_result([_odds_record("evt-refresh", kickoff)])
     with patch("src.db.session.AsyncSessionLocal", new=factory):
         result = await run_clv_capture_pass(provider=mock_provider)
 
     assert result["already_captured"] == 1
     assert result["captured"] == 0
-    mock_provider.odds.assert_not_called()
+    assert result["refreshed_closing"] == 1
+    assert result["closing"] == 1
+    mock_provider.odds.assert_awaited_once()
+
+    async with factory() as session:
+        snapshots = (await session.execute(select(MarketSnapshot))).scalars().all()
+        history = (await session.execute(select(OddsHistory))).scalars().all()
+
+    current = [row for row in snapshots if row.is_closing_line]
+    superseded = [
+        row
+        for row in snapshots
+        if row.provenance.get("evidence_class") == "PRE_MATCH_CLOSING_SUPERSEDED"
+    ]
+    assert len(current) == 1
+    assert len(superseded) == 1
+    assert current[0].captured_at > first_captured_at
+    assert len(history) == 1
 
 
 async def test_capture_skips_unsupported_league_without_provider_call(factory) -> None:
