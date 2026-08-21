@@ -5,44 +5,41 @@ Last reviewed: 2026-08-21
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
-## Phase 2 read-only verification from 2026-08-21
+## Phase 2 post-merge verification from 2026-08-21
 
-- The inspected production release was exact SHA
-  `6f7ab6996b4b971df5802d64598fe6e9799c0658` across GitHub `master`, Render,
-  Vercel, backend readiness, and the frontend-observed backend. The five exact-SHA
-  GitHub workflows were successful, Render reported no post-deploy error or 5xx
-  logs, and Vercel reported no runtime errors in the inspected 24-hour window.
-- `/health/ready` returned HTTP 200 with PostgreSQL, external Redis, migration
-  `0009_quarantine_market_closings`, strict models, and Elo state ready. The
-  settlement pass was healthy but had only 3 generation-scoped settled
-  predictions; walk-forward validation correctly skipped below its 10-record
-  floor. `/api/v1/model-performance` failed closed with HTTP 503 and zero CLV
-  joins. This is insufficient certification evidence.
-- Durable provider evidence separates transport success from data coverage. At
-  review time football-data.org was `DEGRADED` with partial contextual coverage,
-  the Odds API was `STALE` despite historically usable coverage, and ESPN,
-  API-Football, and SportMonks had no durable observations and remained `UNKNOWN`.
-- The repository audit found that live callers supplied the active generation,
-  but lower-level settlement/CLV repository functions still allowed an omitted
-  generation. The canonical SQL also multiplied prediction and closing rows in
-  its diagnostic aggregates. Branch `fix/phase2-generation-scope` closes both
-  escape paths and adds direct-backend `no-store` coverage; deployment evidence
-  must be re-established after review and merge.
-- Validation on that branch passed the full backend suite (`1560 passed, 14
-  skipped`), scoped Ruff, the mypy ceiling (`769 <= 784`), six active-artifact
-  hash pairs, Alembic head discovery (`0009_quarantine_market_closings`), SQL
-  audit read-only contract tests, diff whitespace checks, and a 146.87 MB
-  current-tree Gitleaks scan. Full-tree Ruff still reports four unrelated
-  pre-existing unused-import/variable findings in untouched tests.
-- Render's read-only PostgreSQL connector did not execute the requested SQL because
-  it failed TLS negotiation with `SSL/TLS required`; no database query or mutation
-  occurred. Direct Sentry inspection was unavailable because no local Sentry API
-  credential was configured. SonarQube had no configured project or available
-  scanner. Those gates remain `UNVERIFIED`, not pass.
-- Phase 2 is `BLOCKED`: provider request telemetry is active, but repeated real
-  first/intermediate/closing/result/settlement evidence and generation-scoped CLV
-  joins are not sufficient. Model promotion, value scanning, Kelly, and staking
-  remain disabled. Overall decision: `NOT SAFE FOR PRODUCTION`.
+- PR #61 merged the generation-scoped settlement and CLV hardening as GitHub
+  `master` SHA `bb76f3f947e1443f6879b2c9fc322934a4903da1`. The current Vercel
+  production deployment `dpl_8ZmBDCC2pkXWWx9tLTrbFtJXuTSN` was `READY` at that
+  exact SHA. Its no-store `/api/health` response reported both the Vercel SHA and
+  backend release SHA as the same value.
+- The deployed repository functions require an explicit non-empty model generation,
+  deterministically select one prediction and closing snapshot, prevent cross-model
+  pooling and join multiplication in canonical SQL, and centrally apply
+  `Cache-Control: no-store` to evidence and decision responses, including errors.
+- Production health observed through the Vercel backend proxy was HTTP 200 with
+  PostgreSQL, external Redis, migration `0009_quarantine_market_closings`, and
+  strict model loading ready. The active generation remains `UNVERIFIED` and
+  pending performance evidence.
+- Durable provider evidence separates transport success from data coverage.
+  Football-data.org has real but uneven contextual coverage; Odds API observations
+  are stale and have zero settled records; ESPN, API-Football, and SportMonks have
+  no durable observations. This is not sufficient certification evidence.
+- Current focused validation passed 23 generation-scope, SQL-chain, and no-store
+  regression tests. PR #61's canonical GitHub checks also passed the full backend
+  suite (`1560 passed, 14 skipped`), PostgreSQL migration checks, frontend checks,
+  scraper checks, Playwright, secret scanning, and model-artifact validation.
+- The Codex discovery path had only two plugin-managed skills and omitted `nexus`.
+  Branch `fix/nexus-discovery-overlay` changes setup to a per-skill overlay. The
+  active workspace now resolves all 38 canonical skills, including `nexus`, while
+  preserving `neon` and `neon-postgres`; four overlay regression tests pass.
+- Direct Render resource and log inspection remains pending explicit selection of
+  the sole connector workspace. Direct Sentry inspection remains unavailable
+  without local Sentry configuration. SonarQube has no current local scanner or
+  configured project; PR #62 is separately adding Sonar Cloud CI integration.
+- Phase 2 is `BLOCKED`: repeated real first/intermediate/closing/result/settlement
+  evidence and generation-scoped CLV samples remain insufficient. Model promotion,
+  value scanning, Kelly, and staking remain disabled. Overall decision:
+  `NOT SAFE FOR PRODUCTION`.
 
 ## SAB-22 manifest-v3 candidate evidence from 2026-08-21
 

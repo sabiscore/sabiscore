@@ -10,7 +10,8 @@ preserving the existing NEXUS router and `.ai/skills` suite as the canonical sou
 - `backend/AGENTS.md`, `apps/web/AGENTS.md`, `apps/scraper/AGENTS.md`,
   `models/AGENTS.md` — scoped subsystem rules.
 - `docs/CODEX_VSCODE_SETUP.md` — full setup and usage guide.
-- `scripts/setup-codex-skills.*` — non-duplicating skill bridge setup.
+- `scripts/setup-codex-skills.*` — non-duplicating discovery overlay setup that
+  preserves plugin-managed skills.
 - `scripts/check-codex-skills.py` — skill metadata/discovery validation.
 
 Copy these paths into the matching locations in the SabiScore repository, then run

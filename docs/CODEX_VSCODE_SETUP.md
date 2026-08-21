@@ -17,7 +17,10 @@ sabiscore/
 │       ├── nexus/SKILL.md
 │       └── <existing-skill>/SKILL.md
 ├── .agents/
-│   └── skills -> ../.ai/skills       # symlink or Windows junction
+│   └── skills/
+│       ├── nexus -> ../../.ai/skills/nexus
+│       ├── <repository-skill> -> ../../.ai/skills/<repository-skill>
+│       └── <external-skill>/SKILL.md
 ├── backend/AGENTS.md
 ├── apps/web/AGENTS.md
 ├── apps/scraper/AGENTS.md
@@ -33,7 +36,8 @@ Why this layout:
 
 - `.ai/skills` stays the single canonical skill source shared by tools.
 - `.agents/skills` is the Codex-native discovery location.
-- the bridge prevents duplicated skills from drifting apart.
+- the per-skill overlay prevents canonical skills from drifting while preserving
+  plugin-managed discovery entries.
 - nested `AGENTS.md` files apply only to their subsystem.
 
 ## 2. Install and sign in
@@ -60,10 +64,11 @@ bash scripts/setup-codex-skills.sh
 python scripts/check-codex-skills.py
 ```
 
-This creates:
+This creates one link per canonical repository skill:
 
 ```text
-.agents/skills -> ../.ai/skills
+.agents/skills/nexus -> ../../.ai/skills/nexus
+.agents/skills/<repository-skill> -> ../../.ai/skills/<repository-skill>
 ```
 
 ### Native Windows PowerShell
@@ -75,10 +80,13 @@ powershell -ExecutionPolicy Bypass -File scripts/setup-codex-skills.ps1
 python scripts/check-codex-skills.py
 ```
 
-The PowerShell script creates a directory junction, avoiding duplicate copies.
+The PowerShell script creates one directory junction per canonical skill. Both setup
+scripts preserve external plugin-managed entries already present in `.agents/skills`
+and fail closed when an external entry collides with a canonical skill name.
 
-Do not copy the entire skill suite into both `.ai/skills` and `.agents/skills`.
-That creates two editable sources and guarantees eventual drift.
+Do not copy canonical skill contents into `.agents/skills`. Canonical skill packages
+remain editable only under `.ai/skills`; the overlay contains links plus external
+plugin-managed packages.
 
 ## 4. Verify Codex discovery
 
@@ -260,7 +268,8 @@ be copied blindly between them.
 
 - confirm the workspace is opened at the Git repository root;
 - run `python scripts/check-codex-skills.py`;
-- inspect `.agents/skills` and confirm it resolves to `.ai/skills`;
+- inspect `.agents/skills` and confirm every canonical entry resolves to the matching
+  `.ai/skills/<name>` directory;
 - ensure every skill has `SKILL.md` with `name` and `description` frontmatter;
 - restart VS Code/Codex;
 - check for duplicate skill names.

@@ -5,6 +5,17 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Codex discovery overlay repair (2026-08-21)
+
+### Fixed
+
+- Codex discovery setup now links each canonical repository skill independently,
+  preserving plugin-managed entries already installed under `.agents/skills`.
+- Discovery validation accepts the overlay and fails closed on missing canonical
+  skills or name collisions while continuing to validate canonical metadata.
+- Native Windows setup no longer depends on `Path.GetRelativePath`, which is absent
+  from older PowerShell/.NET hosts used by this repository.
+
 ## Unreleased - Phase 2 generation-scoped CLV hardening (2026-08-21)
 
 ### Fixed
