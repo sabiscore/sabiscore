@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from src.models.active_generation import ActiveGenerationError, load_active_generation
+from src.models.active_generation import (
+    ActiveGenerationError,
+    load_active_generation,
+    verify_feature_contract_freshness,
+)
+from src.models.feature_registry import build_feature_contract
 
 
 def _hash(data: bytes) -> str:
@@ -23,6 +28,7 @@ def _write_generation(
     *,
     feature_schema_version: object = "phase7_68",
     metadata_body: bytes = b'{"feature_count": 68}',
+    feature_contract: object = _OMIT,
 ) -> None:
     artifact = b"model-bytes"
     metadata = metadata_body
@@ -48,6 +54,11 @@ def _write_generation(
     if feature_schema_version is not _OMIT:
         manifest["feature_schema_version"] = feature_schema_version
     (root / "active_generation.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    if feature_contract is not _OMIT:
+        (root / "feature_contract.json").write_text(
+            json.dumps(feature_contract), encoding="utf-8"
+        )
 
 
 def test_active_generation_verifies_hashes(tmp_path: Path) -> None:
@@ -147,3 +158,52 @@ def test_committed_manifest_satisfies_its_own_declared_contract() -> None:
 
     assert result["feature_schema_version"] == "phase7_68"
     assert result["artifacts"], "committed manifest declares no artifacts"
+
+
+# ── Feature-contract freshness (docs/DEBT.md item 36) ────────────────────────
+# The three-artifact drift this item describes happened because a producer
+# changed shape and nobody regenerated (or deleted) its stale consumers. These
+# pin the guard that prevents backend/models/feature_contract.json from rotting
+# the same way.
+#
+# Deliberately a build-time gate, NOT part of load_active_generation: that
+# function runs at startup and on the staking path, so a stale derived doc
+# must never be able to make the API unbootable. See the function's docstring.
+
+
+def test_freshness_check_rejects_a_missing_contract(tmp_path: Path) -> None:
+    _write_generation(tmp_path, feature_contract=_OMIT)
+
+    with pytest.raises(ActiveGenerationError, match="feature_contract.json is missing"):
+        verify_feature_contract_freshness(tmp_path)
+
+
+def test_freshness_check_rejects_a_stale_contract(tmp_path: Path) -> None:
+    """A hand-edited or un-regenerated contract must fail the build, not pass silently."""
+
+    _write_generation(
+        tmp_path,
+        feature_contract={"schema": "sabiscore_feature_contract_v1", "feature_count": 0, "features": []},
+    )
+
+    with pytest.raises(ActiveGenerationError, match="feature_contract.json is stale"):
+        verify_feature_contract_freshness(tmp_path)
+
+
+def test_freshness_check_accepts_a_freshly_generated_contract(tmp_path: Path) -> None:
+    _write_generation(tmp_path, feature_contract=build_feature_contract("phase7_68"))
+
+    verify_feature_contract_freshness(tmp_path)  # must not raise
+
+
+def test_a_missing_contract_does_not_block_loading_the_generation(tmp_path: Path) -> None:
+    """The startup/staking path must stay independent of the derived doc.
+
+    This is the guard against re-coupling them: a generation with no
+    feature_contract.json at all still loads, so a regeneration someone forgot
+    can fail the deploy without being able to crash-loop a running service.
+    """
+
+    _write_generation(tmp_path, feature_contract=_OMIT)
+
+    assert load_active_generation(tmp_path)["feature_schema_version"] == "phase7_68"

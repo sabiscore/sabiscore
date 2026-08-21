@@ -5,6 +5,44 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 3 feature-contract content (2026-08-21)
+
+### Added
+
+- `build_feature_contract()` + `contract_sha256()` in `feature_registry.py`,
+  written to `backend/models/feature_contract.json` by
+  `scripts/generate_feature_contract.py`. One authoritative machine-readable
+  contract for the active generation, replacing three mutually incompatible
+  descriptions of it (`docs/DEBT.md` item 36).
+- Every field is either derived from real code or the literal string
+  `UNDECLARED`. Disposition follows one explicit rule — `always_data_gap` →
+  `DEFER_UNTIL_DATA_EXISTS`, registered default → `ALIGNED_OBSERVED`, neither →
+  `UNDECLARED`. `REMOVE`/`REDESIGN`/`REPLACE_WITH_OBSERVABLE_PROXY` are not
+  auto-assigned; they are product decisions and a rule that guessed them would
+  be the fabrication this work exists to prevent.
+- `verify_feature_contract_freshness()`, called by `verify_active_artifacts.py`
+  in Render's buildCommand: regenerates the contract and fails the deploy if
+  the checked-in copy has drifted.
+
+### Safety
+
+- The freshness check is deliberately **not** wired into
+  `load_active_generation()`. That function runs on the startup path and the
+  settlement/staking path, so coupling it to a derived documentation file would
+  let a forgotten regeneration crash-loop a running service over metadata —
+  the same shape as the vΩ.47 startup-vs-request loader incident. At build time
+  instead, a stale contract fails the deploy and the previous release keeps
+  serving. Pinned by `test_a_missing_contract_does_not_block_loading_the_generation`.
+- `contract_sha256()` hashes every derived field, not just the ordered name
+  list as `promotion_evidence._contract_hash` does — so a changed default,
+  dtype, or disposition is now detectable. §7.3 vector-hash parity remains
+  open (`docs/DEBT.md` item 36).
+- `docs/apex_feature_availability.{json,md}` were slated for deletion as dead
+  weight and are **retained** on a reversed decision: the `.md` carries
+  per-league coverage measurements that exist nowhere else and cannot be
+  regenerated (its generator does not exist in the repo). Item 29's fix (c)
+  corrected accordingly — it is a build, not a regenerate.
+
 ## Unreleased - Phase 3 feature-contract identity (2026-08-21)
 
 ### Fixed
