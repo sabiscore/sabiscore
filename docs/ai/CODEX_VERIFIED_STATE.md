@@ -5,6 +5,52 @@ Last reviewed: 2026-08-21
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
+## Phase 2 market trust-boundary audit from 2026-08-21
+
+- GitHub `master` and the Vercel production deployment
+  `dpl_3chkfNohtKgJJLjwpkBif2aFCNMJ` were at exact SHA
+  `e8f5e42eef854a32267ad9ba00813c8690b1eb2d`. The canonical GitHub workflow,
+  secret scan, artifact validation, large-file gate, Playwright, and SonarCloud
+  Code Analysis check all completed successfully for that SHA.
+- Exact production parity was not established. The canonical verifier reported
+  Render and the frontend-observed backend at preceding SHA
+  `a054ed908f7676ad94e44eaef5e830a0994eba66`, while GitHub and Vercel were at
+  `e8f5e42eef854a32267ad9ba00813c8690b1eb2d`.
+- Render readiness was HTTP 200 with PostgreSQL, external Redis, Alembic head
+  `0009_quarantine_market_closings`, and strict model artifacts ready. Settlement
+  and CLV loops were running without execution failures, but production still had
+  only three settled predictions and zero generation-scoped CLV joins. The model
+  performance endpoint correctly returned HTTP 503 `METRICS_UNAVAILABLE` with
+  `Cache-Control: no-store`.
+- Provider telemetry showed football-data.org `DEGRADED` with seven usable and
+  seven empty competition/query contexts. The Odds API remained `STALE`: 57
+  observations, 502 records, 495 coherent/executable records, 14 events, and zero
+  settled records. ESPN, API-Football, and SportMonks still had no durable
+  observations. This does not satisfy the Phase 2 evidence gate.
+- The code audit found a separate trust-boundary defect: the provenance-blind,
+  publicly writable legacy `Odds` table could be labeled `VERIFIED` by fixture
+  evidence and used as a Phase-8 market-drift fallback. Branch
+  `fix/phase2-market-trust-boundary` removes that fallback, forces manual and
+  legacy rows to explicit research-only/non-executable states, deprecates the
+  compatibility `/odds` namespace, and preserves canonical provider ownership in
+  `OddsHistory` plus `MarketSnapshot`.
+- Final local validation passed the full backend suite (`1564 passed, 14 skipped`),
+  67 focused trust-boundary/zero-fabrication/odds/secret tests, Ruff, the mypy debt
+  ceiling (`769 <= 784`), six active-artifact hash pairs, workspace web tests (208),
+  scraper tests (20), lint, typecheck, production build, diff checks, and a 147.05
+  MB current-tree Gitleaks scan.
+- A separate full-history Gitleaks audit remains a release blocker: it found one
+  historical placeholder and one non-placeholder 32-character hexadecimal value
+  assigned to `API_FOOTBALL_KEY` in commit `67ed0ab`. The current tree is clean,
+  but provider-side revocation/rotation is not verified and the finding must not be
+  allowlisted as a substitute for rotation.
+- Direct Render resource/log/SQL inspection remains blocked until the connector
+  workspace is explicitly confirmed. Sentry remains unverified because no callable
+  connector or local project credentials were available. No Class C mutation,
+  provider quota consumption, settlement write, model promotion, or deploy occurred.
+- Phase 2 remains `BLOCKED`. Model promotion, public value scanning, Kelly sizing,
+  and staking remain disabled. Overall decision: `NOT SAFE FOR PRODUCTION`.
+
 ## Phase 2 post-merge verification from 2026-08-21
 
 - PR #61 merged the generation-scoped settlement and CLV hardening as GitHub

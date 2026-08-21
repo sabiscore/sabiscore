@@ -85,8 +85,8 @@ function setupBaseMocks() {
     away_odds: 3.6,
     observed_at: new Date().toISOString(),
     received_at: new Date().toISOString(),
-    executable: true,
-    provenance: {},
+    executable: false,
+    provenance: { evidence_state: "HYPOTHETICAL_NON_EXECUTABLE" },
   });
 }
 
@@ -136,6 +136,8 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
     render(<BettingIntelligenceDashboard />);
     expect(screen.getByText(/Research forecast — staking disabled/i)).toBeVisible();
     expect(screen.getByText(/no stake is recommended/i)).toBeVisible();
+    expect(screen.getByText(/Hypothetical Market Snapshot/i)).toBeVisible();
+    expect(screen.getByText(/^Research only$/i)).toBeVisible();
     await waitFor(() => expect(getUpcomingFixtures).toHaveBeenCalled());
   });
 
@@ -205,7 +207,7 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
     render(<BettingIntelligenceDashboard />);
     await waitFor(() => expect(getUpcomingFixtures).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /auto-fill market/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load stored reference/i }));
 
     await waitFor(() => {
       expect(

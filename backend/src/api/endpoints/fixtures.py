@@ -38,6 +38,7 @@ router = APIRouter(prefix="/fixtures", tags=["fixtures"])
 MODEL_FEATURES_FRESH_SECONDS = 3600
 AVAILABILITY_CRITICAL_HOURS = 24
 LINEUP_CRITICAL_MINUTES = 90
+RESEARCH_ONLY_MARKET_STATUS = "RESEARCH_ONLY"
 
 
 class FixtureSummary(BaseModel):
@@ -87,8 +88,8 @@ class ProviderOddsCandidate(BaseModel):
     draw_odds: float
     away_odds: float
     captured_at: datetime
-    provider: str = "stored_snapshot"
-    executable: bool = True
+    provider: str = "legacy_unverified"
+    executable: bool = False
 
 
 class ProviderOddsCandidatesResponse(BaseModel):
@@ -214,7 +215,7 @@ def _fixture_summary(fixture: Match, odds: Optional[Odds], prediction: Optional[
         status=str(fixture.status or "scheduled"),
         venue=fixture.venue,
         evidence_status="MODEL_READY" if prediction and not prediction_contract_gaps else "MODEL_UNAVAILABLE",
-        odds_status="SNAPSHOT_READY" if odds else "MANUAL_ODDS_REQUIRED",
+        odds_status=RESEARCH_ONLY_MARKET_STATUS if odds else "DATA_UNAVAILABLE",
     )
 
 
@@ -350,6 +351,11 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
             data_gaps.append("DATA_GAP: model_feature_completeness_critical")
     if odds is None:
         data_gaps.append("DATA_GAP: coherent_1x2_market_snapshot")
+    else:
+        # The legacy Odds table has no durable provider/provenance contract and
+        # is writable by the manual research flow. It may support a hypothetical
+        # comparison, but it can never establish verified market evidence.
+        data_gaps.append("DATA_GAP: market_snapshot_provenance_unverified")
     model_age = _prediction_age_seconds(prediction)
     if prediction is not None and model_age is None:
         data_gaps.append("DATA_GAP: model_features_freshness_unknown")
@@ -361,6 +367,7 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
     if prediction is not None and not _prediction_contract_gaps(prediction):
         model_status = "STALE" if model_age is None or model_age > MODEL_FEATURES_FRESH_SECONDS else "VERIFIED"
 
+    market_status = RESEARCH_ONLY_MARKET_STATUS if odds else "DATA_GAP"
     evidence = EvidenceResponse(
         fixture=summary,
         model={
@@ -381,7 +388,7 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
         freshness={"market_seconds": _market_age_seconds(odds), "model_features_seconds": model_age},
         source_status={
             "model": model_status,
-            "market": "VERIFIED" if odds else "DATA_GAP",
+            "market": market_status,
             "team_metrics": "DATA_GAP",
             "availability": "DATA_GAP",
         },
@@ -389,7 +396,11 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
         retrieval_timeline=[
             {"step": "fixture", "status": "VERIFIED", "source": "database"},
             {"step": "model", "status": model_status, "source": "predictions"},
-            {"step": "market", "status": "VERIFIED" if odds else "DATA_GAP", "source": "manual odds snapshot"},
+            {
+                "step": "market",
+                "status": market_status,
+                "source": "legacy or user-supplied snapshot" if odds else None,
+            },
             {"step": "availability", "status": "DATA_GAP", "source": "lineup and injury provider unavailable"},
         ],
         readiness=[
@@ -398,15 +409,29 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
             {"stage": "Availability", "state": "DATA_GAP", "source": None, "timestamp": None, "reason": "availability provider evidence not verified"},
             {"stage": "Lineup", "state": "DATA_GAP", "source": None, "timestamp": None, "reason": "confirmed lineup unavailable"},
             {"stage": "Model", "state": model_status, "source": "SabiScore backend", "timestamp": prediction.created_at if prediction else None, "reason": None if model_status == "VERIFIED" else "model metadata incomplete or stale"},
-            {"stage": "Market", "state": "VERIFIED" if odds else "DATA_GAP", "source": odds.bookmaker if odds else None, "timestamp": odds.timestamp if odds else None, "reason": None if odds else "one coherent bookmaker snapshot required"},
+            {
+                "stage": "Market",
+                "state": market_status,
+                "source": odds.bookmaker if odds else None,
+                "timestamp": odds.timestamp if odds else None,
+                "reason": (
+                    "legacy snapshot provenance is not authoritative"
+                    if odds
+                    else "one coherent provider snapshot required"
+                ),
+            },
             {"stage": "Risk gate", "state": "PARTIAL" if data_gaps else "VERIFIED", "source": "strict engine", "timestamp": datetime.now(timezone.utc), "reason": "; ".join(data_gaps[:3]) if data_gaps else None},
         ],
         source_comparison=[
             {
                 "field": "market",
                 "selected_source": odds.bookmaker if odds else None,
-                "status": "VERIFIED" if odds else "DATA_GAP",
-                "reason": "single coherent 1X2 bookmaker snapshot" if odds else "no coherent market snapshot stored",
+                "status": market_status,
+                "reason": (
+                    "legacy or user-supplied snapshot; research comparison only"
+                    if odds
+                    else "no coherent provider market snapshot stored"
+                ),
                 "timestamp": odds.timestamp if odds else None,
             },
             {
@@ -538,12 +563,18 @@ async def provider_odds_candidates(
                 draw_odds=float(odds.draw),
                 away_odds=float(odds.away_win),
                 captured_at=captured,
+                provider="legacy_unverified",
+                executable=False,
             )
         )
     return ProviderOddsCandidatesResponse(
         fixture_id=fixture_id,
         candidates=candidates,
-        warnings=[] if candidates else ["no_provider_or_stored_bookmaker_snapshot_available"],
+        warnings=(
+            ["legacy_snapshots_are_research_only"]
+            if candidates
+            else ["no_provider_or_stored_bookmaker_snapshot_available"]
+        ),
     )
 
 
@@ -578,12 +609,15 @@ async def create_manual_odds_snapshot(
         away_odds=payload.away_odds,
         observed_at=observed,
         received_at=received_at,
-        executable=True,
+        executable=False,
         provenance={
             "source_label": payload.source_label,
             "source_url_label": payload.source_url,
             "client_confirmed": payload.user_confirmed,
             "server_fetch_performed": False,
+            "evidence_state": "HYPOTHETICAL_NON_EXECUTABLE",
+            "eligible_for_clv": False,
+            "eligible_for_staking": False,
         },
     )
 
@@ -625,7 +659,10 @@ async def analyze_fixture(
         ),
         source_status=SourceStatusInput(
             model=SourceStatusEnum(model_status) if model else SourceStatusEnum.DATA_GAP,
-            market=SourceStatusEnum.VERIFIED if market else SourceStatusEnum.DATA_GAP,
+            # Legacy/manual Odds rows have no server-verified provenance. Keep
+            # the values available for display, but force the deterministic
+            # engine into forecast-only, zero-stake behavior.
+            market=SourceStatusEnum.DATA_GAP,
             team_metrics=SourceStatusEnum.DATA_GAP,
             availability=SourceStatusEnum.DATA_GAP,
         ),

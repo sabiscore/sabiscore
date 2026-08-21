@@ -154,24 +154,6 @@ async def compute_market_drift(
     except Exception as exc:
         logger.debug("compute_market_drift: OddsHistory query failed for %s: %s", match_id, exc)
 
-    # Fallback: try the simpler Odds table if OddsHistory had no rows
-    if opening_record is None:
-        try:
-            from sqlalchemy import asc, select
-
-            from ..db.models import Odds
-
-            query = (
-                select(Odds)
-                .where(Odds.match_id == match_id)
-                .order_by(asc(Odds.timestamp))
-                .limit(1)
-            )
-            result = await db.execute(query)
-            opening_record = result.scalar_one_or_none()
-        except Exception as exc:
-            logger.debug("compute_market_drift: Odds fallback query failed for %s: %s", match_id, exc)
-
     if opening_record is None:
         return _gap
 

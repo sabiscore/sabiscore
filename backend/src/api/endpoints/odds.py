@@ -1,6 +1,4 @@
-"""
-Odds endpoints for fetching and tracking betting odds
-"""
+"""Deprecated research-only endpoints backed by the provenance-blind Odds table."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/odds", tags=["odds"])
 
 
-@router.get("/match/{match_id}", response_model=List[OddsResponse])
+@router.get("/match/{match_id}", response_model=List[OddsResponse], deprecated=True)
 async def get_match_odds(
     match_id: str,
     bookmaker: Optional[str] = Query(None, description="Filter by bookmaker"),
@@ -28,8 +26,8 @@ async def get_match_odds(
     """
     Get odds history for a specific match
     
-    Returns timestamped odds snapshots showing market movement over time.
-    Useful for identifying line movement and CLV opportunities.
+    Returns timestamped legacy references for research display only. These rows
+    are not canonical market evidence and are ineligible for CLV or staking.
     """
     try:
         # Check cache
@@ -88,7 +86,7 @@ async def get_match_odds(
         raise HTTPException(status_code=500, detail="Failed to fetch odds")
 
 
-@router.get("/latest/{match_id}", response_model=Dict[str, OddsResponse])
+@router.get("/latest/{match_id}", response_model=Dict[str, OddsResponse], deprecated=True)
 async def get_latest_odds(
     match_id: str,
     db: AsyncSession = Depends(get_async_session),
@@ -97,7 +95,7 @@ async def get_latest_odds(
     Get the most recent odds from all bookmakers for a match
     
     Returns a dictionary mapping bookmaker names to their latest odds snapshot.
-    Ideal for comparing lines across bookmakers to find best value.
+    These references are non-executable and cannot establish value evidence.
     """
     try:
         # Check cache
@@ -166,14 +164,14 @@ async def get_latest_odds(
         raise HTTPException(status_code=500, detail="Failed to fetch latest odds")
 
 
-@router.get("/movement/{match_id}")
+@router.get("/movement/{match_id}", deprecated=True)
 async def get_odds_movement(
     match_id: str,
     hours_back: int = Query(24, ge=1, le=168, description="Hours of history to analyze"),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    Analyze odds movement over time for a match
+    Analyze legacy odds movement for a research display.
     
     Returns market movement metrics including:
     - Opening vs current odds
@@ -225,17 +223,15 @@ async def get_odds_movement(
         raise HTTPException(status_code=500, detail="Failed to analyze odds movement")
 
 
-@router.get("/best-line/{match_id}")
+@router.get("/best-line/{match_id}", deprecated=True)
 async def get_best_line(
     match_id: str,
     outcome: str = Query(..., description="Outcome type: home_win, draw, or away_win"),
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    Find the best available odds across all bookmakers for a specific outcome
-    
-    Returns the bookmaker offering the highest odds for the selected outcome,
-    helping users maximize potential returns.
+    Compare legacy references for a specific outcome. The result is research
+    only and must not be interpreted as verified market or value evidence.
     """
     try:
         if outcome not in ["home_win", "draw", "away_win"]:
@@ -269,7 +265,9 @@ async def get_best_line(
             "best_odds": best_odds,
             "bookmaker": best_bookmaker,
             "advantage_percent": _calculate_advantage(best_odds, latest_odds, outcome),
-            "full_odds": latest_odds[best_bookmaker]
+            "full_odds": latest_odds[best_bookmaker],
+            "evidence_state": "RESEARCH_ONLY",
+            "executable": False,
         }
         
     except HTTPException:
@@ -279,15 +277,16 @@ async def get_best_line(
         raise HTTPException(status_code=500, detail="Failed to find best line")
 
 
-@router.post("/", response_model=OddsResponse)
+@router.post("/", response_model=OddsResponse, deprecated=True)
 async def create_odds_snapshot(
     odds_data: OddsCreate,
     db: AsyncSession = Depends(get_async_session),
 ):
     """
-    Store a new odds snapshot (admin/scraper endpoint)
-    
-    Used by automated scrapers to ingest real-time odds data from bookmakers.
+    Store a legacy research reference.
+
+    This endpoint does not verify provider provenance. Its rows cannot enter
+    canonical market features, CLV, value analysis, Kelly sizing, or staking.
     """
     try:
         # Create new odds record
@@ -309,7 +308,7 @@ async def create_odds_snapshot(
         cache_manager.delete(f"odds:match:{odds_data.match_id}:*")
         cache_manager.delete(f"odds:latest:{odds_data.match_id}")
         
-        logger.info(f"Created odds snapshot for match {odds_data.match_id}")
+        logger.info("Created research-only legacy odds reference for match %s", odds_data.match_id)
         
         return OddsResponse(
             id=new_odds.id,
@@ -380,7 +379,9 @@ def _analyze_odds_movement(odds_history: List[Odds]) -> Dict:
         "bookmakers": movements,
         "steam_moves": steam_detected,
         "total_snapshots": len(odds_history),
-        "time_range_hours": (odds_history[-1].timestamp - odds_history[0].timestamp).total_seconds() / 3600 if len(odds_history) > 1 else 0
+        "time_range_hours": (odds_history[-1].timestamp - odds_history[0].timestamp).total_seconds() / 3600 if len(odds_history) > 1 else 0,
+        "evidence_state": "RESEARCH_ONLY",
+        "executable": False,
     }
 
 
