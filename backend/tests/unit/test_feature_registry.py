@@ -120,3 +120,53 @@ def test_apex_market_block_is_non_redundant_and_versioned():
 def test_apex_market_block_rejects_invalid_overround():
     with pytest.raises(ValueError, match="overround"):
         derive_apex_market_features(20.0, 20.0, 20.0)
+
+
+# ── Apex vs legacy market block: the docs/DEBT.md item 37 deadlock ──────────
+
+
+def test_apex_and_canonical_68_differ_at_exactly_eleven_positions() -> None:
+    """Pins the schema disagreement docs/DEBT.md item 37 records.
+
+    ``train_on_real_matches.py`` trains on APEX_FEATURES_68 while
+    ``active_generation.json`` declares ``phase7_68`` (CANONICAL_FEATURES_68).
+    ``promotion_evidence._expected_gate()`` blocks on the resulting
+    ``serving_schema_misaligned_slots``, which the live comparison report reads
+    as 11 — so this number is load-bearing for the promotion verdict, not a
+    curiosity.
+
+    If this count changes, either someone resolved the deadlock (good — update
+    item 37) or a market block was edited without noticing it moves the
+    promotion gate (bad). Either way it should not change silently.
+    """
+    from src.models.feature_registry import APEX_FEATURES_68, CANONICAL_FEATURES_68
+
+    assert len(APEX_FEATURES_68) == len(CANONICAL_FEATURES_68) == 68
+    mismatched = [
+        index
+        for index, (canonical, apex) in enumerate(
+            zip(CANONICAL_FEATURES_68, APEX_FEATURES_68)
+        )
+        if canonical != apex
+    ]
+    assert mismatched == list(range(20, 31)), (
+        "the apex/legacy market disagreement moved; docs/DEBT.md item 37 and "
+        f"the promotion gate both describe indices 20-30, got {mismatched}"
+    )
+
+
+def test_the_seven_shared_market_names_are_why_name_keyed_checks_pass() -> None:
+    """A name-keyed comparison cannot see the item 37 disagreement.
+
+    Guards the reasoning, not just the count: if these seven ever stop
+    overlapping, a name-based check would start catching the mismatch and the
+    contract's schema-keyed market attribution (_is_apex_schema) could be
+    simplified.
+    """
+    from src.models.feature_registry import APEX_MARKET_FEATURES_14, MARKET_FEATURES_14
+
+    shared = set(MARKET_FEATURES_14) & set(APEX_MARKET_FEATURES_14)
+    assert shared == {
+        "market_prob_home", "market_prob_draw", "market_prob_away",
+        "log_odds_home", "log_odds_draw", "log_odds_away", "odds_ratio",
+    }

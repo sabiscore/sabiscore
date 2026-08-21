@@ -5,6 +5,58 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 4 entry gate: frozen certification policy, two blockers found (2026-08-22)
+
+### Added
+
+- `backend/src/models/certification_policy.py` — the frozen, versioned, hashed
+  certification policy §9 requires. **Transcribes the thresholds that already
+  existed in code** (gate logic dates to 89c1254 / f985946, both before the
+  current candidate was evaluated); it does not choose new ones. Policy
+  v1.0.0, SHA-256
+  `41cb77031e3c23b744866e3b41e34e6c239445c98e5d20ad170ab918ff8f3dab`.
+  `test_certification_policy.py` keeps it and the gate code in agreement, so
+  changing one without the other fails the suite.
+- `docs/DEBT.md` item 38 — **the promotion gate is unsatisfiable by
+  construction.** `_expected_gate()` requires `always_data_gap_slots == 0`, but
+  all four `PHASE7_FEATURES_ALWAYS_DATA_GAP` features are permanent slots in
+  every 68-wide schema (deliberately — removing them served
+  `model_version="fallback"` on every inference for two months). A flawless
+  candidate still fails, so `promotion_permitted` can never be `true`.
+  Pinned by `test_promotion_gate_satisfiability.py`, which isolates the cause
+  to that single counter.
+- Regression tests pinning the item 37 schema disagreement: `APEX_FEATURES_68`
+  and `CANONICAL_FEATURES_68` differ at exactly indices 20–30, which is the
+  `serving_schema_misaligned_slots: 11` the promotion gate reports.
+
+### Fixed
+
+- `certification_policy()` deep-copies. It previously returned the module-level
+  dicts by reference, so a caller could rewrite the "frozen" policy in-process
+  — and because `policy_sha256()` hashes the same objects, the digest moved
+  with the mutation and would have reported a tampered policy as authentic.
+  Found by the drift test, not by review.
+
+### Changed
+
+- `docs/DEBT.md` item 37 **corrected against evidence, same session.** The
+  first draft claimed the apex/legacy market disagreement "stayed invisible".
+  It does not: `promotion_evidence._expected_gate()` already reports it as
+  `serving_schema_misaligned_slots: 11` and fails the candidate on it. The
+  accurate framing is a *structural deadlock* — every candidate the training
+  script produces is auto-blocked while the script defaults to Apex and the
+  manifest declares `phase7_68` — not a lurking undetected danger.
+
+### Not done, deliberately
+
+- **The item 38 gate is not relaxed.** Changing a certification threshold after
+  observing a failing result is what §23 forbids, and being confident the
+  change is correct does not make it safe to make autonomously. The exact
+  one-line operation and its consequences are recorded in item 38 for an
+  authorized decision. It would not promote anything today regardless: the
+  candidate independently fails `no_league_regression` (3/6 leagues) and
+  `market_baseline` (0/6 beat the market RPS).
+
 ## Unreleased - Phase 3 source attribution and train/serve vector parity (2026-08-21)
 
 ### Added
