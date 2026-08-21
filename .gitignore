@@ -243,4 +243,7 @@ ssl/*.crt
 .neon
 .pytest_runs/
 /skills-lock.json
+# Ignore IDE / build tool local property files but NOT Sonar config
 *.properties
+!sonar-project.properties
+!**/sonar-project.properties

@@ -227,6 +227,9 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_BACKEND_TOKEN }}
         with:
           projectBaseDir: backend
+          args: >-
+            -Dsonar.projectKey=sabiscore_sabiscore
+            -Dsonar.organization=sabiscore
 
   scraper-quality:
     name: Scraper Validate and Tests
