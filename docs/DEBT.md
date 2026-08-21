@@ -1,63 +1,87 @@
 # SabiScore Debt Ledger
 
-## 36. Phase 3 feature contract: identity is now enforced, but the contract itself is still three incompatible artifacts
+## 36. Phase 3 feature contract — PARTIALLY RESOLVED 2026-08-21: one generated contract now exists; its unanswerable fields remain honestly undeclared
 
-**Tier:** `NEXT` — no fail-open risk remains at the manifest boundary; this is
-about the contract's *content*, not its enforcement.
+**Tier:** `NEXT` — no fail-open risk remains at the manifest boundary, and the
+three-way artifact split is closed. What remains is *populating* fields no code
+can answer today, plus §7.3 vector parity.
 **Found:** 2026-08-21, while implementing the Phase 3 identity gate.
+**Partially resolved:** 2026-08-21, same day, by the generator described below.
 
-The gate shipped this session closes the enforcement half: a manifest can no
-longer declare a feature contract its artifacts cannot honour (see the
-`feature_schema_version` entry in `CLAUDE.md`). What it does **not** do is give
-Phase 3 the machine-readable contract the directive's §7.1 actually asks for.
+### What shipped
 
-**What exists today, spread across three mutually incompatible shapes:**
+`backend/src/models/feature_registry.py` gained `build_feature_contract()` +
+`contract_sha256()`, written to `backend/models/feature_contract.json` by
+`backend/scripts/generate_feature_contract.py`. This is now the single
+authoritative contract for the *active* generation.
 
-1. `backend/src/models/feature_registry.py` — Python `List[str]` name lists plus
-   `DEFAULT_FEATURE_VALUES_*` floats. **No per-feature metadata at all**: no
-   dtype, source, unit, normalization, expected range, or temporal validity.
-2. `backend/models/candidate/feature_availability_matrix.json` — 14 fields per
-   feature including `training_source`, `serving_source`, `freshness_contract`,
-   `serving_status`.
-3. `docs/apex_feature_availability.json` — a *third*, richer schema with
-   `family`, `temporal_validity`, `default_gap_behavior`,
-   `serving_projection_coverage`.
+It derives only what real code can answer — `index`, `feature_name`, `dtype`,
+`default_value`, `fallback_policy`, `required_or_optional`, `league_scope`,
+`feature_group`, `always_data_gap`, `disposition`, `version` — and marks the 14
+fields nothing in the repo can answer as the literal string `UNDECLARED`.
 
-⚠️ **Producer drift is a live landmine.** The checked-in
-`feature_availability_matrix.json` carries `serving_status`,
-`freshness_contract` and rich per-feature source strings that the current
-producer (`models/promotion_evidence.py`) **does not emit at all** —
-regenerating it today would silently *lose* exactly the semantics Phase 3
-needs. `docs/apex_feature_availability.json`'s generator does not exist in the
-repo at all (grep for `default_gap_behavior` under `backend/` returns nothing).
-Item 26 declared the producer/consumer mismatch "RESOLVED"; that closure was
-about the consumer not `KeyError`-ing, **not** about field parity.
+**Disposition is one explicit rule, not per-feature judgement:**
+`always_data_gap` → `DEFER_UNTIL_DATA_EXISTS`; has a registered default and is
+not an always-gap → `ALIGNED_OBSERVED`; neither → `UNDECLARED`. On the serving
+`phase7_68` contract that yields 64 `ALIGNED_OBSERVED` + 4
+`DEFER_UNTIL_DATA_EXISTS`; on `apex_v1_68` the 7-feature Apex market block
+correctly lands on `UNDECLARED`, because it genuinely has no entry in
+`DEFAULT_FEATURE_VALUES_68`. `REMOVE` / `REDESIGN` /
+`REPLACE_WITH_OBSERVABLE_PROXY` are deliberately **not** auto-assigned — those
+are product decisions, and a rule that guessed them would be exactly the
+fabrication this item warns against.
 
-**Also missing for §7.1:** the four required dispositions
-(`REMOVE` / `REDESIGN` / `REPLACE_WITH_OBSERVABLE_PROXY` /
-`DEFER_UNTIL_DATA_EXISTS`) exist nowhere. `promotion_evidence._classification`
-has a 4-value vocabulary but it is *descriptive* (`SCHEMA_MISMATCH`,
-`ALWAYS_DATA_GAP`, `TRAINING_DEFAULT_ONLY`, `ALIGNED_OBSERVED_SIGNAL`), not a
-disposition. 24 `defaulted_training_slot` + 10 `UNWIRED_DEFAULT` + 11
-`UNAVAILABLE_SCHEMA_MISALIGNED` features currently carry no disposition.
+**Staleness is now machine-enforced.** `active_generation.py`'s
+`_verify_feature_contract_freshness()` regenerates the contract on every
+`load_active_generation()` and fails closed if the checked-in copy differs —
+so the Render build gate (`verify_active_artifacts.py`) catches drift, which is
+precisely the failure mode that produced this item. Verified by watching it
+fail: injecting a fabricated `"unit": "goals"` into one record made both the
+build gate (exit 1) and `test_committed_contract_matches_a_fresh_rebuild` fail,
+then pass again on restore.
 
-**Also missing for §7.3:** `promotion_evidence._contract_hash` hashes **only the
-ordered name list** — not dtypes, sources, or transforms — so it cannot serve as
-the `feature_contract_sha256` the directive specifies. And nothing anywhere
-hashes a feature *vector*, so the "same historical cutoff → identical hash"
-parity requirement has no mechanism yet. This is the same gap item 29's fix (b)
-names from the Phase 8 side ("a true parity test comparing a serving vector
-against a training vector for the same fixture is still absent").
+### What remains open
 
-⚠️ **Do not close this by hand-writing 21 metadata fields × 89 features.** Most
-of that metadata does not exist anywhere today, and inventing plausible values
-for `lookahead_risk` / `availability_time` / `unit` would be fabrication on the
-exact surface Phase 3 exists to make trustworthy. The honest path is a generator
-that derives what is derivable from real code and marks the rest explicitly
-undeclared.
+1. **The 14 `UNDECLARED` fields** (`semantic_definition`, `source`,
+   `training_source`, `serving_source`, `offline_backtest_source`,
+   `shadow_source`, `availability_time`, `lookahead_risk`, `missingness_policy`,
+   `normalization`, `expected_range`, `monitoring_rule`, `temporal_validity`,
+   `unit`). ⚠️ **Still do not hand-write these.** They are pinned as
+   `UNDECLARED` by `test_unanswerable_fields_are_literally_undeclared`. When a
+   real derivation for one lands, delete it from `_UNDECLARED_FIELDS` in the
+   same change — do not weaken that assertion to accommodate a hand-written
+   value.
+2. **§7.3 vector-hash parity.** `contract_sha256()` now hashes every derived
+   field (not just the name list, unlike `promotion_evidence._contract_hash`),
+   which is a real step — but nothing yet hashes a feature *vector*, so "same
+   historical cutoff → identical hash across training/backtest/shadow/serving"
+   still has no mechanism. Same gap item 29's fix (b) names from the Phase 8
+   side. This needs a shared harness invoking all four pipelines against one
+   fixture; none exists in any form today.
 
-**Trigger:** before any `v6_phase8` candidate is evaluated for promotion — that
-is the moment a contract with unstated dispositions becomes load-bearing.
+### Deliberately unchanged
+
+- `backend/models/candidate/feature_availability_matrix.json` +
+  `promotion_evidence.py` — a different job (candidate-vs-serving *promotion
+  gate*, real tested producer/consumer pair). Its producer-drift note above
+  still stands and is still a live trap: the checked-in file carries
+  `serving_status` / `freshness_contract` that today's producer does not emit,
+  so regenerating it would silently lose those fields.
+- `docs/apex_feature_availability.{json,md}` — **retained, not deleted, on a
+  reversed decision.** These were slated for deletion as "zero producers, zero
+  consumers." Reading them first showed the `.md` carries per-league coverage
+  *measurements* (EPL 14.3% market / Eredivisie 100% / Ligue 1 13.1%, 2026-08-10)
+  that exist nowhere else and **cannot be regenerated — the generator does not
+  exist in the repo**. Deleting them would destroy an unreproducible measurement
+  record. They are superseded as a *contract* description by
+  `feature_contract.json`; they survive as a historical coverage snapshot only.
+  Note item 29's fix (c) says "regenerate `apex_feature_availability.md`" — that
+  is not currently possible for the same reason; it is really "build a per-league
+  availability generator", which does not exist yet.
+
+**Trigger for the remainder:** before any `v6_phase8` candidate is evaluated for
+promotion — that is the moment unstated dispositions and absent vector parity
+become load-bearing.
 
 ---
 
@@ -468,9 +492,12 @@ feature-engineering pass~~ **DONE 2026-08-18** (see above); (b) add a
 train/serve parity test scoped to the 21 Phase 8 names — partially covered by
 `test_phase8_historical.py`'s contract test, but a true parity test comparing a
 serving vector against a training vector for the same fixture is still absent;
-(c) regenerate `apex_feature_availability.md` against a pipeline that includes
-the 89-feature schema so it can serve as real per-league Phase 8 go/no-go
-evidence; (d) backfill the Pi/Berrar parquet artifacts for *serving* — the
+(c) produce per-league Phase 8 availability evidence against a pipeline that
+includes the 89-feature schema — ⚠️ **corrected 2026-08-21: this is not a
+"regenerate", it is a build.** `apex_feature_availability.md`'s generator does
+not exist anywhere in the repo (see item 36), so the file cannot be
+re-derived; the work is writing that generator, with the existing one-shot
+`.md`/`.json` pair usable only as a Phase-7-era reference for the output shape; (d) backfill the Pi/Berrar parquet artifacts for *serving* — the
 replay above is deliberately training-only (in-memory, `parquet_path=None`,
 keyed by CSV team-name strings), so production serving still cold-starts both
 engines at neutral. Closing (d) means replaying the same engines over the DB's

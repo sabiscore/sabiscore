@@ -25,6 +25,8 @@ _release_identity = _load_module(
     "release_identity", BACKEND_ROOT / "src" / "core" / "release_identity.py"
 )
 load_active_generation = _active_generation.load_active_generation
+verify_feature_contract_freshness = _active_generation.verify_feature_contract_freshness
+ActiveGenerationError = _active_generation.ActiveGenerationError
 write_release_identity_manifest = _release_identity.write_release_identity_manifest
 
 
@@ -36,6 +38,14 @@ def main() -> None:
     missing = sorted(REQUIRED_LEAGUES - set(generation["artifacts"]))
     if missing:
         raise SystemExit(f"Missing required active artifacts: {', '.join(missing)}")
+
+    # Build-time only, never on the startup or staking path — a stale derived
+    # contract must fail the deploy (previous release keeps serving), not make
+    # the API unbootable. See verify_feature_contract_freshness's docstring.
+    try:
+        verify_feature_contract_freshness()
+    except ActiveGenerationError as exc:
+        raise SystemExit(str(exc)) from exc
 
     try:
         identity = write_release_identity_manifest(

@@ -1,8 +1,10 @@
 """Canonical feature registry for inference-safe SabiScore models."""
 
+import hashlib
+import json
 import math
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 # Canonical production feature schema (58) from sabiscore_production_v2 metadata.
 CANONICAL_FEATURES_58: List[str] = [
@@ -706,3 +708,157 @@ def derive_apex_market_features(
         "market_home_away_probability_diff": probs[0] - probs[2],
         "odds_ratio": home_odds / away_odds,
     }
+
+
+# ── Machine-readable feature contract (docs/DEBT.md item 36) ────────────────
+# Three prior artifacts described this contract in three incompatible shapes:
+# this module's own name-only lists, backend/models/candidate/
+# feature_availability_matrix.json (stale relative to its own producer,
+# promotion_evidence.py), and docs/apex_feature_availability.json (no
+# producer anywhere in the repo). None of them agreed, and most of the §7.1
+# metadata fields (unit, lookahead_risk, availability_time, monitoring_rule,
+# ...) do not exist anywhere in real code — inventing plausible values for
+# them would be fabrication on the exact surface this contract exists to
+# make trustworthy.
+#
+# build_feature_contract() derives only what real code can answer and marks
+# everything else UNDECLARED. It is the single generator going forward:
+# scripts/generate_feature_contract.py writes its output to
+# backend/models/feature_contract.json, and active_generation.py's build
+# gate regenerates it on every load, failing closed if the checked-in copy
+# has drifted — the same class of silent staleness that produced this debt
+# item in the first place.
+
+UNDECLARED = "UNDECLARED"
+
+_DISPOSITION_DEFER_UNTIL_DATA_EXISTS = "DEFER_UNTIL_DATA_EXISTS"
+_DISPOSITION_ALIGNED_OBSERVED = "ALIGNED_OBSERVED"
+
+_DEFAULT_VALUE_SOURCES: Dict[str, Dict[str, float]] = {
+    "phase7_68": DEFAULT_FEATURE_VALUES_68,
+    "apex_v1_68": DEFAULT_FEATURE_VALUES_68,
+    "phase8_89": DEFAULT_FEATURE_VALUES_89,
+    "apex_v1_89": DEFAULT_FEATURE_VALUES_89,
+}
+
+# Named subgroups to check membership against, most specific first. Every
+# entry is a real constant already declared above — this is a lookup over
+# structure that exists, not an invented taxonomy.
+_NAMED_FEATURE_GROUPS: List[Tuple[str, Sequence[str]]] = [
+    ("PHASE8_FEATURES_PI", PHASE8_FEATURES_PI),
+    ("PHASE8_FEATURES_BERRAR", PHASE8_FEATURES_BERRAR),
+    ("PHASE8_FEATURES_FORM", PHASE8_FEATURES_FORM),
+    ("PHASE8_FEATURES_MARKET", PHASE8_FEATURES_MARKET),
+    ("PHASE8_FEATURES_CONTEXT", PHASE8_FEATURES_CONTEXT),
+    ("PHASE7_FEATURES_10", PHASE7_FEATURES_10),
+    ("MARKET_FEATURES_14", MARKET_FEATURES_14),
+    ("APEX_MARKET_FEATURES_14", APEX_MARKET_FEATURES_14),
+    ("LEAGUE_ONEHOT_FEATURES", LEAGUE_ONEHOT_FEATURES),
+    ("TEMPORAL_FEATURES", TEMPORAL_FEATURES),
+    ("LEAGUE_RATE_FEATURES", LEAGUE_RATE_FEATURES),
+    ("COMBINATION_FEATURES", COMBINATION_FEATURES),
+]
+
+# §7.1 metadata fields no code in this repository can answer today. Declaring
+# them explicitly UNDECLARED — rather than omitting them or guessing — is the
+# honest form of "not yet known": DEBT.md item 36 forbids inventing plausible
+# values for these on the exact surface Phase 3 exists to make trustworthy.
+_UNDECLARED_FIELDS: Tuple[str, ...] = (
+    "semantic_definition",
+    "source",
+    "training_source",
+    "serving_source",
+    "offline_backtest_source",
+    "shadow_source",
+    "availability_time",
+    "lookahead_risk",
+    "missingness_policy",
+    "normalization",
+    "expected_range",
+    "monitoring_rule",
+    "temporal_validity",
+    "unit",
+)
+
+
+def _feature_group(name: str) -> str:
+    for group_name, members in _NAMED_FEATURE_GROUPS:
+        if name in members:
+            return group_name
+    return "CANONICAL_FEATURES_58"
+
+
+def _league_scope(name: str) -> str:
+    if name in LEAGUE_ONEHOT_FEATURES:
+        return name[len("league_"):]
+    return "ALL"
+
+
+def _disposition(name: str, default_value: Optional[float]) -> str:
+    if name in PHASE7_FEATURES_ALWAYS_DATA_GAP:
+        return _DISPOSITION_DEFER_UNTIL_DATA_EXISTS
+    if default_value is not None:
+        return _DISPOSITION_ALIGNED_OBSERVED
+    return UNDECLARED
+
+
+def build_feature_contract(schema_version: object) -> Dict[str, Any]:
+    """Build the mechanically-derived contract for one declared schema version.
+
+    Raises UnknownFeatureSchemaError for an unrecognised version — the same
+    fail-closed behaviour as resolve_feature_schema, no permissive default.
+    Every field is either derived from a real constant/function already in
+    this module or the literal string UNDECLARED; nothing is invented.
+    """
+    features = resolve_feature_schema(schema_version)
+    defaults = _DEFAULT_VALUE_SOURCES.get(str(schema_version), {})
+
+    records: List[Dict[str, Any]] = []
+    for index, name in enumerate(features):
+        default_value = defaults.get(name)
+        record: Dict[str, Any] = {
+            "index": index,
+            "feature_name": name,
+            "dtype": "float64",
+            "default_value": default_value,
+            "fallback_policy": (
+                "static default (DEFAULT_FEATURE_VALUES_*)"
+                if default_value is not None
+                else UNDECLARED
+            ),
+            # Every feature is a fixed vector slot indexed positionally into a
+            # trained artifact; there is no "optional" slot in this codebase
+            # (PredictionEngine refuses to zero-pad a short vector — see the
+            # PHASE7_FEATURES_10 comment above). Mechanically true, not a guess.
+            "required_or_optional": "REQUIRED",
+            "league_scope": _league_scope(name),
+            "feature_group": _feature_group(name),
+            "always_data_gap": name in PHASE7_FEATURES_ALWAYS_DATA_GAP,
+            "disposition": _disposition(name, default_value),
+            "version": str(schema_version),
+        }
+        for field in _UNDECLARED_FIELDS:
+            record[field] = UNDECLARED
+        records.append(record)
+
+    return {
+        "schema": "sabiscore_feature_contract_v1",
+        "feature_schema_version": str(schema_version),
+        "feature_count": len(records),
+        "features": records,
+        "feature_contract_sha256": contract_sha256(records),
+    }
+
+
+def contract_sha256(records: Sequence[Mapping[str, Any]]) -> str:
+    """SHA-256 over the full per-feature record array, not just names.
+
+    Unlike promotion_evidence._contract_hash (which hashes only the ordered
+    name list), this hashes every derived field — a real step toward the
+    directive's feature_contract_sha256, though not yet the full §7.3
+    vector-hash parity mechanism (see docs/DEBT.md for that remaining gap).
+    """
+    payload = json.dumps(
+        list(records), separators=(",", ":"), sort_keys=True, ensure_ascii=True
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()

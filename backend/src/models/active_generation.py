@@ -234,6 +234,51 @@ def _verify_feature_contract(payload: dict[str, Any], artifacts: dict[str, dict[
             )
 
 
+def verify_feature_contract_freshness(models_dir: Path | None = None) -> None:
+    """Reject a checked-in feature_contract.json that disagrees with a fresh rebuild.
+
+    docs/DEBT.md item 36's landmine happened because a producer changed shape
+    and nobody regenerated (or deleted) its stale consumers. This closes the
+    same class of drift for the one contract file Phase 3 keeps going forward.
+
+    Deliberately **not** called from ``load_active_generation``. That function
+    runs on the startup path (``_startup_load_models_strict``) and on the
+    settlement/staking path (``active_model_version``,
+    ``active_generation_is_certified``), so folding this in would let a stale
+    or missing *derived documentation file* make the API unbootable — a crash
+    loop over metadata, the same shape as the vΩ.47 startup-vs-request loader
+    incident. The enforcement that matters is at build time:
+    ``scripts/verify_active_artifacts.py`` calls this in Render's
+    buildCommand, so drift fails the deploy and the previous release keeps
+    serving. Regenerate with ``scripts/generate_feature_contract.py``.
+    """
+
+    root = (models_dir or DEFAULT_MODELS_DIR).resolve()
+    registry = _load_feature_schema_registry()
+    try:
+        payload = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActiveGenerationError("Active generation manifest is unavailable or invalid") from exc
+    declared = payload.get("feature_schema_version")
+    contract_path = root / "feature_contract.json"
+    if not contract_path.is_file():
+        raise ActiveGenerationError(
+            "backend/models/feature_contract.json is missing — regenerate with "
+            "scripts/generate_feature_contract.py"
+        )
+    try:
+        committed = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActiveGenerationError("feature_contract.json is unreadable or invalid") from exc
+
+    fresh = registry.build_feature_contract(declared)
+    if committed != fresh:
+        raise ActiveGenerationError(
+            "feature_contract.json is stale relative to feature_schema_version "
+            f"{str(declared)!r} — regenerate with scripts/generate_feature_contract.py"
+        )
+
+
 def active_artifact_path(league_slug: str, models_dir: Path | None = None) -> Path | None:
     """Return the verified artifact for a manifested league, if one is active."""
 
@@ -273,4 +318,5 @@ __all__ = [
     "active_generation_is_certified",
     "active_model_version",
     "load_active_generation",
+    "verify_feature_contract_freshness",
 ]
