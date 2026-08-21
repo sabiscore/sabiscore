@@ -71,15 +71,14 @@ async def _log(
 
 
 @pytest.mark.asyncio
-async def test_unscoped_query_still_pools_every_generation(session: AsyncSession) -> None:
-    """The permissive default is preserved for ad-hoc research queries."""
+async def test_query_requires_explicit_generation_scope(session: AsyncSession) -> None:
+    with pytest.raises(TypeError, match="model_version"):
+        await get_settled_predictions(session)  # type: ignore[call-arg]
 
-    await _settled_match(session, "m-1", home=2, away=0)
-    await _settled_match(session, "m-2", home=1, away=1)
-    await _log(session, "m-1", model_version="v5_phase7", created_at=KICKOFF - timedelta(days=1), probs=(0.6, 0.2, 0.2))
-    await _log(session, "m-2", model_version="v6_phase8", created_at=KICKOFF - timedelta(days=1), probs=(0.3, 0.4, 0.3))
 
-    assert len(await get_settled_predictions(session)) == 2
+async def test_query_rejects_blank_generation_scope(session: AsyncSession) -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        await get_settled_predictions(session, model_version="  ")
 
 
 @pytest.mark.asyncio
@@ -101,8 +100,8 @@ async def test_newer_foreign_generation_does_not_hide_the_requested_one(
     """The subquery subtlety, and the reason the filter cannot live only on the
     outer select.
 
-    `latest_per_match` picks max(created_at) per match. Filtering only the outer
-    select would first select the newer v6_phase8 row and then discard it,
+    `ranked_per_match` ranks created_at per match. Filtering only the outer
+    select would first rank the newer v6_phase8 row and then discard it,
     returning nothing for a match that holds a perfectly valid v5_phase7
     prediction. Production match `fd-564632` carries exactly this shape.
     """

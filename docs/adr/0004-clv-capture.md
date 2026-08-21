@@ -128,6 +128,13 @@ Historical invalid/post-kickoff rows remain auditable but are excluded from CLV.
 Generation-specific samples remain separate. A tiny or positive CLV sample cannot
 certify a model.
 
+Repository settlement and CLV reads require an explicit, non-empty
+`model_version`; there is no unscoped production or research default. The canonical
+SQL audit selects exactly one latest valid close per match, then the latest
+prediction strictly before that close per `(match_id, model_version)`. CLV counts
+and diagnostics are grouped by generation so duplicate captures and newer foreign
+generations cannot multiply or hide a sample.
+
 `MarketSnapshot.executable` is kept false by lifecycle persistence. Market evidence
 is not permission to place a bet, enable Kelly sizing, or infer staking suitability.
 

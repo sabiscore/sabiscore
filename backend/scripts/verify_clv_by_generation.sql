@@ -4,17 +4,12 @@
 
 BEGIN TRANSACTION READ ONLY;
 
-WITH settled AS (
-    SELECT p.*, m.match_date
-    FROM match_prediction_logs p
-    JOIN matches m ON m.id = p.match_id
-    WHERE p.created_at < m.match_date
-      AND lower(m.status) = 'finished'
-      AND m.home_score IS NOT NULL
-      AND m.away_score IS NOT NULL
-),
-closing AS (
-    SELECT ms.*
+WITH closing_ranked AS (
+    SELECT ms.*,
+           row_number() OVER (
+               PARTITION BY ms.match_id
+               ORDER BY ms.captured_at DESC, ms.id DESC
+           ) AS closing_rank
     FROM market_snapshots ms
     JOIN matches m ON m.id = ms.match_id
     WHERE ms.is_closing_line IS TRUE
@@ -33,22 +28,52 @@ closing AS (
         - 1.0
       ) <= 0.001
 ),
+current_closing AS (
+    SELECT *
+    FROM closing_ranked
+    WHERE closing_rank = 1
+),
+prediction_ranked AS (
+    SELECT p.model_version,
+           p.id AS prediction_id,
+           p.match_id,
+           p.created_at,
+           p.home_probability,
+           p.draw_probability,
+           p.away_probability,
+           c.home_implied_prob_devigged,
+           c.draw_implied_prob_devigged,
+           c.away_implied_prob_devigged,
+           row_number() OVER (
+               PARTITION BY p.match_id, p.model_version
+               ORDER BY p.created_at DESC, p.id DESC
+           ) AS prediction_rank
+    FROM match_prediction_logs p
+    JOIN matches m ON m.id = p.match_id
+    JOIN current_closing c ON c.match_id = p.match_id
+    WHERE p.created_at < c.captured_at
+      AND lower(m.status) = 'finished'
+      AND m.home_score IS NOT NULL
+      AND m.away_score IS NOT NULL
+      AND p.model_version IS NOT NULL
+      AND btrim(p.model_version) <> ''
+),
 joined AS (
-    SELECT s.model_version,
-           s.id AS prediction_id,
-           s.match_id,
-           s.created_at,
+    SELECT model_version,
+           prediction_id,
+           match_id,
+           created_at,
            CASE
-               WHEN s.home_probability >= s.draw_probability
-                AND s.home_probability >= s.away_probability
-                   THEN s.home_probability - c.home_implied_prob_devigged
-               WHEN s.draw_probability >= s.home_probability
-                AND s.draw_probability >= s.away_probability
-                   THEN s.draw_probability - c.draw_implied_prob_devigged
-               ELSE s.away_probability - c.away_implied_prob_devigged
+               WHEN home_probability >= draw_probability
+                AND home_probability >= away_probability
+                   THEN home_probability - home_implied_prob_devigged
+               WHEN draw_probability >= home_probability
+                AND draw_probability >= away_probability
+                   THEN draw_probability - draw_implied_prob_devigged
+               ELSE away_probability - away_implied_prob_devigged
            END AS clv
-    FROM settled s
-    JOIN closing c ON c.match_id = s.match_id
+    FROM prediction_ranked
+    WHERE prediction_rank = 1
 )
 SELECT model_version,
        count(*) AS clv_joined_predictions,
@@ -61,8 +86,14 @@ FROM joined
 GROUP BY model_version
 ORDER BY model_version;
 
+-- Missing generation identity is a hard audit failure for certification. These
+-- rows remain preserved for forensics but cannot enter the scoped join above.
+SELECT count(*) AS prediction_rows_without_generation_scope
+FROM match_prediction_logs
+WHERE model_version IS NULL OR btrim(model_version) = '';
+
 -- Invalid temporal rows remain in storage for forensic audit but are excluded
--- from the `closing` CTE above and therefore cannot contribute to CLV.
+-- from `current_closing` above and therefore cannot contribute to CLV.
 SELECT count(*) AS closing_rows_at_or_after_kickoff
 FROM market_snapshots ms
 JOIN matches m ON m.id = ms.match_id

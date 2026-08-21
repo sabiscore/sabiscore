@@ -107,7 +107,7 @@ async def test_joins_latest_prediction_to_latest_closing_line(session: AsyncSess
     session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5), home=0.48, draw=0.27, away=0.25))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
 
     assert len(records) == 1
     assert records[0]["model_probs"] == pytest.approx([0.55, 0.25, 0.20])
@@ -124,7 +124,7 @@ async def test_does_not_require_match_to_be_finished(session: AsyncSession) -> N
     session.add(_closing_snapshot("match-scheduled", match_date - timedelta(minutes=5)))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
     assert len(records) == 1
 
 
@@ -136,7 +136,7 @@ async def test_picks_latest_prediction_when_match_has_two(session: AsyncSession)
     session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5)))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
 
     assert len(records) == 1
     assert records[0]["model_probs"] == pytest.approx([0.60, 0.25, 0.15])
@@ -178,7 +178,7 @@ async def test_excludes_prediction_captured_at_or_after_closing_line(
     session.add(_closing_snapshot("match-temporal", closing_at))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
 
     assert len(records) == 1
     assert records[0]["model_probs"] == pytest.approx([0.55, 0.25, 0.20])
@@ -194,9 +194,45 @@ async def test_picks_latest_closing_snapshot_when_two_exist(session: AsyncSessio
     session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=1), home=0.50, draw=0.25, away=0.25))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
 
     assert len(records) == 1
+    assert records[0]["closing_probs"] == pytest.approx([0.50, 0.25, 0.25])
+
+
+async def test_equal_timestamps_use_latest_ids_without_multiplying_join(
+    session: AsyncSession,
+) -> None:
+    match_date = datetime(2026, 8, 8, 15, 0)
+    prediction_at = match_date - timedelta(hours=1)
+    closing_at = match_date - timedelta(minutes=5)
+    await _seed_match(session, "match-tied", match_date=match_date)
+    session.add(
+        _prediction(
+            "match-tied", prediction_at, home=0.40, draw=0.30, away=0.30
+        )
+    )
+    session.add(
+        _prediction(
+            "match-tied", prediction_at, home=0.60, draw=0.25, away=0.15
+        )
+    )
+    session.add(
+        _closing_snapshot(
+            "match-tied", closing_at, home=0.45, draw=0.30, away=0.25
+        )
+    )
+    session.add(
+        _closing_snapshot(
+            "match-tied", closing_at, home=0.50, draw=0.25, away=0.25
+        )
+    )
+    await session.commit()
+
+    records = await get_clv_records(session, model_version="v5_phase7")
+
+    assert len(records) == 1
+    assert records[0]["model_probs"] == pytest.approx([0.60, 0.25, 0.15])
     assert records[0]["closing_probs"] == pytest.approx([0.50, 0.25, 0.25])
 
 
@@ -207,7 +243,7 @@ async def test_excludes_non_closing_line_snapshot(session: AsyncSession) -> None
     session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5), is_closing_line=False))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
     assert records == []
 
 
@@ -217,7 +253,7 @@ async def test_excludes_fixture_with_no_closing_line_at_all(session: AsyncSessio
     session.add(_prediction("match-1", match_date - timedelta(hours=1)))
     await session.commit()
 
-    records = await get_clv_records(session)
+    records = await get_clv_records(session, model_version="v5_phase7")
     assert records == []
 
 
@@ -232,5 +268,7 @@ async def test_league_filter_narrows_via_match_join(session: AsyncSession) -> No
     session.add(_closing_snapshot("match-ded", match_date - timedelta(minutes=5)))
     await session.commit()
 
-    records = await get_clv_records(session, league="EPL")
+    records = await get_clv_records(
+        session, model_version="v5_phase7", league="EPL"
+    )
     assert len(records) == 1
