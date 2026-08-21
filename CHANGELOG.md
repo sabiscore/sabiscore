@@ -5,6 +5,34 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - SAB-22 semantic-repair manifest v3 (2026-08-21)
+
+### Fixed
+
+- `TeamIndex` now keeps exact-name and curated-alias registries independent, so
+  a unique exact `Man City` identity is not made ambiguous by Manchester City's
+  alias. Genuine exact and alias collisions still fail closed. The measured
+  `Ipswich` to `Ipswich Town` spelling is now curated explicitly.
+- Semantic repair manifest schema v3 can propose a deterministic same-league
+  `Team` row only for a source-verified cross-league mismatched participant.
+  Proposed creations, every linked source fixture/evidence hash, and their
+  participant counts are included in the authorization hash. Unaffected
+  unresolved opponents and occupied deterministic ids remain blockers.
+- The Class-C apply path locks `teams`, `matches`, and
+  `elo_rating_snapshots`; creates reviewed Team targets before optimistic Match
+  updates; verifies the created identities and exact update count; and then runs
+  the existing full path-dependent Elo replay. The CLI reports created Team ids.
+- The read-only release endpoint and Next.js proxy expose proposed Team
+  creations. The proxy validates the complete response contract with Zod and
+  returns a no-store 502 envelope for schema drift.
+
+### Safety
+
+- No migration, model, verdict, probability, Kelly, stake, or production-data
+  mutation is part of this release. Production apply still requires the live
+  manifest/replay hashes, a separate authorization id, literal confirmation,
+  backup evidence, and a single successful transaction.
+
 ## Unreleased - Release-SHA parity, semantic-identity repair manifest, and certification-gated CLV/value-scan (2026-08-20)
 
 Five-patch bundle applied on top of `2beb31e`. Code merges in full; the

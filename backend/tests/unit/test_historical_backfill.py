@@ -5,6 +5,7 @@ short names and football-data.org legal names. A wrong join is far worse than no
 join: it would attribute one club's form to another. Every ambiguous case must
 therefore fail closed.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, League, Match, Team
+from src.services import historical_backfill_service
 from src.services.historical_backfill_service import (
     TeamIndex,
     backfill_historical_matches,
@@ -40,14 +42,15 @@ async def session():
 # Normalisation
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.parametrize(
     "raw,expected",
     [
         ("Arsenal FC", ("arsenal",)),
-        ("Club Atlético de Madrid", ("atletico", "madrid")),   # accents + particles
-        ("Real Sociedad de Fútbol", ("real", "sociedad")),     # 'futbol' is noise
-        ("Como 1907", ("como",)),                              # bare year dropped
-        ("FC Twente '65", ("twente",)),                        # apostrophe-year dropped
+        ("Club Atlético de Madrid", ("atletico", "madrid")),  # accents + particles
+        ("Real Sociedad de Fútbol", ("real", "sociedad")),  # 'futbol' is noise
+        ("Como 1907", ("como",)),  # bare year dropped
+        ("FC Twente '65", ("twente",)),  # apostrophe-year dropped
         ("Stade Brestois 29", ("stade", "brestois")),
         ("Willem II Tilburg", ("willem", "ii", "tilburg")),
     ],
@@ -59,6 +62,7 @@ def test_normalise_team_tokens(raw, expected):
 # --------------------------------------------------------------------------- #
 # Resolution
 # --------------------------------------------------------------------------- #
+
 
 def test_resolves_short_name_to_legal_name():
     index = TeamIndex([("t1", "Manchester United FC"), ("t2", "Arsenal FC")])
@@ -80,10 +84,40 @@ def test_ambiguous_prefix_fails_closed():
     club's history to the other. Resolution must refuse instead of guessing.
     """
     index = TeamIndex([("inter", "Internazionale Milano"), ("milan", "AC Milan")])
-    assert index.resolve("Milan") == "milan"   # exact-normalised beats prefix
-    assert index.resolve("Inter") == "inter"   # alias-pinned
+    assert index.resolve("Milan") == "milan"  # exact-normalised beats prefix
+    assert index.resolve("Inter") == "inter"  # alias-pinned
     # A genuinely ambiguous probe resolves to nothing rather than to either club.
     assert index.resolve("Milano Calcio") is None
+
+
+def test_unique_exact_name_beats_another_teams_alias():
+    index = TeamIndex(
+        [
+            ("historical-man-city", "Man City"),
+            ("provider-manchester-city", "Manchester City FC"),
+        ]
+    )
+
+    assert index.resolve("Man City") == "historical-man-city"
+    assert index.resolve("Manchester City") == "provider-manchester-city"
+
+
+def test_ambiguous_curated_alias_fails_closed(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(
+        historical_backfill_service._TEAM_ALIASES, "alpha united", "shared"
+    )
+    monkeypatch.setitem(
+        historical_backfill_service._TEAM_ALIASES, "beta united", "shared"
+    )
+    index = TeamIndex([("alpha", "Alpha United"), ("beta", "Beta United")])
+
+    assert index.resolve("Shared") is None
+
+
+def test_resolves_ipswich_only_through_measured_alias():
+    index = TeamIndex([("ipswich", "Ipswich Town FC")])
+
+    assert index.resolve("Ipswich") == "ipswich"
 
 
 def test_short_token_cannot_prefix_swallow_a_real_word():
@@ -109,11 +143,18 @@ def test_unknown_team_resolves_to_none():
 # Deterministic ids
 # --------------------------------------------------------------------------- #
 
+
 def test_match_id_is_deterministic_and_dialect_independent():
     a = historical_match_id("EPL", datetime(2024, 8, 16), "Man United", "Fulham")
     b = historical_match_id("EPL", datetime(2024, 8, 16), "  man united  ", "Fulham")
-    assert a == b == historical_match_id("EPL", datetime(2024, 8, 16), "Man United", "Fulham")
-    assert a != historical_match_id("EPL", datetime(2024, 8, 16), "Fulham", "Man United")
+    assert (
+        a
+        == b
+        == historical_match_id("EPL", datetime(2024, 8, 16), "Man United", "Fulham")
+    )
+    assert a != historical_match_id(
+        "EPL", datetime(2024, 8, 16), "Fulham", "Man United"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -132,7 +173,7 @@ _NORMALISED = (
 
 def test_parse_handles_raw_provider_dialect(tmp_path: Path):
     path = tmp_path / "fd_E0_2526.csv"
-    path.write_text(_RAW, encoding="utf-8-sig")   # provider ships a BOM
+    path.write_text(_RAW, encoding="utf-8-sig")  # provider ships a BOM
     rows = parse_fd_csv(path)
     assert len(rows) == 1
     assert rows[0].league_id == "EPL"
@@ -153,10 +194,10 @@ def test_parse_skips_malformed_rows_without_failing_the_file(tmp_path: Path):
     path = tmp_path / "fd_E0_2526.csv"
     path.write_text(
         "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
-        "E0,not-a-date,Liverpool,Bournemouth,4,2\n"     # bad date
-        "E0,15/08/2025,Liverpool,,4,2\n"                 # missing away team
-        "E0,15/08/2025,Arsenal,Chelsea,,\n"              # unplayed fixture, no score
-        "E0,16/08/2025,Arsenal,Chelsea,2,1\n",           # good
+        "E0,not-a-date,Liverpool,Bournemouth,4,2\n"  # bad date
+        "E0,15/08/2025,Liverpool,,4,2\n"  # missing away team
+        "E0,15/08/2025,Arsenal,Chelsea,,\n"  # unplayed fixture, no score
+        "E0,16/08/2025,Arsenal,Chelsea,2,1\n",  # good
         encoding="utf-8",
     )
     rows = parse_fd_csv(path)
@@ -174,6 +215,7 @@ def test_parse_rejects_unsupported_division(tmp_path: Path):
 # --------------------------------------------------------------------------- #
 # Backfill behaviour
 # --------------------------------------------------------------------------- #
+
 
 def _write_season(directory: Path) -> None:
     (directory / "fd_E0_2425.csv").write_text(
@@ -212,8 +254,13 @@ async def test_backfill_joins_onto_existing_fixture_sync_teams(
 ):
     """The whole point: history must attach to the Team rows fixture sync created,
     not mint parallel ones under the provider's other spelling."""
-    session.add(Team(id="fd-team-epl:manchester_united_fc", name="Manchester United FC",
-                     league_id="EPL"))
+    session.add(
+        Team(
+            id="fd-team-epl:manchester_united_fc",
+            name="Manchester United FC",
+            league_id="EPL",
+        )
+    )
     session.add(Team(id="fd-team-epl:fulham_fc", name="Fulham FC", league_id="EPL"))
     await session.commit()
 
@@ -221,10 +268,14 @@ async def test_backfill_joins_onto_existing_fixture_sync_teams(
     report = await backfill_historical_matches(session, cache_dir=tmp_path)
 
     match = (
-        await session.execute(
-            select(Match).where(Match.away_team_id == "fd-team-epl:fulham_fc")
+        (
+            await session.execute(
+                select(Match).where(Match.away_team_id == "fd-team-epl:fulham_fc")
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     assert match is not None, "history did not join onto the fixture-sync team rows"
     assert match.home_team_id == "fd-team-epl:manchester_united_fc"
     # Arsenal was genuinely unknown, so exactly one new team row is minted.
@@ -245,8 +296,7 @@ async def test_backfill_same_name_other_league_cannot_poison_valid_local_identit
     )
     await session.commit()
     (tmp_path / "fd_E0_2425.csv").write_text(
-        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
-        "E0,17/08/2024,Arsenal,Chelsea,2,1\n",
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\nE0,17/08/2024,Arsenal,Chelsea,2,1\n",
         encoding="utf-8",
     )
 
@@ -270,8 +320,7 @@ async def test_backfill_other_league_only_candidate_is_never_reused(
     )
     await session.commit()
     (tmp_path / "fd_E0_2425.csv").write_text(
-        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
-        "E0,17/08/2024,Arsenal,Chelsea,2,1\n",
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\nE0,17/08/2024,Arsenal,Chelsea,2,1\n",
         encoding="utf-8",
     )
 
@@ -285,7 +334,9 @@ async def test_backfill_other_league_only_candidate_is_never_reused(
     assert report.teams_created == 2  # Arsenal and Chelsea are both new to EPL.
 
 
-async def test_backfill_reports_nothing_when_cache_dir_absent(session: AsyncSession, tmp_path: Path):
+async def test_backfill_reports_nothing_when_cache_dir_absent(
+    session: AsyncSession, tmp_path: Path
+):
     report = await backfill_historical_matches(session, cache_dir=tmp_path / "nope")
     assert report.files_read == 0
     assert report.matches_inserted == 0

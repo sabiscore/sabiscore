@@ -32,7 +32,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
-from ..core.database import Match
+from ..core.database import Match, Team
 from ..core.league_policy import canonical_league_id
 from ..db.models import EloRatingSnapshot
 from .elo_state_service import apply_finished_match_to_elo
@@ -103,13 +103,15 @@ class SemanticEloRepairPlan:
             },
             "plan_sha256": self.plan_sha256,
             "leagues": [
-                league.as_dict(include_matches=include_matches) for league in self.leagues
+                league.as_dict(include_matches=include_matches)
+                for league in self.leagues
             ],
         }
 
 
 @dataclass(frozen=True)
 class SemanticEloRepairResult:
+    created_team_ids: tuple[str, ...]
     repaired_matches: int
     rebuilt_matches: int
     rebuilt_snapshots: int
@@ -142,7 +144,9 @@ def _corrected_ids_by_match(
                 f"{', '.join(entry.blockers)}"
             )
         if not entry.target_home_team_id or not entry.target_away_team_id:
-            raise RuntimeError(f"semantic repair target missing for match_id={entry.match_id}")
+            raise RuntimeError(
+                f"semantic repair target missing for match_id={entry.match_id}"
+            )
         corrected[entry.match_id] = (
             entry.target_home_team_id,
             entry.target_away_team_id,
@@ -161,7 +165,9 @@ async def build_semantic_elo_repair_plan(
 ) -> SemanticEloRepairPlan:
     """Build the exact post-repair Elo reconstruction plan without mutating state."""
 
-    semantic_manifest = manifest or await build_semantic_identity_repair_manifest(session)
+    semantic_manifest = manifest or await build_semantic_identity_repair_manifest(
+        session
+    )
     if not bool(semantic_manifest.summary.get("complete")):
         raise RuntimeError(
             "semantic identity repair manifest is incomplete; production mutation remains blocked"
@@ -182,18 +188,22 @@ async def build_semantic_elo_repair_plan(
     for league in sorted(boundaries):
         boundary = boundaries[league]
         matches = (
-            await session.execute(
-                select(Match)
-                .where(
-                    func.lower(Match.status) == "finished",
-                    Match.home_score.is_not(None),
-                    Match.away_score.is_not(None),
-                    func.lower(Match.league_id) == league.lower(),
-                    Match.match_date >= boundary,
+            (
+                await session.execute(
+                    select(Match)
+                    .where(
+                        func.lower(Match.status) == "finished",
+                        Match.home_score.is_not(None),
+                        Match.away_score.is_not(None),
+                        func.lower(Match.league_id) == league.lower(),
+                        Match.match_date >= boundary,
+                    )
+                    .order_by(Match.match_date.asc(), Match.id.asc())
                 )
-                .order_by(Match.match_date.asc(), Match.id.asc())
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         evidence: list[ReplayMatchEvidence] = []
         for match in matches:
@@ -203,7 +213,9 @@ async def build_semantic_elo_repair_plan(
                 (str(match.home_team_id), str(match.away_team_id)),
             )
             if not home_id or not away_id:
-                raise RuntimeError(f"missing participant id in replay scope: {match_id}")
+                raise RuntimeError(
+                    f"missing participant id in replay scope: {match_id}"
+                )
             if home_id == away_id:
                 raise RuntimeError(
                     f"self-play fixture remains in replay scope: match_id={match_id} team_id={home_id}"
@@ -212,7 +224,9 @@ async def build_semantic_elo_repair_plan(
                 raise RuntimeError(f"unsettled match entered replay scope: {match_id}")
             match_date = match.match_date
             if not isinstance(match_date, datetime):
-                raise RuntimeError(f"non-datetime match_date in replay scope: {match_id}")
+                raise RuntimeError(
+                    f"non-datetime match_date in replay scope: {match_id}"
+                )
             evidence.append(
                 ReplayMatchEvidence(
                     match_id=match_id,
@@ -284,8 +298,46 @@ async def acquire_semantic_elo_repair_locks(
     timeout_ms = max(1, int(lock_timeout_seconds * 1000))
     await session.execute(text(f"SET LOCAL lock_timeout = '{timeout_ms}ms'"))
     await session.execute(
-        text("LOCK TABLE matches, elo_rating_snapshots IN SHARE ROW EXCLUSIVE MODE")
+        text(
+            "LOCK TABLE teams, matches, elo_rating_snapshots "
+            "IN SHARE ROW EXCLUSIVE MODE"
+        )
     )
+
+
+async def _apply_proposed_team_creations(
+    session: AsyncSession,
+    manifest: SemanticIdentityRepairManifest,
+) -> tuple[str, ...]:
+    created: list[str] = []
+    for proposal in manifest.proposed_team_creations:
+        existing = await session.get(Team, proposal.team_id)
+        if existing is not None:
+            raise RuntimeError(
+                "semantic repair Team precondition failed: deterministic id "
+                f"already exists: team_id={proposal.team_id}"
+            )
+        session.add(
+            Team(
+                id=proposal.team_id,
+                name=proposal.team_name,
+                league_id=proposal.league_id,
+            )
+        )
+        created.append(proposal.team_id)
+    await session.flush()
+
+    for proposal in manifest.proposed_team_creations:
+        persisted = await session.get(Team, proposal.team_id)
+        if (
+            persisted is None
+            or str(persisted.name) != proposal.team_name
+            or str(persisted.league_id) != proposal.league_id
+        ):
+            raise RuntimeError(
+                f"semantic repair Team postcondition failed: team_id={proposal.team_id}"
+            )
+    return tuple(created)
 
 
 async def _apply_identity_manifest(
@@ -336,18 +388,22 @@ async def _assert_post_repair_match_sequence(
 ) -> tuple[Match, ...]:
     boundary = datetime.fromisoformat(plan.boundary_utc)
     rows = (
-        await session.execute(
-            select(Match)
-            .where(
-                func.lower(Match.status) == "finished",
-                Match.home_score.is_not(None),
-                Match.away_score.is_not(None),
-                func.lower(Match.league_id) == plan.league.lower(),
-                Match.match_date >= boundary,
+        (
+            await session.execute(
+                select(Match)
+                .where(
+                    func.lower(Match.status) == "finished",
+                    Match.home_score.is_not(None),
+                    Match.away_score.is_not(None),
+                    func.lower(Match.league_id) == plan.league.lower(),
+                    Match.match_date >= boundary,
+                )
+                .order_by(Match.match_date.asc(), Match.id.asc())
             )
-            .order_by(Match.match_date.asc(), Match.id.asc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     evidence = tuple(
         ReplayMatchEvidence(
@@ -493,7 +549,13 @@ async def apply_semantic_identity_and_rebuild_elo(
             f"expected={expected_plan_sha256} actual={plan.plan_sha256}"
         )
 
+    created_team_ids = await _apply_proposed_team_creations(session, manifest)
     repaired = await _apply_identity_manifest(session, manifest)
+    if repaired != len(manifest.entries):
+        raise RuntimeError(
+            "semantic repair match count postcondition failed: "
+            f"expected={len(manifest.entries)} actual={repaired}"
+        )
 
     residual = await audit_historical_semantic_identity(session)
     if residual:
@@ -509,6 +571,7 @@ async def apply_semantic_identity_and_rebuild_elo(
         total_snapshots += snapshots
 
     return SemanticEloRepairResult(
+        created_team_ids=created_team_ids,
         repaired_matches=repaired,
         rebuilt_matches=total_matches,
         rebuilt_snapshots=total_snapshots,

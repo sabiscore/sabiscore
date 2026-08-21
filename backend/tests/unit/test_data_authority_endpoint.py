@@ -1,4 +1,5 @@
 """Release data-authority endpoints must stay read-only and non-secret."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -7,9 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.api.endpoints import data_authority
 
 
-async def test_postgres_data_authority_exposes_exact_database_and_integrity_state() -> None:
+async def test_postgres_data_authority_exposes_exact_database_and_integrity_state() -> (
+    None
+):
     db = MagicMock()
-    db.get_bind.return_value = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    db.get_bind.return_value = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql")
+    )
     result = MagicMock()
     result.scalar_one_or_none.return_value = "sabiscore_db_v3"
     db.execute = AsyncMock(return_value=result)
@@ -62,9 +67,13 @@ async def test_non_postgres_data_authority_never_invents_database_name() -> None
     db.execute.assert_not_awaited()
 
 
-async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutation() -> None:
+async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutation() -> (
+    None
+):
     db = MagicMock()
-    db.get_bind.return_value = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    db.get_bind.return_value = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql")
+    )
     db.execute = AsyncMock()
     db.rollback = AsyncMock()
 
@@ -91,7 +100,7 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
         ),
     )
     manifest = SimpleNamespace(
-        schema_version=2,
+        schema_version=3,
         manifest_sha256="a" * 64,
         summary={
             "affected_matches": 518,
@@ -99,6 +108,18 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
             "repair_blocked_matches": 0,
             "complete": True,
         },
+        proposed_team_creations=(
+            SimpleNamespace(
+                as_dict=lambda: {
+                    "team_id": "fdco-team-epl-west_ham",
+                    "team_name": "West Ham",
+                    "league_id": "EPL",
+                    "participant_references": 1,
+                    "source_fixture_ids": ["fdco-match"],
+                    "source_evidence_sha256s": ["c" * 64],
+                }
+            ),
+        ),
         entries=entries,
     )
     plan = SimpleNamespace(
@@ -139,6 +160,16 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
     assert payload["replay_plan"]["plan_sha256"] == "b" * 64
     assert payload["authorization"]["review_ready"] is True
     assert payload["authorization"]["production_mutation_authorized"] is False
+    assert payload["proposed_team_creations"] == [
+        {
+            "team_id": "fdco-team-epl-west_ham",
+            "team_name": "West Ham",
+            "league_id": "EPL",
+            "participant_references": 1,
+            "source_fixture_ids": ["fdco-match"],
+            "source_evidence_sha256s": ["c" * 64],
+        }
+    ]
     assert payload["proposed_replacements"] == [
         {
             "stored_team_id": "fd-team-la_liga:villarreal_cf",
@@ -159,13 +190,17 @@ async def test_semantic_repair_review_exposes_hashes_without_authorizing_mutatio
     db.rollback.assert_awaited_once()
 
 
-async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete() -> None:
+async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete() -> (
+    None
+):
     db = MagicMock()
-    db.get_bind.return_value = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+    db.get_bind.return_value = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql")
+    )
     db.execute = AsyncMock()
     db.rollback = AsyncMock()
     manifest = SimpleNamespace(
-        schema_version=2,
+        schema_version=3,
         manifest_sha256="d" * 64,
         summary={
             "affected_matches": 518,
@@ -173,6 +208,7 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
             "repair_blocked_matches": 1,
             "complete": False,
         },
+        proposed_team_creations=(),
         entries=(),
     )
     plan_builder = AsyncMock()
@@ -183,7 +219,9 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
             "build_semantic_identity_repair_manifest",
             new=AsyncMock(return_value=manifest),
         ),
-        patch.object(data_authority, "build_semantic_elo_repair_plan", new=plan_builder),
+        patch.object(
+            data_authority, "build_semantic_elo_repair_plan", new=plan_builder
+        ),
     ):
         payload = await data_authority.semantic_repair_review(db)
 
@@ -207,6 +245,7 @@ async def test_semantic_repair_review_requires_postgres() -> None:
     assert payload["blocked"] is True
     assert payload["reason"] == "POSTGRES_REQUIRED"
     assert payload["manifest"] is None
+    assert payload["proposed_team_creations"] == []
     assert payload["authorization"]["production_mutation_authorized"] is False
     db.execute.assert_not_awaited()
     db.rollback.assert_not_awaited()

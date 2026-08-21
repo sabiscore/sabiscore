@@ -79,12 +79,44 @@ _COLUMN_ALIASES: Dict[str, Tuple[str, ...]] = {
 
 # Tokens carrying no identifying signal — legal forms, sponsor prefixes, particles.
 # Stripped from both sides before comparison.
-_NOISE_TOKENS = frozenset({
-    "fc", "afc", "cf", "sc", "ac", "ca", "rc", "rcd", "ssc", "cfc", "us", "as",
-    "ss", "ud", "sd", "cd", "bv", "sbv", "sv", "vv", "ogc", "aj", "es", "asc",
-    "calcio", "balompie", "futbol", "fussball", "club", "de", "del", "der",
-    "the", "and",
-})
+_NOISE_TOKENS = frozenset(
+    {
+        "fc",
+        "afc",
+        "cf",
+        "sc",
+        "ac",
+        "ca",
+        "rc",
+        "rcd",
+        "ssc",
+        "cfc",
+        "us",
+        "as",
+        "ss",
+        "ud",
+        "sd",
+        "cd",
+        "bv",
+        "sbv",
+        "sv",
+        "vv",
+        "ogc",
+        "aj",
+        "es",
+        "asc",
+        "calcio",
+        "balompie",
+        "futbol",
+        "fussball",
+        "club",
+        "de",
+        "del",
+        "der",
+        "the",
+        "and",
+    }
+)
 
 # Curated only for names the measured matcher cannot bridge safely — either a
 # genuine short-form divergence or a prefix collision that must fail closed.
@@ -111,6 +143,7 @@ _TEAM_ALIASES: Dict[str, str] = {
     "manchester united": "man united",
     "manchester city": "man city",
     "leeds united": "leeds",
+    "ipswich town": "ipswich",
     # Netherlands
     "nec": "nijmegen",
     "psv": "psv eindhoven",
@@ -128,7 +161,9 @@ _TEAM_ALIASES: Dict[str, str] = {
 
 def _strip_accents(value: str) -> str:
     return "".join(
-        ch for ch in unicodedata.normalize("NFKD", value) if not unicodedata.combining(ch)
+        ch
+        for ch in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(ch)
     )
 
 
@@ -196,8 +231,10 @@ class TeamIndex:
     """
 
     def __init__(self, rows: Iterable[Tuple[str, str]]) -> None:
-        self._by_key: Dict[str, str] = {}
-        self._ambiguous_keys: set[str] = set()
+        self._by_exact_key: Dict[str, str] = {}
+        self._ambiguous_exact_keys: set[str] = set()
+        self._by_alias_key: Dict[str, str] = {}
+        self._ambiguous_alias_keys: set[str] = set()
         self._tokens: List[Tuple[Tuple[str, ...], str]] = []
         for team_id, team_name in rows:
             self.add(team_id, team_name)
@@ -206,35 +243,68 @@ class TeamIndex:
         key = _normalise_key(team_name)
         if not key:
             return
-        self._register(key, team_id)
+        self._register_exact(key, team_id)
         # Register the football-data.co.uk spelling too, so a CSV lookup is a
         # direct hit rather than relying on the loose prefix stage.
         alias = _TEAM_ALIASES.get(key)
         if alias:
-            self._register(_normalise_key(alias), team_id)
+            self._register_alias(_normalise_key(alias), team_id)
         self._tokens.append((tuple(key.split()), team_id))
 
-    def _register(self, key: str, team_id: str) -> None:
-        existing = self._by_key.get(key)
+    @staticmethod
+    def _register_key(
+        mapping: Dict[str, str],
+        ambiguous: set[str],
+        key: str,
+        team_id: str,
+    ) -> None:
+        existing = mapping.get(key)
         if existing is None:
-            self._by_key[key] = team_id
+            mapping[key] = team_id
         elif existing != team_id:
             # Two distinct teams normalise identically — refuse both rather than
             # bind history to whichever was inserted first.
-            self._ambiguous_keys.add(key)
+            ambiguous.add(key)
+
+    def _register_exact(self, key: str, team_id: str) -> None:
+        self._register_key(
+            self._by_exact_key,
+            self._ambiguous_exact_keys,
+            key,
+            team_id,
+        )
+
+    def _register_alias(self, key: str, team_id: str) -> None:
+        self._register_key(
+            self._by_alias_key,
+            self._ambiguous_alias_keys,
+            key,
+            team_id,
+        )
 
     def resolve(self, name: str) -> Optional[str]:
         key = _normalise_key(name)
-        if not key or key in self._ambiguous_keys:
+        if not key:
             return None
 
-        direct = self._by_key.get(key)
+        if key in self._ambiguous_exact_keys:
+            return None
+        direct = self._by_exact_key.get(key)
+        if direct is not None:
+            return direct
+
+        if key in self._ambiguous_alias_keys:
+            return None
+        direct = self._by_alias_key.get(key)
         if direct is not None:
             return direct
 
         aliased = _TEAM_ALIASES.get(key)
         if aliased:
-            direct = self._by_key.get(_normalise_key(aliased))
+            alias_key = _normalise_key(aliased)
+            if alias_key in self._ambiguous_exact_keys:
+                return None
+            direct = self._by_exact_key.get(alias_key)
             if direct is not None:
                 return direct
 
@@ -251,13 +321,20 @@ class TeamIndex:
         return None  # zero matches, or ambiguous — fail closed either way
 
 
-def historical_match_id(league_id: str, match_date: datetime, home: str, away: str) -> str:
+def historical_match_id(
+    league_id: str, match_date: datetime, home: str, away: str
+) -> str:
     """Deterministic id so re-running the backfill is a no-op, not a duplicate.
 
     Namespaced ``fdco-`` to stay distinct from fixture sync's ``fd-<providerId>``.
     """
     payload = "|".join(
-        [league_id, match_date.strftime("%Y-%m-%d"), _normalise_key(home), _normalise_key(away)]
+        [
+            league_id,
+            match_date.strftime("%Y-%m-%d"),
+            _normalise_key(home),
+            _normalise_key(away),
+        ]
     )
     return f"fdco-{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:16]}"
 
@@ -378,7 +455,9 @@ def _historical_team_id(team_name: str, league_id: str) -> str:
     return f"fdco-team-{league_id.lower()}-{slug or 'unknown'}"
 
 
-def _team_indexes_by_league(rows: Iterable[Tuple[str, str, str | None]]) -> Dict[str, TeamIndex]:
+def _team_indexes_by_league(
+    rows: Iterable[Tuple[str, str, str | None]],
+) -> Dict[str, TeamIndex]:
     """Build isolated resolver indexes so cross-league Team rows are ineligible."""
     indexes: Dict[str, TeamIndex] = {}
     for team_id, team_name, league_id in rows:
@@ -408,7 +487,9 @@ async def backfill_historical_matches(
     directory = cache_dir or default_cache_dir()
     report = BackfillReport()
     if not directory.is_dir():
-        logger.warning("historical_backfill: cache dir %s not found — nothing to do", directory)
+        logger.warning(
+            "historical_backfill: cache dir %s not found — nothing to do", directory
+        )
         return report
 
     parsed: List[HistoricalMatch] = []
@@ -448,13 +529,26 @@ async def backfill_historical_matches(
     for league_id in sorted(needed_leagues):
         if not await session.get(League, league_id):
             country = next(
-                (c for code, (lid, c) in _FD_CODE_TO_LEAGUE.items() if lid == league_id), None
+                (
+                    c
+                    for code, (lid, c) in _FD_CODE_TO_LEAGUE.items()
+                    if lid == league_id
+                ),
+                None,
             )
-            session.add(League(id=league_id, name=league_id.replace("_", " ").title(), country=country))
+            session.add(
+                League(
+                    id=league_id,
+                    name=league_id.replace("_", " ").title(),
+                    country=country,
+                )
+            )
     await session.flush()
 
     indexes = _team_indexes_by_league(
-        (await session.execute(select(Team.id, Team.name, Team.league_id))).tuples().all()
+        (await session.execute(select(Team.id, Team.name, Team.league_id)))
+        .tuples()
+        .all()
     )
 
     # Resolve every distinct (league, name) needed by pending rows once rather than
@@ -553,7 +647,9 @@ async def run_historical_backfill() -> Optional[BackfillReport]:
         async with AsyncSessionLocal() as session:
             report = await backfill_historical_matches(session)
     except Exception as exc:  # pragma: no cover - defensive, mirrors run_fixture_sync
-        logger.exception("historical_backfill: unhandled error — continuing without history")
+        logger.exception(
+            "historical_backfill: unhandled error — continuing without history"
+        )
         metrics_collector.increment("historical_backfill.failures")
         metrics_collector.record_error(
             error_type=type(exc).__name__,
