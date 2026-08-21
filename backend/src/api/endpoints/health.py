@@ -1,8 +1,6 @@
 """Health check and readiness probe endpoints for orchestration and monitoring."""
 
 import logging
-import os
-import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict
@@ -13,26 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.cache import cache_manager
 from ...core.config import settings
+from ...core.release_identity import release_sha, resolve_release_identity
 from ...db.session import get_async_session
 from ...models.active_generation import ActiveGenerationError, load_active_generation
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
-_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 
 
 def _release_sha() -> str | None:
-    """Return an exact deploy SHA only when runtime metadata is trustworthy.
-
-    Render injects ``RENDER_GIT_COMMIT`` for Git-backed services.  The explicit
-    ``SABISCORE_RELEASE_SHA`` fallback supports non-Render/local release
-    verification without ever inventing a revision.  Malformed/truncated values
-    are UNKNOWN rather than being presented as exact parity evidence.
-    """
-
-    raw = os.getenv("RENDER_GIT_COMMIT") or os.getenv("SABISCORE_RELEASE_SHA")
-    candidate = raw.strip() if raw else ""
-    return candidate.lower() if _GIT_SHA_RE.fullmatch(candidate) else None
+    """Compatibility wrapper for exact fail-closed release identity."""
+    return release_sha()
 
 
 @lru_cache(maxsize=1)
@@ -56,13 +45,15 @@ async def health_check() -> Dict[str, Any]:
     provider health. Those belong to readiness/diagnostic surfaces backed by
     direct observations.
     """
+    identity = resolve_release_identity()
     return {
         "status": "healthy",
         "service": "sabiscore-api",
         "version": settings.app_version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "environment": settings.app_env,
-        "release_sha": _release_sha(),
+        "release_sha": identity["release_sha"],
+        "release_identity": identity,
     }
 
 
@@ -182,10 +173,12 @@ async def readiness_check(
     else:
         overall_status = "healthy"
 
+    identity = resolve_release_identity()
     return {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "release_sha": _release_sha(),
+        "release_sha": identity["release_sha"],
+        "release_identity": identity,
         "checks": checks,
         "ready": critical_healthy,
         "capabilities": {
@@ -235,9 +228,11 @@ async def startup_status(request: Request) -> Dict[str, Any]:
     }
 
     startup_ready = models_loaded and not model_load_in_progress and model_error is None
+    identity = resolve_release_identity()
     return {
         "status": "ready" if startup_ready else "initializing",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "release_sha": _release_sha(),
+        "release_sha": identity["release_sha"],
+        "release_identity": identity,
         "initialization": initialization,
     }

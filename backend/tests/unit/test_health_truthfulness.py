@@ -13,6 +13,18 @@ from src.api.endpoints.health import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_release_identity_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    """Prevent build-generated identity evidence from leaking between test phases."""
+    monkeypatch.setenv(
+        "SABISCORE_RELEASE_IDENTITY_PATH",
+        str(tmp_path / "release_identity.json"),
+    )
+
+
 def _request(*, models_loaded: bool, loaded_leagues: list[str]):
     state = SimpleNamespace(
         models_loaded=models_loaded,
