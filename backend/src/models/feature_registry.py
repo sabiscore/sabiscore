@@ -763,13 +763,21 @@ _NAMED_FEATURE_GROUPS: List[Tuple[str, Sequence[str]]] = [
 # them explicitly UNDECLARED — rather than omitting them or guessing — is the
 # honest form of "not yet known": DEBT.md item 36 forbids inventing plausible
 # values for these on the exact surface Phase 3 exists to make trustworthy.
+#
+# `training_source` / `serving_source` / `shadow_source` are NOT in this list —
+# see _training_source() / _serving_source() / _shadow_source() below, which
+# resolve them per-feature-group where a real, grep-verified derivation
+# exists and fall back to UNDECLARED everywhere else. `source` (the generic,
+# pipeline-agnostic field) and `offline_backtest_source` stay here: `source`
+# would just restate one of the per-pipeline answers under an ambiguous name,
+# and `offline_backtest_source` is genuinely unanswerable for every feature —
+# walk_forward_validate() (models/model_registry.py) consumes pre-computed
+# {date, outcome, probs} records; it has no independent feature-computation
+# step to cite as a source. See docs/DEBT.md item 36.
 _UNDECLARED_FIELDS: Tuple[str, ...] = (
     "semantic_definition",
     "source",
-    "training_source",
-    "serving_source",
     "offline_backtest_source",
-    "shadow_source",
     "availability_time",
     "lookahead_risk",
     "missingness_policy",
@@ -779,6 +787,196 @@ _UNDECLARED_FIELDS: Tuple[str, ...] = (
     "temporal_validity",
     "unit",
 )
+
+# The 8 last-5-form fields (CANONICAL_FEATURES_58[:8]) have no named group in
+# _NAMED_FEATURE_GROUPS above, so _feature_group() falls through to the
+# generic default for them — listed explicitly here instead, mirroring how
+# MARKET_FEATURES_14 is already written out rather than sliced implicitly.
+_LAST5_FORM_FIELDS: Tuple[str, ...] = (
+    "home_form_last5_home", "home_wins_last5_home",
+    "home_draws_last5_home", "home_losses_last5_home",
+    "away_form_last5_away", "away_wins_last5_away",
+    "away_draws_last5_away", "away_losses_last5_away",
+)
+
+# The other half of the WP-18 remap block (the codebase's own
+# _HOME_REMAP_FEATURES/_AWAY_REMAP_FEATURES in
+# upcoming_match_feature_service.py group these with the 8 above, 7 per side).
+# ⚠️ Attributed SEPARATELY on purpose: unlike the last-5 fields, these are not
+# produced by a shared function. All three pipelines perform the same direct
+# key remap from their own team-stats dict, in three replicated assignments.
+# Same values today — verified empirically by
+# tests/unit/test_feature_vector_parity.py, not assumed — but three copies of
+# an assignment can drift in a way one shared function cannot, so the contract
+# says which it is.
+_GOALS_GD_FIELDS: Tuple[str, ...] = (
+    "home_goals_for_avg", "home_goals_against_avg", "home_gd_recent",
+    "away_goals_for_avg", "away_goals_against_avg", "away_gd_recent",
+)
+
+# The 15 Phase 8 fields a real historical replay can compute (Pi + Berrar +
+# EWMA form) — see phase8_historical.py's RESOLVED_FEATURES, which this
+# mirrors rather than imports: phase8_historical.py already imports THIS
+# module (via a path-based spec_from_file_location, to dodge core.database's
+# import-time DB connection — see its own module docstring), so importing
+# back would be circular. The 6 unresolved fields (market drift, match
+# importance) are deliberately absent — their four source fields stay
+# UNDECLARED, matching docs/DEBT.md item 29's "structurally underivable"
+# finding.
+_PHASE8_RESOLVED_FIELDS: Tuple[str, ...] = (
+    *PHASE8_FEATURES_PI, *PHASE8_FEATURES_BERRAR, *PHASE8_FEATURES_FORM,
+)
+
+_TRAINING_SOURCE_LAST5_FORM = (
+    "scripts/train_on_real_matches.py:build_dataset() via "
+    "models/feature_registry.py:derive_last5_form_features()"
+)
+_SERVING_SOURCE_LAST5_FORM = (
+    "services/upcoming_match_feature_service.py:UpcomingMatchFeatureProjector "
+    "and data/transformers.py:FeatureTransformer, both via "
+    "models/feature_registry.py:derive_last5_form_features() — verified by "
+    "import + call-site grep in both files, not by either file's own "
+    "docstring claim about itself"
+)
+_TRAINING_SOURCE_GOALS_GD = (
+    "scripts/train_on_real_matches.py:build_dataset() — direct key remap from "
+    "TeamHistory.stats()'s {side}_goals_per_match_5 / "
+    "{side}_goals_conceded_per_match_5 / {side}_gd_avg_5 (replicated "
+    "assignment, not a shared function)"
+)
+_SERVING_SOURCE_GOALS_GD = (
+    "services/upcoming_match_feature_service.py:project_match_features() and "
+    "data/transformers.py:FeatureTransformer._project_to_canonical_features() "
+    "— the same direct key remap from each pipeline's own team-stats dict, "
+    "replicated in both (not a shared function). Train/serve equality is "
+    "verified empirically by tests/unit/test_feature_vector_parity.py"
+)
+_TRAINING_SOURCE_TEMPORAL = (
+    "scripts/train_on_real_matches.py:build_dataset() via "
+    "models/feature_registry.py:derive_temporal_features()"
+)
+_TRAINING_SOURCE_LEAGUE = (
+    "scripts/train_on_real_matches.py:build_dataset() via "
+    "models/feature_registry.py:derive_league_features()"
+)
+_TRAINING_SOURCE_COMBINATION = (
+    "scripts/train_on_real_matches.py:build_dataset() via "
+    "models/feature_registry.py:derive_combination_features()"
+)
+_SERVING_SOURCE_MARKET_LEGACY = (
+    "services/upcoming_match_feature_service.py:UpcomingMatchFeatureProjector "
+    "and data/transformers.py:FeatureTransformer, both via "
+    "models/feature_registry.py:derive_market_features()"
+)
+_TRAINING_SOURCE_MARKET_APEX = (
+    "scripts/train_on_real_matches.py:build_dataset()'s X (the script's "
+    "current default output) via "
+    "models/feature_registry.py:derive_apex_market_features(); NOT verified "
+    "against any currently-shipped/certified artifact — see docs/DEBT.md "
+    "item 37"
+)
+_TRAINING_SOURCE_PHASE8_RESOLVED = (
+    "src/features/phase8_historical.py:compute_phase8_training_columns() via "
+    "the same PiRatingSystem/BerrarRatingSystem/weighted_form_features "
+    "classes serving calls"
+)
+_SHADOW_SOURCE_PHASE8_RESOLVED = (
+    "services/upcoming_match_feature_service.py:_inject_phase8_features() via "
+    "PiRatingSystem/BerrarRatingSystem/weighted_form_features "
+    "(src/features/{pi_ratings,berrar_ratings,form}.py) — the same classes "
+    "training's historical replay uses"
+)
+
+
+def _is_apex_schema(schema_version: str) -> bool:
+    """Which of the two market blocks a schema carries.
+
+    ⚠️ Decided by schema, NOT by _feature_group(), because seven names —
+    market_prob_home/draw/away, log_odds_home/draw/away, odds_ratio — appear
+    in BOTH MARKET_FEATURES_14 and APEX_MARKET_FEATURES_14. _feature_group()
+    resolves most-specific-first and hits MARKET_FEATURES_14 first, so a
+    name-keyed lookup would attribute the legacy derive_market_features() to
+    an apex slot it does not produce. The schema is what actually decides:
+    APEX_FEATURES_58 splices APEX_MARKET_FEATURES_14 in where
+    CANONICAL_FEATURES_58's legacy block sits.
+    """
+    return schema_version.startswith("apex_")
+
+
+def _training_source(name: str, group: str, schema_version: str) -> str:
+    """Mechanically-derived `training_source` — UNDECLARED where ambiguous.
+
+    Only claims a source where exactly one training code path computes the
+    field AND that path was confirmed by reading it (not assumed from a
+    comment). See docs/DEBT.md item 36/37 for what's deliberately excluded
+    and why: the legacy market block is NOT claimed for phase7_68/phase8_89,
+    because build_dataset()'s current default always trains on
+    APEX_MARKET_FEATURES_14, while the shipped phase7_68 artifacts' own
+    `feature_columns` metadata records the legacy MARKET_FEATURES_14 block —
+    a real, found-not-fabricated discrepancy between what the script does
+    today and what actually trained the certified generation.
+    """
+    if name in _LAST5_FORM_FIELDS:
+        return _TRAINING_SOURCE_LAST5_FORM
+    if name in _GOALS_GD_FIELDS:
+        return _TRAINING_SOURCE_GOALS_GD
+    if group == "TEMPORAL_FEATURES":
+        return _TRAINING_SOURCE_TEMPORAL
+    if group in ("LEAGUE_ONEHOT_FEATURES", "LEAGUE_RATE_FEATURES"):
+        return _TRAINING_SOURCE_LEAGUE
+    if group == "COMBINATION_FEATURES":
+        return _TRAINING_SOURCE_COMBINATION
+    if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
+        return (
+            _TRAINING_SOURCE_MARKET_APEX if _is_apex_schema(schema_version)
+            else UNDECLARED
+        )
+    if name in _PHASE8_RESOLVED_FIELDS:
+        return _TRAINING_SOURCE_PHASE8_RESOLVED
+    return UNDECLARED
+
+
+def _serving_source(name: str, group: str, schema_version: str) -> str:
+    """Mechanically-derived `serving_source` — UNDECLARED where ambiguous.
+
+    Serving has two independent implementations (UpcomingMatchFeatureProjector
+    and FeatureTransformer). A value is only returned where BOTH were
+    confirmed (by import + call-site grep) to invoke the identical function —
+    true for last-5-form and the legacy 14-field market block. Temporal,
+    league and combination fields are deliberately left UNDECLARED here even
+    though UpcomingMatchFeatureProjector calls the shared derive_* functions,
+    because FeatureTransformer._project_to_canonical_features() recomputes
+    those three groups with its own separate inline logic (numerically
+    claimed-identical in a comment, never verified as the same code) — see
+    docs/DEBT.md item 36.
+
+    An apex schema's market block gets UNDECLARED: derive_apex_market_features
+    has zero callers anywhere in backend/src (only scripts/), so nothing
+    serves it. Claiming the legacy function there — which a name-keyed lookup
+    would do, see _is_apex_schema — would be exactly the misattribution this
+    contract exists to prevent.
+    """
+    if name in _LAST5_FORM_FIELDS:
+        return _SERVING_SOURCE_LAST5_FORM
+    if name in _GOALS_GD_FIELDS:
+        return _SERVING_SOURCE_GOALS_GD
+    if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
+        return (
+            UNDECLARED if _is_apex_schema(schema_version)
+            else _SERVING_SOURCE_MARKET_LEGACY
+        )
+    return UNDECLARED
+
+
+def _shadow_source(name: str) -> str:
+    """Mechanically-derived `shadow_source` — the 15 resolved Phase 8 fields
+    only. The 6 unresolved ones (market drift, match importance) are never
+    computed by anything; claiming a source for them would misrepresent a
+    registry default as an observation.
+    """
+    if name in _PHASE8_RESOLVED_FIELDS:
+        return _SHADOW_SOURCE_PHASE8_RESOLVED
+    return UNDECLARED
 
 
 def _feature_group(name: str) -> str:
@@ -816,6 +1014,7 @@ def build_feature_contract(schema_version: object) -> Dict[str, Any]:
     records: List[Dict[str, Any]] = []
     for index, name in enumerate(features):
         default_value = defaults.get(name)
+        group = _feature_group(name)
         record: Dict[str, Any] = {
             "index": index,
             "feature_name": name,
@@ -832,9 +1031,15 @@ def build_feature_contract(schema_version: object) -> Dict[str, Any]:
             # PHASE7_FEATURES_10 comment above). Mechanically true, not a guess.
             "required_or_optional": "REQUIRED",
             "league_scope": _league_scope(name),
-            "feature_group": _feature_group(name),
+            "feature_group": group,
             "always_data_gap": name in PHASE7_FEATURES_ALWAYS_DATA_GAP,
             "disposition": _disposition(name, default_value),
+            # Per-pipeline attribution: a real, grep-verified code path or the
+            # literal UNDECLARED. Never a plausible-sounding guess — see each
+            # resolver's docstring for exactly what it will and will not claim.
+            "training_source": _training_source(name, group, str(schema_version)),
+            "serving_source": _serving_source(name, group, str(schema_version)),
+            "shadow_source": _shadow_source(name),
             "version": str(schema_version),
         }
         for field in _UNDECLARED_FIELDS:

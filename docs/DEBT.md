@@ -1,6 +1,59 @@
 # SabiScore Debt Ledger
 
-## 36. Phase 3 feature contract — PARTIALLY RESOLVED 2026-08-21: one generated contract now exists; its unanswerable fields remain honestly undeclared
+## 37. `train_on_real_matches.py`'s default market block does not match the shipped artifacts' own recorded one
+
+**Tier:** `NEXT` — not a live defect (nothing retrains automatically), but a
+loaded gun for the next Phase 4 candidate.
+**Found:** 2026-08-21, while deriving `training_source` for the feature
+contract (item 36). Surfaced *because* the attribution work forced the
+question "which code actually trained this slot?" for every feature.
+
+`train_on_real_matches.py:main()` builds its `X` matrix from
+`APEX_FEATURES_89 if include_phase8 else APEX_FEATURES_68` (`:782`), and
+`build_dataset()` fills the market block with `derive_apex_market_features()`
+(`:344`). Both are the Apex 14-field block.
+
+But the shipped, certified `v5_phase7` artifacts record the **legacy**
+`MARKET_FEATURES_14` block in their own `feature_columns` metadata — read
+directly out of `backend/models/epl_ensemble_v5_phase7.pkl`, indices 17-30 are
+`market_prob_home, market_prob_draw, market_prob_away, market_edge_home,
+market_favorite, odds_ratio, log_odds_home, log_odds_draw, log_odds_away,
+draw_probability, market_confidence, ev_home, ev_draw, ev_away`. That is
+`CANONICAL_FEATURES_68`, not `APEX_FEATURES_68`.
+
+**Seven of the fourteen names are identical between the two blocks**
+(`market_prob_home/draw/away`, `log_odds_home/draw/away`, `odds_ratio`), which
+is why the discrepancy has stayed invisible: a name-keyed check passes, and
+only the seven *positions* that differ carry different semantics.
+
+**Consequence if unaddressed:** re-running the training script today produces a
+candidate whose market block is positionally incompatible with the schema
+`active_generation.json` declares (`phase7_68`). `train_league()` already
+refuses a width/name-count mismatch (`:567`), but both blocks are 14 wide, so
+that guard does not fire — the artifact would train and load and simply mean
+something different in seven slots than serving supplies.
+
+**Why the contract does not paper over it:** `_training_source()` in
+`models/feature_registry.py` returns `UNDECLARED` for the legacy market block
+under `phase7_68`/`phase8_89` rather than naming `build_dataset()`. Claiming
+the script as the training source for a block it does not currently emit at
+those positions would be exactly the fabrication item 36 exists to prevent.
+The apex schemas *do* get the attribution, because there the claim is true.
+
+**Fix, in order:** (a) decide which block the next generation trains on — this
+is a modelling decision, not a mechanical one, and `derive_apex_market_features`
+is the better feature set (non-redundant, `ev_*` are algebraically identical
+under the legacy formula, see its docstring); (b) if Apex wins, the candidate
+must declare `feature_schema_version: apex_v1_68` (or `_89`) so the identity
+gate from PR #67 catches any mislabel; (c) if legacy wins, `build_dataset()`
+needs a `--market-block legacy` path calling `derive_market_features()`;
+(d) either way add a training-vs-artifact assertion so a future retrain cannot
+silently swap blocks. **Do not "fix" it by relabelling the existing artifacts.**
+**Trigger:** before any Phase 4 candidate is trained.
+
+---
+
+## 36. Phase 3 feature contract — PARTIALLY RESOLVED 2026-08-21: one generated contract, per-pipeline source attribution, and a real train/serve vector-parity harness; the remaining unanswerable fields stay undeclared
 
 **Tier:** `NEXT` — no fail-open risk remains at the manifest boundary, and the
 three-way artifact split is closed. What remains is *populating* fields no code
@@ -42,22 +95,73 @@ then pass again on restore.
 
 ### What remains open
 
-1. **The 14 `UNDECLARED` fields** (`semantic_definition`, `source`,
-   `training_source`, `serving_source`, `offline_backtest_source`,
-   `shadow_source`, `availability_time`, `lookahead_risk`, `missingness_policy`,
-   `normalization`, `expected_range`, `monitoring_rule`, `temporal_validity`,
-   `unit`). ⚠️ **Still do not hand-write these.** They are pinned as
-   `UNDECLARED` by `test_unanswerable_fields_are_literally_undeclared`. When a
-   real derivation for one lands, delete it from `_UNDECLARED_FIELDS` in the
-   same change — do not weaken that assertion to accommodate a hand-written
-   value.
-2. **§7.3 vector-hash parity.** `contract_sha256()` now hashes every derived
-   field (not just the name list, unlike `promotion_evidence._contract_hash`),
-   which is a real step — but nothing yet hashes a feature *vector*, so "same
-   historical cutoff → identical hash across training/backtest/shadow/serving"
-   still has no mechanism. Same gap item 29's fix (b) names from the Phase 8
-   side. This needs a shared harness invoking all four pipelines against one
-   fixture; none exists in any form today.
+⚠️ **Updated 2026-08-21 (second pass).** Both items below moved; neither is closed.
+
+1. **The UNDECLARED fields are now 11, not 14.** `training_source`,
+   `serving_source` and `shadow_source` are resolved per feature by
+   `_training_source()` / `_serving_source()` / `_shadow_source()` in
+   `models/feature_registry.py`, each returning a real grep-verified code path
+   or `UNDECLARED`. On `phase7_68`: 30/68 have a training source, 28/68 a
+   serving source; on `phase8_89` 15/89 additionally have a shadow source (the
+   Pi/Berrar/EWMA block item 29 proved replayable — the 6 unresolved Phase 8
+   fields correctly get none). `offline_backtest_source` stays in the blanket
+   list and is expected to stay there permanently: `walk_forward_validate()`
+   consumes pre-computed `{date, outcome, probs}` records and has no
+   independent feature-computation step to cite, which is asserted rather than
+   assumed by `test_backtest_has_no_independent_feature_computation_to_compare`.
+   The remaining 11 (`semantic_definition`, `source`,
+   `offline_backtest_source`, `availability_time`, `lookahead_risk`,
+   `missingness_policy`, `normalization`, `expected_range`, `monitoring_rule`,
+   `temporal_validity`, `unit`) are **still pinned as UNDECLARED** by
+   `test_unanswerable_fields_are_literally_undeclared`. ⚠️ **Still do not
+   hand-write them.** Verified by watching the guard fail: hand-writing
+   `unit: "goals"` reddened 4 parametrizations; restore made them green.
+
+   ⚠️ **A trap this attribution work walked into and had to fix:** seven names
+   (`market_prob_home/draw/away`, `log_odds_home/draw/away`, `odds_ratio`)
+   exist in **both** `MARKET_FEATURES_14` and `APEX_MARKET_FEATURES_14`.
+   `_feature_group()` resolves most-specific-first and hits the legacy group
+   first, so the first draft attributed the legacy `derive_market_features()`
+   to apex slots it does not produce. Market attribution is therefore keyed on
+   the **schema** (`_is_apex_schema`), never on the feature name. Any future
+   per-feature attribution must ask the same question.
+
+2. **§7.3 vector-hash parity — the harness now exists**
+   (`backend/tests/unit/test_feature_vector_parity.py`), and the previously
+   unverifiable claim is tested rather than asserted. It seeds one synthetic
+   six-match-per-side history as `Match` rows for
+   `UpcomingMatchFeatureProjector._get_team_stats()` **and** feeds the same
+   results to `train_on_real_matches.TeamHistory`, then compares both the
+   per-side stats dicts and a SHA-256 over an ordered 40-name sub-vector
+   (`PARITY_SCOPE`). `TeamHistory.stats()`'s long-standing docstring claim —
+   "Mirror `_get_team_stats()`" — is confirmed true for the first time.
+   A `test_a_divergence_actually_breaks_the_hash` case perturbs one feature by
+   1e-9 to prove the digest is load-bearing, and
+   `test_parity_scope_matches_the_contract_s_own_attribution` fails if the
+   harness ever claims parity for a feature the contract cannot attribute
+   (watched failing on `shot_quality_diff` before being trusted).
+
+   **What it does NOT yet cover, and why:**
+   - `FeatureTransformer.engineer_features()` (`data/transformers.py`), the
+     *second* serving implementation, serving `insights/engine.py`. It calls
+     the shared `derive_last5_form_features` / `derive_market_features` but
+     recomputes temporal, league and combination features with its own inline
+     logic (`_project_to_canonical_features`, `:399-435`) — duplicated tables
+     that merely *claim* numerical identity in a comment. This is the concrete
+     blocker to full §7.3 and the reason `serving_source` is `UNDECLARED` for
+     those three groups. Closing it means making that method call
+     `derive_temporal_features()` / `derive_league_features()` /
+     `derive_combination_features()`: behaviour-preserving unification, but it
+     touches a live serving path and deserves its own PR.
+   - the 6 goals/gd fields are attributed but flagged as a **replicated direct
+     assignment** across three pipelines rather than a shared function. The
+     harness verifies they agree today; three copies can drift where one
+     function cannot.
+   - the fallback branches. Both pipelines are compared only where each has
+     >=5 real results, because below that threshold they legitimately differ
+     (serving substitutes documented defaults and raises a data gap; training
+     returns `None` and drops the row). That divergence is by design, so the
+     harness states the restriction rather than hiding it.
 
 ### Deliberately unchanged
 
