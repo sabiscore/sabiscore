@@ -107,7 +107,8 @@ FROM (
     UNION ALL SELECT 'match_odds_latest_observation', coalesce(max(timestamp)::text, 'NULL') FROM odds_history WHERE market_type = 'match_odds'
 
     -- Evidence/provenance lifecycle. Nonclosing no longer means "opening": it
-    -- may be opening, intermediate, or a superseded closing candidate.
+    -- may be opening, intermediate, a superseded closing candidate, or an
+    -- explicitly quarantined historical post-kickoff rejection.
     UNION ALL SELECT 'market_snapshot_rows', count(*)::text FROM market_snapshots
     UNION ALL SELECT 'nonclosing_snapshot_rows', count(*)::text FROM market_snapshots WHERE is_closing_line IS FALSE
     UNION ALL SELECT 'pre_match_opening_snapshot_rows', count(*)::text
@@ -116,13 +117,16 @@ FROM (
       FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'PRE_MATCH_INTERMEDIATE'
     UNION ALL SELECT 'superseded_closing_snapshot_rows', count(*)::text
       FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'PRE_MATCH_CLOSING_SUPERSEDED'
+    UNION ALL SELECT 'post_kickoff_rejected_snapshot_rows', count(*)::text
+      FROM market_snapshots WHERE provenance ->> 'evidence_class' = 'POST_KICKOFF_REJECTED'
     UNION ALL SELECT 'unclassified_nonclosing_snapshot_rows', count(*)::text
       FROM market_snapshots
       WHERE is_closing_line IS FALSE
         AND coalesce(provenance ->> 'evidence_class', '') NOT IN (
             'PRE_MATCH_OPENING',
             'PRE_MATCH_INTERMEDIATE',
-            'PRE_MATCH_CLOSING_SUPERSEDED'
+            'PRE_MATCH_CLOSING_SUPERSEDED',
+            'POST_KICKOFF_REJECTED'
         )
 
     UNION ALL SELECT 'closing_snapshot_rows', count(*)::text FROM closing
