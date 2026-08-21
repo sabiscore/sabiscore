@@ -6,7 +6,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,6 +107,7 @@ async def data_authority(
 
 @router.get("/semantic-repair-review")
 async def semantic_repair_review(
+    response: Response,
     db: AsyncSession = Depends(get_async_session),
 ) -> dict[str, Any]:
     """Build the exact SAB-22 Class-C review evidence without mutating production.
@@ -117,6 +118,7 @@ async def semantic_repair_review(
     when the manifest is complete) the deterministic Elo replay-plan
     hash/boundaries. It never authorizes apply.
     """
+    response.headers["Cache-Control"] = "no-store"
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "unknown"
     if dialect != "postgresql":
