@@ -18,11 +18,11 @@ router = APIRouter(prefix="/release", tags=["release-verification"])
 async def data_authority(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict[str, Any]:
-    """Expose non-secret DB identity and deterministic Elo recovery coverage.
+    """Expose non-secret DB identity and read-only Elo release evidence.
 
-    The endpoint executes SELECT-only queries. It deliberately does not claim
-    structural Elo validity, semantic identity correctness, model certification,
-    CLV sufficiency, or permission to mutate production data.
+    The endpoint executes SELECT-only queries. Structural and semantic Elo states
+    are direct persisted-data gates, while model performance, CLV sufficiency,
+    and staking authorization remain deliberately outside this endpoint.
     """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "unknown"
@@ -33,6 +33,8 @@ async def data_authority(
         database_name = str(raw_name) if raw_name is not None else None
 
     elo = await elo_recovery_health(db)
+    structural = elo.get("structural_integrity") or {}
+    semantic = elo.get("semantic_integrity") or {}
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "read_only": True,
@@ -42,9 +44,10 @@ async def data_authority(
         },
         "elo": elo,
         "certification": {
-            "structural_elo": "NOT_EVALUATED",
-            "semantic_identity": "NOT_EVALUATED",
+            "structural_elo": structural.get("status", "NOT_EVALUATED"),
+            "semantic_identity": semantic.get("status", "NOT_EVALUATED"),
             "model": "NOT_EVALUATED",
+            "clv": "NOT_EVALUATED",
             "staking": "NOT_AUTHORIZED",
         },
     }
