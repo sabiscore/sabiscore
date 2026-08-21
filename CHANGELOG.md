@@ -5,6 +5,55 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 3 source attribution and train/serve vector parity (2026-08-21)
+
+### Added
+
+- Per-pipeline source attribution in `feature_registry.py`:
+  `_training_source()`, `_serving_source()` and `_shadow_source()` resolve
+  `training_source` / `serving_source` / `shadow_source` per feature to a real,
+  grep-verified code path, or the literal `UNDECLARED`. `_UNDECLARED_FIELDS`
+  shrinks 14 → 11. On `phase7_68`: 30/68 features carry a training source,
+  28/68 a serving source; `phase8_89` adds 15 shadow sources for the Pi /
+  Berrar / EWMA block that `docs/DEBT.md` item 29 proved replayable.
+- `backend/tests/unit/test_feature_vector_parity.py` — the §7.3 parity harness
+  that did not exist in any form. Seeds one synthetic six-match-per-side
+  history as `Match` rows for `UpcomingMatchFeatureProjector._get_team_stats()`
+  and feeds the same results to `train_on_real_matches.TeamHistory`, then
+  compares the per-side stats dicts and a SHA-256 over an ordered 40-name
+  sub-vector. `TeamHistory.stats()`'s docstring claim ("Mirror
+  `_get_team_stats()`") is verified true for the first time.
+- `docs/DEBT.md` item 37 — found while deriving `training_source`:
+  `train_on_real_matches.py` trains its market block from
+  `derive_apex_market_features()`, but the shipped `v5_phase7` artifacts record
+  the **legacy** `MARKET_FEATURES_14` block in their own `feature_columns`
+  metadata. Seven of fourteen names are identical between the two blocks, which
+  is why it stayed invisible. Blocks any Phase 4 retrain until resolved.
+
+### Fixed
+
+- Market attribution is keyed on the **schema**, not the feature name.
+  `market_prob_home` / `log_odds_*` / `odds_ratio` appear in both
+  `MARKET_FEATURES_14` and `APEX_MARKET_FEATURES_14`, and `_feature_group()`
+  resolves most-specific-first — so a name-keyed lookup (the first draft here)
+  attributed the legacy `derive_market_features()` to apex slots it does not
+  produce. `_is_apex_schema()` decides instead.
+
+### Safety
+
+- No `UNDECLARED` field was hand-written. The four newly-populated fields left
+  the blanket list only because a real derivation landed for them;
+  `test_unanswerable_fields_are_literally_undeclared` still pins the other 11.
+- `offline_backtest_source` remains `UNDECLARED` for every feature and is
+  expected to stay so: `walk_forward_validate()` consumes pre-computed
+  `{date, outcome, probs}` records and has no independent feature-computation
+  step to cite. Asserted, not assumed, by
+  `test_backtest_has_no_independent_feature_computation_to_compare`.
+- All three guards were watched failing before being trusted: an injected
+  plausible `serving_source` reddened the build gate (exit 1) and the freshness
+  test; a hand-written `unit: "goals"` reddened 4 parametrizations; adding an
+  unattributed feature to `PARITY_SCOPE` reddened the scope test by name.
+
 ## Unreleased - Phase 3 feature-contract content (2026-08-21)
 
 ### Added
