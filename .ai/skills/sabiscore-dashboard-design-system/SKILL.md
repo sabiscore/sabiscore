@@ -11,7 +11,7 @@ description: >
   rather than persona-brief hex codes. Covers dark-mode analytics UI: odds
   tables, probability bars, confidence gauges, fixture cards, WCAG AA
   legibility for dense numerics. Complements, doesn't duplicate, generic
-  frontend-design-auditor/design-token-system-architect skills — SabiScore
+  accessibility-system-architect/design-token-system-architect skills — SabiScore
   verdict/confidence-state specific. Triggers: "dashboard design", "verdict
   badge", "confidence gauge", "prediction UI", "SabiScore design system",
   "odds table design", "watchlist styling", "SHADOW vs CERTIFIED", "verdict

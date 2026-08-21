@@ -48,7 +48,6 @@ Claude will list all installed skills. Confirm you see the expected names.
 |---|---|---|
 | `design-token-system-architect` | 7 | "Design a token system for my fintech dashboard" |
 | `frontend-product-design-architect` | 8 | "Shape the information architecture for my landing page" |
-| `frontend-design-auditor` | 9 | "Audit this component for design quality" |
 | `accessibility-system-architect` | 10 | "Make this flow keyboard and screen-reader friendly" |
 | `component-quality-gate` | 11 | "Review this React component for production readiness" |
 | `motion-performance-architect` | 12 | "Audit my animation performance and set the motion budget" |
@@ -140,8 +139,7 @@ These are the highest-leverage multi-skill sequences. Run them in order.
 4. motion-performance-architect       → "Set the motion budget and compositor rules"
 5. motion-interaction-architect       → "Implement the Framer Motion animation system"
 6. data-visualization-architect       → "Design the chart and analytics layer"
-7. frontend-design-auditor            → "Audit the visual hierarchy and polish"
-8. component-quality-gate             → "Run the production readiness gate"
+7. component-quality-gate             → "Run the production readiness gate"
 ```
 **Result**: A premium, accessible, motion-aware UI with data visualization that ships cleanly.
 
@@ -213,7 +211,7 @@ These are the highest-leverage multi-skill sequences. Run them in order.
 - Motion strategy → `motion-performance-architect`
 - Motion implementation → `motion-interaction-architect`
 - Data display → `data-visualization-architect`
-- Design critique → `frontend-design-auditor`
+- Design critique → `frontend-product-design-architect`
 - Component gate → `component-quality-gate`
 
 **Cluster 6 (Vertical Intelligence)** captures product-specific knowledge that is too
