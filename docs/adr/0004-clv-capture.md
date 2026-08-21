@@ -138,6 +138,13 @@ generations cannot multiply or hide a sample.
 `MarketSnapshot.executable` is kept false by lifecycle persistence. Market evidence
 is not permission to place a bet, enable Kelly sizing, or infer staking suitability.
 
+The legacy `Odds` table has no durable provider or provenance contract and also
+backs the user-supplied hypothetical comparison flow. It is therefore excluded
+from Phase-8 market-drift fallback and cannot establish `VERIFIED` market status.
+Rows remain available as `RESEARCH_ONLY` references, but are ineligible for CLV,
+value analysis, Kelly sizing, and staking. Only canonical `OddsHistory` and
+`MarketSnapshot` lifecycle writes may satisfy those evidence paths.
+
 ## Schema history
 
 Migration `0005_clv_capture_schema` added/relaxed the schema required for CLV:

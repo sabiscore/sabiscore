@@ -41,7 +41,16 @@ POST /fixtures/{fixture_id}/odds-snapshot
 POST /fixtures/{fixture_id}/analyze
 ```
 
-`/odds-snapshots` returns coherent one-bookmaker 1X2 candidates. Cross-bookmaker comparisons are display evidence only; analysis uses one complete bookmaker snapshot or a user-confirmed manual snapshot.
+`/odds-snapshots` exposes legacy one-bookmaker 1X2 references as
+`RESEARCH_ONLY` and `executable=false`. A user-confirmed manual snapshot is
+`HYPOTHETICAL_NON_EXECUTABLE`: it does not establish provider provenance, enter
+market-drift features or CLV, enable value analysis, or permit a stake. Canonical
+market evidence is captured by the backend provider lifecycle into `OddsHistory`
+and `MarketSnapshot`.
+
+The legacy `/odds` namespace is retained for compatibility as a deprecated
+research surface. Its responses include `evidence_state=RESEARCH_ONLY` and
+`executable=false`; rows written there have no verified provider provenance.
 
 ### Upcoming Discovery
 

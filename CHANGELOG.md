@@ -5,6 +5,26 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 2 market trust boundary (2026-08-21)
+
+### Fixed
+
+- Phase 8 market-drift features no longer fall back to the provenance-blind
+  legacy `Odds` table when canonical `OddsHistory` evidence is absent.
+- User-supplied and legacy odds snapshots now report `RESEARCH_ONLY` and
+  `HYPOTHETICAL_NON_EXECUTABLE`; they cannot establish verified market status,
+  CLV eligibility, value analysis, Kelly sizing, or stake permission.
+- The compatibility `/odds` API is deprecated and returns explicit
+  `RESEARCH_ONLY`, non-executable state for every provenance-blind row.
+- The intelligence UI identifies manual market input as a hypothetical research
+  snapshot instead of implying that recording it creates executable evidence.
+
+### Safety
+
+- This change does not alter or delete existing odds rows. Canonical provider
+  observations, closing-line capture, and generation-scoped CLV continue to use
+  `OddsHistory` and `MarketSnapshot` only.
+
 ## Unreleased - Codex discovery overlay repair (2026-08-21)
 
 ### Fixed

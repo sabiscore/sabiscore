@@ -690,10 +690,13 @@ export function BettingIntelligenceDashboard() {
             </div>
 
             <section className="bi-panel">
-              <div className="bi-panel-title"><Database size={16} /> Manual Odds Snapshot</div>
+              <div className="bi-panel-title">
+                <Database size={16} /> Hypothetical Market Snapshot
+                <span className="bi-state">Research only</span>
+              </div>
               <div className="bi-actions">
                 <button className="bi-btn ghost" type="button" disabled={!selectedFixtureId || activeLoading} onClick={loadOddsCandidates}>
-                  Auto-fill market
+                  Load stored reference
                 </button>
               </div>
               {oddsCandidates.length > 0 && (
@@ -702,7 +705,7 @@ export function BettingIntelligenceDashboard() {
                     <div className="bi-candidate" key={`${candidate.bookmaker}-${candidate.captured_at}`}>
                       <span>
                         <strong>{candidate.bookmaker}</strong>
-                        <small className="bi-muted">H {fmtOdds(candidate.home_odds)} D {fmtOdds(candidate.draw_odds)} A {fmtOdds(candidate.away_odds)} | {fmtDate(candidate.captured_at)}</small>
+                        <small className="bi-muted">H {fmtOdds(candidate.home_odds)} D {fmtOdds(candidate.draw_odds)} A {fmtOdds(candidate.away_odds)} | {fmtDate(candidate.captured_at)} | Research only</small>
                       </span>
                       <button className="bi-btn secondary" type="button" onClick={() => previewCandidate(candidate)}>Preview</button>
                     </div>
@@ -724,10 +727,10 @@ export function BettingIntelligenceDashboard() {
                 </div>
                 <label className="bi-confirm">
                   <input type="checkbox" checked={oddsForm.confirmed} onChange={(e) => setOddsForm((f) => ({ ...f, confirmed: e.target.checked }))} />
-                  I confirm these three prices are from one bookmaker and one fixture snapshot.
+                  I confirm these three prices are from one bookmaker and one fixture snapshot for this research comparison.
                 </label>
                 <div className="bi-actions">
-                  <button className="bi-btn" type="submit" disabled={!oddsFormValid || activeLoading}>Submit Snapshot</button>
+                  <button className="bi-btn" type="submit" disabled={!oddsFormValid || activeLoading}>Record Research Snapshot</button>
                 </div>
               </form>
             </section>

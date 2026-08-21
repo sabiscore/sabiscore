@@ -1,7 +1,7 @@
 """Odds schemas for market data exposure."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,13 +24,15 @@ class OddsCreate(OddsBase):
 
 
 class OddsResponse(OddsBase):
-	"""API response model for odds data."""
+	"""Legacy odds reference that cannot establish executable evidence."""
 
 	model_config = ConfigDict(from_attributes=True)
 
 	id: Optional[int] = None
 	created_at: Optional[datetime] = None
 	updated_at: Optional[datetime] = None
+	evidence_state: Literal["RESEARCH_ONLY"] = "RESEARCH_ONLY"
+	executable: Literal[False] = False
 
 
 __all__ = ["Odds", "OddsCreate", "OddsResponse"]

@@ -263,6 +263,12 @@ edge, and Quarter-Kelly stake sizing. UCL fixtures cannot become
 `HIGH_CONVICTION`. Raw Kelly math is internal audit detail and is not returned by
 public backend schemas or frontend TypeScript contracts.
 
+The fixture manual-odds route is a research surface. It records a
+`HYPOTHETICAL_NON_EXECUTABLE` reference and returns `executable=false`; the legacy
+row cannot satisfy verified market provenance, feed Phase-8 market drift, enter
+CLV, enable value analysis, or permit staking. Canonical market evidence is owned
+by the provider lifecycle and persisted to `OddsHistory` plus `MarketSnapshot`.
+
 Only critical gaps force a `PARTIAL` verdict: missing/invalid required model probabilities, unresolved fixture identity, missing coherent 1X2 market data for value analysis, or stale required inputs. Advisory gaps and risks such as provisional lineups, optional injury context, or low-confidence contextual signals may reduce confidence or hold promotion, but they do not trigger `PARTIAL` by themselves. Conflicting source evidence remains fail-closed and is reported separately from critical gaps.
 
 The unified full-analysis route has a typed Pydantic/OpenAPI response. Consumers
