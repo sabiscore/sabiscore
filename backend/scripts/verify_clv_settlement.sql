@@ -49,35 +49,6 @@ valid_closing AS (
         + away_implied_prob_devigged
         - 1.0
       ) <= 0.001
-),
-joined AS (
-    SELECT s.id AS prediction_id,
-           s.match_id,
-           s.model_version,
-           s.created_at AS prediction_created_at,
-           s.match_date,
-           s.home_probability,
-           s.draw_probability,
-           s.away_probability,
-           c.id AS market_snapshot_id,
-           c.provider,
-           c.bookmaker,
-           c.captured_at,
-           c.closing_rows_per_match,
-           c.home_implied_prob_devigged,
-           c.draw_implied_prob_devigged,
-           c.away_implied_prob_devigged,
-           CASE
-               WHEN s.home_probability >= s.draw_probability
-                AND s.home_probability >= s.away_probability
-                   THEN s.home_probability - c.home_implied_prob_devigged
-               WHEN s.draw_probability >= s.home_probability
-                AND s.draw_probability >= s.away_probability
-                   THEN s.draw_probability - c.draw_implied_prob_devigged
-               ELSE s.away_probability - c.away_implied_prob_devigged
-           END AS clv
-    FROM settled s
-    JOIN valid_closing c ON c.match_id = s.match_id
 )
 SELECT metric, value
 FROM (
@@ -97,8 +68,6 @@ FROM (
       WHERE abs((home_probability + draw_probability + away_probability) - 1.0) > 0.000001
         AND abs((home_probability + draw_probability + away_probability) - 1.0) <= 0.001
     UNION ALL SELECT 'max_prediction_simplex_error', coalesce(max(abs((home_probability + draw_probability + away_probability) - 1.0))::text, 'NULL') FROM eligible
-    UNION ALL SELECT 'settled_eligible_predictions', count(*)::text FROM settled
-
     -- Numerical market stream consumed by Phase-8 market drift.
     UNION ALL SELECT 'odds_history_rows', count(*)::text FROM odds_history
     UNION ALL SELECT 'match_odds_history_rows', count(*)::text FROM odds_history WHERE market_type = 'match_odds'
@@ -153,28 +122,21 @@ FROM (
       FROM closing WHERE kickoff IS NOT NULL AND captured_at > kickoff
     UNION ALL SELECT 'closing_captured_more_than_60m_after_kickoff', count(*)::text
       FROM closing WHERE kickoff IS NOT NULL AND captured_at > kickoff + interval '60 minutes'
-    UNION ALL SELECT 'settled_predictions_with_valid_closing_join', count(*)::text FROM joined
-    UNION ALL SELECT 'distinct_settled_matches_with_valid_closing_join', count(DISTINCT match_id)::text FROM joined
-    UNION ALL SELECT 'clv_sample_size', count(*)::text FROM joined
-    UNION ALL SELECT 'clv_mean_diagnostic_only', coalesce(avg(clv)::text, 'NULL') FROM joined
-    UNION ALL SELECT 'clv_positive_count_diagnostic_only', count(*) FILTER (WHERE clv > 0)::text FROM joined
-    UNION ALL SELECT 'oldest_settled_prediction', coalesce(min(created_at)::text, 'NULL') FROM settled
-    UNION ALL SELECT 'newest_settled_prediction', coalesce(max(created_at)::text, 'NULL') FROM settled
+    -- Raw lifecycle counts are intentionally not CLV metrics. Generation-scoped
+    -- CLV aggregation lives only in verify_clv_by_generation.sql.
+    UNION ALL SELECT 'raw_settled_prediction_rows_all_generations', count(*)::text FROM settled
+    UNION ALL SELECT 'settled_prediction_generation_count', count(DISTINCT model_version)::text FROM settled
+    UNION ALL SELECT 'oldest_raw_settled_prediction', coalesce(min(created_at)::text, 'NULL') FROM settled
+    UNION ALL SELECT 'newest_raw_settled_prediction', coalesce(max(created_at)::text, 'NULL') FROM settled
 ) q
 ORDER BY metric;
 
 -- Per-prediction evidence chain. Only a valid current pre-kickoff closing snapshot
 -- may populate closing_snapshot_id. Superseded and invalid temporal rows remain
 -- auditable above but never enter the CLV chain.
-WITH eligible AS (
-    SELECT p.*, m.match_date, m.status AS match_status, m.home_score, m.away_score
-    FROM match_prediction_logs p
-    JOIN matches m ON m.id = p.match_id
-    WHERE p.created_at < m.match_date
-),
-closing AS (
+WITH closing_ranked AS (
     SELECT ms.*,
-           row_number() OVER (PARTITION BY ms.match_id ORDER BY ms.captured_at DESC, ms.id DESC) AS rn,
+           row_number() OVER (PARTITION BY ms.match_id ORDER BY ms.captured_at DESC, ms.id DESC) AS closing_rank,
            count(*) OVER (PARTITION BY ms.match_id) AS closing_rows_per_match
     FROM market_snapshots ms
     JOIN matches m ON m.id = ms.match_id
@@ -193,6 +155,37 @@ closing AS (
         + ms.away_implied_prob_devigged
         - 1.0
       ) <= 0.001
+),
+current_closing AS (
+    SELECT *
+    FROM closing_ranked
+    WHERE closing_rank = 1
+),
+eligible_ranked AS (
+    SELECT p.*,
+           m.match_date,
+           m.status AS match_status,
+           m.home_score,
+           m.away_score,
+           c.id AS closing_snapshot_id,
+           c.provider,
+           c.bookmaker,
+           c.captured_at AS closing_captured_at,
+           c.closing_rows_per_match,
+           c.coherent,
+           c.home_implied_prob_devigged,
+           c.draw_implied_prob_devigged,
+           c.away_implied_prob_devigged,
+           row_number() OVER (
+               PARTITION BY p.match_id, p.model_version
+               ORDER BY p.created_at DESC, p.id DESC
+           ) AS prediction_rank
+    FROM match_prediction_logs p
+    JOIN matches m ON m.id = p.match_id
+    LEFT JOIN current_closing c ON c.match_id = p.match_id
+    WHERE p.created_at < coalesce(c.captured_at, m.match_date)
+      AND p.model_version IS NOT NULL
+      AND btrim(p.model_version) <> ''
 )
 SELECT e.id AS prediction_id,
        e.match_id,
@@ -204,26 +197,26 @@ SELECT e.id AS prediction_id,
        e.draw_probability,
        e.away_probability,
        e.home_probability + e.draw_probability + e.away_probability AS probability_sum,
-       c.id AS closing_snapshot_id,
-       c.provider,
-       c.bookmaker,
-       c.captured_at AS closing_captured_at,
-       c.closing_rows_per_match,
-       c.coherent,
-       c.home_implied_prob_devigged,
-       c.draw_implied_prob_devigged,
-       c.away_implied_prob_devigged,
+       e.closing_snapshot_id,
+       e.provider,
+       e.bookmaker,
+       e.closing_captured_at,
+       e.closing_rows_per_match,
+       e.coherent,
+       e.home_implied_prob_devigged,
+       e.draw_implied_prob_devigged,
+       e.away_implied_prob_devigged,
        CASE
-           WHEN c.id IS NULL THEN NULL
+           WHEN e.closing_snapshot_id IS NULL THEN NULL
            WHEN e.home_probability >= e.draw_probability AND e.home_probability >= e.away_probability
-               THEN e.home_probability - c.home_implied_prob_devigged
+               THEN e.home_probability - e.home_implied_prob_devigged
            WHEN e.draw_probability >= e.home_probability AND e.draw_probability >= e.away_probability
-               THEN e.draw_probability - c.draw_implied_prob_devigged
-           ELSE e.away_probability - c.away_implied_prob_devigged
+               THEN e.draw_probability - e.draw_implied_prob_devigged
+           ELSE e.away_probability - e.away_implied_prob_devigged
        END AS clv
-FROM eligible e
-LEFT JOIN closing c ON c.match_id = e.match_id AND c.rn = 1
-ORDER BY e.created_at, e.id;
+FROM eligible_ranked e
+WHERE e.prediction_rank = 1
+ORDER BY e.model_version, e.created_at, e.id;
 
 -- Provider request observations. Absence is UNKNOWN, not success.
 SELECT provider,

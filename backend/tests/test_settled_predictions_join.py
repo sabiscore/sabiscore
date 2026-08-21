@@ -138,7 +138,7 @@ async def test_get_settled_predictions_joins_latest_log_to_result(session: Async
     )
     await session.commit()
 
-    records = await get_settled_predictions(session)
+    records = await get_settled_predictions(session, model_version="latest")
 
     assert len(records) == 1
     record = records[0]
@@ -183,10 +183,52 @@ async def test_get_settled_predictions_excludes_post_kickoff_log(
     )
     await session.commit()
 
-    records = await get_settled_predictions(session)
+    records = await get_settled_predictions(session, model_version="eligible")
 
     assert len(records) == 1
     assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])
+
+
+async def test_get_settled_predictions_breaks_equal_timestamps_by_latest_id(
+    session: AsyncSession,
+) -> None:
+    match_date = datetime(2026, 8, 1, 15, 0)
+    created_at = match_date - timedelta(hours=1)
+    await _seed_settled_match(
+        session,
+        "match-tied",
+        home_score=2,
+        away_score=1,
+        match_date=match_date,
+    )
+    session.add(
+        MatchPredictionLog(
+            match_id="match-tied",
+            model_version="v5_phase7",
+            home_probability=0.20,
+            draw_probability=0.20,
+            away_probability=0.60,
+            created_at=created_at,
+        )
+    )
+    session.add(
+        MatchPredictionLog(
+            match_id="match-tied",
+            model_version="v5_phase7",
+            home_probability=0.60,
+            draw_probability=0.25,
+            away_probability=0.15,
+            created_at=created_at,
+        )
+    )
+    await session.commit()
+
+    records = await get_settled_predictions(
+        session, model_version="v5_phase7"
+    )
+
+    assert len(records) == 1
+    assert records[0]["probs"] == pytest.approx([0.60, 0.25, 0.15])
 
 
 async def test_get_settled_predictions_excludes_unsettled_matches(session: AsyncSession) -> None:
@@ -219,7 +261,7 @@ async def test_get_settled_predictions_excludes_unsettled_matches(session: Async
     )
     await session.commit()
 
-    records = await get_settled_predictions(session)
+    records = await get_settled_predictions(session, model_version="v5_phase7")
     assert records == []
 
 
@@ -250,7 +292,7 @@ async def test_get_settled_predictions_outcome_encoding(session: AsyncSession) -
         )
         await session.commit()
 
-    records = await get_settled_predictions(session)
+    records = await get_settled_predictions(session, model_version="v5_phase7")
     outcomes = {r["outcome"] for r in records}
     assert outcomes == {1, 2}
 
@@ -359,7 +401,7 @@ async def test_full_analysis_capture_flows_into_settlement_join(
     fixture.away_score = 1
     await session.commit()
 
-    records = await get_settled_predictions(session)
+    records = await get_settled_predictions(session, model_version="v5_phase7")
     assert len(records) == 1
     assert records[0]["outcome"] == 0
     assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])

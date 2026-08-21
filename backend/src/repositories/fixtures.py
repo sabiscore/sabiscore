@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Final, List, Sequence
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
@@ -32,6 +32,15 @@ def _validated_limit(limit: int) -> int:
             f"limit must be between 1 and {MAX_SETTLED_FIXTURE_LIMIT}"
         )
     return limit
+
+
+def _validated_model_version(model_version: str) -> str:
+    if not isinstance(model_version, str):
+        raise TypeError("model_version must be a string")
+    normalized = model_version.strip()
+    if not normalized:
+        raise ValueError("model_version must be non-empty")
+    return normalized
 
 
 def build_settled_fixtures_query(
@@ -101,27 +110,27 @@ async def get_settled_fixtures(
 # joining through it here would silently return zero rows forever.
 #
 # A prediction is eligible only when it was created before kickoff. This is
-# enforced inside latest_per_match so the chosen row cannot be a post-kickoff
+# enforced inside ranked_per_match so the chosen row cannot be a post-kickoff
 # re-request.
 
 
 def build_settled_predictions_query(
     *,
+    model_version: str,
     limit: int = 5_000,
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
-    model_version: str | None = None,
 ) -> Select[Any]:
     """Join the most recent logged prediction per settled fixture to its result.
 
     ``model_version`` restricts the join to a single model generation. Pooling
     generations is a zero-fabrication violation: accuracy/RPS computed across
     two models describes a system that never existed, and it silently inflates
-    the sample size gating certification. Production callers pass the active
-    generation; ``None`` is for ad-hoc research queries only.
+    the sample size gating certification. The generation is therefore required
+    even for research queries.
 
-    The filter is applied inside ``latest_per_match`` as well as on the outer
+    The filter is applied inside ``ranked_per_match`` as well as on the outer
     select. Filtering only the outer select would first pick the newest
     prediction per match across *all* generations and then discard it, losing a
     match that holds a valid prediction for the requested generation behind a
@@ -130,21 +139,28 @@ def build_settled_predictions_query(
     """
 
     validated_limit = _validated_limit(limit)
+    validated_model_version = _validated_model_version(model_version)
 
-    latest_per_match_filters = [MatchPredictionLog.created_at < Match.match_date]
-    if model_version:
-        latest_per_match_filters.append(
-            MatchPredictionLog.model_version == model_version
-        )
+    latest_per_match_filters = [
+        MatchPredictionLog.created_at < Match.match_date,
+        MatchPredictionLog.model_version == validated_model_version,
+    ]
 
-    latest_per_match = (
+    ranked_per_match = (
         select(
-            MatchPredictionLog.match_id,
-            func.max(MatchPredictionLog.created_at).label("latest_created_at"),
+            MatchPredictionLog.id.label("prediction_id"),
+            func.row_number()
+            .over(
+                partition_by=MatchPredictionLog.match_id,
+                order_by=(
+                    MatchPredictionLog.created_at.desc(),
+                    MatchPredictionLog.id.desc(),
+                ),
+            )
+            .label("prediction_rank"),
         )
         .join(Match, MatchPredictionLog.match_id == Match.id)
         .where(*latest_per_match_filters)
-        .group_by(MatchPredictionLog.match_id)
         .subquery()
     )
 
@@ -160,21 +176,18 @@ def build_settled_predictions_query(
         .select_from(MatchPredictionLog)
         .join(Match, MatchPredictionLog.match_id == Match.id)
         .join(
-            latest_per_match,
-            and_(
-                MatchPredictionLog.match_id == latest_per_match.c.match_id,
-                MatchPredictionLog.created_at == latest_per_match.c.latest_created_at,
-            ),
+            ranked_per_match,
+            MatchPredictionLog.id == ranked_per_match.c.prediction_id,
         )
         .where(
+            ranked_per_match.c.prediction_rank == 1,
             func.lower(Match.status).in_(SETTLED_MATCH_STATUSES),
             Match.home_score.is_not(None),
             Match.away_score.is_not(None),
+            MatchPredictionLog.model_version == validated_model_version,
         )
     )
 
-    if model_version:
-        statement = statement.where(MatchPredictionLog.model_version == model_version)
     if league:
         statement = statement.where(func.lower(Match.league_id) == league.lower())
     if started_at is not None:
@@ -188,29 +201,29 @@ def build_settled_predictions_query(
 async def get_settled_predictions(
     session: AsyncSession,
     *,
+    model_version: str,
     limit: int = 5_000,
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
-    model_version: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return settled-fixture records shaped for
     ``model_registry.ModelRegistry.walk_forward_validate()``:
     ``{"date": ISO str, "outcome": 0|1|2, "probs": [p_home, p_draw, p_away]}``,
     where outcome is 0=home_win, 1=draw, 2=away_win.
 
-    Pass ``model_version`` to scope the records to one model generation — see
+    ``model_version`` scopes the records to one model generation — see
     ``build_settled_predictions_query`` for why pooling generations is a
     zero-fabrication violation rather than a larger sample.
     """
 
     result = await session.execute(
         build_settled_predictions_query(
+            model_version=model_version,
             limit=limit,
             league=league,
             started_at=started_at,
             ended_at=ended_at,
-            model_version=model_version,
         )
     )
 
@@ -253,11 +266,11 @@ async def get_settled_predictions(
 
 def build_clv_records_query(
     *,
+    model_version: str,
     limit: int = 5_000,
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
-    model_version: str | None = None,
 ) -> Select[Any]:
     """Join the most recent pre-close prediction per match to its latest valid
     pre-kickoff closing line.
@@ -268,11 +281,22 @@ def build_clv_records_query(
     """
 
     validated_limit = _validated_limit(limit)
+    validated_model_version = _validated_model_version(model_version)
 
-    latest_closing_line = (
+    ranked_closing_line = (
         select(
+            MarketSnapshot.id.label("snapshot_id"),
             MarketSnapshot.match_id,
-            func.max(MarketSnapshot.captured_at).label("latest_captured_at"),
+            MarketSnapshot.captured_at,
+            func.row_number()
+            .over(
+                partition_by=MarketSnapshot.match_id,
+                order_by=(
+                    MarketSnapshot.captured_at.desc(),
+                    MarketSnapshot.id.desc(),
+                ),
+            )
+            .label("closing_rank"),
         )
         .join(Match, MarketSnapshot.match_id == Match.id)
         .where(
@@ -280,26 +304,44 @@ def build_clv_records_query(
             MarketSnapshot.coherent.is_(True),
             MarketSnapshot.captured_at < Match.match_date,
         )
-        .group_by(MarketSnapshot.match_id)
+        .subquery()
+    )
+    latest_closing_line = (
+        select(
+            ranked_closing_line.c.snapshot_id,
+            ranked_closing_line.c.match_id,
+            ranked_closing_line.c.captured_at,
+        )
+        .where(ranked_closing_line.c.closing_rank == 1)
         .subquery()
     )
     latest_prediction_filters = [
-        MatchPredictionLog.created_at
-        < latest_closing_line.c.latest_captured_at
+        MatchPredictionLog.created_at < latest_closing_line.c.captured_at,
+        MatchPredictionLog.model_version == validated_model_version,
     ]
-    if model_version:
-        latest_prediction_filters.append(MatchPredictionLog.model_version == model_version)
-    latest_prediction = (
+    ranked_prediction = (
         select(
-            MatchPredictionLog.match_id,
-            func.max(MatchPredictionLog.created_at).label("latest_created_at"),
+            MatchPredictionLog.id.label("prediction_id"),
+            func.row_number()
+            .over(
+                partition_by=MatchPredictionLog.match_id,
+                order_by=(
+                    MatchPredictionLog.created_at.desc(),
+                    MatchPredictionLog.id.desc(),
+                ),
+            )
+            .label("prediction_rank"),
         )
         .join(
             latest_closing_line,
             latest_closing_line.c.match_id == MatchPredictionLog.match_id,
         )
         .where(*latest_prediction_filters)
-        .group_by(MatchPredictionLog.match_id)
+        .subquery()
+    )
+    latest_prediction = (
+        select(ranked_prediction.c.prediction_id)
+        .where(ranked_prediction.c.prediction_rank == 1)
         .subquery()
     )
 
@@ -316,10 +358,7 @@ def build_clv_records_query(
         .join(Match, MatchPredictionLog.match_id == Match.id)
         .join(
             latest_prediction,
-            and_(
-                MatchPredictionLog.match_id == latest_prediction.c.match_id,
-                MatchPredictionLog.created_at == latest_prediction.c.latest_created_at,
-            ),
+            MatchPredictionLog.id == latest_prediction.c.prediction_id,
         )
         .join(
             latest_closing_line,
@@ -327,10 +366,7 @@ def build_clv_records_query(
         )
         .join(
             MarketSnapshot,
-            and_(
-                MarketSnapshot.match_id == latest_closing_line.c.match_id,
-                MarketSnapshot.captured_at == latest_closing_line.c.latest_captured_at,
-            ),
+            MarketSnapshot.id == latest_closing_line.c.snapshot_id,
         )
         .where(
             MarketSnapshot.is_closing_line.is_(True),
@@ -339,10 +375,9 @@ def build_clv_records_query(
             MarketSnapshot.home_implied_prob_devigged.is_not(None),
             MarketSnapshot.draw_implied_prob_devigged.is_not(None),
             MarketSnapshot.away_implied_prob_devigged.is_not(None),
+            MatchPredictionLog.model_version == validated_model_version,
         )
     )
-    if model_version:
-        statement = statement.where(MatchPredictionLog.model_version == model_version)
     if league:
         statement = statement.where(func.lower(Match.league_id) == league.lower())
     if started_at is not None:
@@ -356,11 +391,11 @@ def build_clv_records_query(
 async def get_clv_records(
     session: AsyncSession,
     *,
+    model_version: str,
     limit: int = 5_000,
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
-    model_version: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return prediction/closing-line pairs shaped for
     ``services.clv_service.compute_clv_summary()``:
@@ -369,11 +404,11 @@ async def get_clv_records(
 
     result = await session.execute(
         build_clv_records_query(
+            model_version=model_version,
             limit=limit,
             league=league,
             started_at=started_at,
             ended_at=ended_at,
-            model_version=model_version,
         )
     )
 

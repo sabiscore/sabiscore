@@ -16,6 +16,25 @@ from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_NO_STORE_PATH_PREFIXES = (
+    "/api/v1/betting-intelligence",
+    "/api/v1/fixtures",
+    "/api/v1/full-analysis",
+    "/api/v1/model-performance",
+    "/api/v1/predict",
+    "/api/v1/providers/evidence",
+    "/api/v1/release/data-authority",
+    "/api/v1/release/semantic-identity-review",
+    "/api/v1/value-bet-scan",
+)
+
+
+def _requires_no_store(path: str) -> bool:
+    """Return whether a public evidence or decision response is non-cacheable."""
+
+    return path.startswith(_NO_STORE_PATH_PREFIXES)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Redis-backed fixed-window rate limiting."""
 
@@ -148,10 +167,11 @@ class TimingMiddleware(BaseHTTPMiddleware):
             },
         )
 
-        if request.url.path.startswith(("/api/v1/betting-intelligence", "/api/v1/fixtures")):
+        if _requires_no_store(request.url.path):
             response.headers.setdefault("Cache-Control", "no-store")
         response.headers["X-Process-Time"] = f"{process_time:.6f}"
         return response
+
 
 class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     """Global error handling middleware emitting structured errors."""
@@ -162,7 +182,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             return response
         except Exception:  # pragma: no cover - safety net
             logger.exception("Unhandled application error", extra={"path": request.url.path})
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=500,
                 content={
                     "detail": "Internal server error",
@@ -171,6 +191,10 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                     "timestamp": time.time(),
                 },
             )
+            if _requires_no_store(request.url.path):
+                response.headers["Cache-Control"] = "no-store"
+            return response
+
 
 def setup_middleware(app):
     """Setup all middleware for the FastAPI app"""
