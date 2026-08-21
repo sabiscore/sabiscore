@@ -171,13 +171,17 @@ async def _capture_due_fixtures(session: Any, provider: Any = None) -> dict[str,
         if league is None:
             counts["unsupported_league"] += 1
             continue
-        # A current closing does not itself trigger another provider request.
-        # If another due fixture in the same league triggers a board fetch, the
-        # lifecycle writer may still replace this row with a later valid close.
-        if match.id in already_captured_ids:
-            continue
-        pending_due_ids.add(match.id)
+
+        # Every supported fixture remains a network trigger until kickoff, even
+        # after a current closing row exists.  The lifecycle writer deliberately
+        # accepts an unchanged closing price at a newer timestamp and supersedes
+        # the prior row, which is how the system proves the final observation it
+        # actually captured before kickoff.  Stopping after the first close would
+        # turn an arbitrary first poll inside the closing window into a false
+        # "final" close unless another fixture happened to trigger the board.
         by_league.setdefault(league, []).append(match)
+        if match.id not in already_captured_ids:
+            pending_due_ids.add(match.id)
 
     if not by_league:
         return counts
