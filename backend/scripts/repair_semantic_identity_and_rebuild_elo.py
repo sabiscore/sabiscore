@@ -84,7 +84,9 @@ async def _run(args: argparse.Namespace) -> int:
             if args.review:
                 # Force a server-enforced read-only transaction on PostgreSQL.
                 if session.bind is None or session.bind.dialect.name != "postgresql":
-                    raise RuntimeError("production semantic repair review requires PostgreSQL")
+                    raise RuntimeError(
+                        "production semantic repair review requires PostgreSQL"
+                    )
                 await session.execute(text("SET TRANSACTION READ ONLY"))
                 manifest = await build_semantic_identity_repair_manifest(session)
                 complete = bool(manifest.summary.get("complete"))
@@ -110,14 +112,15 @@ async def _run(args: argparse.Namespace) -> int:
                 await session.rollback()
                 return 0
 
-            manifest_sha = _validate_sha256(args.manifest_sha256, field="--manifest-sha256")
+            manifest_sha = _validate_sha256(
+                args.manifest_sha256, field="--manifest-sha256"
+            )
             plan_sha = _validate_sha256(args.plan_sha256, field="--plan-sha256")
             if not args.authorization_id or not args.authorization_id.strip():
                 raise RuntimeError("--authorization-id is required for --apply")
             if args.confirm != _CONFIRMATION:
                 raise RuntimeError(
-                    "--apply requires the literal confirmation token "
-                    f"{_CONFIRMATION}"
+                    f"--apply requires the literal confirmation token {_CONFIRMATION}"
                 )
 
             try:
@@ -138,6 +141,8 @@ async def _run(args: argparse.Namespace) -> int:
                         "authorization_id": args.authorization_id.strip(),
                         "manifest_sha256": manifest_sha,
                         "plan_sha256": plan_sha,
+                        "created_team_count": len(result.created_team_ids),
+                        "created_team_ids": list(result.created_team_ids),
                         "repaired_matches": result.repaired_matches,
                         "rebuilt_matches": result.rebuilt_matches,
                         "rebuilt_snapshots": result.rebuilt_snapshots,

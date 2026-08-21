@@ -98,7 +98,7 @@ async def test_manifest_resolves_known_residuals_and_is_hash_stable(
     first = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
     second = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
 
-    assert first.schema_version == 2
+    assert first.schema_version == 3
     assert first.manifest_sha256 == second.manifest_sha256
     assert len(first.manifest_sha256) == 64
     assert first.summary["affected_matches"] == 2
@@ -107,7 +107,10 @@ async def test_manifest_resolves_known_residuals_and_is_hash_stable(
     assert first.summary["source_records_missing"] == 0
     assert first.summary["source_evidence_hashed"] == 2
     assert first.summary["replay_required_matches"] == 2
+    assert first.summary["proposed_team_creations"] == 0
+    assert first.summary["proposed_team_creation_references"] == 0
     assert first.summary["complete"] is True
+    assert first.proposed_team_creations == ()
 
     by_id = {entry.match_id: entry for entry in first.entries}
     west_ham = by_id[west_ham_match_id]
@@ -119,7 +122,10 @@ async def test_manifest_resolves_known_residuals_and_is_hash_stable(
     assert west_ham.source_fixture_id == west_ham_match_id
     assert west_ham.source_evidence_sha256 is not None
     assert len(west_ham.source_evidence_sha256) == 64
-    assert west_ham.source_evidence_sha256 == by_id[west_ham_match_id].source_evidence_sha256
+    assert (
+        west_ham.source_evidence_sha256
+        == by_id[west_ham_match_id].source_evidence_sha256
+    )
     assert west_ham.repair_reason == "home_cross_league_identity"
     assert west_ham.replay_required is True
     assert west_ham.blockers == ()
@@ -147,7 +153,9 @@ async def test_manifest_blocks_when_persisted_score_disagrees_with_source(
     match.home_score = 9
     await session.commit()
 
-    manifest = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
+    manifest = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
     entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
 
     assert entry.repair_ready is False
@@ -160,7 +168,7 @@ async def test_manifest_blocks_when_persisted_score_disagrees_with_source(
     assert manifest.summary["complete"] is False
 
 
-async def test_manifest_blocks_when_source_team_cannot_resolve_in_match_league(
+async def test_manifest_proposes_missing_cross_league_target_deterministically(
     session: AsyncSession,
     tmp_path: Path,
 ) -> None:
@@ -172,14 +180,100 @@ async def test_manifest_blocks_when_source_team_cannot_resolve_in_match_league(
     await session.delete(west_ham)
     await session.commit()
 
-    manifest = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
+    manifest = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
+    entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
+
+    assert entry.repair_ready is True
+    assert entry.repair_status == "READY"
+    assert entry.target_home_team_id == "fdco-team-epl-west_ham"
+    assert entry.blockers == ()
+    assert entry.source_evidence_sha256 is not None
+    assert manifest.summary["proposed_team_creations"] == 1
+    assert manifest.summary["proposed_team_creation_references"] == 1
+    proposal = manifest.proposed_team_creations[0]
+    assert proposal.team_id == "fdco-team-epl-west_ham"
+    assert proposal.team_name == "West Ham"
+    assert proposal.league_id == "EPL"
+    assert proposal.participant_references == 1
+    assert proposal.source_fixture_ids == (west_ham_match_id,)
+    assert proposal.source_evidence_sha256s == (entry.source_evidence_sha256,)
+
+
+async def test_manifest_does_not_create_an_unaffected_unresolved_opponent(
+    session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    _write_epl_source(tmp_path)
+    west_ham_match_id, _ = await _seed_common(session)
+
+    arsenal = await session.get(Team, "arsenal")
+    assert arsenal is not None
+    await session.delete(arsenal)
+    await session.commit()
+
+    manifest = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
     entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
 
     assert entry.repair_ready is False
-    assert entry.repair_status == "BLOCKED"
-    assert entry.target_home_team_id is None
+    assert entry.target_away_team_id is None
+    assert "target_away_unresolved" in entry.blockers
+    assert manifest.proposed_team_creations == ()
+
+
+async def test_manifest_blocks_a_conflicting_deterministic_team_id(
+    session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    _write_epl_source(tmp_path)
+    west_ham_match_id, _ = await _seed_common(session)
+
+    west_ham = await session.get(Team, "west-ham")
+    assert west_ham is not None
+    await session.delete(west_ham)
+    session.add(
+        Team(
+            id="fdco-team-epl-west_ham",
+            name="Conflicting Identity",
+            league_id="EPL",
+        )
+    )
+    await session.commit()
+
+    manifest = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
+    entry = {row.match_id: row for row in manifest.entries}[west_ham_match_id]
+
+    assert entry.repair_ready is False
     assert "target_home_unresolved" in entry.blockers
-    assert entry.source_evidence_sha256 is not None
+    assert "proposed_team_id_conflict" in entry.blockers
+    assert manifest.proposed_team_creations == ()
+
+
+async def test_manifest_hash_changes_when_team_creation_enters_authorization(
+    session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    _write_epl_source(tmp_path)
+    await _seed_common(session)
+    without_creation = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
+
+    west_ham = await session.get(Team, "west-ham")
+    assert west_ham is not None
+    await session.delete(west_ham)
+    await session.commit()
+    with_creation = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
+
+    assert without_creation.manifest_sha256 != with_creation.manifest_sha256
+    assert with_creation.summary["complete"] is True
 
 
 async def test_manifest_is_read_only(
@@ -193,7 +287,9 @@ async def test_manifest_is_read_only(
     assert before is not None
     stored_home = before.home_team_id
 
-    manifest = await build_semantic_identity_repair_manifest(session, cache_dir=tmp_path)
+    manifest = await build_semantic_identity_repair_manifest(
+        session, cache_dir=tmp_path
+    )
     assert manifest.summary["repair_ready_matches"] == 2
 
     session.expire_all()

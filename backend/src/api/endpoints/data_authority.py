@@ -1,4 +1,5 @@
 """Read-only production data-authority evidence for release verification."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -14,7 +15,9 @@ from ...services.elo_recovery_health_service import elo_recovery_health
 from ...services.historical_identity_repair_manifest_service import (
     build_semantic_identity_repair_manifest,
 )
-from ...services.historical_identity_repair_service import build_semantic_elo_repair_plan
+from ...services.historical_identity_repair_service import (
+    build_semantic_elo_repair_plan,
+)
 
 router = APIRouter(prefix="/release", tags=["release-verification"])
 
@@ -57,7 +60,9 @@ def _proposed_replacement_summary(entries: Iterable[object]) -> list[dict[str, o
             "source_team_name": source_name or None,
             "participant_references": count,
         }
-        for (stored_id, stored_name, target_id, source_name), count in sorted(counts.items())
+        for (stored_id, stored_name, target_id, source_name), count in sorted(
+            counts.items()
+        )
     ]
 
 
@@ -108,8 +113,9 @@ async def semantic_repair_review(
 
     The PostgreSQL transaction is server-enforced read-only and rolled back before
     returning. The response exposes the immutable semantic-manifest hash, summary,
-    aggregated participant replacements, and (only when the manifest is complete)
-    the deterministic Elo replay-plan hash/boundaries. It never authorizes apply.
+    aggregated participant replacements, source-linked Team creations, and (only
+    when the manifest is complete) the deterministic Elo replay-plan
+    hash/boundaries. It never authorizes apply.
     """
     bind = db.get_bind()
     dialect = bind.dialect.name if bind is not None else "unknown"
@@ -122,6 +128,7 @@ async def semantic_repair_review(
             "manifest": None,
             "replay_plan": None,
             "proposed_replacements": [],
+            "proposed_team_creations": [],
             "authorization": {
                 "review_ready": False,
                 "production_mutation_authorized": False,
@@ -138,6 +145,9 @@ async def semantic_repair_review(
             and summary.get("repair_blocked_matches") == 0
         )
         replacements = _proposed_replacement_summary(manifest.entries)
+        team_creations = [
+            proposal.as_dict() for proposal in manifest.proposed_team_creations
+        ]
 
         replay_plan: dict[str, object] | None = None
         if review_ready:
@@ -156,6 +166,7 @@ async def semantic_repair_review(
             },
             "replay_plan": replay_plan,
             "proposed_replacements": replacements,
+            "proposed_team_creations": team_creations,
             "authorization": {
                 "review_ready": review_ready,
                 "production_mutation_authorized": False,

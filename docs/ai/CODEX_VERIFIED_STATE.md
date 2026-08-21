@@ -1,9 +1,39 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-14
+Last reviewed: 2026-08-21
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## SAB-22 manifest-v3 candidate evidence from 2026-08-21
+
+- Candidate work is isolated on `fix/sab22-semantic-repair-v3`, based on exact
+  `origin/master` SHA `317337f61a0605afc2c3c8a95a019013c1587ace`.
+  The root checkout's unrelated `.gitignore` modification remains untouched.
+- The last live manifest-v2 review reported 518 affected EPL matches, 236
+  repair-ready, and 282 blocked. Source rows existed for all 518. The measured
+  unresolved names were West Ham, Man City, and Ipswich; these are the only
+  identity cases addressed by this candidate.
+- Manifest schema v3 hashes deterministic source-linked Team creations. The
+  apply service locks Team/Match/Elo tables, creates reviewed targets before
+  optimistic Match updates, verifies exact counts, and retains full chronological
+  Elo replay. The read-only Next.js proxy now validates the response contract.
+- Fresh local evidence: focused backend identity/manifest/apply/endpoint suite
+  `62 passed`; full backend suite `1551 passed, 14 skipped`; full web Vitest
+  `208 passed`; scraper suite `20 passed`; `/intelligence` Playwright desktop and
+  mobile smoke `4 passed`; web lint, type-check, production build, scoped Ruff,
+  mypy ceiling (`769 <= 784`), OpenAPI (`81 paths`), Docker Compose syntax, and
+  Gitleaks current-tree scan passed. Docker image and disposable-PostgreSQL
+  Alembic gates remain unavailable locally.
+- A read-only Render export of the production identity population was loaded into
+  an ignored, disposable local SQLite snapshot and deleted after verification.
+  Manifest v3 reported `affected_matches: 518`, `repair_ready_matches: 518`,
+  `repair_blocked_matches: 0`, `source_records_missing: 0`, and exactly one
+  `fdco-team-epl-west_ham` creation with 266 participant references. This is
+  local candidate evidence, not a live deployed-v3 review or authorization hash.
+- No production data was mutated. Class-C apply remains blocked until the merged
+  exact SHA produces a complete live manifest and replay plan and a separate
+  authorization binds both hashes plus backup and rollback evidence.
 
 ## Integration pass evidence from 2026-08-14 (post-`e0f89ae`)
 

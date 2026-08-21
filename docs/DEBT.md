@@ -56,12 +56,14 @@ solving one well likely informs the other.
 
 ---
 
-## 34. Semantic-identity repair is manifest-complete and hash-gated; `--apply` still requires a live, human-reviewed run — NEXT (operator-gated)
+## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — NEXT
 
-**Tier:** `NEXT`. Code complete, tested, and merged 2026-08-20. Blocked only
-on an operator running `--review` against production and supplying the two
-resulting SHA-256 digests plus an authorization id — nothing here is
-agent-doable without live production credentials this session doesn't have.
+**Tier:** `NEXT`. The production v2 review on 2026-08-21 found 518 affected EPL
+matches: 236 repair-ready and 282 blocked. The measured blockers are a missing
+same-league West Ham Team identity plus exact/alias ambiguity for Man City and a
+curated-alias miss for Ipswich. Manifest v3 resolves those cases in code without
+broad fuzzy matching. It must still pass CI, deploy on one exact SHA, and produce
+a complete live review before any Class-C authorization can be requested.
 
 **Context.** `historical_identity_audit_service.py` (PR #40) already finds
 semantic-identity drift beyond the simple self-play case closed in item 23 —
@@ -74,7 +76,8 @@ repair it:
    league/date/score agreement against the persisted `Match`, and
    re-resolves both team names under today's league-scoped `TeamIndex`. An
    entry is `repair_ready` only when the source agrees and both teams
-   resolve to two *distinct* ids; every other case is a named blocker
+   resolve to two *distinct* ids or a schema-v3 deterministic Team creation.
+   Each creation and its source evidence are hashed; every other case is a named blocker
    (`source_score_mismatch`, `target_home_unresolved`,
    `target_identity_collision`, …), never a guess. The whole manifest is
    canonicalized and SHA-256 hashed. Read-only — `SET TRANSACTION READ ONLY`,
@@ -91,7 +94,7 @@ repair it:
 **Why `--apply` is intentionally not runnable by copying a value in.**
 `apply_semantic_identity_and_rebuild_elo()` re-derives both the manifest and
 the replay-plan SHA-256 *inside* the transaction, under a PostgreSQL
-`LOCK TABLE matches, elo_rating_snapshots IN SHARE ROW EXCLUSIVE MODE`, and
+`LOCK TABLE teams, matches, elo_rating_snapshots IN SHARE ROW EXCLUSIVE MODE`, and
 aborts if either digest has moved since review — so a value copied from an
 earlier review, or a manifest that drifted because new matches synced in the
 meantime, cannot silently apply against a different reality than what was
@@ -103,10 +106,12 @@ per-match team-id/league/timestamp integrity, and a final
 `audit_historical_semantic_identity()` re-run that must return zero residual
 findings.
 
-**Trigger to close:** an operator runs
+**Trigger to close:** after the schema-v3 release reaches production, an operator runs
 `python scripts/repair_semantic_identity_and_rebuild_elo.py --review`
-against production, confirms `blocked: false` and `complete: true`, records
-the two printed SHA-256 digests, then runs `--apply` with those digests plus
+against production, confirms `affected_matches: 518`, `repair_ready_matches:
+518`, `blocked: false`, `complete: true`, the exact proposed Team creation and
+participant replacements, and records the two printed SHA-256 digests. A later
+separately-authorized run may use `--apply` with those digests plus
 a real authorization id. Until then this is inert, reviewable code — no
 production data has been touched by this item.
 

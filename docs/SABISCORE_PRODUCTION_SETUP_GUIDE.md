@@ -1,6 +1,6 @@
 ﻿# SabiScore Production Setup Guide
 
-Last updated: 2026-08-16
+Last updated: 2026-08-21
 
 This is the authoritative setup and deployment guide for the finalized production shape.
 
@@ -79,6 +79,40 @@ python -m pytest tests/test_secret_safety.py tests/test_database_migration_harde
 ```bash
 gitleaks detect --source . --redact --verbose
 ```
+
+## SAB-22 semantic identity repair
+
+The release review surface is read-only:
+
+```text
+GET /api/v1/release/semantic-repair-review
+GET /api/release/semantic-repair-review
+```
+
+Both responses use `Cache-Control: no-store`. Manifest schema v3 includes
+`proposed_team_creations`; each deterministic Team id, same-league name, source
+fixture id, evidence hash, and participant-reference count is part of the
+manifest SHA-256. A missing unaffected opponent, conflicting deterministic id,
+source mismatch, or identity collision keeps the review blocked.
+
+Run review from `backend/` only against the authorized production database:
+
+```powershell
+python scripts/repair_semantic_identity_and_rebuild_elo.py --review
+```
+
+Review must report the expected affected population, zero missing source rows,
+zero blockers, `complete: true`, the exact proposed Team creation/replacements,
+and both the manifest and replay-plan SHA-256 values. Review never commits.
+
+Production apply is a separate Class-C change. It requires a database
+backup/snapshot reference, rollback procedure, authorization id, the exact live
+hashes, and the literal confirmation token. The transaction locks `teams`,
+`matches`, and `elo_rating_snapshots`; creates reviewed Team targets; performs
+optimistic Match updates; runs the full chronological Elo rebuild; and commits
+once only after every postcondition passes. Do not copy hashes from an older
+deployment or run `--apply` merely because code and infrastructure health are
+green.
 
 ## Install
 
