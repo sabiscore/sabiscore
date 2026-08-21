@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
 from ...services.elo_recovery_health_service import elo_recovery_health
+from ...services.historical_identity_repair_manifest_service import (
+    build_semantic_identity_repair_manifest,
+)
 
 router = APIRouter(prefix="/release", tags=["release-verification"])
 
@@ -50,6 +53,41 @@ async def data_authority(
             "clv": "NOT_EVALUATED",
             "staking": "NOT_AUTHORIZED",
         },
+    }
+
+
+@router.get("/semantic-repair-manifest")
+async def semantic_repair_manifest(
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Expose the immutable SAB-22 repair authorization artifact, read-only.
+
+    The existing manifest builder cross-checks persisted historical findings
+    against the committed football-data.co.uk source corpus and current
+    league-scoped Team identities. This route intentionally returns only the
+    deterministic manifest identity and aggregate gate summary; per-match repair
+    entries remain operator evidence rather than a large public API payload.
+
+    This endpoint never mutates Match, Team, or Elo state and never authorizes a
+    Class-C repair by itself. ``authorization_ready`` only means the dry-run
+    evidence set has zero missing/blocked rows and is eligible for explicit human
+    review plus backup/rollback authorization.
+    """
+    manifest = await build_semantic_identity_repair_manifest(db)
+    summary = dict(manifest.summary)
+    authorization_ready = (
+        bool(summary.get("complete"))
+        and int(summary.get("source_records_missing", 0)) == 0
+        and int(summary.get("repair_blocked_matches", 0)) == 0
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "read_only": True,
+        "manifest_schema_version": manifest.schema_version,
+        "repair_manifest_sha256": manifest.manifest_sha256,
+        "summary": summary,
+        "authorization_ready": authorization_ready,
+        "production_mutation_authorized": False,
     }
 
 
