@@ -8,6 +8,7 @@ modified: that would make promotion non-atomic and rollback unverifiable.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,37 @@ MANIFEST_NAME = "active_generation.json"
 UNVERIFIED = "UNVERIFIED"
 CERTIFIED = "CERTIFIED"
 ALLOWED_CERTIFICATION_STATES = frozenset({UNVERIFIED, CERTIFIED})
+
+
+def _load_feature_schema_registry() -> Any:
+    """Return the feature registry, working in both of this module's load contexts.
+
+    ``scripts/verify_active_artifacts.py`` deliberately loads this file
+    standalone via ``spec_from_file_location`` so the Render build gate never
+    pulls in the application import chain — importing ``src.models`` as a
+    package opens a database connection at module scope, which a build step must
+    not require. A relative import therefore raises ``ImportError`` there while
+    working normally in the app.
+
+    The registry itself is stdlib-only, so loading the sibling file directly is
+    safe. The package import is attempted first so the common path shares one
+    module object rather than duplicating the feature lists.
+    """
+
+    try:
+        from . import feature_registry  # type: ignore[no-redef]
+
+        return feature_registry
+    except ImportError:
+        pass
+
+    path = Path(__file__).resolve().parent / "feature_registry.py"
+    spec = importlib.util.spec_from_file_location("_sabiscore_feature_registry", path)
+    if spec is None or spec.loader is None:
+        raise ActiveGenerationError("Unable to load the canonical feature registry")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _sha256(path: Path) -> str:
@@ -91,6 +123,7 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
         }
 
     _verify_certification_claim(payload, root)
+    _verify_feature_contract(payload, verified)
 
     return {
         **payload,
@@ -153,6 +186,52 @@ def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
         raise ActiveGenerationError(
             f"Certification evidence has failing gates: {', '.join(failed)}"
         )
+
+
+def _verify_feature_contract(payload: dict[str, Any], artifacts: dict[str, dict[str, Any]]) -> None:
+    """Reject a manifest whose artifacts cannot honour its declared feature contract.
+
+    This is the same asymmetry ``_verify_certification_claim`` closes for the
+    verdict, one field over: the artifacts are tamper-evident but
+    ``feature_schema_version`` was unvalidated free text, and six public
+    consumers republish it as provenance. Nothing downstream catches a relabel
+    either — ``prediction.py`` answers a feature-width mismatch with
+    ``_fallback_result()`` rather than raising, so claiming ``phase8_89`` over a
+    68-column generation would silently degrade every prediction to fallback
+    while ``/health`` reported the false schema as fact.
+
+    The per-league metadata was SHA-256 verified by the caller immediately above,
+    so its ``feature_count`` is trustworthy evidence here and costs one small
+    JSON read per league — no pickle is deserialised to check a shape.
+    """
+
+    registry = _load_feature_schema_registry()
+    declared = payload.get("feature_schema_version")
+    try:
+        contract = registry.resolve_feature_schema(declared)
+    except registry.UnknownFeatureSchemaError as exc:
+        raise ActiveGenerationError(str(exc)) from exc
+
+    expected = len(contract)
+    for league, entry in sorted(artifacts.items()):
+        try:
+            metadata = json.loads(entry["metadata_path"].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ActiveGenerationError(
+                f"Active generation metadata is unreadable for {league}"
+            ) from exc
+        count = metadata.get("feature_count") if isinstance(metadata, dict) else None
+        # bool is an int subclass; `feature_count: true` must not satisfy this.
+        if not isinstance(count, int) or isinstance(count, bool):
+            raise ActiveGenerationError(
+                f"Active generation metadata for {league} declares no integer feature_count"
+            )
+        if count != expected:
+            raise ActiveGenerationError(
+                f"Feature contract mismatch for {league}: manifest declares "
+                f"{str(declared)!r} ({expected} features) but its artifact metadata "
+                f"declares {count}"
+            )
 
 
 def active_artifact_path(league_slug: str, models_dir: Path | None = None) -> Path | None:

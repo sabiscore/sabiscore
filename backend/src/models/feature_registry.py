@@ -390,6 +390,49 @@ DEFAULT_FEATURE_VALUES_89: Dict[str, float] = {
 DEFAULT_FEATURE_VALUES_86 = DEFAULT_FEATURE_VALUES_89
 
 
+# ── Declared feature-schema contracts ────────────────────────────────────────
+# `active_generation.json` names the contract its artifacts were trained against
+# in `feature_schema_version`. Until this map existed that string resolved to
+# nothing: the manifest hash-protects every artifact's bytes while the contract
+# describing their shape was unvalidated free text. Six public consumers
+# (`/health`, `/api/v1/models/status`, `legacy_endpoints`, and every prediction's
+# provenance block) republish it as fact, and `prediction.py` answers a width
+# mismatch with `_fallback_result()` rather than raising — so relabelling a
+# 68-column generation as 89 would silently degrade every prediction to fallback
+# while the API kept reporting the false schema. Keys are the only strings a
+# manifest may declare; add one here before shipping an artifact that claims it.
+FEATURE_SCHEMA_VERSIONS: Dict[str, List[str]] = {
+    "phase7_68": CANONICAL_FEATURES_68,
+    "apex_v1_68": APEX_FEATURES_68,
+    "phase8_89": CANONICAL_FEATURES_89,
+    "apex_v1_89": APEX_FEATURES_89,
+}
+
+
+class UnknownFeatureSchemaError(ValueError):
+    """A declared feature_schema_version matches no registered contract."""
+
+
+def resolve_feature_schema(version: object) -> List[str]:
+    """Return the ordered feature contract a declared schema version names.
+
+    Raises rather than returning a permissive default: an unrecognised schema
+    string is exactly the case where the caller's belief about vector shape is
+    least trustworthy, and a fallback would launder that into a confident answer.
+    """
+
+    if not isinstance(version, str) or not version.strip():
+        raise UnknownFeatureSchemaError("feature_schema_version is missing or empty")
+    key = version.strip()
+    try:
+        return FEATURE_SCHEMA_VERSIONS[key]
+    except KeyError as exc:
+        raise UnknownFeatureSchemaError(
+            f"Unknown feature_schema_version {key!r}; expected one of "
+            f"{sorted(FEATURE_SCHEMA_VERSIONS)}"
+        ) from exc
+
+
 def active_canonical_features(use_phase7: bool, use_phase8: bool = False) -> List[str]:
     if use_phase8:
         return list(CANONICAL_FEATURES_89)
