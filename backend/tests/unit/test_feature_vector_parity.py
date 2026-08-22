@@ -24,10 +24,14 @@ PROVEN — training and serving agree on:
 
 NOT PROVEN, and named rather than silently skipped:
   * ``FeatureTransformer.engineer_features()`` — the *second* serving
-    implementation (data/transformers.py, serving insights/engine.py). It
-    recomputes temporal/league/combination with its own inline logic rather
-    than calling the shared helpers, so it cannot enter this harness without
-    first being unified. That is the open half of DEBT item 36.
+    implementation (data/transformers.py, serving insights/engine.py). §7.2
+    unified it onto the same shared helpers the other two pipelines use, and
+    it is proven group-by-group against them below (league, temporal,
+    combination, last-5 form, market) — but not via the SHA-256 vector hash
+    above, because its inputs differ (an already-engineered features row, not
+    raw match history), so it cannot enter ``PARITY_SCOPE`` directly. The 6
+    goals/gd fields remain a replicated direct assignment, not a shared-
+    function call, in all three pipelines — see DEBT item 36.
   * backtest. ``model_registry.walk_forward_validate()`` consumes
     pre-computed ``{date, outcome, probs}`` records and has **no independent
     feature-computation step**. There is structurally nothing to compare, so
@@ -338,17 +342,25 @@ def test_backtest_has_no_independent_feature_computation_to_compare() -> None:
         )
 
 
-# -- The second serving implementation (7.2 unification) --------------------
+# -- The second serving implementation (7.2 unification, + WP-18/WP-A) ------
 # FeatureTransformer._project_to_canonical_features() kept its own inline
-# copies of the temporal, league and combination arithmetic until it was
-# unified onto the shared registry helpers. These tests are the evidence that
-# the unification is behaviour-preserving, and they extend 7.3 coverage to the
-# serving path insights/engine.py uses.
+# copies of the temporal, league and combination arithmetic until §7.2 (PR
+# #71) unified them onto the shared registry helpers. Its last-5-form and
+# market-block calls were unified earlier (WP-18/WP-A) but were never
+# regression-tested against the shared helpers until now. These tests are the
+# evidence that both the recent and prior unifications are behaviour-
+# preserving, and they extend 7.3 coverage to the serving path
+# insights/engine.py uses.
 
 #: Fixed goal averages, so the combination features have non-trivial inputs
 #: rather than all landing on a shared registry default.
 _HOME_GOALS_FOR, _HOME_GOALS_AGAINST = 1.83, 1.12
 _AWAY_GOALS_FOR, _AWAY_GOALS_AGAINST = 1.44, 1.61
+
+#: Same reasoning for last-5 form: non-default rate inputs, so the parity
+#: check exercises real arithmetic rather than the round()/estimate defaults.
+_HOME_FORM_5, _HOME_WIN_RATE_5 = 0.667, 0.667
+_AWAY_FORM_5, _AWAY_WIN_RATE_5 = 0.333, 0.2
 
 
 def _transformer_canonical(league: str, kickoff: datetime) -> Dict[str, float]:
@@ -368,6 +380,10 @@ def _transformer_canonical(league: str, kickoff: datetime) -> Dict[str, float]:
         "home_goals_conceded_per_match_5": _HOME_GOALS_AGAINST,
         "away_goals_per_match_5": _AWAY_GOALS_FOR,
         "away_goals_conceded_per_match_5": _AWAY_GOALS_AGAINST,
+        "home_form_5": _HOME_FORM_5,
+        "home_win_rate_5": _HOME_WIN_RATE_5,
+        "away_form_5": _AWAY_FORM_5,
+        "away_win_rate_5": _AWAY_WIN_RATE_5,
     }])
     match_data = {
         "schedule": {"date": kickoff.isoformat(), "league": league},
@@ -431,6 +447,36 @@ def test_second_serving_implementation_matches_the_shared_combination_helper() -
     )
 
     assert expected, "fixture assumption: the helper returns the four fields"
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), name
+
+
+def test_second_serving_implementation_matches_the_shared_last5_form_helper() -> None:
+    """Both sides' form/wins/draws/losses, from real non-default rate inputs.
+
+    FeatureTransformer never has real wins_5/draws_5/losses_5 counts available
+    on an already-engineered features row (see the WP-18 comment at
+    transformers.py's call site), so it always takes
+    derive_last5_form_features()'s round()/estimate branch -- this test calls
+    the helper the same way, with no wins_5/draws_5/losses_5 kwargs.
+    """
+    canonical = _transformer_canonical("EPL", _KICKOFF)
+    expected = {
+        **derive_last5_form_features(_HOME_FORM_5, _HOME_WIN_RATE_5, is_home=True),
+        **derive_last5_form_features(_AWAY_FORM_5, _AWAY_WIN_RATE_5, is_home=False),
+    }
+
+    assert expected, "fixture assumption: the helper returns the 8 fields"
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), name
+
+
+def test_second_serving_implementation_matches_the_shared_market_helper() -> None:
+    """All 14 market fields -- a direct passthrough of derive_market_features()."""
+    canonical = _transformer_canonical("EPL", _KICKOFF)
+    expected = derive_market_features(*_ODDS)
+
+    assert expected, "fixture assumption: the helper returns the 14 fields"
     for name, value in expected.items():
         assert float(canonical[name]) == pytest.approx(float(value)), name
 
