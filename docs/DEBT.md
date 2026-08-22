@@ -172,14 +172,18 @@ correctly lands on `UNDECLARED`, because it genuinely has no entry in
 are product decisions, and a rule that guessed them would be exactly the
 fabrication this item warns against.
 
-**Staleness is now machine-enforced.** `active_generation.py`'s
-`_verify_feature_contract_freshness()` regenerates the contract on every
-`load_active_generation()` and fails closed if the checked-in copy differs —
-so the Render build gate (`verify_active_artifacts.py`) catches drift, which is
-precisely the failure mode that produced this item. Verified by watching it
-fail: injecting a fabricated `"unit": "goals"` into one record made both the
-build gate (exit 1) and `test_committed_contract_matches_a_fresh_rebuild` fail,
-then pass again on restore.
+**Staleness is now machine-enforced — at build time, not on every load.**
+`active_generation.py`'s `verify_feature_contract_freshness()` regenerates
+the contract and fails closed if the checked-in copy differs, but it is
+called only from the Render build gate (`scripts/verify_active_artifacts.py`),
+deliberately **not** from `load_active_generation()` itself (the startup and
+settlement/staking path) — coupling a derived documentation file's freshness
+check to the running-service path would let a stale or missing contract
+crash-loop production over metadata instead of failing a deploy, the same
+shape as the vΩ.47 incident. Verified by watching it fail: injecting a
+fabricated `"unit": "goals"` into one record made both the build gate (exit 1)
+and `test_committed_contract_matches_a_fresh_rebuild` fail, then pass again on
+restore.
 
 ### What remains open
 
@@ -189,8 +193,9 @@ then pass again on restore.
    `serving_source` and `shadow_source` are resolved per feature by
    `_training_source()` / `_serving_source()` / `_shadow_source()` in
    `models/feature_registry.py`, each returning a real grep-verified code path
-   or `UNDECLARED`. On `phase7_68`: 30/68 have a training source, 28/68 a
-   serving source; on `phase8_89` 15/89 additionally have a shadow source (the
+   or `UNDECLARED`. On `phase7_68`: 30/68 have a training source, 44/68 a
+   serving source (raised from 28/68 by the §7.2 unification below); on
+   `phase8_89` 15/89 additionally have a shadow source (the
    Pi/Berrar/EWMA block item 29 proved replayable — the 6 unresolved Phase 8
    fields correctly get none). `offline_backtest_source` stays in the blanket
    list and is expected to stay there permanently: `walk_forward_validate()`
