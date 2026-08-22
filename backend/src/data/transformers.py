@@ -11,13 +11,22 @@ from ..models.feature_registry import (
     CANONICAL_FEATURES_68,
     DEFAULT_FEATURE_VALUES_68,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
+    UnknownFeatureSchemaError,
+    derive_apex_market_features,
     derive_combination_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
     derive_temporal_features,
     has_league_rate_priors,
+    is_apex_schema,
+    resolve_feature_schema,
 )
+
+# Default serving schema when nothing declares otherwise — today's exact
+# CANONICAL_FEATURES_68 behavior, preserved as a literal string so a future
+# schema-resolution failure always falls back to this, never a guess.
+_DEFAULT_FEATURE_SCHEMA_VERSION = "phase7_68"
 
 
 logger = logging.getLogger(__name__)
@@ -135,11 +144,36 @@ class FeatureTransformer:
     Produces canonical feature vectors aligned with production model metadata.
     """
 
-    def __init__(self, *, allow_legacy_defaults: bool = False) -> None:
+    def __init__(
+        self, *, allow_legacy_defaults: bool = False, schema_version: str | None = None
+    ) -> None:
         self.scaler = StandardScaler()
-        self.expected_columns = list(CANONICAL_FEATURES_68)
-        self.feature_completeness: float = 1.0
         self.allow_legacy_defaults = allow_legacy_defaults
+        self.schema_version = schema_version or self._resolve_active_schema_version()
+        try:
+            self.expected_columns = list(resolve_feature_schema(self.schema_version))
+        except UnknownFeatureSchemaError:
+            self.schema_version = _DEFAULT_FEATURE_SCHEMA_VERSION
+            self.expected_columns = list(CANONICAL_FEATURES_68)
+        self.feature_completeness: float = 1.0
+
+    @staticmethod
+    def _resolve_active_schema_version() -> str:
+        """The active generation's declared schema, or today's default on any hiccup.
+
+        docs/DEBT.md item 37's serving wire-up: every existing caller
+        (``FeatureTransformer()`` with no args) must keep resolving to
+        exactly ``CANONICAL_FEATURES_68`` — the only generation active today
+        — so any failure here (missing manifest, import cycle) falls back to
+        the literal default rather than raising out of a constructor no
+        caller expects to fail.
+        """
+        try:
+            from ..models.active_generation import active_feature_schema_version
+
+            return active_feature_schema_version()
+        except Exception:
+            return _DEFAULT_FEATURE_SCHEMA_VERSION
 
     def _fail_closed_enabled(self) -> bool:
         if self.allow_legacy_defaults:
@@ -329,8 +363,12 @@ class FeatureTransformer:
         home_odds = odds.get("home_win", 2.5)
         draw_odds = odds.get("draw", 3.3)
         away_odds = odds.get("away_win", 2.8)
+        derive_market = (
+            derive_apex_market_features if is_apex_schema(self.schema_version)
+            else derive_market_features
+        )
         try:
-            market_features = derive_market_features(home_odds, draw_odds, away_odds)
+            market_features = derive_market(home_odds, draw_odds, away_odds)
         except ValueError as exc:
             raise DataUnavailableError(
                 "Malformed 1X2 market; refusing to repair invalid prices",

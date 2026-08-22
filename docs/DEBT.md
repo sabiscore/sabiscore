@@ -90,10 +90,14 @@ candidate from being blocked by an unfixable accounting term.
 
 ## 37. `train_on_real_matches.py`'s default market block does not match the shipped artifacts' own recorded one
 
-**Tier:** `NEXT` — **blocks Phase 4 outright.** Not a live serving defect
-(nothing retrains automatically), but a structural deadlock: the promotion
-gate already refuses every candidate this script produces, and will keep
-refusing until the schema disagreement is resolved. See the correction below.
+**Tier:** `BLOCKED-ON-DATA` (was `NEXT`) — **the mechanical deadlock is
+RESOLVED as of 2026-08-22**; see "Serving wire-up SHIPPED" below. The schema
+disagreement that made every candidate auto-unpromotable is fixed: serving now
+dispatches on the active generation's declared schema, so an Apex-trained
+candidate compared against an Apex-serving contract reads
+`serving_schema_misaligned_slots: 0`. What remains is not code — the candidate
+still fails `no_league_regression` and `market_baseline`, which need real
+elapsed match volume.
 **Found:** 2026-08-21, while deriving `training_source` for the feature
 contract (item 36). Surfaced *because* the attribution work forced the
 question "which code actually trained this slot?" for every feature.
@@ -181,25 +185,65 @@ starts, so a future edit cannot silently swap in `MARKET_FEATURES_14` (or any
 other reordering) while the artifact still claims `apex_v1_*`. Pinned by
 `tests/unit/test_train_on_real_matches_market_block.py`.
 
-⚠️ **What is still NOT done, deliberately.** Deciding the block and guarding
-the training script does not make an Apex-schema candidate promotable. Live
-serving (`data/transformers.py`'s `_project_to_canonical_features()`,
-`upcoming_match_feature_service.py`) only knows how to build the **legacy**
-14-field market block — it has no code path that calls
-`derive_apex_market_features()`. That is exactly why
-`promotion_evidence.py`'s `serving_schema_misaligned_slots` correctly reads
-**11** today (`comparison_report.json`, indices 20-30) and correctly keeps
-failing the availability gate: promoting an Apex-trained candidate right now
-would silently feed it legacy-block values at Apex-block positions. **New
-NEXT-tier follow-up, not started:** wire live serving to build Apex-ordered
-market vectors when the active generation declares `feature_schema_version:
-apex_v1_*`, with its own train/serve parity tests mirroring
-`test_feature_vector_parity.py` (the harness Phase 3 built for exactly this
-kind of claim). This is a materially larger, higher-risk change than
-recording the decision — it touches the same live train/serve parity surface
-Phase 3 exists to protect — and needs its own dedicated PR and review, not a
-bundled addition to this decision record. **Trigger:** before any Apex-schema
-candidate can pass `serving_feature_availability`.
+✅ **Serving wire-up SHIPPED 2026-08-22 (the follow-up this entry called for).**
+Both serving implementations now dispatch the market block on the active
+generation's declared `feature_schema_version`, closing the last mechanical
+blocker this item owned:
+
+- `data/transformers.py` — `FeatureTransformer.__init__` resolves the active
+  schema (new `schema_version` kwarg, defaulting to the manifest via
+  `active_feature_schema_version()`), sets `expected_columns` from
+  `resolve_feature_schema()`, and `_project_to_canonical_features()` calls
+  `derive_apex_market_features()` under an `apex_*` schema, `derive_market_features()`
+  otherwise.
+- `services/upcoming_match_feature_service.py` — `UpcomingMatchFeatureProjector`
+  gains `_resolve_is_apex()`, and `project_match_features()` branches the same
+  way, updating `derived_resolved` with `APEX_MARKET_FEATURES_14` on that path
+  so data-gap bookkeeping stays honest.
+- `models/feature_registry.py` — `_is_apex_schema` promoted to public
+  `is_apex_schema()`; `active_canonical_features()`/`active_default_feature_values()`
+  gain an `apex=` axis (separate from the phase7/phase8 *width* axis). Apex-only
+  market defaults are derived from the same neutral 1X2 snapshot the legacy path
+  uses (2.5/3.3/2.8) rather than hand-authored constants, and the seven
+  legacy-only names are dropped from the apex default set so a serving gap can
+  never report a stale legacy value.
+- `models/promotion_evidence.py` — new `current_serving_contract()` replaces the
+  hardcoded `CANONICAL_FEATURES_68` comparison in both
+  `build_promotion_feature_evidence()` and `validate_promotion_feature_evidence()`.
+  **This was load-bearing:** without it `serving_schema_misaligned_slots` would
+  have reported 11 forever, so no serving fix could ever have satisfied the gate.
+
+**Measured result:** under today's real `phase7_68` manifest the counter still
+reads **11** and the gate still FAILs — correct, because legacy is genuinely
+what serves today. Under an `apex_v1_68` manifest the same candidate reads
+**0**. Pinned by `test_serving_comparison_follows_the_active_schema`.
+
+⚠️ **Every path is inert until an `apex_*` generation is actually activated.**
+`active_generation.json` still declares `phase7_68`, so today's behaviour is
+byte-identical — proven by `test_default_schema_version_is_unchanged` and by the
+20 pre-existing parity tests passing unmodified. Both resolvers fail closed to
+`phase7_68` on any error (missing manifest, unknown schema string), matching
+what serving already did.
+
+**Contract attribution corrected in the same change:** `_serving_source()` had
+returned `UNDECLARED` for apex market slots on the grounds that
+`derive_apex_market_features` had "zero callers anywhere in backend/src". That
+became false the moment serving was wired, so the attribution now names the
+apex helper (14/14 slots, was 0/14) — never the legacy one, since the seven
+shared names are exactly what a name-keyed lookup would get wrong. Guarded by
+`test_apex_market_block_now_has_a_real_serving_attribution` and its regression
+twin `test_legacy_schema_market_attribution_is_unchanged`, both watched failing
+on a reverted wire-up before being trusted. The committed
+`backend/models/feature_contract.json` is unchanged (it describes `phase7_68`);
+`verify_feature_contract_freshness()` still exits 0.
+
+**What this does NOT do:** it does not promote anything. The candidate still
+independently fails `no_league_regression` (3/6 leagues) and `market_baseline`
+(0/6 leagues) — both model-quality gates, unrelated to schema alignment, and
+both blocked on real elapsed match volume rather than code. **Remaining trigger
+for this item:** train an Apex-schema candidate that clears those two gates,
+then activate it (which requires regenerating `feature_contract.json` for
+`apex_v1_68`, or the build gate fails closed — by design).
 
 ---
 

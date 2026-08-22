@@ -17,11 +17,14 @@ from typing import Any
 
 import numpy as np
 
+from .active_generation import ActiveGenerationError, active_feature_schema_version
 from .feature_registry import (
     APEX_FEATURES_68,
     CANONICAL_FEATURES_68,
     DEFAULT_FEATURE_VALUES_68,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
+    UnknownFeatureSchemaError,
+    resolve_feature_schema,
 )
 
 REPORT_SCHEMA = "apex_v1_68"
@@ -42,6 +45,28 @@ _FLOAT_ATOL = 1e-8
 def _contract_hash(features: Sequence[str]) -> str:
     payload = json.dumps(list(features), separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def current_serving_contract() -> list[str]:
+    """The column order live serving actually produces today.
+
+    Was hardcoded to ``CANONICAL_FEATURES_68``. Since docs/DEBT.md item 37's
+    serving wire-up, both serving implementations
+    (``data/transformers.py``, ``services/upcoming_match_feature_service.py``)
+    dispatch on the active generation's declared ``feature_schema_version``,
+    so this gate must read the same source — otherwise
+    ``serving_schema_misaligned_slots`` would keep reporting the 11-slot
+    apex/legacy divergence even once serving genuinely produced Apex vectors,
+    and the gate could never clear no matter what was fixed.
+
+    Falls back to ``CANONICAL_FEATURES_68`` on any resolution failure, which
+    is exactly what both serving implementations fall back to — the gate must
+    describe serving's real behaviour, including its fallback.
+    """
+    try:
+        return list(resolve_feature_schema(active_feature_schema_version()))
+    except (ActiveGenerationError, UnknownFeatureSchemaError):
+        return list(CANONICAL_FEATURES_68)
 
 
 def _stack_candidate_rows(dataset: Mapping[str, Mapping[str, Any]]) -> tuple[np.ndarray, dict[str, int]]:
@@ -142,9 +167,10 @@ def build_promotion_feature_evidence(
     matrix, rows_by_league = _stack_candidate_rows(dataset)
     training_rows = int(matrix.shape[0])
     features: list[dict[str, Any]] = []
+    serving_contract = current_serving_contract()
 
     for index, feature in enumerate(APEX_FEATURES_68):
-        serving_feature = CANONICAL_FEATURES_68[index]
+        serving_feature = serving_contract[index]
         column = matrix[:, index] if training_rows else np.empty(0, dtype=np.float64)
         defaulted, training_coverage = _column_is_default_only(feature, column)
         variable = bool(column.size and not np.allclose(column, column[0], rtol=0.0, atol=_FLOAT_ATOL))
@@ -160,7 +186,7 @@ def build_promotion_feature_evidence(
                 "serving_feature": serving_feature,
                 "classification": classification,
                 "training_source": "exact build_dataset() candidate matrix",
-                "serving_source": "CANONICAL_FEATURES_68 positional serving contract",
+                "serving_source": "active generation's positional serving contract",
                 "training_rows": training_rows,
                 "training_coverage": round(training_coverage, 6),
                 "training_missingness": round(1.0 - training_coverage, 6),
@@ -181,7 +207,7 @@ def build_promotion_feature_evidence(
         "training_rows": training_rows,
         "rows_by_league": rows_by_league,
         "candidate_contract_hash": _contract_hash(APEX_FEATURES_68),
-        "serving_contract_hash": _contract_hash(CANONICAL_FEATURES_68),
+        "serving_contract_hash": _contract_hash(serving_contract),
         "summary": summary,
         "promotion_gate": _expected_gate(summary, training_rows),
         "features": features,
@@ -208,8 +234,9 @@ def validate_promotion_feature_evidence(report: Mapping[str, Any]) -> Mapping[st
             f"promotion evidence must contain exactly {len(APEX_FEATURES_68)} feature rows"
         )
 
+    serving_contract = current_serving_contract()
     for index, (candidate_feature, serving_feature) in enumerate(
-        zip(APEX_FEATURES_68, CANONICAL_FEATURES_68, strict=True)
+        zip(APEX_FEATURES_68, serving_contract, strict=True)
     ):
         row = raw_features[index]
         if not isinstance(row, Mapping):
@@ -264,7 +291,7 @@ def validate_promotion_feature_evidence(report: Mapping[str, Any]) -> Mapping[st
 
     if "candidate_contract_hash" in report and report.get("candidate_contract_hash") != _contract_hash(APEX_FEATURES_68):
         raise ValueError("candidate feature-contract hash does not match the current registry")
-    if "serving_contract_hash" in report and report.get("serving_contract_hash") != _contract_hash(CANONICAL_FEATURES_68):
+    if "serving_contract_hash" in report and report.get("serving_contract_hash") != _contract_hash(serving_contract):
         raise ValueError("serving feature-contract hash does not match the current registry")
 
     return report
@@ -296,7 +323,7 @@ def render_promotion_feature_evidence_markdown(report: Mapping[str, Any]) -> str
         lines.append("")
     lines.extend(
         [
-            "This report is derived from the exact `build_dataset()` candidate matrices and the current positional `APEX_FEATURES_68` → `CANONICAL_FEATURES_68` contract. A FAIL is evidence, not an error to be thresholded away.",
+            "This report is derived from the exact `build_dataset()` candidate matrices and the current positional `APEX_FEATURES_68` → active-serving-contract comparison (the schema live serving actually produces today). A FAIL is evidence, not an error to be thresholded away.",
             "",
         ]
     )

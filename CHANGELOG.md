@@ -5,6 +5,79 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Apex market block wired into live serving, schema-gated (2026-08-22)
+
+### Added
+
+- `backend/src/models/active_generation.py`: `active_feature_schema_version()`
+  — a cheap manifest read returning the active generation's declared
+  `feature_schema_version`. Deliberately does not re-verify artifact hashes;
+  that gate already runs at boot and in the Render build command, and
+  request-path callers only need the schema name to pick a code path, not to
+  re-certify the whole generation on every call.
+- `backend/src/models/promotion_evidence.py`: `current_serving_contract()`,
+  replacing a hardcoded `CANONICAL_FEATURES_68` in both
+  `build_promotion_feature_evidence()` and `validate_promotion_feature_evidence()`.
+  Load-bearing: without it `serving_schema_misaligned_slots` would report 11
+  forever and no serving fix could ever satisfy the gate.
+
+### Changed
+
+- `backend/src/data/transformers.py`: `FeatureTransformer` gains a
+  `schema_version` kwarg (defaulting to the active manifest), derives
+  `expected_columns` via `resolve_feature_schema()`, and
+  `_project_to_canonical_features()` dispatches the market block —
+  `derive_apex_market_features()` under an `apex_*` schema,
+  `derive_market_features()` otherwise.
+- `backend/src/services/upcoming_match_feature_service.py`:
+  `UpcomingMatchFeatureProjector` gains `_resolve_is_apex()`; column order,
+  defaults, and `project_match_features()`'s market branch all follow it, with
+  `derived_resolved` updated from `APEX_MARKET_FEATURES_14` on that path so
+  data-gap bookkeeping stays honest.
+- `backend/src/models/feature_registry.py`: `_is_apex_schema` promoted to
+  public `is_apex_schema()`; `active_canonical_features()` and
+  `active_default_feature_values()` gain an `apex=` keyword — a separate axis
+  from the existing phase7/phase8 *width* axis. Apex-only market defaults are
+  derived from the same neutral 1X2 snapshot the legacy path already uses
+  (2.5/3.3/2.8) rather than hand-authored constants, and the seven legacy-only
+  names are dropped from the apex default set so a serving gap under an apex
+  schema can never surface a stale legacy value.
+- `backend/src/models/feature_registry.py`: `_serving_source()` now attributes
+  apex market slots to `derive_apex_market_features()` (14/14, was 0/14
+  `UNDECLARED`). The old `UNDECLARED` was correct only while that function had
+  zero callers in `backend/src`; wiring serving made the old claim false, so
+  the contract was corrected in the same change rather than left stale.
+
+### Notes
+
+- **Inert until an `apex_*` generation is activated.** `active_generation.json`
+  still declares `phase7_68`, so live behaviour is byte-identical — proven by
+  `test_default_schema_version_is_unchanged` and by the 20 pre-existing parity
+  tests passing unmodified. Both resolvers fail closed to `phase7_68` on any
+  error, matching what serving already did.
+- **Does not promote anything.** Under today's manifest
+  `serving_schema_misaligned_slots` still reads 11 and the gate still FAILs —
+  correct, since legacy is what serves today. Under an `apex_v1_68` manifest
+  the same candidate reads 0. The candidate still independently fails
+  `no_league_regression` (3/6 leagues) and `market_baseline` (0/6), which are
+  model-quality gates blocked on real elapsed match volume, not code.
+- `backend/models/feature_contract.json` is unchanged (it describes
+  `phase7_68`); `verify_feature_contract_freshness()` exits 0. Activating an
+  apex generation later requires regenerating it or the build gate fails
+  closed, by design.
+- Closes the serving-wire-up follow-up `docs/DEBT.md` item 37 opened; item 37
+  moves `NEXT` → `BLOCKED-ON-DATA`.
+
+### Tests
+
+- 8 added (1653 → 1661 passing): apex-schema market parity for both serving
+  implementations, projector schema dispatch and constructor wiring,
+  schema-aware promotion-gate comparison plus its fallback, and the two
+  contract-attribution guards. Every new guard was watched failing on a
+  reverted wire-up before being trusted.
+
+---
+
 ## Unreleased - Promotion gate made satisfiable, market-block decision recorded, identity backlog gauge (2026-08-22)
 
 ### Changed
