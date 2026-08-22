@@ -336,3 +336,128 @@ def test_backtest_has_no_independent_feature_computation_to_compare() -> None:
             f"walk_forward_validate now calls {builder} — it has an independent "
             "feature path and must be added to the parity harness"
         )
+
+
+# -- The second serving implementation (7.2 unification) --------------------
+# FeatureTransformer._project_to_canonical_features() kept its own inline
+# copies of the temporal, league and combination arithmetic until it was
+# unified onto the shared registry helpers. These tests are the evidence that
+# the unification is behaviour-preserving, and they extend 7.3 coverage to the
+# serving path insights/engine.py uses.
+
+#: Fixed goal averages, so the combination features have non-trivial inputs
+#: rather than all landing on a shared registry default.
+_HOME_GOALS_FOR, _HOME_GOALS_AGAINST = 1.83, 1.12
+_AWAY_GOALS_FOR, _AWAY_GOALS_AGAINST = 1.44, 1.61
+
+
+def _transformer_canonical(league: str, kickoff: datetime) -> Dict[str, float]:
+    """Run the real second serving implementation over a fixed input row.
+
+    allow_legacy_defaults=True keeps the fail-closed guards out of the way so
+    the arithmetic under test is what actually runs; the guards themselves are
+    covered separately below.
+    """
+    import pandas as pd
+
+    from src.data.transformers import FeatureTransformer
+
+    transformer = FeatureTransformer(allow_legacy_defaults=True)
+    row = pd.DataFrame([{
+        "home_goals_per_match_5": _HOME_GOALS_FOR,
+        "home_goals_conceded_per_match_5": _HOME_GOALS_AGAINST,
+        "away_goals_per_match_5": _AWAY_GOALS_FOR,
+        "away_goals_conceded_per_match_5": _AWAY_GOALS_AGAINST,
+    }])
+    match_data = {
+        "schedule": {"date": kickoff.isoformat(), "league": league},
+        "odds": {"home_win": _ODDS[0], "draw": _ODDS[1], "away_win": _ODDS[2]},
+    }
+    projected = transformer._project_to_canonical_features(row, match_data)
+    return projected.iloc[0].to_dict()
+
+
+@pytest.mark.parametrize(
+    "league",
+    ["EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "premier_league", "laliga"],
+)
+def test_second_serving_implementation_matches_the_shared_league_helper(
+    league: str,
+) -> None:
+    """Every one-hot and prior must equal derive_league_features()'s answer.
+
+    Parametrised over both vocabularies (display and alias forms) because the
+    two-league-vocabulary trap has fired repeatedly in this repo, and EPL is
+    spelled identically in both -- an EPL-only check proves nothing.
+    """
+    canonical = _transformer_canonical(league, _KICKOFF)
+    expected = derive_league_features(league)
+
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), f"{league}:{name}"
+
+
+@pytest.mark.parametrize(
+    "kickoff",
+    [
+        datetime(2026, 8, 22, 15, 0),
+        datetime(2026, 1, 1, 20, 0),
+        datetime(2026, 12, 31, 12, 0),
+        datetime(2026, 5, 17, 9, 30),
+    ],
+)
+def test_second_serving_implementation_matches_the_shared_temporal_helper(
+    kickoff: datetime,
+) -> None:
+    """pandas .dayofweek and datetime.weekday() must agree, including at the
+    January and December boundaries where season_phase clamps -- an off-by-one
+    there would be invisible mid-season.
+    """
+    canonical = _transformer_canonical("EPL", kickoff)
+    expected = derive_temporal_features(kickoff)
+
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), f"{kickoff}:{name}"
+
+
+def test_second_serving_implementation_matches_the_shared_combination_helper() -> None:
+    """All four combination features, from real non-default goal averages."""
+    canonical = _transformer_canonical("EPL", _KICKOFF)
+    expected = derive_combination_features(
+        home_goals_for_avg=_HOME_GOALS_FOR,
+        home_goals_against_avg=_HOME_GOALS_AGAINST,
+        away_goals_for_avg=_AWAY_GOALS_FOR,
+        away_goals_against_avg=_AWAY_GOALS_AGAINST,
+    )
+
+    assert expected, "fixture assumption: the helper returns the four fields"
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), name
+
+
+def test_unifying_did_not_remove_the_unsupported_league_guard() -> None:
+    """The stricter caller must still refuse a league with no measured priors.
+
+    derive_league_features() deliberately falls back for Eredivisie/UCL so the
+    projector can keep serving them. FeatureTransformer is the strict caller and
+    must keep raising -- if the guard were moved into the shared helper this
+    would still pass while the projector silently broke, so the guard's
+    *location* is what this pins.
+    """
+    import pandas as pd
+
+    from src.core.exceptions import DataUnavailableError
+    from src.data.transformers import FeatureTransformer
+    from src.models.feature_registry import has_league_rate_priors
+
+    assert not has_league_rate_priors("EREDIVISIE")
+
+    strict = FeatureTransformer(allow_legacy_defaults=False)
+    with pytest.raises(DataUnavailableError):
+        strict._project_to_canonical_features(
+            pd.DataFrame([{}]),
+            {
+                "schedule": {"date": _KICKOFF.isoformat(), "league": "EREDIVISIE"},
+                "odds": {"home_win": _ODDS[0], "draw": _ODDS[1], "away_win": _ODDS[2]},
+            },
+        )

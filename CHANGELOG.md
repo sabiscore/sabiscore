@@ -5,6 +5,46 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 3 §7.2: one implementation per feature group (2026-08-22)
+
+### Changed
+
+- `FeatureTransformer._project_to_canonical_features()` (`data/transformers.py`)
+  now calls the shared `derive_temporal_features()` /
+  `derive_league_features()` / `derive_combination_features()` instead of
+  keeping a third inline copy of each. All three pipelines — training, the
+  upcoming-match projector, and the insights transformer — share one
+  implementation per feature group, which is what §7.2 asks for.
+- The tables were **proven** identical before the change, not assumed: the
+  league priors dict and its fallback triple compare equal; the one-hot logic
+  agrees across all 12 league keys including unsupported ones; temporal agrees
+  across five kickoffs (pandas `.dayofweek` and `datetime.weekday()` share
+  Monday=0); the four combination formulas agree.
+- A duplicate `combined_attack` / `combined_defense_weakness` computation
+  (previously calculated twice with identical results) is removed.
+- Consequence for the contract: `serving_source` on `phase7_68` now resolves
+  for **44 of 68** features, up from 28.
+
+### Added
+
+- `has_league_rate_priors()` — public predicate so a stricter caller can refuse
+  a league with no measured priors without importing a private helper.
+- Five parity tests running the **real** `FeatureTransformer` against the
+  shared helpers, parametrised over both league vocabularies and over January /
+  December month boundaries where `season_phase` clamps. Watched failing on an
+  injected divergence before being trusted.
+
+### Safety
+
+- ⚠️ **The fail-closed guard deliberately did not move into the shared
+  helper.** `derive_league_features()` falls back for an unsupported league
+  because `UpcomingMatchFeatureProjector` must keep serving Eredivisie and UCL,
+  neither of which has a one-hot column. `FeatureTransformer` remains the
+  stricter caller and still raises `DataUnavailableError`.
+  `test_unifying_did_not_remove_the_unsupported_league_guard` pins the guard's
+  *location*: moving it into the helper would keep that test green while
+  silently breaking the projector.
+
 ## Unreleased - Phase 4 entry gate: frozen certification policy, two blockers found (2026-08-22)
 
 ### Added
