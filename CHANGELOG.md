@@ -47,6 +47,29 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   `sabiscore_fallback.db` SQLite engine on every single pytest run, even for
   tests that only needed `Base`/model classes. That waste (and the stray
   gitignored file it left behind) is gone.
+## Unreleased - Remove orphaned monitoring dashboards and stale pre-deploy script (2026-08-22)
+
+### Removed
+
+- `apps/web/src/components/monitoring/monitoring-dashboard.tsx`,
+  `performance-dashboard.tsx`, and `confidence-band-chart.tsx` — zero importers
+  anywhere in `apps/web/src` (confirmed by repo-wide grep before deletion);
+  `app/monitoring/page.tsx` is a pure redirect to `/performance` and the two
+  dashboards fetched endpoint shapes (`/api/metrics`, `/api/drift`) that no
+  longer match the live `/api/model-performance*` surface. Closes
+  `docs/DEBT.md` item 21(b).
+- `apps/web/pre-deploy-check.ps1` — not referenced by any `package.json`
+  script, GitHub Actions workflow, `Makefile`, `render.yaml`, or
+  `vercel.json` target; its own "critical files" checklist still named
+  `src/lib/ml/tfjs-ensemble-engine.ts` and `src/lib/betting/kelly-optimizer.ts`,
+  both deliberately deleted in prior sessions (browser-side TF.js inference
+  and the frontend Kelly module) — it had been silently failing its own
+  checklist, unused, since those removals.
+
+### Safety
+
+- `pnpm lint` and `pnpm typecheck` (`@sabiscore/web`) both exit 0 after all
+  four deletions. No behavior change — nothing imported any of these files.
 
 ## Unreleased - Phase 3 finalized: parity coverage for the two remaining shared groups (2026-08-22)
 
