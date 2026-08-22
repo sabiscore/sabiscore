@@ -85,6 +85,7 @@ _FEATURE_REGISTRY = importlib.util.module_from_spec(_FEATURE_SPEC)
 _FEATURE_SPEC.loader.exec_module(_FEATURE_REGISTRY)
 APEX_FEATURES_68 = _FEATURE_REGISTRY.APEX_FEATURES_68
 APEX_FEATURES_89 = _FEATURE_REGISTRY.APEX_FEATURES_89
+APEX_MARKET_FEATURES_14 = _FEATURE_REGISTRY.APEX_MARKET_FEATURES_14
 CANONICAL_FEATURES_68 = _FEATURE_REGISTRY.CANONICAL_FEATURES_68
 DEFAULT_FEATURE_VALUES_68 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_68
 DEFAULT_FEATURE_VALUES_89 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_89
@@ -283,6 +284,22 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
 
     feature_names = APEX_FEATURES_89 if include_phase8 else APEX_FEATURES_68
     base_defaults = DEFAULT_FEATURE_VALUES_89 if include_phase8 else DEFAULT_FEATURE_VALUES_68
+
+    # docs/DEBT.md item 37: every candidate this script trains declares
+    # feature_schema_version: apex_v1_{width} (below), so the market-block
+    # slice of feature_names must actually BE the Apex block. A future edit
+    # that quietly swapped in the legacy MARKET_FEATURES_14 (or reordered it)
+    # would train a candidate whose metadata lies about its own schema —
+    # exactly the fabrication the feature contract exists to prevent. Static,
+    # one-time check; not worth paying per-row.
+    _market_start = feature_names.index(APEX_MARKET_FEATURES_14[0])
+    _market_slice = feature_names[_market_start:_market_start + len(APEX_MARKET_FEATURES_14)]
+    assert _market_slice == list(APEX_MARKET_FEATURES_14), (
+        "feature_names does not carry APEX_MARKET_FEATURES_14 contiguously "
+        f"in order at index {_market_start} (got {_market_slice}) — a future "
+        "edit may have swapped in the legacy market block while artifacts "
+        "still declare apex_v1_* (docs/DEBT.md item 37)"
+    )
     phase8_rows: List[Dict[str, float]] = []
     if include_phase8:
         replay = compute_phase8_training_columns(matches)

@@ -115,10 +115,15 @@ def _summary_from_features(features: Sequence[Mapping[str, Any]]) -> dict[str, i
 
 
 def _expected_gate(summary: Mapping[str, Any], training_rows: int) -> str:
+    # always_data_gap_slots is intentionally NOT a blocker (docs/DEBT.md item
+    # 38, authorized 2026-08-22): PHASE7_FEATURES_ALWAYS_DATA_GAP is a
+    # permanent, declared 4-slot gap present in every 68-wide schema by
+    # design — counting it here made the gate structurally unsatisfiable for
+    # any candidate, however good. The count still surfaces in `summary` and
+    # the rendered markdown; it just stops disqualifying.
     blockers = (
         int(summary["training_defaulted_slots"]),
         int(summary["serving_schema_misaligned_slots"]),
-        int(summary["always_data_gap_slots"]),
     )
     return "PASS" if training_rows > 0 and all(value == 0 for value in blockers) else "FAIL"
 

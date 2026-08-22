@@ -2,24 +2,27 @@
 
 WHY THIS EXISTS
 ---------------
-``promotion_evidence._expected_gate()`` returns PASS only when
+``promotion_evidence._expected_gate()`` used to return PASS only when
 ``training_defaulted_slots``, ``serving_schema_misaligned_slots`` **and**
-``always_data_gap_slots`` are all zero. ``compare_candidate_vs_incumbent.py``
-then computes ``promotion_permitted = all(gate == "PASS")``.
+``always_data_gap_slots`` were all zero. ``compare_candidate_vs_incumbent.py``
+computes ``promotion_permitted = all(gate == "PASS")``.
 
 But all four ``PHASE7_FEATURES_ALWAYS_DATA_GAP`` features are present as slots
 in every 68-wide schema, deliberately and permanently: ``PHASE7_FEATURES_10``'s
 own comment records that removing the slots broke every artifact and produced
 ``model_version="fallback"`` on every inference for two months. So
-``always_data_gap_slots`` is structurally 4, never 0, and the gate cannot pass.
+``always_data_gap_slots`` was structurally 4, never 0, and the gate could never
+pass — a certification-threshold conflation, not a real quality bar.
 
-⚠️ **These tests PIN the current behaviour; they do not endorse it.** Relaxing
-the gate is a certification-threshold change made after seeing a failing
-result, which the APEX directive §23 forbids doing autonomously. The decision
-is recorded in docs/DEBT.md item 38 and left to a deliberate, separate one.
+⚠️ **RESOLVED 2026-08-22, authorized.** ``always_data_gap_slots`` was removed
+from the gate's blockers (and from ``certification_policy.py``'s threshold in
+the same change) — a deliberate, authorized decision recorded in docs/DEBT.md
+item 38, not made autonomously after seeing a failing result. The declared-gap
+count still surfaces in every evidence summary; it just no longer disqualifies.
 
-If a future change makes the gate satisfiable, these tests fail — which is the
-intent. Update item 38 in the same change rather than deleting the tests.
+These tests now PIN the repair: if a future change makes the gate
+unsatisfiable again, they fail — update item 38 in the same change rather than
+deleting the tests.
 """
 from __future__ import annotations
 
@@ -39,11 +42,11 @@ def test_every_68_schema_carries_all_four_permanent_data_gap_slots() -> None:
         assert present == list(PHASE7_FEATURES_ALWAYS_DATA_GAP)
 
 
-def test_promotion_gate_is_currently_unsatisfiable_for_any_68_wide_candidate() -> None:
-    """Even a *perfect* candidate fails: zero defaults, zero misalignment.
-
-    This is the whole finding. The only remaining non-zero counter is the one
-    that cannot be driven to zero without deleting slots the artifacts require.
+def test_promotion_gate_is_satisfiable_after_the_authorized_item_38_fix() -> None:
+    """A *perfect* candidate now passes even while carrying the 4 permanent
+    declared-gap slots — those stop being disqualifying (docs/DEBT.md item 38,
+    authorized 2026-08-22). Zero training defaults and zero misalignment are
+    still required.
     """
     flawless = {
         "features": 68,
@@ -52,19 +55,16 @@ def test_promotion_gate_is_currently_unsatisfiable_for_any_68_wide_candidate() -
         "serving_schema_misaligned_slots": 0,
         "always_data_gap_slots": len(PHASE7_FEATURES_ALWAYS_DATA_GAP),
     }
-    assert _expected_gate(flawless, training_rows=10_000) == "FAIL", (
-        "the availability gate became satisfiable — if that was deliberate, "
-        "update docs/DEBT.md item 38 in the same change"
+    assert _expected_gate(flawless, training_rows=10_000) == "PASS", (
+        "the availability gate became unsatisfiable again — if that was "
+        "deliberate, update docs/DEBT.md item 38 in the same change"
     )
 
 
 def test_the_gate_would_pass_if_declared_gaps_were_not_counted() -> None:
-    """Isolates the cause to exactly one counter, so the fix is unambiguous.
-
-    Same flawless candidate, only `always_data_gap_slots` zeroed -> PASS. That
-    localises the deadlock to the declared-gap term and nothing else, which is
-    what makes item 38's proposed fix a one-line decision rather than a
-    re-audit of the whole gate.
+    """Post-fix, `always_data_gap_slots` is fully inert either way — this pins
+    that explicitly (zeroed here vs. `len(...)` in the test above; both PASS),
+    rather than leaving the term's irrelevance implicit.
     """
     flawless_without_declared_gaps = {
         "features": 68,

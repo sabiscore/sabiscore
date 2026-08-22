@@ -66,6 +66,26 @@ reviewer still sees `4` rather than losing the signal entirely.
 **Trigger:** before any Phase 4 candidate can be promoted — i.e. now, but
 under explicit authorization.
 
+✅ **RESOLVED 2026-08-22, authorized by the user, exactly as scoped above.**
+`always_data_gap_slots` dropped from `_expected_gate()`'s blockers tuple; the
+matching threshold dict entry removed from
+`certification_policy.py`'s `serving_feature_availability` gate, its `rule`
+prose trimmed, and `CERTIFICATION_POLICY_VERSION` bumped `1.0.0` → `1.1.0`
+(a genuine threshold change, not wording). The declared-gap count of 4 is
+unchanged in `_summary_from_features()` and the rendered markdown — it's
+still visible to any reviewer, it just no longer disqualifies.
+`test_promotion_gate_satisfiability.py`'s three tests now pin the repair
+(the previously-`FAIL`-asserting test now asserts `PASS`); the module
+docstring records the authorization. **What did NOT change, deliberately:**
+this is a deadlock repair, not a promotion. The live
+`backend/models/candidate/comparison_report.json` snapshot is untouched (it
+would need a real training run to regenerate, out of scope) and, read as-is,
+that candidate still independently fails `no_league_regression` (3/6 leagues)
+and `market_baseline` (0/6 leagues) — both unrelated to this fix — plus 11
+`serving_schema_misaligned_slots` from item 37, which remains open. No
+candidate promotes as a result of this change; it only stops a *good*
+candidate from being blocked by an unfixable accounting term.
+
 ---
 
 ## 37. `train_on_real_matches.py`'s default market block does not match the shipped artifacts' own recorded one
@@ -138,6 +158,48 @@ needs a `--market-block legacy` path calling `derive_market_features()`;
 (d) either way add a training-vs-artifact assertion so a future retrain cannot
 silently swap blocks. **Do not "fix" it by relabelling the existing artifacts.**
 **Trigger:** before any Phase 4 candidate is trained.
+
+**(a) DECIDED 2026-08-22: Apex wins.** Direct comparison of the two block
+implementations (`feature_registry.py`) confirms the reasoning above with
+specifics: under `derive_market_features()`, `ev_home == ev_draw == ev_away`
+always (algebraically identical per its own docstring — one independent value
+presented as three), `draw_probability` is a byte-for-byte duplicate of
+`market_prob_draw`, and `market_confidence` is a duplicate of
+`max(market_prob_home, market_prob_draw, market_prob_away)` — three of its
+fourteen fields carry zero independent signal. `derive_apex_market_features()`
+replaces all four with `market_overround`, `market_favorite_{home,draw,away}`
+(three clean binary flags instead of one ordinal-coded `market_favorite`),
+`market_probability_margin`, and `market_normalized_entropy` — none of which
+duplicate another field in the block. **(b) is already implemented**, and was
+before this decision was recorded: `train_on_real_matches.py:697` stamps
+`feature_schema_version: f"apex_v1_{len(feature_names)}"` into every trained
+candidate's metadata unconditionally — no code change needed. **(c) is now
+moot** — legacy did not win, so no `--market-block legacy` path is needed.
+**(d) shipped 2026-08-22**: `build_dataset()` now asserts the market-block
+slice of `feature_names` equals `APEX_MARKET_FEATURES_14` before training
+starts, so a future edit cannot silently swap in `MARKET_FEATURES_14` (or any
+other reordering) while the artifact still claims `apex_v1_*`. Pinned by
+`tests/unit/test_train_on_real_matches_market_block.py`.
+
+⚠️ **What is still NOT done, deliberately.** Deciding the block and guarding
+the training script does not make an Apex-schema candidate promotable. Live
+serving (`data/transformers.py`'s `_project_to_canonical_features()`,
+`upcoming_match_feature_service.py`) only knows how to build the **legacy**
+14-field market block — it has no code path that calls
+`derive_apex_market_features()`. That is exactly why
+`promotion_evidence.py`'s `serving_schema_misaligned_slots` correctly reads
+**11** today (`comparison_report.json`, indices 20-30) and correctly keeps
+failing the availability gate: promoting an Apex-trained candidate right now
+would silently feed it legacy-block values at Apex-block positions. **New
+NEXT-tier follow-up, not started:** wire live serving to build Apex-ordered
+market vectors when the active generation declares `feature_schema_version:
+apex_v1_*`, with its own train/serve parity tests mirroring
+`test_feature_vector_parity.py` (the harness Phase 3 built for exactly this
+kind of claim). This is a materially larger, higher-risk change than
+recording the decision — it touches the same live train/serve parity surface
+Phase 3 exists to protect — and needs its own dedicated PR and review, not a
+bundled addition to this decision record. **Trigger:** before any Apex-schema
+candidate can pass `serving_feature_availability`.
 
 ---
 
@@ -390,6 +452,26 @@ of the 9 (and any others already accumulated) `fd-team-` rows to the
 **Trigger:** revisit once item 34's semantic-identity infrastructure is
 actually exercised — the two problems are close enough in shape that
 solving one well likely informs the other.
+
+✅ **(a) RESOLVED 2026-08-22.** `sync_upcoming_fixtures()`
+(`fixture_sync_service.py`) now sets a gauge —
+`fixture_sync.identity_rebind_pending_backlog` — to the exact count of
+mismatched fixtures found in that tick, right before commit. The existing
+`fixture_sync.identity_rebind_pending` counter is untouched (it still answers
+"how many rebind events fired this process lifetime"; the gauge answers "how
+big is the backlog right now"). Because fixture_sync re-evaluates every
+currently-tracked unsettled fixture on every tick (immediate on boot, then
+every 6h), the gauge is a true point-in-time backlog size, not an
+ever-growing counter — it self-corrects within seconds of every deploy
+instead of silently reading 0 until the next drift event happens to fire.
+Surfaced automatically via the existing `GET /metrics` → `production.gauges`
+path — no new endpoint plumbing needed. Pinned by an added assertion in
+`test_provider_elo_identity_bridge.py::test_existing_scheduled_fixture_is_not_silently_rekeyed`,
+which already exercises exactly one mismatched fixture.
+**(b) still NOT built, deliberately** — the gauge answers the actually-stated
+gap ("is there a backlog and how big"); a reconciliation manifest or backfill
+remains future work, still best deferred until item 34's infrastructure is
+exercised for the first real case.
 
 ---
 

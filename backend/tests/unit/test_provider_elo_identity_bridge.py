@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from src.core.database import Base, League, Match, Team
 from src.db.models import EloRatingSnapshot, ProviderTeamMapping
 from src.db.provider_elo_team_mapping import ProviderEloTeamMapping
+from src.monitoring.metrics import metrics_collector
 from src.services.canonical_identity_service import ensure_canonical_fixture
 from src.services.fixture_sync_service import sync_upcoming_fixtures
 from src.services.team_identity import (
@@ -362,6 +363,17 @@ async def test_existing_scheduled_fixture_is_not_silently_rekeyed(
     assert persisted.home_team_id == generated_home
     assert persisted.away_team_id == generated_away
     assert persisted.match_date == datetime(2026, 8, 30, 18, 45)
+
+    # docs/DEBT.md item 35: the backlog gauge is SET (not accumulated) every
+    # tick to the count of currently-drifted fixtures, so it reads exactly 1
+    # right after this single-mismatch sync regardless of what earlier tests
+    # left behind.
+    assert (
+        metrics_collector.get_summary()["gauges"][
+            "fixture_sync.identity_rebind_pending_backlog"
+        ]
+        == 1
+    )
 
     elo_bridges = (
         await session.execute(

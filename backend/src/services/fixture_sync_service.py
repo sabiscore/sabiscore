@@ -282,6 +282,7 @@ async def sync_upcoming_fixtures(
         return 0
 
     inserted = 0
+    rebind_pending_count = 0
     for raw in matches_raw:
         league_name: str = raw.get("league", "")
         meta = _LEAGUE_META.get(league_name)
@@ -396,6 +397,7 @@ async def sync_upcoming_fixtures(
                     away_id,
                 )
                 metrics_collector.increment("fixture_sync.identity_rebind_pending")
+                rebind_pending_count += 1
             if previous_kickoff != match_date:
                 metrics_collector.increment("fixture_sync.reschedules")
                 logger.info(
@@ -449,6 +451,15 @@ async def sync_upcoming_fixtures(
     duration_ms = (time.perf_counter() - started_at) * 1000
     metrics_collector.increment("fixture_sync.successes")
     metrics_collector.increment("fixture_sync.inserted", inserted)
+    # docs/DEBT.md item 35: a gauge (SET, not accumulated) of how many
+    # currently-tracked fixtures disagreed on identity resolution THIS tick —
+    # every unsettled fixture is re-checked every tick, so this is the true
+    # backlog size at commit time, not an ever-growing process-lifetime count.
+    # The sibling `.identity_rebind_pending` counter above stays untouched;
+    # it answers a different question ("how many rebind events ever fired").
+    metrics_collector.set_gauge(
+        "fixture_sync.identity_rebind_pending_backlog", rebind_pending_count
+    )
     metrics_collector.record_timer("fixture_sync.latency", duration_ms)
     metrics_collector.record_provider_outcome(
         provider="football_data_org",
