@@ -11,8 +11,12 @@ from ..models.feature_registry import (
     CANONICAL_FEATURES_68,
     DEFAULT_FEATURE_VALUES_68,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
+    derive_combination_features,
     derive_last5_form_features,
+    derive_league_features,
     derive_market_features,
+    derive_temporal_features,
+    has_league_rate_priors,
 )
 
 
@@ -358,8 +362,6 @@ class FeatureTransformer:
         canonical["home_gd_recent"] = get_num("home_gd_avg_5", 0.35)
         canonical["away_gd_recent"] = get_num("away_gd_avg_5", -0.15)
 
-        canonical["combined_attack"] = canonical["home_goals_for_avg"] + canonical["away_goals_for_avg"]
-        canonical["combined_defense_weakness"] = canonical["home_goals_against_avg"] + canonical["away_goals_against_avg"]
         canonical["total_goals_expected"] = get_num("xg_differential", 0.20) + 2.60
 
         canonical.update(market_features)
@@ -396,43 +398,44 @@ class FeatureTransformer:
                 )
             kickoff_dt = pd.Timestamp.utcnow()
 
-        canonical["day_of_week"] = float(kickoff_dt.dayofweek)
-        canonical["is_weekend"] = 1.0 if kickoff_dt.dayofweek >= 5 else 0.0
-        canonical["month"] = float(kickoff_dt.month)
-        canonical["season_phase"] = float(min(max((kickoff_dt.month - 1) / 11.0, 0.0), 1.0))
+        # §7.2 (docs/DEBT.md item 36): delegate to the shared registry helpers
+        # UpcomingMatchFeatureProjector and train_on_real_matches.py already
+        # call, rather than keeping a third inline copy of the same arithmetic.
+        # The tables were verified byte-identical before this change (the
+        # league priors dict, the fallback triple, the one-hot alias logic over
+        # all 12 league keys including unsupported ones, the temporal formulas
+        # across five kickoffs, and the four combination formulas) — this is a
+        # unification of provably equal implementations, not a behaviour change.
+        # pandas' .dayofweek and datetime.weekday() share the Monday=0
+        # convention, so converting the Timestamp here is exact.
+        canonical.update(derive_temporal_features(kickoff_dt.to_pydatetime()))
 
         league_name = str(schedule.get("league", "EPL"))
-        league_defaults = {
-            "epl": (0.42, 2.85, 0.246),
-            "la_liga": (0.44, 2.60, 0.255),
-            "bundesliga": (0.45, 3.05, 0.228),
-            "serie_a": (0.43, 2.58, 0.272),
-            "ligue_1": (0.41, 2.66, 0.259),
-        }
-        key = league_name.lower().replace(" ", "_")
-        if key not in league_defaults and self._fail_closed_enabled():
+        # ⚠️ The fail-closed guard stays HERE, not in derive_league_features().
+        # That helper deliberately falls back to _LEAGUE_RATE_FALLBACK for an
+        # unsupported league (Eredivisie and UCL have no one-hot column and
+        # legitimately produce an all-zero block). FeatureTransformer is the
+        # stricter caller and refuses instead — moving the check into the
+        # shared helper would impose this strictness on the projector, which
+        # must keep serving those two competitions.
+        if not has_league_rate_priors(league_name) and self._fail_closed_enabled():
             raise DataUnavailableError(
                 f"League policy defaults unavailable for '{league_name}'",
                 provider="internal",
                 evidence_type="feature:league",
             )
-        home_rate, avg_goals, draw_rate = league_defaults.get(key, (0.42, 2.75, 0.246))
-        canonical["league_home_rate"] = home_rate
-        canonical["league_avg_goals"] = avg_goals
-        canonical["league_draw_rate"] = draw_rate
+        canonical.update(derive_league_features(league_name))
 
         canonical["form_market_agreement_home"] = (canonical["home_form_last5_home"] / 3.0) * market_prob_home
         canonical["form_market_disagreement"] = abs((canonical["home_form_last5_home"] / 3.0) - market_prob_home)
-        canonical["home_attack_vs_away_defense"] = canonical["home_goals_for_avg"] - canonical["away_goals_against_avg"]
-        canonical["away_attack_vs_home_defense"] = canonical["away_goals_for_avg"] - canonical["home_goals_against_avg"]
+        canonical.update(derive_combination_features(
+            home_goals_for_avg=canonical["home_goals_for_avg"],
+            home_goals_against_avg=canonical["home_goals_against_avg"],
+            away_goals_for_avg=canonical["away_goals_for_avg"],
+            away_goals_against_avg=canonical["away_goals_against_avg"],
+        ))
         canonical["venue_market_combo"] = canonical["home_venue_win_rate"] * market_prob_home
         canonical["h2h_market_agreement"] = canonical["h2h_dominance"] * market_prob_home
-
-        canonical["league_Bundesliga"] = 1.0 if key == "bundesliga" else 0.0
-        canonical["league_EPL"] = 1.0 if key in ("epl", "premier_league") else 0.0
-        canonical["league_La_Liga"] = 1.0 if key in ("la_liga", "laliga") else 0.0
-        canonical["league_Ligue_1"] = 1.0 if key in ("ligue_1", "ligue1") else 0.0
-        canonical["league_Serie_A"] = 1.0 if key in ("serie_a", "seriea") else 0.0
 
         # Phase 7-A additions (Elo + StatsBomb tactical layer).
         # Only compute columns required by the loaded model artifact. This preserves

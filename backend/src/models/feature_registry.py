@@ -560,6 +560,19 @@ def derive_temporal_features(match_date: datetime) -> Dict[str, float]:
     }
 
 
+def has_league_rate_priors(league: str) -> bool:
+    """Does this league have measured priors, or will it take the fallback?
+
+    Public because a stricter caller may want to refuse rather than accept the
+    fallback: FeatureTransformer raises DataUnavailableError for an unsupported
+    league, while UpcomingMatchFeatureProjector must keep serving Eredivisie
+    and UCL, which legitimately have no one-hot column. derive_league_features
+    itself stays permissive so both callers can share it; the strictness lives
+    with the caller that wants it.
+    """
+    return _league_key(league) in LEAGUE_RATE_PRIORS
+
+
 def derive_league_features(league: str) -> Dict[str, float]:
     """League one-hots plus the three league-prior rates."""
     key = _league_key(league)
@@ -851,6 +864,23 @@ _SERVING_SOURCE_GOALS_GD = (
     "replicated in both (not a shared function). Train/serve equality is "
     "verified empirically by tests/unit/test_feature_vector_parity.py"
 )
+_SERVING_SOURCE_TEMPORAL = (
+    "services/upcoming_match_feature_service.py:project_match_features() and "
+    "data/transformers.py:FeatureTransformer._project_to_canonical_features(), "
+    "both via models/feature_registry.py:derive_temporal_features()"
+)
+_SERVING_SOURCE_LEAGUE = (
+    "services/upcoming_match_feature_service.py:project_match_features() and "
+    "data/transformers.py:FeatureTransformer._project_to_canonical_features(), "
+    "both via models/feature_registry.py:derive_league_features(); the latter "
+    "additionally refuses a league with no measured priors "
+    "(has_league_rate_priors) before delegating"
+)
+_SERVING_SOURCE_COMBINATION = (
+    "services/upcoming_match_feature_service.py:project_match_features() and "
+    "data/transformers.py:FeatureTransformer._project_to_canonical_features(), "
+    "both via models/feature_registry.py:derive_combination_features()"
+)
 _TRAINING_SOURCE_TEMPORAL = (
     "scripts/train_on_real_matches.py:build_dataset() via "
     "models/feature_registry.py:derive_temporal_features()"
@@ -942,13 +972,12 @@ def _serving_source(name: str, group: str, schema_version: str) -> str:
     Serving has two independent implementations (UpcomingMatchFeatureProjector
     and FeatureTransformer). A value is only returned where BOTH were
     confirmed (by import + call-site grep) to invoke the identical function —
-    true for last-5-form and the legacy 14-field market block. Temporal,
-    league and combination fields are deliberately left UNDECLARED here even
-    though UpcomingMatchFeatureProjector calls the shared derive_* functions,
-    because FeatureTransformer._project_to_canonical_features() recomputes
-    those three groups with its own separate inline logic (numerically
-    claimed-identical in a comment, never verified as the same code) — see
-    docs/DEBT.md item 36.
+    true for last-5-form, the legacy 14-field market block, and — since the
+    §7.2 unification — the temporal, league and combination groups, which
+    FeatureTransformer previously recomputed with its own inline copies.
+    That unification is proven behaviour-preserving by
+    tests/unit/test_feature_vector_parity.py, which runs the real
+    FeatureTransformer and compares it against these same helpers.
 
     An apex schema's market block gets UNDECLARED: derive_apex_market_features
     has zero callers anywhere in backend/src (only scripts/), so nothing
@@ -960,6 +989,12 @@ def _serving_source(name: str, group: str, schema_version: str) -> str:
         return _SERVING_SOURCE_LAST5_FORM
     if name in _GOALS_GD_FIELDS:
         return _SERVING_SOURCE_GOALS_GD
+    if group == "TEMPORAL_FEATURES":
+        return _SERVING_SOURCE_TEMPORAL
+    if group in ("LEAGUE_ONEHOT_FEATURES", "LEAGUE_RATE_FEATURES"):
+        return _SERVING_SOURCE_LEAGUE
+    if group == "COMBINATION_FEATURES":
+        return _SERVING_SOURCE_COMBINATION
     if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
         return (
             UNDECLARED if _is_apex_schema(schema_version)

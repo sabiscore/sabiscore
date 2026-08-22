@@ -229,18 +229,35 @@ then pass again on restore.
    harness ever claims parity for a feature the contract cannot attribute
    (watched failing on `shot_quality_diff` before being trusted).
 
-   **What it does NOT yet cover, and why:**
-   - `FeatureTransformer.engineer_features()` (`data/transformers.py`), the
-     *second* serving implementation, serving `insights/engine.py`. It calls
-     the shared `derive_last5_form_features` / `derive_market_features` but
-     recomputes temporal, league and combination features with its own inline
-     logic (`_project_to_canonical_features`, `:399-435`) — duplicated tables
-     that merely *claim* numerical identity in a comment. This is the concrete
-     blocker to full §7.3 and the reason `serving_source` is `UNDECLARED` for
-     those three groups. Closing it means making that method call
-     `derive_temporal_features()` / `derive_league_features()` /
-     `derive_combination_features()`: behaviour-preserving unification, but it
-     touches a live serving path and deserves its own PR.
+   ✅ **§7.2 unification DONE 2026-08-22.**
+   `FeatureTransformer._project_to_canonical_features()` — the *second*
+   serving implementation, serving `insights/engine.py` — no longer carries
+   inline copies of the temporal, league and combination arithmetic. It now
+   calls the same `derive_temporal_features()` / `derive_league_features()` /
+   `derive_combination_features()` the projector and the training script
+   already used, so all three pipelines share one implementation per group.
+
+   The tables were **proven** byte-identical before the change, not assumed:
+   the league priors dict and its fallback triple compare equal; the one-hot
+   logic agrees across all 12 league keys including unsupported ones; temporal
+   agrees across five kickoffs (pandas `.dayofweek` and `datetime.weekday()`
+   share Monday=0); the four combination formulas agree. The parity harness
+   now runs the real `FeatureTransformer` and asserts agreement, and was
+   watched failing on an injected divergence before being trusted.
+   Consequence: `serving_source` on `phase7_68` resolves for 44 of 68
+   features, up from 28.
+
+   ⚠️ **The fail-closed guard deliberately did NOT move into the shared
+   helper.** `derive_league_features()` falls back for a league with no
+   measured priors, because `UpcomingMatchFeatureProjector` must keep serving
+   Eredivisie and UCL — neither has a one-hot column. `FeatureTransformer` is
+   the stricter caller and still raises `DataUnavailableError`, now via the
+   new public `has_league_rate_priors()` predicate. Pinned by
+   `test_unifying_did_not_remove_the_unsupported_league_guard`, which asserts
+   the guard's *location*: moving it into the helper would keep that test
+   green while silently breaking the projector.
+
+   **What remains uncovered:**
    - the 6 goals/gd fields are attributed but flagged as a **replicated direct
      assignment** across three pipelines rather than a shared function. The
      harness verifies they agree today; three copies can drift where one
