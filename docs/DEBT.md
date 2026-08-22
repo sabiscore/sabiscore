@@ -1324,12 +1324,12 @@ disguise — say so honestly.
 
 ## 21. Frontend residuals left deliberately after the 2026-08-13 truthfulness pass
 
-**Tier:** `ACCEPTED` (a and b) / **CLOSED 2026-08-14** (c — see below).
+**Tier:** `ACCEPTED` (a) / **CLOSED 2026-08-14** (c) / **CLOSED 2026-08-22** (b).
 **Found:** 2026-08-13, while fixing the `LIVE`-badge, page-title, mobile-overflow
 and selection-UI defects recorded in `CHANGELOG.md` for that date.
 
-Three things were found and understood; (a) and (b) were deliberately left
-unchanged, (c) was fixed the next day once its own named trigger fired.
+Three things were found and understood; (a) was deliberately left unchanged,
+(b) and (c) were later fixed once each item's own named trigger fired.
 Recording all three so a future session does not re-derive the context.
 
 **(a) `BigMatchesCarousel` fetches while collapsed.** On the homepage the match
@@ -1344,13 +1344,21 @@ or truthfulness issue — but it is avoidable. The fix is to gate the fetch on t
 `<details>` open state (or lazy-mount the selector), which needs the accordion to
 become a controlled component. Not worth the added state today.
 
-**(b) `monitoring-dashboard.tsx` / `performance-dashboard.tsx` are orphaned.**
-Neither is imported anywhere in `apps/web/src` (repo-wide grep), and
-`app/monitoring/page.tsx` is a pure `redirect("/performance")`. They also fetch
-endpoint shapes (`/api/metrics`, `/api/drift`) that no longer match the
-`/api/model-performance*` surface `/performance` actually uses. Dead code, not
-user-reachable, so deleting them is safe but is a separate cleanup with its own
-review — bundling it into a UI-truthfulness commit would have obscured that diff.
+**(b) `monitoring-dashboard.tsx` / `performance-dashboard.tsx` are orphaned —
+CLOSED 2026-08-22.** Neither was imported anywhere in `apps/web/src` (repo-wide
+grep), and `app/monitoring/page.tsx` is a pure `redirect("/performance")`. They
+also fetched endpoint shapes (`/api/metrics`, `/api/drift`) that no longer
+matched the `/api/model-performance*` surface `/performance` actually uses.
+Deleted, along with `confidence-band-chart.tsx` (same directory, same
+zero-importer status — not named in the original entry, found while confirming
+these two, and dead independently of them). Also deleted `apps/web/pre-deploy-check.ps1`,
+found in the same pass: an unwired PowerShell script (not referenced by any
+`package.json` script, CI workflow, `Makefile`, or `render.yaml`/`vercel.json`
+target) whose "critical files" checklist still named `src/lib/ml/tfjs-ensemble-engine.ts`
+and `src/lib/betting/kelly-optimizer.ts` — both deliberately deleted in
+prior sessions (TF.js browser inference and the frontend Kelly module) — so it
+had been failing its own checklist, silently, unused, for months. `pnpm lint`
+and `pnpm typecheck` both exit 0 after all four deletions.
 
 **(c) `phase8-analytics-panel.tsx` still labels a tier `"Live"` — CLOSED
 2026-08-14.** The named trigger fired: `Phase8AnalyticsSection` renders this
@@ -1369,11 +1377,10 @@ truthfulness fix required. Both helpers are now exported and pinned by
 `phase8-analytics-panel.test.tsx`. See `CHANGELOG.md` (2026-08-14) for the
 full three-file fix.
 
-**Blast radius:** (a) one redundant request per homepage load; (b) none — dead
-code; (c) none remaining — fixed.
-**Cost:** (a) small but needs a controlled accordion; (b) trivial deletion,
-separate review; (c) done.
-**Priority:** low for (a)/(b); none remaining for (c).
+**Blast radius:** (a) one redundant request per homepage load; (b) none
+remaining — dead code deleted; (c) none remaining — fixed.
+**Cost:** (a) small but needs a controlled accordion; (b) done; (c) done.
+**Priority:** low for (a); none remaining for (b)/(c).
 
 ---
 
