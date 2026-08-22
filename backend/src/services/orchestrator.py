@@ -563,10 +563,10 @@ class ProductionOrchestrator:
         import time
         start = time.time()
         try:
-            from ..core.database import engine
+            from ..core.database import get_engine
             from sqlalchemy import text
-            
-            with engine.connect() as conn:
+
+            with get_engine().connect() as conn:
                 conn.execute(text("SELECT 1"))
             
             return HealthCheckResult(

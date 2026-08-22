@@ -2156,9 +2156,42 @@ operator decision to change what the product is.
 
 ## 7. `core/database.py` opens a connection at import time, so every offline tool needs a live DB
 
-**Tier:** `ARCH-DEBT` — needs an ADR; do not change fail-closed semantics casually.
+**Tier:** `ACCEPTED` — **CLOSED 2026-08-22**, per `docs/adr/0008-lazy-database-engine-init.md`. Kept as the incident record.
 **Owner:** unassigned.
 **Found:** 2026-08-05, diagnosing a production outage (see the operator note below).
+
+**Fixed 2026-08-22.** Engine creation + connection testing moved from module
+import time into a lazily-initialised, memoized `get_engine()`, with an
+explicit `verify_database_connection()` called first thing in `api/main.py`'s
+`lifespan()` — preserving the exact fail-closed contract (unreachable
+PostgreSQL with no explicit SQLite fallback still aborts startup) while
+letting `Base`/model-class-only importers (Alembic, ~30 test files, scripts)
+import cleanly without a live database. `SessionLocal` became a class using
+`__new__` so its `SessionLocal()` call surface is unchanged for every
+existing caller. The two direct consumers of the old module-level `engine`
+object (`api/endpoints/monitoring.py`, `services/orchestrator.py`) now call
+`get_engine()` — the one place laziness could have been silently defeated,
+since `api/main.py` imports `monitoring.py`'s router at module scope, before
+`lifespan` ever runs. Alembic's `env.py` needed no change: it already builds
+its own independent engine via `engine_from_config()` and never touched
+`core.database`'s engine or fallback state.
+
+Verified, not assumed: `backend/tests/unit/test_lazy_database_engine.py`
+runs real subprocesses against a genuinely unreachable address (not an
+in-process mock) and proves both halves — import succeeds with no live DB
+and no fallback allowed, and `get_engine()`/`SessionLocal()` still raise the
+moment either is actually called. Full backend suite green (1636 passed, 0
+failed) after fixing 3 pre-existing tests that patched the now-removed
+`monitoring.engine` module attribute (`patch.object(monitoring, "engine",
+...)` → `patch.object(monitoring, "get_engine", return_value=...)`). Side
+benefit found while verifying: `backend/conftest.py` sets
+`ALLOW_SQLITE_FALLBACK=true` for the whole test session, so the old eager
+import created a throwaway `sabiscore_fallback.db` SQLite engine — and the
+stray gitignored file it left behind — on every single pytest run, even for
+tests that only needed `Base`/model classes and never touched a session.
+That waste is gone.
+
+**Original entry, 2026-08-05 (kept for the incident record):**
 
 `backend/src/core/database.py` runs `_test_connection()` and raises at **module scope**
 (`:110-117`), not inside a function. Anything that imports the module therefore
@@ -2178,17 +2211,19 @@ enforces "PostgreSQL unavailable and SQLite fallback is not explicitly allowed" 
 check must preserve that: the correct shape is a lazy engine whose *first use* raises
 the same way, not a check that is dropped.
 
-**Blast radius:** in production it converts a recoverable dependency outage into an
-un-diagnosable crash loop. `render.yaml`'s `startCommand` is
-`alembic upgrade head && uvicorn …`; when the import raises, the `&&` short-circuits,
-uvicorn never starts, the container exits, Render restarts it, and the only public
-signal is the platform's own HTML 502. The service being down is *correct* (it cannot
-serve without its database) — being unable to say why is not.
-**Cost:** medium. Convert to a lazily-initialised engine plus an explicit
-`verify_database_connection()` called from `lifespan()` and from Alembic's `run_
-migrations_online()`, keeping the fallback gate exactly where it is.
-**Impact:** developer friction today; diagnosability during an incident.
-**Priority:** medium — raise it if a second outage is misdiagnosed because of this.
+**Blast radius:** none remaining. In production it used to convert a recoverable
+dependency outage into an un-diagnosable crash loop. `render.yaml`'s `startCommand`
+is `alembic upgrade head && uvicorn …`; when the import raised, the `&&`
+short-circuited, uvicorn never started, the container exited, Render restarted
+it, and the only public signal was the platform's own HTML 502. The service
+being down was *correct* (it cannot serve without its database) — being
+unable to say why was not. `verify_database_connection()` now produces a
+dedicated log line at the same point in startup instead of a bare import
+traceback.
+**Cost:** done.
+**Impact:** none remaining — developer friction and incident diagnosability
+both resolved.
+**Priority:** none remaining.
 
 ---
 

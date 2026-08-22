@@ -13,6 +13,7 @@ from ..core.redaction import redact_text
 from ..core.cache import cache
 from ..core.model_fetcher import DEFAULT_LEAGUES, load_ensemble_per_league
 from ..models.active_generation import load_active_generation
+from ..core.database import verify_database_connection
 from ..db.session import init_db, close_db
 from ..providers import build_provider_registry
 from ..services.odds_service import OddsService
@@ -199,7 +200,17 @@ async def lifespan(app: FastAPI):
     
     # === STARTUP ===
     logger.info("Starting SabiScore API...")
-    
+
+    # Connect (and connection-test) the sync database engine now, as the
+    # first startup step -- core.database no longer does this at import
+    # time (docs/adr/0007-lazy-database-engine-init.md), so this is the one
+    # explicit place that preserves the original fail-closed contract:
+    # PostgreSQL unreachable with no explicit SQLite fallback still raises
+    # here and aborts startup, exactly as it always raised at import before.
+    # Left unguarded (no try/except) on purpose, and before init_db() below,
+    # which reads is_using_fallback() and needs this to have already run.
+    verify_database_connection()
+
     # Initialize cache and model state
     app.state.cache = cache
     app.state.model_instance = None
