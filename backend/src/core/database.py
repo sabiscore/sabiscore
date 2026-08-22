@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Iterator
+from threading import Lock
+from typing import Iterator, Optional
 
 import uuid
 
@@ -18,6 +19,7 @@ from sqlalchemy import (
     create_engine,
     text,
 )
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, relationship, sessionmaker, declarative_base
 from sqlalchemy.pool import QueuePool
@@ -48,8 +50,10 @@ def _get_sync_database_url(url: str) -> str:
 # Get sync-compatible database URL
 _sync_url = _get_sync_database_url(settings.database_url)
 
-# Flag to track database availability
-_db_available = True
+# Flag to track database availability. Both start "unknown" (False) rather
+# than "assumed available" -- they only become accurate once get_engine()
+# has actually run (see docs/adr/0007-lazy-database-engine-init.md).
+_db_available = False
 _using_fallback = False
 
 
@@ -93,20 +97,32 @@ def _test_connection(eng) -> bool:
         return False
 
 
-# Initialize database engine with fallback
-if _sync_url.startswith("sqlite"):
-    if not _sqlite_fallback_allowed():
-        raise RuntimeError(
-            "SQLite database URLs require SABISCORE_ALLOW_INSECURE_FALLBACK=true "
-            "and APP_ENV must not be production"
-        )
-    # SQLite-specific configuration
-    engine = _create_sqlite_engine(_sync_url)
-    _db_available = _test_connection(engine)
-else:
+def _init_engine() -> Engine:
+    """Create and connection-test the database engine.
+
+    This is the exact logic that used to run at module import time (see
+    docs/adr/0007-lazy-database-engine-init.md) -- unchanged in substance,
+    only in when it runs. Fail-closed semantics are preserved: PostgreSQL
+    unreachable with no explicit SQLite fallback still raises here, just
+    like it always did. Importing this module for `Base`/model classes
+    (Alembic, tests, IDE tooling) no longer triggers it.
+    """
+    global _db_available, _using_fallback
+
+    if _sync_url.startswith("sqlite"):
+        if not _sqlite_fallback_allowed():
+            raise RuntimeError(
+                "SQLite database URLs require SABISCORE_ALLOW_INSECURE_FALLBACK=true "
+                "and APP_ENV must not be production"
+            )
+        # SQLite-specific configuration
+        eng = _create_sqlite_engine(_sync_url)
+        _db_available = _test_connection(eng)
+        return eng
+
     # Try PostgreSQL first
     try:
-        engine = _create_postgres_engine(_sync_url)
+        eng = _create_postgres_engine(_sync_url)
         # Connect inline rather than via _test_connection(): that helper returns a
         # bool and swallows the driver's exception into a logger.warning, so the
         # raise below used to surface a bare "PostgreSQL connection test failed"
@@ -114,9 +130,11 @@ else:
         # alembic) then saw an unactionable error for what is usually a precise,
         # self-explaining driver message ("password authentication failed for
         # user X", "no pg_hba.conf entry", "could not translate host name").
-        with engine.connect() as _conn:
+        with eng.connect() as _conn:
             _conn.execute(text("SELECT 1"))
         logger.info("PostgreSQL connection successful")
+        _db_available = True
+        return eng
     except Exception as exc:
         if not _sqlite_fallback_allowed():
             logger.error("PostgreSQL unavailable and SQLite fallback is not explicitly allowed")
@@ -124,15 +142,71 @@ else:
         logger.warning("PostgreSQL unavailable (%s), using explicit SQLite fallback", exc)
         _using_fallback = True
         fallback_url = "sqlite:///./sabiscore_fallback.db"
-        engine = _create_sqlite_engine(fallback_url)
-        _db_available = _test_connection(engine)
+        eng = _create_sqlite_engine(fallback_url)
+        _db_available = _test_connection(eng)
         if _db_available:
             logger.info("SQLite fallback database initialized")
         else:
             logger.error("Both PostgreSQL and SQLite fallback failed!")
-            _db_available = False
+        return eng
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+_engine: Optional[Engine] = None
+_engine_lock = Lock()
+
+
+def get_engine() -> Engine:
+    """Return the lazily-created, connection-tested engine (memoized).
+
+    First call wins: it runs `_init_engine()` exactly once (double-checked
+    locking guards concurrent first callers) and every later call returns
+    the same engine. A failure is not cached/retried on a timer -- the next
+    call simply raises again, the same fail-closed shape as before.
+    """
+    global _engine
+    if _engine is None:
+        with _engine_lock:
+            if _engine is None:
+                _engine = _init_engine()
+    return _engine
+
+
+def verify_database_connection() -> Engine:
+    """Force the lazy engine to initialise now, raising on failure.
+
+    Call this once, early and unguarded, from a real startup entrypoint
+    (FastAPI's `lifespan`) so an unreachable database with no explicit
+    fallback still fails fast and loud at process startup -- unchanged from
+    the old import-time behaviour -- instead of surfacing lazily on
+    whichever request happens to touch the database first.
+    """
+    return get_engine()
+
+
+_session_factory: Optional[sessionmaker] = None
+
+
+def _get_session_factory() -> sessionmaker:
+    global _session_factory
+    if _session_factory is None:
+        eng = get_engine()  # outside the lock: does its own locking, and may raise
+        with _engine_lock:
+            if _session_factory is None:
+                _session_factory = sessionmaker(autocommit=False, autoflush=False, bind=eng)
+    return _session_factory
+
+
+class SessionLocal:
+    """Lazy stand-in for a bound `sessionmaker`.
+
+    Every existing caller uses this as `SessionLocal()` to get a `Session` --
+    that call surface is preserved exactly. What changes is that binding an
+    engine (and connection-testing it) is deferred to the first actual call
+    instead of happening at import time.
+    """
+
+    def __new__(cls, **kwargs) -> Session:
+        return _get_session_factory()(**kwargs)
 
 
 def is_db_available() -> bool:

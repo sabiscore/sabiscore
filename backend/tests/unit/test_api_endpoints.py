@@ -40,10 +40,11 @@ def test_health_check(test_client: TestClient) -> None:
     # Let's try /api/v1/health assuming the router is mounted there.
     
     # We need to mock the database check and cache check to ensure consistent results
-    with patch('src.api.endpoints.monitoring.engine') as mock_engine, \
+    mock_engine = MagicMock()
+    with patch('src.api.endpoints.monitoring.get_engine', return_value=mock_engine), \
          patch('src.core.cache.cache.ping', return_value=True), \
          patch('src.core.cache.cache.metrics_snapshot', return_value={'hits': 10, 'misses': 1}):
-        
+
         # Mock the connection context manager
         mock_connection = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_connection

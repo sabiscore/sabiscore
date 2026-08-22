@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
 
 from ...core.cache import cache
-from ...core.database import engine, get_db_status
+from ...core.database import get_engine, get_db_status
 from ...core.config import settings
 from ...core.model_fetcher import REQUIRED_LEAGUES
 from ...core.redaction import redact_text
@@ -84,7 +84,7 @@ def _discover_model_artifacts() -> Dict[str, Any]:
 def _check_alembic_revision() -> Dict[str, Any]:
     head = _alembic_head_revision()
     try:
-        with engine.connect() as conn:
+        with get_engine().connect() as conn:
             applied = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
     except Exception as exc:
         return {
@@ -149,7 +149,7 @@ def health_check() -> Dict[str, Any]:
     
     # Check database connectivity
     try:
-        with engine.connect() as conn:
+        with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         health_status["components"]["database"] = {
             "status": "healthy" if not db_status["using_fallback"] else "degraded",
@@ -334,7 +334,7 @@ async def readiness_check(
     
     # Check database
     try:
-        with engine.connect() as conn:
+        with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         checks["database"] = {"status": "ready", "message": "Connected"}
     except Exception as e:

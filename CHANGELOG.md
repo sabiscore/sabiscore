@@ -5,6 +5,48 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - core/database.py no longer connects at import time (2026-08-22)
+
+### Changed
+
+- `backend/src/core/database.py`: engine creation + connection testing moved
+  from module import time into a lazily-initialised, memoized `get_engine()`.
+  An explicit `verify_database_connection()` runs first thing in
+  `api/main.py`'s `lifespan()`, preserving the exact fail-closed contract
+  (unreachable PostgreSQL with no explicit `ALLOW_SQLITE_FALLBACK` still
+  aborts startup) while letting `Base`/model-class-only importers — Alembic,
+  ~30 test files, offline scripts — import cleanly without a live database.
+  `SessionLocal` is now a class using `__new__` so its `SessionLocal()` call
+  surface is unchanged for every existing caller. Closes `docs/DEBT.md` item
+  7; see `docs/adr/0008-lazy-database-engine-init.md` for the full decision
+  record.
+- `api/endpoints/monitoring.py` and `services/orchestrator.py`, the only two
+  direct consumers of the old module-level `engine` object, now call
+  `get_engine()` instead — the one place laziness could have been silently
+  defeated, since `api/main.py` imports `monitoring.py`'s router at module
+  scope, before `lifespan` ever runs.
+
+### Added
+
+- `backend/tests/unit/test_lazy_database_engine.py` — 4 subprocess-based
+  regression tests proving both halves: import succeeds against a genuinely
+  unreachable database with no fallback allowed, and `get_engine()`/
+  `SessionLocal()` still raise the moment either is actually called.
+
+### Fixed
+
+- 3 pre-existing tests patched the now-removed `monitoring.engine` module
+  attribute (`patch.object(monitoring, "engine", ...)` /
+  `patch('...monitoring.engine')`); updated to patch `get_engine` instead.
+
+### Safety
+
+- Full backend suite: 1636 passed, 0 failed, 14 skipped. Side benefit found
+  while verifying: `backend/conftest.py` sets `ALLOW_SQLITE_FALLBACK=true`
+  for the whole test session, so the old eager import created a throwaway
+  `sabiscore_fallback.db` SQLite engine on every single pytest run, even for
+  tests that only needed `Base`/model classes. That waste (and the stray
+  gitignored file it left behind) is gone.
 ## Unreleased - Remove orphaned monitoring dashboards and stale pre-deploy script (2026-08-22)
 
 ### Removed

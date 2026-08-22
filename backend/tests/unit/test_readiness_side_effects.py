@@ -35,7 +35,7 @@ async def test_readiness_is_side_effect_free_when_core_gates_are_green() -> None
     mock_engine.connect.return_value.__enter__.return_value.execute.return_value = None
 
     with (
-        patch.object(monitoring, "engine", mock_engine),
+        patch.object(monitoring, "get_engine", return_value=mock_engine),
         patch.object(
             monitoring,
             "_check_alembic_revision",
@@ -100,7 +100,7 @@ async def test_readiness_preserves_core_503_semantics_without_capability_probe()
     mock_engine.connect.return_value.__enter__.return_value.execute.return_value = None
 
     with (
-        patch.object(monitoring, "engine", mock_engine),
+        patch.object(monitoring, "get_engine", return_value=mock_engine),
         patch.object(
             monitoring,
             "_check_alembic_revision",
