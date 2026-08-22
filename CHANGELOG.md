@@ -5,6 +5,63 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Promotion gate made satisfiable, market-block decision recorded, identity backlog gauge (2026-08-22)
+
+### Changed
+
+- `backend/src/models/promotion_evidence.py`: `_expected_gate()` no longer
+  counts `always_data_gap_slots` as a blocker. Four `PHASE7_FEATURES_ALWAYS_DATA_GAP`
+  features are permanent, declared slots in every 68-wide schema (removing
+  them broke every artifact and served `model_version="fallback"` for two
+  months), so counting them made `serving_feature_availability` — and
+  therefore `promotion_permitted` — structurally unreachable for any
+  candidate, however good. The declared-gap count of 4 still surfaces in
+  every evidence summary and rendered report; it just no longer disqualifies.
+  Authorized decision, closes `docs/DEBT.md` item 38. This does not promote
+  anything: the current candidate independently fails `no_league_regression`
+  and `market_baseline`, and still carries 11 `serving_schema_misaligned_slots`
+  from item 37.
+- `backend/src/models/certification_policy.py`: `serving_feature_availability`'s
+  threshold and rule updated to match; `CERTIFICATION_POLICY_VERSION` bumped
+  `1.0.0` → `1.1.0` (a genuine threshold change, not wording).
+- `backend/scripts/train_on_real_matches.py`: `build_dataset()` now asserts
+  the market-block slice of `feature_names` is exactly `APEX_MARKET_FEATURES_14`
+  in order, one-time and static, so a future edit cannot silently swap in the
+  legacy 14-field block while a trained candidate's metadata still declares
+  `feature_schema_version: apex_v1_*`.
+- `backend/src/services/fixture_sync_service.py`: `sync_upcoming_fixtures()`
+  now sets a gauge, `fixture_sync.identity_rebind_pending_backlog`, to the
+  exact count of identity-mismatched fixtures found in that sync tick.
+  Because every unsettled fixture is re-checked every tick, this is a true
+  point-in-time backlog size — unlike the pre-existing `identity_rebind_pending`
+  counter (kept, unchanged), which only ever answered "how many rebind
+  events fired this process lifetime" and reset to 0 on every redeploy.
+  Surfaced automatically via the existing `GET /metrics` gauges. Closes
+  `docs/DEBT.md` item 35 fix-step (a).
+
+### Documented
+
+- `docs/DEBT.md` item 37: recorded the modelling decision that the Apex
+  14-field market block (`derive_apex_market_features`) is the standard for
+  future generations — the legacy block's `ev_home == ev_draw == ev_away`
+  always, and `draw_probability`/`market_confidence` duplicate fields already
+  present, so 3 of its 14 features carry no independent signal. Training-side
+  self-labeling (`feature_schema_version: apex_v1_*`) was already implemented.
+  Recorded as a new, explicit follow-up (not started): wiring live serving to
+  build Apex-ordered market vectors, which a promoted Apex-schema candidate
+  will require and which needs its own dedicated PR and parity tests.
+
+### Tests
+
+- `backend/tests/unit/test_promotion_gate_satisfiability.py`: the test that
+  pinned the deadlock now pins the repair (asserts `PASS`, not `FAIL`).
+- `backend/tests/unit/test_train_on_real_matches_market_block.py` (new): the
+  static market-block assertion holds today and actually catches a corrupted
+  block; the `apex_v1_*` schema-version format is pinned.
+- `backend/tests/unit/test_provider_elo_identity_bridge.py`: extended
+  `test_existing_scheduled_fixture_is_not_silently_rekeyed` with a gauge
+  assertion.
+
 ## Unreleased - core/database.py no longer connects at import time (2026-08-22)
 
 ### Changed

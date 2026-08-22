@@ -34,7 +34,10 @@ from typing import Any, Dict, Mapping
 #: Bumped only when a threshold genuinely changes, never for wording. The
 #: certification manifest cites this together with POLICY_SHA256 so a report can
 #: always be traced to the exact bar it was judged against.
-CERTIFICATION_POLICY_VERSION = "1.0.0"
+#: 1.0.0 -> 1.1.0 (2026-08-22): docs/DEBT.md item 38, authorized — removed
+#: always_data_gap_slots from serving_feature_availability's threshold. See
+#: that gate's entry below for the full rationale.
+CERTIFICATION_POLICY_VERSION = "1.1.0"
 
 #: Every gate `compare_candidate_vs_incumbent.py` emits, with the rule as
 #: applied and the code that applies it. `rule` is prose for a reviewer;
@@ -62,23 +65,25 @@ PROMOTION_GATES: Dict[str, Dict[str, Any]] = {
     "serving_feature_availability": {
         "rule": (
             "no silently-defaulted training slot, no positional train/serve "
-            "schema mismatch, no declared-permanent data-gap slot, and a "
-            "non-empty training set"
+            "schema mismatch, and a non-empty training set"
         ),
         "source": "src/models/promotion_evidence.py:_expected_gate()",
         "threshold": {
             "training_defaulted_slots": 0,
             "serving_schema_misaligned_slots": 0,
-            "always_data_gap_slots": 0,
             "min_training_rows": 1,
         },
-        # Transcribed exactly as applied. See docs/DEBT.md item 38: the
-        # always_data_gap_slots term makes this gate unsatisfiable for any
-        # 68-wide candidate, because all four declared-gap features are
-        # permanent slots in every 68 schema. Recorded here as-is rather than
-        # quietly corrected — changing it is an authorized decision, not a
-        # transcription detail.
-        "known_issue": "docs/DEBT.md item 38 — unsatisfiable as written",
+        # docs/DEBT.md item 38, RESOLVED 2026-08-22 (authorized): this gate
+        # used to also require always_data_gap_slots == 0, which made it
+        # unsatisfiable for any 68-wide candidate — all four
+        # PHASE7_FEATURES_ALWAYS_DATA_GAP features are permanent, declared
+        # slots in every 68 schema (removing them broke every artifact and
+        # served model_version="fallback" for two months). The term was
+        # authorized-removed as a blocker; the count of 4 still surfaces in
+        # every evidence summary and rendered report, it just no longer
+        # disqualifies. This does not relax any real quality bar — the
+        # candidate this was checked against still independently fails
+        # no_league_regression and market_baseline (docs/DEBT.md item 38).
     },
     "primary_metric_improvement": {
         "rule": "mean RPS improvement over the incumbent is strictly positive",
