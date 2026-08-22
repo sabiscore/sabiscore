@@ -220,7 +220,7 @@ then pass again on restore.
    six-match-per-side history as `Match` rows for
    `UpcomingMatchFeatureProjector._get_team_stats()` **and** feeds the same
    results to `train_on_real_matches.TeamHistory`, then compares both the
-   per-side stats dicts and a SHA-256 over an ordered 40-name sub-vector
+   per-side stats dicts and a SHA-256 over an ordered 44-name sub-vector
    (`PARITY_SCOPE`). `TeamHistory.stats()`'s long-standing docstring claim —
    "Mirror `_get_team_stats()`" — is confirmed true for the first time.
    A `test_a_divergence_actually_breaks_the_hash` case perturbs one feature by
@@ -257,6 +257,20 @@ then pass again on restore.
    the guard's *location*: moving it into the helper would keep that test
    green while silently breaking the projector.
 
+   ✅ **`FeatureTransformer` test-coverage gap closed 2026-08-22 (same day,
+   follow-up pass).** `_serving_source()` already attributed `FeatureTransformer`'s
+   last-5-form and market-block calls to `derive_last5_form_features()` /
+   `derive_market_features()` (both were unified earlier, under WP-18/WP-A,
+   before §7.2's temporal/league/combination work) — but only the group tests
+   added alongside §7.2 (`test_second_serving_implementation_matches_the_shared_
+   league_helper` / `_temporal_helper` / `_combination_helper`) existed;
+   last-5-form and market had zero regression coverage despite the shared
+   implementation already being live. `test_second_serving_implementation_
+   matches_the_shared_last5_form_helper` and `_market_helper` close that gap,
+   both watched failing on an injected perturbation before being trusted. All
+   five feature groups `FeatureTransformer` shares with the other pipelines
+   are now individually parity-tested.
+
    **What remains uncovered:**
    - the 6 goals/gd fields are attributed but flagged as a **replicated direct
      assignment** across three pipelines rather than a shared function. The
@@ -267,6 +281,13 @@ then pass again on restore.
      (serving substitutes documented defaults and raises a data gap; training
      returns `None` and drops the row). That divergence is by design, so the
      harness states the restriction rather than hiding it.
+   - the 24 features with `serving_source: UNDECLARED` on `phase7_68`
+     (`h2h_*`, `home_venue_*`, `home_advantage_strength`,
+     `total_goals_expected`, the 4 agreement/combo fields, and all 10
+     `PHASE7_FEATURES_10` elo/pressing/carry/shot-quality fields) — no shared
+     implementation exists to attribute or parity-test them against. Extracting
+     one for each remaining group is a materially larger effort, not attempted
+     this session.
 
 ### Deliberately unchanged
 

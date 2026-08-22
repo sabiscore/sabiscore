@@ -5,6 +5,37 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 3 finalized: parity coverage for the two remaining shared groups (2026-08-22)
+
+### Added
+
+- Two parity tests in `backend/tests/unit/test_feature_vector_parity.py`:
+  `test_second_serving_implementation_matches_the_shared_last5_form_helper`
+  and `_market_helper`. §7.2 (below) added tests for the three groups it
+  personally unified (league/temporal/combination); last-5-form and market
+  were unified earlier under WP-18/WP-A and had run live with zero regression
+  coverage until now, despite `_serving_source()` already attributing both
+  groups to the shared helpers. Both new tests were watched failing on an
+  injected perturbation before being trusted.
+
+### Fixed
+
+- `docs/DEBT.md` item 36: corrected a stale "40-name sub-vector" reference
+  (`PARITY_SCOPE` grew to 44 names in §7.2) and recorded the closed
+  sub-gap alongside what remains genuinely open — the 6 goals/gd fields
+  (replicated direct assignment, not a shared function), the fallback-branch
+  divergence (by design), and the 24 features with no shared implementation
+  to attribute at all.
+- Two stale docstrings in `test_feature_vector_parity.py` that predated §7.2
+  and still described `FeatureTransformer` as recomputing temporal/league/
+  combination inline.
+
+### Safety
+
+- Feature contract hash unchanged (`b63a0517…`) — test-and-documentation-only,
+  no attribution logic touched. Full backend suite 1636 passed / 14 skipped;
+  mypy 769 ≤ 784; ruff clean; `scripts/verify_active_artifacts.py` exit 0.
+
 ## Unreleased - Phase 3 §7.2: one implementation per feature group (2026-08-22)
 
 ### Changed
