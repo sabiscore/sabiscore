@@ -1,11 +1,17 @@
 """core.database must not connect at import time, but must still fail
 closed the moment anything actually asks for a session/engine.
 
-Runs in real subprocesses (not just patched in-process) because the
-regression this guards is specifically about *module import*, which an
-in-process test can't isolate once `src.core.database` is already cached in
-`sys.modules` by the rest of the suite. See docs/DEBT.md item 7 and
-docs/adr/0007-lazy-database-engine-init.md.
+The import-time regression itself can only be proven with real subprocesses
+(not in-process patching), because it's specifically about *module import*,
+which an in-process test can't isolate once `src.core.database` is already
+cached in `sys.modules` by the rest of the suite. See docs/DEBT.md item 7 and
+docs/adr/0008-lazy-database-engine-init.md.
+
+The branch-level tests further down (TestInitEngine) run in-process instead,
+monkeypatching _init_engine()'s collaborators directly -- subprocess tests
+don't run under the parent pytest process's coverage instrumentation, so a
+subprocess-only suite is invisible to coverage tooling despite genuinely
+exercising the code.
 """
 
 from __future__ import annotations
@@ -14,6 +20,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+import src.core.database as db
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -201,3 +211,124 @@ def test_postgres_unreachable_falls_back_to_sqlite_when_explicitly_allowed():
     assert result.returncode == 0, result.stderr
     assert "ENGINE_OK:sqlite" in result.stdout
     assert "USING_FALLBACK:True" in result.stdout
+
+
+# ─── In-process branch coverage for _init_engine() ─────────────────────────
+#
+# The subprocess tests above are the trustworthy end-to-end proof, but a
+# subprocess's coverage isn't visible to the parent pytest process's
+# coverage.py run. These monkeypatch _init_engine()'s collaborators directly
+# so every branch is both exercised AND counted.
+
+
+@pytest.fixture(autouse=True)
+def _reset_module_singletons(monkeypatch: pytest.MonkeyPatch):
+    """_init_engine() mutates module-level globals (_db_available,
+    _using_fallback); isolate each test from whatever the rest of the suite
+    (or an earlier test in this file) already did to them."""
+    monkeypatch.setattr(db, "_db_available", False)
+    monkeypatch.setattr(db, "_using_fallback", False)
+    yield
+
+
+class _FakeEngine:
+    def __init__(self, name: str):
+        self.name = name
+
+
+def test_init_engine_sqlite_primary_success(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(db, "_sync_url", "sqlite:///:memory:")
+    monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
+    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-primary"))
+    monkeypatch.setattr(db, "_test_connection", lambda eng: True)
+
+    engine = db._init_engine()
+
+    assert engine.name == "sqlite-primary"
+    assert db.is_db_available() is True
+    assert db.is_using_fallback() is False
+
+
+def test_init_engine_sqlite_primary_rejected_without_fallback_flag(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(db, "_sync_url", "sqlite:///:memory:")
+    monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: False)
+
+    with pytest.raises(RuntimeError, match="ALLOW_INSECURE_FALLBACK"):
+        db._init_engine()
+
+
+def test_init_engine_postgres_success_never_touches_fallback(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
+    monkeypatch.setattr(db, "_create_postgres_engine", lambda url: _FakeEngine("postgres"))
+
+    class _FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr(_FakeEngine, "connect", lambda self: _FakeConn(), raising=False)
+
+    engine = db._init_engine()
+
+    assert engine.name == "postgres"
+    assert db.is_db_available() is True
+    assert db.is_using_fallback() is False
+
+
+def test_init_engine_postgres_failure_falls_back_to_sqlite(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
+
+    def _raise_postgres(url):
+        raise ConnectionError("simulated postgres outage")
+
+    monkeypatch.setattr(db, "_create_postgres_engine", _raise_postgres)
+    monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
+    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback"))
+    monkeypatch.setattr(db, "_test_connection", lambda eng: True)
+
+    engine = db._init_engine()
+
+    assert engine.name == "sqlite-fallback"
+    assert db.is_using_fallback() is True
+    assert db.is_db_available() is True
+
+
+def test_init_engine_postgres_failure_no_fallback_raises(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
+
+    def _raise_postgres(url):
+        raise ConnectionError("simulated postgres outage")
+
+    monkeypatch.setattr(db, "_create_postgres_engine", _raise_postgres)
+    monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: False)
+
+    with pytest.raises(ConnectionError, match="simulated postgres outage"):
+        db._init_engine()
+
+    assert db.is_using_fallback() is False
+
+
+def test_init_engine_both_postgres_and_fallback_fail_reports_unavailable(monkeypatch: pytest.MonkeyPatch):
+    """_init_engine() does not raise when the fallback engine itself fails
+    its connection test -- it returns the (broken) engine and leaves
+    is_db_available() False, matching the pre-refactor behaviour exactly."""
+    monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
+
+    def _raise_postgres(url):
+        raise ConnectionError("simulated postgres outage")
+
+    monkeypatch.setattr(db, "_create_postgres_engine", _raise_postgres)
+    monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
+    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback"))
+    monkeypatch.setattr(db, "_test_connection", lambda eng: False)
+
+    engine = db._init_engine()
+
+    assert engine.name == "sqlite-fallback"
+    assert db.is_using_fallback() is True
+    assert db.is_db_available() is False
