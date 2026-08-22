@@ -1543,6 +1543,31 @@ diagnosis; does not change the runbook above.
 
 **Tier:** `FIX-NOW` / P0 before merge or deployment. **Verified:** 2026-08-10.
 
+> ⚠️ **Partially stale as of 2026-08-22 — re-verify before treating any line
+> below as current.** This item's evidence predates roughly 60 merged PRs
+> (last renumbered reference here is "PR #5"; the repository is at PR #75 as
+> of this note) and its own Alembic line names `0006_canonical_league_ids`
+> as the sole head — the tree now has three migrations past that
+> (`0007_durable_elo_state`, `0008_provider_elo_team_identity`,
+> `0009_quarantine_post_kickoff_closings`, confirmed by listing
+> `backend/alembic/versions/` directly). A live production Render deploy log
+> captured this same session shows a clean, fast, successful boot: build
+> succeeded, `alembic upgrade head` applied cleanly, `Alembic schema revision
+> verified: 0009_quarantine_market_closings` logged, service went live,
+> `/health/ready` returned 200 repeatedly within seconds. Every PR in this
+> session (#72–#75) also merged through genuinely green canonical CI
+> (`gh pr checks`, all required jobs `SUCCESS`) with no billing-lock
+> annotations anywhere — the GitHub Actions dispatch blocker this item
+> tracked is confirmed still clear. The **"Release rule" line below is
+> obsolete** (PR #5 is ~70 PRs in the past) and should not be read as
+> current merge policy. **Not re-verified this session, genuinely unknown
+> either way:** the two historical Gitleaks credential fingerprints (still
+> needs the credential owner's dated revocation evidence — operator-only,
+> not code-checkable) and whether a fresh `sabiscore-backend:verify` /
+> `sabiscore-web:verify` Docker image tag exists (needs an actual build run,
+> not attempted this session). Do not mark those two sub-items resolved
+> without independently re-running them.
+
 - Current-tree Gitleaks passes. Full-history Gitleaks still reports exactly two
   historical `backend/.env.example` fingerprints: `generic-api-key:17` at
   `d604c13` and `generic-api-key:10` at `67ed0ab`. Neither may be waived until
