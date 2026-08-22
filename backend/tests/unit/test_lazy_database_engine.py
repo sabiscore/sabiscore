@@ -114,3 +114,90 @@ def test_engine_is_memoized_across_calls():
     )
     assert result.returncode == 0, result.stderr
     assert "SAME" in result.stdout
+
+
+def test_session_local_returns_a_usable_session_on_the_success_path():
+    """The other half of test_session_local_call_also_triggers_the_same_
+    fail_closed_path: SessionLocal() must also still hand back a real,
+    usable Session -- not just raise correctly on failure."""
+    result = _run(
+        "import src.core.database as db\n"
+        "from sqlalchemy import text\n"
+        "session = db.SessionLocal()\n"
+        "try:\n"
+        "    value = session.execute(text('SELECT 1')).scalar_one()\n"
+        "    print('QUERY_OK:' + str(value))\n"
+        "finally:\n"
+        "    session.close()\n",
+        extra_env={
+            "APP_ENV": "development",
+            "ALLOW_SQLITE_FALLBACK": "true",
+            "DATABASE_URL": "sqlite:///:memory:",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "QUERY_OK:1" in result.stdout
+
+
+def test_verify_database_connection_returns_the_same_engine_as_get_engine():
+    """verify_database_connection() is the named entrypoint lifespan() calls
+    -- confirm it actually does the same thing get_engine() does, not a
+    parallel/divergent path."""
+    result = _run(
+        "import src.core.database as db\n"
+        "e1 = db.verify_database_connection()\n"
+        "e2 = db.get_engine()\n"
+        "print('SAME' if e1 is e2 else 'DIFFERENT')\n",
+        extra_env={
+            "APP_ENV": "development",
+            "ALLOW_SQLITE_FALLBACK": "true",
+            "DATABASE_URL": "sqlite:///:memory:",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "SAME" in result.stdout
+
+
+def test_status_helpers_reflect_reality_after_a_successful_lazy_init():
+    """is_db_available()/is_using_fallback()/get_db_status() default to an
+    honest 'unknown' (False) before anything triggers the engine, and must
+    become accurate once get_engine() has actually run."""
+    result = _run(
+        "import src.core.database as db\n"
+        "before = db.is_db_available()\n"
+        "db.get_engine()\n"
+        "after = db.is_db_available()\n"
+        "status = db.get_db_status()\n"
+        "print('BEFORE:' + str(before))\n"
+        "print('AFTER:' + str(after))\n"
+        "print('FALLBACK:' + str(db.is_using_fallback()))\n"
+        "print('STATUS_AVAILABLE:' + str(status['available']))\n",
+        extra_env={
+            "APP_ENV": "development",
+            "ALLOW_SQLITE_FALLBACK": "true",
+            "DATABASE_URL": "sqlite:///:memory:",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "BEFORE:False" in result.stdout
+    assert "AFTER:True" in result.stdout
+    assert "STATUS_AVAILABLE:True" in result.stdout
+
+
+def test_postgres_unreachable_falls_back_to_sqlite_when_explicitly_allowed():
+    """The other half of the fail-closed test: when the fallback IS allowed,
+    an unreachable primary must still succeed via SQLite, not raise."""
+    result = _run(
+        "import src.core.database as db\n"
+        "engine = db.get_engine()\n"
+        "print('ENGINE_OK:' + engine.dialect.name)\n"
+        "print('USING_FALLBACK:' + str(db.is_using_fallback()))\n",
+        extra_env={
+            "APP_ENV": "development",
+            "ALLOW_SQLITE_FALLBACK": "true",
+            # Primary is Postgres and unreachable; fallback is allowed this time.
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ENGINE_OK:sqlite" in result.stdout
+    assert "USING_FALLBACK:True" in result.stdout
