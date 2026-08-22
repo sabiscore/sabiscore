@@ -3,10 +3,13 @@
 
 Regenerate this after any change to feature_registry.py's schema
 definitions/derivation rules, or after active_generation.json's
-feature_schema_version changes. active_generation.py's build gate
-regenerates the contract on every load and fails closed if this checked-in
-copy has drifted (docs/DEBT.md item 36) — running this script is how you
-keep it in sync.
+feature_schema_version changes. active_generation.py's
+verify_feature_contract_freshness() re-derives the contract and fails
+closed if this checked-in copy has drifted, but only at build time via
+scripts/verify_active_artifacts.py — not on every load_active_generation()
+call, so a drift here fails a deploy rather than crash-looping a running
+service (docs/DEBT.md item 36) — running this script is how you keep it
+in sync.
 
 Loads feature_registry.py standalone by file path, the same pattern
 verify_active_artifacts.py uses, so this script never needs a database
