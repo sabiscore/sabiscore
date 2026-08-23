@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
 from ...services.elo_recovery_health_service import elo_recovery_health
+from ...services.fixture_identity_rebind_service import (
+    build_fixture_identity_rebind_manifest,
+)
 from ...services.historical_identity_repair_manifest_service import (
     build_semantic_identity_repair_manifest,
 )
@@ -180,6 +183,40 @@ async def semantic_repair_review(
         }
     finally:
         await db.rollback()
+
+
+@router.get("/fixture-identity-review")
+async def fixture_identity_review(
+    response: Response,
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Review live fixtures whose stored identity disagrees with the already-
+    verified canonical identity (docs/DEBT.md item 35).
+
+    Purely read-only — never mutates ``matches``. No rebind/apply path exists
+    yet; that would be a Class-C production-identity mutation under the APEX
+    directive and needs its own, separately-authorized dry-run manifest flow,
+    mirroring ``semantic_repair_review`` for the sibling historical case.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    manifest = await build_fixture_identity_rebind_manifest(db)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "read_only": True,
+        "manifest": {
+            "schema_version": manifest.schema_version,
+            "rebind_manifest_sha256": manifest.manifest_sha256,
+            "summary": manifest.summary,
+        },
+        "entries": [entry.as_dict() for entry in manifest.entries],
+        "authorization": {
+            "apply_supported": False,
+            "note": (
+                "review only; no rebind/apply path exists yet — "
+                "see docs/DEBT.md item 35"
+            ),
+        },
+    }
 
 
 __all__ = ["router"]

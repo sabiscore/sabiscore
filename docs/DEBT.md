@@ -512,10 +512,29 @@ Surfaced automatically via the existing `GET /metrics` → `production.gauges`
 path — no new endpoint plumbing needed. Pinned by an added assertion in
 `test_provider_elo_identity_bridge.py::test_existing_scheduled_fixture_is_not_silently_rekeyed`,
 which already exercises exactly one mismatched fixture.
-**(b) still NOT built, deliberately** — the gauge answers the actually-stated
-gap ("is there a backlog and how big"); a reconciliation manifest or backfill
-remains future work, still best deferred until item 34's infrastructure is
-exercised for the first real case.
+**(b) partially RESOLVED 2026-08-23** — the review half is built:
+`GET /release/fixture-identity-review` (`data_authority.py`, backed by new
+`services/fixture_identity_rebind_service.py`) is a read-only manifest of
+every currently-drifted fixture, mirroring item 34's
+`historical_identity_repair_manifest_service.py` shape. It needed no live
+provider call and no re-run of resolution logic: `Match.id` is the provider
+event id, so joining `Match` ⋈ `ProviderEventMapping` ⋈ `CanonicalFixture`
+directly recovers the "verified" identity `ensure_canonical_fixture` already
+persists every tick, independent of whatever the legacy `Match` row still
+holds. Each entry carries stored vs. verified participant ids/names and
+computed blockers (`KICKOFF_PASSED`, `CROSS_LEAGUE_MISMATCH`,
+`HAS_EXISTING_PREDICTIONS`) per the APEX directive's §5.5 requirements for an
+operator-controlled reconciliation path. **The actual rebind/apply — writing
+corrected ids back onto `Match` rows — is still NOT built, deliberately**:
+that is a Class-C production-identity mutation (APEX §3) needing its own
+separately-authorized dry-run-manifest flow, out of scope for a review tool.
+Verified locally against SQLite via 6 new unit tests
+(`test_fixture_identity_rebind_service.py`) exercising the mismatch/no-mismatch/
+settled-excluded/kickoff-passed/existing-prediction/hash-determinism cases;
+not yet probed against the live production database this session — the render
+log evidence that reopened this item (13 fixtures, same `fd-team-` vs
+`fdco-team-` shape as the original 9) is the expected shape this endpoint
+would surface once deployed.
 
 ---
 
