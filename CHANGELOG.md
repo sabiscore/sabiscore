@@ -5,6 +5,64 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Fix broken web typecheck, wire orphaned Firecrawl test, remove non-functional UI pill (2026-08-23)
+
+### Fixed
+
+- `apps/web/src/lib/firecrawl/evidence.ts`: statically imported a generated
+  JSON artifact via the `@/*` alias (`apps/web/src/data/generated/...`), but
+  `scripts/firecrawl-refresh.ts` writes it to the repo root
+  (`data/generated/...`) — a path outside the package entirely, breaking
+  `pnpm typecheck` unconditionally. `getFirecrawlEvidence()` now takes an
+  optional `evidencePath` parameter (defaulting to the real artifact
+  location) and reads it at runtime, falling back to an empty bundle on a
+  missing file, a read error, or a failed Zod parse — matching this repo's
+  established fail-toward-silence convention rather than crashing the caller.
+- `tests/unit/firecrawl.test.ts` (real, substantive coverage for `client.ts`:
+  URL normalization/SSRF guards, error redaction, scrape/search shaping)
+  lived outside `apps/web`'s test tree and was never discovered by
+  `pnpm --filter @sabiscore/web test` — no repo-root Vitest config exists
+  either, so it never ran anywhere. Moved to
+  `apps/web/src/lib/firecrawl/client.test.ts`, this repo's established
+  colocated-test convention; no import changes needed.
+
+### Added
+
+- Committed the Firecrawl "portfolio evidence" transport layer for the first
+  time (`client.ts`, the `lib/server/firecrawl.ts` server-only boundary, the
+  refresh script, a generated scaffold, and the newly-discoverable test)
+  alongside the fix above, plus the `firecrawl`/`server-only`/`dotenv`
+  `package.json` and lockfile entries it depends on. No UI consumer is
+  wired — the evidence model is deliberately deferred until a product
+  feature defines what it should feed.
+- `apps/web/src/lib/firecrawl/evidence.test.ts`: covers all four branches of
+  `getFirecrawlEvidence()` (missing file, malformed JSON, failed schema
+  validation, a valid bundle) against real temporary files rather than
+  mocking `fs` — added after PR #79's SonarCloud gate failed on new-code
+  coverage (76.7% vs 80%). Mocking `node:fs` directly (both `vi.mock` and
+  `vi.spyOn`) failed under this repo's jsdom test environment; verified
+  failing before being abandoned for the temp-file approach.
+
+### Removed
+
+- `apps/web/src/app/page.tsx`: the "Supported competitions" grid's decorative
+  "Verify status" pill — it called nothing and linked nowhere, implying a
+  live per-league check the page never performs. The existing italic note
+  below the grid already carries the honest caveat without it.
+- `apps/web/src/components/match-selector.tsx`: a file-wide
+  `eslint-disable jsx-a11y/aria-proptypes` (every `aria-*` usage in the file
+  was already correctly typed; the rule never fired) and a dead
+  commented-out `console.warn`.
+
+### Verification
+
+- Backend (unaffected by this entry, re-confirmed): `pytest tests -q` → 1661
+  passed, 14 skipped · `ruff check src/` → clean
+- Web: `pnpm lint` → 0 · `pnpm typecheck` → 0 · `pnpm test` → 37 files / 224
+  passed
+
+---
+
 ## Unreleased - Apex market block wired into live serving, schema-gated (2026-08-22)
 
 ### Added
