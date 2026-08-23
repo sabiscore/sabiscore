@@ -94,3 +94,41 @@ def test_contract_hash_tampering_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="candidate feature-contract hash"):
         validate_promotion_feature_evidence(tampered)
+
+
+def test_serving_comparison_follows_the_active_schema(monkeypatch) -> None:
+    """docs/DEBT.md item 37: the gate must compare against what serving
+    ACTUALLY produces, not a hardcoded legacy constant.
+
+    Under today's real manifest (phase7_68 -> legacy block) an apex-trained
+    candidate is genuinely misaligned at 11 slots -- that FAIL is correct and
+    must not change. Under an apex_v1_68 manifest, live serving produces the
+    Apex order, so the same candidate is aligned and this particular blocker
+    clears. Without this, the counter would report 11 forever and no serving
+    fix could ever satisfy the gate.
+    """
+    import src.models.promotion_evidence as pe
+
+    legacy = build_promotion_feature_evidence(_candidate_dataset())
+    assert legacy["summary"]["serving_schema_misaligned_slots"] == 11
+
+    monkeypatch.setattr(pe, "active_feature_schema_version", lambda: "apex_v1_68")
+    apex = build_promotion_feature_evidence(_candidate_dataset())
+    assert apex["summary"]["serving_schema_misaligned_slots"] == 0
+    assert validate_promotion_feature_evidence(apex) is apex
+    assert apex["candidate_contract_hash"] == apex["serving_contract_hash"]
+
+
+def test_serving_contract_falls_back_to_legacy_when_unresolvable(monkeypatch) -> None:
+    """Serving's own fallback is phase7_68; the gate must describe that, not raise."""
+    import src.models.promotion_evidence as pe
+    from src.models.feature_registry import CANONICAL_FEATURES_68
+
+    def _raise() -> str:
+        raise pe.ActiveGenerationError("no manifest")
+
+    monkeypatch.setattr(pe, "active_feature_schema_version", _raise)
+    assert pe.current_serving_contract() == list(CANONICAL_FEATURES_68)
+
+    monkeypatch.setattr(pe, "active_feature_schema_version", lambda: "not_a_schema")
+    assert pe.current_serving_contract() == list(CANONICAL_FEATURES_68)

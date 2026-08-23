@@ -295,6 +295,27 @@ def active_generation_is_certified(models_dir: Path | None = None) -> bool:
     return generation.get("certification_state") == "CERTIFIED"
 
 
+def active_feature_schema_version(models_dir: Path | None = None) -> str:
+    """Return the active generation's declared ``feature_schema_version``.
+
+    Deliberately does not re-verify artifact hashes — that gate already runs
+    at boot (``_startup_load_models_strict`` / ``verify_active_artifacts.py``
+    via ``load_active_generation``); this is a cheap manifest read for
+    request-path callers (docs/DEBT.md item 37's serving wire-up) that only
+    need the schema name to pick a market-block code path, not to re-certify
+    the whole generation on every call.
+    """
+    root = (models_dir or DEFAULT_MODELS_DIR).resolve()
+    try:
+        payload = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActiveGenerationError("Active generation manifest is unavailable or invalid") from exc
+    version = payload.get("feature_schema_version") if isinstance(payload, dict) else None
+    if not isinstance(version, str) or not version.strip():
+        raise ActiveGenerationError("Active generation does not declare feature_schema_version")
+    return version.strip()
+
+
 def active_model_version(models_dir: Path | None = None) -> str:
     """Return the serving generation's model version (e.g. ``v5_phase7``).
 
@@ -315,6 +336,7 @@ def active_model_version(models_dir: Path | None = None) -> str:
 __all__ = [
     "ActiveGenerationError",
     "active_artifact_path",
+    "active_feature_schema_version",
     "active_generation_is_certified",
     "active_model_version",
     "load_active_generation",

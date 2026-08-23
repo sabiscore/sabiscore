@@ -77,6 +77,7 @@ docs/SABISCORE*.txt
 .local/
 .serena/
 
+.firecrawl/
 # Large artifacts moved out of repo (models / processed data)
 # ML Models (store in S3/GCS - too large for git)
 models/*.pkl

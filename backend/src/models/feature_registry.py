@@ -435,18 +435,46 @@ def resolve_feature_schema(version: object) -> List[str]:
         ) from exc
 
 
-def active_canonical_features(use_phase7: bool, use_phase8: bool = False) -> List[str]:
+def active_canonical_features(
+    use_phase7: bool, use_phase8: bool = False, *, apex: bool = False
+) -> List[str]:
+    """The serving column order for the active generation.
+
+    ``apex`` is a separate axis from ``use_phase7``/``use_phase8`` (which
+    pick the feature *width*, not the market block) — see docs/DEBT.md item
+    37. Defaults to False so every pre-existing caller is unaffected.
+    """
+    if apex:
+        if use_phase8:
+            return list(APEX_FEATURES_89)
+        return list(APEX_FEATURES_68 if use_phase7 else APEX_FEATURES_58)
     if use_phase8:
         return list(CANONICAL_FEATURES_89)
     return list(CANONICAL_FEATURES_68 if use_phase7 else CANONICAL_FEATURES_58)
 
 
 def active_default_feature_values(
-    use_phase7: bool, use_phase8: bool = False
+    use_phase7: bool, use_phase8: bool = False, *, apex: bool = False
 ) -> Dict[str, float]:
-    if use_phase8:
-        return dict(DEFAULT_FEATURE_VALUES_89)
-    return dict(DEFAULT_FEATURE_VALUES_68 if use_phase7 else DEFAULT_FEATURE_VALUES_58)
+    """Neutral fallback values for the active generation's serving schema.
+
+    ``apex=True`` swaps the legacy-only market defaults for the Apex block's
+    own, computed from the same neutral 1X2 snapshot
+    ``data/transformers.py`` already uses when no live odds are available
+    (2.5 / 3.3 / 2.8) — one convention for "no market evidence", expressed in
+    whichever market block is actually being served. Computed lazily (not a
+    module constant) because MARKET_FEATURES_14/derive_apex_market_features
+    are defined later in this file; the diff is 14 names, negligible cost.
+    """
+    base = (
+        dict(DEFAULT_FEATURE_VALUES_89) if use_phase8
+        else dict(DEFAULT_FEATURE_VALUES_68 if use_phase7 else DEFAULT_FEATURE_VALUES_58)
+    )
+    if apex:
+        legacy_only = frozenset(MARKET_FEATURES_14) - frozenset(APEX_MARKET_FEATURES_14)
+        base = {k: v for k, v in base.items() if k not in legacy_only}
+        base.update(derive_apex_market_features(2.5, 3.3, 2.8))
+    return base
 
 
 def canonical_feature_count() -> int:
@@ -905,6 +933,14 @@ _TRAINING_SOURCE_MARKET_APEX = (
     "against any currently-shipped/certified artifact — see docs/DEBT.md "
     "item 37"
 )
+_SERVING_SOURCE_MARKET_APEX = (
+    "services/upcoming_match_feature_service.py:UpcomingMatchFeatureProjector "
+    "and data/transformers.py:FeatureTransformer, both via "
+    "models/feature_registry.py:derive_apex_market_features(), dispatched on "
+    "the active generation's declared feature_schema_version; reachable only "
+    "while an apex_* generation is active — no such generation has yet been "
+    "trained, certified, or activated (see docs/DEBT.md item 37)"
+)
 _TRAINING_SOURCE_PHASE8_RESOLVED = (
     "src/features/phase8_historical.py:compute_phase8_training_columns() via "
     "the same PiRatingSystem/BerrarRatingSystem/weighted_form_features "
@@ -918,7 +954,7 @@ _SHADOW_SOURCE_PHASE8_RESOLVED = (
 )
 
 
-def _is_apex_schema(schema_version: str) -> bool:
+def is_apex_schema(schema_version: str) -> bool:
     """Which of the two market blocks a schema carries.
 
     ⚠️ Decided by schema, NOT by _feature_group(), because seven names —
@@ -929,6 +965,11 @@ def _is_apex_schema(schema_version: str) -> bool:
     an apex slot it does not produce. The schema is what actually decides:
     APEX_FEATURES_58 splices APEX_MARKET_FEATURES_14 in where
     CANONICAL_FEATURES_58's legacy block sits.
+
+    Public (no leading underscore): docs/DEBT.md item 37's serving wire-up
+    (data/transformers.py, services/upcoming_match_feature_service.py) needs
+    this same decision outside this module — one predicate, not a second
+    copy of the schema-string convention.
     """
     return schema_version.startswith("apex_")
 
@@ -958,7 +999,7 @@ def _training_source(name: str, group: str, schema_version: str) -> str:
         return _TRAINING_SOURCE_COMBINATION
     if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
         return (
-            _TRAINING_SOURCE_MARKET_APEX if _is_apex_schema(schema_version)
+            _TRAINING_SOURCE_MARKET_APEX if is_apex_schema(schema_version)
             else UNDECLARED
         )
     if name in _PHASE8_RESOLVED_FIELDS:
@@ -979,11 +1020,14 @@ def _serving_source(name: str, group: str, schema_version: str) -> str:
     tests/unit/test_feature_vector_parity.py, which runs the real
     FeatureTransformer and compares it against these same helpers.
 
-    An apex schema's market block gets UNDECLARED: derive_apex_market_features
-    has zero callers anywhere in backend/src (only scripts/), so nothing
-    serves it. Claiming the legacy function there — which a name-keyed lookup
-    would do, see _is_apex_schema — would be exactly the misattribution this
-    contract exists to prevent.
+    An apex schema's market block is attributed to
+    derive_apex_market_features() as of docs/DEBT.md item 37's serving
+    wire-up: both serving implementations now dispatch on the active
+    generation's feature_schema_version, so under an apex_* generation that
+    IS what serves. It was previously UNDECLARED because the function had
+    zero callers in backend/src (scripts/ only). Claiming the *legacy*
+    function here — which a name-keyed lookup would do, see is_apex_schema —
+    would still be exactly the misattribution this contract prevents.
     """
     if name in _LAST5_FORM_FIELDS:
         return _SERVING_SOURCE_LAST5_FORM
@@ -997,7 +1041,7 @@ def _serving_source(name: str, group: str, schema_version: str) -> str:
         return _SERVING_SOURCE_COMBINATION
     if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
         return (
-            UNDECLARED if _is_apex_schema(schema_version)
+            _SERVING_SOURCE_MARKET_APEX if is_apex_schema(schema_version)
             else _SERVING_SOURCE_MARKET_LEGACY
         )
     return UNDECLARED

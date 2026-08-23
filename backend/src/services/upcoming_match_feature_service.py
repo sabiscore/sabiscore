@@ -31,7 +31,9 @@ from ..features.form import weighted_form_features
 from ..features.market import MARKET_FEATURE_NAMES, compute_market_drift
 from ..features.match_context import CONTEXT_FEATURE_NAMES, compute_match_context
 from ..features.pi_ratings import PiRatingSystem
+from ..models.active_generation import ActiveGenerationError, active_feature_schema_version
 from ..models.feature_registry import (
+    APEX_MARKET_FEATURES_14,
     CANONICAL_FEATURES_58,
     PHASE7_FEATURES_7,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
@@ -45,13 +47,16 @@ from ..models.feature_registry import (
     LEAGUE_RATE_FEATURES,
     MARKET_FEATURES_14,
     TEMPORAL_FEATURES,
+    UnknownFeatureSchemaError,
     active_canonical_features,
     active_default_feature_values,
+    derive_apex_market_features,
     derive_combination_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
     derive_temporal_features,
+    is_apex_schema,
 )
 from ..utils.season import canonical_season
 from .elo_state_service import get_elo_context
@@ -152,13 +157,16 @@ class UpcomingMatchFeatureProjector:
 
     def __init__(self, odds_service: OddsService | None = None) -> None:
         self._use_phase8 = settings.phase8_enabled
+        self._is_apex = self._resolve_is_apex()
         self.canonical_features = active_canonical_features(
             use_phase7=settings.use_phase7_models,
             use_phase8=self._use_phase8,
+            apex=self._is_apex,
         )
         self.defaults = active_default_feature_values(
             use_phase7=settings.use_phase7_models,
             use_phase8=self._use_phase8,
+            apex=self._is_apex,
         )
         self.statsbomb = StatsBombAggregator()
         self.pi_engine = PiRatingSystem(
@@ -169,6 +177,20 @@ class UpcomingMatchFeatureProjector:
         )
         self.odds_service = odds_service or OddsService()
         self.scraped_form_store = ScrapedTeamFormStore()
+
+    @staticmethod
+    def _resolve_is_apex() -> bool:
+        """Whether the active generation serves the Apex market block.
+
+        docs/DEBT.md item 37's serving wire-up. Any resolution failure
+        (missing manifest, unregistered schema string) falls back to
+        ``False`` — today's exact behavior for every existing deployment,
+        since the only generation active today declares ``phase7_68``.
+        """
+        try:
+            return is_apex_schema(active_feature_schema_version())
+        except (ActiveGenerationError, UnknownFeatureSchemaError):
+            return False
 
     async def project_match_features(
         self,
@@ -330,10 +352,16 @@ class UpcomingMatchFeatureProjector:
             match_dict["home_team"], match_dict["away_team"], match_dict.get("league") or "",
         )
         if {"home_win", "draw", "away_win"}.issubset(odds):
-            features_dict.update(derive_market_features(
-                odds["home_win"], odds["draw"], odds["away_win"],
-            ))
-            derived_resolved.update(MARKET_FEATURES_14)
+            if self._is_apex:
+                features_dict.update(derive_apex_market_features(
+                    odds["home_win"], odds["draw"], odds["away_win"],
+                ))
+                derived_resolved.update(APEX_MARKET_FEATURES_14)
+            else:
+                features_dict.update(derive_market_features(
+                    odds["home_win"], odds["draw"], odds["away_win"],
+                ))
+                derived_resolved.update(MARKET_FEATURES_14)
         # else: leave features_dict at its DEFAULT_FEATURE_VALUES_68 seed for
         # these 14 keys — they fall through to data_gaps below, same honest-gap
         # treatment Elo/StatsBomb already get.

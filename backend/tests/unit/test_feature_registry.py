@@ -170,3 +170,43 @@ def test_the_seven_shared_market_names_are_why_name_keyed_checks_pass() -> None:
         "market_prob_home", "market_prob_draw", "market_prob_away",
         "log_odds_home", "log_odds_draw", "log_odds_away", "odds_ratio",
     }
+
+
+def test_apex_market_block_now_has_a_real_serving_attribution() -> None:
+    """docs/DEBT.md item 37's serving wire-up, recorded in the contract.
+
+    Before the wire-up ``derive_apex_market_features()`` had zero callers in
+    ``backend/src`` (scripts/ only), so the contract correctly said
+    ``UNDECLARED`` for every apex market slot -- claiming a source there would
+    have been fabrication. Both serving implementations now dispatch on the
+    active generation's ``feature_schema_version``, so the attribution is real
+    and must name the apex helper, never the legacy one (the seven shared
+    names are exactly why a name-keyed lookup would get this wrong).
+    """
+    from src.models.feature_registry import build_feature_contract
+
+    contract = build_feature_contract("apex_v1_68")
+    market_rows = [row for row in contract["features"] if 17 <= row["index"] <= 30]
+
+    assert len(market_rows) == 14
+    for row in market_rows:
+        assert row["serving_source"] != "UNDECLARED", row["index"]
+        assert "derive_apex_market_features" in row["serving_source"], row["index"]
+        assert "derive_market_features()" not in row["serving_source"], row["index"]
+
+
+def test_legacy_schema_market_attribution_is_unchanged() -> None:
+    """The active phase7_68 contract must still name the legacy helper.
+
+    This is the regression half of the test above: the wire-up is additive,
+    so nothing about what serves today may move.
+    """
+    from src.models.feature_registry import build_feature_contract
+
+    contract = build_feature_contract("phase7_68")
+    market_rows = [row for row in contract["features"] if 17 <= row["index"] <= 30]
+
+    assert len(market_rows) == 14
+    for row in market_rows:
+        assert "derive_market_features()" in row["serving_source"], row["index"]
+        assert "derive_apex_market_features" not in row["serving_source"], row["index"]

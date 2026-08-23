@@ -363,18 +363,24 @@ _HOME_FORM_5, _HOME_WIN_RATE_5 = 0.667, 0.667
 _AWAY_FORM_5, _AWAY_WIN_RATE_5 = 0.333, 0.2
 
 
-def _transformer_canonical(league: str, kickoff: datetime) -> Dict[str, float]:
+def _transformer_canonical(
+    league: str, kickoff: datetime, *, schema_version: str | None = None
+) -> Dict[str, float]:
     """Run the real second serving implementation over a fixed input row.
 
     allow_legacy_defaults=True keeps the fail-closed guards out of the way so
     the arithmetic under test is what actually runs; the guards themselves are
-    covered separately below.
+    covered separately below. ``schema_version`` defaults to None, i.e.
+    today's exact default resolution (phase7_68) -- pass "apex_v1_68" to
+    exercise docs/DEBT.md item 37's serving branch.
     """
     import pandas as pd
 
     from src.data.transformers import FeatureTransformer
 
-    transformer = FeatureTransformer(allow_legacy_defaults=True)
+    transformer = FeatureTransformer(
+        allow_legacy_defaults=True, schema_version=schema_version
+    )
     row = pd.DataFrame([{
         "home_goals_per_match_5": _HOME_GOALS_FOR,
         "home_goals_conceded_per_match_5": _HOME_GOALS_AGAINST,
@@ -479,6 +485,98 @@ def test_second_serving_implementation_matches_the_shared_market_helper() -> Non
     assert expected, "fixture assumption: the helper returns the 14 fields"
     for name, value in expected.items():
         assert float(canonical[name]) == pytest.approx(float(value)), name
+
+
+def test_default_schema_version_is_unchanged() -> None:
+    """FeatureTransformer() with no schema_version still resolves to phase7_68.
+
+    docs/DEBT.md item 37's serving wire-up must be inert for every existing
+    caller -- this is the load-bearing safety proof that today's active
+    generation is untouched.
+    """
+    from src.data.transformers import FeatureTransformer
+    from src.models.feature_registry import CANONICAL_FEATURES_68
+
+    transformer = FeatureTransformer()
+    assert transformer.schema_version == "phase7_68"
+    assert transformer.expected_columns == list(CANONICAL_FEATURES_68)
+
+
+def test_second_serving_implementation_matches_the_shared_apex_market_helper() -> None:
+    """All 14 Apex market fields, under an apex_v1_68 schema -- item 37's serving wire-up.
+
+    Same pattern as the legacy market-helper test above, watched failing on an
+    injected perturbation before being trusted (see
+    test_apex_market_divergence_actually_breaks_parity below).
+    """
+    from src.models.feature_registry import APEX_FEATURES_68, derive_apex_market_features
+
+    canonical = _transformer_canonical("EPL", _KICKOFF, schema_version="apex_v1_68")
+    expected = derive_apex_market_features(*_ODDS)
+
+    assert expected, "fixture assumption: the helper returns the 14 fields"
+    for name, value in expected.items():
+        assert float(canonical[name]) == pytest.approx(float(value)), name
+    # The vector actually served must be the Apex-spliced schema, not legacy.
+    assert set(canonical.keys()) == set(APEX_FEATURES_68)
+
+
+def test_apex_schema_actually_takes_the_apex_branch() -> None:
+    """The apex-schema vector must carry Apex-only fields legacy never has --
+    proof the branch really ran derive_apex_market_features(), not that a
+    same-named legacy field coincidentally matched."""
+    canonical = _transformer_canonical("EPL", _KICKOFF, schema_version="apex_v1_68")
+    legacy = _transformer_canonical("EPL", _KICKOFF)
+
+    assert "market_overround" in canonical  # apex-only field
+    assert "market_overround" not in legacy
+    assert "market_edge_home" in legacy  # legacy-only field
+    assert "market_edge_home" not in canonical
+
+
+def test_upcoming_match_feature_projector_resolves_active_apex_schema(monkeypatch) -> None:
+    """_resolve_is_apex() reads the active schema and fails closed to legacy.
+
+    docs/DEBT.md item 37: the projector's own dispatch, independent of
+    FeatureTransformer's. Every branch is exercised directly rather than
+    assumed from the manifest reading correctly once in a smoke test.
+    """
+    import src.services.upcoming_match_feature_service as svc
+
+    monkeypatch.setattr(svc, "active_feature_schema_version", lambda: "apex_v1_68")
+    assert svc.UpcomingMatchFeatureProjector._resolve_is_apex() is True
+
+    monkeypatch.setattr(svc, "active_feature_schema_version", lambda: "phase7_68")
+    assert svc.UpcomingMatchFeatureProjector._resolve_is_apex() is False
+
+    def _raise() -> str:
+        raise svc.ActiveGenerationError("no manifest")
+
+    monkeypatch.setattr(svc, "active_feature_schema_version", _raise)
+    assert svc.UpcomingMatchFeatureProjector._resolve_is_apex() is False
+
+
+def test_upcoming_match_feature_projector_apex_constructor_wiring(monkeypatch) -> None:
+    """Under an apex-declaring manifest, the projector's columns/defaults flip
+    to the Apex block; under today's real manifest they do not (regression
+    proof, mirrors test_default_schema_version_is_unchanged above)."""
+    import src.services.upcoming_match_feature_service as svc
+    from src.models.feature_registry import APEX_MARKET_FEATURES_14, active_canonical_features
+    from src.core.config import settings
+
+    monkeypatch.setattr(svc, "active_feature_schema_version", lambda: "apex_v1_68")
+    apex_projector = svc.UpcomingMatchFeatureProjector()
+    assert apex_projector._is_apex is True
+    expected_apex_columns = active_canonical_features(
+        use_phase7=settings.use_phase7_models, use_phase8=settings.phase8_enabled, apex=True,
+    )
+    assert apex_projector.canonical_features == expected_apex_columns
+    assert set(APEX_MARKET_FEATURES_14) <= set(apex_projector.defaults)
+
+    monkeypatch.undo()  # restores active_feature_schema_version -- reads the real manifest
+    legacy_projector = svc.UpcomingMatchFeatureProjector()
+    assert legacy_projector._is_apex is False
+    assert legacy_projector.canonical_features != expected_apex_columns
 
 
 def test_unifying_did_not_remove_the_unsupported_league_guard() -> None:
