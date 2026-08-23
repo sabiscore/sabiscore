@@ -400,9 +400,6 @@ function PremiumHome() {
                 <p className="text-sm font-semibold text-white">{c.name}</p>
                 <p className="text-xs text-slate-300">{c.short}</p>
               </div>
-              <span className="rounded-lg bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Verify status
-              </span>
             </div>
           ))}
         </div>

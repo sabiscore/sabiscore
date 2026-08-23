@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/aria-proptypes */
 "use client";
 
 import { useMemo, useState, useEffect, useTransition } from "react";
@@ -362,7 +361,6 @@ export function MatchSelector() {
       if (parsed?.awayTeam) setAwayTeam(parsed.awayTeam);
     } catch {
       // ignore parse errors
-      // console.warn("Failed to restore match selector state", err);
     }
   }, []);
 
