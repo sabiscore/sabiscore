@@ -1335,9 +1335,18 @@ prerequisite for CLV/market-comparison work.
 
 ---
 
-## 20. A Render service builds the monorepo at root and is not in `render.yaml`
+## 20. A Render service builds the monorepo at root and is not in `render.yaml` — `RESOLVED 2026-08-23`
 
-**Tier:** `FIX-NOW` / P0 — it crash-loops on every push to master.
+✅ **Live-verified via the Render MCP tool this session**: `list_services`
+(workspace `tea-d9509cpkh4rs73fs82q0`, `includePreviews: true`) returns
+exactly two services — `sabiscore-api` (`rootDir: backend`, the canonical
+web service) and `sabiscore-evidence-acquisition` (the cron job). No third,
+blueprint-invisible, root-building service exists. The operator checklist
+below (steps 1–6, dashboard-only) has evidently been completed — the stray
+service is gone, not merely suspended. Not re-diagnosed further; this closes
+the item on direct evidence rather than inference from a stale log.
+
+**Tier:** `FIX-NOW` / P0 — it crash-looped on every push to master.
 **Found:** 2026-08-12, from an operator-supplied Render deploy log for commit
 `5de6228`.
 
