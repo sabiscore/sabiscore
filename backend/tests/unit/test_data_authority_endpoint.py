@@ -240,6 +240,62 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
     db.rollback.assert_awaited_once()
 
 
+async def test_fixture_identity_review_exposes_manifest_without_authorizing_apply() -> (
+    None
+):
+    response = Response()
+    db = MagicMock()
+
+    entries = (
+        SimpleNamespace(
+            as_dict=lambda: {
+                "match_id": "fd-1",
+                "league_id": "SERIE_A",
+                "stored_home_team_id": "fd-team-serie_a:home",
+                "verified_home_team_id": "team-abc123",
+                "blockers": [],
+                "rebind_ready": True,
+                "rebind_status": "READY",
+            }
+        ),
+    )
+    manifest = SimpleNamespace(
+        schema_version=1,
+        manifest_sha256="e" * 64,
+        summary={
+            "total_mismatched": 1,
+            "rebind_ready_count": 1,
+            "blocked_count": 0,
+            "leagues_affected": ["SERIE_A"],
+        },
+        entries=entries,
+    )
+
+    with patch.object(
+        data_authority,
+        "build_fixture_identity_rebind_manifest",
+        new=AsyncMock(return_value=manifest),
+    ):
+        payload = await data_authority.fixture_identity_review(response, db)
+
+    assert response.headers["cache-control"] == "no-store"
+    assert payload["read_only"] is True
+    assert payload["manifest"]["rebind_manifest_sha256"] == "e" * 64
+    assert payload["manifest"]["summary"]["total_mismatched"] == 1
+    assert payload["entries"] == [
+        {
+            "match_id": "fd-1",
+            "league_id": "SERIE_A",
+            "stored_home_team_id": "fd-team-serie_a:home",
+            "verified_home_team_id": "team-abc123",
+            "blockers": [],
+            "rebind_ready": True,
+            "rebind_status": "READY",
+        }
+    ]
+    assert payload["authorization"]["apply_supported"] is False
+
+
 async def test_semantic_repair_review_requires_postgres() -> None:
     response = Response()
     db = MagicMock()

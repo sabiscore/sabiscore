@@ -5,6 +5,31 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Fixture-identity reconciliation review endpoint (2026-08-23)
+
+### Added
+
+- `GET /release/fixture-identity-review` (`backend/src/api/endpoints/data_authority.py`,
+  backed by new `backend/src/services/fixture_identity_rebind_service.py`):
+  a read-only manifest of every live fixture whose stored
+  `Match.home_team_id`/`away_team_id` disagrees with the already-verified
+  canonical identity `ensure_canonical_fixture` persists every
+  `fixture_sync` tick. Closes `docs/DEBT.md` item 35(b)'s "no way to ever see
+  the backlog" half — previously this drift was only visible as a WARNING log
+  line plus an in-process metrics gauge, reset on every deploy. Each entry
+  reports stored vs. verified participant ids/names and computed blockers
+  (`KICKOFF_PASSED`, `CROSS_LEAGUE_MISMATCH`, `HAS_EXISTING_PREDICTIONS`) per
+  the operator-controlled reconciliation path the SabiScore APEX directive's
+  §5.5 describes. `Match.id` is the provider event id, so the manifest is a
+  pure DB join (`Match` ⋈ `ProviderEventMapping` ⋈ `CanonicalFixture`) with no
+  live provider call and no re-run of resolution logic. Ships review only —
+  no rebind/apply path exists yet; that is a Class-C production-identity
+  mutation (APEX §3) and needs its own separately-authorized dry-run-manifest
+  flow. 7 new tests: 6 service-level (`test_fixture_identity_rebind_service.py`,
+  real SQLite session, mirroring the existing `ensure_canonical_fixture`
+  test-seeding convention) and 1 endpoint-level (extending
+  `test_data_authority_endpoint.py`'s established mocked-session pattern).
+
 ## Unreleased - Fix broken web typecheck, wire orphaned Firecrawl test, remove non-functional UI pill (2026-08-23)
 
 ### Fixed
