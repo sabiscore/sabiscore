@@ -85,11 +85,19 @@ const EVIDENCE_PATH = path.resolve(
  * established convention for optional/generated data (e.g. the offseason
  * notice fallback) -- a missing file (refresh never run), unreadable file,
  * or a malformed/stale schema must never crash the caller.
+ *
+ * `evidencePath` defaults to the real artifact location; overridable so
+ * tests exercise this against a real temp file instead of mocking `fs`
+ * (Node's built-in ESM exports are non-configurable, so `vi.spyOn`/`vi.mock`
+ * on `node:fs` doesn't reliably intercept calls under this repo's jsdom test
+ * environment).
  */
-export function getFirecrawlEvidence(): FirecrawlEvidenceBundle {
+export function getFirecrawlEvidence(
+  evidencePath: string = EVIDENCE_PATH,
+): FirecrawlEvidenceBundle {
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(EVIDENCE_PATH, 'utf8'));
+    raw = JSON.parse(readFileSync(evidencePath, 'utf8'));
   } catch {
     return EMPTY_BUNDLE;
   }
