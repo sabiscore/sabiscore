@@ -90,6 +90,7 @@ CANONICAL_FEATURES_68 = _FEATURE_REGISTRY.CANONICAL_FEATURES_68
 DEFAULT_FEATURE_VALUES_68 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_68
 DEFAULT_FEATURE_VALUES_89 = _FEATURE_REGISTRY.DEFAULT_FEATURE_VALUES_89
 derive_combination_features = _FEATURE_REGISTRY.derive_combination_features
+derive_goals_gd_features = _FEATURE_REGISTRY.derive_goals_gd_features
 derive_last5_form_features = _FEATURE_REGISTRY.derive_last5_form_features
 derive_league_features = _FEATURE_REGISTRY.derive_league_features
 derive_apex_market_features = _FEATURE_REGISTRY.derive_apex_market_features
@@ -327,18 +328,20 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
                 wins_5=home_stats["wins_5"], draws_5=home_stats["draws_5"],
                 losses_5=home_stats["losses_5"],
             ))
-            features["home_goals_for_avg"] = home_stats["home_goals_per_match_5"]
-            features["home_goals_against_avg"] = home_stats["home_goals_conceded_per_match_5"]
-            features["home_gd_recent"] = home_stats["home_gd_avg_5"]
+            # Strict lookup on purpose: training drops an incomplete row
+            # rather than imputing, so the default is never reached here.
+            features.update(derive_goals_gd_features(
+                lambda key, _default: home_stats[key], is_home=True,
+            ))
 
             features.update(derive_last5_form_features(
                 away_stats["away_form_5"], away_stats["away_win_rate_5"], is_home=False,
                 wins_5=away_stats["wins_5"], draws_5=away_stats["draws_5"],
                 losses_5=away_stats["losses_5"],
             ))
-            features["away_goals_for_avg"] = away_stats["away_goals_per_match_5"]
-            features["away_goals_against_avg"] = away_stats["away_goals_conceded_per_match_5"]
-            features["away_gd_recent"] = away_stats["away_gd_avg_5"]
+            features.update(derive_goals_gd_features(
+                lambda key, _default: away_stats[key], is_home=False,
+            ))
 
             features.update(derive_temporal_features(m["date"]))
             features.update(derive_league_features(league))

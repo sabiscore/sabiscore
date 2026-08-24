@@ -52,6 +52,7 @@ from ..models.feature_registry import (
     active_default_feature_values,
     derive_apex_market_features,
     derive_combination_features,
+    derive_goals_gd_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
@@ -275,9 +276,9 @@ class UpcomingMatchFeatureProjector:
                 draws_5=home_stats.get("draws_5"),
                 losses_5=home_stats.get("losses_5"),
             ))
-            home_stats["home_goals_for_avg"] = home_stats.get("home_goals_per_match_5", 1.5)
-            home_stats["home_goals_against_avg"] = home_stats.get("home_goals_conceded_per_match_5", 1.2)
-            home_stats["home_gd_recent"] = home_stats.get("home_gd_avg_5", 0.0)
+            home_stats.update(
+                derive_goals_gd_features(home_stats.get, is_home=True)
+            )
         if away_stats:
             away_stats.update(derive_last5_form_features(
                 away_stats.get("away_form_5", 0.45),
@@ -287,9 +288,9 @@ class UpcomingMatchFeatureProjector:
                 draws_5=away_stats.get("draws_5"),
                 losses_5=away_stats.get("losses_5"),
             ))
-            away_stats["away_goals_for_avg"] = away_stats.get("away_goals_per_match_5", 1.5)
-            away_stats["away_goals_against_avg"] = away_stats.get("away_goals_conceded_per_match_5", 1.2)
-            away_stats["away_gd_recent"] = away_stats.get("away_gd_avg_5", 0.0)
+            away_stats.update(
+                derive_goals_gd_features(away_stats.get, is_home=False)
+            )
 
         features_dict = dict(self.defaults)
         defaults_count = len(self.defaults)

@@ -14,6 +14,7 @@ from ..models.feature_registry import (
     UnknownFeatureSchemaError,
     derive_apex_market_features,
     derive_combination_features,
+    derive_goals_gd_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
@@ -392,13 +393,11 @@ class FeatureTransformer:
             away_form_5, get_num("away_win_rate_5", 0.4), is_home=False,
         ))
 
-        canonical["home_goals_for_avg"] = get_num("home_goals_per_match_5", 1.55)
-        canonical["away_goals_for_avg"] = get_num("away_goals_per_match_5", 1.25)
-        canonical["home_goals_against_avg"] = get_num("home_goals_conceded_per_match_5", 1.20)
-        canonical["away_goals_against_avg"] = get_num("away_goals_conceded_per_match_5", 1.40)
-
-        canonical["home_gd_recent"] = get_num("home_gd_avg_5", 0.35)
-        canonical["away_gd_recent"] = get_num("away_gd_avg_5", -0.15)
+        # docs/DEBT.md item 36(a): shared with the projector and the training
+        # builder. get_num keeps this call site fail-closed — an absent value
+        # still raises DataUnavailableError rather than taking the default.
+        canonical.update(derive_goals_gd_features(get_num, is_home=True))
+        canonical.update(derive_goals_gd_features(get_num, is_home=False))
 
         canonical["total_goals_expected"] = get_num("xg_differential", 0.20) + 2.60
 
