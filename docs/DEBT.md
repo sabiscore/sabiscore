@@ -1,5 +1,62 @@
 # SabiScore Debt Ledger
 
+## 39. Mojibake team names in production cost those fixtures their Elo identity
+
+**Tier:** `NEXT` — ingest guard shipped 2026-08-23; the **data repair of the
+existing rows is Class C** and still needs authorization.
+**Found:** 2026-08-23, from a user screenshot of the live UI reading
+"Club Atl??tico de Madrid".
+
+Production `sabiscore_db_v3` holds team rows whose names and IDs carry literal
+ASCII `?` in place of every accented byte — `M??laga CF`,
+`fd-team-la_liga:m??laga_cf`, `FC Bayern M??nchen`, `Borussia M??nchengladbach`,
+`Deportivo Alav??s`, `RC Deportivo La Coru??a`, `Real Betis Balompi??`,
+`Real Sociedad de F??tbol`. Exactly one `?` per UTF-8 *byte*, which is a
+two-stage failure: UTF-8 bytes decoded as a single-byte codepage, then
+ASCII-encoded with replacement.
+
+**This is not cosmetic.** `team_identity` tokenizes on `[a-z0-9]+`, so the `?`
+splits the word (`bayern m nchen`), and `_AUDITED_ALIASES` is keyed on the
+correctly-folded form (`bayern munchen`). No alias can ever match, so
+`resolve_team_id()` fails, `fixture_sync` falls back to minting an ID from the
+broken name, and the result is an **Elo-less orphan that shadows the real,
+history-bearing club** for every fixture it appears in.
+
+**Origin — ruled out, one layer at a time, with live probes:**
+
+| Layer | Result |
+|---|---|
+| Upstream football-data.org | clean — `b'M\xc3\xa1laga'`, `charset=UTF-8`, zero `?` |
+| Our httpx 0.25.2 `response.json()` | clean — reproduced against the real API |
+| Repo data files at rest | clean — zero mojibake in any CSV/JSON |
+| Redis cache | byte-safe (`decode_responses=False`, explicit UTF-8) |
+| `sabiscore_db_v2` | clean (`Club Atlético de Madrid`) |
+| `sabiscore_db_v3` (production) | **corrupt** |
+
+So the current code path does **not** reproduce it: these are legacy rows from
+v3's seeding (created 2026-08-20). Decisively, the *verified* side of every
+affected fixture is already clean and Elo-bearing —
+`stored=(fd-team-bundesliga:fc_bayern_m??nchen,…)` vs
+`verified=(fdco-team-bundesliga-bayern_munich,…)`.
+
+✅ **Ingest guard RESOLVED 2026-08-23.** `is_unusable_team_name()`
+(`fixture_sync_service.py`) fails closed on any provider display name
+containing `?`, placed **after** the durable provider-ID anchor resolves (where
+the name carries no identity weight, so a lossy one is merely cosmetic) and
+**before** the name becomes identity as fuzzy-match input or a minted ID. Bumps
+`fixture_sync.unusable_team_name` and raises into the caller's existing
+identity-conflict path. Both behaviours pinned, and **both guards were watched
+failing against a reverted fix** before being trusted.
+
+**Repair path already exists — no new tooling needed.**
+`GET /api/v1/release/fixture-identity-review` (item 35) surfaces these rows
+directly, and the manifest now carries `stored_identity_unusable` per entry
+plus `stored_identity_unusable_count` in the summary, so the mojibake-driven
+rebinds can be triaged out of the wider drift set. **Live production reading,
+2026-08-23:** 49 drifted fixtures — 42 rebind-ready, 7 blocked — across all six
+active leagues. Applying a rebind is a Class-C production-identity mutation
+(APEX §3) and remains unauthorized.
+
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
 **Tier:** `NEXT` — **the single hard blocker on Phase 4.** Not a serving

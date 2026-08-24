@@ -5,6 +5,46 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Fail closed on mojibake team names (2026-08-23)
+
+### Fixed
+
+- `backend/src/services/fixture_sync_service.py`: a provider display name
+  containing `?` can no longer become team identity. Production
+  (`sabiscore_db_v3`) holds rows like `fd-team-la_liga:m??laga_cf` /
+  `FC Bayern M??nchen` — one literal ASCII `?` per UTF-8 byte. That is not
+  cosmetic: `team_identity` tokenizes on `[a-z0-9]+`, so the `?` splits the
+  word and the audited alias table (keyed on the correctly-folded
+  `bayern munchen`) can never match, leaving an **Elo-less orphan that shadows
+  the real, history-bearing club** on every fixture it touches. New
+  `is_unusable_team_name()` fails closed via the caller's existing
+  identity-conflict path and bumps `fixture_sync.unusable_team_name`.
+  Placed deliberately *after* the durable provider-ID anchor resolves — where
+  the display name carries no identity weight, so a lossy one is cosmetic
+  rather than disqualifying and the fixture still syncs — and *before* the
+  name becomes identity as fuzzy-match input or a minted ID. Both behaviours
+  are pinned by tests, and both were watched failing against a reverted guard
+  before being trusted.
+
+### Added
+
+- `stored_identity_unusable` (per entry) and `stored_identity_unusable_count`
+  (summary) on the item-35 rebind manifest, so the mojibake-driven rebinds can
+  be triaged out of the wider drift set; manifest schema version 1 → 2.
+
+### Investigation
+
+- Origin ruled out layer by layer with live probes, recorded in `docs/DEBT.md`
+  item 39: upstream football-data.org is clean (`b'M\xc3\xa1laga'`,
+  `charset=UTF-8`), our httpx 0.25.2 `response.json()` is clean when
+  reproduced against the real API, repo data files are clean, the Redis cache
+  is byte-safe, and `sabiscore_db_v2` is clean — only production `v3` is
+  corrupt. The current code path does not reproduce it; these are legacy rows
+  from v3's seeding, and the *verified* side of every affected fixture is
+  already clean and Elo-bearing. Repairing them is Class C (APEX §3) and
+  remains unauthorized; `GET /api/v1/release/fixture-identity-review` already
+  surfaces them (live: 49 drifted, 42 rebind-ready, across all six leagues).
+
 ## Unreleased - Fixture-identity reconciliation review endpoint (2026-08-23)
 
 ### Added

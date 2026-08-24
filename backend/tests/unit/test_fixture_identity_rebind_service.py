@@ -189,6 +189,67 @@ async def test_manifest_flags_existing_predictions_blocker(session: AsyncSession
     assert "HAS_EXISTING_PREDICTIONS" in manifest.entries[0].blockers
 
 
+async def test_manifest_flags_mojibake_stored_identity(session: AsyncSession) -> None:
+    """The exact production shape: a lossy stored name vs a clean verified one.
+
+    Live v3 held `fd-team-la_liga:m??laga_cf` / "M??laga CF" while the verified
+    canonical side was the clean, Elo-bearing club. Those rows are the
+    highest-value rebinds, so the manifest must single them out.
+    """
+    league_id = "LA_LIGA"
+    stored_home = "fd-team-la_liga:m??laga_cf"
+    stored_away = "fd-team-la_liga:away"
+    session.add(League(id=league_id, name=league_id, country="test"))
+    session.add(Team(id=stored_home, name="M??laga CF", league_id=league_id))
+    session.add(Team(id=stored_away, name="Clean Away", league_id=league_id))
+    await session.flush()
+    session.add(
+        Match(
+            id="fd-7",
+            league_id=league_id,
+            home_team_id=stored_home,
+            away_team_id=stored_away,
+            match_date=_FUTURE,
+            season="2026/2027",
+            status="scheduled",
+        )
+    )
+    await session.flush()
+    await ensure_canonical_fixture(
+        session,
+        provider="football-data.org",
+        provider_event_id="fd-7",
+        competition_id=league_id,
+        competition_name=league_id,
+        home_provider_id="300",
+        home_name="Málaga CF",
+        away_provider_id="301",
+        away_name="Clean Away",
+        kickoff_utc=_FUTURE,
+        season="2026/2027",
+        status="scheduled",
+        evidence={},
+    )
+    await session.commit()
+
+    manifest = await build_fixture_identity_rebind_manifest(session)
+
+    assert manifest.summary["stored_identity_unusable_count"] == 1
+    entry = manifest.entries[0]
+    assert entry.stored_identity_unusable is True
+    assert entry.verified_home_team_name == "Málaga CF"
+    assert entry.as_dict()["stored_identity_unusable"] is True
+
+
+async def test_clean_mismatch_is_not_flagged_as_unusable(session: AsyncSession) -> None:
+    await _seed_mismatched_match(session, match_id="fd-8")
+
+    manifest = await build_fixture_identity_rebind_manifest(session)
+
+    assert manifest.summary["stored_identity_unusable_count"] == 0
+    assert manifest.entries[0].stored_identity_unusable is False
+
+
 async def test_manifest_sha256_is_deterministic(session: AsyncSession) -> None:
     await _seed_mismatched_match(session, match_id="fd-6")
 
