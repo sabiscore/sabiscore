@@ -459,6 +459,110 @@ async def test_fixture_without_upstream_team_ids_is_rejected(
     assert await session.get(Match, "fd-9904") is None
 
 
+async def test_mojibake_team_name_never_mints_an_orphan_identity(
+    session: AsyncSession,
+) -> None:
+    """Regression for the live v3 `fd-team-la_liga:m??laga_cf` orphans.
+
+    A lossy display name must not become identity. Before this guard the name
+    was slugged straight into a Team ID, and because `team_identity` tokenizes
+    on `[a-z0-9]+` the `?` split the word so no audited alias could ever match
+    — leaving an Elo-less orphan shadowing the real club.
+    """
+    fetch = AsyncMock(
+        return_value=[
+            _fixture(
+                match_id="fd-9905",
+                league="La Liga",
+                home_provider_id=900,
+                away_provider_id=901,
+                home_name="M??laga CF",
+                away_name="Clean Opponent CF",
+            )
+        ]
+    )
+    with patch(
+        "src.data.loaders.football_data_api.FootballDataAPIClient.get_upcoming_matches",
+        new=fetch,
+    ):
+        inserted = await sync_upcoming_fixtures(session, provider=object())
+
+    assert inserted == 0
+    assert await session.get(Match, "fd-9905") is None
+    assert await session.get(Team, "fd-team-la_liga:m??laga_cf") is None
+    assert (
+        metrics_collector.get_summary()["counters"]["fixture_sync.unusable_team_name"]
+        >= 1
+    )
+
+
+async def test_durable_provider_anchor_still_wins_over_a_lossy_display_name(
+    session: AsyncSession,
+) -> None:
+    """The guard must not reject a fixture whose identity is already durable.
+
+    Once the provider-ID anchor resolves, the display name carries no identity
+    weight, so a lossy one is cosmetic rather than disqualifying — rejecting it
+    would drop a fixture we can resolve perfectly well.
+    """
+    await _seed_elo_team(
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        index=11,
+    )
+    await _seed_elo_team(
+        session,
+        team_id="fdco-team-la_liga-opponent",
+        name="Opponent",
+        league_id="LA_LIGA",
+        index=12,
+    )
+    await bind_provider_elo_team_id(
+        provider="football-data.org",
+        provider_team_id="910",
+        provider_team_name="Malaga CF",
+        competition="LA_LIGA",
+        team_id="fdco-team-la_liga-malaga",
+        db=session,
+        evidence={"source": "unit-test"},
+    )
+    await bind_provider_elo_team_id(
+        provider="football-data.org",
+        provider_team_id="911",
+        provider_team_name="Opponent",
+        competition="LA_LIGA",
+        team_id="fdco-team-la_liga-opponent",
+        db=session,
+        evidence={"source": "unit-test"},
+    )
+    await session.commit()
+
+    fetch = AsyncMock(
+        return_value=[
+            _fixture(
+                match_id="fd-9906",
+                league="La Liga",
+                home_provider_id=910,
+                away_provider_id=911,
+                home_name="M??laga CF",
+                away_name="Opponent",
+            )
+        ]
+    )
+    with patch(
+        "src.data.loaders.football_data_api.FootballDataAPIClient.get_upcoming_matches",
+        new=fetch,
+    ):
+        inserted = await sync_upcoming_fixtures(session, provider=object())
+
+    assert inserted == 1
+    persisted = await session.get(Match, "fd-9906")
+    assert persisted is not None
+    assert persisted.home_team_id == "fdco-team-la_liga-malaga"
+
+
 async def test_canonical_provider_id_anchor_survives_display_name_change(
     session: AsyncSession,
 ) -> None:

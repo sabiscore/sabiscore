@@ -67,6 +67,20 @@ def _team_id(team_name: str, league_id: str) -> str:
     return f"fd-team-{slug}"
 
 
+def is_unusable_team_name(team_name: str) -> bool:
+    """Reject a provider display name that cannot carry team identity.
+
+    A real club name never contains ``?``. Its presence means the name reached
+    us through a lossy decode, and production proved what that costs: rows like
+    ``fd-team-la_liga:m??laga_cf`` were minted from mojibake, and because
+    ``team_identity`` tokenizes on ``[a-z0-9]+`` the ``?`` splits the word, so
+    the audited alias table (keyed on correctly-folded ``malaga``) can never
+    match. The result is a silent Elo-less orphan that shadows the real,
+    history-bearing team for every fixture it appears in.
+    """
+    return "?" in team_name
+
+
 async def _resolve_upcoming_team_id(
     session: AsyncSession,
     *,
@@ -83,6 +97,12 @@ async def _resolve_upcoming_team_id(
     ID for future observations. History-free clubs fall back to a deterministic
     unresolved Team ID and are never promoted merely through a neutral/default
     Elo value.
+
+    A name that cannot carry identity fails closed *between* those two steps:
+    once the durable provider-ID anchor has resolved, the display name is
+    irrelevant and the fixture proceeds normally. Past that point the name
+    becomes identity — first as fuzzy-match input, then as the minted ID — so
+    an unusable one must not be allowed to guess a club or mint an orphan.
     """
     normalized_provider_id = str(provider_team_id or "").strip()
 
@@ -95,6 +115,12 @@ async def _resolve_upcoming_team_id(
         )
         if mapped:
             return mapped, True
+
+    if is_unusable_team_name(team_name):
+        metrics_collector.increment("fixture_sync.unusable_team_name")
+        raise ValueError(
+            f"provider team name is not usable as identity: {team_name!r}"
+        )
 
     historical = await resolve_team_id(
         team_name,

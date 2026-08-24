@@ -40,8 +40,9 @@ from ..db.models import (
     ProviderEventMapping,
 )
 from ..repositories.fixtures import SETTLED_MATCH_STATUSES
+from .fixture_sync_service import is_unusable_team_name
 
-_MANIFEST_SCHEMA_VERSION = 1
+_MANIFEST_SCHEMA_VERSION = 2
 _PROVIDER = "football-data.org"
 
 
@@ -76,11 +77,32 @@ class FixtureIdentityRebindEntry:
     def rebind_status(self) -> str:
         return "READY" if self.rebind_ready else "BLOCKED"
 
+    @property
+    def stored_identity_unusable(self) -> bool:
+        """True when the *stored* side carries a name no decode should produce.
+
+        Production surfaced rows like `fd-team-la_liga:m??laga_cf` whose
+        verified counterpart (`Málaga CF`) is clean and Elo-bearing. Those are
+        the highest-value rebinds — the drift is not a genuine identity
+        question, it is a lossy name that cost the fixture its history — so
+        the manifest flags them rather than making an operator eyeball 49 rows.
+        """
+        return any(
+            value is not None and is_unusable_team_name(value)
+            for value in (
+                self.stored_home_team_id,
+                self.stored_home_team_name,
+                self.stored_away_team_id,
+                self.stored_away_team_name,
+            )
+        )
+
     def as_dict(self) -> dict[str, object]:
         payload = asdict(self)
         payload["blockers"] = list(self.blockers)
         payload["rebind_ready"] = self.rebind_ready
         payload["rebind_status"] = self.rebind_status
+        payload["stored_identity_unusable"] = self.stored_identity_unusable
         return payload
 
 
@@ -194,6 +216,9 @@ async def build_fixture_identity_rebind_manifest(
         "total_mismatched": len(entries),
         "rebind_ready_count": sum(1 for entry in entries if entry.rebind_ready),
         "blocked_count": sum(1 for entry in entries if not entry.rebind_ready),
+        "stored_identity_unusable_count": sum(
+            1 for entry in entries if entry.stored_identity_unusable
+        ),
         "leagues_affected": sorted(leagues_affected),
     }
     manifest_sha256 = _canonical_sha256(
