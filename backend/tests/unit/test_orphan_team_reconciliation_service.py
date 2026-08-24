@@ -301,6 +301,24 @@ async def test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons(
     diag = manifest.summary["unrepaired_orphan_sides"]
     assert diag.get("ORPHAN_NO_RESOLVER_MATCH") == 2  # both home and away
 
+    # Identity detail lets a caller diagnose *which* side is stuck without a
+    # direct DB query — the aggregate count above stays the count-of-record.
+    detail = manifest.summary["unrepaired_orphan_side_detail"]
+    assert len(detail) == 2
+    sides = {record["side"] for record in detail}
+    assert sides == {"home", "away"}
+    for record in detail:
+        assert record["match_id"] == "fd-8"
+        assert record["league_id"] == league_id
+        assert record["reason"] == "ORPHAN_NO_RESOLVER_MATCH"
+        assert record["orphan_team_id"] in {
+            "fd-team-la_liga:home-fd-8",
+            "fd-team-la_liga:away-fd-8",
+        }
+    home_record = next(r for r in detail if r["side"] == "home")
+    assert home_record["orphan_team_name"] == "Unmatched Club CF"
+    assert home_record["freshest_observed_name"] == "Unmatched Club CF"
+
 
 async def test_target_that_would_collide_with_the_other_side_is_refused(
     session: AsyncSession,
