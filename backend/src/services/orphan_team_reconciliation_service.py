@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 
@@ -162,6 +163,7 @@ async def build_orphan_team_repair_manifest(
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     entries: list[OrphanTeamRepairEntry] = []
+    unrepaired: Counter[str] = Counter()
     for match, evidence in rows:
         evidence = evidence or {}
         for side, stored_team_id in (
@@ -175,6 +177,7 @@ async def build_orphan_team_repair_manifest(
 
             provider_team_id = str(evidence.get(f"{side}_provider_team_id") or "").strip()
             if not provider_team_id:
+                unrepaired["ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE"] += 1
                 continue
 
             mapping = (
@@ -187,8 +190,12 @@ async def build_orphan_team_repair_manifest(
                 )
             ).scalar_one_or_none()
             freshest_name = mapping.strip() if mapping else None
-            if not freshest_name or is_unusable_team_name(freshest_name):
-                continue  # nothing clean to re-resolve against yet
+            if not freshest_name:
+                unrepaired["ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET"] += 1
+                continue
+            if is_unusable_team_name(freshest_name):
+                unrepaired["ORPHAN_FRESHEST_NAME_STILL_CORRUPT"] += 1
+                continue
 
             target_id = await resolve_team_id(
                 freshest_name,
@@ -197,11 +204,12 @@ async def build_orphan_team_repair_manifest(
                 require_elo_history=True,
             )
             if not target_id or target_id == stored_team_id:
+                unrepaired["ORPHAN_NO_RESOLVER_MATCH"] += 1
                 continue
 
             other_side_id = match.away_team_id if side == "home" else match.home_team_id
-            
             if target_id == other_side_id:
+                unrepaired["ORPHAN_TARGET_COLLIDES_WITH_OTHER_SIDE"] += 1
                 continue  # would create a self-play collision — refuse, not guess
 
             blockers: list[str] = []
@@ -250,6 +258,10 @@ async def build_orphan_team_repair_manifest(
         "distinct_orphan_teams": len(distinct_orphans),
         "distinct_repair_targets": len(distinct_targets),
         "leagues_affected": sorted({entry.league_id for entry in entries}),
+        # Orphan sides found but not proposed, broken down by why — otherwise
+        # an orphan that fails to resolve is silently indistinguishable from
+        # "there was never an orphan here" from outside this function.
+        "unrepaired_orphan_sides": dict(sorted(unrepaired.items())),
     }
     manifest_sha256 = _canonical_sha256(
         {
