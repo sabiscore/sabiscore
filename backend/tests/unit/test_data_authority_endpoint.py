@@ -296,6 +296,56 @@ async def test_fixture_identity_review_exposes_manifest_without_authorizing_appl
     assert payload["authorization"]["apply_supported"] is False
 
 
+async def test_orphan_team_repair_review_exposes_manifest_without_authorizing_apply() -> (
+    None
+):
+    response = Response()
+    db = MagicMock()
+
+    entries = (
+        SimpleNamespace(
+            as_dict=lambda: {
+                "match_id": "fd-1",
+                "league_id": "LA_LIGA",
+                "side": "home",
+                "orphan_team_id": "fd-team-la_liga:m??laga_cf",
+                "target_team_id": "fdco-team-la_liga-malaga",
+                "target_elo_snapshot_count": 118,
+                "blockers": [],
+                "repair_ready": True,
+                "repair_status": "READY",
+            }
+        ),
+    )
+    manifest = SimpleNamespace(
+        schema_version=1,
+        manifest_sha256="f" * 64,
+        summary={
+            "total_candidates": 1,
+            "repair_ready_count": 1,
+            "blocked_count": 0,
+            "distinct_orphan_teams": 1,
+            "distinct_repair_targets": 1,
+            "leagues_affected": ["LA_LIGA"],
+        },
+        entries=entries,
+    )
+
+    with patch.object(
+        data_authority,
+        "build_orphan_team_repair_manifest",
+        new=AsyncMock(return_value=manifest),
+    ):
+        payload = await data_authority.orphan_team_repair_review(response, db)
+
+    assert response.headers["cache-control"] == "no-store"
+    assert payload["read_only"] is True
+    assert payload["manifest"]["repair_manifest_sha256"] == "f" * 64
+    assert payload["manifest"]["summary"]["distinct_orphan_teams"] == 1
+    assert payload["entries"][0]["target_team_id"] == "fdco-team-la_liga-malaga"
+    assert payload["authorization"]["apply_supported"] is False
+
+
 async def test_semantic_repair_review_requires_postgres() -> None:
     response = Response()
     db = MagicMock()
