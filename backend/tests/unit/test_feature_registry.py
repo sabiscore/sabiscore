@@ -10,8 +10,10 @@ import pytest
 from src.models.feature_registry import (
     APEX_FEATURES_68,
     APEX_MARKET_FEATURES_14,
+    DEFAULT_FEATURE_VALUES_68,
     MARKET_FEATURES_14,
     derive_apex_market_features,
+    derive_goals_gd_features,
     derive_last5_form_features,
     derive_market_features,
 )
@@ -210,3 +212,85 @@ def test_legacy_schema_market_attribution_is_unchanged() -> None:
     for row in market_rows:
         assert "derive_market_features()" in row["serving_source"], row["index"]
         assert "derive_apex_market_features" not in row["serving_source"], row["index"]
+
+
+# --- derive_goals_gd_features (docs/DEBT.md item 36(a)) ----------------------
+# The four replicated assignments this replaced each had their own
+# missing-value policy, and item 36(b) declares that divergence deliberate.
+# The helper therefore owns the key mapping and the registry defaults but not
+# the lookup — these tests pin exactly that split.
+
+
+def test_goals_gd_reads_the_side_prefixed_source_keys():
+    stats = {
+        "home_goals_per_match_5": 2.1,
+        "home_goals_conceded_per_match_5": 0.7,
+        "home_gd_avg_5": 1.4,
+    }
+    assert derive_goals_gd_features(stats.get, is_home=True) == {
+        "home_goals_for_avg": pytest.approx(2.1),
+        "home_goals_against_avg": pytest.approx(0.7),
+        "home_gd_recent": pytest.approx(1.4),
+    }
+
+
+def test_goals_gd_away_side_uses_away_keys_only():
+    stats = {
+        "away_goals_per_match_5": 1.1,
+        "away_goals_conceded_per_match_5": 1.9,
+        "away_gd_avg_5": -0.8,
+        # A home-side key must not leak into the away result.
+        "home_goals_per_match_5": 99.0,
+    }
+    result = derive_goals_gd_features(stats.get, is_home=False)
+    assert set(result) == {
+        "away_goals_for_avg", "away_goals_against_avg", "away_gd_recent",
+    }
+    assert result["away_goals_for_avg"] == pytest.approx(1.1)
+
+
+def test_goals_gd_defaults_come_from_the_registry_not_a_hand_copy():
+    """The projector's old literals (1.5/1.2/0.0, home values reused for away)
+    had drifted from the registry. Sourcing them here is what stops that."""
+    for is_home in (True, False):
+        side = "home" if is_home else "away"
+        result = derive_goals_gd_features({}.get, is_home=is_home)
+        for canonical in ("goals_for_avg", "goals_against_avg", "gd_recent"):
+            name = f"{side}_{canonical}"
+            assert result[name] == pytest.approx(DEFAULT_FEATURE_VALUES_68[name])
+    # And the two sides genuinely differ, which the old literals did not.
+    assert (
+        DEFAULT_FEATURE_VALUES_68["home_goals_for_avg"]
+        != DEFAULT_FEATURE_VALUES_68["away_goals_for_avg"]
+    )
+
+
+def test_goals_gd_propagates_a_raising_lookup_unchanged():
+    """FeatureTransformer's fail-closed get_num must still raise through the
+    helper rather than silently landing on a default."""
+
+    class _Boom(Exception):
+        pass
+
+    def raising(_name, _default):
+        raise _Boom
+
+    with pytest.raises(_Boom):
+        derive_goals_gd_features(raising, is_home=True)
+
+
+def test_goals_gd_propagates_a_strict_lookup_keyerror():
+    """The training builder drops an incomplete row instead of imputing."""
+    stats = {"home_goals_per_match_5": 1.0}
+    with pytest.raises(KeyError):
+        derive_goals_gd_features(lambda k, _d: stats[k], is_home=True)
+
+
+def test_goals_gd_coerces_to_float():
+    stats = {
+        "home_goals_per_match_5": 2,
+        "home_goals_conceded_per_match_5": 1,
+        "home_gd_avg_5": 1,
+    }
+    result = derive_goals_gd_features(stats.get, is_home=True)
+    assert all(isinstance(value, float) for value in result.values())

@@ -5,6 +5,54 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - One goals/gd remap replaces four copies; two stale ledger entries corrected (2026-08-24)
+
+### Changed
+
+- `backend/src/models/feature_registry.py`: new `derive_goals_gd_features()`
+  collapses the goals/gd key remap that was replicated across four call sites
+  — both serving pipelines (`data/transformers.py`,
+  `services/upcoming_match_feature_service.py`), the training builder
+  (`scripts/train_on_real_matches.py`), and the parity harness's own
+  `_assemble()`, a fourth copy `docs/DEBT.md` item 36(a) had not counted.
+  The three pipelines need genuinely different missing-value policies (item
+  36(b) declares that divergence by design), so the helper takes the caller's
+  own `(key, default)` lookup rather than owning it: `FeatureTransformer`
+  keeps its fail-closed `get_num` (raises `DataUnavailableError`), the
+  projector passes `dict.get`, training passes a strict lookup (raises
+  `KeyError`, dropping the row). The *names* were the duplication, not the
+  arithmetic. Closes item 36(a).
+
+### Fixed
+
+- Defaults now come from `DEFAULT_FEATURE_VALUES_68` instead of hand-copied
+  literals. The projector's copies had already drifted — 1.5/1.2/0.0, with the
+  home literals reused verbatim for the away side, against the registry's home
+  1.55/1.20/0.35 and away 1.25/1.40/-0.15. Unreachable in practice (both stats
+  producers always emit all three keys per side), so this is a latent-bug fix,
+  not a behaviour change; no reachable path moved.
+- `backend/models/feature_contract.json` regenerated for the updated
+  attribution strings — the build gate flagged the stale contract exactly as
+  designed. Diff is confined to the 6 goals/gd `training_source`/`serving_source`
+  fields plus the contract hash; no default, dtype, or disposition changed.
+
+### Documentation
+
+- `docs/DEBT.md` item 38: tier label still read `NEXT` / "the single hard
+  blocker on Phase 4" long after its own body recorded the authorized fix, so
+  the top of the ledger advertised a blocker that no longer exists.
+- `docs/DEBT.md` item 24: the "Not done — deliberately deferred… a rescheduled
+  fixture's canonical identity stays unreconciled indefinitely" paragraph was
+  **factually wrong when written** — `ensure_canonical_fixture` has reconciled
+  reschedules in place since `0384804`/`da1c1f2` (2026-08-16, the same day the
+  item was filed), conflict-checking on participants only and returning early
+  before the kickoff-derived hash is ever reached. Replaced with the one thing
+  that genuinely remains: switching to a kickoff-independent key would make
+  legacy rows unfindable by the dedup lookup, so a second provider would mint
+  duplicate canonical fixtures. Latent multi-provider concern, not a live
+  defect, and deliberately not worth changing until a second provider writes
+  canonical fixtures.
+
 ## Unreleased - Fail closed on mojibake team names (2026-08-23)
 
 ### Fixed

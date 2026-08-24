@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 # Canonical production feature schema (58) from sabiscore_production_v2 metadata.
 CANONICAL_FEATURES_58: List[str] = [
@@ -531,6 +531,49 @@ def derive_last5_form_features(
     }
 
 
+# (canonical suffix, team-stats source suffix) for the goals/gd block. Both are
+# side-prefixed by the caller, so one table serves home and away.
+_GOALS_GD_KEY_MAP: Tuple[Tuple[str, str], ...] = (
+    ("goals_for_avg", "goals_per_match_5"),
+    ("goals_against_avg", "goals_conceded_per_match_5"),
+    ("gd_recent", "gd_avg_5"),
+)
+
+
+def derive_goals_gd_features(
+    get: Callable[[str, float], Any],
+    *,
+    is_home: bool,
+) -> Dict[str, float]:
+    """docs/DEBT.md item 36(a): the one goals/gd remap, replacing four copies.
+
+    ``get`` is the caller's own ``(key, default) -> value`` lookup, which is
+    what lets a single implementation serve three deliberately different
+    missing-value policies — the divergence item 36(b) declares as by design:
+
+    * ``FeatureTransformer``'s ``get_num`` raises ``DataUnavailableError``
+      under fail-closed rather than substituting a default;
+    * the projector passes ``dict.get``, so an absent key takes the default;
+    * training passes a strict lookup, so an absent key raises ``KeyError``
+      and the row is dropped instead of being silently imputed.
+
+    The *names* were the duplication here, not the arithmetic, so the helper
+    owns the key mapping and the registry defaults while leaving the lookup
+    policy with the caller. Defaults come from ``DEFAULT_FEATURE_VALUES_68``
+    rather than being hand-copied per call site — the projector's copies had
+    already drifted (1.5/1.2/0.0, with the home literals reused verbatim for
+    the away side), which is exactly the failure mode a shared function
+    prevents.
+    """
+    side = "home" if is_home else "away"
+    return {
+        f"{side}_{canonical}": float(
+            get(f"{side}_{source}", DEFAULT_FEATURE_VALUES_68[f"{side}_{canonical}"])
+        )
+        for canonical, source in _GOALS_GD_KEY_MAP
+    }
+
+
 # Per-league priors: (home_win_rate, avg_total_goals, draw_rate). Constants, not
 # measurements — identical at training and serving time, which is the only
 # property that matters for train/serve consistency. Mirrors the table in
@@ -843,13 +886,11 @@ _LAST5_FORM_FIELDS: Tuple[str, ...] = (
 # The other half of the WP-18 remap block (the codebase's own
 # _HOME_REMAP_FEATURES/_AWAY_REMAP_FEATURES in
 # upcoming_match_feature_service.py group these with the 8 above, 7 per side).
-# ⚠️ Attributed SEPARATELY on purpose: unlike the last-5 fields, these are not
-# produced by a shared function. All three pipelines perform the same direct
-# key remap from their own team-stats dict, in three replicated assignments.
-# Same values today — verified empirically by
-# tests/unit/test_feature_vector_parity.py, not assumed — but three copies of
-# an assignment can drift in a way one shared function cannot, so the contract
-# says which it is.
+# docs/DEBT.md item 36(a): these WERE three replicated assignments (four,
+# counting the parity harness's own copy) and are now one shared function,
+# derive_goals_gd_features(). The per-pipeline missing-value policies stayed
+# deliberately different — item 36(b) declares that divergence by design — so
+# the helper takes the caller's own (key, default) lookup rather than owning it.
 _GOALS_GD_FIELDS: Tuple[str, ...] = (
     "home_goals_for_avg", "home_goals_against_avg", "home_gd_recent",
     "away_goals_for_avg", "away_goals_against_avg", "away_gd_recent",
@@ -880,17 +921,20 @@ _SERVING_SOURCE_LAST5_FORM = (
     "docstring claim about itself"
 )
 _TRAINING_SOURCE_GOALS_GD = (
-    "scripts/train_on_real_matches.py:build_dataset() — direct key remap from "
+    "scripts/train_on_real_matches.py:build_dataset() via "
+    "models/feature_registry.py:derive_goals_gd_features(), remapping "
     "TeamHistory.stats()'s {side}_goals_per_match_5 / "
-    "{side}_goals_conceded_per_match_5 / {side}_gd_avg_5 (replicated "
-    "assignment, not a shared function)"
+    "{side}_goals_conceded_per_match_5 / {side}_gd_avg_5 — passes a strict "
+    "lookup, so an absent key drops the row rather than imputing a default"
 )
 _SERVING_SOURCE_GOALS_GD = (
     "services/upcoming_match_feature_service.py:project_match_features() and "
-    "data/transformers.py:FeatureTransformer._project_to_canonical_features() "
-    "— the same direct key remap from each pipeline's own team-stats dict, "
-    "replicated in both (not a shared function). Train/serve equality is "
-    "verified empirically by tests/unit/test_feature_vector_parity.py"
+    "data/transformers.py:FeatureTransformer._project_to_canonical_features(), "
+    "both via models/feature_registry.py:derive_goals_gd_features() — verified "
+    "by import + call-site grep in both files. The projector passes dict.get "
+    "(absent key takes the registry default); FeatureTransformer passes its "
+    "fail-closed get_num (absent key raises DataUnavailableError). Train/serve "
+    "equality is verified by tests/unit/test_feature_vector_parity.py"
 )
 _SERVING_SOURCE_TEMPORAL = (
     "services/upcoming_match_feature_service.py:project_match_features() and "

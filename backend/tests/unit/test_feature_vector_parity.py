@@ -59,6 +59,7 @@ from src.models.feature_registry import (
     MARKET_FEATURES_14,
     TEMPORAL_FEATURES,
     derive_combination_features,
+    derive_goals_gd_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
@@ -166,12 +167,12 @@ def _assemble(home_stats: Dict[str, float], away_stats: Dict[str, float]) -> Dic
         wins_5=away_stats["wins_5"], draws_5=away_stats["draws_5"],
         losses_5=away_stats["losses_5"],
     ))
-    out["home_goals_for_avg"] = float(home_stats["home_goals_per_match_5"])
-    out["home_goals_against_avg"] = float(home_stats["home_goals_conceded_per_match_5"])
-    out["away_goals_for_avg"] = float(away_stats["away_goals_per_match_5"])
-    out["away_goals_against_avg"] = float(away_stats["away_goals_conceded_per_match_5"])
-    out["home_gd_recent"] = float(home_stats["home_gd_avg_5"])
-    out["away_gd_recent"] = float(away_stats["away_gd_avg_5"])
+    out.update(derive_goals_gd_features(
+        lambda key, _default: home_stats[key], is_home=True,
+    ))
+    out.update(derive_goals_gd_features(
+        lambda key, _default: away_stats[key], is_home=False,
+    ))
     out.update(derive_combination_features(
         home_goals_for_avg=out["home_goals_for_avg"],
         home_goals_against_avg=out["home_goals_against_avg"],

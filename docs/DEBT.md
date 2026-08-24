@@ -59,10 +59,12 @@ active leagues. Applying a rebind is a Class-C production-identity mutation
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
-**Tier:** `NEXT` — **the single hard blocker on Phase 4.** Not a serving
-defect; nothing in production reads this gate. But it makes the entire
-candidate-promotion path a no-op, so Phase 4 cannot complete regardless of how
-good a candidate is.
+**Tier:** `RESOLVED 2026-08-22`. (Label corrected 2026-08-24 — it still read
+`NEXT` / "the single hard blocker on Phase 4" long after the body below
+recorded the authorized fix, so the top of the ledger was advertising a
+blocker that no longer exists.) Not a serving defect; nothing in production
+reads this gate. But it made the entire candidate-promotion path a no-op, so
+Phase 4 could not complete regardless of how good a candidate was.
 **Found:** 2026-08-22, while transcribing the in-code certification thresholds
 for a frozen policy artifact (APEX directive §9). Surfaced by asking "what
 would a *passing* candidate look like?" rather than reading why the current
@@ -439,11 +441,30 @@ restore.
    five feature groups `FeatureTransformer` shares with the other pipelines
    are now individually parity-tested.
 
+   ✅ **(a) RESOLVED 2026-08-24.** The 6 goals/gd fields are no longer a
+   replicated assignment. `derive_goals_gd_features()` (`feature_registry.py`)
+   is the single implementation, wired into all four copies — the two serving
+   pipelines, the training builder, and the parity harness's own `_assemble()`,
+   a **fourth** replica this item had not counted. Because the three pipelines
+   need genuinely different missing-value policies (the divergence (b) below
+   declares by design), the helper takes the caller's own `(key, default)`
+   lookup: `FeatureTransformer` keeps passing its fail-closed `get_num`
+   (raises `DataUnavailableError`), the projector passes `dict.get`, and
+   training passes a strict lookup (raises `KeyError`, dropping the row). The
+   *names* were the duplication, not the arithmetic, so the helper owns the key
+   mapping and the defaults while the lookup policy stays with the caller.
+   Defaults now come from `DEFAULT_FEATURE_VALUES_68` instead of hand-copied
+   literals — the projector's copies had **already drifted** (1.5/1.2/0.0, with
+   the home literals reused verbatim for the away side, where the registry says
+   home 1.55/1.20/0.35 and away 1.25/1.40/-0.15). Those were unreachable in
+   practice, since both stats producers always emit all three keys per side, so
+   this is a latent-bug fix rather than a behaviour change; no reachable path
+   moved. Attribution strings updated and `feature_contract.json` regenerated
+   accordingly — the build gate caught the stale contract exactly as designed.
+   6 new tests, and the default-sourcing guard was watched failing against an
+   injected hand-copied literal (`assert 1.5 == 1.55`) before being trusted.
+
    **What remains uncovered:**
-   - the 6 goals/gd fields are attributed but flagged as a **replicated direct
-     assignment** across three pipelines rather than a shared function. The
-     harness verifies they agree today; three copies can drift where one
-     function cannot.
    - the fallback branches. Both pipelines are compared only where each has
      >=5 real results, because below that threshold they legitimately differ
      (serving substitutes documented defaults and raises a data gap; training
@@ -1125,10 +1146,13 @@ was filed if a later, unrelated-looking commit happens to fix it.
 
 ---
 
-## 24. Rescheduled fixtures wedged the whole fixture-sync tick; mitigation shipped, identity-hash root cause deferred
+## 24. Rescheduled fixtures wedged the whole fixture-sync tick; mitigation shipped, then the root cause was fixed too
 
-**Tier:** mitigation = `FIXED` this session. Root cause = `NEXT` — a
-kickoff-independent canonical fixture identity key, not a one-line change.
+**Tier:** `RESOLVED 2026-08-16` — mitigation (`35ca7bb`) *and* root cause
+(`0384804`, `da1c1f2`) both shipped. (Re-scoped 2026-08-24: this line read
+"Root cause = `NEXT`" and the body claimed the fix was deferred; both were
+already false when written — see the correction below.) A latent
+multi-provider dedup concern remains recorded but is not a live defect.
 **Found:** 2026-08-16, in a fresh Render deploy log: `fixture_sync: unhandled
 error — continuing without fixture data`, traceback ending in
 `canonical_identity_service.ensure_canonical_fixture` raising `ValueError:
@@ -1159,17 +1183,35 @@ test: `test_canonical_identity_conflict_does_not_wedge_the_batch`
 with a different kickoff time alongside an unrelated new fixture, and asserts
 the second fixture still commits.
 
-**Not done — deliberately deferred.** The identity hash still includes
-`kickoff_utc`, so a rescheduled fixture's canonical identity stays
-unreconciled indefinitely (not just once) until a kickoff-independent key is
-adopted — most likely `(competition_id, season, home_name, away_name)`,
-which stays stable across a reschedule for SabiScore's supported
-competitions (each is round-robin — at most one home/away meeting per
-season pair — so this remains disambiguating; UCL's occasional
-same-pairing-twice edge case was judged too rare to design around here).
-Changing the hash affects new canonical-identity generation broadly, not
-just the conflict path, so it's out of scope for a same-session defensive
-fix.
+⚠️ **CORRECTED 2026-08-24 — the paragraph that stood here was factually
+wrong.** It read "Not done — deliberately deferred… a rescheduled fixture's
+canonical identity stays unreconciled indefinitely." That has not been true
+since `0384804` ("reconcile verified provider reschedules in place") and
+`da1c1f2`, both shipped 2026-08-16, the same day this item was filed. Read
+`ensure_canonical_fixture` end to end: when a `ProviderEventMapping` already
+exists it conflict-checks on **competition + home_team_id + away_team_id
+only** — kickoff is deliberately excluded — then mutates
+`mapped_fixture.kickoff_utc` in place and **returns early**. The
+`_stable_id(...)` call that hashes `kickoff_utc` is reachable *only* for a
+provider event never seen before. Its own docstring states the contract:
+"Kickoff and provider display names are mutable metadata: legitimate
+reschedules/name changes update those fields without changing canonical
+participants." Pinned by
+`test_provider_reschedule_updates_kickoff_without_identity_drift`. Leaving
+the old text in place would have sent a future session to rewrite a hash that
+does not need rewriting.
+
+**What genuinely remains — and it is not the reschedule problem.** The
+`session.get(CanonicalFixture, fixture_id)` following that hash is a *dedup*
+lookup: a second provider reporting the same match hashes to the same id and
+attaches to the existing row. So switching to a kickoff-independent key
+(`(competition_id, season, home_name, away_name)`) would make legacy
+kickoff-derived rows unfindable, and a new provider event for an
+already-canonical fixture would mint a **duplicate** canonical fixture
+instead of attaching. That needs either a dual-key lookup or a backfill.
+With the operational pain gone, this is a latent multi-provider concern, not
+a live defect — and the change is deliberately **not** worth making until a
+second provider actually writes canonical fixtures.
 
 **Blast radius:** was every fixture in whichever sync tick happened to
 include a rescheduled fixture (all of them, not just the reschedule) — now
