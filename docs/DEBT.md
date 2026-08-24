@@ -90,6 +90,38 @@ question ("does `Match` and `CanonicalFixture` structurally disagree"), which
 is a real, separate signal (`CanonicalFixture` currently backs the shipped
 CLV-capture pipeline). It is simply the wrong lens for *this* repair.
 
+**2026-08-24 follow-up — the manifest's own diagnostic named a real gap, now
+made queryable.** Live `orphan-team-repair-review` reports 5 repair-ready
+Bundesliga entries (0 blocked) — 3 unplayed fixtures (`fd-565776`,
+`fd-565777`, `fd-565778`, kicking off 2026-08-28/29), so repairing them is a
+pre-kickoff `Match.home_team_id`/`away_team_id` repoint, not a historical Elo
+replay — plus `unrepaired_orphan_sides: {"ORPHAN_NO_RESOLVER_MATCH": 3}` with
+no identity attached. The production DB (`sabiscore_db_v3`,
+`dpg-da3p8qv10e5c738vls1g-a`) is unreachable for a direct read-only query from
+this environment — its `ipAllowList` is locked to a single operator IP,
+unlike the decoy `sabiscore_db_v2`'s open `0.0.0.0/0` (confirmed: the same
+query tool succeeds against v2, fails with `SSL/TLS required` against v3
+every time). `summary["unrepaired_orphan_side_detail"]` now carries
+`match_id`/`league_id`/`side`/`orphan_team_id`/`orphan_team_name`/
+`freshest_observed_name` per unrepaired side (`manifest_sha256` unaffected —
+detail lives in `summary`, which was already excluded from the hash). Pinned
+by an extension of `test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons`
+in `test_orphan_team_reconciliation_service.py`. **Diagnosis of the 3 sides
+themselves is deferred to the next session** once this detail is live
+in production — a plausible hypothesis (untested): the *target* `Team.name`
+for these 3 is itself mojibake-corrupted from the same 2026-08-20 seeding
+incident, which `_identity_key()`'s `[a-z0-9]+` tokenizer would make
+unmatchable against a now-clean freshest-observed name (the `?` bytes are
+dropped, not mapped back to the letter they replaced, shortening the token by
+one character and breaking both the exact/affix and space-bounded
+containment checks in `team_identity.py`). If confirmed, that's a smaller,
+lower-risk Class B display-text correction on an already-correctly-identified
+row — not a Class C identity rebind. The Class C authorization package for
+the 5 already-diagnosed Bundesliga entries (manifest hash
+`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9` as of
+2026-08-24T22:05 UTC) is prepared and presented to the operator this session
+— **not executed**; no `--apply` path exists in code.
+
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
 **Tier:** `RESOLVED 2026-08-22`. (Label corrected 2026-08-24 — it still read
