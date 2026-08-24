@@ -164,7 +164,6 @@ async def build_orphan_team_repair_manifest(
 
     entries: list[OrphanTeamRepairEntry] = []
     unrepaired: Counter[str] = Counter()
-    unrepaired_detail: list[dict[str, object]] = []
     for match, evidence in rows:
         evidence = evidence or {}
         for side, stored_team_id in (
@@ -176,26 +175,9 @@ async def build_orphan_team_repair_manifest(
             if await _has_elo_history(session, stored_team_id, match.league_id):
                 continue  # not an orphan — already carries real history
 
-            orphan_name_row = await session.get(Team, stored_team_id)
-            orphan_team_name = str(orphan_name_row.name) if orphan_name_row else None
-            base_detail: dict[str, object] = {
-                "match_id": match.id,
-                "league_id": match.league_id,
-                "side": side,
-                "orphan_team_id": stored_team_id,
-                "orphan_team_name": orphan_team_name,
-            }
-
             provider_team_id = str(evidence.get(f"{side}_provider_team_id") or "").strip()
             if not provider_team_id:
                 unrepaired["ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE"] += 1
-                unrepaired_detail.append(
-                    {
-                        **base_detail,
-                        "reason": "ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE",
-                        "freshest_observed_name": None,
-                    }
-                )
                 continue
 
             mapping = (
@@ -210,23 +192,9 @@ async def build_orphan_team_repair_manifest(
             freshest_name = mapping.strip() if mapping else None
             if not freshest_name:
                 unrepaired["ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET"] += 1
-                unrepaired_detail.append(
-                    {
-                        **base_detail,
-                        "reason": "ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET",
-                        "freshest_observed_name": None,
-                    }
-                )
                 continue
             if is_unusable_team_name(freshest_name):
                 unrepaired["ORPHAN_FRESHEST_NAME_STILL_CORRUPT"] += 1
-                unrepaired_detail.append(
-                    {
-                        **base_detail,
-                        "reason": "ORPHAN_FRESHEST_NAME_STILL_CORRUPT",
-                        "freshest_observed_name": freshest_name,
-                    }
-                )
                 continue
 
             target_id = await resolve_team_id(
@@ -237,25 +205,11 @@ async def build_orphan_team_repair_manifest(
             )
             if not target_id or target_id == stored_team_id:
                 unrepaired["ORPHAN_NO_RESOLVER_MATCH"] += 1
-                unrepaired_detail.append(
-                    {
-                        **base_detail,
-                        "reason": "ORPHAN_NO_RESOLVER_MATCH",
-                        "freshest_observed_name": freshest_name,
-                    }
-                )
                 continue
 
             other_side_id = match.away_team_id if side == "home" else match.home_team_id
             if target_id == other_side_id:
                 unrepaired["ORPHAN_TARGET_COLLIDES_WITH_OTHER_SIDE"] += 1
-                unrepaired_detail.append(
-                    {
-                        **base_detail,
-                        "reason": "ORPHAN_TARGET_COLLIDES_WITH_OTHER_SIDE",
-                        "freshest_observed_name": freshest_name,
-                    }
-                )
                 continue  # would create a self-play collision — refuse, not guess
 
             blockers: list[str] = []
@@ -273,6 +227,7 @@ async def build_orphan_team_repair_manifest(
                 session, target_id, match.league_id
             )
             target_name_row = await session.get(Team, target_id)
+            orphan_name_row = await session.get(Team, stored_team_id)
 
             entries.append(
                 OrphanTeamRepairEntry(
@@ -282,7 +237,7 @@ async def build_orphan_team_repair_manifest(
                     kickoff_utc=match.match_date.isoformat() if match.match_date else "",
                     status=match.status or "",
                     orphan_team_id=stored_team_id,
-                    orphan_team_name=orphan_team_name,
+                    orphan_team_name=str(orphan_name_row.name) if orphan_name_row else None,
                     freshest_observed_name=freshest_name,
                     target_team_id=target_id,
                     target_team_name=str(target_name_row.name) if target_name_row else None,
@@ -307,13 +262,6 @@ async def build_orphan_team_repair_manifest(
         # an orphan that fails to resolve is silently indistinguishable from
         # "there was never an orphan here" from outside this function.
         "unrepaired_orphan_sides": dict(sorted(unrepaired.items())),
-        # Per-side identity for each unrepaired count above, so a caller can
-        # diagnose *which* team/match is stuck without a direct DB query.
-        # Summary-only: excluded from manifest_sha256 like the rest of summary.
-        "unrepaired_orphan_side_detail": sorted(
-            unrepaired_detail,
-            key=lambda record: (str(record["match_id"]), str(record["side"])),
-        ),
     }
     manifest_sha256 = _canonical_sha256(
         {
