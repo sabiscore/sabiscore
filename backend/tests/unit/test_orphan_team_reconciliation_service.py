@@ -279,6 +279,29 @@ async def test_manifest_sha256_is_deterministic(session: AsyncSession) -> None:
     assert first.manifest_sha256 != ""
 
 
+async def test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons(
+    session: AsyncSession,
+) -> None:
+    """An orphan that fails to resolve must not be silently indistinguishable
+    from 'there was never an orphan here' — the diagnostic breakdown is what
+    a human uses to tell those apart from outside this function."""
+    league_id = "LA_LIGA"
+    session.add(League(id=league_id, name=league_id, country="test"))
+    # No opponent with Elo history exists in this league at all, so
+    # resolve_team_id has nothing to match against — ORPHAN_NO_RESOLVER_MATCH.
+    await _seed_orphan_fixture(
+        session, match_id="fd-8", league_id=league_id,
+        home_provider_id="600", away_provider_id="601",
+        observed_home_name="Unmatched Club CF", observed_away_name="Also Unmatched",
+    )
+
+    manifest = await build_orphan_team_repair_manifest(session)
+
+    assert manifest.entries == ()
+    diag = manifest.summary["unrepaired_orphan_sides"]
+    assert diag.get("ORPHAN_NO_RESOLVER_MATCH") == 2  # both home and away
+
+
 async def test_target_that_would_collide_with_the_other_side_is_refused(
     session: AsyncSession,
 ) -> None:
