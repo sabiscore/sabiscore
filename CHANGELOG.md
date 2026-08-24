@@ -53,6 +53,43 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   defect, and deliberately not worth changing until a second provider writes
   canonical fixtures.
 
+## Unreleased - Correct repair target for mojibake orphans; PR #81's manifest compared the wrong systems (2026-08-24)
+
+### Fixed
+
+- `docs/DEBT.md` item 39's "repair path already exists" claim (from the
+  previous entry below) was wrong. `GET /api/v1/release/fixture-identity-review`
+  (PR #81) proposes rebinding `Match.home_team_id`/`away_team_id` toward
+  `CanonicalFixture.home_team_id`/`away_team_id` — `canonical_teams.id`, a
+  **different table `Match` never references**, resolved through
+  `canonical_identity_service._provider_team_anchor()`, a wholly separate
+  system from the one that actually backs `Match.home_team_id`. Verified live
+  before trusting it: all 118 "verified" ids across the 59 item-35 entries are
+  `team-<hash>` format, and for all 11 mojibake-flagged rows the "verified"
+  *name* is also `??`-corrupted — `_provider_team_anchor` has no name-quality
+  guard and, once a `ProviderTeamMapping` exists, reuses its
+  `canonical_team_id` forever regardless of the current display name. A
+  rebind toward that target would not have fixed the mojibake at all.
+
+### Added
+
+- `GET /api/v1/release/orphan-team-repair-review`
+  (`services/orphan_team_reconciliation_service.py`) — the genuine repair
+  tool. Replays the exact resolver `fixture_sync` itself uses for
+  `Match.home_team_id` (`team_identity.resolve_team_id()`) against the
+  **freshest observed** provider team name, sourced from
+  `ProviderTeamMapping.provider_team_name` (refreshed on every sync tick,
+  unlike `CanonicalTeam.name`, which is set once at creation and never
+  touched again). Only proposes a target that already carries real
+  `EloRatingSnapshot` rows in the same league, evidenced by snapshot count
+  and first/last match date; refuses a target that would collide with the
+  fixture's other side (self-play guard, watched failing before being
+  trusted). Review-only — no rebind/apply path; that remains Class C
+  (APEX §3) and unauthorized. 8 new tests, seeded to mirror production's
+  actual shape (orphan rows predate the mojibake ingest guard, so they're
+  seeded directly rather than through `sync_upcoming_fixtures`, which now
+  correctly refuses to mint a new one).
+
 ## Unreleased - Fail closed on mojibake team names (2026-08-23)
 
 ### Fixed

@@ -48,14 +48,47 @@ the name carries no identity weight, so a lossy one is merely cosmetic) and
 identity-conflict path. Both behaviours pinned, and **both guards were watched
 failing against a reverted fix** before being trusted.
 
-**Repair path already exists — no new tooling needed.**
-`GET /api/v1/release/fixture-identity-review` (item 35) surfaces these rows
-directly, and the manifest now carries `stored_identity_unusable` per entry
-plus `stored_identity_unusable_count` in the summary, so the mojibake-driven
-rebinds can be triaged out of the wider drift set. **Live production reading,
-2026-08-23:** 49 drifted fixtures — 42 rebind-ready, 7 blocked — across all six
-active leagues. Applying a rebind is a Class-C production-identity mutation
-(APEX §3) and remains unauthorized.
+⚠️ **CORRECTED 2026-08-24 — "repair path already exists" was wrong.** The
+paragraph that stood here proposed rebinding toward item 35's
+`GET /api/v1/release/fixture-identity-review` "verified" identity. That
+target is `CanonicalFixture.home_team_id`/`away_team_id` —
+`canonical_teams.id`, a **different table `Match` never references**, resolved
+through `canonical_identity_service._provider_team_anchor()`, a wholly
+separate system from the one that actually backs `Match.home_team_id`
+(`teams.id`, resolved through `team_identity.resolve_team_id()`). Checked
+live before trusting it: all 118 "verified" ids across the 59 item-35 entries
+are `team-<hash>` format — zero are the Elo-durable `fdco-team-` format — and
+for all 11 `stored_identity_unusable` rows the "verified" *name* is **also**
+`??`-corrupted, because `_provider_team_anchor` has no name-quality guard and,
+once a `ProviderTeamMapping` exists, reuses its `canonical_team_id` forever
+regardless of the current display name — the identical "sticky corruption"
+class this item's own ingest guard exists to prevent, just in the other
+system. Rebinding toward that target would not have fixed the mojibake at
+all; it would have moved to a differently-formatted but equally corrupted
+name.
+
+✅ **The genuine repair tool, built and shipped correctly this time:**
+`GET /api/v1/release/orphan-team-repair-review`
+(`services/orphan_team_reconciliation_service.py`). It replays the exact
+resolver `fixture_sync` itself uses for `Match.home_team_id` —
+`team_identity.resolve_team_id()` — against the **freshest observed**
+provider team name, sourced from `ProviderTeamMapping.provider_team_name`
+(refreshed on every sync tick, unlike `CanonicalTeam.name`, which is set once
+at creation and never touched again). Because the deterministic-fallback path
+that mints an orphan never calls `bind_provider_elo_team_id`, a corrupted-name
+orphan carries no sticky mapping in the *legacy* system — so once upstream and
+the freshest observed name are clean (both true today), the resolver can find
+the real, history-bearing team on its own. Only proposes a target that
+already carries real `EloRatingSnapshot` rows in the same league — evidenced
+in the manifest by snapshot count and first/last match date — and refuses a
+target that would collide with the fixture's other side (self-play guard,
+watched failing before being trusted). Still review-only: no rebind/apply
+path exists; that remains Class C (APEX §3) and unauthorized.
+
+Item 35's endpoint is not deleted — it still correctly answers its own
+question ("does `Match` and `CanonicalFixture` structurally disagree"), which
+is a real, separate signal (`CanonicalFixture` currently backs the shipped
+CLV-capture pipeline). It is simply the wrong lens for *this* repair.
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 

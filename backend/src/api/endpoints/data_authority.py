@@ -21,6 +21,9 @@ from ...services.historical_identity_repair_manifest_service import (
 from ...services.historical_identity_repair_service import (
     build_semantic_elo_repair_plan,
 )
+from ...services.orphan_team_reconciliation_service import (
+    build_orphan_team_repair_manifest,
+)
 
 router = APIRouter(prefix="/release", tags=["release-verification"])
 
@@ -214,6 +217,44 @@ async def fixture_identity_review(
             "note": (
                 "review only; no rebind/apply path exists yet — "
                 "see docs/DEBT.md item 35"
+            ),
+        },
+    }
+
+
+@router.get("/orphan-team-repair-review")
+async def orphan_team_repair_review(
+    response: Response,
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Review Elo-less orphan team identities with a now-resolvable target.
+
+    docs/DEBT.md item 39: unlike ``fixture_identity_review`` (which compares
+    against the unrelated ``canonical_teams`` system), this replays the exact
+    resolver ``fixture_sync`` uses for ``Match.home_team_id``/``away_team_id``
+    against the freshest observed provider team name, and only proposes a
+    target that already carries real Elo history in the same league. Purely
+    read-only — never mutates ``matches`` or ``teams``. No rebind/apply path
+    exists yet; that would be a Class-C production-identity mutation under
+    the APEX directive and needs its own, separately-authorized dry-run
+    manifest flow.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    manifest = await build_orphan_team_repair_manifest(db)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "read_only": True,
+        "manifest": {
+            "schema_version": manifest.schema_version,
+            "repair_manifest_sha256": manifest.manifest_sha256,
+            "summary": manifest.summary,
+        },
+        "entries": [entry.as_dict() for entry in manifest.entries],
+        "authorization": {
+            "apply_supported": False,
+            "note": (
+                "review only; no rebind/apply path exists yet — "
+                "see docs/DEBT.md item 39"
             ),
         },
     }
