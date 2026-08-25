@@ -106,21 +106,58 @@ every time). `summary["unrepaired_orphan_side_detail"]` now carries
 `freshest_observed_name` per unrepaired side (`manifest_sha256` unaffected —
 detail lives in `summary`, which was already excluded from the hash). Pinned
 by an extension of `test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons`
-in `test_orphan_team_reconciliation_service.py`. **Diagnosis of the 3 sides
-themselves is deferred to the next session** once this detail is live
-in production — a plausible hypothesis (untested): the *target* `Team.name`
-for these 3 is itself mojibake-corrupted from the same 2026-08-20 seeding
-incident, which `_identity_key()`'s `[a-z0-9]+` tokenizer would make
-unmatchable against a now-clean freshest-observed name (the `?` bytes are
-dropped, not mapped back to the letter they replaced, shortening the token by
-one character and breaking both the exact/affix and space-bounded
-containment checks in `team_identity.py`). If confirmed, that's a smaller,
-lower-risk Class B display-text correction on an already-correctly-identified
-row — not a Class C identity rebind. The Class C authorization package for
-the 5 already-diagnosed Bundesliga entries (manifest hash
-`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9` as of
-2026-08-24T22:05 UTC) is prepared and presented to the operator this session
-— **not executed**; no `--apply` path exists in code.
+in `test_orphan_team_reconciliation_service.py`.
+
+⚠️ **2026-08-25 — the 3 sides are diagnosed, and the hypothesis above was
+WRONG.** It predicted a mojibake-corrupted *target* `Team.name`. Live probe of
+the deployed detail (backend `sha:a42f03b`) returned three **perfectly clean**
+names, no `?` anywhere:
+
+| Fixture | Side | Orphan team | Freshest observed |
+|---|---|---|---|
+| `fd-565779` | away | Eintracht Frankfurt | `Eintracht Frankfurt` |
+| `fd-565780` | home | SV 07 Elversberg | `SV 07 Elversberg` |
+| `fd-565781` | away | Hamburger SV | `Hamburger SV` |
+
+Mojibake was never involved. The real cause is a **two-vocabulary mismatch**,
+the same class as the league-id trap: the historical Elo corpus
+(`backend/data/cache/fd_D1_*.csv`, football-data.co.uk) abbreviates club
+names, while the live provider sends the full legal name. Read out of the
+committed CSVs across all seven seasons (27 distinct clubs):
+
+- `Eintracht Frankfurt` → corpus **`Ein Frankfurt`** — `_identity_key` gives
+  `eintracht frankfurt` vs `ein frankfurt`; exact ✗, affix ✗, containment ✗
+  (`"eintracht"` is not `"ein"` + boundary), `reconcile_team` **0.8125 →
+  `REQUIRES_REVIEW`**, correctly below the 0.94 auto-accept threshold.
+- `Hamburger SV` → corpus **`Hamburg`** — `hamburger sv` vs `hamburg`
+  (`sv` is deliberately *not* in `_LEGAL_TEAM_TOKENS`); `reconcile_team`
+  **0.7368 → `REQUIRES_REVIEW`**.
+- `SV 07 Elversberg` → **absent from all seven seasons.** Newly promoted, so
+  no Bundesliga Elo can exist. `reconcile_team` **0.4615 → `UNKNOWN`**. This
+  one is **correct fail-closed behaviour, not a defect** — do not "fix" it.
+
+`REQUIRES_REVIEW` is precisely what `_AUDITED_ALIASES` exists to answer
+("identity assertions, not fuzzy-threshold exceptions", per the module's own
+docstring), and the dict already carried the identical
+`("BUNDESLIGA", "borussia monchengladbach"): "m gladbach"` case. Two entries
+added — `eintracht frankfurt → ein frankfurt`, `hamburger sv → hamburg` —
+with 4 tests: 2 proving resolution, 1 proving an absent club still fails
+closed (aliases must not make Elversberg snap to a neighbour), 1 proving the
+alias cannot leak across leagues. **Both resolution tests were watched
+failing** against the un-aliased resolver (`assert None == 'fdco-bundesliga-0'`)
+before the fix was trusted.
+
+⚠️ **Re-derive corpus spellings from the committed CSVs, never guess them** —
+`Ein Frankfurt`, `M'gladbach`, `FC Koln`, `St Pauli` and `Hamburg` are all
+football-data.co.uk conventions that no amount of reasoning about the club's
+real name will produce.
+
+The Class C authorization package for the 5 already-diagnosed Bundesliga
+entries (manifest hash
+`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9`, re-confirmed
+unchanged at 2026-08-25T00:5x UTC on `sha:a42f03b`) is prepared and presented
+to the operator — **not executed**; no `--apply` path exists in code, and a
+general "proceed" is not the authorization APEX §3 requires.
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
