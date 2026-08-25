@@ -64,6 +64,16 @@ _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     ("BUNDESLIGA", "hamburger sv"): "hamburg",
     ("EPL", "manchester city"): "man city",
     ("LIGUE_1", "rennais"): "rennes",
+    # Paris FC and Paris SG are two genuinely different clubs that both appear
+    # in the Ligue 1 corpus. `_identity_key` reduces "Paris FC" to the bare
+    # place name "paris", which the containment heuristic below then finds
+    # inside "paris sg" -- silently merging PSG's entire history into the
+    # Paris FC row. Confirmed in production: `fd-team-ligue_1:paris_fc` held
+    # 276 Elo snapshots spanning 2019/2020 onward, including results
+    # (3-0 Nimes, 4-0 Toulouse, 1-0 at Lyon in Aug/Sep 2019) that are PSG's,
+    # in seasons when Paris FC was in Ligue 2. Asserting the identity here is
+    # what stops the heuristic from guessing. See docs/DEBT.md item 40.
+    ("LIGUE_1", "paris sg"): "paris saint germain",
 }
 
 
@@ -283,9 +293,46 @@ async def resolve_team_id(
         if deterministic:
             return deterministic
 
+        # An audited alias is an explicit human identity assertion, so it must
+        # outrank every heuristic below it -- including containment. This
+        # ordering is load-bearing, not cosmetic: "Paris SG" reduces to
+        # `paris sg`, which contains the bare place name `paris` that
+        # "Paris FC" reduces to, so containment would otherwise resolve PSG to
+        # a different real club before the alias was ever consulted.
+        #
+        # An alias that names a target we cannot find fails CLOSED rather than
+        # falling through: the assertion says this name means one specific
+        # club, so when that club is absent the honest answer is "unresolved",
+        # never "let the next heuristic guess".
+        # An audited alias is an explicit human identity assertion, so it must
+        # outrank every heuristic below it -- including containment. This
+        # ordering is load-bearing, not cosmetic: "Paris SG" reduces to
+        # `paris sg`, which contains the bare place name `paris` that
+        # "Paris FC" reduces to, so containment would otherwise resolve PSG to
+        # a different real club before the alias was ever consulted. Verified
+        # by reverting only this block, with the alias left in place: the
+        # Paris regression test goes red.
+        #
+        # An alias that names a target we cannot find fails CLOSED rather than
+        # falling through: the assertion says this name means one specific
+        # club, so when that club is absent the honest answer is "unresolved",
+        # never "let the next heuristic guess".
+        if league_id and (league_id, identity_key) in _AUDITED_ALIASES:
+            alias_target = _AUDITED_ALIASES[(league_id, identity_key)]
+            return _unique_match(
+                rows, lambda row_name: _identity_key(row_name) == alias_target
+            )
+
         # Safe containment handles long official names such as
         # ``Brighton & Hove Albion FC`` vs historical ``Brighton``. Ambiguity
         # remains fail-closed because exactly one candidate must match.
+        #
+        # ⚠️ Uniqueness does NOT make this safe on its own. Two distinct clubs
+        # sharing a place name (Paris FC / Paris SG) produce exactly one
+        # containment match and are still merged. Every such corpus pair must
+        # be disambiguated by an audited alias above -- enforced by
+        # ``test_team_identity_containment_collisions.py``, which fails if the
+        # committed corpora ever introduce an uncovered collision.
         if len(identity_key) >= 5:
             contained = _unique_match(
                 rows,
@@ -299,13 +346,6 @@ async def resolve_team_id(
             )
             if contained:
                 return contained
-
-        if league_id:
-            alias_target = _AUDITED_ALIASES.get((league_id, identity_key))
-            if alias_target:
-                aliased = _unique_match(rows, lambda row_name: _identity_key(row_name) == alias_target)
-                if aliased:
-                    return aliased
 
     candidates = [TeamCandidate(team_id=row_id, name=row_name) for row_id, row_name in rows]
     decision = reconcile_team(name, candidates)

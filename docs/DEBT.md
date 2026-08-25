@@ -1,5 +1,114 @@
 # SabiScore Debt Ledger
 
+## 40. PSG's entire Elo history sits on the Paris FC team row — two distinct clubs merged by a place-name collision
+
+**Tier:** resolver hardening `RESOLVED 2026-08-25` (both name resolvers now
+refuse the merge, machine-enforced across every committed corpus). The
+**production data repair is `NEXT` and Class C** — unauthorized, and it needs
+a chronological Elo replay, not a spot fix.
+**Found:** 2026-08-25, incidentally. A verification query run immediately
+after the item-35 rebind showed the repaired fixture's opponent
+(`fd-team-ligue_1:paris_saint-germain_fc`, PSG) carrying **3** Elo snapshots
+while an unrelated row carried 276. Nothing prompted that check — it came
+from reading the numbers in a result rather than only the row being repaired.
+
+### The corruption
+
+| Team id | Name | Elo snapshots | Seasons |
+|---|---|---|---|
+| `fd-team-ligue_1:paris_fc` | Paris FC | **276** | 2019/2020 → 2026/2027 |
+| `fd-team-ligue_1:paris_saint-germain_fc` | Paris Saint-Germain FC | 3 | 2025/2026 → 2026/2027 |
+
+276 is the **highest count in Ligue 1** — above every other club's 244–245.
+It is PSG's 243 corpus appearances merged with Paris FC's own 34.
+
+**Confirmed by reading the actual matches, not inferred from counts.** The
+2019/2020 fixtures stored under "Paris FC" are unmistakably PSG's, in a season
+Paris FC spent in Ligue 2:
+
+```text
+2019-08-11  Paris FC 3-0 Nimes          2019-08-18  Rennes 2-1 Paris FC
+2019-08-25  Paris FC 4-0 Toulouse FC    2019-08-30  Metz 0-2 Paris FC
+2019-09-14  Paris FC 1-0 Strasbourg     2019-09-22  Ol. Lyonnais 0-1 Paris FC
+```
+
+All are real PSG results. Match-source breakdown confirms the origin: 275 of
+the 277 are `fdco-` ids (historical backfill), and 2025/2026 alone holds
+**66** — both clubs' fixtures collapsed onto one row.
+
+### Root cause
+
+`_identity_key` strips the legal token `FC` but not `SG`, so:
+
+```text
+"Paris FC" → "paris"      "Paris SG" → "paris sg"
+```
+
+`resolve_team_id`'s containment rule — which exists so `Brighton` resolves to
+`Brighton & Hove Albion FC` — then finds `" paris "` inside `" paris sg "`
+and merges them.
+
+⚠️ **`_unique_match`'s uniqueness guard does not help, and understanding why
+matters.** Only one candidate matches, so the merge looks unambiguous. Even
+with the real PSG row present it stays unique: `"paris saint germain"` neither
+contains nor is contained by `"paris sg"`, so PSG never becomes a competing
+candidate. Uniqueness is not a safety property here.
+
+### What was fixed (Class B, this session)
+
+**Both** resolvers now refuse it, and each was watched failing first:
+
+1. `team_identity._AUDITED_ALIASES` gains `("LIGUE_1", "paris sg") →
+   "paris saint germain"`.
+2. **The alias lookup moved *before* the containment heuristic.** This is
+   load-bearing on its own: reverting only the ordering, with the alias left
+   in the table, still reproduces the merge — containment answered first, so
+   the assertion was never consulted. An explicit human identity assertion
+   must outrank a heuristic.
+3. An alias naming a target that cannot be found now **fails closed** instead
+   of falling through to the heuristics it was meant to pre-empt.
+
+`historical_backfill_service.TeamIndex` — the resolver that actually consumes
+the corpus — already refused this pair (PR #25) and was verified unchanged
+against the full real 28-row Ligue 1 roster, not a toy fixture.
+
+**Machine-enforced going forward:** `tests/unit/test_team_identity_containment_collisions.py`
+scans every committed corpus for pairs whose identity keys contain one another
+and requires each to be refused *behaviourally* by `TeamIndex` and asserted by
+an alias for `resolve_team_id`. Exactly one such pair exists across all six
+leagues today (this one). A future season whose promoted club collides with an
+incumbent now fails CI instead of silently merging two clubs' histories.
+
+⚠️ **The scan reads four column conventions** (`HomeTeam`/`AwayTeam` and
+`home_team`/`away_team`) because the committed cache mixes them — the older
+files are snake_case-normalized, the newest keep raw upstream headers. A first
+pass that read only the raw pair undercounted PSG from 243 appearances to 34
+and nearly produced the wrong conclusion.
+
+### What is NOT fixed — the data (Class C, `NEXT`)
+
+Current code no longer reproduces this; the corrupted rows are legacy, the
+same shape as item 39's mojibake. Repair requires:
+
+- reassigning ~243 `fdco-` matches from `fd-team-ligue_1:paris_fc` to a real
+  PSG row, keeping Paris FC's own 34;
+- a **chronological Elo replay** for Ligue 1 from 2019-08-11 forward, because
+  Elo is path-dependent and every later Ligue 1 opponent's rating was computed
+  against a PSG-strength "Paris FC".
+
+That is item 34's `repair_semantic_identity_and_rebuild_elo.py` machinery, and
+it is Class C: unauthorized, needing its own dry-run manifest, digest, and
+explicit approval. **Do not attempt it as part of an unrelated change.**
+
+**Live impact while unrepaired:** Ligue 1 Elo features are wrong for PSG
+(near-baseline, 3 snapshots) and inflated for Paris FC, and every Ligue 1
+club's rating carries some contamination from having faced the merged row.
+Predictions still serve — Elo is 4 of 68 features and the affected fixtures
+report honestly — but Ligue 1 Elo should not be treated as trustworthy until
+the replay runs.
+
+---
+
 ## 39. Mojibake team names in production cost those fixtures their Elo identity
 
 **Tier:** `RESOLVED 2026-08-25` — ingest guard shipped 2026-08-23; the Class C
@@ -1165,6 +1274,42 @@ to fix, and it now does so precisely — no more, no less.
 against a 1-fixture corrected manifest is a materially different operation
 and needs its own explicit authorization, taken after a fresh review
 (`3171fb83…` moves on every sync tick that resolves or detects drift).
+
+✅ **EXECUTED 2026-08-25T07:50:39 UTC, operator-authorized against the
+corrected numbers.** The user was shown the corrected 1-ready manifest and
+explicitly re-authorized. Re-reviewed immediately before applying (this
+ledger's standing rule): digest still `3171fb83…`, 1 ready / 1 blocked.
+
+```text
+POST /api/v1/release/fixture-identity-repair-apply
+authorization_id: operator-authorized-2026-08-25-item35b-corrected-pr97
+rebound_count: 1 · affected: [fd-559702] · skipped_blocked: [fd-560555]
+reversal: fd-559702 home_team_id
+          fd-team-ligue_1:lille_osc → fdco-team-ligue_1-lille
+```
+
+**Both postconditions verified independently of the endpoint's own checks:**
+
+- Direct DB query: `fd-559702` home is now `fdco-team-ligue_1-lille` ("Lille",
+  **244** Elo snapshots) where it was the orphan `fd-team-ligue_1:lille_osc`
+  (**1** snapshot). Kickoff 2026-08-28, still `scheduled` — unplayed, so no
+  post-match Elo derived from the wrong participant exists and no replay is
+  implicated.
+- `fd-560555` (EPL, `HAS_EXISTING_PREDICTIONS`) is byte-for-byte untouched.
+- Re-review: digest moved to `dbdd3d6e…`, `total_mismatched: 1`,
+  `rebind_ready_count: 0` — the rebound fixture dropped out entirely, which is
+  postcondition 2 confirmed from outside the transaction that asserted it.
+
+⚠️ **A tooling trap worth recording:** the first post-apply review appeared to
+show the fixture *still* pending. That was `WebFetch`'s own 15-minute
+per-URL response cache, not production state — the endpoint sets
+`Cache-Control: no-store` and was correct all along. **Verify a mutation's
+effect with `curl` (or a direct query), never with a tool that caches
+responses**; a cached read of a "did my write land" probe is worse than no
+read at all.
+
+Item 35 is closed: review (a), apply tool (b), and the executed repair are all
+done, live, and independently verified.
 
 ---
 
