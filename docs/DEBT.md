@@ -218,12 +218,90 @@ built with the canonical `"LA_LIGA"` is silently dropped as an unsupported
 competition and the test passes for the wrong reason. Provider-shaped test
 fixtures must use the display form.
 
-The Class C authorization package for the 5 already-diagnosed Bundesliga
-entries (manifest hash
-`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9`, re-confirmed
-unchanged at 2026-08-25T00:5x UTC on `sha:a42f03b`) is prepared and presented
-to the operator — **not executed**; no `--apply` path exists in code, and a
-general "proceed" is not the authorization APEX §3 requires.
+✅ **2026-08-25 — the Class C executor is BUILT (code only; nothing mutated).**
+`services/orphan_team_rebind_service.py` + `scripts/repair_orphan_team_identities.py`,
+mirroring the `repair_semantic_identity_and_rebuild_elo.py` precedent
+rule-for-rule: `--review` is read-only under `SET TRANSACTION READ ONLY` and
+always rolls back; `--apply` requires the reviewed `--manifest-sha256`, an
+`--authorization-id`, and the literal token `APPLY_ORPHAN_TEAM_REBIND`;
+PostgreSQL-only (`acquire_orphan_team_rebind_locks` raises on any other bind,
+so there is no silent SQLite path); the manifest digest is **re-derived under
+`LOCK TABLE teams, matches, elo_rating_snapshots IN SHARE ROW EXCLUSIVE MODE`**
+and every row's exact pre-state re-checked, so a concurrent change aborts
+before a single write.
+
+**Deliberately narrower than its sibling**: it writes `Match.home_team_id` /
+`away_team_id` and *nothing else* — no `Team` created, renamed or deleted, no
+`EloRatingSnapshot` written or rebuilt. That narrowness is what removes the
+need for a chronological Elo replay: the manifest already refuses any side
+whose kickoff has passed, so every repaired fixture is **still unplayed** and
+no post-match Elo derived from the wrong participant exists to unwind. This is
+a forward-looking identity correction, not a rewrite of the past — a materially
+different risk profile from item 34's EPL replay.
+
+Two postconditions run before the caller commits, and **the second was watched
+catching a sabotaged write** (`RuntimeError: orphan team rebind postcondition
+failed: ['fd-rebind-1/home'] still proposed after rebind`), not merely asserted
+in a test: (1) no touched fixture may record a team playing itself — the exact
+shape item 23's 26 rows produced; (2) re-deriving the manifest must no longer
+propose any side just written, since each target carries real same-league Elo.
+`--apply` also prints a `reversals` list — the exact `(match, side, from, to)`
+tuples to undo it by hand. 6 tests cover the happy path, a stale digest, a row
+that moved since review, an empty manifest (an explicit refusal, never a silent
+success), a blocked entry, and the PostgreSQL-only lock refusal.
+
+⚠️ **Execution is operator-side and has NOT happened.** The agent environment
+cannot reach `sabiscore_db_v3` at all (single-IP `ipAllowList`), so `--apply`
+must run somewhere holding real DB access — a Render shell or the operator's
+own machine. ⚠️ **Re-run `--review` first and use the hash it prints**: the
+digest moved when the corpus-alias fix deployed, because Eintracht Frankfurt
+and Hamburger SV stopped being `ORPHAN_NO_RESOLVER_MATCH` and became
+repair-ready entries. Any digest recorded before that deploy is stale by
+construction, and the executor will refuse it.
+
+### Class C authorization package — current as of `sha:e135ce9`
+
+✅ **Both code fixes above are live and verified in production.** Mojibake on
+the public fixtures endpoint went **9 of 50 → 2 of 50**; the 7 LA_LIGA rows
+now render correctly, and exactly the 2 BUNDESLIGA orphans remain — which is
+the predicted split, since those are Elo-**less** and a name repair cannot give
+them history. The corpus-alias fix is likewise confirmed live: the manifest
+moved from **5 repair-ready / 3 unrepaired** to **7 repair-ready / 1
+unrepaired**, the remaining one being SV 07 Elversberg, correctly (no
+Bundesliga Elo exists for a newly-promoted club).
+
+**Authoritative manifest digest (re-derived post-deploy, 2026-08-25):**
+
+```
+9da675851dc4da4f5ac4e1afbe415d9ca700dee1baec66dd6643723a5b66353e
+```
+
+⚠️ The earlier `6925fbade2…` digest is **stale by construction** and the
+executor will refuse it — it predates the alias fix, when Frankfurt and Hamburg
+were still `ORPHAN_NO_RESOLVER_MATCH` rather than repair-ready entries.
+
+7 sides across 5 unplayed fixtures, **0 blocked**, all BUNDESLIGA:
+
+| Fixture | Side | Orphan | → Target | Elo evidence |
+|---|---|---|---|---|
+| `fd-565776` | home | FC Bayern M??nchen | `fdco-…-bayern_munich` | 238 (2019-08-16→2026-05-16) |
+| `fd-565776` | away | VfB Stuttgart | `fdco-…-stuttgart` | 204 (2020-09-19→2026-05-16) |
+| `fd-565777` | away | Borussia M??nchengladbach | `fdco-…-m_gladbach` | 238 (2019-08-17→2026-05-16) |
+| `fd-565778` | home | 1. FSV Mainz 05 | `fdco-…-mainz` | 238 (2019-08-17→2026-05-16) |
+| `fd-565778` | away | SC Paderborn 07 | `fdco-…-paderborn` | 34 (2019-08-17→2020-06-27) |
+| `fd-565779` | away | Eintracht Frankfurt | `fdco-…-ein_frankfurt` | 238 (2019-08-18→2026-05-16) |
+| `fd-565781` | away | Hamburger SV | `fdco-…-hamburg` | 34 (2025-08-24→2026-05-16) |
+
+**Replay boundary: none.** Every kickoff is 2026-08-28/29, i.e. in the future,
+so this is a pre-kickoff repoint with no post-match Elo to unwind.
+**Rollback:** `--apply` prints the exact `(match, side, from, to)` reversals;
+only 7 columns on 5 rows change, and nothing else is written.
+
+**Status: NOT EXECUTED.** The agent environment cannot reach `sabiscore_db_v3`
+(single-IP `ipAllowList`), so this runs operator-side. Re-run `--review` at
+execution time and use the digest it prints — if fixture sync has since altered
+any of these rows, the digest will have moved again and the executor will
+correctly refuse the one above.
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
