@@ -929,6 +929,84 @@ log evidence that reopened this item (13 fixtures, same `fd-team-` vs
 `fdco-team-` shape as the original 9) is the expected shape this endpoint
 would surface once deployed.
 
+✅ **(b) apply tool SHIPPED 2026-08-25 — the Class C executor is BUILT (code
+only; nothing mutated).** `services/fixture_identity_rebind_apply_service.py`
++ `scripts/repair_fixture_identity_rebind.py` +
+`POST /api/v1/release/fixture-identity-repair-apply`, mirroring item 39's
+`orphan_team_rebind_service.py` precedent rule-for-rule: `--review`/`GET
+.../fixture-identity-review` are read-only; `--apply`/`POST
+.../fixture-identity-repair-apply` require the reviewed full-manifest
+`--manifest-sha256`, an `--authorization-id`, and the literal confirmation
+token `APPLY_FIXTURE_IDENTITY_REBIND`; PostgreSQL-only
+(`acquire_fixture_identity_rebind_locks` raises on any other bind); the
+manifest digest is re-derived under
+`LOCK TABLE matches, canonical_fixtures, provider_event_mappings, match_prediction_logs IN SHARE ROW EXCLUSIVE MODE`
+and every row's exact pre-state re-checked, so a concurrent change aborts
+before a single write. It writes `Match.home_team_id`/`away_team_id` and
+nothing else — no `Team`/`CanonicalTeam` created or renamed, no
+`EloRatingSnapshot` touched.
+
+**Deliberate deviation from the item-39 precedent, not a copy of it.** Orphan
+rebind refuses the whole apply if *any* manifest entry is blocked — safe
+there because that manifest happened to reach zero-blocked before it was
+applied. This item's live manifest is routinely a *mix* of ready and blocked
+entries, and a `HAS_EXISTING_PREDICTIONS` blocker will not resolve on its own
+(predictions are never deleted), so an all-or-nothing rule would make this
+tool permanently inapplicable. The executor therefore re-derives and
+digest-checks the **full** manifest (ready and blocked entries alike — any
+drift in either aborts the apply), then writes only the entries whose
+`blockers` tuple is empty, leaving blocked entries untouched and still
+visible on the next review. Two postconditions run before the caller commits:
+(1) no touched fixture may record a team playing itself (item 23's shape);
+(2) re-deriving the manifest must no longer propose any fixture just written.
+9 tests cover the mixed ready/blocked happy path (only ready entries rebound,
+blocked entries' rows provably untouched), a stale digest, a row that moved
+since review, an all-blocked (empty ready-subset) refusal, a duplicated-match
+guard, self-play refusal on a malformed verified identity, the
+PostgreSQL-only lock refusal, and the self-play postcondition catch. The
+ready/blocked split was watched failing before being trusted: sabotaging
+`_ready_entries()` to return the full manifest (bypassing the filter) reddened
+the mixed happy-path test, confirming it is load-bearing and not an artifact
+of the seeded scenario.
+
+### Class C authorization package — current as of `sha:1b62331`
+
+⚠️ **This digest is provisional and will move.** Fixture sync re-evaluates
+every unsettled fixture on every tick (immediate on boot, then every 6h) and
+resolves or newly detects mismatches as it runs, so — exactly as item 39's
+own package warned — **always re-run `GET /fixture-identity-review`
+immediately before any `--apply`/`POST .../fixture-identity-repair-apply`
+call and use the digest it prints.** Any digest recorded here before that
+moment is stale by construction and the executor will refuse it.
+
+Live `GET /api/v1/release/fixture-identity-review` (2026-08-25, pre-deploy of
+this PR): **59 total mismatched live fixtures, 54 rebind-ready, 5 correctly
+blocked**, across BUNDESLIGA, EPL, EREDIVISIE, LA_LIGA, LIGUE_1, SERIE_A.
+Blocked entries and why, all correct fail-closed behaviour, not defects:
+
+| Match | League | Blocker |
+|---|---|---|
+| `fd-558233` | EREDIVISIE | `KICKOFF_PASSED` |
+| `fd-560555` | EPL | `HAS_EXISTING_PREDICTIONS` |
+| `fd-564636` | LA_LIGA | `HAS_EXISTING_PREDICTIONS` |
+| `fd-564637` | LA_LIGA | `HAS_EXISTING_PREDICTIONS` |
+| `fd-564649` | LA_LIGA | `HAS_EXISTING_PREDICTIONS` |
+
+**Replay boundary: none.** The ready set is unplayed/unsettled fixtures whose
+stored identity disagrees with the already-verified canonical identity — a
+forward-looking repoint, not a rewrite of settled history. No Elo replay is
+implicated (this tool never touches `EloRatingSnapshot`).
+**Rollback:** `--apply`/the endpoint response prints the exact `(match,
+column, from, to)` reversal tuples for every column actually changed.
+
+**Status: NOT EXECUTED.** No Class C mutation has been requested or
+authorized for this batch. Per APEX §3, the operator DB-access unlock and the
+instruction to "proceed with next integration steps" that produced this PR is
+**not** itself authorization for this specific mutation — building and
+deploying the tool is Class B; applying it against the live 54-fixture
+backlog is a separate decision requiring its own explicit authorization,
+taken immediately after a fresh review confirms the digest is still current.
+
 ---
 
 ## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — RESOLVED 2026-08-25

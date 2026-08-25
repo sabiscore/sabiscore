@@ -240,7 +240,7 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
     db.rollback.assert_awaited_once()
 
 
-async def test_fixture_identity_review_exposes_manifest_without_authorizing_apply() -> (
+async def test_fixture_identity_review_exposes_manifest_and_apply_endpoint() -> (
     None
 ):
     response = Response()
@@ -293,7 +293,73 @@ async def test_fixture_identity_review_exposes_manifest_without_authorizing_appl
             "rebind_status": "READY",
         }
     ]
-    assert payload["authorization"]["apply_supported"] is False
+    assert payload["authorization"]["apply_supported"] is True
+    assert (
+        payload["authorization"]["apply_endpoint"]
+        == "POST /api/v1/release/fixture-identity-repair-apply"
+    )
+
+
+async def test_fixture_identity_rebind_apply_rejects_a_wrong_confirmation_token() -> None:
+    from fastapi import HTTPException
+
+    body = data_authority.FixtureIdentityRebindApplyRequest(
+        expected_manifest_sha256="e" * 64,
+        authorization_id="change-1",
+        confirm="NOT_THE_RIGHT_TOKEN",
+    )
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    with patch.object(
+        data_authority, "apply_fixture_identity_rebind", new=AsyncMock()
+    ) as apply_mock:
+        try:
+            await data_authority.apply_fixture_identity_rebind_endpoint(body, db)
+            raised = False
+        except HTTPException as exc:
+            raised = True
+            assert exc.status_code == 422
+
+    assert raised is True
+    apply_mock.assert_not_called()
+    db.commit.assert_not_called()
+
+
+async def test_fixture_identity_rebind_apply_commits_on_a_correct_confirmation() -> None:
+    from src.services.fixture_identity_rebind_apply_service import (
+        FixtureIdentityRebindApplyResult,
+    )
+
+    body = data_authority.FixtureIdentityRebindApplyRequest(
+        expected_manifest_sha256="e" * 64,
+        authorization_id="change-1",
+        confirm="APPLY_FIXTURE_IDENTITY_REBIND",
+    )
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    result = FixtureIdentityRebindApplyResult(
+        manifest_sha256="e" * 64,
+        rebound_count=1,
+        affected_match_ids=("fd-1",),
+        skipped_blocked_match_ids=(),
+        leagues=("EPL",),
+        reversals=(("fd-1", "home_team_id", "old", "new"),),
+    )
+
+    with patch.object(
+        data_authority,
+        "apply_fixture_identity_rebind",
+        new=AsyncMock(return_value=result),
+    ) as apply_mock:
+        payload = await data_authority.apply_fixture_identity_rebind_endpoint(body, db)
+
+    apply_mock.assert_awaited_once_with(db, expected_manifest_sha256="e" * 64)
+    db.commit.assert_awaited_once()
+    assert payload["authorization_id"] == "change-1"
+    assert payload["rebound_count"] == 1
+    assert payload["affected_match_ids"] == ("fd-1",)
 
 
 async def test_orphan_team_repair_review_exposes_manifest_without_authorizing_apply() -> (
