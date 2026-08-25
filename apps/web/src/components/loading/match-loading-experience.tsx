@@ -127,7 +127,7 @@ function TeamEvidenceCard({
 
       <div className="space-y-1.5" aria-hidden="true">
         <div className={cn("flex items-center gap-2", align === "right" && "flex-row-reverse")}>
-          <span className="text-[10px] text-slate-500">Form:</span>
+          <span className="text-[10px] text-slate-400">Form:</span>
           <div className={cn("flex gap-1", align === "right" && "flex-row-reverse")}>
             {[0, 1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-5 w-5 rounded-full bg-slate-700/50" />
@@ -143,7 +143,7 @@ function TeamEvidenceCard({
         <Skeleton className={cn("h-3 w-20 rounded bg-slate-700/30", align === "right" && "ml-auto")} />
       </div>
 
-      <p className="mt-2 text-[10px] text-slate-500">Syncing form &amp; standings…</p>
+      <p className="mt-2 text-[10px] text-slate-400">Syncing form &amp; standings…</p>
     </motion.div>
   );
 }
@@ -270,11 +270,11 @@ function QuickPredictionPoll({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.5 }}
-      className="rounded-xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-4"
+      className="rounded-xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-3.5 sm:p-4"
     >
-      <div className="mb-3 flex items-center justify-center gap-2">
+      <div className="mb-2.5 sm:mb-3 flex items-center justify-center gap-2">
         <Target className="h-4 w-4 text-indigo-400" />
-        <p className="text-sm font-medium text-slate-300">
+        <p className="text-xs sm:text-sm font-medium text-slate-300">
           Your call — who wins this one?
         </p>
         {voted && (
@@ -284,6 +284,7 @@ function QuickPredictionPoll({
           </span>
         )}
       </div>
+
       <div className="grid grid-cols-3 gap-2">
         {[
           { key: "home", label: homeTeam },
@@ -299,7 +300,7 @@ function QuickPredictionPoll({
             whileTap={!voted ? { scale: 0.98 } : undefined}
             aria-pressed={voted === key}
             className={cn(
-              "relative overflow-hidden rounded-lg border p-3 text-center transition-all",
+              "relative overflow-hidden rounded-lg border p-2.5 sm:p-3 text-center transition-all min-h-11",
               voted === key
                 ? POLL_CHOICE_CLASSES[key]
                 : voted
@@ -322,7 +323,7 @@ function QuickPredictionPoll({
           </motion.button>
         ))}
       </div>
-      <p className="mt-2 text-center text-[10px] text-slate-500">
+      <p className="mt-2 text-center text-[10px] text-slate-400">
         Compare your read against the model when the analysis lands.
       </p>
     </motion.div>
@@ -426,7 +427,7 @@ function SwipePredictionCard({
       >
         <div className="text-center">
           <p className="mb-2 text-sm font-medium text-slate-300">{question}</p>
-          <div className="flex items-center justify-center gap-4 text-xs text-slate-500">
+          <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
             <span className="flex items-center gap-1">
               <ChevronLeft className="h-3 w-3" />
               Swipe {leftLabel}
@@ -664,7 +665,7 @@ export function MatchLoadingExperience({
                 />
               </motion.div>
               <span className="mt-2 max-w-20 truncate text-sm font-bold text-white">{homeTeam}</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1 text-[10px] text-slate-400">
                 {homeCountryCode ? (
                   <CountryFlag countryCode={homeCountryCode} size={FLAG_SIZE_TINY} className={FLAG_CLASS_TINY} />
                 ) : (
@@ -716,7 +717,7 @@ export function MatchLoadingExperience({
                 />
               </motion.div>
               <span className="mt-2 max-w-20 truncate text-sm font-bold text-white">{awayTeam}</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1 text-[10px] text-slate-400">
                 {awayCountryCode ? (
                   <CountryFlag countryCode={awayCountryCode} size={FLAG_SIZE_TINY} className={FLAG_CLASS_TINY} />
                 ) : (
@@ -736,7 +737,7 @@ export function MatchLoadingExperience({
               <motion.p
                 initial={reduceMotion ? {} : { opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-center text-xs text-slate-500"
+                className="text-center text-xs text-slate-400"
               >
                 Taking longer than usual? The backend may be warming up from idle — analysis continues automatically.
               </motion.p>
@@ -816,7 +817,7 @@ export function MatchLoadingExperience({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.8 }}
-        className="mt-4 text-center text-[10px] text-slate-600"
+        className="mt-3 text-center text-[10px] text-slate-400"
       >
         Ensemble ML models · calibrated per league · verified evidence only
       </motion.p>

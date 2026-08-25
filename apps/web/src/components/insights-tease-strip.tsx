@@ -132,23 +132,23 @@ export function InsightsTeaseStrip({ matchId, league = "EPL", visible }: Insight
           initial="hidden"
           animate="show"
           exit="exit"
-          className="mb-4"
+          className="mb-2.5 sm:mb-3"
         >
-          <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-2.5 sm:gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => <TeaseCardSkeleton key={i} />)
               : cards.map((card) => (
                   <motion.div
                     key={card.label}
                     variants={cardVariants}
-                    className="flex-shrink-0 w-[140px] rounded-xl border border-slate-800/60 bg-slate-900/60 px-4 py-3"
+                    className="flex-shrink-0 w-[136px] sm:w-[140px] rounded-xl border border-slate-800/60 bg-slate-900/60 px-3.5 py-2.5 sm:px-4 sm:py-3"
                   >
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500">{card.label}</p>
-                    <p className={cn("text-sm font-semibold mt-0.5 truncate", card.accent)}>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400">{card.label}</p>
+                    <p className={cn("text-xs sm:text-sm font-semibold mt-0.5 truncate", card.accent)}>
                       {card.value}
                     </p>
                     {card.sub && (
-                      <p className="text-[10px] text-slate-500 truncate mt-0.5">{card.sub}</p>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{card.sub}</p>
                     )}
                   </motion.div>
                 ))}

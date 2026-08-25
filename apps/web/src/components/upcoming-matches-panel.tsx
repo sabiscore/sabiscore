@@ -237,7 +237,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
     <Link
       href={href}
       aria-label={ariaLabel}
-      className="group flex min-w-0 items-center justify-between gap-4 rounded-xl border border-slate-800/60 bg-slate-900/50 px-4 py-3 transition hover:border-indigo-500/30 hover:bg-slate-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+      className="group flex min-w-0 items-center justify-between gap-2.5 rounded-xl border border-slate-800/60 bg-slate-900/50 px-3 py-1.5 transition hover:border-indigo-500/30 hover:bg-slate-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:py-2"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="truncate text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
@@ -245,7 +245,7 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
           <span className="mx-1.5 text-slate-300">vs</span>
           {match.away_team}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className={leagueChip(match.league)}>{leagueDisplayName(match.league)}</span>
           <span className="text-[10px] text-slate-300">
             {formatMatchDate(match.match_date)}
@@ -381,11 +381,11 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
   const showOffseasonBanner = isOffseason && !dismissed && data && data.upcoming_matches.length > 0;
 
   return (
-    <section aria-label="Upcoming matches" className="space-y-4">
-      <div className="space-y-3">
+    <section aria-label="Upcoming matches" className="space-y-2.5">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-200">{title}</h2>
+            <h2 className="text-sm font-semibold text-slate-200 sm:text-base">{title}</h2>
             {isFetching && !isLoading && (
               <span className="text-[10px] font-medium text-slate-300 animate-pulse" aria-live="polite">
                 Refreshing…
@@ -412,7 +412,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
       {/* Off-season banner — shown when fixture list is non-empty but season is flagged closed */}
       {showOffseasonBanner && (
         <div
-          className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2"
           role="status"
           aria-label="Off-season notice"
         >
@@ -451,7 +451,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
       {isLoading && <PanelSkeleton />}
 
       {error && !data && (
-        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-300">
+        <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-3.5 py-2.5 text-center text-xs text-slate-300">
           Fixtures unavailable — backend offline or warming up.
         </p>
       )}
@@ -479,7 +479,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           // data_gap means the backend failed rather than genuinely having no
           // fixtures — saying "no fixtures" there would report an outage as a
           // quiet, believable empty state.
-          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-8 text-center text-xs text-slate-300">
+          <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-3.5 py-2.5 text-center text-xs text-slate-300">
             {data.data_gap
               ? "Fixture list unavailable right now. Please try again shortly."
               : `No upcoming fixtures in the next ${VISIBLE_WINDOW_DAYS} days.`}
@@ -500,7 +500,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
               <MatchRow key={m.match_id} match={m} />
             ))}
           </div>
-          <div className="flex flex-col items-center justify-center gap-2 pt-1 sm:flex-row">
+          <div className="flex flex-col items-center justify-center gap-2 pt-0.5 sm:flex-row">
             <p aria-live="polite" className="text-center text-[11px] text-slate-300">
               Showing {showAll ? data.upcoming_matches.length : Math.min(VISIBLE_MATCH_LIMIT, data.upcoming_matches.length)} of {data.upcoming_matches.length} fixtures
               {!selectedLeague && !showAll && data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && " · expand the list or filter by league"}

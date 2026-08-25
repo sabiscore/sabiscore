@@ -76,7 +76,7 @@ function KellyVisualizer({ fraction, abstain }: { fraction: number; abstain: boo
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-slate-400">Suggested exposure</span>
-        <span className={cn("text-xs font-bold tabular-nums", abstain ? "text-slate-500" : "text-slate-200")}>
+        <span className={cn("text-xs font-bold tabular-nums", abstain ? "text-slate-400" : "text-slate-200")}>
           {label}
         </span>
       </div>
@@ -96,7 +96,7 @@ function KellyVisualizer({ fraction, abstain }: { fraction: number; abstain: boo
           style={{ width: `${pct * 100}%` }}
         />
       </div>
-      <p className="mt-0.5 text-[10px] text-slate-600">Quarter-Kelly · capped at 5%</p>
+      <p className="mt-0.5 text-[10px] text-slate-400">Quarter-Kelly · capped at 5%</p>
     </div>
   );
 }
@@ -124,11 +124,11 @@ function ConvergenceIndicator({ delta }: { delta: number | null | undefined }) {
       className="flex items-center gap-1"
       title={`Market drift: opening-to-closing implied probability delta. ${positive ? "Positive = sharp money confirms model." : "Negative = model lagged the market."}`}
     >
-      <span className="text-[10px] text-slate-500">Drift Δ</span>
+      <span className="text-[10px] text-slate-400">Drift Δ</span>
       <span
         className={cn(
           "text-xs font-bold tabular-nums",
-          neutral ? "text-slate-500" : positive ? "text-emerald-400" : "text-rose-400",
+          neutral ? "text-slate-400" : positive ? "text-emerald-400" : "text-rose-400",
         )}
       >
         {positive ? "▲" : delta < 0 ? "▼" : "—"}
@@ -201,7 +201,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
   // ── ABSTAIN state ──
   if (isAbstain) {
     return (
-      <div className="relative overflow-hidden rounded-xl border border-slate-700/40 bg-slate-900/50 p-6 space-y-3">
+      <div className="relative overflow-hidden rounded-xl border border-slate-700/40 bg-slate-900/50 p-4 sm:p-5 space-y-3">
         <div className="flex items-center gap-3">
           <AlertCircle className="h-5 w-5 flex-shrink-0 text-amber-400" aria-hidden="true" />
           <div>
@@ -211,7 +211,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
             )}
           </div>
         </div>
-        <div className="flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center justify-between text-xs text-slate-400">
           <span>{context.homeTeam} vs {context.awayTeam}</span>
           <span className="rounded-full border border-slate-700/50 bg-slate-800/50 px-2 py-0.5 font-medium">
             ABSTAIN
@@ -224,7 +224,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border p-6 backdrop-blur-sm transition-all",
+        "group relative overflow-hidden rounded-xl border p-4 sm:p-5 backdrop-blur-sm transition-all",
         premiumVisualsEnabled
           ? "border-white/10 bg-gradient-to-br from-slate-950/80 to-slate-900/60 hover:border-cyan-400/40 hover:shadow-[0_15px_45px_rgba(0,212,255,0.25)]"
           : "border-slate-700/50 bg-gradient-to-br from-slate-800/50 to-slate-900/50 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/20",
@@ -244,7 +244,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
       </div>
 
       {/* Match info */}
-      <div className="mb-4">
+      <div className="mb-2.5 sm:mb-3">
         <div className="mb-1">
           <TeamVsDisplay
             homeTeam={context.homeTeam}
@@ -254,46 +254,46 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
             className="justify-start"
           />
         </div>
-        <p className="text-sm text-slate-400">
+        <p className="text-xs sm:text-sm text-slate-400">
           {getMarketLabel()} @ {bookmakerName}
         </p>
       </div>
 
       {/* Edge + Odds */}
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="rounded-lg bg-slate-800/50 p-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <TrendingUp className="h-4 w-4" aria-hidden="true" />
+      <div className="mb-2.5 sm:mb-3 grid grid-cols-2 gap-2.5 sm:gap-3">
+        <div className="rounded-lg bg-slate-800/50 p-2.5 sm:p-3">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Edge</span>
             <EdgeTooltip />
           </div>
-          <p className="mt-1 text-2xl font-bold text-emerald-400">
+          <p className="mt-1 text-xl sm:text-2xl font-bold text-emerald-400">
             +{edgePercentage.toFixed(1)}%
           </p>
         </div>
-        <div className="rounded-lg bg-slate-800/50 p-3">
+        <div className="rounded-lg bg-slate-800/50 p-2.5 sm:p-3">
           <div className="text-xs text-slate-400">Odds</div>
-          <p className="mt-1 text-2xl font-bold text-white">
+          <p className="mt-1 text-xl sm:text-2xl font-bold text-white">
             {bookmakerOdds.toFixed(2)}
           </p>
         </div>
       </div>
 
       {/* Kelly stake visualizer (E.3) */}
-      <div className="mb-4 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 space-y-3">
+      <div className="mb-2.5 sm:mb-3 rounded-lg border border-slate-700/50 bg-slate-900/50 p-3 sm:p-3.5 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-slate-300">Recommended Stake</span>
+            <span className="text-xs sm:text-sm font-medium text-slate-300">Recommended Stake</span>
             <KellyTooltip />
           </div>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-400">
             {(suggestedStake * 100).toFixed(1)}% Kelly
           </span>
         </div>
         <KellyVisualizer fraction={suggestedStake} abstain={false} />
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold text-white">{formatCurrency(stakeValue)}</span>
-          <span className="text-sm text-slate-400">
+          <span className="text-xl sm:text-2xl font-bold text-white">{formatCurrency(stakeValue)}</span>
+          <span className="text-xs sm:text-sm text-slate-400">
             → {formatCurrency(potentialReturnValue)} return
           </span>
         </div>
@@ -303,7 +303,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
       </div>
 
       {/* Probability breakdown + convergence */}
-      <div className="mb-4 space-y-2">
+      <div className="mb-2.5 sm:mb-3 space-y-1.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400">Fair Probability</span>
           <span className="font-medium text-white">
@@ -312,7 +312,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
         </div>
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400">Implied Probability</span>
-          <span className="font-medium text-slate-500">
+          <span className="font-medium text-slate-400">
             {(safe.marketProb * 100).toFixed(1)}%
           </span>
         </div>
@@ -322,13 +322,13 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
       </div>
 
       {/* Action buttons */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
         <button
           type="button"
           onClick={copyBetDetails}
           aria-label="Copy bet details to clipboard"
           className={cn(
-            "flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 min-h-[44px]",
+            "flex items-center justify-center gap-2 rounded-lg border px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 min-h-[44px]",
             premiumVisualsEnabled
               ? "border-white/10 bg-slate-900/60 text-slate-200 hover:border-cyan-400/30 hover:bg-cyan-400/10"
               : "border-slate-600 bg-slate-700/50 text-white hover:bg-slate-700",
@@ -346,7 +346,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
           onClick={openBookmaker}
           aria-label={`Open ${bookmakerName} to place bet`}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 min-h-[44px]",
+            "flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 min-h-[44px]",
             premiumVisualsEnabled
               ? "bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-[0_8px_20px_rgba(0,212,255,0.3)] hover:scale-[1.02]"
               : "bg-emerald-600 text-white hover:bg-emerald-700",
@@ -359,7 +359,7 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
 
       {/* Marginal/avoid warning */}
       {(safe.qualityTier === "MARGINAL" || safe.qualityTier === "AVOID") && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+        <div className="mt-2.5 sm:mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 sm:p-3">
           <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
           <p className="text-xs text-amber-300">
             {safe.qualityTier === "MARGINAL"

@@ -113,7 +113,7 @@ export default function RootLayout({
                   aria-label="Workspace navigation and backend authority"
                 >
                   <div className="sticky top-0 flex h-screen flex-col">
-                    <div className="border-b border-white/10 px-5 py-5">
+                    <div className="border-b border-white/10 px-4 py-3.5">
                       <Link
                         href="/"
                         className="inline-flex rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-300"
@@ -123,14 +123,14 @@ export default function RootLayout({
                       </Link>
                     </div>
 
-                    <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Primary navigation">
+                    <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Primary navigation">
                       <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Workspace</p>
-                      <div className="mt-3 space-y-1">
+                      <div className="mt-2 space-y-0.5">
                         {WORKSPACE_LINKS.map((item) => (
                           <Link
                             key={item.href}
                             href={item.href}
-                            className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                            className="flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
                           >
                             <item.icon className="h-4 w-4 text-emerald-300" aria-hidden="true" />
                             {item.label}
@@ -138,13 +138,13 @@ export default function RootLayout({
                         ))}
                       </div>
 
-                      <p className="mt-6 px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Leagues</p>
-                      <div className="mt-3 space-y-1">
+                      <p className="mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Leagues</p>
+                      <div className="mt-2 space-y-0.5">
                         {LEAGUES.map((league) => (
                           <Link
                             key={league.code}
                             href={`/intelligence?league=${encodeURIComponent(league.code)}`}
-                            className="flex min-h-11 items-center justify-between rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                            className="flex min-h-10 items-center justify-between rounded-md px-3 py-1.5 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
                           >
                             <span className="flex items-center gap-2">
                               <Trophy className="h-4 w-4 text-emerald-300" aria-hidden="true" />
@@ -156,13 +156,13 @@ export default function RootLayout({
                       </div>
                     </nav>
 
-                    <div className="border-t border-white/10 p-4">
-                      <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                    <div className="border-t border-white/10 p-3">
+                      <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
                         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                           <ShieldCheck className="h-4 w-4 text-emerald-300" aria-hidden="true" />
                           Backend authority
                         </div>
-                        <p className="mt-2 text-xs leading-5 text-slate-400">
+                        <p className="mt-1 text-xs leading-5 text-slate-400">
                           Providers, model inference, EV, Kelly sizing, and decisions stay server-side.
                         </p>
                       </div>
@@ -172,8 +172,8 @@ export default function RootLayout({
 
                 <div className="min-w-0">
                   <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--brand-nav)]/95 backdrop-blur">
-                    <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:gap-3 sm:px-6 sm:py-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 px-3 py-1 sm:gap-2.5 sm:px-4 sm:py-1.5">
+                      <div className="flex items-center gap-2.5">
                         <Link
                           href="/"
                           className="rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-200 lg:hidden"
@@ -183,10 +183,10 @@ export default function RootLayout({
                         </Link>
                         <MobileNav />
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
                             Live workspace
                           </p>
-                          <h1 className="text-base font-semibold text-white sm:text-lg">
+                          <h1 className="text-sm font-semibold text-white sm:text-base">
                             Prediction and market intelligence
                           </h1>
                         </div>
@@ -194,7 +194,7 @@ export default function RootLayout({
 
                       <div className="hidden flex-wrap items-center gap-2 md:flex">
                         <PlatformHealthPills />
-                        <div className="min-w-[132px] rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
+                        <div className="min-w-[132px] rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1">
                           <ReadinessRing />
                         </div>
                       </div>
@@ -206,11 +206,11 @@ export default function RootLayout({
                   </header>
                   <BackendStatusBanner />
 
-                  <main id="main-content" className="min-h-[calc(100vh-65px)] px-4 py-5 sm:px-6 lg:px-8">
+                  <main id="main-content" className="min-h-[calc(100vh-48px)] px-2.5 py-2.5 sm:px-4 sm:py-3 lg:px-5">
                     {children}
                   </main>
                   {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA && (
-                    <footer className="py-2 text-center text-[10px] text-slate-400 select-none">
+                    <footer className="py-1.5 text-center text-[10px] text-slate-400 select-none">
                       {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}
                     </footer>
                   )}

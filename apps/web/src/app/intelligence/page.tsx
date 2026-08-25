@@ -8,15 +8,15 @@ export const metadata = {
 
 export default function IntelligencePage() {
   return (
-    <section aria-labelledby="match-intelligence-title" className="space-y-5">
-      <header className="mx-auto max-w-[1200px] px-6 pt-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-400">
+    <section aria-labelledby="match-intelligence-title" className="space-y-2">
+      <header className="mx-auto max-w-[1200px] px-3 pt-1.5 sm:px-4 sm:pt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-400">
           Evidence-gated football analysis
         </p>
-        <h1 id="match-intelligence-title" className="mt-2 text-3xl font-extrabold text-white">
+        <h1 id="match-intelligence-title" className="mt-0.5 text-xl font-extrabold text-white sm:text-2xl">
           SabiScore Match Intelligence
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+        <p className="mt-0.5 max-w-3xl text-xs leading-normal text-slate-400">
           Match Intelligence covers verified fixture identity, model probabilities, uncertainty, and
           supporting football evidence. Market Intelligence appears only when a coherent verified
           1X2 price snapshot exists; missing, stale, or conflicting market evidence remains explicitly

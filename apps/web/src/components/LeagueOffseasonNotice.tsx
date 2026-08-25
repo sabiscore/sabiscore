@@ -63,32 +63,32 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
       animate={{ opacity: 1, y: 0 }}
       transition={prefersReduced ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
       className={cn(
-        "flex flex-col items-center gap-4 rounded-xl border border-dashed",
-        "border-zinc-700 bg-zinc-900/60 px-6 py-10 text-center",
+        "flex flex-col items-center gap-1.5 rounded-xl border border-dashed",
+        "border-zinc-700 bg-zinc-900/60 px-3.5 py-2.5 sm:px-4 sm:py-3 text-center",
         className,
       )}
     >
       {/* Decorative calendar icon */}
-      <span aria-hidden="true" className="text-4xl select-none">
+      <span aria-hidden="true" className="text-xl select-none">
         📅
       </span>
 
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold text-zinc-100">
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-semibold text-zinc-100 sm:text-base">
           {leagueName} — Off Season
         </h3>
         {leagueCode && (
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-400">
             {leagueCode}
           </p>
         )}
-        <p className="text-sm text-zinc-400">
+        <p className="text-xs text-zinc-400">
           No upcoming fixtures are scheduled right now.
         </p>
       </div>
 
       {nextSeasonStart && (
-        <div className="rounded-lg bg-zinc-800 px-4 py-2 text-sm">
+        <div className="rounded-lg bg-zinc-800 px-2.5 py-1 text-xs">
           <span className="text-zinc-400">
             {nextSeasonStartEstimated ? "Season currently expected around " : "Next season kicks off "}
           </span>
@@ -99,17 +99,17 @@ export const LeagueOffseasonNotice = memo(function LeagueOffseasonNotice({
             {formattedDate}
           </time>
           {days !== null && days > 0 && (
-            <span className="ml-1 text-zinc-500">({days} days away)</span>
+            <span className="ml-1 text-zinc-400">({days} days away)</span>
           )}
           {nextSeasonStartEstimated && (
-            <span className="mt-1 block text-xs text-amber-300">
+            <span className="mt-0.5 block text-[11px] text-amber-300">
               Date not yet confirmed by the provider.
             </span>
           )}
         </div>
       )}
 
-      <p className="max-w-xs text-xs text-zinc-500">
+      <p className="max-w-xs text-[10px] text-zinc-400">
         Historical data and model ratings remain available. Predictions will
         resume once fixtures are released.
       </p>
