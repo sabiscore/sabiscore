@@ -999,13 +999,92 @@ implicated (this tool never touches `EloRatingSnapshot`).
 **Rollback:** `--apply`/the endpoint response prints the exact `(match,
 column, from, to)` reversal tuples for every column actually changed.
 
-**Status: NOT EXECUTED.** No Class C mutation has been requested or
-authorized for this batch. Per APEX §3, the operator DB-access unlock and the
-instruction to "proceed with next integration steps" that produced this PR is
-**not** itself authorization for this specific mutation — building and
-deploying the tool is Class B; applying it against the live 54-fixture
-backlog is a separate decision requiring its own explicit authorization,
-taken immediately after a fresh review confirms the digest is still current.
+**Status: NOT EXECUTED (as of the paragraph above).** No Class C mutation had
+been requested or authorized for this batch at merge time.
+
+⚠️⚠️ **2026-08-25 — authorized, attempted, and caught a real defect before
+any data was written; the manifest builder itself was wrong.** The user
+explicitly authorized applying against the live backlog. A fresh
+`GET /fixture-identity-review` was fetched immediately before applying (per
+this item's own standing rule) and returned the identical digest recorded
+above (`4a4a5a0b…`), confirming nothing had drifted. `POST
+/fixture-identity-repair-apply` was called with that exact digest and
+returned **HTTP 500**, not a clean postcondition refusal.
+
+**Root cause, found from the live Render traceback, not guessed:**
+`asyncpg.exceptions.ForeignKeyViolationError: insert or update on table
+"matches" violates foreign key constraint "matches_away_team_id_fkey"`.
+`Match.home_team_id`/`away_team_id` are `FOREIGN KEY → teams.id`
+(`core/database.py`) — but this manifest builder's "verified" identity was
+`CanonicalFixture.home_team_id`/`away_team_id`, which is
+`FOREIGN KEY → canonical_teams.id` (`db/models.py`) — **a completely
+different table and id namespace.** `docs/DEBT.md` item 39's own 2026-08-24
+correction had *already* named this exact trap for this exact endpoint
+("that target is `CanonicalFixture.home_team_id`/`away_team_id` —
+`canonical_teams.id`, a different table `Match` never references… a wholly
+separate system from the one that actually backs `Match.home_team_id`") —
+it went unheeded when this apply tool was built on top of the pre-existing
+review manifest, because the review manifest itself (shipped 2026-08-23,
+before item 39's correction was written) was never revisited against it.
+
+**Verified safe before doing anything else, not assumed:** a fresh
+`GET /fixture-identity-review` immediately after the 500 showed the digest
+and summary byte-identical to before the failed call, and a direct read-only
+production query confirmed zero `matches` rows carry a `canonical_teams.id`
+(`team-<hash>`)-format value in `home_team_id`/`away_team_id`. The FK
+violation aborted the transaction before `db.commit()` was ever reached —
+**no data was written or corrupted.**
+
+**Fix, in `fixture_identity_rebind_service.py`** (manifest schema bumped
+2 → 3): the "verified" identity is now the same durable Elo bridge
+`fixture_sync_service._resolve_upcoming_team_id()`'s fast path already uses —
+`ProviderEventMapping.evidence` durably stores each side's
+`home_provider_team_id`/`away_provider_team_id` (written every sync tick,
+independent of the canonical-identity system), and
+`team_identity.resolve_provider_elo_team_id()` resolves that to a real,
+same-league, Elo-bearing `Team.id` via the `VERIFIED` `ProviderEloTeamMapping`
+bridge — still **no live provider call**, just querying the correct durable
+table instead of the wrong one. A side with no durable `VERIFIED` binding yet
+is silently excluded from the manifest (cannot be safely reconciled without
+live data), rather than guessed. The now-moot `CROSS_LEAGUE_MISMATCH` blocker
+is dropped — `resolve_provider_elo_team_id` only ever returns a same-league
+team by construction.
+
+**Defense in depth added in `fixture_identity_rebind_apply_service.py`:**
+`_assert_ready_entries_are_applicable` (now async) independently re-verifies
+every proposed target is a real, same-league `Team` row *before* attempting
+any write — so a future manifest-builder regression fails closed here too,
+with a clear message, instead of surfacing as a raw database-driver crash.
+Watched failing: reverting this check locally reproduced red on both new
+test cases before being trusted.
+
+**Both existing test files were rewritten, not patched around** — the
+original seeding for both `test_fixture_identity_rebind_service.py` (item
+35a) and `test_fixture_identity_rebind_apply_service.py` (item 35b) only
+ever exercised the canonical-identity system, which is exactly why neither
+suite caught this before a live attempt did. Seeding now builds a real
+`ProviderEloTeamMapping(status="VERIFIED")` bridge with genuine Elo history
+for every "ready" fixture, matching what production actually requires — the
+identical gap a review-manifest test suite testing against the wrong table
+could never have caught. New coverage: a fixture with canonical identity
+resolved but no durable Elo bridge is correctly excluded from the manifest
+(`test_manifest_excludes_matches_with_no_durable_binding`); the apply
+service's existence/league re-check has its own two direct tests.
+
+**Corrected live before considering the apply requested again:** the fixed
+manifest builder must be deployed and re-reviewed fresh — the pre-fix digest
+(`4a4a5a0b…`) and its 54/5 ready/blocked breakdown are **void**; they
+described a manifest sourced from the wrong table and must not be reused.
+Applying against the corrected manifest is a new decision requiring its own
+fresh review and its own authorization, not a continuation of this one.
+
+⚠️ **Lesson, stated plainly:** this repository had already written down the
+exact warning that would have prevented this, in the immediately-preceding
+item (39), and it was not cross-checked against a sibling module built on
+the same wrong assumption. When two endpoints/services describe the same
+"verified identity" concept, a correction to one must trigger an audit of
+every other consumer of the same concept — not just the one that happened to
+surface the bug first.
 
 ---
 
