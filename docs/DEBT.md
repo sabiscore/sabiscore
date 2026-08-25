@@ -931,9 +931,10 @@ would surface once deployed.
 
 ---
 
-## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — NEXT
+## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — RESOLVED 2026-08-25
 
-**Tier:** `NEXT`. The production v2 review on 2026-08-21 found 518 affected EPL
+**Tier:** `RESOLVED 2026-08-25` — the underlying drift is gone; nothing
+remains to review or apply. The production v2 review on 2026-08-21 found 518 affected EPL
 matches: 236 repair-ready and 282 blocked. The measured blockers are a missing
 same-league West Ham Team identity plus exact/alias ambiguity for Man City and a
 curated-alias miss for Ipswich. Manifest v3 resolves those cases in code without
@@ -989,6 +990,44 @@ participant replacements, and records the two printed SHA-256 digests. A later
 separately-authorized run may use `--apply` with those digests plus
 a real authorization id. Until then this is inert, reviewable code — no
 production data has been touched by this item.
+
+✅ **RESOLVED 2026-08-25 — the drift is gone, no repair was ever applied.**
+`sabiscore_db_v3`'s `ipAllowList` was opened for direct read-only access this
+session, which prompted a fresh live probe rather than trusting the
+2026-08-21 "518 affected" figure. `GET /api/v1/release/semantic-repair-review`
+(the exact production code path `--review` would run) now returns
+`manifest.schema_version: 3`, `manifest.summary.affected_matches: 0`,
+`blocked: false`, `complete: true`, `authorization.review_ready: true` — zero
+findings, not 518-resolved-to-repair-ready. **Corroborated independently**,
+same probe, via `GET /api/v1/release/data-authority`: `semantic_identity:
+"PASS"` (zero historical league-mismatch findings) and `structural elo: PASS`
+with every invariant counter at zero — a completely different query
+(`data_authority`'s own structural/semantic checks vs. this item's
+`audit_historical_semantic_identity()`) landing on the same answer.
+
+⚠️ **Neither `historical_backfill_service.py` nor the audit/manifest services
+have changed since `d4ad5a2`** (the commit that shipped the schema-v3 manifest
+this item is about, predating the 2026-08-21 review that found 518) — so this
+is not a code fix quietly closing the gap. The most likely explanation: the
+2026-08-21 review's blockers were "a missing same-league West Ham Team
+identity plus exact/alias ambiguity for Man City and a curated-alias miss for
+Ipswich" — i.e. missing/unresolved same-league `Team` rows for clubs whose
+*first* EPL fixture of the 2026/27 season (opening 2026-08-21) had not yet
+been synced by `fixture_sync_service` at review time. Once EPL fixtures began
+syncing, the live provider path created the missing same-league `Team` rows
+independently of this item's own resolver, and `audit_historical_semantic_identity()`
+— which joins against whatever `Team` rows exist *now* — stopped finding a
+cross-league/missing-identity mismatch for those historical matches. This is
+the same self-healing shape already documented for item 10's Elo coverage
+(real data volume closing a gap no code change was needed for), not a fluke:
+two independent live queries agree, and no manifest, script, or endpoint in
+this item's scope was touched to produce the result.
+
+**No Class C action was ever taken for this item** — `authorization.review_ready:
+true` with zero entries means there is nothing to authorize or apply. Item 34
+closes as "the problem resolved itself once the season started," which is
+itself worth recording so a future session doesn't reopen it chasing a stale
+518-match figure.
 
 ---
 
@@ -2296,7 +2335,7 @@ sync windows open. Blast radius was every prediction path via `get_league_policy
 
 ## 10. Offline Elo / StatsBomb artifacts were frozen at 2024-06-02 and synthetically keyed
 
-**Tier:** `NEXT` — **Elo code path fixed 2026-08-16; production migration/backfill not yet independently verified.** StatsBomb remains offline debt. The historical incident below is retained because the legacy Parquet files still exist for offline/backward-compatible tooling.
+**Tier:** `NEXT` (StatsBomb only) — **Elo half RESOLVED 2026-08-25**, independently re-verified at 100% production coverage (see below). StatsBomb remains offline debt, unrelated to database access. The historical incident below is retained because the legacy Parquet files still exist for offline/backward-compatible tooling.
 **Owner:** unassigned.
 **Found:** 2026-08-08, tracing why STALE_REQUIRED_EVIDENCE fired on 100% of fixtures.
 
@@ -2343,6 +2382,20 @@ and the historical replay script persists the same real-ID state only when
 production `alembic upgrade head`, replay, row coverage, and live fixture resolution
 must still be observed before marking it DATA_FED/VERIFIED. The stale StatsBomb
 portion of this item remains unchanged.
+
+✅ **2026-08-25 — Elo half independently re-verified at 100% coverage,
+superseding the 2026-08-17 74–77% figure.** `sabiscore_db_v3`'s `ipAllowList`
+was opened this session, prompting a fresh live probe:
+`GET /api/v1/release/data-authority` reports **25,668 `elo_rating_snapshots`
+rows / 185 teams / 12,834 of 12,834 eligible finished matches processed —
+coverage ratio 1.0**, structural Elo `PASS` (every invariant counter zero).
+The backlog the 2026-08-17 entry described (five years of pre-2024 history
+behind a global chronological cursor) has fully drained. **DATA_FED/VERIFIED
+reached for the Elo half** — production `alembic upgrade head` is confirmed
+current (backend `/health` `sha` matches local HEAD), replay ran, and row
+coverage is complete. The StatsBomb portion is untouched by this probe and
+remains exactly as described below: frozen, offline debt, unrelated to
+database access.
 
 **2026-08-08 correction — blast radius was wider than "6 of 65 degraded" for one
 path.** `GET /api/v1/upcoming/matches` (the endpoint behind the homepage fixture
