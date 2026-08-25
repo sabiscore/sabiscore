@@ -6,7 +6,10 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-from fastapi import APIRouter, Depends, Response
+import dataclasses
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +27,7 @@ from ...services.historical_identity_repair_service import (
 from ...services.orphan_team_reconciliation_service import (
     build_orphan_team_repair_manifest,
 )
+from ...services.orphan_team_rebind_service import apply_orphan_team_rebind
 
 router = APIRouter(prefix="/release", tags=["release-verification"])
 
@@ -251,12 +255,43 @@ async def orphan_team_repair_review(
         },
         "entries": [entry.as_dict() for entry in manifest.entries],
         "authorization": {
-            "apply_supported": False,
-            "note": (
-                "review only; no rebind/apply path exists yet — "
-                "see docs/DEBT.md item 39"
-            ),
+            "apply_supported": True,
+            "apply_endpoint": "POST /api/v1/release/orphan-team-repair-apply",
         },
+    }
+
+
+class OrphanTeamRebindApplyRequest(BaseModel):
+    expected_manifest_sha256: str
+    authorization_id: str
+    confirm: str  # must equal the literal "APPLY_ORPHAN_TEAM_REBIND"
+
+
+@router.post("/orphan-team-repair-apply")
+async def apply_orphan_team_rebind_endpoint(
+    body: OrphanTeamRebindApplyRequest,
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Execute the Class-C orphan-team identity rebind (docs/DEBT.md item 39).
+
+    Requires the exact confirmation token ``"APPLY_ORPHAN_TEAM_REBIND"``, the
+    manifest SHA-256 from the immediately-preceding review call, and an
+    operator-supplied authorization id that becomes part of the audit trail.
+
+    Always run ``GET /orphan-team-repair-review`` immediately before this call
+    to confirm the manifest digest is still current — the digest changes
+    whenever fixture sync resolves a previously-unresolvable side.
+    """
+    if body.confirm != "APPLY_ORPHAN_TEAM_REBIND":
+        raise HTTPException(status_code=422, detail="confirmation token mismatch")
+    result = await apply_orphan_team_rebind(
+        db, expected_manifest_sha256=body.expected_manifest_sha256
+    )
+    await db.commit()
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "authorization_id": body.authorization_id,
+        **dataclasses.asdict(result),
     }
 
 
