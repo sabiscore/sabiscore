@@ -2,8 +2,9 @@
 
 ## 39. Mojibake team names in production cost those fixtures their Elo identity
 
-**Tier:** `NEXT` — ingest guard shipped 2026-08-23; the **data repair of the
-existing rows is Class C** and still needs authorization.
+**Tier:** `RESOLVED 2026-08-25` — ingest guard shipped 2026-08-23; the Class C
+data repair executed the same day, operator-authorized, live-verified with
+zero mojibake remaining across all production fixtures.
 **Found:** 2026-08-23, from a user screenshot of the live UI reading
 "Club Atl??tico de Madrid".
 
@@ -326,6 +327,50 @@ before applying it**, provided the apply happens before any further sync tick
 touches these fixtures. As always, re-check the digest immediately before
 applying if any time has passed — this note describes one confirmed instant,
 not a standing guarantee.
+
+✅ **EXECUTED 2026-08-25T03:29:38 UTC, operator-authorized.** The operator
+supplied direct production-database credentials in-session specifically to
+unblock this apply; execution went through `POST
+/api/v1/release/orphan-team-repair-apply` instead — the identical code path,
+without ever needing to hold or transmit the raw credential. Re-reviewed
+immediately before applying (this ledger's own standing rule): digest
+unchanged at `9da67585…`, 7/7 still ready, 0 blocked.
+
+**Result:** `rebound_sides: 7` across 5 fixtures (`fd-565776`, `fd-565777`,
+`fd-565778`, `fd-565779`, `fd-565781`), all BUNDESLIGA. Reversal tuples
+(`match, side, from, to`), preserved here as the rollback record:
+
+```text
+fd-565776 away fd-team-bundesliga:vfb_stuttgart            → fdco-team-bundesliga-stuttgart
+fd-565776 home fd-team-bundesliga:fc_bayern_m??nchen        → fdco-team-bundesliga-bayern_munich
+fd-565777 away fd-team-bundesliga:borussia_m??nchengladbach → fdco-team-bundesliga-m_gladbach
+fd-565778 away fd-team-bundesliga:sc_paderborn_07           → fdco-team-bundesliga-paderborn
+fd-565778 home fd-team-bundesliga:1._fsv_mainz_05           → fdco-team-bundesliga-mainz
+fd-565779 away fd-team-bundesliga:eintracht_frankfurt       → fdco-team-bundesliga-ein_frankfurt
+fd-565781 away fd-team-bundesliga:hamburger_sv              → fdco-team-bundesliga-hamburg
+```
+
+**Both postconditions verified live, not just by the endpoint's own internal
+check:** `GET orphan-team-repair-review` immediately after reports
+`total_candidates: 0`, `repair_ready_count: 0` — the only remaining
+`unrepaired_orphan_sides` entry is SV 07 Elversberg (`ORPHAN_NO_RESOLVER_MATCH`,
+correctly, no Bundesliga Elo exists for a newly-promoted club). `GET
+/api/v1/fixtures/upcoming?limit=200` across all 58 live fixtures: **zero**
+names containing `?` — the 5 touched fixtures now read `Bayern Munich vs
+Stuttgart`, `RB Leipzig vs M'gladbach`, `Mainz vs Paderborn`, `Union Berlin vs
+Ein Frankfurt`, `Dortmund vs Hamburg` (the corpus-side display names, since
+the fixture's team ids now point at the Elo-bearing rows). Playwright against
+the live homepage confirms the same. Item 39 is closed — both halves (the
+ingest guard and this repair) are done, live, and verified.
+
+⚠️ **Process note, not a code finding:** the operator pasted a live
+`postgresql://` connection string with a real password directly into the chat
+session to unblock this. It was not used (the HTTP path made it unnecessary)
+and was not written to any file or command, but a chat transcript is not a
+secure secret store — this is the same class of incident this ledger already
+records for the Upstash token and provider keys (§ credential-safety rows
+above). **Recommend rotating this database password in the Render dashboard**
+even though this session never needed or persisted it.
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
