@@ -106,21 +106,124 @@ every time). `summary["unrepaired_orphan_side_detail"]` now carries
 `freshest_observed_name` per unrepaired side (`manifest_sha256` unaffected —
 detail lives in `summary`, which was already excluded from the hash). Pinned
 by an extension of `test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons`
-in `test_orphan_team_reconciliation_service.py`. **Diagnosis of the 3 sides
-themselves is deferred to the next session** once this detail is live
-in production — a plausible hypothesis (untested): the *target* `Team.name`
-for these 3 is itself mojibake-corrupted from the same 2026-08-20 seeding
-incident, which `_identity_key()`'s `[a-z0-9]+` tokenizer would make
-unmatchable against a now-clean freshest-observed name (the `?` bytes are
-dropped, not mapped back to the letter they replaced, shortening the token by
-one character and breaking both the exact/affix and space-bounded
-containment checks in `team_identity.py`). If confirmed, that's a smaller,
-lower-risk Class B display-text correction on an already-correctly-identified
-row — not a Class C identity rebind. The Class C authorization package for
-the 5 already-diagnosed Bundesliga entries (manifest hash
-`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9` as of
-2026-08-24T22:05 UTC) is prepared and presented to the operator this session
-— **not executed**; no `--apply` path exists in code.
+in `test_orphan_team_reconciliation_service.py`.
+
+⚠️ **2026-08-25 — the 3 sides are diagnosed, and the hypothesis above was
+WRONG.** It predicted a mojibake-corrupted *target* `Team.name`. Live probe of
+the deployed detail (backend `sha:a42f03b`) returned three **perfectly clean**
+names, no `?` anywhere:
+
+| Fixture | Side | Orphan team | Freshest observed |
+|---|---|---|---|
+| `fd-565779` | away | Eintracht Frankfurt | `Eintracht Frankfurt` |
+| `fd-565780` | home | SV 07 Elversberg | `SV 07 Elversberg` |
+| `fd-565781` | away | Hamburger SV | `Hamburger SV` |
+
+Mojibake was never involved. The real cause is a **two-vocabulary mismatch**,
+the same class as the league-id trap: the historical Elo corpus
+(`backend/data/cache/fd_D1_*.csv`, football-data.co.uk) abbreviates club
+names, while the live provider sends the full legal name. Read out of the
+committed CSVs across all seven seasons (27 distinct clubs):
+
+- `Eintracht Frankfurt` → corpus **`Ein Frankfurt`** — `_identity_key` gives
+  `eintracht frankfurt` vs `ein frankfurt`; exact ✗, affix ✗, containment ✗
+  (`"eintracht"` is not `"ein"` + boundary), `reconcile_team` **0.8125 →
+  `REQUIRES_REVIEW`**, correctly below the 0.94 auto-accept threshold.
+- `Hamburger SV` → corpus **`Hamburg`** — `hamburger sv` vs `hamburg`
+  (`sv` is deliberately *not* in `_LEGAL_TEAM_TOKENS`); `reconcile_team`
+  **0.7368 → `REQUIRES_REVIEW`**.
+- `SV 07 Elversberg` → **absent from all seven seasons.** Newly promoted, so
+  no Bundesliga Elo can exist. `reconcile_team` **0.4615 → `UNKNOWN`**. This
+  one is **correct fail-closed behaviour, not a defect** — do not "fix" it.
+
+`REQUIRES_REVIEW` is precisely what `_AUDITED_ALIASES` exists to answer
+("identity assertions, not fuzzy-threshold exceptions", per the module's own
+docstring), and the dict already carried the identical
+`("BUNDESLIGA", "borussia monchengladbach"): "m gladbach"` case. Two entries
+added — `eintracht frankfurt → ein frankfurt`, `hamburger sv → hamburg` —
+with 4 tests: 2 proving resolution, 1 proving an absent club still fails
+closed (aliases must not make Elversberg snap to a neighbour), 1 proving the
+alias cannot leak across leagues. **Both resolution tests were watched
+failing** against the un-aliased resolver (`assert None == 'fdco-bundesliga-0'`)
+before the fix was trusted.
+
+⚠️ **Re-derive corpus spellings from the committed CSVs, never guess them** —
+`Ein Frankfurt`, `M'gladbach`, `FC Koln`, `St Pauli` and `Hamburg` are all
+football-data.co.uk conventions that no amount of reasoning about the club's
+real name will produce.
+
+⚠️ **2026-08-25 — a SECOND, larger and entirely user-visible half of item 39,
+found from the operator's own screenshots.** `GET /api/v1/upcoming/matches`
+returns **9 of 50 live fixtures rendering mojibake team names to users**:
+7 LA_LIGA (`Real Betis Balompi??`, `Real Sociedad de F??tbol`,
+`Deportivo Alav??s`, `Club Atl??tico de Madrid`, `M??laga CF`) and 2
+BUNDESLIGA (`FC Bayern M??nchen`, `Borussia M??nchengladbach`).
+
+**The La Liga ones are a different defect from the orphan one, and the orphan
+manifest is right to exclude them.** Established by elimination against live
+evidence, not inferred:
+
+- They appear in item 35's `fixture-identity-review` (13 LA_LIGA entries,
+  `stored_identity_unusable: true`), so `ProviderEventMapping` rows exist and
+  the orphan manifest's join does reach them.
+- They produce **zero** orphan entries and **zero** `unrepaired_orphan_sides`
+  counts, so `_has_elo_history()` returned `True` — these rows **carry real
+  Elo history** and are correctly not orphans.
+- Live `/metrics` shows `fixture_sync.unusable_team_name` and
+  `fixture_sync.identity_conflicts` both **absent (zero)**, with exactly
+  `identity_rebind_pending: 5` — matching the 5 logged drift warnings, none of
+  which are LA_LIGA. So La Liga never reaches the drift check at all.
+
+The explanation that satisfies all three: resolution **short-circuits at step 1
+of `_resolve_upcoming_team_id`** — a VERIFIED `ProviderEloTeamMapping` binds
+the provider ID straight to the corrupted-name row (which passes that
+function's own `has_history` requirement), so the computed id *equals* the
+stored id, no drift is reported, and the name is never revisited. Reproduced
+locally end-to-end: `resolve_provider_elo_team_id` returns
+`fd-team-la_liga:real_betis_balompi??` for a clean incoming
+`"Real Betis Balompié"`.
+
+**Root cause:** `fixture_sync_service.py`'s Team upsert was
+`if tname and not await session.get(Team, tid)` — **write-once**. `Team.name`
+was set at creation and never refreshed, so a row minted during the
+2026-08-20 corrupted window kept that text forever. This is the *identical*
+sticky-corruption shape this item already documents for `CanonicalTeam.name`,
+one table over — and the orphan service's own docstring had already named the
+contrast ("`ProviderTeamMapping.provider_team_name` … is refreshed on every
+sync tick, unlike `CanonicalTeam.name`"). `Team.name` was the third instance
+and nobody had looked.
+
+✅ **Fixed 2026-08-25, Class B.** The upsert now repairs a stored name **only
+in the strictly-improving direction**: stored unusable *and* incoming usable.
+A clean stored name is never overwritten — which is what protects the
+Elo-bearing corpus spellings (`Bayern Munich`, `Ein Frankfurt`) that
+`resolve_team_id` matches against from being renamed out from under the
+resolver by a provider's legal-name form. `Team.id`, Elo snapshots and the
+durable `ProviderEloTeamMapping` are all untouched: this corrects a **display
+label**, never an identity, so it is not a Class C historical rewrite. Emits
+`fixture_sync.team_name_repaired` and an INFO log. Idempotent — once repaired,
+the stored name is clean and the branch can never fire again.
+
+Two tests, both seeding production's exact shape (corrupted row **plus** real
+Elo **plus** a VERIFIED provider mapping, since PR #82's guard now correctly
+refuses to let sync mint such a row): one proving the repair and that
+id/mapping survive it, one proving a clean stored name survives both a
+corrupted and a differently-clean incoming name. **The repair test was watched
+failing** against the un-patched upsert (`assert 'Real Betis Balompi??' ==
+'Real Betis Balompié'`).
+
+⚠️ **The two-league-vocabulary trap fired again while writing these tests** —
+`_LEAGUE_META` is keyed on the **display** form (`"La Liga"`), so a fixture
+built with the canonical `"LA_LIGA"` is silently dropped as an unsupported
+competition and the test passes for the wrong reason. Provider-shaped test
+fixtures must use the display form.
+
+The Class C authorization package for the 5 already-diagnosed Bundesliga
+entries (manifest hash
+`6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9`, re-confirmed
+unchanged at 2026-08-25T00:5x UTC on `sha:a42f03b`) is prepared and presented
+to the operator — **not executed**; no `--apply` path exists in code, and a
+general "proceed" is not the authorization APEX §3 requires.
 
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 

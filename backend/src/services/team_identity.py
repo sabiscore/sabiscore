@@ -55,6 +55,13 @@ _LEGAL_TEAM_TOKENS = {
 _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     ("BUNDESLIGA", "bayern munchen"): "bayern munich",
     ("BUNDESLIGA", "borussia monchengladbach"): "m gladbach",
+    # The historical Elo corpus (backend/data/cache/fd_D1_*.csv, football-data.co.uk)
+    # abbreviates these two, so the live provider's full legal name reaches
+    # reconcile_team() at 0.81 / 0.74 -- REQUIRES_REVIEW, correctly below the
+    # 0.94 auto-accept threshold. Both corpus spellings were read out of the
+    # committed CSVs across all seven seasons before being asserted here.
+    ("BUNDESLIGA", "eintracht frankfurt"): "ein frankfurt",
+    ("BUNDESLIGA", "hamburger sv"): "hamburg",
     ("EPL", "manchester city"): "man city",
     ("LIGUE_1", "rennais"): "rennes",
 }

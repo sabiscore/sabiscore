@@ -248,3 +248,157 @@ async def test_provider_name_drift_preserves_raw_identity_and_canonical_anchor(
     assert (
         await session.execute(text("SELECT count(*) FROM canonical_fixtures"))
     ).scalar_one() == 2
+
+
+async def _seed_corrupted_but_elo_bearing_team(
+    session: AsyncSession,
+    *,
+    team_id: str,
+    corrupted_name: str,
+    league_id: str,
+    provider_team_id: str,
+) -> None:
+    """Reproduce production's exact La Liga shape (docs/DEBT.md item 39).
+
+    These rows predate PR #82's mojibake guard, which now correctly refuses to
+    let sync mint a *new* corrupted team -- so they are seeded directly, the
+    same approach test_orphan_team_reconciliation_service.py takes.
+
+    The load-bearing detail is that the corrupted row **carries real Elo
+    history and a VERIFIED ProviderEloTeamMapping**. That is why live metrics
+    show zero `fixture_sync.unusable_team_name` and zero identity conflicts for
+    LA_LIGA while it still renders mojibake: resolution short-circuits at the
+    durable provider-ID anchor and returns this very row, so the computed id
+    equals the stored id and no drift is ever reported. The name is the only
+    thing wrong.
+    """
+    from src.core.database import League, Team
+    from src.db.models import EloRatingSnapshot
+    from src.db.provider_elo_team_mapping import ProviderEloTeamMapping
+
+    if await session.get(League, league_id) is None:
+        session.add(League(id=league_id, name=league_id, country="test"))
+    opponent_id = f"{team_id}-opponent"
+    session.add(Team(id=team_id, name=corrupted_name, league_id=league_id))
+    session.add(Team(id=opponent_id, name="Historic Opponent", league_id=league_id))
+    await session.flush()
+
+    hist_id = f"hist-{team_id}"
+    hist_date = datetime(2025, 9, 20, 15, 0)
+    session.add(
+        Match(
+            id=hist_id,
+            league_id=league_id,
+            home_team_id=team_id,
+            away_team_id=opponent_id,
+            match_date=hist_date,
+            season="2025/2026",
+            status="finished",
+            home_score=2,
+            away_score=1,
+        )
+    )
+    await session.flush()
+    session.add(
+        EloRatingSnapshot(
+            match_id=hist_id,
+            team_id=team_id,
+            pre_match_elo=1500.0,
+            post_match_elo=1520.0,
+            league=league_id,
+            season="2025/2026",
+            match_date=hist_date,
+            created_at=hist_date,
+        )
+    )
+    session.add(
+        ProviderEloTeamMapping(
+            provider="football-data.org",
+            provider_team_id=provider_team_id,
+            provider_team_name=corrupted_name,
+            competition=league_id,
+            team_id=team_id,
+            reconciliation_status="VERIFIED",
+            reconciliation_confidence=1.0,
+            evidence={"identity_basis": "real_durable_elo_history"},
+            checked_at=datetime(2026, 8, 20, 12, 0),
+        )
+    )
+    await session.commit()
+
+
+async def test_corrupted_stored_team_name_is_repaired_from_a_clean_provider_name(
+    session: AsyncSession,
+) -> None:
+    """Team.name was write-once, so a row created while the provider name was
+    mojibake-corrupted kept that corruption forever and rendered it to users
+    (9 of 50 live fixtures on 2026-08-25). Once upstream is clean again, the
+    next sync tick must repair the stored display name -- without touching
+    identity, Elo, or the durable provider mapping.
+    """
+    from src.core.database import Team
+    from src.db.provider_elo_team_mapping import ProviderEloTeamMapping
+    from src.services.fixture_sync_service import sync_upcoming_fixtures
+
+    corrupted_id = "fd-team-la_liga:real_betis_balompi??"
+    await _seed_corrupted_but_elo_bearing_team(
+        session,
+        team_id=corrupted_id,
+        corrupted_name="Real Betis Balompi??",
+        league_id="LA_LIGA",
+        provider_team_id="90",
+    )
+
+    fixture = _match(9, league="La Liga")
+    fixture["home_provider_team_id"] = 90
+    fixture["home_team"] = "Real Betis Balompié"
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client([fixture])
+        await sync_upcoming_fixtures(session)
+
+    repaired = await session.get(Team, corrupted_id)
+    assert repaired is not None, "identity must survive a display-name repair"
+    assert repaired.name == "Real Betis Balompié"
+    assert repaired.id == corrupted_id, "Team.id is identity and must never change"
+
+    # The durable anchor and its Elo evidence are untouched by a name repair.
+    mapping = (
+        await session.execute(
+            select(ProviderEloTeamMapping).where(
+                ProviderEloTeamMapping.provider_team_id == "90"
+            )
+        )
+    ).scalar_one()
+    assert mapping.team_id == corrupted_id
+
+
+async def test_a_clean_stored_name_is_never_overwritten(session: AsyncSession) -> None:
+    """The repair is strictly one-directional. Historical corpus spellings
+    ("Bayern Munich", "Ein Frankfurt") are what resolve_team_id matches
+    against, so a clean stored name must never be renamed by a provider --
+    including when the provider regresses to a corrupted one.
+    """
+    from src.core.database import Team
+    from src.services.fixture_sync_service import sync_upcoming_fixtures
+
+    clean_id = "fdco-team-la_liga-betis"
+    await _seed_corrupted_but_elo_bearing_team(
+        session,
+        team_id=clean_id,
+        corrupted_name="Real Betis",  # already clean
+        league_id="LA_LIGA",
+        provider_team_id="91",
+    )
+
+    for incoming in ("Real Betis Balompi??", "Real Betis Balompié"):
+        fixture = _match(9, league="La Liga")
+        fixture["home_provider_team_id"] = 91
+        fixture["home_team"] = incoming
+        with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+            MockCls.return_value = _mock_client([fixture])
+            await sync_upcoming_fixtures(session)
+
+        still = await session.get(Team, clean_id)
+        assert still is not None and still.name == "Real Betis", (
+            f"a clean stored name must survive incoming {incoming!r}"
+        )
