@@ -152,6 +152,72 @@ before the fix was trusted.
 football-data.co.uk conventions that no amount of reasoning about the club's
 real name will produce.
 
+⚠️ **2026-08-25 — a SECOND, larger and entirely user-visible half of item 39,
+found from the operator's own screenshots.** `GET /api/v1/upcoming/matches`
+returns **9 of 50 live fixtures rendering mojibake team names to users**:
+7 LA_LIGA (`Real Betis Balompi??`, `Real Sociedad de F??tbol`,
+`Deportivo Alav??s`, `Club Atl??tico de Madrid`, `M??laga CF`) and 2
+BUNDESLIGA (`FC Bayern M??nchen`, `Borussia M??nchengladbach`).
+
+**The La Liga ones are a different defect from the orphan one, and the orphan
+manifest is right to exclude them.** Established by elimination against live
+evidence, not inferred:
+
+- They appear in item 35's `fixture-identity-review` (13 LA_LIGA entries,
+  `stored_identity_unusable: true`), so `ProviderEventMapping` rows exist and
+  the orphan manifest's join does reach them.
+- They produce **zero** orphan entries and **zero** `unrepaired_orphan_sides`
+  counts, so `_has_elo_history()` returned `True` — these rows **carry real
+  Elo history** and are correctly not orphans.
+- Live `/metrics` shows `fixture_sync.unusable_team_name` and
+  `fixture_sync.identity_conflicts` both **absent (zero)**, with exactly
+  `identity_rebind_pending: 5` — matching the 5 logged drift warnings, none of
+  which are LA_LIGA. So La Liga never reaches the drift check at all.
+
+The explanation that satisfies all three: resolution **short-circuits at step 1
+of `_resolve_upcoming_team_id`** — a VERIFIED `ProviderEloTeamMapping` binds
+the provider ID straight to the corrupted-name row (which passes that
+function's own `has_history` requirement), so the computed id *equals* the
+stored id, no drift is reported, and the name is never revisited. Reproduced
+locally end-to-end: `resolve_provider_elo_team_id` returns
+`fd-team-la_liga:real_betis_balompi??` for a clean incoming
+`"Real Betis Balompié"`.
+
+**Root cause:** `fixture_sync_service.py`'s Team upsert was
+`if tname and not await session.get(Team, tid)` — **write-once**. `Team.name`
+was set at creation and never refreshed, so a row minted during the
+2026-08-20 corrupted window kept that text forever. This is the *identical*
+sticky-corruption shape this item already documents for `CanonicalTeam.name`,
+one table over — and the orphan service's own docstring had already named the
+contrast ("`ProviderTeamMapping.provider_team_name` … is refreshed on every
+sync tick, unlike `CanonicalTeam.name`"). `Team.name` was the third instance
+and nobody had looked.
+
+✅ **Fixed 2026-08-25, Class B.** The upsert now repairs a stored name **only
+in the strictly-improving direction**: stored unusable *and* incoming usable.
+A clean stored name is never overwritten — which is what protects the
+Elo-bearing corpus spellings (`Bayern Munich`, `Ein Frankfurt`) that
+`resolve_team_id` matches against from being renamed out from under the
+resolver by a provider's legal-name form. `Team.id`, Elo snapshots and the
+durable `ProviderEloTeamMapping` are all untouched: this corrects a **display
+label**, never an identity, so it is not a Class C historical rewrite. Emits
+`fixture_sync.team_name_repaired` and an INFO log. Idempotent — once repaired,
+the stored name is clean and the branch can never fire again.
+
+Two tests, both seeding production's exact shape (corrupted row **plus** real
+Elo **plus** a VERIFIED provider mapping, since PR #82's guard now correctly
+refuses to let sync mint such a row): one proving the repair and that
+id/mapping survive it, one proving a clean stored name survives both a
+corrupted and a differently-clean incoming name. **The repair test was watched
+failing** against the un-patched upsert (`assert 'Real Betis Balompi??' ==
+'Real Betis Balompié'`).
+
+⚠️ **The two-league-vocabulary trap fired again while writing these tests** —
+`_LEAGUE_META` is keyed on the **display** form (`"La Liga"`), so a fixture
+built with the canonical `"LA_LIGA"` is silently dropped as an unsupported
+competition and the test passes for the wrong reason. Provider-shaped test
+fixtures must use the display form.
+
 The Class C authorization package for the 5 already-diagnosed Bundesliga
 entries (manifest hash
 `6925fbade21febf55e8de8c807bb44e309681be9019ebfd3637cf3a9e9c60fb9`, re-confirmed

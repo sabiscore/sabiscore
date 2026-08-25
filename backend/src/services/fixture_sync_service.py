@@ -377,8 +377,30 @@ async def sync_upcoming_fixtures(
             await session.flush()
 
         for tid, tname in [(home_id, home_name), (away_id, away_name)]:
-            if tname and not await session.get(Team, tid):
+            if not tname:
+                continue
+            existing = await session.get(Team, tid)
+            if existing is None:
                 session.add(Team(id=tid, name=tname, league_id=league_id))
+                continue
+            # Team.name was previously write-once, so a row created while the
+            # provider name was corrupted kept that corruption forever and
+            # rendered it to users -- the same sticky-corruption shape
+            # docs/DEBT.md item 39 records for CanonicalTeam.name. Repair it
+            # only in the strictly-improving direction: a stored name that is
+            # unusable, replaced by an incoming one that is not. A clean name
+            # is never overwritten, so historical corpus spellings (the
+            # Elo-bearing "Bayern Munich"/"Ein Frankfurt" rows that
+            # resolve_team_id matches against) can never be renamed out from
+            # under the resolver. Identity itself (Team.id) is never touched.
+            if is_unusable_team_name(str(existing.name)) and not is_unusable_team_name(tname):
+                metrics_collector.increment("fixture_sync.team_name_repaired")
+                logger.info(
+                    "fixture_sync: repaired unusable stored team name team_id=%s -> %r",
+                    tid,
+                    tname,
+                )
+                cast(Any, existing).name = tname
         await session.flush()
 
         raw_date = str(raw.get("match_date") or "")
