@@ -15,6 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
 from ...services.elo_recovery_health_service import elo_recovery_health
+from ...services.fixture_identity_rebind_apply_service import (
+    apply_fixture_identity_rebind,
+)
 from ...services.fixture_identity_rebind_service import (
     build_fixture_identity_rebind_manifest,
 )
@@ -200,10 +203,10 @@ async def fixture_identity_review(
     """Review live fixtures whose stored identity disagrees with the already-
     verified canonical identity (docs/DEBT.md item 35).
 
-    Purely read-only — never mutates ``matches``. No rebind/apply path exists
-    yet; that would be a Class-C production-identity mutation under the APEX
-    directive and needs its own, separately-authorized dry-run manifest flow,
-    mirroring ``semantic_repair_review`` for the sibling historical case.
+    Purely read-only — never mutates ``matches``. Mirrors ``semantic_repair_review``
+    for the sibling historical case. The manifest is typically a mix of
+    rebind-ready and blocked entries; ``POST /fixture-identity-repair-apply``
+    applies only the ready subset, per its own docstring.
     """
     response.headers["Cache-Control"] = "no-store"
     manifest = await build_fixture_identity_rebind_manifest(db)
@@ -217,11 +220,8 @@ async def fixture_identity_review(
         },
         "entries": [entry.as_dict() for entry in manifest.entries],
         "authorization": {
-            "apply_supported": False,
-            "note": (
-                "review only; no rebind/apply path exists yet — "
-                "see docs/DEBT.md item 35"
-            ),
+            "apply_supported": True,
+            "apply_endpoint": "POST /api/v1/release/fixture-identity-repair-apply",
         },
     }
 
@@ -285,6 +285,45 @@ async def apply_orphan_team_rebind_endpoint(
     if body.confirm != "APPLY_ORPHAN_TEAM_REBIND":
         raise HTTPException(status_code=422, detail="confirmation token mismatch")
     result = await apply_orphan_team_rebind(
+        db, expected_manifest_sha256=body.expected_manifest_sha256
+    )
+    await db.commit()
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "authorization_id": body.authorization_id,
+        **dataclasses.asdict(result),
+    }
+
+
+class FixtureIdentityRebindApplyRequest(BaseModel):
+    expected_manifest_sha256: str
+    authorization_id: str
+    confirm: str  # must equal the literal "APPLY_FIXTURE_IDENTITY_REBIND"
+
+
+@router.post("/fixture-identity-repair-apply")
+async def apply_fixture_identity_rebind_endpoint(
+    body: FixtureIdentityRebindApplyRequest,
+    db: AsyncSession = Depends(get_async_session),
+) -> dict[str, Any]:
+    """Execute the Class-C fixture-identity rebind (docs/DEBT.md item 35).
+
+    Requires the exact confirmation token ``"APPLY_FIXTURE_IDENTITY_REBIND"``,
+    the manifest SHA-256 from the immediately-preceding review call, and an
+    operator-supplied authorization id that becomes part of the audit trail.
+
+    Applies only the currently rebind-ready subset of the reviewed manifest;
+    blocked entries (``KICKOFF_PASSED``, ``CROSS_LEAGUE_MISMATCH``,
+    ``HAS_EXISTING_PREDICTIONS``) are left untouched and still visible on the
+    next review call.
+
+    Always run ``GET /fixture-identity-review`` immediately before this call
+    to confirm the manifest digest is still current — it changes on every
+    fixture-sync tick that resolves or newly detects a mismatch.
+    """
+    if body.confirm != "APPLY_FIXTURE_IDENTITY_REBIND":
+        raise HTTPException(status_code=422, detail="confirmation token mismatch")
+    result = await apply_fixture_identity_rebind(
         db, expected_manifest_sha256=body.expected_manifest_sha256
     )
     await db.commit()

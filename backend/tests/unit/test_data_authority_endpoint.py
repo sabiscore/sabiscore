@@ -240,7 +240,7 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
     db.rollback.assert_awaited_once()
 
 
-async def test_fixture_identity_review_exposes_manifest_without_authorizing_apply() -> (
+async def test_fixture_identity_review_exposes_manifest_and_apply_endpoint() -> (
     None
 ):
     response = Response()
@@ -293,7 +293,11 @@ async def test_fixture_identity_review_exposes_manifest_without_authorizing_appl
             "rebind_status": "READY",
         }
     ]
-    assert payload["authorization"]["apply_supported"] is False
+    assert payload["authorization"]["apply_supported"] is True
+    assert (
+        payload["authorization"]["apply_endpoint"]
+        == "POST /api/v1/release/fixture-identity-repair-apply"
+    )
 
 
 async def test_orphan_team_repair_review_exposes_manifest_without_authorizing_apply() -> (
