@@ -1086,6 +1086,86 @@ the same wrong assumption. When two endpoints/services describe the same
 every other consumer of the same concept — not just the one that happened to
 surface the bug first.
 
+### ✅ Corrected manifest deployed and live-verified (`sha:716aaa7`, 2026-08-25)
+
+**The real backlog is 2 fixtures, not 59. The old "54 rebind-ready" were
+almost entirely false positives, and this is provable, not inferred.**
+
+A read-only production query settles it:
+
+```sql
+SELECT count(*) AS canonical_team_rows,
+       count(*) FILTER (WHERE id LIKE 'team-%') AS hashed_namespace_rows,
+       count(*) FILTER (WHERE id IN (SELECT id FROM teams)) AS also_in_teams
+FROM canonical_teams;
+-- → 114 / 114 / 0
+```
+
+All 114 `canonical_teams.id` values live in the `team-<hash>` namespace and
+**not one of them exists in `teams`**. The pre-fix comparison
+`match.home_team_id == fixture.home_team_id` was therefore **structurally
+incapable of ever being true** — every fixture carrying a
+`ProviderEventMapping` was flagged as "mismatched" purely because the two
+sides were drawn from disjoint id namespaces. That is the entire explanation
+for 59.
+
+⚠️ **The PostgreSQL foreign key was the last line of defence, and it held.**
+Had the apply succeeded it would have written 54 fixtures' participants to
+team ids that do not exist in `teams`, corrupting the primary fixture table
+across all six leagues. `matches_away_team_id_fkey` refused the first such
+write and aborted the transaction. **A schema constraint caught what four
+layers of application-level review, two test suites, and a hash-verified
+manifest all missed** — do not treat a green manifest as proof that its ids
+are addressable.
+
+**Corrected live manifest** (`GET /api/v1/release/fixture-identity-review`,
+2026-08-25T07:33 UTC, schema_version 3):
+
+```text
+manifest_sha256: 3171fb830dd03aa607a3d3d45d73be0b819a3ce0ec4a26ba9cc3edf2a0ccec7c
+total_mismatched: 2 · rebind_ready: 1 · blocked: 1
+leagues_affected: EPL, LIGUE_1
+```
+
+| Match | League | Side drifted | Stored → Verified | Status |
+|---|---|---|---|---|
+| `fd-559702` | LIGUE_1 | home | `fd-team-ligue_1:lille_osc` → `fdco-team-ligue_1-lille` | **READY** |
+| `fd-560555` | EPL | away | `fd-team-epl:manchester_city_fc` → `fdco-team-epl-man_city` | BLOCKED (`HAS_EXISTING_PREDICTIONS`) |
+
+**Targets confirmed history-bearing by direct query** — this is the
+Elo-orphan shape item 39 documents, one table over:
+
+| Team id | Name | League | Elo snapshots |
+|---|---|---|---|
+| `fdco-team-ligue_1-lille` | Lille | LIGUE_1 | **244** |
+| `fd-team-ligue_1:lille_osc` | Lille OSC | LIGUE_1 | 1 |
+| `fdco-team-epl-man_city` | Man City | EPL | **266** |
+| `fd-team-epl:manchester_city_fc` | Manchester City FC | EPL | 1 |
+
+**Three-way independent corroboration that the corrected manifest is right.**
+`fixture_sync_service`'s own drift detector — a wholly separate code path
+that has been logging this every sync tick, untouched by any of this work —
+reports **exactly these two fixtures with byte-identical stored/verified
+pairs**, both in the live 07:20 UTC tick and in the 03:49 UTC deploy log
+captured before any of this session's changes existed:
+
+```text
+match_id=fd-559702 stored=(fd-team-ligue_1:lille_osc,fd-team-ligue_1:paris_saint-germain_fc)
+                   verified=(fdco-team-ligue_1-lille,fd-team-ligue_1:paris_saint-germain_fc)
+match_id=fd-560555 stored=(fd-team-epl:crystal_palace_fc,fd-team-epl:manchester_city_fc)
+                   verified=(fd-team-epl:crystal_palace_fc,fdco-team-epl-man_city)
+```
+
+That agreement is exactly what "correct" looks like here: this manifest's
+only job is to surface what `fixture_sync` detects and deliberately refuses
+to fix, and it now does so precisely — no more, no less.
+
+**Status: still NOT EXECUTED.** The authorization on record was granted for
+"the live 54-fixture backlog", which has been shown not to exist. Applying
+against a 1-fixture corrected manifest is a materially different operation
+and needs its own explicit authorization, taken after a fresh review
+(`3171fb83…` moves on every sync tick that resolves or detects drift).
+
 ---
 
 ## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — RESOLVED 2026-08-25
