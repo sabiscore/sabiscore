@@ -53,8 +53,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
-import re
 import sys
 from pathlib import Path
 
@@ -62,30 +60,19 @@ _BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
+from _class_c_repair_cli import (  # noqa: E402
+    build_review_apply_parser,
+    open_class_c_session,
+    validate_sha256,
+)
+
 _CONFIRMATION = "APPLY_FIXTURE_IDENTITY_REBIND"
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
-
-
-def _redact(url: str) -> str:
-    return re.sub(r"(://[^:/@]+:)[^@]*(@)", r"\1***\2", url)
-
-
-def _validate_sha256(value: str, *, field: str) -> str:
-    normalized = (value or "").strip().lower()
-    if not _SHA256_RE.fullmatch(normalized):
-        raise ValueError(f"{field} must be a 64-character SHA-256 hex digest")
-    return normalized
 
 
 async def _run(args: argparse.Namespace) -> int:
-    # Apply the explicit URL before importing pydantic settings/database modules.
-    if args.database_url:
-        os.environ["DATABASE_URL"] = str(args.database_url)
-
     from sqlalchemy import text
 
-    from src.core.config import settings
-    from src.db.session import close_db, init_db
+    from src.db.session import close_db
     from src.services.fixture_identity_rebind_apply_service import (
         apply_fixture_identity_rebind,
     )
@@ -93,14 +80,7 @@ async def _run(args: argparse.Namespace) -> int:
         build_fixture_identity_rebind_manifest,
     )
 
-    print(f"target={_redact(settings.database_url)}")
-    await init_db()
-    from src.db import session as db_session
-
-    factory = db_session.AsyncSessionLocal
-    if factory is None:
-        raise RuntimeError("Async database session is unavailable")
-
+    factory = await open_class_c_session(args.database_url)
     try:
         async with factory() as session:
             if args.review:
@@ -121,9 +101,7 @@ async def _run(args: argparse.Namespace) -> int:
                 await session.rollback()
                 return 2 if payload["nothing_to_apply"] else 0
 
-            manifest_sha = _validate_sha256(
-                args.manifest_sha256, field="--manifest-sha256"
-            )
+            manifest_sha = validate_sha256(args.manifest_sha256, field="--manifest-sha256")
             if not args.authorization_id or not args.authorization_id.strip():
                 raise RuntimeError("--authorization-id is required for --apply")
             if args.confirm != _CONFIRMATION:
@@ -164,31 +142,10 @@ async def _run(args: argparse.Namespace) -> int:
         await close_db()
 
 
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Review/apply the reviewed live-fixture identity rebind"
-    )
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument(
-        "--review",
-        action="store_true",
-        help="Read-only: print the rebind manifest and its SHA-256",
-    )
-    mode.add_argument(
-        "--apply",
-        action="store_true",
-        help="Mutate only after the reviewed hash and explicit authorization are supplied",
-    )
-    parser.add_argument("--manifest-sha256", default="")
-    parser.add_argument("--authorization-id", default="")
-    parser.add_argument("--confirm", default="")
-    parser.add_argument("--database-url", default="")
-    parser.add_argument("--lock-timeout-seconds", type=int, default=5)
-    return parser
-
-
 def main() -> int:
-    args = _parser().parse_args()
+    args = build_review_apply_parser(
+        "Review/apply the reviewed live-fixture identity rebind"
+    ).parse_args()
     try:
         return asyncio.run(_run(args))
     except Exception as exc:  # noqa: BLE001 - CLI boundary
