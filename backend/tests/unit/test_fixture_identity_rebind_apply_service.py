@@ -230,6 +230,12 @@ def _manifest(*entries: FixtureIdentityRebindEntry) -> FixtureIdentityRebindMani
     )
 
 
+def test_assert_applicable_refuses_a_missing_verified_identity() -> None:
+    manifest = _manifest(_entry(verified_home_team_id=None))
+    with pytest.raises(RuntimeError, match="no distinct verified identity"):
+        _assert_ready_entries_are_applicable(manifest)
+
+
 def test_assert_applicable_refuses_a_self_play_verified_identity() -> None:
     manifest = _manifest(_entry(verified_away_team_id="verified-home"))
     with pytest.raises(RuntimeError, match="self-play"):
