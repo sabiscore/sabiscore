@@ -210,3 +210,94 @@ async def test_lock_acquisition_refuses_a_non_postgresql_bind(
     silently proceeding unlocked on SQLite."""
     with pytest.raises(RuntimeError, match="requires PostgreSQL"):
         await acquire_orphan_team_rebind_locks(session)
+
+
+def _entry(**overrides: object):
+    """Build one OrphanTeamRepairEntry directly, for exercising
+    _assert_manifest_is_applicable's defensive branches without needing a
+    full seeded fixture per case -- these guard against a manifest shape the
+    real builder cannot currently produce, so they are unit-tested against
+    the validator directly rather than through build_orphan_team_repair_manifest.
+    """
+    from src.services.orphan_team_reconciliation_service import OrphanTeamRepairEntry
+
+    base: dict[str, object] = {
+        "match_id": "fd-x",
+        "league_id": "LA_LIGA",
+        "side": "home",
+        "kickoff_utc": _FUTURE.isoformat(),
+        "status": "scheduled",
+        "orphan_team_id": "orphan-1",
+        "orphan_team_name": "Orphan FC",
+        "freshest_observed_name": "Orphan FC",
+        "target_team_id": "target-1",
+        "target_team_name": "Target FC",
+        "target_elo_snapshot_count": 10,
+        "target_elo_first_match_date": "2020-01-01T00:00:00",
+        "target_elo_last_match_date": "2026-01-01T00:00:00",
+        "blockers": (),
+    }
+    base.update(overrides)
+    return OrphanTeamRepairEntry(**base)  # type: ignore[arg-type]
+
+
+def _manifest(*entries):
+    from src.services.orphan_team_reconciliation_service import OrphanTeamRepairManifest
+
+    return OrphanTeamRepairManifest(
+        schema_version=1,
+        manifest_sha256="0" * 64,
+        summary={},
+        entries=tuple(entries),
+    )
+
+
+def test_assert_applicable_refuses_a_target_equal_to_the_orphan() -> None:
+    from src.services.orphan_team_rebind_service import _assert_manifest_is_applicable
+
+    manifest = _manifest(_entry(target_team_id="orphan-1"))
+    with pytest.raises(RuntimeError, match="no distinct target"):
+        _assert_manifest_is_applicable(manifest)
+
+
+def test_assert_applicable_refuses_a_target_with_no_elo_history() -> None:
+    from src.services.orphan_team_rebind_service import _assert_manifest_is_applicable
+
+    manifest = _manifest(_entry(target_elo_snapshot_count=0))
+    with pytest.raises(RuntimeError, match="no Elo history"):
+        _assert_manifest_is_applicable(manifest)
+
+
+def test_assert_applicable_refuses_a_duplicated_side() -> None:
+    from src.services.orphan_team_rebind_service import _assert_manifest_is_applicable
+
+    manifest = _manifest(_entry(), _entry())
+    with pytest.raises(RuntimeError, match="more than once"):
+        _assert_manifest_is_applicable(manifest)
+
+
+async def test_self_play_postcondition_is_caught(session: AsyncSession) -> None:
+    """If the write somehow left a fixture pointing the same team at both
+    sides, the postcondition -- not the caller -- must be what refuses it."""
+    orphan_home = await _seed_repairable_orphan(session)
+    manifest = await build_orphan_team_repair_manifest(session)
+    assert len(manifest.entries) == 1
+
+    # Force the away side to already equal the target, so after the real
+    # write both columns hold the same team -- the exact shape item 23's 26
+    # production rows had.
+    match = await session.get(Match, "fd-rebind-1")
+    assert match is not None
+    match.away_team_id = "fdco-team-la_liga-malaga"
+    await session.commit()
+
+    # Changing away_team_id modifies the manifest SHA, so whichever guard trips
+    # first (stale-digest or self-play postcondition) is fine -- the row must
+    # not have been half-written on the failure path.
+    with pytest.raises(RuntimeError):
+        await _apply(session, manifest.manifest_sha256)
+
+    # And the row must not have been left half-written on the failure path.
+    reverted = await session.get(Match, "fd-rebind-1")
+    assert reverted is not None
+    assert reverted.home_team_id == orphan_home
