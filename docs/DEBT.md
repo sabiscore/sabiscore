@@ -303,6 +303,30 @@ execution time and use the digest it prints — if fixture sync has since altere
 any of these rows, the digest will have moved again and the executor will
 correctly refuse the one above.
 
+✅ **2026-08-25 — an HTTP apply path shipped alongside the script (PR #92),
+live-verified in production, not just merged.** `POST
+/api/v1/release/orphan-team-repair-apply` wraps the identical
+`apply_orphan_team_rebind()` the script calls — same manifest-digest
+re-derivation under the same table locks, same two postconditions, same
+`confirm: "APPLY_ORPHAN_TEAM_REBIND"` literal plus an `authorization_id` that
+rides through into the response for the audit trail. This is an additional
+surface, not a second implementation: the script remains the reference for an
+operator with a Render shell; the endpoint is for anyone who only has network
+access to the API. `GET orphan-team-repair-review`'s `authorization` block
+now reports `apply_supported: true` and points at the endpoint instead of the
+prior hardcoded `false`.
+
+**Live-verified post-deploy (backend `sha:88f53e0`, 2026-08-25T03:05 UTC):**
+the manifest digest re-derived by production right now is still
+`9da675851dc4da4f5ac4e1afbe415d9ca700dee1baec66dd6643723a5b66353e` —
+byte-identical to the one recorded above, confirming fixture sync has not
+touched any of the 7 rows since that digest was captured. **The authorization
+package above is current; the operator does not need to re-run `--review`
+before applying it**, provided the apply happens before any further sync tick
+touches these fixtures. As always, re-check the digest immediately before
+applying if any time has passed — this note describes one confirmed instant,
+not a standing guarantee.
+
 ## 38. The promotion gate is unsatisfiable by construction — no candidate can ever be promoted
 
 **Tier:** `RESOLVED 2026-08-22`. (Label corrected 2026-08-24 — it still read
