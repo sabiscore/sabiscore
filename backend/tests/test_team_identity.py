@@ -202,3 +202,73 @@ async def test_alias_does_not_leak_across_leagues(session: AsyncSession) -> None
         )
         is None
     )
+
+
+# docs/DEBT.md item 40: Paris FC and Paris SG are two genuinely different
+# clubs. `_identity_key` reduces "Paris FC" to the bare place name "paris",
+# which the containment heuristic finds inside "paris sg". Uniqueness does not
+# protect this -- exactly one candidate matches, so the merge looks
+# unambiguous. Only the audited alias, consulted BEFORE containment, stops it.
+
+
+async def test_paris_sg_never_resolves_to_paris_fc(session: AsyncSession) -> None:
+    """The exact production shape: only Paris FC is present when Paris SG
+    arrives. Containment would merge them; the alias must fail closed instead."""
+    await _seed_league(session, "LIGUE_1", "Paris FC", "Lille")
+    assert (
+        await resolve_team_id(
+            "Paris SG",
+            session,
+            league_id="LIGUE_1",
+            require_elo_history=True,
+        )
+        is None
+    )
+
+
+async def test_paris_sg_resolves_to_psg_when_that_club_exists(
+    session: AsyncSession,
+) -> None:
+    """With the real club present the alias resolves to it, not to Paris FC --
+    proving the alias redirects rather than merely blocking."""
+    await _seed_league(session, "LIGUE_1", "Paris FC", "Paris Saint-Germain FC")
+    assert (
+        await resolve_team_id(
+            "Paris SG",
+            session,
+            league_id="LIGUE_1",
+            require_elo_history=True,
+        )
+        == "fdco-ligue_1-1"
+    )
+
+
+async def test_paris_fc_still_resolves_to_itself(session: AsyncSession) -> None:
+    """Asserting PSG's identity must not cost Paris FC its own resolution."""
+    await _seed_league(session, "LIGUE_1", "Paris FC", "Paris Saint-Germain FC")
+    assert (
+        await resolve_team_id(
+            "Paris FC",
+            session,
+            league_id="LIGUE_1",
+            require_elo_history=True,
+        )
+        == "fdco-ligue_1-0"
+    )
+
+
+async def test_containment_still_resolves_a_genuine_short_name(
+    session: AsyncSession,
+) -> None:
+    """Moving the alias check ahead of containment must not disable
+    containment itself -- Brighton is exactly what that rule exists for."""
+    await _seed_league(session, "EPL", "Brighton & Hove Albion FC", "Arsenal")
+    assert (
+        await resolve_team_id(
+            "Brighton",
+            session,
+            league_id="EPL",
+            require_elo_history=True,
+        )
+        == "fdco-epl-0"
+    )
