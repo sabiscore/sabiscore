@@ -343,7 +343,11 @@ async def test_orphan_team_repair_review_exposes_manifest_without_authorizing_ap
     assert payload["manifest"]["repair_manifest_sha256"] == "f" * 64
     assert payload["manifest"]["summary"]["distinct_orphan_teams"] == 1
     assert payload["entries"][0]["target_team_id"] == "fdco-team-la_liga-malaga"
-    assert payload["authorization"]["apply_supported"] is False
+    assert payload["authorization"]["apply_supported"] is True
+    assert (
+        payload["authorization"]["apply_endpoint"]
+        == "POST /api/v1/release/orphan-team-repair-apply"
+    )
 
 
 async def test_semantic_repair_review_requires_postgres() -> None:
