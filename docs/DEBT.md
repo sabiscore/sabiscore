@@ -2440,8 +2440,40 @@ abstain/zero its public recommendation.
 
 ## 15. Redis credential incident and Render configuration are operator-blocked
 
-**Tier:** `FIX-NOW` / P0. **Found:** 2026-08-09. **Second call site found and
-fixed:** 2026-08-10.
+**Tier:** migration `RESOLVED 2026-08-25` (tier-1 Redis is live in production,
+verified by this item's own step-5 method). **Old-credential revocation
+remains `NEXT` and operator-only.** Was `FIX-NOW` / P0.
+**Found:** 2026-08-09. **Second call site found and fixed:** 2026-08-10.
+
+> ✅ **Migration confirmed live 2026-08-25.** Probed exactly as step 5 below
+> prescribes — reading `components.cache.metrics`' tier flags rather than the
+> top-level `cache` string this ledger already warns is insufficient on its
+> own:
+>
+> ```text
+> GET /health  (sha c09e46c)   cache.status: healthy
+>   tier1_redis_enabled:   True      tier1_redis_available: True
+>   tier1_circuit_open:    False     tier2_upstash_active:  False
+> ```
+>
+> Steps 1–5 of the runbook are therefore demonstrably complete: a valid
+> `rediss://` URL is set on `sabiscore-api`, the production guard accepted it,
+> and tier-1 is connected with the breaker closed. This supersedes the
+> "not confirmed migrated" note further down, which was written during a
+> 2026-08-13 window when the service was returning 503.
+>
+> ⚠️ **What is still genuinely open is step 6 only:** revoking the exposed
+> credential in the old Redis Cloud console (database `sabiscore-database`,
+> ID `13753214`). That is operator-only and not checkable from code — a live
+> tier-1 connection proves the *new* credential works, it proves nothing about
+> whether the *old* one was revoked. Do not close this item on the evidence
+> above alone.
+>
+> Note `tier2_upstash_active: False` — tier 2 is not configured, which is fine
+> (tiers 2/3 are fallbacks), but it means the migration landed on a working
+> tier-1 rather than the Upstash target the 2026-08-13 transcript described.
+> The runbook below is retained as-is because its diagnostics are sound and
+> the guard behaviour it documents is real.
 
 A supplied Render log contained a complete Redis URI. A later Render build log
 shows `REDIS_URL` is not a valid `redis://`, `rediss://`, or `unix://` URL and the
@@ -2530,7 +2562,61 @@ diagnosis; does not change the runbook above.
 
 ## 16. Release infrastructure and historical-secret gates remain partially closed
 
-**Tier:** `FIX-NOW` / P0 before merge or deployment. **Verified:** 2026-08-10.
+**Tier:** `NEXT` — narrowed 2026-08-25 to exactly two open sub-items, both
+requiring something code cannot do (a credential owner's revocation evidence;
+an actual Docker build run). Was `FIX-NOW` / P0 "before merge or deployment",
+which is no longer an accurate description of what remains.
+**Verified:** 2026-08-10. **Re-verified and narrowed:** 2026-08-25.
+
+> ✅ **Re-verified 2026-08-25 against live production and a full-history scan.**
+> The 2026-08-22 staleness warning below was correct; here is what the actual
+> checks return now.
+>
+> **CLOSED — Alembic head proof.** This item claims `0006_canonical_league_ids`
+> is the sole head and that `upgrade head` timed out, leaving migration proof
+> absent. Live `GET /health/ready` returns:
+>
+> ```text
+> migrations: {"status":"ready","message":"Alembic head is applied",
+>              "head":"0009_quarantine_market_closings",
+>              "applied":"0009_quarantine_market_closings"}
+> ```
+>
+> Three migrations past the one named here, applied and verified in
+> production. `backend/alembic/versions/` confirms the same tip locally.
+>
+> **CLOSED — deploy/CI dispatch.** Backend and Vercel both report
+> `sha: c09e46c` (full parity with `origin/master` HEAD),
+> `backendStatus: "ok"`, `status: "healthy"`. Every PR merged this session
+> (#95–#99) cleared all required canonical checks including SonarCloud, on
+> named runners with real steps.
+>
+> ⚠️ **OBSOLETE AND ACTIVELY MISLEADING — the "Release rule" at the bottom of
+> this item.** It reads *"keep PR #5 unmerged and do not activate Render or
+> promote a Vercel deployment while any item above remains unproven."* The
+> repository is ~95 PRs past #5; Render and Vercel are both live, healthy, and
+> have been continuously deployed from `master` throughout. **Disregard that
+> line entirely.** It is struck rather than deleted so the record of what was
+> once believed survives — but a top-priority ledger entry instructing "do not
+> deploy" while the team deploys all day is worse than no entry, because it
+> teaches readers that this file is safe to ignore. This session was already
+> bitten twice by trusting stale ledger claims (item 34's phantom 518 matches;
+> item 35's wrong-table manifest), which is why it is called out this bluntly.
+>
+> **STILL GENUINELY OPEN — 1 of 2: historical Gitleaks fingerprints.**
+> Re-ran a full-history scan this session (456 commits, 28.15 MB, 12.5s):
+> **exactly 2 leaks found**, unchanged and matching this item's own record —
+> `backend/.env.example` `generic-api-key:17` at `d604c13` and
+> `generic-api-key:10` at `67ed0ab`. Current tree is clean. These cannot be
+> waived without the credential owner's dated revocation evidence for those
+> exact values; that is operator-only.
+>
+> **STILL GENUINELY OPEN — 2 of 2: fresh Docker image proof.** No
+> `sabiscore-backend:verify` or `sabiscore-web:verify` image exists in the
+> local Docker daemon (checked this session; the daemon reports no such
+> tags). Proving this needs an actual build run, which prior sessions
+> recorded as exceeding 15 minutes under the available Docker VM memory —
+> not attempted here, and not something a code change can satisfy.
 
 > ⚠️ **Partially stale as of 2026-08-22 — re-verify before treating any line
 > below as current.** This item's evidence predates roughly 60 merged PRs
@@ -2591,8 +2677,12 @@ diagnosis; does not change the runbook above.
   via `.github/workflows/ci.yml` (or `scripts/run-canonical-ci.ps1`) as the
   source of truth for merge/release gates.
 
-**Release rule:** keep PR #5 unmerged and do not activate Render or promote a
-Vercel deployment while any item above remains unproven.
+~~**Release rule:** keep PR #5 unmerged and do not activate Render or promote a
+Vercel deployment while any item above remains unproven.~~
+**↑ OBSOLETE — struck 2026-08-25.** See the re-verification block at the top of
+this item. The repository is ~95 PRs past #5 and both Render and Vercel are
+live, healthy, and at full SHA parity with `master`. This line does not
+describe current merge or release policy.
 
 ## 12. Certified artifacts were trained on synthetic data — RESOLVED, with a residual
 
