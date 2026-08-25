@@ -200,14 +200,14 @@ async def build_fixture_identity_rebind_manifest(
         ):
             continue
 
-        verified_home_name = None
-        verified_away_name = None
+        verified_home_name: str | None = None
+        verified_away_name: str | None = None
         if verified_home_id:
             team = await session.get(Team, verified_home_id)
-            verified_home_name = team.name if team is not None else None
+            verified_home_name = str(team.name) if team is not None else None
         if verified_away_id:
             team = await session.get(Team, verified_away_id)
-            verified_away_name = team.name if team is not None else None
+            verified_away_name = str(team.name) if team is not None else None
 
         blockers: list[str] = []
         if match.match_date is not None and match.match_date < now:
