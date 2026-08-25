@@ -65,22 +65,22 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
   const isVerifiedFixturePath = Boolean(home && away);
 
   return (
-    <article className="mx-auto max-w-6xl space-y-8" aria-labelledby="match-analysis-title">
-      <header className="flex flex-col gap-3 border-b border-slate-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
+    <article className="mx-auto max-w-6xl space-y-4 sm:space-y-5" aria-labelledby="match-analysis-title">
+      <header className="flex flex-col gap-2.5 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">
             SabiScore Match Intelligence
           </p>
-          <h1 id="match-analysis-title" className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+          <h1 id="match-analysis-title" className="mt-1 text-xl font-semibold text-white sm:text-2xl">
             {matchup}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-400">
+          <p className="mt-1 max-w-3xl text-xs text-slate-400 sm:text-sm">
             Forecast, uncertainty, and football evidence are shown independently from Market Intelligence.
             Odds-derived edge, EV, CLV, and stake context require verified market evidence and remain fail-closed.
           </p>
         </div>
         <span
-          className={`inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold ${
+          className={`inline-flex min-h-10 items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${
             isVerifiedFixturePath
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
               : "border-amber-500/40 bg-amber-500/10 text-amber-200"
@@ -91,11 +91,11 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
       </header>
       <ResearchModeBanner />
       <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
-      <details className="group rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
-        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+      <details className="group rounded-2xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4">
+        <summary className="flex min-h-10 cursor-pointer items-center text-xs font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:text-sm">
           Technical feature diagnostics
         </summary>
-        <div className="pt-4">
+        <div className="pt-2.5">
           <Phase8AnalyticsSection matchId={rawId} league={league} />
         </div>
       </details>

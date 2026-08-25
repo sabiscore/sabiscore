@@ -155,17 +155,17 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
   if (!isLoading && (data?.offseason || !hasAnyFixtures)) return null;
 
   return (
-    <div className="space-y-3 mb-6">
+    <div className="space-y-2.5 mb-4">
       <div className="flex items-center justify-between">
         {/* Not "Upcoming Fixtures": UpcomingMatchesPanel renders a section with
             that exact heading and its own league filter further down /match, so
             two identically-labelled fixture lists with two different filter rows
             appeared on one page. This one is a shortcut into the form below. */}
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500 font-semibold">
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-400 font-semibold">
           Quick pick
         </p>
         {/* League filter chips */}
-        <div className="flex gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-1.5 overflow-x-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => setActiveLeague("ALL")}
@@ -174,7 +174,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
               "flex-shrink-0 min-h-[24px] rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400",
               activeLeague === "ALL"
                 ? "border-slate-400/30 bg-slate-700/50 text-slate-200"
-                : "border-slate-700/40 text-slate-500 hover:text-slate-300",
+                : "border-slate-700/40 text-slate-400 hover:text-slate-200",
             )}
           >
             All
@@ -193,7 +193,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                 "flex-shrink-0 min-h-[24px] rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400",
                 activeLeague === l.id
                   ? "border-indigo-400/30 bg-indigo-500/10 text-indigo-300"
-                  : "border-slate-700/40 text-slate-500 hover:text-slate-300",
+                  : "border-slate-700/40 text-slate-400 hover:text-slate-200",
               )}
             >
               {l.id}
@@ -203,7 +203,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
       </div>
 
       {/* Cards */}
-      <div className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-2.5 sm:gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] [overscroll-behavior-x:contain] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {isLoading
           ? Array.from({ length: 4 }).map((_, i) => (
               <div
@@ -223,7 +223,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                   />
                 )
               : (
-                  <p className="text-xs text-slate-500 py-4">
+                  <p className="text-xs text-slate-400 py-4">
                     No {activeLeague === "ALL" ? "" : `${activeLeague} `}fixtures in the next 14 days. Try another league.
                   </p>
                 )
@@ -276,7 +276,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                         size={12}
                         className="rounded-sm flex-shrink-0"
                       />
-                      <span className="text-[9px] tracking-wide text-slate-600">{selectorLeague}</span>
+                      <span className="text-[9px] tracking-wide text-slate-400">{selectorLeague}</span>
                     </div>
                   )}
                   {isTopEdge && (
@@ -289,9 +289,9 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                     </p>
                   )}
                   <p className="text-xs font-semibold text-slate-100 truncate">{match.home_team}</p>
-                  <p className="text-[10px] text-slate-500 truncate">vs {match.away_team}</p>
+                  <p className="text-[10px] text-slate-400 truncate">vs {match.away_team}</p>
                   {match.match_date && (
-                    <p className="text-[9px] text-slate-600 mt-0.5">
+                    <p className="text-[9px] text-slate-400 mt-0.5">
                       {new Date(match.match_date).toLocaleString("en-NG", {
                         weekday: "short", day: "numeric", month: "short",
                         hour: "2-digit", minute: "2-digit",
@@ -326,7 +326,7 @@ function BigMatchesCarousel({ onSelectFixture }: BigMatchesCarouselProps) {
                       </span>
                     )}
                     {topOutcome && (
-                      <span className="text-[9px] text-slate-500">{topOutcome}</span>
+                      <span className="text-[9px] text-slate-400">{topOutcome}</span>
                     )}
                   </div>
                 </button>
@@ -514,7 +514,7 @@ export function MatchSelector() {
     <>
       <div
         className={cn(
-          "glass-card relative overflow-hidden p-5 sm:p-8",
+          "glass-card relative overflow-hidden p-3.5 sm:p-4.5",
           premiumVisualsEnabled &&
             "border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
         )}
@@ -525,24 +525,24 @@ export function MatchSelector() {
             aria-hidden="true"
           />
         )}
-        <div className="relative space-y-6">
+        <div className="relative space-y-4 sm:space-y-5">
           {/* Big Matches Carousel (E.5) */}
           <BigMatchesCarousel onSelectFixture={handleCarouselSelect} />
 
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl font-bold text-slate-100 sm:text-2xl">Generate Match Insights</h2>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h2 className="text-lg font-bold text-slate-100 sm:text-xl">Generate Match Insights</h2>
               {/* The "Premium visual mode" chip that used to sit here named an
                   internal feature flag. It described the stylesheet, not the
                   analysis, and meant nothing to a reader. */}
             </div>
-            <p className="text-sm text-slate-400 sm:text-base">Choose a verified fixture or enter a hypothetical matchup.</p>
+            <p className="text-xs text-slate-400 sm:text-sm">Choose a verified fixture or enter a hypothetical matchup.</p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:p-5">
+          <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3 sm:p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className={cn(
-                "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.24em]",
+                "rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em]",
                 selectedFixture
                   ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-300"
                   : homeTeam.trim() && awayTeam.trim()
@@ -551,19 +551,19 @@ export function MatchSelector() {
               )}>
                 {selectionSummary.badge}
               </span>
-              <h3 className="text-sm font-semibold text-slate-100 sm:text-base">
+              <h3 className="text-xs font-semibold text-slate-100 sm:text-sm">
                 {selectionSummary.title}
               </h3>
             </div>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
               {selectionSummary.description}
             </p>
             {selectedFixture && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
                   Canonical fixture ID preserved
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
                   {league}
                 </span>
               </div>
@@ -576,7 +576,7 @@ export function MatchSelector() {
               matchup preview at all (the compact row below is sm:hidden). Only
               the decorative trust chips stay flag-gated. */}
           {hasTeamsSelected && (
-            <div className="hidden rounded-2xl border border-white/10 bg-slate-900/60 p-4 sm:block">
+            <div className="hidden rounded-xl border border-white/10 bg-slate-900/60 p-3 sm:block">
               <TeamVsDisplay
                 homeTeam={homeTeam}
                 awayTeam={awayTeam}
@@ -586,14 +586,14 @@ export function MatchSelector() {
                 className="justify-between"
               />
               {premiumVisualsEnabled && (
-                <div className="mt-4 flex flex-wrap gap-3 text-[11px] text-slate-300">
-                  <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1">
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-300">
+                  <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2.5 py-0.5">
                     Evidence availability checked
                   </span>
-                  <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1">
+                  <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2.5 py-0.5">
                     Model status reported by backend
                   </span>
-                  <span className="rounded-full border border-purple-300/30 bg-purple-300/10 px-3 py-1">
+                  <span className="rounded-full border border-purple-300/30 bg-purple-300/10 px-2.5 py-0.5">
                     Zero stake when gates close
                   </span>
                 </div>
@@ -602,17 +602,17 @@ export function MatchSelector() {
           )}
 
           {hasTeamsSelected && (
-            <div className="rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm sm:hidden">
+            <div className="rounded-xl border border-white/10 bg-slate-900/50 px-2.5 py-1.5 text-xs sm:hidden">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate font-medium text-slate-200">{homeTeam || "Home team"}</span>
-                <span className="text-xs uppercase text-slate-500">vs</span>
+                <span className="text-[10px] uppercase text-slate-400">vs</span>
                 <span className="truncate text-right font-medium text-slate-200">{awayTeam || "Away team"}</span>
               </div>
-              <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <p className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
                 {LEAGUE_CONFIG[league]?.countryCode && (
                   <CountryFlag
                     countryCode={LEAGUE_CONFIG[league].countryCode}
-                    size={12}
+                    size={10}
                     className="rounded-sm flex-shrink-0"
                   />
                 )}
@@ -621,14 +621,14 @@ export function MatchSelector() {
             </div>
           )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           {/* League Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">League</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-300">League</label>
             {/* 7 leagues: a 5-col grid left the last row as 2 stub-width cells
                 with 3 empty columns beside them. 4→7 divides evenly at both
                 breakpoints. */}
-            <div className="flex gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible lg:grid-cols-7">
+            <div className="flex gap-1.5 overflow-x-auto pb-1 md:grid md:grid-cols-4 md:overflow-visible lg:grid-cols-7">
               {LEAGUES.map((l) => (
                 <button
                   key={l.id}
@@ -643,7 +643,7 @@ export function MatchSelector() {
                   data-selected={league === l.id}
                   aria-label={`Select ${l.name}${league === l.id ? ' (selected)' : ''}`}
                   className={cn(
-                    "min-w-[116px] flex-shrink-0 rounded-xl border-2 p-3 transition-all md:min-w-0",
+                    "min-w-[100px] flex-shrink-0 rounded-xl border-2 p-2 transition-all md:min-w-0",
                     premiumVisualsEnabled
                       ? league === l.id
                         ? "border-transparent bg-gradient-to-br from-cyan-400/30 to-indigo-500/30 text-white shadow-[0_10px_25px_rgba(15,23,42,0.55)]"
@@ -653,20 +653,20 @@ export function MatchSelector() {
                       : "border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600"
                   )}
                 >
-                  <div className="mb-1 flex justify-center">
+                  <div className="mb-0.5 flex justify-center">
                     {LEAGUE_CONFIG[l.id]?.countryCode ? (
                       <CountryFlag 
                         countryCode={LEAGUE_CONFIG[l.id].countryCode} 
-                        size={32}
+                        size={24}
                         className="rounded-sm"
                       />
                     ) : (
-                      <span className="text-2xl">⚽</span>
+                      <span className="text-xl">⚽</span>
                     )}
                   </div>
-                  <div className="text-xs font-medium">{l.name}</div>
+                  <div className="text-[11px] font-medium">{l.name}</div>
                   {premiumVisualsEnabled && LEAGUE_CONFIG[l.id]?.country && (
-                    <p className="text-[10px] text-slate-500">{LEAGUE_CONFIG[l.id]?.country}</p>
+                    <p className="text-[9px] text-slate-400">{LEAGUE_CONFIG[l.id]?.country}</p>
                   )}
                 </button>
               ))}
@@ -684,7 +684,7 @@ export function MatchSelector() {
           )}
 
           {/* Team Inputs */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <TeamAutocomplete
               label="Home Team"
               value={homeTeam}
@@ -710,7 +710,7 @@ export function MatchSelector() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-4 font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] hover:bg-indigo-500 hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:scale-100 disabled:bg-slate-700 disabled:shadow-none"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 sm:py-3.5 font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:scale-[1.02] hover:bg-indigo-500 hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:scale-100 disabled:bg-slate-700 disabled:shadow-none text-sm sm:text-base"
           >
             {loading ? (
               <>
@@ -748,10 +748,10 @@ export function MatchSelector() {
         </form>
 
         <div className="pt-4 border-t border-slate-800/50">
-          <p className="text-xs text-center text-slate-500">
+          <p className="text-xs text-center text-slate-400">
             Analysis, evidence checks, and verdicts remain server-authoritative
           </p>
-          <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-slate-600">
+          <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-slate-400">
             <span className="inline-flex items-center gap-1">
               <span
                 className={cn(

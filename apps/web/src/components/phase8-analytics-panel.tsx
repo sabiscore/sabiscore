@@ -103,7 +103,7 @@ function toLabel(name: string): string {
  * null = DATA_GAP (feature has no live value); 0 = just fetched (Fresh).
  * Never "Live" — this measures feature-data recency, not match state. */
 export function freshnessLabel(seconds: number | null): { label: string; cls: string } {
-  if (seconds === null) return { label: "—", cls: "text-slate-600" };
+  if (seconds === null) return { label: "—", cls: "text-slate-400" };
   if (seconds === 0) return { label: "Fresh", cls: "text-emerald-400" };
   if (seconds < 3_600) return { label: `${Math.round(seconds / 60)}m`, cls: "text-emerald-400" };
   if (seconds < 86_400) return { label: `${Math.round(seconds / 3600)}h`, cls: "text-amber-400" };
@@ -128,9 +128,9 @@ function Phase8Skeleton() {
       aria-label="Loading Phase 8 analytics"
     >
       <div className="h-8 w-48 rounded-lg bg-slate-800/70" />
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-48 rounded-2xl bg-slate-800/50" />
+          <div key={i} className="h-44 rounded-2xl bg-slate-800/50" />
         ))}
       </div>
     </div>
@@ -159,7 +159,7 @@ const FeatureRow = memo(function FeatureRow({
       <span
         className={cn(
           "text-xs font-mono truncate max-w-[55%]",
-          isGap ? "text-slate-500" : "text-slate-300"
+          isGap ? "text-slate-400" : "text-slate-200"
         )}
         title={feature.name}
       >
@@ -168,7 +168,7 @@ const FeatureRow = memo(function FeatureRow({
       <div className="flex items-center gap-1.5">
         {!isGap && feature.source && (
           <span
-            className="text-[9px] font-medium text-slate-600 truncate max-w-[4rem]"
+            className="text-[9px] font-medium text-slate-400 truncate max-w-[4rem]"
             title={`Source: ${feature.source}`}
             aria-label={`Source: ${feature.source}`}
           >
@@ -187,7 +187,7 @@ const FeatureRow = memo(function FeatureRow({
         <span
           className={cn(
             "text-xs font-semibold tabular-nums",
-            isGap ? "text-slate-600 line-through" : "text-slate-100"
+            isGap ? "text-slate-400 line-through" : "text-slate-100"
           )}
           aria-label={
             isGap
@@ -197,7 +197,7 @@ const FeatureRow = memo(function FeatureRow({
         >
           {formatFeatureValue(feature.name, feature.value)}
           {isGap && (
-            <span className="ml-1 text-[9px] font-bold text-slate-600 uppercase tracking-wider">
+            <span className="ml-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
               GAP
             </span>
           )}
@@ -250,7 +250,7 @@ const FeatureGroupCard = memo(function FeatureGroupCard({
         {(() => {
           const chip = group.all_available
             ? groupFreshnessChip(group.group_freshness_seconds)
-            : { label: "PARTIAL", cls: "text-slate-500", bg: "bg-slate-700/30 border-slate-600/30" };
+            : { label: "PARTIAL", cls: "text-slate-300", bg: "bg-slate-800/60 border-slate-700/60" };
           return (
             <span
               className={cn(
@@ -271,7 +271,7 @@ const FeatureGroupCard = memo(function FeatureGroupCard({
       </div>
 
       {/* Reference note */}
-      <p className="text-[10px] text-slate-600 leading-tight" aria-hidden="true">
+      <p className="text-[10px] text-slate-400 leading-tight" aria-hidden="true">
         {group.reference}
       </p>
 
@@ -295,12 +295,12 @@ function Phase8DisabledNotice() {
   return (
     <div
       role="status"
-      className="rounded-2xl border border-slate-700/40 bg-slate-800/20 p-5 flex flex-col gap-2"
+      className="rounded-2xl border border-slate-700/40 bg-slate-800/20 p-3.5 sm:p-4 flex flex-col gap-1.5"
     >
-      <p className="text-sm font-semibold text-slate-400">
+      <p className="text-sm font-semibold text-slate-300">
         Advanced Feature Intelligence — Coming Soon
       </p>
-      <p className="text-xs text-slate-600 max-w-prose">
+      <p className="text-xs text-slate-400 max-w-prose">
         Deeper feature analytics (team strength ratings, form momentum, market
         movement, match importance) are in staged rollout pending model
         validation. The predictions and analysis above are unaffected.
@@ -341,7 +341,7 @@ function Phase8Error({
   return (
     <div
       role="alert"
-      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 flex items-start gap-3"
+      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-3.5 sm:p-4 flex items-start gap-3"
     >
       <svg
         className="mt-0.5 h-4 w-4 flex-shrink-0 text-rose-400"
@@ -359,7 +359,7 @@ function Phase8Error({
       </svg>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-rose-300">Phase 8 analytics unavailable</p>
-        <p className="mt-0.5 text-xs text-slate-500">{safe}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{safe}</p>
         {onRetry && (
           <button
             type="button"

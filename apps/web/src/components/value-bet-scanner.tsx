@@ -143,20 +143,20 @@ async function fetchValueBets(days: number): Promise<ValueBetScanResponse> {
 
 function DataGapState({ data }: { data?: ValueBetScanResponse }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center" data-testid="value-bet-data-gap">
-      <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-300">No fresh, fully gated candidates</p>
-      <p className="max-w-md text-xs text-slate-500">
+    <div className="flex flex-col items-center gap-2 py-4 text-center" data-testid="value-bet-data-gap">
+      <TrendingUp className="h-6 w-6 text-slate-500" aria-hidden="true" />
+      <p className="text-xs font-semibold text-slate-300">No fresh, fully gated candidates</p>
+      <p className="max-w-md text-[11px] text-slate-400">
         The scanner reads persisted analysis only. Missing, stale, partial, zero-stake, or non-actionable records are intentionally excluded.
       </p>
       {data?.generated_at ? (
-        <p className="text-[11px] text-slate-600">
+        <p className="text-[10px] text-slate-500">
           Checked {new Date(data.generated_at).toLocaleString()} · {data.provenance?.join(" + ") || "provenance unavailable"}
         </p>
       ) : null}
       <Link
         href="/match"
-        className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
       >
         <ExternalLink className="h-3 w-3" aria-hidden="true" />
         Go to Match
@@ -167,10 +167,10 @@ function DataGapState({ data }: { data?: ValueBetScanResponse }) {
 
 function LegitimateEmptyState({ days }: { days: number }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center" data-testid="value-bet-empty">
-      <TrendingUp className="h-8 w-8 text-slate-600" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-400">No value edges detected</p>
-      <p className="text-xs text-slate-600">
+    <div className="flex flex-col items-center gap-2 py-4 text-center" data-testid="value-bet-empty">
+      <TrendingUp className="h-6 w-6 text-slate-500" aria-hidden="true" />
+      <p className="text-xs font-semibold text-slate-300">No value edges detected</p>
+      <p className="text-[11px] text-slate-400">
         No bets above threshold for current filters in the next {days} days. Min edge 4.2%.
       </p>
     </div>
@@ -179,14 +179,14 @@ function LegitimateEmptyState({ days }: { days: number }) {
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-8" role="alert" data-testid="value-bet-error">
+    <div className="flex flex-col items-center gap-1.5 py-4" role="alert" data-testid="value-bet-error">
       <div className="flex items-center gap-2 text-rose-400">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
-        <span className="text-sm">Scanner unavailable. Try again shortly.</span>
+        <span className="text-xs">Scanner unavailable. Try again shortly.</span>
       </div>
       <button
         onClick={onRetry}
-        className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300 transition-colors"
+        className="text-xs text-slate-400 underline underline-offset-2 hover:text-slate-200 transition-colors"
       >
         Retry
       </button>
@@ -355,9 +355,9 @@ export const ValueBetScanner = memo(function ValueBetScanner({
 
       {/* Body */}
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-12 text-slate-400" aria-live="polite" aria-busy="true">
+        <div className="flex items-center justify-center gap-2 py-4 text-slate-400" aria-live="polite" aria-busy="true">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span className="text-sm">Scanning for value…</span>
+          <span className="text-xs">Scanning for value…</span>
         </div>
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} />
@@ -390,7 +390,7 @@ export const ValueBetScanner = memo(function ValueBetScanner({
 
       {/* Footer */}
       {data && !isDataGap && (
-        <p className="border-t border-white/[0.04] px-4 py-2 text-[10px] text-slate-600">
+        <p className="border-t border-white/[0.04] px-4 py-2 text-[10px] text-slate-400">
           Source: {data.source} · Min EV 4.2% · {activeDays}d window
         </p>
       )}

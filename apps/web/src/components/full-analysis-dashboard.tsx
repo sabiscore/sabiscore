@@ -122,7 +122,7 @@ function SabiInsightsBadge({
 }) {
   const displayedCopy = copy ?? sabiInsightCopy(verdict, matchId);
   return (
-    <p className="text-[11px] text-slate-500 italic leading-relaxed truncate">
+    <p className="text-[11px] text-slate-400 italic leading-relaxed truncate">
       <span className="sr-only">Sabi Insights: </span>
       {displayedCopy}
     </p>
@@ -186,7 +186,7 @@ function ProbabilityOrb({ label, value, strokeColor, isTop, available = true }: 
           </text>
         )}
       </svg>
-      <span className={cn("text-xs font-medium tracking-wide", isTop ? "text-white" : "text-slate-500")}>
+      <span className={cn("text-xs font-medium tracking-wide", isTop ? "text-white" : "text-slate-400")}>
         {label}
       </span>
     </div>
@@ -229,33 +229,33 @@ function EnhancedMatchHero({
         };
 
   return (
-    <div className={cn("rounded-2xl border p-5 space-y-4", meta.bg, meta.border)}>
-      <section aria-labelledby="decision-heading" className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
-        <p id="decision-heading" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+    <div className={cn("rounded-2xl border p-3.5 sm:p-4.5 space-y-3 sm:space-y-3.5", meta.bg, meta.border)}>
+      <section aria-labelledby="decision-heading" className="rounded-xl border border-white/10 bg-slate-950/40 p-3 sm:p-3.5">
+        <p id="decision-heading" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
           Decision
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-2.5">
           <VerdictBadge verdict={data.verdict} />
-          <strong className="text-base text-white">{presentation.primaryDecision}</strong>
+          <strong className="text-sm sm:text-base text-white">{presentation.primaryDecision}</strong>
         </div>
-        <p className="mt-2 text-sm leading-6 text-slate-300">{presentation.reason}</p>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
+        <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
           Evidence quality: {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
         </p>
       </section>
       {/* ── Teams clash ── */}
       <div className="flex items-center justify-between gap-3">
         <motion.div {...slideIn("left")} className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Home</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">Home</p>
           <p className="text-base font-bold text-slate-100 truncate">{home || "—"}</p>
         </motion.div>
 
         <div className="flex-shrink-0 text-center px-2">
-          <span className="text-xs font-semibold text-slate-600 tracking-widest">vs</span>
+          <span className="text-xs font-semibold text-slate-400 tracking-widest">vs</span>
         </div>
 
         <motion.div {...slideIn("right")} className="flex-1 min-w-0 text-right">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Away</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-0.5">Away</p>
           <p className="text-base font-bold text-slate-100 truncate">{away || "—"}</p>
         </motion.div>
       </div>
@@ -288,13 +288,13 @@ function EnhancedMatchHero({
       {/* ── Quick-stat strip ── */}
       <div className="flex items-center justify-between border-t border-slate-800/40 pt-3 text-center">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Home Elo</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Home Elo</p>
           <p className="text-xs font-semibold text-slate-200 tabular-nums">
             {elo ? fmt(elo.home_elo) : "—"}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Elo Δ</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Elo Δ</p>
           <p className={cn("text-xs font-bold tabular-nums", !elo ? "text-slate-400" : elo.elo_difference > 0 ? "text-emerald-400" : elo.elo_difference < 0 ? "text-rose-400" : "text-slate-400")}>
             {elo
               ? `${elo.elo_difference >= 0 ? "+" : ""}${fmt(elo.elo_difference)}`
@@ -302,13 +302,13 @@ function EnhancedMatchHero({
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Away Elo</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Away Elo</p>
           <p className="text-xs font-semibold text-slate-200 tabular-nums">
             {elo ? fmt(elo.away_elo) : "—"}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Top outcome probability</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Top outcome probability</p>
           <p className="text-xs font-bold text-white tabular-nums">
             {presentation.topOutcomeProbability === null
               ? "Unavailable"
@@ -320,7 +320,7 @@ function EnhancedMatchHero({
       {/* ── Model provenance strip (Phase D) ── */}
       {(ensemble.calibration_applied || ensemble.overlay_applied) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2.5">
-          <span className="text-[9px] uppercase tracking-widest text-slate-600 mr-0.5">Model</span>
+          <span className="text-[9px] uppercase tracking-widest text-slate-400 mr-0.5">Model</span>
           {ensemble.calibration_applied && (
             <span
               className="inline-flex items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-400"
@@ -337,7 +337,7 @@ function EnhancedMatchHero({
               +Poisson
             </span>
           )}
-          <span className="text-[9px] text-slate-700 ml-auto truncate" title={`Model version: ${ensemble.model_version}`}>
+          <span className="text-[9px] text-slate-400 ml-auto truncate" title={`Model version: ${ensemble.model_version}`}>
             {ensemble.model_version}
           </span>
         </div>
@@ -355,7 +355,7 @@ function EnhancedMatchHero({
           {presentation.isReducedEvidenceBaseline ||
           (data.staleness_available && data.staleness_seconds >= 365 * 86400) ? (
             <span
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/40 bg-slate-800/40 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/40 bg-slate-800/40 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400"
               title="Evidence freshness: time since team statistics were last updated from providers."
             >
               Historical data only
@@ -395,7 +395,7 @@ function EnhancedMatchHero({
         <SabiInsightsBadge verdict={data.verdict} matchId={matchId} copy={presentation.reason} />
       </div>
       {/* ── Verdict description (Phase 3) ── */}
-      <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-800/30 pt-2">
+      <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/30 pt-2">
         {VERDICT_COPY[data.verdict] ?? ""}
       </p>
     </div>
@@ -420,16 +420,16 @@ function getActionabilitySummary(data: FullMatchAnalysisResponse) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse" role="status" aria-busy="true" aria-label="Loading intelligence dashboard">
-      <div className="h-14 rounded-2xl bg-slate-800/70" />
-      <div className="h-20 rounded-2xl bg-slate-800/50" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="h-44 rounded-2xl bg-slate-800/50" />
-        <div className="h-44 rounded-2xl bg-slate-800/50" />
+    <div className="space-y-3.5 sm:space-y-4 animate-pulse" role="status" aria-busy="true" aria-label="Loading intelligence dashboard">
+      <div className="h-12 rounded-2xl bg-slate-800/70" />
+      <div className="h-16 rounded-2xl bg-slate-800/50" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <div className="h-36 sm:h-40 rounded-2xl bg-slate-800/50" />
+        <div className="h-36 sm:h-40 rounded-2xl bg-slate-800/50" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-40 rounded-2xl bg-slate-800/40" />
+          <div key={i} className="h-32 sm:h-36 rounded-2xl bg-slate-800/40" />
         ))}
       </div>
     </div>
@@ -590,10 +590,10 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
   const max = Math.max(data.home_win_prob, data.draw_prob, data.away_win_prob);
   const available = data.probabilities_available;
   return (
-    <div className="glass-card p-6 space-y-5 border border-slate-800/60">
+    <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4 border border-slate-800/60">
       <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider text-slate-500">Ensemble Prediction</p>
-        <span className="text-xs text-slate-500">{data.league}</span>
+        <p className="text-xs uppercase tracking-wider text-slate-400">Ensemble Prediction</p>
+        <span className="text-xs text-slate-400">{data.league}</span>
       </div>
       {available ? <div className="space-y-3">
         <ProbBar
@@ -615,19 +615,19 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
           isTop={data.away_win_prob === max}
         />
       </div> : (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-4 text-sm text-amber-200/80">
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-xs text-amber-200/80">
           Official outcome probabilities are unavailable. Diagnostic baseline values are not displayed.
         </div>
       )}
       <div className="pt-1 border-t border-slate-800/50 space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-500">Top outcome probability</span>
+          <span className="text-xs text-slate-400">Top outcome probability</span>
           <span className="text-sm font-bold text-white">
             {available ? pct(data.top_outcome_probability) : "Unavailable"}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-slate-600">{data.model_version}</span>
+          <span className="text-[10px] text-slate-400">{data.model_version}</span>
           <div className="flex items-center gap-1">
             {data.calibration_applied && (
               <span
@@ -678,8 +678,8 @@ export function RLCard({
     : "#22d3ee";
 
   return (
-    <div className="glass-card p-6 space-y-5 border border-slate-800/60">
-      <p className="text-xs uppercase tracking-wider text-slate-500">RL Bet Recommendation</p>
+    <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4 border border-slate-800/60">
+      <p className="text-xs uppercase tracking-wider text-slate-400">RL Bet Recommendation</p>
 
       <div className="flex items-center gap-5">
         <svg viewBox="0 0 92 54" className="w-28 flex-shrink-0" aria-label={!stakePermitted ? "No bet" : `Stake ${pct(rec.stake_fraction, 2)} of ${pct(effectiveKellyCap)} cap`} role="img">
@@ -698,11 +698,11 @@ export function RLCard({
           </text>
         </svg>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <p className={cn("text-lg font-bold", !stakePermitted ? "text-amber-300" : "text-emerald-300")}>
             {!stakePermitted ? "No bet" : `Stake ${pct(rec.stake_fraction, 2)}`}
           </p>
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-600">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400">
             Effective Kelly cap {pct(effectiveKellyCap, 1)}
             <KellyTooltip />
           </div>
@@ -720,7 +720,7 @@ export function RLCard({
         <div className="grid grid-cols-2 gap-2 pt-1">
           {Object.entries(rec.reward_components).slice(0, 4).map(([k, v]) => (
             <div key={k} className="rounded-lg bg-slate-900/60 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-slate-600">{toLabel(k)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400">{toLabel(k)}</p>
               <p className="text-sm font-semibold text-slate-200">{fmt(v, 3)}</p>
             </div>
           ))}
@@ -734,20 +734,20 @@ export function RLCard({
 
 function ModelDriversCard({ drivers }: { drivers: string[] }) {
   return (
-    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
-      <p className="text-xs uppercase tracking-wider text-slate-500">Model Drivers</p>
+    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
+      <p className="text-xs uppercase tracking-wider text-slate-400">Model Drivers</p>
       {drivers.length === 0 ? (
-        <p className="text-sm text-slate-500">No validated model-driver report is available.</p>
+        <p className="text-sm text-slate-400">No validated model-driver report is available.</p>
       ) : (
-        <ul className="space-y-2" aria-label="Model feature drivers">
+        <ul className="space-y-1.5" aria-label="Model feature drivers">
           {drivers.slice(0, 5).map((d, i) => {
             const opacity = Math.max(0.5, 1 - i * 0.1);
             return (
-              <li key={d} className="flex items-center gap-2.5" style={{ opacity }}>
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 flex items-center justify-center text-[10px] font-bold select-none" aria-hidden>
+              <li key={d} className="flex items-center gap-2" style={{ opacity }}>
+                <span className="flex-shrink-0 w-4.5 h-4.5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 flex items-center justify-center text-[10px] font-bold select-none" aria-hidden>
                   {i + 1}
                 </span>
-                <span className="truncate text-fuchsia-300 text-sm">{toLabel(d)}</span>
+                <span className="truncate text-fuchsia-300 text-xs sm:text-sm">{toLabel(d)}</span>
               </li>
             );
           })}
@@ -762,20 +762,20 @@ function ModelDriversCard({ drivers }: { drivers: string[] }) {
 export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
   if (!elo) {
     return (
-      <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-wider text-slate-500">Elo Context</p>
-        <div className="space-y-2">
+      <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
+        <p className="text-xs uppercase tracking-wider text-slate-400">Elo Context</p>
+        <div className="space-y-1.5">
           {["Home Elo", "Away Elo", "Elo Diff", "Momentum"].map((label) => (
-            <div key={label} className="flex justify-between text-sm">
+            <div key={label} className="flex justify-between text-xs sm:text-sm">
               <span className="text-slate-400">{label}</span>
-              <span className="font-semibold text-slate-500 tabular-nums">
+              <span className="font-semibold text-slate-400 tabular-nums">
                 <span className="sr-only">{label} unavailable</span>
                 <span aria-hidden="true">—</span>
               </span>
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           Ratings need verified match history, which is unavailable for this fixture.
         </p>
       </div>
@@ -786,24 +786,24 @@ export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
   const diffColor = diff > 50 ? "text-emerald-400" : diff < -50 ? "text-rose-400" : "text-slate-300";
 
   return (
-    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
-      <p className="text-xs uppercase tracking-wider text-slate-500">Elo Context</p>
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
+    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
+      <p className="text-xs uppercase tracking-wider text-slate-400">Elo Context</p>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="text-slate-400">Home Elo</span>
           <span className="font-semibold text-slate-200 tabular-nums">{fmt(elo.home_elo)}</span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="text-slate-400">Away Elo</span>
           <span className="font-semibold text-slate-200 tabular-nums">{fmt(elo.away_elo)}</span>
         </div>
-        <div className="flex justify-between text-sm border-t border-slate-800/50 pt-2">
+        <div className="flex justify-between text-xs sm:text-sm border-t border-slate-800/50 pt-1.5">
           <span className="text-slate-400">Elo Diff</span>
           <span className={cn("font-bold tabular-nums", diffColor)}>
             {diff >= 0 ? "+" : ""}{fmt(diff)}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="text-slate-400">Momentum</span>
           <span className="font-semibold text-slate-200 tabular-nums">{fmt(elo.elo_momentum_cross, 2)}</span>
         </div>
@@ -817,10 +817,10 @@ export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
 export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty; available: boolean }) {
   if (!unc) {
     return (
-      <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
-        <p className="text-xs uppercase tracking-wider text-slate-500">BNN Uncertainty</p>
+      <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
+        <p className="text-xs uppercase tracking-wider text-slate-400">BNN Uncertainty</p>
         <p className="text-sm font-semibold text-slate-300">Unavailable</p>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           No measured uncertainty is available; no interval or percentage is inferred.
         </p>
       </div>
@@ -828,12 +828,12 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
   }
   const isLow = unc.confidence_tier === "LOW_EVIDENCE";
   return (
-    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-5 space-y-3">
+    <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500">
+        <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400">
           BNN Uncertainty
           <Tooltip content="Bayesian Neural Network — instead of one number, the model reports a range reflecting what it doesn't know.">
-            <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
           </Tooltip>
         </div>
         <span
@@ -847,33 +847,33 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
           {isLow ? "Low Evidence" : "OK"}
         </span>
       </div>
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="flex items-center gap-1.5 text-slate-400">
             Epistemic
             <Tooltip content="Unknown-unknowns — reducible with more data. High values trigger abstention.">
-              <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+              <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
             </Tooltip>
           </span>
           <span className="font-semibold tabular-nums text-slate-200">{pct(unc.epistemic_unc)}</span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="flex items-center gap-1.5 text-slate-400">
             Aleatoric
             <Tooltip content="Irreducible randomness in football outcomes. Cannot be reduced by more data.">
-              <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+              <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
             </Tooltip>
           </span>
           <span className="font-semibold tabular-nums text-slate-200">{pct(unc.aleatoric_unc)}</span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="flex items-center gap-1.5 text-slate-400">
             CI
             <Tooltip content="Width of the 95% credible interval for the top predicted class. Narrower = more precise.">
-              <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+              <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
             </Tooltip>
           </span>
-          <span className={cn("font-semibold tabular-nums", available ? "text-slate-200" : "text-slate-500")}>
+          <span className={cn("font-semibold tabular-nums", available ? "text-slate-200" : "text-slate-400")}>
             {available
               ? `[${pct(unc.credible_interval[0])}, ${pct(unc.credible_interval[1])}]`
               : "—"}
@@ -881,7 +881,7 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
         </div>
       </div>
       {!available && (
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           Spread reflects missing evidence, not model disagreement about an outcome.
         </p>
       )}
@@ -895,22 +895,22 @@ export function OddsEdgeCard({ edge }: { edge: FullMatchOddsEdge }) {
   const hasEdge = edge.edge > 0;
   return (
     <div className={cn(
-      "rounded-xl border p-5 space-y-3",
+      "rounded-xl border p-3.5 sm:p-4.5 space-y-2.5",
       hasEdge
         ? "bg-emerald-500/5 border-emerald-500/20"
         : "bg-slate-900/60 border-slate-800/60"
     )}>
-      <p className="text-xs uppercase tracking-wider text-slate-500">Market Edge</p>
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
+      <p className="text-xs uppercase tracking-wider text-slate-400">Market Edge</p>
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="text-slate-400">Market</span>
           <span className="font-semibold text-slate-200">{toLabel(edge.market)}</span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="text-slate-400">Odds</span>
           <span className="font-semibold tabular-nums text-slate-200">{fmt(edge.market_odds, 2)}</span>
         </div>
-        <div className="flex justify-between text-sm border-t border-slate-800/50 pt-2">
+        <div className="flex justify-between text-xs sm:text-sm border-t border-slate-800/50 pt-1.5">
           <span className="flex items-center gap-1.5 text-slate-400">
             Edge
             <EdgeTooltip />
@@ -919,7 +919,7 @@ export function OddsEdgeCard({ edge }: { edge: FullMatchOddsEdge }) {
             {hasEdge ? "+" : ""}{pct(edge.edge)}
           </span>
         </div>
-        <div className="flex justify-between text-sm">
+        <div className="flex justify-between text-xs sm:text-sm">
           <span className="flex items-center gap-1.5 text-slate-400">
             Kelly
             <KellyTooltip />
@@ -937,7 +937,7 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
   if (gaps.length === 0) return null;
   const COLLAPSE_THRESHOLD = 8;
   return (
-    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-5 py-4 flex items-start gap-3" role="alert">
+    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-start gap-3" role="alert">
       <svg className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
       </svg>
@@ -1017,19 +1017,19 @@ function EdgeDeltaBar({
 
   return (
     <div
-      className="rounded-xl border border-slate-800/60 bg-slate-900/50 px-5 py-4 space-y-3"
+      className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3.5 sm:p-4 space-y-2.5"
       role="group"
       aria-label="Model vs market edge delta"
     >
       <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">Edge Delta</p>
-        <span className="text-[10px] text-slate-600 capitalize">{marketLabel}</span>
+        <p className="text-[10px] uppercase tracking-wider text-slate-400">Edge Delta</p>
+        <span className="text-[10px] text-slate-400 capitalize">{marketLabel}</span>
       </div>
       <div className="flex items-center gap-4">
-        <div className="flex-1 space-y-1.5">
+        <div className="flex-1 space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Model {pct(modelProb)}</span>
-            <span className="text-slate-500">Market {pct(impliedProb)}</span>
+            <span className="text-slate-400">Market {pct(impliedProb)}</span>
           </div>
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
             <div
@@ -1042,7 +1042,7 @@ function EdgeDeltaBar({
           <p className={cn("text-lg font-bold tabular-nums", textColor)}>
             {isPositive ? "+" : ""}{deltaPct.toFixed(1)}%
           </p>
-          <p className="text-[10px] text-slate-600">
+          <p className="text-[10px] text-slate-400">
             {isNeutral ? "Neutral" : isPositive ? "EV advantage" : "Fade signal"}
           </p>
         </div>
@@ -1083,14 +1083,14 @@ function DataFreshnessSection() {
   if (!data) return null;
   if (data.status !== "AVAILABLE") {
     return (
-      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-3 text-xs text-slate-500">
+      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs text-slate-400">
         Source freshness: <span className="font-semibold text-amber-300">{data.status}</span>
       </div>
     );
   }
   if (data.sources.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-3 text-xs text-slate-500">
+      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs text-slate-400">
         Source freshness: <span className="font-semibold">UNKNOWN</span>
       </div>
     );
@@ -1104,8 +1104,8 @@ function DataFreshnessSection() {
   };
 
   return (
-    <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-600 mb-2">Source Freshness</p>
+    <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Source Freshness</p>
       <div className="flex flex-wrap gap-4">
         {data.sources.slice(0, 6).map((src) => (
           <div
@@ -1118,14 +1118,14 @@ function DataFreshnessSection() {
               style={{ backgroundColor: dotColor[src.freshness_status] ?? "#475569" }}
               aria-hidden
             />
-            <span className="text-[10px] text-slate-500">{src.category}</span>
+            <span className="text-[10px] text-slate-400">{src.category}</span>
           </div>
         ))}
         <div className="ml-auto flex items-center gap-2.5 text-[9px] text-slate-300">
           <span><span className="text-emerald-500">●</span> Live</span>
           <span><span className="text-amber-500">●</span> Recent</span>
           <span><span className="text-rose-500">●</span> Stale</span>
-          <span><span className="text-slate-500">●</span> Gap</span>
+          <span><span className="text-slate-400">●</span> Gap</span>
         </div>
       </div>
     </div>
@@ -1153,7 +1153,7 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
     <div
       role="region"
       aria-label="Why no prediction — evidence status"
-      className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-5 py-4 space-y-3"
+      className="rounded-xl border border-slate-800/50 bg-slate-900/30 p-3.5 sm:p-4 space-y-2.5"
     >
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
         Why no prediction
@@ -1179,15 +1179,15 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
       {listGaps.length > 0 && (
         needsCollapse ? (
           <details className="space-y-1">
-            <summary className="cursor-pointer select-none text-[11px] text-slate-500 hover:text-slate-400 transition-colors list-none flex items-center gap-1.5">
+            <summary className="cursor-pointer select-none text-[11px] text-slate-400 hover:text-slate-300 transition-colors list-none flex items-center gap-1.5">
               <span className="text-rose-400">✗</span>
               {listGaps.length} required input{listGaps.length !== 1 ? "s" : ""} unavailable
-              <span className="ml-auto text-[10px] text-slate-600">▼ show</span>
+              <span className="ml-auto text-[10px] text-slate-400">▼ show</span>
             </summary>
             <ul className="mt-2 space-y-1.5 pl-1" aria-label="Missing inputs">
               {listGaps.map((gap) => (
-                <li key={gap} className="flex items-start gap-2 text-xs text-slate-500">
-                  <span className="mt-0.5 flex-shrink-0 text-rose-500 text-[10px]" aria-hidden>✗</span>
+                <li key={gap} className="flex items-start gap-2 text-xs text-slate-400">
+                  <span className="mt-0.5 flex-shrink-0 text-rose-400 text-[10px]" aria-hidden>✗</span>
                   <span className="capitalize">{describeEvidenceCode(gap)}</span>
                 </li>
               ))}
@@ -1196,8 +1196,8 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
         ) : (
           <ul className="space-y-1.5" aria-label="Missing inputs">
             {listGaps.map((gap) => (
-              <li key={gap} className="flex items-start gap-2 text-xs text-slate-500">
-                <span className="mt-0.5 flex-shrink-0 text-rose-500 text-[10px]" aria-hidden>✗</span>
+              <li key={gap} className="flex items-start gap-2 text-xs text-slate-400">
+                <span className="mt-0.5 flex-shrink-0 text-rose-400 text-[10px]" aria-hidden>✗</span>
                 <span className="capitalize">{describeEvidenceCode(gap)}</span>
               </li>
             ))}
@@ -1205,7 +1205,7 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
         )
       )}
 
-      <p className="text-[11px] text-slate-600 border-t border-slate-800/30 pt-2.5">
+      <p className="text-[11px] text-slate-400 border-t border-slate-800/30 pt-2">
         {blocking.length > 0
           ? "Check back closer to kickoff — providers update when squads and markets are confirmed."
           : "Model abstained on risk grounds. Evidence may be sufficient closer to kickoff."}
@@ -1218,18 +1218,18 @@ function ActionabilityStrip({ data }: { data: FullMatchAnalysisResponse }) {
   const summary = getActionabilitySummary(data);
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-3" role="group" aria-label="Actionability summary">
-      <div className={cn("rounded-xl border px-4 py-3", summary.tone)}>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">Next move</p>
-        <p className="mt-1 text-sm font-semibold">{summary.action}</p>
+    <div className="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-3" role="group" aria-label="Actionability summary">
+      <div className={cn("rounded-xl border px-3.5 py-2.5 sm:px-4 sm:py-3", summary.tone)}>
+        <p className="text-[10px] uppercase tracking-wider text-slate-400">Next move</p>
+        <p className="mt-0.5 text-sm font-semibold">{summary.action}</p>
       </div>
-      <div className="rounded-xl border border-slate-800/50 bg-slate-900/40 px-4 py-3">
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">Why</p>
-        <p className="mt-1 text-sm text-slate-200">{summary.rationale}</p>
+      <div className="rounded-xl border border-slate-800/50 bg-slate-900/40 px-3.5 py-2.5 sm:px-4 sm:py-3">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400">Why</p>
+        <p className="mt-0.5 text-sm text-slate-200">{summary.rationale}</p>
       </div>
-      <div className="rounded-xl border border-slate-800/50 bg-slate-900/40 px-4 py-3">
-        <p className="text-[10px] uppercase tracking-wider text-slate-500">Coverage</p>
-        <p className="mt-1 text-sm text-slate-200">{summary.coverage}</p>
+      <div className="rounded-xl border border-slate-800/50 bg-slate-900/40 px-3.5 py-2.5 sm:px-4 sm:py-3">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400">Coverage</p>
+        <p className="mt-0.5 text-sm text-slate-200">{summary.coverage}</p>
       </div>
     </div>
   );
@@ -1249,8 +1249,8 @@ function EdgeQualityGauge({ score }: { score: number }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] uppercase tracking-wider text-slate-500">Edge quality</span>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] uppercase tracking-wider text-slate-400">Edge quality</span>
         <div className="flex items-center gap-1.5">
           <span className={cn(
             "text-[9px] font-bold uppercase tracking-wider rounded-full px-1.5 py-0.5",
@@ -1264,7 +1264,7 @@ function EdgeQualityGauge({ score }: { score: number }) {
         </div>
       </div>
       <div
-        className="h-2.5 rounded-full bg-slate-800 overflow-hidden"
+        className="h-2 rounded-full bg-slate-800 overflow-hidden"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -1284,18 +1284,18 @@ function EdgeQualityGauge({ score }: { score: number }) {
 function ActionabilityEvidencePanel({ actionability }: { actionability: MatchActionability }) {
   return (
     <section
-      className="rounded-2xl border border-slate-800/50 bg-slate-900/50 px-5 py-4 space-y-4"
+      className="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-3.5 sm:p-4 space-y-3"
       aria-label="Edge quality and evidence"
     >
-      <h3 className="text-xs uppercase tracking-[0.3em] text-slate-500">CLV Evidence</h3>
+      <h3 className="text-xs uppercase tracking-[0.3em] text-slate-400">CLV Evidence</h3>
 
       {/* Edge quality gauge */}
       <EdgeQualityGauge score={actionability.edge_quality_score} />
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-center">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4 text-center">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-600">Stake</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Stake</p>
           <p className="text-sm font-bold text-slate-200 tabular-nums">
             {actionability.abstain ? "No bet" : `${actionability.suggested_stake_pct.toFixed(1)}%`}
           </p>
@@ -1303,7 +1303,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
         <div>
           {/* CLV: always null pre-kick-off; computed against closing odds post-match */}
           <p
-            className="text-[10px] uppercase tracking-wider text-slate-600"
+            className="text-[10px] uppercase tracking-wider text-slate-400"
             title="Closing-line value — computed against Pinnacle closing odds at match end"
           >
             CLV
@@ -1320,12 +1320,12 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
             </p>
           ) : (
             <p
-              className="text-sm font-bold text-slate-500 tabular-nums"
+              className="text-sm font-bold text-slate-400 tabular-nums"
               title="CLV is computed against the closing implied probability at kick-off. Pre-match value is unavailable."
             >
               <span className="sr-only">CLV not yet available — computed at match end. </span>
               <span aria-hidden="true">Pre-match</span>
-              <span className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-700/60 text-[8px] font-bold text-slate-500 select-none" aria-hidden>
+              <span className="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-700/60 text-[8px] font-bold text-slate-400 select-none" aria-hidden>
                 ?
               </span>
             </p>
@@ -1333,7 +1333,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
         </div>
         <div>
           <p
-            className="text-[10px] uppercase tracking-wider text-slate-600"
+            className="text-[10px] uppercase tracking-wider text-slate-400"
             title="Opening-to-current implied-probability drift — proxy for market intelligence before closing line"
           >
             Drift Δ
@@ -1341,7 +1341,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
           <p className={cn(
             "text-sm font-bold tabular-nums",
             actionability.closing_line_convergence_delta == null
-              ? "text-slate-500"
+              ? "text-slate-400"
               : actionability.closing_line_convergence_delta > 0
               ? "text-emerald-400"
               : actionability.closing_line_convergence_delta < 0
@@ -1354,7 +1354,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-600">Signal</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">Signal</p>
           <p className={cn(
             "text-sm font-bold uppercase",
             actionability.abstain ? "text-rose-400" : "text-cyan-400"
@@ -1367,7 +1367,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
       {/* Evidence list */}
       {actionability.top_evidence.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Key signals</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">Key signals</p>
           <ul className="space-y-1" aria-label="Key signals">
             {actionability.top_evidence.map((ev) => (
               <li key={ev} className="flex items-start gap-2 text-xs text-slate-300">
@@ -1382,7 +1382,7 @@ function ActionabilityEvidencePanel({ actionability }: { actionability: MatchAct
       {/* Caveats */}
       {actionability.caveats.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Caveats</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1.5">Caveats</p>
           <ul className="space-y-1" aria-label="Caveats">
             {actionability.caveats.map((c) => (
               <li key={c} className="flex items-start gap-2 text-xs text-amber-400/80">
@@ -1433,11 +1433,11 @@ function DashboardError({
 
   return (
     <div
-      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center space-y-3"
+      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 sm:p-5 text-center space-y-2.5"
       role="alert"
     >
       <svg
-        className="w-8 h-8 mx-auto text-rose-400"
+        className="w-7 h-7 mx-auto text-rose-400"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -1457,7 +1457,7 @@ function DashboardError({
           type="button"
           onClick={handleRetry}
           disabled={retrying}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/40 px-4 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-700/60 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/40 px-3.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-700/60 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-500"
         >
           <svg
             className={`h-3 w-3 ${retrying ? "animate-spin" : ""}`}
@@ -1486,13 +1486,13 @@ export function NarrativeBlock({ text }: { text: string }) {
   const displayed = needsClip && !expanded ? `${text.slice(0, NARRATIVE_CLIP)}…` : text;
 
   return (
-    <div className="rounded-2xl border border-slate-800/50 bg-slate-900/50 px-6 py-5">
-      <p className="text-xs uppercase tracking-wider text-slate-500 mb-2">Narrative</p>
-      <p id="narrative-text" className="text-sm leading-relaxed text-slate-200">{displayed}</p>
+    <div className="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-3.5 sm:p-4.5">
+      <p className="text-xs uppercase tracking-wider text-slate-400 mb-1.5">Narrative</p>
+      <p id="narrative-text" className="text-xs sm:text-sm leading-relaxed text-slate-200">{displayed}</p>
       {needsClip && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mt-2 inline-flex min-h-11 items-center rounded px-2 text-[11px] font-medium text-slate-500 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+          className="mt-2 inline-flex min-h-11 items-center rounded px-2 text-[11px] font-medium text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
           aria-expanded={expanded}
           aria-controls="narrative-text"
         >
@@ -1541,7 +1541,7 @@ function FullAnalysisDashboardInner({
       animate={{ opacity: 1, y: 0 }}
       transition={prefersReduced ? { duration: 0 } : { duration: 0.4 }}
       aria-label="Full match intelligence dashboard"
-      className="full-analysis-surface space-y-5"
+      className="full-analysis-surface space-y-3.5 sm:space-y-4"
     >
       {/* ── Enhanced match hero (E.1 + Phase F) ── */}
       <EnhancedMatchHero
@@ -1572,7 +1572,7 @@ function FullAnalysisDashboardInner({
       <DataGapBanner gaps={data.data_gaps} />
 
       {/* ── Ensemble + RL (2-col) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         <EnsembleCard data={data.ensemble} />
         <RLCard
           rec={data.rl_recommendation}
@@ -1582,7 +1582,7 @@ function FullAnalysisDashboardInner({
       </div>
 
       {/* ── Model drivers · Elo · Uncertainty (3-col) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <ModelDriversCard drivers={data.model_drivers} />
         <EloContextCard elo={data.elo_context} />
         <UncertaintyCard unc={data.uncertainty} available={presentation.predictionAvailable} />
@@ -1597,11 +1597,11 @@ function FullAnalysisDashboardInner({
       {data.odds_edge ? (
         <OddsEdgeCard edge={data.odds_edge} />
       ) : (
-        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-5 py-4 flex items-center gap-3">
-          <svg className="w-4 h-4 flex-shrink-0 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-3">
+          <svg className="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-xs text-slate-600">Live market odds unavailable — edge calculation skipped.</p>
+          <p className="text-xs text-slate-400">Live market odds unavailable — edge calculation skipped.</p>
         </div>
       )}
 
@@ -1614,7 +1614,7 @@ function FullAnalysisDashboardInner({
       <DataFreshnessSection />
 
       {/* ── Footer ── */}
-      <p className="text-[11px] text-slate-600 text-right tabular-nums">
+      <p className="text-[11px] text-slate-400 text-right tabular-nums">
         Generated <time dateTime={data.generated_at} title={presentation.generatedAbsoluteLagos}>
           {presentation.generatedRelative} ({presentation.generatedAbsoluteLagos} WAT)
         </time>
@@ -1643,7 +1643,7 @@ function Phase9ShadowStrip({
 
   return (
     <div
-      className="rounded-xl border border-violet-800/30 bg-violet-950/20 px-4 py-3 space-y-2"
+      className="rounded-xl border border-violet-800/30 bg-violet-950/20 px-3.5 py-2.5 sm:px-4 sm:py-3 space-y-2"
       role="group"
       aria-label="Phase 9 candidate signal strip (shadow mode)"
     >
@@ -1652,7 +1652,7 @@ function Phase9ShadowStrip({
           V4 · SHADOW
         </span>
         {shadowOnly && (
-          <span className="text-[10px] text-slate-500">
+          <span className="text-[10px] text-slate-400">
             Candidate signals — not used in prediction
           </span>
         )}
@@ -1676,7 +1676,7 @@ function Phase9ShadowStrip({
               {topBet.outcome.replace("_", " ")} EV {(topBet.ev * 100).toFixed(1)}%
             </strong>
             {topBet.kelly_fraction != null && (
-              <span className="ml-1 text-slate-500">
+              <span className="ml-1 text-slate-400">
                 (Kelly {(topBet.kelly_fraction * 100).toFixed(1)}%)
               </span>
             )}

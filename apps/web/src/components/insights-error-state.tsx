@@ -109,16 +109,16 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
       role="status"
       aria-live="polite"
       aria-label={`${cfg.label} — retry manually when ready`}
-      className={`rounded-2xl border p-5 sm:p-6 ${
+      className={`rounded-xl border p-3.5 sm:p-4 ${
         isAmber
           ? "border-amber-500/25 bg-amber-500/[0.04]"
           : "border-rose-500/25 bg-slate-900/40"
       }`}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         {/* Icon */}
         <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${
             isAmber
               ? "bg-amber-500/10 border-amber-500/30"
               : "bg-slate-800/50 border-rose-500/30"
@@ -126,7 +126,7 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
         >
           {isAmber ? (
             <svg
-              className="h-5 w-5 text-amber-400 motion-safe:animate-pulse"
+              className="h-4 w-4 text-amber-400 motion-safe:animate-pulse"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -137,7 +137,7 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
             </svg>
           ) : (
             <svg
-              className="h-5 w-5 text-rose-400"
+              className="h-4 w-4 text-rose-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -151,30 +151,30 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
         </div>
 
         {/* Text + actions */}
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="space-y-0.5">
             <p
-              className={`text-[11px] font-semibold uppercase tracking-wider ${
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
                 isAmber ? "text-amber-300" : "text-rose-300"
               }`}
             >
               {cfg.label}
             </p>
-            <h2 className="text-lg font-bold text-slate-100">{cfg.heading}</h2>
-            <p className="text-sm text-slate-400">{body}</p>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-base font-bold text-slate-100">{cfg.heading}</h2>
+            <p className="text-xs text-slate-400">{body}</p>
+            <p className="text-[11px] text-slate-400">
               The analysis sections below load independently and update on their own — no need to wait here.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Retrying cannot produce evidence that does not exist yet. */}
             {errorType !== "insufficient_evidence" && (
             <button
               type="button"
               disabled={refreshing}
               onClick={handleRetryNow}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-indigo-500/60 bg-indigo-500/20 px-4 py-2 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/30 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-indigo-500/60 bg-indigo-500/20 px-3.5 py-1.5 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/30 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               <svg
                 className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
@@ -191,15 +191,15 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
             )}
             <Link
               href="/match"
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-800/40 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/40 px-3.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
             >
               Pick another matchup
             </Link>
           </div>
 
           {cfg.showWhyNote && (
-            <p className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-400">Why does this happen?</span>{" "}
+            <p className="text-xs text-slate-400">
+              <span className="font-semibold text-slate-300">Why does this happen?</span>{" "}
               We use a free-tier backend that spins down after inactivity to keep costs low — the
               engine needs ~30 seconds to warm up.
             </p>

@@ -22,11 +22,11 @@ function HealthPill({
   const isReady = status === "Ready";
 
   return (
-    <div className="flex min-h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2">
-      <Icon className={isReady ? "h-4 w-4 text-emerald-300" : "h-4 w-4 text-amber-300"} aria-hidden="true" />
+    <div className="flex min-h-9 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1">
+      <Icon className={isReady ? "h-3.5 w-3.5 text-emerald-300" : "h-3.5 w-3.5 text-amber-300"} aria-hidden="true" />
       <span>
-        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-300">{label}</span>
-        <span className="block text-xs text-slate-300">{value}</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-300">{label}</span>
+        <span className="block text-[11px] text-slate-300">{value}</span>
       </span>
     </div>
   );
