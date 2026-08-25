@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, League, Match, Team
-from src.db.models import EloRatingSnapshot, MatchPredictionLog
+from src.db.models import EloRatingSnapshot, MatchPredictionLog, ProviderEventMapping
 from src.services.canonical_identity_service import ensure_canonical_fixture
 from src.services.orphan_team_reconciliation_service import (
     build_orphan_team_repair_manifest,
@@ -300,6 +300,118 @@ async def test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons(
     assert manifest.entries == ()
     diag = manifest.summary["unrepaired_orphan_sides"]
     assert diag.get("ORPHAN_NO_RESOLVER_MATCH") == 2  # both home and away
+
+    # Identity detail lets a caller diagnose *which* side is stuck without a
+    # direct DB query — the aggregate count above stays the count-of-record.
+    detail = manifest.summary["unrepaired_orphan_side_detail"]
+    assert len(detail) == 2
+    sides = {record["side"] for record in detail}
+    assert sides == {"home", "away"}
+    for record in detail:
+        assert record["match_id"] == "fd-8"
+        assert record["league_id"] == league_id
+        assert record["reason"] == "ORPHAN_NO_RESOLVER_MATCH"
+        assert record["orphan_team_id"] in {
+            "fd-team-la_liga:home-fd-8",
+            "fd-team-la_liga:away-fd-8",
+        }
+    home_record = next(r for r in detail if r["side"] == "home")
+    assert home_record["orphan_team_name"] == "Unmatched Club CF"
+    assert home_record["freshest_observed_name"] == "Unmatched Club CF"
+
+
+async def test_orphan_missing_provider_team_id_evidence_is_diagnosed(
+    session: AsyncSession,
+) -> None:
+    """No home/away_provider_team_id in evidence at all --
+    ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE, distinct from a resolver miss."""
+    league_id = "LA_LIGA"
+    session.add(League(id=league_id, name=league_id, country="test"))
+    orphan_home_id = "fd-team-la_liga:home-fd-9"
+    orphan_away_id = "fd-team-la_liga:away-fd-9"
+    session.add(Team(id=orphan_home_id, name="No Evidence Home", league_id=league_id))
+    session.add(Team(id=orphan_away_id, name="No Evidence Away", league_id=league_id))
+    await session.flush()
+    session.add(
+        Match(
+            id="fd-9", league_id=league_id,
+            home_team_id=orphan_home_id, away_team_id=orphan_away_id,
+            match_date=_FUTURE, season="2026/2027", status="scheduled",
+        )
+    )
+    await session.flush()
+    session.add(
+        ProviderEventMapping(
+            provider="football-data.org",
+            provider_event_id="fd-9",
+            competition=league_id,
+            reconciliation_status="VERIFIED",
+            reconciliation_confidence=1.0,
+            evidence={},  # no provider_team_id evidence at all
+            checked_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+    )
+    await session.commit()
+
+    manifest = await build_orphan_team_repair_manifest(session)
+
+    assert manifest.entries == ()
+    diag = manifest.summary["unrepaired_orphan_sides"]
+    assert diag.get("ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE") == 2
+    detail = manifest.summary["unrepaired_orphan_side_detail"]
+    assert len(detail) == 2
+    for record in detail:
+        assert record["reason"] == "ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE"
+        assert record["freshest_observed_name"] is None
+
+
+async def test_orphan_no_provider_team_mapping_yet_is_diagnosed(
+    session: AsyncSession,
+) -> None:
+    """Evidence names a provider_team_id, but no ProviderTeamMapping row
+    exists yet for it -- ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET."""
+    league_id = "LA_LIGA"
+    session.add(League(id=league_id, name=league_id, country="test"))
+    orphan_home_id = "fd-team-la_liga:home-fd-10"
+    orphan_away_id = "fd-team-la_liga:away-fd-10"
+    session.add(Team(id=orphan_home_id, name="Unmapped Home", league_id=league_id))
+    session.add(Team(id=orphan_away_id, name="Unmapped Away", league_id=league_id))
+    await session.flush()
+    session.add(
+        Match(
+            id="fd-10", league_id=league_id,
+            home_team_id=orphan_home_id, away_team_id=orphan_away_id,
+            match_date=_FUTURE, season="2026/2027", status="scheduled",
+        )
+    )
+    await session.flush()
+    session.add(
+        ProviderEventMapping(
+            provider="football-data.org",
+            provider_event_id="fd-10",
+            competition=league_id,
+            reconciliation_status="VERIFIED",
+            reconciliation_confidence=1.0,
+            evidence={
+                "home_provider_team_id": "900",
+                "away_provider_team_id": "901",
+            },
+            checked_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+    )
+    # Deliberately no ProviderTeamMapping rows for provider_team_id 900/901.
+    await session.commit()
+
+    manifest = await build_orphan_team_repair_manifest(session)
+
+    assert manifest.entries == ()
+    diag = manifest.summary["unrepaired_orphan_sides"]
+    assert diag.get("ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET") == 2
+    detail = manifest.summary["unrepaired_orphan_side_detail"]
+    assert len(detail) == 2
+    for record in detail:
+        assert record["reason"] == "ORPHAN_NO_PROVIDER_TEAM_MAPPING_YET"
+        assert record["freshest_observed_name"] is None
 
 
 async def test_target_that_would_collide_with_the_other_side_is_refused(
