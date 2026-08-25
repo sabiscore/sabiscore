@@ -14,10 +14,10 @@ import {
   FirecrawlIntegrationError,
   normalizeFirecrawlUrl,
   scrapePage,
-} from '../lib/firecrawl/client';
+} from '../src/lib/firecrawl/client';
 
 dotenv.config({
-  path: '.env.local',
+  path: path.resolve(process.cwd(), '../../.env.local'),
   quiet: true,
 });
 
@@ -26,7 +26,7 @@ const EXCERPT_LENGTH = 1_200;
 
 const OUTPUT_PATH = path.resolve(
   process.cwd(),
-  'data/generated/firecrawl-evidence.json',
+  '../../data/generated/firecrawl-evidence.json',
 );
 
 interface EvidenceItem {
