@@ -5,6 +5,15 @@ These run on SQLite, so the PostgreSQL lock acquisition is bypassed by calling
 path itself is asserted separately (it must *refuse* a non-PostgreSQL bind).
 Everything else -- digest verification, the optimistic row precondition, both
 postconditions, and the ready/blocked split -- is dialect-independent.
+
+⚠️ Rewritten 2026-08-25 alongside ``fixture_identity_rebind_service``'s
+correction: seeding now builds a durable ``ProviderEloTeamMapping`` bridge
+with real Elo history for the verified side, matching what the corrected
+manifest builder (and a real production apply) actually requires. The
+original seeding (canonical-identity only, no Elo bridge) is exactly what
+made the first live apply attempt fail with a ``ForeignKeyViolationError`` --
+these tests would have caught that if they had matched production's real
+constraints from the start.
 """
 from __future__ import annotations
 
@@ -16,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, League, Match, Team
-from src.db.models import MatchPredictionLog
+from src.db.models import EloRatingSnapshot, MatchPredictionLog
 from src.services.canonical_identity_service import ensure_canonical_fixture
 from src.services.fixture_identity_rebind_apply_service import (
     FixtureIdentityRebindApplyResult,
@@ -29,6 +38,7 @@ from src.services.fixture_identity_rebind_service import (
     FixtureIdentityRebindManifest,
     build_fixture_identity_rebind_manifest,
 )
+from src.services.team_identity import bind_provider_elo_team_id
 
 _FUTURE = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=3)
 _PROVIDER = "football-data.org"
@@ -45,6 +55,40 @@ async def session():
     await engine.dispose()
 
 
+async def _give_team_elo_history(session: AsyncSession, *, team_id: str, league_id: str) -> None:
+    hist_date = datetime(2025, 9, 20, 15, 0)
+    hist_match_id = f"hist-{team_id}"
+    session.add(Team(id=f"opponent-{team_id}", name="Historical Opponent", league_id=league_id))
+    await session.flush()
+    session.add(
+        Match(
+            id=hist_match_id,
+            league_id=league_id,
+            home_team_id=team_id,
+            away_team_id=f"opponent-{team_id}",
+            match_date=hist_date,
+            season="2025/2026",
+            status="finished",
+            home_score=2,
+            away_score=1,
+        )
+    )
+    await session.flush()
+    session.add(
+        EloRatingSnapshot(
+            match_id=hist_match_id,
+            team_id=team_id,
+            pre_match_elo=1500.0,
+            post_match_elo=1520.0,
+            league=league_id,
+            season="2025/2026",
+            match_date=hist_date,
+            created_at=hist_date,
+        )
+    )
+    await session.flush()
+
+
 async def _seed_mismatched_fixture(
     session: AsyncSession,
     *,
@@ -52,17 +96,24 @@ async def _seed_mismatched_fixture(
     league_id: str = "EPL",
     with_prediction: bool = False,
 ) -> tuple[str, str]:
-    """One live fixture whose stored participants differ from the verified
-    canonical identity. Returns (stored_home_team_id, stored_away_team_id)."""
+    """One live fixture whose stored participants differ from the durably-
+    verified Elo-bridge identity. Returns (stored_home_team_id, stored_away_team_id)."""
     existing_league = await session.get(League, league_id)
     if existing_league is None:
         session.add(League(id=league_id, name=league_id, country="test"))
 
     stored_home = f"fd-team-{league_id.lower()}:old-{match_id}-home"
     stored_away = f"fd-team-{league_id.lower()}:old-{match_id}-away"
+    verified_home = f"fdco-team-{league_id.lower()}-{match_id}-home"
+    verified_away = f"fdco-team-{league_id.lower()}-{match_id}-away"
     session.add(Team(id=stored_home, name="Stale Home FC", league_id=league_id))
     session.add(Team(id=stored_away, name="Stale Away FC", league_id=league_id))
+    session.add(Team(id=verified_home, name="Verified Home FC", league_id=league_id))
+    session.add(Team(id=verified_away, name="Verified Away FC", league_id=league_id))
     await session.flush()
+
+    await _give_team_elo_history(session, team_id=verified_home, league_id=league_id)
+    await _give_team_elo_history(session, team_id=verified_away, league_id=league_id)
 
     session.add(
         Match(
@@ -76,23 +127,42 @@ async def _seed_mismatched_fixture(
         )
     )
     await session.flush()
+
+    home_provider_id = f"{match_id}-home"
+    away_provider_id = f"{match_id}-away"
     await ensure_canonical_fixture(
         session,
         provider=_PROVIDER,
         provider_event_id=match_id,
         competition_id=league_id,
         competition_name=league_id,
-        home_provider_id=f"{match_id}-home",
+        home_provider_id=home_provider_id,
         home_name="Verified Home FC",
-        away_provider_id=f"{match_id}-away",
+        away_provider_id=away_provider_id,
         away_name="Verified Away FC",
         kickoff_utc=_FUTURE,
         season="2026/2027",
         status="scheduled",
         evidence={
-            "home_provider_team_id": f"{match_id}-home",
-            "away_provider_team_id": f"{match_id}-away",
+            "home_provider_team_id": home_provider_id,
+            "away_provider_team_id": away_provider_id,
         },
+    )
+    await bind_provider_elo_team_id(
+        provider=_PROVIDER,
+        provider_team_id=home_provider_id,
+        provider_team_name="Verified Home FC",
+        competition=league_id,
+        team_id=verified_home,
+        db=session,
+    )
+    await bind_provider_elo_team_id(
+        provider=_PROVIDER,
+        provider_team_id=away_provider_id,
+        provider_team_name="Verified Away FC",
+        competition=league_id,
+        team_id=verified_away,
+        db=session,
     )
 
     if with_prediction:
@@ -223,35 +293,69 @@ def _entry(**overrides: object) -> FixtureIdentityRebindEntry:
 
 def _manifest(*entries: FixtureIdentityRebindEntry) -> FixtureIdentityRebindManifest:
     return FixtureIdentityRebindManifest(
-        schema_version=2,
+        schema_version=3,
         manifest_sha256="0" * 64,
         summary={},
         entries=tuple(entries),
     )
 
 
-def test_assert_applicable_refuses_a_missing_verified_identity() -> None:
+async def test_assert_applicable_refuses_a_missing_verified_identity(
+    session: AsyncSession,
+) -> None:
     manifest = _manifest(_entry(verified_home_team_id=None))
     with pytest.raises(RuntimeError, match="no distinct verified identity"):
-        _assert_ready_entries_are_applicable(manifest)
+        await _assert_ready_entries_are_applicable(session, manifest)
 
 
-def test_assert_applicable_refuses_a_self_play_verified_identity() -> None:
+async def test_assert_applicable_refuses_a_self_play_verified_identity(
+    session: AsyncSession,
+) -> None:
     manifest = _manifest(_entry(verified_away_team_id="verified-home"))
     with pytest.raises(RuntimeError, match="self-play"):
-        _assert_ready_entries_are_applicable(manifest)
+        await _assert_ready_entries_are_applicable(session, manifest)
 
 
-def test_assert_applicable_refuses_a_duplicated_match() -> None:
+async def test_assert_applicable_refuses_an_unknown_target_team(
+    session: AsyncSession,
+) -> None:
+    """The independent existence re-check this item's live incident added:
+    a manifest proposing a team id that doesn't exist in ``teams`` must be
+    refused with a clear message, not a raw database FK crash."""
+    manifest = _manifest(_entry())
+    with pytest.raises(RuntimeError, match="unknown team"):
+        await _assert_ready_entries_are_applicable(session, manifest)
+
+
+async def test_assert_applicable_refuses_a_cross_league_target_team(
+    session: AsyncSession,
+) -> None:
+    session.add(League(id="EPL", name="EPL", country="test"))
+    session.add(League(id="LA_LIGA", name="LA_LIGA", country="test"))
+    session.add(Team(id="verified-home", name="Verified Home FC", league_id="LA_LIGA"))
+    session.add(Team(id="verified-away", name="Verified Away FC", league_id="EPL"))
+    await session.commit()
+
+    manifest = _manifest(_entry())  # entry's league_id defaults to "EPL"
+    with pytest.raises(RuntimeError, match="from league"):
+        await _assert_ready_entries_are_applicable(session, manifest)
+
+
+async def test_assert_applicable_refuses_a_duplicated_match(session: AsyncSession) -> None:
+    session.add(League(id="EPL", name="EPL", country="test"))
+    session.add(Team(id="verified-home", name="Verified Home FC", league_id="EPL"))
+    session.add(Team(id="verified-away", name="Verified Away FC", league_id="EPL"))
+    await session.commit()
+
     manifest = _manifest(_entry(), _entry())
     with pytest.raises(RuntimeError, match="more than once"):
-        _assert_ready_entries_are_applicable(manifest)
+        await _assert_ready_entries_are_applicable(session, manifest)
 
 
-def test_assert_applicable_refuses_an_empty_ready_set() -> None:
+async def test_assert_applicable_refuses_an_empty_ready_set(session: AsyncSession) -> None:
     manifest = _manifest(_entry(blockers=("HAS_EXISTING_PREDICTIONS",)))
     with pytest.raises(RuntimeError, match="no rebind-ready entries"):
-        _assert_ready_entries_are_applicable(manifest)
+        await _assert_ready_entries_are_applicable(session, manifest)
 
 
 async def test_self_play_postcondition_is_caught(session: AsyncSession) -> None:

@@ -1,24 +1,39 @@
 """Read-only manifest of live fixtures whose stored identity disagrees with
-the already-verified canonical identity.
+the durably-verified Elo-bridge identity.
 
 docs/DEBT.md item 35: ``fixture_sync_service.sync_upcoming_fixtures`` detects
 this drift every tick (a participant was first bound to the deterministic
 ``fd-team-<league>:<slug>`` fallback before a durable Elo/provider identity
-existed; a later tick resolves a better-anchored canonical id) and
-deliberately leaves ``Match.home_team_id``/``away_team_id`` unchanged, only
-logging a warning and bumping an in-process metric. Nothing previously let an
-operator ever see the drifted rows themselves. This module builds that review
-manifest — read-only, no mutation — mirroring
-``historical_identity_repair_manifest_service.py``'s pattern for the sibling
-item-34 historical case.
+existed; a later tick resolves a better-anchored ``Team`` id) and deliberately
+leaves ``Match.home_team_id``/``away_team_id`` unchanged, only logging a
+warning and bumping an in-process metric. Nothing previously let an operator
+ever see the drifted rows themselves. This module builds that review
+manifest — read-only, no mutation.
 
-``Match.id`` is the football-data.org provider event id
-(``fixture_sync_service.sync_upcoming_fixtures``), and ``ensure_canonical_fixture``
-is called with ``provider_event_id=match_id`` on every tick regardless of
-whether the legacy row was flagged — so the "verified" identity is already
-fully computed and persisted on ``CanonicalFixture.home_team_id``/``away_team_id``
-via the ``ProviderEventMapping`` join. No live provider call or re-run of
-resolution logic is needed here.
+⚠️ **Corrected 2026-08-25.** The original version of this module joined
+``CanonicalFixture.home_team_id``/``away_team_id`` and called that the
+"verified" identity. That is wrong: ``CanonicalFixture`` is keyed by
+``canonical_teams.id`` (a wholly separate identity domain,
+``canonical_identity_service``/``ProviderTeamMapping``), while
+``Match.home_team_id``/``away_team_id`` are a foreign key to ``teams.id``.
+Docs/DEBT.md item 39's own 2026-08-24 correction had already named this exact
+trap for this exact endpoint — it went unheeded when this module was built,
+and a live apply attempt failed with a real
+``ForeignKeyViolationError`` (safely; nothing committed) before it was caught
+and fixed here.
+
+The actually-correct verified identity is the same durable Elo bridge
+``fixture_sync_service._resolve_upcoming_team_id()`` uses on its fast path:
+``ProviderEventMapping.evidence`` durably stores each side's
+``home_provider_team_id``/``away_provider_team_id`` (written every sync tick,
+independent of the canonical-identity system), and
+``team_identity.resolve_provider_elo_team_id()`` resolves that provider id to
+a real, same-league, Elo-bearing ``Team.id`` through the ``VERIFIED``
+``ProviderEloTeamMapping`` bridge — no live provider call needed, and no
+canonical-identity table involved. A side that has no durable ``VERIFIED``
+binding yet cannot be safely reconciled without live data (the fuzzy
+name-match path needs the freshest provider name), so a fixture is only
+included when **both** sides resolve durably.
 """
 
 from __future__ import annotations
@@ -33,16 +48,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ..core.database import Match, Team
-from ..db.models import (
-    CanonicalFixture,
-    CanonicalTeam,
-    MatchPredictionLog,
-    ProviderEventMapping,
-)
+from ..db.models import MatchPredictionLog, ProviderEventMapping
 from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 from .fixture_sync_service import is_unusable_team_name
+from .team_identity import resolve_provider_elo_team_id
 
-_MANIFEST_SCHEMA_VERSION = 2
+_MANIFEST_SCHEMA_VERSION = 3
 _PROVIDER = "football-data.org"
 
 
@@ -117,7 +128,8 @@ class FixtureIdentityRebindManifest:
 async def build_fixture_identity_rebind_manifest(
     session: AsyncSession,
 ) -> FixtureIdentityRebindManifest:
-    """Compare persisted vs. verified participant identity for live fixtures.
+    """Compare persisted vs. durably-verified participant identity for live
+    fixtures.
 
     Read-only: issues SELECT statements only, never stages or commits a write.
     A caller that wants transactional isolation from concurrent writers may
@@ -127,31 +139,16 @@ async def build_fixture_identity_rebind_manifest(
     """
     stored_home = aliased(Team)
     stored_away = aliased(Team)
-    verified_home = aliased(CanonicalTeam)
-    verified_away = aliased(CanonicalTeam)
 
     statement = (
-        select(
-            Match,
-            CanonicalFixture,
-            stored_home.name,
-            stored_away.name,
-            verified_home.name,
-            verified_away.name,
-        )
+        select(Match, ProviderEventMapping, stored_home.name, stored_away.name)
         .join(
             ProviderEventMapping,
             (ProviderEventMapping.provider_event_id == Match.id)
             & (ProviderEventMapping.provider == _PROVIDER),
         )
-        .join(
-            CanonicalFixture,
-            CanonicalFixture.id == ProviderEventMapping.canonical_fixture_id,
-        )
         .outerjoin(stored_home, stored_home.id == Match.home_team_id)
         .outerjoin(stored_away, stored_away.id == Match.away_team_id)
-        .outerjoin(verified_home, verified_home.id == CanonicalFixture.home_team_id)
-        .outerjoin(verified_away, verified_away.id == CanonicalFixture.away_team_id)
         .where(
             or_(
                 Match.status.is_(None),
@@ -165,25 +162,56 @@ async def build_fixture_identity_rebind_manifest(
 
     entries: list[FixtureIdentityRebindEntry] = []
     leagues_affected: set[str] = set()
-    for (
-        match,
-        fixture,
-        stored_home_name,
-        stored_away_name,
-        verified_home_name,
-        verified_away_name,
-    ) in rows:
+    for match, mapping, stored_home_name, stored_away_name in rows:
+        evidence = mapping.evidence or {}
+        home_provider_id = evidence.get("home_provider_team_id")
+        away_provider_id = evidence.get("away_provider_team_id")
+
+        verified_home_id = (
+            await resolve_provider_elo_team_id(
+                provider=_PROVIDER,
+                provider_team_id=home_provider_id,
+                competition=match.league_id,
+                db=session,
+            )
+            if home_provider_id
+            else None
+        )
+        verified_away_id = (
+            await resolve_provider_elo_team_id(
+                provider=_PROVIDER,
+                provider_team_id=away_provider_id,
+                competition=match.league_id,
+                db=session,
+            )
+            if away_provider_id
+            else None
+        )
+
+        # Neither side can be safely reconciled without a live provider call
+        # (the fuzzy name-match fallback needs the freshest display name) --
+        # skip rather than guess. Fails toward silence, matching the
+        # convention used throughout this codebase for absent evidence.
+        if verified_home_id is None or verified_away_id is None:
+            continue
         if (
-            match.home_team_id == fixture.home_team_id
-            and match.away_team_id == fixture.away_team_id
+            match.home_team_id == verified_home_id
+            and match.away_team_id == verified_away_id
         ):
             continue
+
+        verified_home_name = None
+        verified_away_name = None
+        if verified_home_id:
+            team = await session.get(Team, verified_home_id)
+            verified_home_name = team.name if team is not None else None
+        if verified_away_id:
+            team = await session.get(Team, verified_away_id)
+            verified_away_name = team.name if team is not None else None
 
         blockers: list[str] = []
         if match.match_date is not None and match.match_date < now:
             blockers.append("KICKOFF_PASSED")
-        if fixture.competition_id != match.league_id:
-            blockers.append("CROSS_LEAGUE_MISMATCH")
         has_predictions = bool(
             await session.scalar(
                 select(exists().where(MatchPredictionLog.match_id == match.id))
@@ -202,9 +230,9 @@ async def build_fixture_identity_rebind_manifest(
                 stored_home_team_name=stored_home_name,
                 stored_away_team_id=match.away_team_id,
                 stored_away_team_name=stored_away_name,
-                verified_home_team_id=fixture.home_team_id,
+                verified_home_team_id=verified_home_id,
                 verified_home_team_name=verified_home_name,
-                verified_away_team_id=fixture.away_team_id,
+                verified_away_team_id=verified_away_id,
                 verified_away_team_name=verified_away_name,
                 blockers=tuple(blockers),
             )

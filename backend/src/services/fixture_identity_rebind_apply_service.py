@@ -2,16 +2,26 @@
 
 docs/DEBT.md item 35(b). ``fixture_identity_rebind_service`` proves, read-only,
 that a scheduled fixture's persisted ``Match.home_team_id``/``away_team_id``
-disagrees with the already-verified canonical identity
-(``CanonicalFixture.home_team_id``/``away_team_id``, resolved every tick by
-``ensure_canonical_fixture`` regardless of whether the legacy row was
-flagged). ``fixture_sync_service`` deliberately leaves the row unchanged when
-it detects this. This module is the only thing that acts on that proof.
+disagrees with the durably-verified Elo-bridge identity (a real, same-league,
+Elo-bearing ``Team.id`` resolved via ``team_identity.resolve_provider_elo_team_id``
+against the ``ProviderEloTeamMapping`` bridge). ``fixture_sync_service``
+deliberately leaves the row unchanged when it detects this on its own sync
+tick. This module is the only thing that acts on that proof.
 
 Scope mirrors the item-39 ``orphan_team_rebind_service`` precedent: it writes
 ``Match.home_team_id`` / ``Match.away_team_id`` and nothing else -- no
 ``Team``/``CanonicalTeam`` created, renamed, or deleted, no
 ``EloRatingSnapshot`` touched.
+
+⚠️ A first version of this executor trusted the manifest's verified ids
+without re-checking they exist in ``teams`` -- the manifest builder was
+itself sourcing them from the wrong table at the time (see
+``fixture_identity_rebind_service``'s 2026-08-25 correction) and a live apply
+attempt failed with a real ``ForeignKeyViolationError`` (safely; nothing
+committed, caught before any postcondition ran). ``_assert_ready_entries_are_applicable``
+now independently re-verifies every proposed target is a real, same-league
+``Team`` row, so a manifest-builder regression fails closed here too instead
+of surfacing as a raw database-driver crash.
 
 **Deliberate deviation from that precedent.** Orphan rebind refuses the whole
 apply if *any* manifest entry is blocked -- safe there because that manifest
@@ -33,7 +43,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.database import Match
+from ..core.database import Match, Team
 from .fixture_identity_rebind_service import (
     FixtureIdentityRebindManifest,
     build_fixture_identity_rebind_manifest,
@@ -83,7 +93,9 @@ def _ready_entries(manifest: FixtureIdentityRebindManifest):
     return [entry for entry in manifest.entries if entry.rebind_ready]
 
 
-def _assert_ready_entries_are_applicable(manifest: FixtureIdentityRebindManifest) -> None:
+async def _assert_ready_entries_are_applicable(
+    session: AsyncSession, manifest: FixtureIdentityRebindManifest
+) -> None:
     ready = _ready_entries(manifest)
     if not ready:
         raise RuntimeError(
@@ -100,6 +112,21 @@ def _assert_ready_entries_are_applicable(manifest: FixtureIdentityRebindManifest
             raise RuntimeError(
                 f"manifest entry {entry.match_id} verified identity is self-play"
             )
+        # Independent re-check that every proposed target is a real,
+        # same-league Team row -- never trust the manifest builder's ids
+        # blindly. Catches a builder regression here, with a clear message,
+        # instead of a raw ForeignKeyViolationError from the database driver.
+        for team_id in (entry.verified_home_team_id, entry.verified_away_team_id):
+            team = await session.get(Team, team_id)
+            if team is None:
+                raise RuntimeError(
+                    f"manifest entry {entry.match_id} proposes unknown team {team_id!r}"
+                )
+            if team.league_id != entry.league_id:
+                raise RuntimeError(
+                    f"manifest entry {entry.match_id} proposes {team_id!r} "
+                    f"from league {team.league_id!r}, expected {entry.league_id!r}"
+                )
 
     seen: set[str] = set()
     for entry in ready:
@@ -132,7 +159,7 @@ async def apply_fixture_identity_rebind(
             "fixture identity rebind manifest changed since review: "
             f"expected={expected_manifest_sha256} actual={manifest.manifest_sha256}"
         )
-    _assert_ready_entries_are_applicable(manifest)
+    await _assert_ready_entries_are_applicable(session, manifest)
 
     ready = _ready_entries(manifest)
     reversals: list[tuple[str, str, str, str]] = []
