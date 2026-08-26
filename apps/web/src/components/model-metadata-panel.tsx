@@ -4,43 +4,46 @@ import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { PredictionMatrix } from "@/components/brand/prediction-matrix";
 import { Tooltip } from "@/components/ui/ResponsibleGamblingTooltip";
+import { certificationLabel, generationLabel, promotionLabel } from "@/lib/model-identity";
 import { fetchModelStatus, MODEL_STATUS_QUERY_KEY } from "@/lib/model-status";
 
-function unique(values: unknown[]): string {
-  const normalized = [...new Set(values.filter((value) => value != null).map(String))];
-  return normalized.length === 1 ? normalized[0] : normalized.length > 1 ? "Mixed" : "Unknown";
-}
-
-
+/**
+ * Consumer surface (homepage hero rail). Per APEX §11 this panel carries
+ * *meaning*, never engineering provenance: `active_version`, `generation`,
+ * `generation_hash`, `feature_schema_version` and `served_head` are internal
+ * identifiers and live on `/admin/model-health` instead. Every value below is
+ * routed through `lib/model-identity.ts`, which fails closed on an unknown
+ * backend enum rather than echoing it.
+ */
 export function ModelMetadataPanel() {
   const { data, isError, isPending } = useQuery({
     queryKey: MODEL_STATUS_QUERY_KEY,
     queryFn: fetchModelStatus,
     staleTime: 60_000,
   });
-  const models = Object.values(data?.models ?? {});
+  // Both numbers come from the manifest the backend actually served — never a
+  // hardcoded league count, which would overstate coverage the moment the
+  // active generation's league set changes.
+  const declaredLeagues = Object.values(data?.models ?? {});
+  const loadedLeagues = declaredLeagues.filter((model) => model.loaded).length;
   const stats: { label: string; value: string; hint?: string }[] = [
     {
-      label: "Active model",
-      value: data?.active_version ? String(data.active_version) : "Unknown",
-      hint: "The model artifact currently serving live predictions.",
-    },
-    { label: "Generation", value: data?.generation ? String(data.generation) : "Unknown" },
-    {
-      label: "Generation hash",
-      value: data?.generation_hash ? String(data.generation_hash).slice(0, 16) : "Unknown",
-    },
-    { label: "Feature schema", value: unique(models.map((model) => model.feature_schema_version ?? model.feature_count)) },
-    { label: "Served head", value: unique(models.map((model) => model.served_head)) },
-    {
-      label: "Certification",
-      value: data?.certification_state ? String(data.certification_state) : "Pending",
-      hint: "Whether this model has been validated for public staking. Unverified models are research output only — no stakes are permitted until certification passes.",
+      label: "Model generation",
+      value: generationLabel(data?.active_version),
+      hint: "The forecasting generation currently serving this workspace.",
     },
     {
-      label: "Promotion",
-      value: data?.promotion_state ? String(data.promotion_state) : "Unknown",
-      hint: "ACTIVE_FAIL_CLOSED means the model serves predictions but blocks staking until it is certified.",
+      label: "Validation",
+      value: certificationLabel(data?.certification_state),
+      hint: "Research mode means forecasts are analytical output only — no stake is recommended until validation passes.",
+    },
+    {
+      label: "Availability",
+      value: promotionLabel(data?.promotion_state),
+    },
+    {
+      label: "Leagues covered",
+      value: declaredLeagues.length > 0 ? `${loadedLeagues} of ${declaredLeagues.length}` : "Unknown",
     },
   ];
 

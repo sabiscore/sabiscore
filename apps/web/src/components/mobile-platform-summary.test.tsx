@@ -53,13 +53,17 @@ describe("MobilePlatformSummary", () => {
       })),
     });
 
+    // APEX §11 — product language on a consumer surface, including the
+    // screen-reader label, which is consumer output too.
     expect(
       await screen.findByLabelText(
-        "Model v5_phase7; certification UNVERIFIED; providers 5 configured, 5 enabled; explicit live validation 1 verified",
+        "Model Generation 5; certification Research mode; providers 5 configured, 5 enabled; explicit live validation 1 verified",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("v5_phase7")).toBeInTheDocument();
-    expect(screen.getByText("UNVERIFIED")).toBeInTheDocument();
+    expect(screen.getByText("Generation 5")).toBeInTheDocument();
+    expect(screen.getByText("Research mode")).toBeInTheDocument();
     expect(screen.getByText("5 cfg · 5 on")).toBeInTheDocument();
+    expect(screen.queryByText("v5_phase7")).not.toBeInTheDocument();
+    expect(screen.queryByText("UNVERIFIED")).not.toBeInTheDocument();
   });
 });

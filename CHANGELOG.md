@@ -5,6 +5,58 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Internal model provenance removed from consumer surfaces (APEX §11); hero dead space eliminated (2026-08-26)
+
+### Fixed
+
+- **APEX §11 violation on the homepage.** The hero's "Model pulse" rail
+  published the active generation's internal provenance verbatim —
+  `v5_phase7`, `v5_phase7-20260808`, `6bab9609e900c253`, `phase7_68`,
+  `SoftmaxMetaModel`, `ACTIVE_FAIL_CLOSED`. §11 names two of those strings
+  explicitly as forbidden on consumer surfaces and permits them only in
+  developer/admin diagnostics. Found from a live production screenshot; it had
+  never been ledgered. Five components leaked, not one — see `docs/DEBT.md`
+  item 41 for the full table.
+- New `apps/web/src/lib/model-identity.ts` is the single internal→consumer
+  mapping, transcribing §11's own product-language table. It fails closed: an
+  unrecognised backend enum yields a neutral label, never the raw string.
+- `lib/model-status.ts`'s `displayModelVersion()` / `displayCertification()`
+  were pure passthroughs returning the raw value. Fixed at the shared helper,
+  which fixed `mobile-platform-summary.tsx` (including its `aria-label`) with
+  no per-call-site edit.
+- `components/admin/model-health-client.tsx` gained a "Model Provenance" block
+  carrying all seven raw fields, so nothing is lost — that route is
+  bearer-token guarded and `robots.ts`-disallowed, which is §11's carve-out.
+
+### Added
+
+- `lib/model-identity-contract.test.ts` — repo-wide guard, same idiom as
+  `copy-contract.test.ts` / `league-contract.test.ts`. Watched failing on a
+  reverted fix (it named the offending file) before being trusted.
+- `lib/model-identity.test.ts` — 5 unit tests pinning the mapping, including
+  fail-closed behaviour on an unknown certification state.
+
+### Changed
+
+- **Homepage hero dead space.** The right diagnostics rail ran 799px against a
+  241px headline column; `items-center` could only split that 558px imbalance
+  into two dead halves (the 2026-08-13 `items-start` → `items-center` change
+  balanced it without removing it). The trust pillars moved into the headline
+  column where they belong as positioning copy, and the rail shed three cards
+  as a §11 side effect. Measured against a local production build: hero
+  **833px → 534px**, imbalance **558px → 102px**, zero horizontal overflow at
+  1276px and 360px.
+- "Leagues covered" derives both numerator and denominator from the served
+  manifest. A hardcoded 7 from `CANONICAL_LEAGUES` would have rendered `6 of 7`
+  — the active generation ships 6 artifacts, no UCL model.
+
+### Removed
+
+- `components/match-intelligence-card.tsx` (+ its test) and
+  `components/predictions/ultra-prediction-flow.tsx` — both leaked
+  `model_version` and both had zero production importers (the latter had zero
+  references repo-wide). Deleting beat special-casing them in the new guard.
+
 ## Unreleased - One goals/gd remap replaces four copies; two stale ledger entries corrected (2026-08-24)
 
 ### Changed

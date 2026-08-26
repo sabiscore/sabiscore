@@ -1,5 +1,106 @@
 # SabiScore Debt Ledger
 
+## 41. The homepage published the model's internal provenance as consumer branding — APEX §11 violation, live, untracked
+
+**Tier:** `RESOLVED 2026-08-26`. Consumer surfaces now render product language;
+the raw identifiers moved to `/admin/model-health`. Machine-enforced repo-wide.
+**Found:** 2026-08-26, from a full-page screenshot of the live production alias
+taken while confirming a *different* claim (that the deployed page was stale —
+it was not; `web-lac-theta-42.vercel.app` was correctly serving `d62e890`).
+The violation was visible in the screenshot and had never been ledgered.
+
+### What was published
+
+The homepage hero's "Model pulse" rail (`components/model-metadata-panel.tsx`)
+rendered seven fields straight off `/api/models/status`, verbatim:
+
+```text
+ACTIVE MODEL      v5_phase7
+GENERATION        v5_phase7-20260808
+GENERATION HASH   6bab9609e900c253
+FEATURE SCHEMA    phase7_68
+SERVED HEAD       SoftmaxMetaModel
+CERTIFICATION     UNVERIFIED
+PROMOTION         ACTIVE_FAIL_CLOSED
+```
+
+APEX §11 names `v5_phase7` and `v6_phase8` **explicitly** as forbidden on
+consumer surfaces, permits them only in "developer/admin diagnostics", and
+§25's final UI checklist requires "no raw technical generation identifiers".
+This was the most prominent public surface in the product.
+
+### Why it survived every prior truthfulness pass
+
+Nothing here was *fabricated* — every value was accurate. The prior passes
+(vΩ.24 neutral-defaults, vΩ.28 RL reward decomposition, the 2026-08-13
+`LIVE`-badge sweep) all hunted for values that were **wrong**. §11 is a
+different failure class: values that are **right but not for this audience**.
+A zero-fabrication scan cannot see it, and the copy-contract test only bans
+certainty language.
+
+### Blast radius — five components, not one
+
+The recurring shape in this repo (league vocabulary ×5, `LIVE` badge ×3,
+`edge_quality_score` ×3). Point-fixing the rail would have left four:
+
+| Surface | Leak | Status |
+|---|---|---|
+| `model-metadata-panel.tsx` | 6 raw fields (homepage hero) | fixed |
+| `mobile-platform-summary.tsx` | `active_version`, `certification_state` — incl. the `aria-label` | fixed at the shared helper |
+| `full-analysis-dashboard.tsx` ×2 | `model_version` on `/match/[id]` | fixed |
+| `match-intelligence-card.tsx` | `Model {model_version}` | **deleted** — zero production importers |
+| `predictions/ultra-prediction-flow.tsx` | `{prediction.model_version}` | **deleted** — zero references repo-wide |
+
+`lib/model-status.ts`'s `displayModelVersion()` / `displayCertification()` were
+pure passthroughs returning the raw string — fixing them there fixed
+`mobile-platform-summary` with no per-call-site edit, which is why the root
+helper was the right place.
+
+### The fix
+
+`lib/model-identity.ts` is the single internal→consumer mapping, transcribing
+§11's own table (`model_version` → "Model generation"; `unverified model` →
+"Research mode"; `certified model` → "Production-validated"). It **fails
+closed**: an unrecognised backend enum yields a neutral label, never the raw
+string, so a state added later cannot silently leak.
+
+Raw provenance is not lost — `components/admin/model-health-client.tsx` gained
+a "Model Provenance" block carrying all seven fields. That page is
+bearer-token guarded (`ADMIN_TOKEN`) and `robots.ts`-disallowed, which is
+exactly §11's carve-out.
+
+⚠️ **The denominator was nearly fabricated.** The replacement "Leagues covered"
+stat first read `N of 7` from `CANONICAL_LEAGUES` — but the active generation
+ships **6** artifacts (no UCL model), so a hardcoded 7 would have understated
+coverage as `6 of 7` and would silently lie again the moment the league set
+changes. Both numbers now come from the served manifest.
+
+### The durable guard
+
+`lib/model-identity-contract.test.ts` — repo-wide scan, same idiom as
+`copy-contract.test.ts` / `league-contract.test.ts` /
+`metadata-title-contract.test.ts`. It fails if any non-admin `.tsx` renders a
+provenance field without routing it through the mapping.
+
+**Watched failing before being trusted**, per this repo's own rule: reverting
+one of the two `full-analysis-dashboard.tsx` fixes turned the guard red and it
+named the file (`["components/full-analysis-dashboard.tsx"]`); restoring it
+returned green.
+
+**Live-verified** against a local production build pointed at the real Render
+backend: zero occurrences of `v5_phase7`, `phase7_68`, `SoftmaxMetaModel`,
+`ACTIVE_FAIL_CLOSED` or the generation hash in rendered text, at both 1276px
+and 360px. The rail now reads "Generation 5 / Research mode / Serving
+forecasts · staking blocked / 6 of 6".
+
+### Note for whoever certifies a new generation
+
+When `certification_state` flips to `CERTIFIED`, the consumer label becomes
+"Production-validated" automatically. Do **not** add the version string back
+alongside it "for transparency" — that is this entry, recurring.
+
+---
+
 ## 40. PSG's entire Elo history sits on the Paris FC team row — two distinct clubs merged by a place-name collision
 
 **Tier:** resolver hardening `RESOLVED 2026-08-25` (both name resolvers now

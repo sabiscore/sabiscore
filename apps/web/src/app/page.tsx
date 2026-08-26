@@ -264,6 +264,25 @@ function PremiumHome() {
                 Explore Docs
               </Link>
             </div>
+
+            {/* The pillars are trust/positioning copy, so they belong with the
+                headline rather than in the diagnostics rail. Keeping them here
+                also stops the rail running ~2x the headline column's height,
+                which `items-center` could only split into two dead halves. */}
+            <div className="grid gap-1.5 pt-0.5 sm:grid-cols-3 lg:grid-cols-1">
+              {PREMIUM_PILLARS.map((pillar) => (
+                <div
+                  key={pillar.title}
+                  className="flex items-center gap-2 rounded-xl border border-white/5 bg-slate-900/60 px-2.5 py-1.5"
+                >
+                  <pillar.icon className="h-3.5 w-3.5 shrink-0 text-cyan-300" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white">{pillar.title}</p>
+                    <p className="text-[10px] text-slate-400">{pillar.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="lg:hidden">
@@ -285,19 +304,6 @@ function PremiumHome() {
               </div>
             </div>
 
-            <div className="space-y-1">
-              {PREMIUM_PILLARS.map((pillar) => (
-                <div key={pillar.title} className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-900/60 px-2.5 py-1.5">
-                  <div className="flex items-center gap-2">
-                    <pillar.icon className="h-3.5 w-3.5 text-cyan-300 shrink-0" aria-hidden="true" />
-                    <div>
-                      <p className="text-xs font-semibold text-white">{pillar.title}</p>
-                      <p className="text-[10px] text-slate-400">{pillar.detail}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>

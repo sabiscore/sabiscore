@@ -24,6 +24,7 @@ import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { mapEvidenceFreshness } from "@/lib/freshness";
+import { generationLabel } from "@/lib/model-identity";
 
 // ─── Verdict description copy (Phase 3) ──────────────────────────────────────
 
@@ -337,8 +338,10 @@ function EnhancedMatchHero({
               +Poisson
             </span>
           )}
-          <span className="text-[9px] text-slate-400 ml-auto truncate" title={`Model version: ${ensemble.model_version}`}>
-            {ensemble.model_version}
+          {/* APEX §11: the raw artifact version is engineering provenance and
+              lives on /admin/model-health, not on a consumer match page. */}
+          <span className="text-[9px] text-slate-400 ml-auto truncate">
+            {generationLabel(ensemble.model_version)}
           </span>
         </div>
       )}
@@ -627,7 +630,7 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-slate-400">{data.model_version}</span>
+          <span className="text-[10px] text-slate-400">{generationLabel(data.model_version)}</span>
           <div className="flex items-center gap-1">
             {data.calibration_applied && (
               <span
