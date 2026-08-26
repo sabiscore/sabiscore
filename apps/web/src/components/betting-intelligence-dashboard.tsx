@@ -35,6 +35,7 @@ import {
 } from "@/lib/betting-intelligence-api";
 import { describeEvidenceCode } from "@/lib/full-analysis-contract";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
+import { evidenceStateFor } from "@/lib/evidence-state";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
@@ -521,6 +522,7 @@ export function BettingIntelligenceDashboard() {
         .bi-list.risk li{border-left-color:#ffd76b}.bi-list.gap li{border-left-color:#d8b8ff}
         .bi-table-wrap{overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}.bi-table{display:grid;gap:3px;min-width:640px}.bi-tr{display:grid;grid-template-columns:1fr 1fr 1fr .8fr .8fr .8fr;gap:5px;align-items:center;border-bottom:1px solid rgba(255,255,255,.07);padding:4px 0;font-size:11.5px}.bi-th{color:#9fb3aa;font-weight:800;text-transform:uppercase;font-size:9.5px}
         .bi-good{color:hsl(var(--signal-positive))}.bi-risk{color:hsl(var(--signal-danger))}
+        .bi-tone-positive{color:hsl(var(--signal-positive))}.bi-tone-warning{color:hsl(var(--signal-warning))}.bi-tone-info{color:#d8b8ff}.bi-tone-neutral{color:#9fb3aa}
         .bi-timeline{display:grid;gap:5px}.bi-timeline-row{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center;font-size:11.5px}.bi-timeline-row small{grid-column:2 / 4;color:#9fb3aa;font-size:10.5px}.bi-dot{width:8px;height:8px;border-radius:50%;background:#71827b}.bi-dot.verified,.bi-dot.success{background:#39d98a}.bi-dot.data_gap,.bi-dot.waiting{background:#d8b8ff}.bi-dot.stale{background:#ffd76b}.bi-dot.conflicting{background:#ffb5bd}
         .bi-rail{display:grid;gap:5px}.bi-rail-row{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:start;border-bottom:1px solid rgba(255,255,255,.07);padding:3.5px 0;font-size:11.5px}.bi-rail-row strong{display:block;font-size:11.5px;overflow-wrap:break-word;word-break:break-word}.bi-rail-row small{display:block;color:#9fb3aa;margin-top:1px;font-size:9.5px}.bi-state{font-size:9.5px;font-weight:800;color:#cfe5dc}
         .bi-candidates{display:grid;gap:5px;margin-top:5px}.bi-candidate{display:flex;justify-content:space-between;gap:7px;align-items:center;border:1px solid rgba(255,255,255,.12);background:#0c1714;border-radius:6px;padding:5px 7px;font-size:11.5px;min-width:0}
@@ -581,7 +583,12 @@ export function BettingIntelligenceDashboard() {
                 }}
               >
                 <strong>{fixture.home_team} vs {fixture.away_team}</strong>
-                <small>{fmtDate(fixture.kickoff_utc)} | {fixture.odds_status.replace(/_/g, " ")}</small>
+                <small>
+                  {fmtDate(fixture.kickoff_utc)} |{" "}
+                  <span className={`bi-tone-${evidenceStateFor(fixture.odds_status).tone}`}>
+                    {evidenceStateFor(fixture.odds_status).label}
+                  </span>
+                </small>
               </button>
             ))}
             <div className="bi-actions">
@@ -643,10 +650,10 @@ export function BettingIntelligenceDashboard() {
                 {evidence ? (
                   <>
                     <div className="bi-metrics">
-                      <div className="bi-metric"><span>Model</span><strong>{evidence.source_status.model}</strong></div>
-                      <div className="bi-metric"><span>Market</span><strong>{evidence.source_status.market}</strong></div>
-                      <div className="bi-metric"><span>Team Metrics</span><strong>{evidence.source_status.team_metrics}</strong></div>
-                      <div className="bi-metric"><span>Availability</span><strong>{evidence.source_status.availability}</strong></div>
+                      <div className="bi-metric"><span>Model</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.model).tone}`}>{evidenceStateFor(evidence.source_status.model).label}</strong></div>
+                      <div className="bi-metric"><span>Market</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.market).tone}`}>{evidenceStateFor(evidence.source_status.market).label}</strong></div>
+                      <div className="bi-metric"><span>Team Metrics</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.team_metrics).tone}`}>{evidenceStateFor(evidence.source_status.team_metrics).label}</strong></div>
+                      <div className="bi-metric"><span>Availability</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.availability).tone}`}>{evidenceStateFor(evidence.source_status.availability).label}</strong></div>
                       <div className="bi-metric"><span>Model age</span><strong>{recordNumber(evidence.freshness, "model_features_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "model_features_seconds")}s`}</strong></div>
                       <div className="bi-metric"><span>Market age</span><strong>{recordNumber(evidence.freshness, "market_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "market_seconds")}s`}</strong></div>
                       <div className="bi-metric"><span>Epistemic uncertainty</span><strong>{fmtPct(recordNumber(evidence.model ?? null, "epistemic_uncertainty"))}</strong></div>
