@@ -1512,6 +1512,20 @@ closes as "the problem resolved itself once the season started," which is
 itself worth recording so a future session doesn't reopen it chasing a stale
 518-match figure.
 
+**Addendum (2026-08-26):** a session opened with a standing operator
+authorization dated 2026-08-26T02:25:43+01:00 WAT, quoting the manifest SHA
+`a1eae47c4d5b86fb3b0eda2bc997f219533561f0913cd584ecc49839cfa72b62` and replay
+plan SHA `9bf816061704b6c45aacdc3080eba4d25dcc0d5e007c834687f66d02d7d87bd4`
+recorded above, authorizing exactly the 518-row repair this item already
+closed the day before. Independently re-confirmed this session by re-reading
+this item directly rather than trusting the authorization text's premise: the
+condition it targets does not exist. Its own required pre-mutation step —
+re-run the dry-run, verify the manifest hash still matches — cannot pass,
+because a manifest computed over 0 affected rows cannot reproduce a hash
+computed over 518. **No repair was executed.** See
+`docs/ai/CODEX_VERIFIED_STATE.md`'s "SAB-22 stale-authorization verification
+from 2026-08-26" section for the full record of this check.
+
 ---
 
 ## 33. Public CLV and value-bet-scan trusted a persisted payload's own claims instead of the certified-generation authority — FIXED 2026-08-20

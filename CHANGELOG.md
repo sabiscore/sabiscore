@@ -5,6 +5,40 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Evidence-state tokens now render as distinct visual states; docs page density pass; SAB-22 authorization confirmed stale (2026-08-26)
+
+### Fixed
+
+- **Raw backend evidence tokens rendered verbatim in `betting-intelligence-dashboard.tsx`.**
+  `fixture.odds_status` (line ~584) and each `evidence.source_status.{model,market,
+  team_metrics,availability}` field (lines ~646-649) printed the literal backend
+  enum (`DATA_GAP`, `RESEARCH_ONLY`, `STALE`, ...) with no color, icon, or
+  plain-language treatment — no distinct visual state, contrary to Mandate 2 R3 /
+  APEX §15.2's requirement that evidence states never collapse into one generic
+  treatment. The comparison logic at lines 129/132/152/155 (`.some(v => v ===
+  "CONFLICTING"/"STALE")`) is untouched — only the *display* changed.
+- **SAB-22's 2026-08-26T02:25:43+01:00 WAT Class C authorization is stale.** It
+  authorized a 518-row repair that `docs/DEBT.md` item 34 had already closed the
+  day before (`RESOLVED 2026-08-25`, live probe found `affected_matches: 0`).
+  The authorization's own required pre-mutation step — re-run the dry-run,
+  confirm the hash still matches — cannot pass against a manifest with 0
+  affected rows. No repair was executed; both `docs/DEBT.md` and
+  `docs/ai/CODEX_VERIFIED_STATE.md` now cross-reference the finding so a future
+  session doesn't reopen it from the authorization text alone.
+
+### Added
+
+- New `apps/web/src/lib/evidence-state.ts` — the single backend-token→product-state
+  mapping for per-fixture evidence display, following the same fail-closed idiom
+  as `model-identity.ts`: an unrecognised token yields a neutral "Status
+  unavailable" label, never the raw string. Covers all 8 tokens
+  `_build_evidence()`/`_fixture_summary()` (`backend/src/api/endpoints/fixtures.py`)
+  can emit today plus `CONFLICTING`, which the TypeScript type already
+  anticipates.
+- `lib/evidence-state.test.ts` — pins all 8 mappings plus the fail-closed default.
+- `docs/page.tsx` density pass: 7 card wrappers `p-8` → `p-5 sm:p-6`, header/CTA
+  margins and the content-grid gap tightened on the same responsive scale.
+
 ## Unreleased - Internal model provenance removed from consumer surfaces (APEX §11); hero dead space eliminated (2026-08-26)
 
 ### Fixed

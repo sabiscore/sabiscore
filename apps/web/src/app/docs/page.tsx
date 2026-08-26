@@ -14,11 +14,11 @@ export default function DocsPage() {
     // /performance and /monitoring.
     <div className="container mx-auto text-white">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-6 sm:mb-8">
           <Link
             href="/"
             className={cn(
-              "inline-flex items-center mb-8 transition-colors",
+              "inline-flex items-center mb-5 sm:mb-6 transition-colors",
               premiumVisualsEnabled
                 ? "text-cyan-400 hover:text-cyan-300"
                 : "text-indigo-400 hover:text-indigo-300"
@@ -45,10 +45,10 @@ export default function DocsPage() {
         </div>
 
         {/* Content Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           {/* Getting Started */}
           <div className={cn(
-            "rounded-xl p-8 border",
+            "rounded-xl p-5 sm:p-6 border",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -69,7 +69,7 @@ export default function DocsPage() {
 
           {/* Key Metrics */}
           <div className={cn(
-            "rounded-xl p-8 border",
+            "rounded-xl p-5 sm:p-6 border",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -90,7 +90,7 @@ export default function DocsPage() {
 
           {/* Model Performance */}
           <div className={cn(
-            "rounded-xl p-8 border",
+            "rounded-xl p-5 sm:p-6 border",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -111,7 +111,7 @@ export default function DocsPage() {
 
           {/* Technical Stack */}
           <div className={cn(
-            "rounded-xl p-8 border",
+            "rounded-xl p-5 sm:p-6 border",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -132,7 +132,7 @@ export default function DocsPage() {
 
           {/* Sprint 4 What's New */}
           <div className={cn(
-            "rounded-xl p-8 border md:col-span-2",
+            "rounded-xl p-5 sm:p-6 border md:col-span-2",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -178,7 +178,7 @@ export default function DocsPage() {
 
           {/* API Access */}
           <div className={cn(
-            "rounded-xl p-8 border md:col-span-2",
+            "rounded-xl p-5 sm:p-6 border md:col-span-2",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -245,7 +245,7 @@ export default function DocsPage() {
 
           {/* Support */}
           <div className={cn(
-            "rounded-xl p-8 border md:col-span-2",
+            "rounded-xl p-5 sm:p-6 border md:col-span-2",
             premiumVisualsEnabled
               ? "glass-card border-white/10 bg-slate-950/70 shadow-[0_15px_45px_rgba(8,14,35,0.55)]"
               : "bg-slate-800/50 border-slate-700/50"
@@ -280,7 +280,7 @@ export default function DocsPage() {
         </div>
 
         {/* CTA */}
-        <div className="mt-12 text-center">
+        <div className="mt-8 sm:mt-10 text-center">
           <Link
             href="/match"
             className={cn(

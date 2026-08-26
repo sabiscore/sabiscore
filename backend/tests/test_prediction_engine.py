@@ -30,7 +30,6 @@ Coverage:
 from __future__ import annotations
 
 from dataclasses import fields
-from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import numpy as np

@@ -1,9 +1,40 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-21
+Last reviewed: 2026-08-26
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## SAB-22 stale-authorization verification from 2026-08-26
+
+- A session opened holding two stacked mandates: an APEX activation directive
+  carrying a pre-granted Class C authorization for the SAB-22 EPL
+  participant repair (518 affected matches, manifest SHA
+  `a1eae47c4d5b86fb3b0eda2bc997f219533561f0913cd584ecc49839cfa72b62`, replay
+  plan SHA `9bf816061704b6c45aacdc3080eba4d25dcc0d5e007c834687f66d02d7d87bd4`
+  — both recorded verbatim below under "SAB-22 manifest-v3 candidate
+  evidence from 2026-08-21"), and a later, broader audit/fix-pass mandate.
+- Before acting on the authorization, `docs/DEBT.md` item 34 was read
+  directly rather than trusted from an earlier agent's summary. It is
+  titled `RESOLVED 2026-08-25` — one day before the authorization was
+  granted — and records a fresh live probe
+  (`GET /api/v1/release/semantic-repair-review`) that found
+  `affected_matches: 0`, corroborated independently by
+  `GET /api/v1/release/data-authority` (`semantic_identity: "PASS"`,
+  structural Elo invariants all zero). It states plainly: "No Class C action
+  was ever taken for this item."
+- **Conclusion: the authorization's own required pre-mutation step cannot
+  pass.** Every Class C repair script in this codebase re-derives the
+  manifest hash immediately before mutating and refuses to proceed unless it
+  matches the reviewed value. A manifest computed over 0 affected rows
+  cannot reproduce a hash computed over 518 affected rows. Re-running the
+  dry-run today would report zero affected matches and a different hash, not
+  a match to the authorized one.
+- **No repair was executed. No production data was touched.** This is
+  recorded so a future session does not reopen SAB-22 by trusting a pasted
+  authorization's premise instead of re-deriving current state, which is
+  exactly the failure mode this document's own "Verification rule" (below)
+  exists to prevent.
 
 ## Phase 2 market trust-boundary audit from 2026-08-21
 
