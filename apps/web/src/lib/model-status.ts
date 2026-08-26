@@ -1,3 +1,5 @@
+import { certificationLabel, generationLabel } from "@/lib/model-identity";
+
 export const MODEL_STATUS_QUERY_KEY = ["model-status"] as const;
 
 export type ModelRecord = {
@@ -29,12 +31,18 @@ export async function fetchModelStatus(): Promise<ModelStatus> {
   return response.json() as Promise<ModelStatus>;
 }
 
+/**
+ * Consumer-facing. Returns §11 product language, never the raw
+ * `active_version` — see `lib/model-identity.ts` for why, and
+ * `/admin/model-health` for the raw provenance.
+ */
 export function displayModelVersion(status: ModelStatus | null | undefined): string {
   if (!status?.active_version) return "Unavailable";
-  return String(status.active_version);
+  return generationLabel(status.active_version);
 }
 
+/** Consumer-facing. `UNVERIFIED` → "Research mode", not the raw enum. */
 export function displayCertification(status: ModelStatus | null | undefined): string {
   if (!status?.certification_state) return "Unavailable";
-  return String(status.certification_state);
+  return certificationLabel(status.certification_state);
 }

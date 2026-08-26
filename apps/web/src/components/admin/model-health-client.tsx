@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw, Database, Cpu, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchModelStatus, MODEL_STATUS_QUERY_KEY, type ModelStatus } from "@/lib/model-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,36 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "not_ready" || status === "unhealthy" || status === "error")
     return <XCircle className="h-4 w-4 text-rose-400" aria-hidden="true" />;
   return <Loader2 className="h-4 w-4 animate-spin text-slate-400" aria-hidden="true" />;
+}
+
+/**
+ * Raw manifest provenance. Admin-only by APEX §11 — do not lift these onto a
+ * consumer surface; use `lib/model-identity.ts` there.
+ */
+const PROVENANCE_FIELDS: { label: string; value: (s?: ModelStatus) => string | null }[] = [
+  { label: "Active version", value: (s) => str(s?.active_version) },
+  { label: "Generation", value: (s) => str(s?.generation) },
+  { label: "Generation hash", value: (s) => str(s?.generation_hash) },
+  { label: "Certification state", value: (s) => str(s?.certification_state) },
+  { label: "Promotion state", value: (s) => str(s?.promotion_state) },
+  {
+    label: "Feature schema",
+    value: (s) => uniqueOf(Object.values(s?.models ?? {}).map((m) => m.feature_schema_version)),
+  },
+  {
+    label: "Served head",
+    value: (s) => uniqueOf(Object.values(s?.models ?? {}).map((m) => m.served_head)),
+  },
+];
+
+function str(value: unknown): string | null {
+  return value == null ? null : String(value);
+}
+
+function uniqueOf(values: unknown[]): string | null {
+  const seen = [...new Set(values.filter((v) => v != null).map(String))];
+  if (seen.length === 0) return null;
+  return seen.length === 1 ? seen[0] : `Mixed (${seen.join(", ")})`;
 }
 
 function statusColor(status: string): string {
@@ -119,6 +150,16 @@ export function ModelHealthClient() {
     },
     refetchInterval: 60_000,
     staleTime: 0,
+  });
+
+  const {
+    data: modelStatus,
+    isLoading: mLoading,
+    isError: mError,
+  } = useQuery({
+    queryKey: MODEL_STATUS_QUERY_KEY,
+    queryFn: fetchModelStatus,
+    staleTime: 60_000,
   });
 
   const overallReady = readiness?.status === "ready";
@@ -215,6 +256,36 @@ export function ModelHealthClient() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Model provenance — APEX §11 permits raw internal identifiers only in
+          developer/admin diagnostics. This page is bearer-token guarded and
+          robots-disallowed; consumer surfaces render product language via
+          lib/model-identity.ts instead. */}
+      <div className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Model Provenance
+        </h2>
+        {mError ? (
+          <div className="flex items-center gap-2 text-rose-400" role="alert">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            <span className="text-sm">Could not fetch model status from backend</span>
+          </div>
+        ) : (
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {PROVENANCE_FIELDS.map(({ label, value }) => (
+              <div
+                key={label}
+                className="rounded-xl border border-white/[0.06] bg-slate-900/60 px-4 py-2.5"
+              >
+                <dt className="text-[10px] uppercase tracking-wider text-slate-500">{label}</dt>
+                <dd className="mt-0.5 break-all font-mono text-xs text-slate-200">
+                  {mLoading ? "…" : (value(modelStatus) ?? "—")}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
 
       {/* Model error detail */}
