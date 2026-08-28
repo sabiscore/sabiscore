@@ -1,9 +1,48 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-26
+Last reviewed: 2026-08-28
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## Live-state resync from 2026-08-28
+
+A session opened holding the same two mandates as the 2026-08-26 entries
+below — both already merged (`aaf0da9`, PR #103) before this session's own
+first tool call. Re-verifying rather than assuming, per this document's own
+rule:
+
+- **Deploy parity confirmed both directions.** `GET
+  https://sabiscore-api-bav1.onrender.com/health` → `sha: aaf0da9`, healthy,
+  DB/cache/models all up. `GET https://web-lac-theta-42.vercel.app/api/health`
+  → `sha: aaf0da9`, `backendSha` full-SHA match, `backendStatus: ok`.
+- **Walk-forward validation crossed its ≥10-settled floor** — `total_settled:
+  11` (was 9 two sessions ago), `rps_overall: 0.331495`, a real 3-fold
+  `series`. Both frontend consumers (`rolling-accuracy-chart.tsx`,
+  `performance-page-client.tsx`) were already correctly wired for this
+  state — no code change needed. `accuracy_overall: 0.0` at n=11 is recorded
+  but explicitly not treated as a quality signal (too small a sample); RPS
+  0.331 is currently above the 0.21 promotion gate. Full detail: `docs/DEBT.md`
+  item 2.
+- **fd-560555 (EPL, Man City/Crystal Palace) re-confirmed still the sole,
+  correctly-blocked identity-drift entry** (`HAS_EXISTING_PREDICTIONS`),
+  byte-for-byte unchanged since item 35's 2026-08-25 closure — a 2026-08-26
+  deploy-log line naming the same fixture is the same steady state, not a
+  new occurrence. Its kickoff is 2026-08-28 (today); once it passes,
+  `KICKOFF_PASSED` joins the blocker set and it stops being a rebind
+  candidate regardless of any action. Full detail: `docs/DEBT.md` item 35.
+- **Redis old-credential revocation (item 15, step 6): operator stated
+  complete this session.** Recorded as an operator report, not independently
+  verified — no console access exists in this environment to confirm the old
+  `sabiscore-database` (ID `13753214`) credential was actually revoked versus
+  merely superseded. Full detail: `docs/DEBT.md` item 15.
+- `sabiscore.com` DNS: operator explicitly deprioritized in favor of the
+  current Vercel domain "for now." No numbered ledger item exists for this
+  (it was never tracked as its own `docs/DEBT.md` entry); recorded here only.
+- An uncommitted, unrelated Prisma Composer/Neon workspace change
+  (`package.json`, `pnpm-workspace.yaml`, `.npmrc`, `pnpm-lock.yaml`,
+  `prisma.config.ts`) was found sitting in the working tree with no context
+  tying it to either mandate. Left untouched by this session.
 
 ## SAB-22 stale-authorization verification from 2026-08-26
 
