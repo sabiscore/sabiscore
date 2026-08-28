@@ -1412,6 +1412,28 @@ read at all.
 Item 35 is closed: review (a), apply tool (b), and the executed repair are all
 done, live, and independently verified.
 
+**Re-confirmed live 2026-08-28, twice, several hours apart** (no code
+touched, documentation only). First probe: `GET
+/api/v1/release/fixture-identity-review` still reported exactly the same
+single entry as the 2026-08-25 closure — `fd-560555`, blocker
+`HAS_EXISTING_PREDICTIONS`, byte-for-byte unchanged from three days earlier.
+A 2026-08-26T07:56:49Z Render deploy log line reporting this same
+stored/verified pair for `fd-560555` (checked against that first probe
+before drawing a conclusion, not assumed) is the same steady state, not a
+fresh recurrence — worth recording explicitly since a bare log line out of
+context reads like one. **Second probe, later the same day: 0 entries.**
+`fixture_identity_rebind_service.py`'s manifest query filters
+`Match.status NOT IN SETTLED_MATCH_STATUSES` (confirmed by reading the query
+directly), so the fixture most likely finished — its `kickoff_utc` was
+`2026-08-28T19:00:00`, i.e. earlier the same day as this second probe — and
+dropped out of the manifest entirely rather than staying listed as blocked;
+a genuinely finished match is excluded outright, not merely
+`KICKOFF_PASSED`-blocked, per this same query. Not independently confirmed against
+`Match.status` directly (no DB access this session), but consistent with
+every fact available. Either way: no action was needed or taken, and the
+backlog is self-resolving via ordinary fixture progression exactly as item
+34 documents for the historical case.
+
 ---
 
 ## 34. Semantic-identity repair manifest v3 is code-ready; live review and `--apply` remain operator-gated — RESOLVED 2026-08-25
@@ -2589,6 +2611,20 @@ remains `NEXT` and operator-only.** Was `FIX-NOW` / P0.
 > tier-1 rather than the Upstash target the 2026-08-13 transcript described.
 > The runbook below is retained as-is because its diagnostics are sound and
 > the guard behaviour it documents is real.
+>
+> **Operator-reported 2026-08-27/28: old-credential revocation (step 6)
+> stated complete.** The operator stated in this turn that "the keys have
+> been rotated." This is recorded as an **operator report, not an
+> independently verified fact** — exactly the distinction this item has
+> insisted on throughout: `GET /health` still shows `tier1_redis_enabled:
+> true`, `tier1_redis_available: true`, `tier1_circuit_open: false`, which
+> proves *a* credential currently works, the same thing it already proved on
+> 2026-08-25. This environment has no Upstash/Redis Cloud console access, so
+> it cannot independently confirm the *old* `sabiscore-database` (ID
+> `13753214`) credential was actually revoked rather than merely superseded.
+> Leave this item's tier as-is until the operator supplies (or this
+> environment gains access to) dated revocation evidence from that console —
+> the same standard item 16 already holds historical Gitleaks credentials to.
 
 A supplied Render log contained a complete Redis URI. A later Render build log
 shows `REDIS_URL` is not a valid `redis://`, `rediss://`, or `unix://` URL and the
@@ -3198,6 +3234,37 @@ generate settleable matches (Eredivisie opens 2026-08-07, EPL 2026-08-21 — see
 the blocker. What remains is time: `/model-performance` needs ≥10 settled, logged
 Eredivisie predictions (several matchdays into the season, not the first match) before
 Phase 2 can honestly begin.
+
+✅ **The ≥10 floor crossed — live-confirmed 2026-08-28, no code touched.**
+`GET /api/v1/model-performance/summary` now returns `status: "OK"`,
+`total_settled: 11` (up from the 9 recorded two sessions ago), `rps_overall:
+0.331495`, `n_splits: 3`. `GET /api/v1/model-performance?window=30` confirms
+the underlying `series` is real, not a stub: 3 chronological folds
+(2026-08-16, 2026-08-21, 2026-08-22), one settled match each, RPS per fold
+ranging 0.294–0.355. Both endpoints (`model-gates.ts`'s consumers
+`rolling-accuracy-chart.tsx` and `performance-page-client.tsx`) were already
+correctly wired for this transition before today — `hasMetrics = status ===
+"OK"` and `series.length > 0` gate the real-data branches, `SummaryNotice`/
+`ChartNotice` were only ever the < 10 path. **No frontend code change was
+needed or made.**
+
+**Read the numbers honestly, don't over-claim from n=11.** `accuracy_overall`
+(top-pick exact-hit rate) is **0.0** — zero of eleven settled predictions
+landed the model's highest-probability outcome. At this sample size that is
+not a meaningful signal of model quality either way (a well-calibrated model
+can plausibly go 0-for-11 by chance on single-outcome top-pick hits alone);
+RPS is the continuous, calibration-sensitive metric this platform's own
+promotion gate actually uses, and 0.331 is currently **above**
+`RPS_PROMOTION_GATE = 0.21` (`apps/web/src/lib/model-gates.ts`) — i.e. does
+not yet meet it. The UI renders this correctly (amber stat, not a fabricated
+pass). Two sub-metrics stay honestly gated below their own floors rather than
+publishing on too little data: Brier decomposition ("requires ≥10 pooled
+validated records, only 3 available") and CLV ("need >= 10 joined
+predictions, got 1" — see item 6, unaffected by this crossing, a materially
+different join). **Do not treat this crossing as a verdict on model
+quality** — it only means the walk-forward pipeline itself is now DATA-FED
+and producing real, honestly-gated numbers; whether those numbers are good
+is a question for a much larger sample.
 
 ---
 
