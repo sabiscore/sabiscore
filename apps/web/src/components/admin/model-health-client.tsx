@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw, Database, Cpu, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 import { fetchModelStatus, MODEL_STATUS_QUERY_KEY, type ModelStatus } from "@/lib/model-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,8 +164,12 @@ export function ModelHealthClient() {
   });
 
   const overallReady = readiness?.status === "ready";
+  // WAT like every other timestamp on the platform, not the viewer's local zone:
+  // this is a client component, so a locale-dependent render disagrees with its
+  // own SSR output at hydration.
+  // rUpdatedAt is React Query's dataUpdatedAt: epoch ms, not an ISO string.
   const lastUpdated = rUpdatedAt
-    ? new Date(rUpdatedAt).toLocaleTimeString()
+    ? `${formatLagosTimestamp(new Date(rUpdatedAt).toISOString())} WAT`
     : "—";
 
   return (

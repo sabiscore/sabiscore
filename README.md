@@ -122,6 +122,57 @@ API routes:
 
 The production UI lives at `/intelligence` in `apps/web`. It provides competition filtering, team search, date filters, fixture cards, evidence readiness, source comparison, provider odds candidates, manual odds fallback, and backend-returned decision cards.
 
+## Model Training
+
+Two corpora exist and they are not interchangeable:
+
+| Path | Contents | Use |
+| --- | --- | --- |
+| `backend/data/cache/fd_*.csv` | **12,765 real matches**, 6 leagues, 2019-09 → 2026-05, 100% with opening 1X2 odds | **Canonical.** Every trainer should read this. |
+| `data/processed/*_training.csv` | 2,058 rows; `xg_differential`, `elo_difference` and the xg-diff columns are zero in 85% of rows, and the Eredivisie slice is generated synthetically by `scripts/generate_eredivisie_data.py` | Legacy. Retained for reproducing older runs only. |
+
+Features are built by `backend/scripts/train_on_real_matches.py::build_dataset`,
+which walks forward in time — a match never sees its own result — and computes
+every group through the same shared `feature_registry` helpers that live serving
+uses. That train/serve parity is the governing constraint: a model must only be
+trained on features that are genuinely resolved at request time.
+
+```bash
+# Ensemble candidate (baseline hyperparameters)
+cd backend && python scripts/train_on_real_matches.py
+
+# …with Bayesian (Optuna TPE) hyperparameter search, ~30 trials per learner
+python scripts/train_on_real_matches.py --tune 30
+
+# Uncertainty (BNN) member — defaults to the real corpus
+python scripts/train_bnn.py                     # --corpus processed for the legacy CSVs
+```
+
+`--tune` searches `n_estimators` / `max_depth` / `learning_rate` / `reg_lambda`
+(plus subsample and colsample) for RandomForest, XGBoost and LightGBM. It scores
+**RPS** — the metric `model_registry.compare_models` promotes on — over a
+`TimeSeriesSplit` of the **training slice only**, so the calibration and holdout
+seasons stay unseen and the reported holdout RPS remains out-of-sample. A
+`MedianPruner` abandons weak trials after their first fold and trials run
+single-threaded, which is what keeps a laptop run inside memory. Omitting
+`--tune` reproduces the baseline hyperparameters exactly.
+
+> **CatBoost is not tunable in this workspace.** It is pinned
+> `python_version < "3.14"` in `requirements.txt` and has no wheel for a 3.14
+> interpreter (production runs 3.11). Its parameters map onto the two
+> gradient-boosted learners that are available — `depth` → `max_depth`,
+> `l2_leaf_reg` → `reg_lambda`, `iterations` → `n_estimators` — so the same axes
+> are searched.
+
+### Reading the scores
+
+Brier is reported **summed over the three classes**. On that scale the de-vigged
+bookmaker market — the strongest available 1X2 forecaster — scores **0.5787**
+over the corpus above, and a uniform 1/3 forecaster scores 0.6667. A model near
+0.58 is at market level, not broken. See `docs/DEBT.md` item 43: `train_bnn.py`'s
+`BRIER_GATE = 0.220` sits below the market's own score and no honest model can
+pass it.
+
 ## Verification
 
 ```bash

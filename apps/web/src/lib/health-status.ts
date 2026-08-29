@@ -15,6 +15,10 @@ export type CapabilityStatus =
   | "verified"
   | "unverified_no_fixtures"
   | "unverified_insufficient_evidence"
+  // Emitted by /health/ready itself: readiness is side-effect free and does not
+  // run the prediction pipeline, so it reports that rather than a fixture claim.
+  | "not_probed_by_readiness"
+  | "skipped_not_ready"
   | "failed"
   | "unknown";
 
@@ -59,6 +63,8 @@ const CAPABILITY_STATUSES = new Set<CapabilityStatus>([
   "verified",
   "unverified_no_fixtures",
   "unverified_insufficient_evidence",
+  "not_probed_by_readiness",
+  "skipped_not_ready",
   "failed",
 ]);
 

@@ -10,6 +10,7 @@ import {
 import {
   mapFullAnalysisPresentation,
   describeEvidenceCode,
+  formatLagosTimestamp,
   groupEvidenceGaps,
   isNarrativeRedundant,
   type FullMatchAnalysisResponse,
@@ -483,7 +484,7 @@ function PredictionAgePill({ generatedAt }: { generatedAt: string }) {
     ? Math.max(0, Math.round((Date.now() - generatedMs) / 1000))
     : 0;
 
-  const title = `Prediction generated at ${new Date(generatedAt).toLocaleString()}. Regenerate for latest signal.`;
+  const title = `Prediction generated at ${formatLagosTimestamp(generatedAt)} WAT. Regenerate for latest signal.`;
 
   // Wording is deliberately about the ANALYSIS, not the evidence. A bare "Fresh"
   // sat beside the evidence-freshness pill and read as a claim about the data,

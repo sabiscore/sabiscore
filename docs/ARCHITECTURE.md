@@ -72,6 +72,28 @@ and rollback metadata. Promotion is atomic and retains the last-known-good set.
 `/models/status` reports the artifact facts the frontend may display. Missing
 metadata is `UNKNOWN` or `UNVERIFIED`, never inferred from infrastructure health.
 
+### Training corpus authority
+
+`backend/data/cache/fd_*.csv` — 12,765 real matches across six leagues,
+2019-09 to 2026-05 — is the canonical corpus, and every trainer reads it:
+`train_on_real_matches.py` for the ensemble generations and `train_bnn.py` for
+the uncertainty member. Feature construction is centralised in
+`build_dataset()`, which walks forward in time so a match never sees its own
+result, and computes each feature group through the same shared
+`feature_registry` helpers that live serving uses.
+
+`data/processed/*_training.csv` is legacy and is retained only for reproducing
+older runs. It holds 2,058 rows, leaves the xG and Elo columns zero in 85% of
+them, and its Eredivisie slice is synthesised by
+`scripts/generate_eredivisie_data.py`. Nothing in the serving path reads it.
+
+The schema a trainer targets follows the **active generation**, resolved through
+`active_feature_schema_version()`, never a hardcoded preference. `build_dataset`
+emits both an Apex vector and a canonical/incumbent one; because
+`uncertainty_service` aligns the served feature dict to the `feature_cols`
+stored in a checkpoint and raises when one is missing, training against the
+block that serving does not build fails closed at request time.
+
 ## Public product flow
 
 The homepage begins with upcoming verified fixtures. Full analysis is the only

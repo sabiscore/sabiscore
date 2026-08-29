@@ -20,6 +20,7 @@ const RollingAccuracyChart = dynamic(
   },
 );
 import { ValueBetScanner } from "@/components/value-bet-scanner";
+import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 import { canonicalLeagueId } from "@/lib/league";
 import { RPS_PROMOTION_GATE, meetsRpsGate } from "@/lib/model-gates";
 import { cn } from "@/lib/utils";
@@ -209,7 +210,7 @@ export function PerformancePageClient() {
               <p className="mt-2 text-right text-[11px] text-slate-600">
                 Walk-forward validated{" "}
                 <time dateTime={summary.validated_at}>
-                  {new Date(summary.validated_at).toLocaleString()}
+                  {formatLagosTimestamp(summary.validated_at)} WAT
                 </time>
               </p>
             )}

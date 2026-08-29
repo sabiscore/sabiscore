@@ -1,5 +1,58 @@
 # SabiScore Debt Ledger
 
+## 43. The BNN Brier gate is below the bookmaker market's own score — unattainable by construction
+
+**Tier:** `BLOCKED-ON-DECISION` — a certification threshold, Class C. Filed
+2026-08-29 while pointing `train_bnn.py` at the real corpus.
+
+`scripts/train_bnn.py` sets `BRIER_GATE = 0.220`. `_brier_score()` sums squared
+error over the three classes — the same convention as `multiclass_brier()` in
+`backend/scripts/train_on_real_matches.py` and the `brier_overall` that
+`walk_forward_validate()` reports (CLAUDE.md records the served generation's
+real settled value as **0.578** on that scale).
+
+**Measured on the 12,761 real matches in `backend/data/cache/`:**
+
+| forecaster | Brier (sum-over-classes) | accuracy |
+|---|---|---|
+| de-vigged bookmaker market | **0.5787** | 0.5361 |
+| class-prior forecaster | 0.6503 | — |
+| uniform 1/3 | 0.6667 | — |
+| **BNN gate** | **≤ 0.220** | — |
+
+The market — the strongest available 1X2 forecaster, priced by firms with far
+more resources than this project — **fails this gate by 2.6×**. No honest
+football model can pass it on this convention. The only artifact that ever did
+was the label-leakage build (0.0378, item 42).
+
+The BNN trained on the real corpus scores **0.5831** (200 epochs) — within
+0.005 of the market, i.e. a legitimately competitive football model that the
+gate reports as a failure.
+
+### Two readings, both requiring an authorized decision
+
+1. **Units mismatch.** `_brier_score()`'s own docstring says *"Mean Brier score
+   across all three classes"* while the code sums across them. Under the mean
+   convention the market scores 0.1929 and the real-corpus BNN 0.1944 — both
+   inside 0.220. The gate may have been specified against the docstring.
+2. **Threshold mis-specification.** The constant was simply set to a value with
+   no attainable referent.
+
+**Not changed here, deliberately.** Editing either the constant or the metric
+after observing a failing result is the same act, and is exactly what APEX §23
+forbids — "fixing" `_brier_score()` to make a failing gate pass would be a
+threshold change wearing a bug fix's clothes. The other three gates (ECE ≤
+0.050, CI coverage ≥ 0.880, draw ratio ≥ 0.600) are all attainable and the
+real-corpus run passes ECE and draw ratio on the MC-Dropout path.
+
+**Shipped instead (Class B, observability only):** `MARKET_BASELINE_BRIER` and
+`UNIFORM_BASELINE_BRIER` constants, printed beside every Brier result, so a
+~0.58 is never again read as a broken model — which is what the previous
+session's "Recommendation: add more training data" advice implied. More data
+will not move this; the corpus went 2,058 → 12,256 rows and the score moved
+0.615 → 0.583, converging on the market rather than on 0.220.
+
+
 ## 42. Staking is blocked by a permanent critical gap that no amount of model certification can clear
 
 **Tier:** `BLOCKED-ON-DECISION` — needs an authorized product/infra decision,
@@ -58,6 +111,70 @@ and CLAUDE.md's own rule is that only `critical_gaps` force `PARTIAL`:
 
 Nothing was changed. Recording the mechanism so the choice is made
 deliberately.
+
+### Addendum — 2026-08-29: option 1 was attempted locally and the artifact it
+### produced is not usable
+
+An operator installed `torch` and ran `scripts/train_bnn.py`. It reported
+`ALL PASS` on every production gate (ECE 0.0215, Brier 0.0378, CI coverage
+0.9878, draw ratio 1.2264) and wrote `backend/models/bnn_ensemble.pt`.
+
+**Those gates passed on label leakage, not skill.** `_augment_bnn_signal()`
+overwrote five feature columns with values drawn from a distribution whose
+mean was selected by `match_result` — the label — and did so on the whole
+frame *before* the train/val split, so no gate could detect it:
+
+```python
+result = frame["match_result"].values
+means = np.where(result == OUTCOME_HOME, h_mu,
+                 np.where(result == OUTCOME_AWAY, a_mu, d_mu))
+frame[col] = np.clip(means + rng.normal(0, sigma, len(result)), lo, hi)
+```
+
+Measured, not inferred: a plain `LogisticRegression` fitted on **only** those
+synthesised columns scores **0.9806 accuracy / 0.0368 multiclass Brier** on a
+held-out split (majority-class baseline 0.432). The BNN's "passing" 0.0378 is
+that number. For scale, the served generation's real settled walk-forward
+Brier is **0.578** and its RPS 0.243 — the artifact looked ~15× better than
+production because it was reading the answer off its own input.
+
+The function's own docstring claimed it was "conservative enough not to
+inflate gate metrics beyond what a real dataset would achieve." It was not.
+
+**Nothing reached production, on three independent counts:** `.gitignore:96`
+ignores `backend/models/*.pt` so the artifact cannot be committed; Render's
+`buildCommand` installs `requirements.runtime.txt`, which the operator's
+(malformed) `torch` line did not touch; and `uncertainty_service` fails closed
+when the file is absent. The reverted `requirements.txt` edit was
+`torch==2.3.0+cpu --extra-index-url` with no URL and no trailing newline — it
+would have broken `pip install` locally while having no production effect.
+
+**Fixed here (Class B):** `_augment_bnn_signal()` is deleted and replaced with
+`_warn_on_sparse_features()`, which reports the real 85%-zero sparsity instead
+of papering over it. Guarded by
+`test_training_scripts_never_derive_features_from_the_label` in
+`backend/tests/test_zero_fabrication_contract.py`, watched failing on a
+reintroduced leak before being trusted.
+
+**Two things option 1 must still resolve before it is viable:**
+
+1. The corpus itself. `data/processed/` leaves `xg_differential`,
+   `elo_difference`, `home_xg_diff_5` and `away_xg_diff_5` zero in **85%** of
+   rows — that sparsity is the real gap the leakage was hiding. Its Eredivisie
+   slice is generated by `scripts/generate_eredivisie_data.py`, which derives
+   every column from the outcome at eight sites. It is openly self-declared
+   synthetic and writes only to gitignored `data/processed/`, so it is
+   allowlisted in the guard rather than flagged — but a model trained on it
+   has not been shown skill either. The real corpus is
+   `backend/data/cache/fd_*.csv` (12,765 real matches, per the vΩ.46 retrain).
+2. `settings.bnn_model_path` defaults to `backend/models/bnn_ensemble.pt` —
+   exactly where the leaked artifact now sits on the operator's disk. It is
+   gitignored and cannot ship, but any local run will load it and emit
+   fabricated uncertainty that unblocks staking locally. **Delete it before
+   running the stack locally.**
+
+Option 1 remains open and still requires authorization. What changed is its
+cost: it needs a corpus fix first, not just a dependency and a training run.
 
 ## 41. The homepage published the model's internal provenance as consumer branding — APEX §11 violation, live, untracked
 
