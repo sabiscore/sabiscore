@@ -15,7 +15,6 @@ opening evidence remains absent.
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
@@ -28,6 +27,7 @@ from ..core.database import Match, OddsHistory, Team
 from ..db.models import MarketSnapshot
 from ..providers.the_odds_api import devig_probabilities
 from .canonical_identity_service import canonical_fixture_id_for_provider_event
+from .team_identity import select_unique_by_team_names
 
 logger = logging.getLogger(__name__)
 
@@ -96,45 +96,6 @@ def _parse_datetime(value: object) -> datetime | None:
     return None
 
 
-def _team_key(value: object) -> str:
-    """Conservative team-name key used only to narrow fixture identity.
-
-    Strip club affixes as complete tokens before compaction. Compacting first
-    made names ending in a vowel plus ``FC`` ambiguous with the longer ``AFC``
-    suffix (for example ``Chelsea FC`` became ``chelseafc`` and was reduced to
-    ``chelse``), causing valid provider records to fail closed as unmatched.
-    """
-    normalized = re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
-    tokens = normalized.split()
-    if not tokens:
-        return ""
-
-    if tokens[:3] == ["a", "f", "c"]:
-        tokens = tokens[3:]
-    elif tokens[:2] == ["c", "f"]:
-        tokens = tokens[2:]
-    elif tokens[0] in {"afc", "cf"} and len(tokens) > 1:
-        tokens = tokens[1:]
-
-    if len(tokens) > 2 and tokens[-3:] == ["a", "f", "c"]:
-        tokens = tokens[:-3]
-    elif len(tokens) > 1 and tokens[-2:] in (["f", "c"], ["c", "f"], ["s", "c"]):
-        tokens = tokens[:-2]
-    elif len(tokens) > 2 and tokens[-2:] in (["football", "club"], ["soccer", "club"]):
-        tokens = tokens[:-2]
-    elif tokens and tokens[-1] in {
-        "footballclub",
-        "soccerclub",
-        "afc",
-        "fc",
-        "cf",
-        "sc",
-    } and len(tokens) > 1:
-        tokens = tokens[:-1]
-
-    return "".join(tokens)
-
-
 def _same_prices(row: Any, *, home: float, draw: float, away: float) -> bool:
     return bool(row.home_win == home and row.draw == draw and row.away_win == away)
 
@@ -195,25 +156,27 @@ async def _fixture_candidates(
 
 
 def _match_record(
-    record: dict[str, Any], candidates: list[_FixtureCandidate]
+    record: dict[str, Any], candidates: list[_FixtureCandidate], league: str
 ) -> tuple[_FixtureCandidate | None, bool]:
     event_kickoff = _parse_datetime(record.get("provider_event_timestamp"))
-    home_key = _team_key(record.get("home_team", ""))
-    away_key = _team_key(record.get("away_team", ""))
-    if event_kickoff is None or not home_key or not away_key:
+    home = str(record.get("home_team", ""))
+    away = str(record.get("away_team", ""))
+    if event_kickoff is None or not home or not away:
         return None, False
 
-    matches = [
+    in_window = [
         candidate
         for candidate in candidates
-        if _team_key(candidate.home_name) == home_key
-        and _team_key(candidate.away_name) == away_key
-        and abs((candidate.kickoff - event_kickoff).total_seconds())
+        if abs((candidate.kickoff - event_kickoff).total_seconds())
         <= _KICKOFF_MATCH_TOLERANCE_MINUTES * 60
     ]
-    if len(matches) == 1:
-        return matches[0], False
-    return None, len(matches) > 1
+    return select_unique_by_team_names(
+        in_window,
+        home=home,
+        away=away,
+        league=league,
+        names=lambda candidate: (candidate.home_name, candidate.away_name),
+    )
 
 
 def _valid_record(record: dict[str, Any]) -> tuple[float, float, float] | None:
@@ -427,7 +390,7 @@ async def persist_market_board(
             result.invalid += 1
             continue
         selected = min(coherent, key=lambda record: str(record.get("bookmaker") or ""))
-        candidate, ambiguous = _match_record(selected, candidates)
+        candidate, ambiguous = _match_record(selected, candidates, league)
         if candidate is None:
             if ambiguous:
                 result.ambiguous += 1

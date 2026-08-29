@@ -15,7 +15,8 @@ from __future__ import annotations
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import Any, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,8 @@ from ..core.database import Team
 from ..db.models import EloRatingSnapshot
 from ..db.provider_elo_team_mapping import ProviderEloTeamMapping
 from ..providers.reconciliation import TeamCandidate, reconcile_team
+
+T = TypeVar("T")
 
 _CLUB_AFFIXES = re.compile(r"^(afc|cf|1\.)\s+|\s+(fc|afc|cf|sc)$", flags=re.IGNORECASE)
 _LEGAL_TEAM_TOKENS = {
@@ -47,6 +50,9 @@ _LEGAL_TEAM_TOKENS = {
     "us",
     "vfb",
 }
+
+# Spelled-out club designators, stripped from the end of a name only.
+_TRAILING_CLUB_WORDS = {"club", "football", "soccer"}
 
 # Explicit, league-scoped aliases established from production identity evidence.
 # These are identity assertions, not fuzzy-threshold exceptions. Once the real
@@ -90,21 +96,153 @@ def _ascii_text(value: str) -> str:
     )
 
 
+def _collapse_letter_runs(tokens: list[str]) -> list[str]:
+    """Rejoin single-letter runs so dotted abbreviations read as one token.
+
+    ``Chelsea F.C.`` and ``C.F. Monterrey`` tokenize to ``["chelsea","f","c"]``
+    and ``["c","f","monterrey"]``. Without this, the designator never matches
+    ``_LEGAL_TEAM_TOKENS`` and survives into the identity key, so the dotted
+    spelling fails to match the same club written ``Chelsea FC``.
+    """
+    collapsed: list[str] = []
+    run: list[str] = []
+    for token in tokens:
+        if len(token) == 1 and token.isalpha():
+            run.append(token)
+            continue
+        if run:
+            collapsed.append("".join(run) if len(run) > 1 else run[0])
+            run = []
+        collapsed.append(token)
+    if run:
+        collapsed.append("".join(run) if len(run) > 1 else run[0])
+    return collapsed
+
+
 def _identity_key(name: str) -> str:
     """Normalize legal-name decoration without guessing nicknames.
 
     Only bounded club-designator/founding-number tokens are removed. Semantic
     words such as ``United`` or ``City`` remain part of the identity key.
     """
-    tokens = re.findall(r"[a-z0-9]+", _ascii_text(name).lower().replace("&", " "))
+    tokens = _collapse_letter_runs(
+        re.findall(r"[a-z0-9]+", _ascii_text(name).lower().replace("&", " "))
+    )
     while tokens and (tokens[0] in _LEGAL_TEAM_TOKENS or tokens[0].isdigit()):
         tokens.pop(0)
+    # Spelled-out designators are trailing decoration only. Leading ``Club`` is
+    # deliberately preserved: it is a real name component in ``Club Atletico de
+    # Madrid`` and ``Club Brugge``, whereas a trailing ``Football Club`` never is.
+    while len(tokens) > 1 and tokens[-1] in _TRAILING_CLUB_WORDS:
+        tokens.pop()
     while tokens and (
         tokens[-1] in _LEGAL_TEAM_TOKENS
         or (tokens[-1].isdigit() and len(tokens[-1]) <= 4)
     ):
         tokens.pop()
     return " ".join(tokens)
+
+
+# Market-scoped identity assertions: live betting-market provider names vs the
+# ``Team.name`` values fixture sync persists. These are deliberately SEPARATE
+# from ``_AUDITED_ALIASES`` because the two tables point in opposite directions.
+# ``_AUDITED_ALIASES`` maps a provider legal name onto the shorter historical
+# Elo-corpus spelling ("Olympique Lyonnais" would need to become "Lyon"); the
+# market matcher needs the reverse ("Lyon" -> "Olympique Lyonnais"). Merging
+# them would make ``resolve_team_id`` fail closed on corpus rows it currently
+# resolves, because an alias that names an absent target returns unresolved.
+#
+# Each entry was established by observing a real provider board against the
+# live fixture list: same competition, same kickoff, with the OTHER side of the
+# same fixture already matching, which determines the club uniquely.
+_MARKET_ALIASES: dict[tuple[str, str], str] = {
+    ("LIGUE_1", "lyon"): "olympique lyonnais",
+    ("LIGUE_1", "brest"): "brestois",
+    ("SERIE_A", "inter milan"): "internazionale milano",
+}
+
+
+def identity_key(name: str) -> str:
+    """Public normalizer shared by identity resolution and market matching."""
+    return _identity_key(name)
+
+
+def market_identity_key(name: str, league: str) -> str:
+    """Identity key with league-scoped alias folding, applied symmetrically.
+
+    Both the provider name and the stored fixture name go through this, so an
+    alias collapses the two spellings onto one representative regardless of
+    which side happens to carry the decorated form.
+    """
+    key = _identity_key(name)
+    return _MARKET_ALIASES.get((league, key)) or _AUDITED_ALIASES.get((league, key)) or key
+
+
+def _keys_equivalent(left: str, right: str) -> bool:
+    """Exact match, or one name's tokens fully contained in the other's.
+
+    Providers publish short trade names ("Udinese", "Strasbourg") where fixture
+    sync stores full legal names ("Udinese Calcio", "RC Strasbourg Alsace").
+    Subset rather than substring because the legal form frequently inserts
+    tokens: ``celta vigo`` vs ``celta de vigo``.
+
+    This is deliberately permissive and is ONLY usable behind the staged
+    uniqueness guard in ``select_unique_by_team_names``. Two clubs sharing a
+    place name (Paris FC / Paris SG) both satisfy it, so the exact stage runs
+    first and any residual tie fails closed as ambiguous.
+
+    ⚠️ Residual exposure, stated plainly: if the genuinely-correct fixture is
+    absent from the candidate set, a bare place name can still be the sole
+    subset match for a larger club and be accepted. Three independent
+    constraints bound that -- same competition, kickoff within
+    ``_KICKOFF_MATCH_TOLERANCE_MINUTES``, and BOTH sides matching -- and a
+    known cross-vocabulary pair belongs in ``_MARKET_ALIASES`` so the exact
+    stage resolves it before this one is ever reached.
+    """
+    if left == right:
+        return True
+    left_tokens, right_tokens = set(left.split()), set(right.split())
+    if not left_tokens or not right_tokens:
+        return False
+    return left_tokens <= right_tokens or right_tokens <= left_tokens
+
+
+def select_unique_by_team_names(
+    candidates: Sequence[T],
+    *,
+    home: str,
+    away: str,
+    league: str,
+    names: Callable[[T], tuple[str, str]],
+) -> tuple[T | None, bool]:
+    """Resolve one fixture from ``candidates`` by home/away name, or fail closed.
+
+    Returns ``(match, ambiguous)``. Exact keys are tried across the whole
+    candidate set before the permissive stage, so a club whose short name is
+    contained in a different club's name (Paris FC inside Paris Saint-Germain)
+    is resolved by its own exact key and never reaches the loose comparison.
+    """
+    home_key = market_identity_key(home, league)
+    away_key = market_identity_key(away, league)
+    if not home_key or not away_key:
+        return None, False
+
+    keyed = [
+        (market_identity_key(pair[0], league), market_identity_key(pair[1], league), candidate)
+        for candidate in candidates
+        for pair in (names(candidate),)
+    ]
+
+    for predicate in (
+        lambda h, a: h == home_key and a == away_key,
+        lambda h, a: _keys_equivalent(h, home_key) and _keys_equivalent(a, away_key),
+    ):
+        matches = [candidate for h, a, candidate in keyed if predicate(h, a)]
+        if len(matches) == 1:
+            return matches[0], False
+        if len(matches) > 1:
+            return None, True
+    return None, False
 
 
 def _unique_match(rows: list[tuple[str, str]], predicate: Any) -> str | None:
@@ -356,6 +494,9 @@ async def resolve_team_id(
 
 __all__ = [
     "bind_provider_elo_team_id",
+    "identity_key",
+    "market_identity_key",
+    "select_unique_by_team_names",
     "resolve_provider_elo_team_id",
     "resolve_team_id",
 ]
