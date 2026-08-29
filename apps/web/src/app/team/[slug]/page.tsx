@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTeamIntelligence, APIError, TeamIntelligenceResponse, TeamFormVerdict } from "@/lib/api";
+import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -273,7 +274,8 @@ export default async function TeamIntelligencePage({ params }: PageProps) {
       )}
 
       <footer className="text-center text-[10px] text-zinc-700">
-        Intelligence queried at {new Date(data.queried_at).toLocaleString()}
+        Intelligence queried at{" "}
+        <time dateTime={data.queried_at}>{formatLagosTimestamp(data.queried_at)} WAT</time>
       </footer>
     </div>
   );

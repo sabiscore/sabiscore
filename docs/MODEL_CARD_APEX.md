@@ -65,6 +65,29 @@ baseline in any evaluated league row. Its feature matrix reports 24 defaulted,
 non-variable training slots, 11 positions incompatible with the current serving
 schema, and four slots that always report a serving data gap.
 
+### Hyperparameter provenance (added 2026-08-30)
+
+Every candidate now records how it was fitted. `training_report_real.json`
+carries, per league, `hyperparameter_source` — either `baseline_hardcoded` or
+`optuna_tpe_rps_{N}trials` — alongside the exact `hyperparameters` used. A run
+without `--tune` reproduces the previous baseline values exactly, so existing
+artifacts are unaffected and comparable.
+
+When `--tune N` is passed, `train_on_real_matches.py` runs an Optuna TPE search
+per base learner over `n_estimators`, `max_depth`, `learning_rate`,
+`reg_lambda`, `subsample` and `colsample_bytree`, scored on **RPS** — the metric
+`model_registry.compare_models` promotes on — across a `TimeSeriesSplit` of the
+**training slice only**. Calibration and holdout seasons are never seen by the
+search, so a tuned candidate's holdout RPS remains an out-of-sample number
+rather than a search artifact. Each learner uses its own sampler seed;
+a single shared seed made XGBoost and LightGBM converge on identical
+hyperparameters and collapsed the ensemble diversity that stacking depends on.
+
+CatBoost is not searched: it is pinned `python_version < "3.14"` and has no
+wheel for the development interpreter. Its `depth` / `l2_leaf_reg` /
+`iterations` axes are covered by the equivalent XGBoost and LightGBM
+parameters.
+
 Machine-readable evidence lives beside the quarantined artifacts:
 
 - `training_report_real.json`: sample windows, RPS, Brier, log loss,

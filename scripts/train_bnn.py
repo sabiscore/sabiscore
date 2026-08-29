@@ -67,6 +67,19 @@ BASE_DRAW_RATE = 0.246         # ground truth draw frequency (from ground_truth 
 DRAW_RATIO_GATE = 0.60         # C5: predicted_draw_rate / 0.246 ≥ 0.60
 ECE_GATE = 0.050
 BRIER_GATE = 0.220
+
+# ⚠️ Reference point, not a gate. `_brier_score()` sums squared error over the
+# three classes (the same convention as `multiclass_brier` in
+# train_on_real_matches.py, and the `brier_overall` reported by
+# `walk_forward_validate`). On that scale the de-vigged BOOKMAKER MARKET —
+# the strongest available football forecaster — scores 0.5787 over the 12,761
+# real matches in backend/data/cache, and a uniform 1/3 forecaster scores
+# 0.6667. BRIER_GATE above is therefore BELOW the market's own score, i.e. it
+# is not attainable by any honest 1X2 model on this convention. Printed beside
+# every result so a ~0.58 is not misread as a broken model. See docs/DEBT.md
+# item 43 — changing the gate is a certification decision, not a code fix.
+MARKET_BASELINE_BRIER = 0.5787
+UNIFORM_BASELINE_BRIER = 0.6667
 CI_COVERAGE_GATE = 0.880
 
 N_BINS_ECE = 10
@@ -167,55 +180,96 @@ def _select_causal_top_features(
     return selected
 
 
-def _augment_bnn_signal(frame: pd.DataFrame, seed: int = SEED) -> pd.DataFrame:
-    """Synthesise outcome-correlated values for near-zero feature columns in-memory.
+def _load_real_corpus(cache_dir: Path) -> pd.DataFrame:
+    """Build the training frame from the 12,765 real matches in backend/data/cache.
 
-    Five of the six league CSV generators don't populate xg_differential,
-    elo_difference, or home_implied_prob — they're zeros in 85% of training rows.
-    This function adds synthetic signal (same statistical profile as the Eredivisie
-    generator) only for rows where those columns are near-zero, so the BNN has
-    sufficient training signal without touching any files on disk.
+    Reuses ``backend/scripts/train_on_real_matches.build_dataset`` rather than
+    reimplementing feature construction: that builder walks forward in time
+    (a match never sees its own result), and computes features through the same
+    shared ``feature_registry`` helpers that live serving uses, which is the
+    train/serve parity constraint the v5_phase7 retrain established.
 
-    The augmentation matches the distribution of real football data (ATE ≈ 0.30-0.45
-    per unit) and is conservative enough not to inflate gate metrics beyond what
-    a real dataset with these features would achieve.
+    Schema follows the ACTIVE GENERATION, not a hardcoded preference. The
+    builder emits both an Apex vector (``X``) and a canonical/incumbent one
+    (``X_incumbent``); ``uncertainty_service._build_input_tensor`` aligns the
+    served feature dict to the ``feature_cols`` saved in this checkpoint and
+    raises when one is missing, so training on the block serving does not build
+    would fail closed at request time with "BNN feature schema incomplete".
     """
-    frame = frame.copy()
-    rng = np.random.default_rng(seed)
+    import importlib.util
 
-    if "match_result" not in frame.columns:
-        return frame
+    trainer_path = _ROOT / "backend" / "scripts" / "train_on_real_matches.py"
+    if not trainer_path.exists():
+        raise FileNotFoundError(f"Real-corpus builder not found at {trainer_path}")
+    spec = importlib.util.spec_from_file_location("sabiscore_real_trainer", trainer_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load the real-corpus builder")
+    trainer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(trainer)
 
-    result = frame["match_result"].values
+    try:
+        from backend.src.models.active_generation import active_feature_schema_version
+        from backend.src.models.feature_registry import is_apex_schema
+        schema_version = active_feature_schema_version()
+        apex = is_apex_schema(schema_version)
+    except Exception as exc:  # noqa: BLE001 - resolver failure must not pick a schema
+        log.warning("Could not resolve the active feature schema (%s); "
+                    "defaulting to the canonical block that serving builds today", exc)
+        schema_version, apex = "phase7_68", False
 
-    # (column, home_mean, draw_mean, away_mean, noise_std, clip_lo, clip_hi)
-    # Means match real football data distributions (ATE ≈ 0.30-0.45 per unit).
-    # Tighter sigma increases SNR so the model can distinguish outcomes confidently.
-    _AUGMENT_SPEC = [
-        ("xg_differential",   0.55,  0.10, -0.55, 0.20, -3.0, 3.0),
-        ("elo_difference",   35.0,   2.0,  -35.0, 22.0, -120.0, 120.0),
-        ("home_implied_prob", 0.50,  0.34,  0.22, 0.06,  0.05, 0.90),
-        ("home_xg_diff_5",    0.38,  0.05, -0.38, 0.18, -2.0, 2.0),
-        ("away_xg_diff_5",   -0.28,  0.05,  0.28, 0.15, -2.0, 2.0),
-    ]
+    key, names = (
+        ("X", list(trainer.APEX_FEATURES_68)) if apex
+        else ("X_incumbent", list(trainer.CANONICAL_FEATURES_68))
+    )
+    log.info("Active feature schema: %s -> training on %d %s columns",
+             schema_version, len(names), key)
 
-    for col, h_mu, d_mu, a_mu, sigma, lo, hi in _AUGMENT_SPEC:
+    matches = trainer.load_matches(cache_dir)
+    if not matches:
+        raise FileNotFoundError(f"No parseable fd_*.csv matches in {cache_dir}")
+    dataset = trainer.build_dataset(matches)
+
+    rows, labels, dates = [], [], []
+    for league, payload in dataset.items():
+        vectors = payload[key]
+        rows.extend(vectors)
+        labels.extend(payload["y"])
+        dates.extend(payload["dates"])
+        log.info("  %-12s %5d rows", league, len(vectors))
+
+    # The downstream split is chronological and does NOT shuffle, so the frame
+    # must actually be in time order. Concatenating per-league blocks would put
+    # one whole league in the validation set instead of the most recent matches.
+    order = np.argsort(np.array(dates))
+    frame = pd.DataFrame([rows[i] for i in order], columns=names)
+    frame["match_result"] = [labels[i] for i in order]
+    log.info("Real corpus: %d matches, %d features, %s -> %s",
+             len(frame), len(names), dates[order[0]].date(), dates[order[-1]].date())
+    return frame
+
+
+def _warn_on_sparse_features(frame: pd.DataFrame) -> None:
+    """Report near-constant columns instead of inventing values for them.
+
+    Several league CSV generators leave xg/elo columns at zero for most rows.
+    That sparsity is a real gap in the corpus: the honest response is a loud
+    warning (and a corpus fix upstream), never synthesising values. A prior
+    version of this script filled these columns from ``match_result`` itself,
+    which leaked the label into the features and drove the validation Brier to
+    0.038 -- a plain logistic regression on those five columns alone scores
+    0.98 accuracy, so every production gate passed on leakage rather than skill.
+    """
+    for col in ("xg_differential", "elo_difference", "home_implied_prob",
+                "home_xg_diff_5", "away_xg_diff_5"):
         if col not in frame.columns:
             continue
-        vals = frame[col].values.astype(float)
-        frac_zero = float((np.abs(vals) < 1e-6).mean())
-        if frac_zero < 0.40:
-            continue  # majority of rows already have non-zero signal — don't overwrite
-
-        means = np.where(result == OUTCOME_HOME, h_mu,
-                         np.where(result == OUTCOME_AWAY, a_mu, d_mu))
-        synthetic = np.clip(means + rng.normal(0, sigma, len(result)), lo, hi)
-        frame[col] = synthetic.astype(np.float32)
-        log.info(
-            "BNN signal augmentation: '%s' synthesised (frac_zero=%.2f)", col, frac_zero
-        )
-
-    return frame
+        frac_zero = float((np.abs(frame[col].values.astype(float)) < 1e-6).mean())
+        if frac_zero >= 0.40:
+            log.warning(
+                "Sparse feature '%s': %.0f%% of rows are zero. The BNN will train "
+                "on a mostly-absent signal; fix the corpus rather than the column.",
+                col, frac_zero * 100,
+            )
 
 
 def _build_feature_matrix(
@@ -361,6 +415,9 @@ def _log_gate_results(label: str, metrics: Dict[str, float]) -> None:
              "✓" if metrics["ece"] <= ECE_GATE else "✗")
     log.info("  Brier:       %.4f  (gate ≤ %.3f)  %s", metrics["brier"], BRIER_GATE,
              "✓" if metrics["brier"] <= BRIER_GATE else "✗")
+    log.info("               reference: bookmaker market %.4f | uniform 1/3 %.4f "
+             "(same sum-over-classes convention)",
+             MARKET_BASELINE_BRIER, UNIFORM_BASELINE_BRIER)
     log.info("  CI coverage: %.4f  (gate ≥ %.3f)  %s", metrics["ci_coverage"], CI_COVERAGE_GATE,
              "✓" if metrics["ci_coverage"] >= CI_COVERAGE_GATE else "✗")
     log.info("  Draw ratio:  %.4f  (gate ≥ %.3f)  %s", metrics["draw_ratio"], DRAW_RATIO_GATE,
@@ -600,6 +657,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Train BNN Ensemble Member (Phase 6-A)")
     parser.add_argument("--data-dir", default="data/processed",
                         help="Directory containing *_training.csv files")
+    parser.add_argument("--corpus", default="real", choices=["real", "processed"],
+                        help="real = the 12,765 real matches in backend/data/cache "
+                             "(default); processed = the legacy data/processed CSVs, "
+                             "which leave xg/elo zero in 85%% of rows")
+    parser.add_argument("--cache-dir", default="backend/data/cache",
+                        help="Real-corpus directory (fd_*.csv), used when --corpus real")
     parser.add_argument("--models-dir", default="backend/models",
                         help="Output directory for saved model checkpoints")
     parser.add_argument("--max-epochs", type=int, default=200)
@@ -639,13 +702,14 @@ def main() -> int:
     models_dir = Path(args.models_dir)
     models_dir.mkdir(parents=True, exist_ok=True)
 
-    log.info("Loading training data from %s …", data_dir)
-    frame = _load_training_frames(data_dir)
-    log.info("Loaded %d samples across %d columns", len(frame), len(frame.columns))
-
-    # Augment near-zero features in-memory before feature selection so variance
-    # filter and causal ATE ranking see realistic signal across all leagues
-    frame = _augment_bnn_signal(frame, seed=SEED)
+    if args.corpus == "real":
+        log.info("Loading real match corpus from %s …", args.cache_dir)
+        frame = _load_real_corpus(Path(args.cache_dir))
+    else:
+        log.info("Loading training data from %s …", data_dir)
+        frame = _load_training_frames(data_dir)
+        log.info("Loaded %d samples across %d columns", len(frame), len(frame.columns))
+        _warn_on_sparse_features(frame)
 
     feature_cols = _select_feature_cols(frame)
     if args.top_features > 0:

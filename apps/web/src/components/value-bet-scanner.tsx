@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, AlertCircle, Loader2, ArrowUpRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ function formatKickoff(utcStr: string): string {
 function PredictionAgePill({ createdAt }: { createdAt?: string }) {
   if (!createdAt) return null;
   const ageSecs = Math.round((Date.now() - new Date(createdAt).getTime()) / 1000);
-  const title = `Prediction generated at ${new Date(createdAt).toLocaleString()}`;
+  const title = `Prediction generated at ${formatLagosTimestamp(createdAt)} WAT`;
 
   if (ageSecs < 30 * 60) {
     return <span className="text-[9px] text-emerald-500" title={title}>Fresh</span>;
@@ -151,7 +152,7 @@ function DataGapState({ data }: { data?: ValueBetScanResponse }) {
       </p>
       {data?.generated_at ? (
         <p className="text-[10px] text-slate-500">
-          Checked {new Date(data.generated_at).toLocaleString()} · {data.provenance?.join(" + ") || "provenance unavailable"}
+          Checked <time dateTime={data.generated_at}>{formatLagosTimestamp(data.generated_at)} WAT</time> · {data.provenance?.join(" + ") || "provenance unavailable"}
         </p>
       ) : null}
       <Link

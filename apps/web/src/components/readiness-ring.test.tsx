@@ -60,6 +60,22 @@ describe("ReadinessRing capability line (D6)", () => {
 
   it("falls back to the neutral copy for a backend response with no capability field yet", async () => {
     renderRing({ backendStatus: "ok", backendChecks: READY_CHECKS });
-    expect(await screen.findByText("No fixtures to verify yet")).toBeInTheDocument();
+    expect(await screen.findByText("Capability not reported")).toBeInTheDocument();
+  });
+
+  // Regression: /health/ready is side-effect free and reports this state on every
+  // healthy call. It was absent from the whitelist, so it degraded to "unknown"
+  // and rendered "No fixtures to verify yet" while 60 fixtures were live.
+  it("never claims there are no fixtures when readiness simply did not probe", async () => {
+    renderRing({
+      backendStatus: "ok",
+      backendChecks: READY_CHECKS,
+      backendCapability: {
+        status: "not_probed_by_readiness",
+        message: "Readiness verifies infrastructure and loaded-model state only",
+      },
+    });
+    expect(await screen.findByText("Capability checked separately")).toBeInTheDocument();
+    expect(screen.queryByText("No fixtures to verify yet")).not.toBeInTheDocument();
   });
 });

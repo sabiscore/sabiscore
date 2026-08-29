@@ -569,16 +569,142 @@ def _fit_temperature(meta_model: Any, meta_features: Any, y_calibration: np.ndar
     return TemperatureScaledMetaModel(meta_model, float(result.x))
 
 
+# ---------------------------------------------------------------------------
+# Optional Bayesian hyperparameter search
+# ---------------------------------------------------------------------------
+
+# Baseline hyperparameters. These are what ship when --tune is not passed, so
+# an untuned run stays byte-identical to every prior candidate.
+_BASE_PARAMS: Dict[str, Dict[str, object]] = {
+    "random_forest": {"n_estimators": 300, "max_depth": 8, "min_samples_leaf": 15},
+    "xgboost": {"n_estimators": 250, "max_depth": 4, "learning_rate": 0.05,
+                "subsample": 0.85, "colsample_bytree": 0.85, "reg_lambda": 2.0},
+    "lightgbm": {"n_estimators": 250, "max_depth": 5, "learning_rate": 0.05,
+                 "subsample": 0.85, "colsample_bytree": 0.85, "reg_lambda": 2.0},
+}
+
+
+def _suggest(trial, learner: str) -> Dict[str, object]:
+    """Search space per learner.
+
+    CatBoost is deliberately absent: it is pinned `python_version < "3.14"` in
+    requirements.txt and has no wheel for the local interpreter, so a CatBoost
+    space could be written but never executed or verified here. Its parameters
+    map onto the two gradient-boosted learners that ARE available —
+    ``depth`` -> ``max_depth``, ``l2_leaf_reg`` -> ``reg_lambda``,
+    ``iterations`` -> ``n_estimators`` — so the same axes are searched.
+    """
+    if learner == "random_forest":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 150, 500, step=50),
+            "max_depth": trial.suggest_int("max_depth", 4, 14),
+            "min_samples_leaf": trial.suggest_int("min_samples_leaf", 5, 40),
+        }
+    return {
+        "n_estimators": trial.suggest_int("n_estimators", 100, 500, step=50),
+        "max_depth": trial.suggest_int("max_depth", 3, 8),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
+        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0.5, 20.0, log=True),
+    }
+
+
+def _instantiate(learner: str, params: Dict[str, object], *, n_jobs: int = -1):
+    from lightgbm import LGBMClassifier
+    from sklearn.ensemble import RandomForestClassifier
+    from xgboost import XGBClassifier
+
+    if learner == "random_forest":
+        return RandomForestClassifier(random_state=42, n_jobs=n_jobs, **params)
+    if learner == "xgboost":
+        return XGBClassifier(
+            objective="multi:softprob", num_class=3, random_state=42,
+            tree_method="hist", eval_metric="mlogloss", n_jobs=n_jobs, **params,
+        )
+    return LGBMClassifier(
+        objective="multiclass", num_class=3, random_state=42, verbose=-1,
+        n_jobs=n_jobs, **params,
+    )
+
+
+def tune_hyperparameters(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    *,
+    n_trials: int,
+    league: str,
+) -> Dict[str, Dict[str, object]]:
+    """Bayesian (TPE) search over the three base learners, scored on RPS.
+
+    Three deliberate choices:
+
+    * **RPS, not accuracy or log-loss.** RPS is the repo's certified promotion
+      metric (``model_registry.compare_models`` defaults to it, ascending), and
+      it is ordinal-aware — a football forecast that puts its mass on the wrong
+      side of a draw should be punished more than one that is merely unsure.
+      Tuning on anything else optimises a target certification does not read.
+    * **TimeSeriesSplit over the TRAINING slice only.** The calibration and
+      holdout seasons are never touched, so a tuned candidate's holdout RPS
+      stays an honest out-of-sample number rather than a search artifact.
+    * **MedianPruner + n_jobs=1 inside trials.** Parallelism multiplies across
+      trees x folds x trials, which is what exhausts memory on a laptop; the
+      pruner also abandons a bad configuration after its first fold instead of
+      paying for all of them.
+    """
+    import optuna
+    from sklearn.model_selection import TimeSeriesSplit
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    splitter = TimeSeriesSplit(n_splits=3)
+    tuned: Dict[str, Dict[str, object]] = {}
+
+    # Each learner gets its own sampler seed. A single shared seed makes TPE
+    # walk the identical sequence for xgboost and lightgbm — they share a search
+    # space — so both converge on byte-identical hyperparameters and the stack
+    # loses the diversity that is the entire reason for ensembling them.
+    for offset, learner in enumerate(("random_forest", "xgboost", "lightgbm")):
+        def objective(trial, _learner=learner) -> float:
+            params = _suggest(trial, _learner)
+            scores = []
+            for fold, (tr, va) in enumerate(splitter.split(X_train)):
+                model = _instantiate(_learner, params, n_jobs=1)
+                model.fit(X_train[tr], y_train[tr])
+                scores.append(
+                    ranked_probability_score(y_train[va], model.predict_proba(X_train[va]))
+                )
+                trial.report(float(np.mean(scores)), fold)
+                if trial.should_prune():
+                    raise optuna.TrialPruned()
+            return float(np.mean(scores))
+
+        study = optuna.create_study(
+            direction="minimize",                    # RPS: lower is better
+            sampler=optuna.samplers.TPESampler(seed=42 + offset),
+            pruner=optuna.pruners.MedianPruner(n_warmup_steps=1),
+            study_name=f"{league}_{learner}",
+        )
+        study.optimize(objective, n_trials=n_trials, gc_after_trial=True)
+        tuned[learner] = dict(study.best_params)
+        logger.info(
+            "    %-14s tuned rps=%.4f (%d trials, %d pruned) %s",
+            learner, study.best_value, len(study.trials),
+            sum(1 for t in study.trials if t.state == optuna.trial.TrialState.PRUNED),
+            study.best_params,
+        )
+
+    return tuned
+
+
 def train_league(
     league: str,
     data: dict,
     holdout_season: str,
     feature_names: Optional[List[str]] = None,
+    tune_trials: int = 0,
 ) -> Optional[dict]:
-    from lightgbm import LGBMClassifier
-    from sklearn.ensemble import RandomForestClassifier
-    from xgboost import XGBClassifier
-
+    # Learner construction lives in _instantiate() so the tuning path and the
+    # baseline path cannot drift into two different model definitions.
     # The vector's own width decides the schema — a caller cannot mislabel an
     # 89-wide matrix as 68 (or vice versa) by passing the wrong list.
     feature_names = list(feature_names or APEX_FEATURES_68)
@@ -629,23 +755,18 @@ def train_league(
     X_calibration, y_calibration = X[calibration_mask], y[calibration_mask]
     X_test, y_test = X[test_mask], y[test_mask]
 
-    models = {
-        "random_forest": RandomForestClassifier(
-            n_estimators=300, max_depth=8, min_samples_leaf=15,
-            random_state=42, n_jobs=-1,
-        ),
-        "xgboost": XGBClassifier(
-            n_estimators=250, max_depth=4, learning_rate=0.05,
-            subsample=0.85, colsample_bytree=0.85, reg_lambda=2.0,
-            objective="multi:softprob", num_class=3, random_state=42,
-            tree_method="hist", eval_metric="mlogloss",
-        ),
-        "lightgbm": LGBMClassifier(
-            n_estimators=250, max_depth=5, learning_rate=0.05,
-            subsample=0.85, colsample_bytree=0.85, reg_lambda=2.0,
-            objective="multiclass", num_class=3, random_state=42, verbose=-1,
-        ),
-    }
+    # Search only over the training slice; calibration and holdout stay unseen so
+    # the reported holdout RPS remains an out-of-sample number, not a search result.
+    params = {name: dict(cfg) for name, cfg in _BASE_PARAMS.items()}
+    tuned_params: Optional[Dict[str, Dict[str, object]]] = None
+    if tune_trials > 0:
+        logger.info("  %s: Bayesian search, %d trials/learner", league, tune_trials)
+        tuned_params = tune_hyperparameters(
+            X_train, y_train, n_trials=tune_trials, league=league
+        )
+        params = tuned_params
+
+    models = {name: _instantiate(name, params[name]) for name in _BASE_PARAMS}
     meta_model = _fit_meta_model(models, X_train, y_train)
     for model in models.values():
         model.fit(X_train, y_train)
@@ -661,6 +782,10 @@ def train_league(
     # scored here too rather than assumed equivalent to the averaged base.
     metrics["stacked"] = evaluate(
         y_test, meta_model.predict_proba(_build_meta_features(models, X_test))
+    )
+    metrics["hyperparameters"] = params
+    metrics["hyperparameter_source"] = (
+        f"optuna_tpe_rps_{tune_trials}trials" if tuned_params else "baseline_hardcoded"
     )
     metrics["train_n"] = int(len(y_train))
     metrics["calibration_n"] = int(len(y_calibration))
@@ -754,6 +879,7 @@ def train_pooled(
     dataset: Dict[str, dict],
     holdout_season: str,
     feature_names: Optional[List[str]] = None,
+    tune_trials: int = 0,
 ) -> Optional[dict]:
     """One model over every league, for leagues too small to train alone.
 
@@ -770,7 +896,10 @@ def train_pooled(
         for key in pooled:
             pooled[key].extend(data[key])
     logger.info("\nPooled model over %d leagues, %d rows", len(dataset), len(pooled["y"]))
-    return train_league("POOLED", pooled, holdout_season, feature_names=feature_names)
+    return train_league(
+        "POOLED", pooled, holdout_season,
+        feature_names=feature_names, tune_trials=tune_trials,
+    )
 
 
 def main() -> int:
@@ -778,6 +907,13 @@ def main() -> int:
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
     ap.add_argument("--out-dir", type=Path, default=_BACKEND_ROOT / "models" / "candidate")
     ap.add_argument("--holdout-season", default="2526")
+    ap.add_argument(
+        "--tune", type=int, default=0, metavar="N",
+        help="Run N Optuna (TPE) trials per base learner, scored on RPS over a "
+             "TimeSeriesSplit of the training slice. 0 (default) keeps the "
+             "baseline hyperparameters, so an untuned run is unchanged. "
+             "Start around 30; trials are pruned on the median rule.",
+    )
     ap.add_argument(
         "--include-phase8",
         action="store_true",
@@ -812,7 +948,8 @@ def main() -> int:
     trained: set = set()
     for league in sorted(dataset):
         bundle = train_league(
-            league, dataset[league], args.holdout_season, feature_names=feature_names
+            league, dataset[league], args.holdout_season,
+            feature_names=feature_names, tune_trials=args.tune,
         )
         if bundle is None:
             continue
@@ -825,7 +962,10 @@ def main() -> int:
     # Cover whatever was too small to fit on its own.
     uncovered = sorted(set(dataset) - trained)
     if uncovered:
-        pooled_bundle = train_pooled(dataset, args.holdout_season, feature_names=feature_names)
+        pooled_bundle = train_pooled(
+            dataset, args.holdout_season, feature_names=feature_names,
+            tune_trials=args.tune,
+        )
         if pooled_bundle is not None:
             report["POOLED"] = pooled_bundle.pop("_metrics")
             pooled_bundle["model_metadata"]["pooled_fallback_for"] = uncovered

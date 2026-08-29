@@ -142,3 +142,40 @@ def test_explainer_fallback_is_empty_not_fabricated() -> None:
     assert perf.get("feature_importance_global") == {}, (
         "ModelExplainer fabricated global feature importances — zero-fab violation"
     )
+
+
+def test_training_scripts_never_derive_features_from_the_label() -> None:
+    """No training script may write a feature column computed from the outcome.
+
+    `scripts/train_bnn.py` once filled five near-zero feature columns with values
+    drawn from a distribution selected by ``match_result`` -- the label -- and then
+    trained on them. Because the leak was applied before the train/val split, every
+    production gate passed (val Brier 0.038 vs the served model's real settled 0.578)
+    while the network had learned only to read the answer off its own input.
+    """
+    scripts_root = Path(__file__).resolve().parents[2] / "scripts"
+    label_cols = ("match_result", "result", "outcome", "y_true", "label")
+
+    # generate_eredivisie_data.py derives every column from the outcome too, but it
+    # says so in its own docstring, exists to emit a synthetic fixture for the Optuna
+    # tuner, and writes only to gitignored data/processed/. It is allowlisted so it
+    # stays visible here rather than forgotten -- anything it produces is synthetic,
+    # and a model trained on it has not been shown skill.
+    declared_synthetic = {"generate_eredivisie_data.py"}
+
+    for path in sorted(scripts_root.glob("*.py")):
+        if path.name in declared_synthetic:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for line in text.splitlines():
+            code = line.split("#", 1)[0]
+            # `np.where(result == OUTCOME_HOME, ...)` fanning a label into values
+            if "np.where(" not in code and ".where(" not in code:
+                continue
+            if not any(re.search(rf"\b{c}\b\s*==", code) for c in label_cols):
+                continue
+            raise AssertionError(
+                f"{path.name}: feature values branched on the label column -- "
+                f"{code.strip()!r}. Training features must never be derived from "
+                f"the outcome; fix the corpus instead."
+            )

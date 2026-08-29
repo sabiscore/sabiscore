@@ -23,7 +23,18 @@ const CAPABILITY_COPY: Record<CapabilityStatus, { text: string; className: strin
     className: "text-amber-400",
   },
   failed: { text: "Prediction pipeline not verified", className: "text-rose-400" },
-  unknown: { text: "No fixtures to verify yet", className: "text-slate-300" },
+  // Readiness is side-effect free by design, so "not probed" is the normal answer
+  // here and says nothing about fixture supply. Reporting it as "no fixtures"
+  // asserted a count this check never measured (60 were live when that was found).
+  not_probed_by_readiness: {
+    text: "Capability checked separately",
+    className: "text-slate-300",
+  },
+  skipped_not_ready: {
+    text: "Capability check skipped — core not ready",
+    className: "text-amber-400",
+  },
+  unknown: { text: "Capability not reported", className: "text-slate-300" },
 };
 
 // ─── Data fetching ────────────────────────────────────────────────────────────

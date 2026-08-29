@@ -288,17 +288,50 @@ Full contract and implementation notes: [`docs/CORE_ENGINE.md`](./CORE_ENGINE.md
 
 **GET** `/models/status`
 
-Get information about trained models and their performance.
+Reports the active generation's artifact facts. Every field is read from the
+hash-verified manifest; nothing is inferred from infrastructure health.
 
-**Response:**
+**Response** (shape captured live 2026-08-30, one league shown):
 ```json
 {
+  "active_version": "v5_phase7",
+  "generation": "v5_phase7-20260808",
+  "generation_hash": "6bab9609e900c253…",
+  "certification_state": "UNVERIFIED",
+  "promotion_state": "ACTIVE_FAIL_CLOSED",
+  "validation_status": "UNVERIFIED",
+  "manifest_valid": true,
   "models_loaded": true,
-  "last_trained": "2024-10-25T10:00:00Z",
-  "accuracy": 0.732,
-  "leagues_supported": ["EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "UCL"]
+  "stake_permitted": false,
+  "models": {
+    "epl": {
+      "feature_schema_version": "phase7_68",
+      "feature_count": 68,
+      "served_head": "SoftmaxMetaModel",
+      "artifact": "epl_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "9928f9f8307e260f…",
+      "required": true,
+      "loaded": true
+    }
+  }
 }
 ```
+
+Six league artifacts ship in this generation — `epl`, `la_liga`, `bundesliga`,
+`serie_a`, `ligue_1` (all `required: true`) and `eredivisie`
+(`required: false`). **There is no UCL model**; UCL fixtures are capped at
+`ACTIONABLE` and never reach `HIGH_CONVICTION`.
+
+> ⚠️ This response carries internal provenance. `active_version`,
+> `generation`, `generation_hash`, `feature_schema_version`, `served_head`,
+> `promotion_state` and the artifact hashes are **developer/admin diagnostics
+> only** and must not be rendered on a consumer surface — map them through
+> `apps/web/src/lib/model-identity.ts` first. This is machine-enforced by
+> `model-identity-contract.test.ts`.
+
+No aggregate accuracy is published here. Model quality is reported separately
+by `GET /model-performance`, computed from settled predictions, and is
+`503 bet_history_aggregation_not_yet_integrated` until the sample floor is met.
 
 ## Error Handling
 
