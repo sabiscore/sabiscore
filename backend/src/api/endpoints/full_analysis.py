@@ -38,6 +38,7 @@ from ...core.config import settings
 from ...core.league_policy import LeaguePolicyUnavailableError, get_league_policy
 from ...core.redaction import redact_text
 from ...data.elo_engine import EloContext
+from ...services.elo_state_service import DurableEloContext
 from ...db.session import get_async_session
 from ...models.causal_selector import CausalFeatureResult
 from ...models.feature_registry import active_canonical_features
@@ -764,7 +765,19 @@ async def get_full_analysis(
 
     # Layer 5: Elo context
     elo_candidate = live.get("elo_context")
-    elo_ctx = elo_candidate if isinstance(elo_candidate, EloContext) else None
+    # Accept BOTH Elo context types. ``DurableEloContext`` is what the live
+    # projector actually returns -- it is backed by the PostgreSQL
+    # ``elo_rating_snapshots`` table, which is the production authority.
+    # ``EloContext`` comes from the offline Parquet research engine. Checking
+    # only the legacy type silently discarded every resolved production
+    # rating, so ``elo_ratings`` was reported as a gap on every fixture while
+    # ``elo.lookup.resolved`` read 100%. The two are field-identical and both
+    # expose ``.resolved``; the projector has already gated on it.
+    elo_ctx = (
+        elo_candidate
+        if isinstance(elo_candidate, (EloContext, DurableEloContext))
+        else None
+    )
     # Elo ratings are keyed by team_id — an unresolved identity makes any Elo value
     # meaningless regardless of its number. Gate on identity (the real cause), not
     # value: EloEngine never fails/raises, so a genuine, evenly-rated matchup can
