@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from ..data.elo_engine import EloContext
+from ..services.elo_state_service import AnyEloContext
 from ..models.causal_selector import CausalFeatureResult
 from ..services.rl_betting_agent import RLRecommendationPayload
 from ..services.uncertainty_service import UncertaintyBreakdown
@@ -192,7 +192,7 @@ class FullMatchAnalysisResponse:
     model_drivers: List[str]
     causal_drivers: List[str]
     rl_recommendation: RLRecommendationPayload
-    elo_context: Optional[EloContext]
+    elo_context: Optional[AnyEloContext]
     odds_edge: Optional[OddsEdge]
     narrative: str                           # B11: ≤280 chars
     partial_intelligence: bool              # True only for critical gaps/conflicts
@@ -364,7 +364,7 @@ class IntelligenceSynthesizer:
         uncertainty: Optional[UncertaintyBreakdown],
         causal_results: List[CausalFeatureResult],
         rl_rec: RLRecommendationPayload,
-        elo_ctx: Optional[EloContext],
+        elo_ctx: Optional[AnyEloContext],
         odds_edge: Optional[OddsEdge] = None,
         data_gaps: Optional[List[str]] = None,
         actionability: Optional[MatchActionability] = None,
@@ -583,7 +583,7 @@ class IntelligenceSynthesizer:
         uncertainty: UncertaintyBreakdown,
         verdict: str,
         active_drivers: List[str],
-        elo_ctx: EloContext,
+        elo_ctx: AnyEloContext,
         rl_rec: RLRecommendationPayload,
         phase8_ctx: Optional[dict] = None,
     ) -> str:

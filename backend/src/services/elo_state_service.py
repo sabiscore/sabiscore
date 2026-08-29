@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable, cast
+from typing import TYPE_CHECKING, Iterable, Union, cast
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,9 @@ from ..core.database import Match
 from ..core.league_policy import canonical_league_id
 from ..db.models import EloRatingSnapshot
 from ..monitoring.metrics import metrics_collector
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..data.elo_engine import EloContext
 from ..utils.season import canonical_season
 
 logger = logging.getLogger(__name__)
@@ -41,6 +44,12 @@ class DurableEloContext:
     @property
     def resolved(self) -> bool:
         return self.home_resolved and self.away_resolved
+
+
+# The offline Parquet research engine defines a field-identical context type.
+# Consumers read only the shared float fields, so both flow through the same
+# call sites; this alias states that instead of leaving one of them unannotated.
+AnyEloContext = Union["EloContext", DurableEloContext]
 
 
 def _naive_utc(value: datetime) -> datetime:
