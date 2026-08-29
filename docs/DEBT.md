@@ -1,5 +1,64 @@
 # SabiScore Debt Ledger
 
+## 42. Staking is blocked by a permanent critical gap that no amount of model certification can clear
+
+**Tier:** `BLOCKED-ON-DECISION` — needs an authorized product/infra decision,
+not code. Filed 2026-08-29 while working the certification path.
+
+`stake_permitted` requires `not partial`, and any entry in `critical_gaps`
+forces `partial`. Every live analysis carries `MODEL_UNCERTAINTY_UNAVAILABLE`
+in `critical_gaps`, so **every fixture is permanently no-bet regardless of
+model quality**.
+
+The gap is emitted at `api/endpoints/full_analysis.py` when
+`UncertaintyService.decompose_measured()` returns `None`. That method's first
+branch is:
+
+```python
+if self._bnn_model is None or torch is None:
+    return None
+```
+
+Neither input exists in production:
+
+* `torch` appears in **neither** `requirements.txt` nor
+  `requirements.runtime.txt` — confirmed against the Render install log.
+* No trained BNN artifact exists anywhere in the repository. The only related
+  file is `scripts/train_bnn.py`, the trainer itself.
+
+So `decompose_measured()` returns `None` unconditionally, forever.
+
+### Why this matters for the certification sequence
+
+Certifying the model generation is **necessary but not sufficient** for
+staking activation. Even a candidate that clears every gate in
+`certification_policy.py` (RPS, `no_league_regression`, `market_baseline`)
+would still produce `stake_permitted: false` on every fixture, because this
+gap is independent of model quality and cannot be closed by accumulating
+match results.
+
+### The decision, not taken here
+
+Three options, all requiring authorization — this is a staking safety gate,
+and CLAUDE.md's own rule is that only `critical_gaps` force `PARTIAL`:
+
+1. **Ship the capability.** Add `torch` to the runtime requirements, then
+   train and commit a BNN artifact. Materially increases image size and
+   deploy time on the current Render plan, and needs its own train/serve
+   parity review.
+2. **Reclassify the gap.** Move `MODEL_UNCERTAINTY_UNAVAILABLE` from
+   `critical_gaps` to `advisory_gaps`, so absent uncertainty reduces
+   confidence without blocking. This is a **loosening of a staking gate** and
+   must not be done on an agent's own judgement — nor after observing that it
+   is what stands between the platform and a green board, which is exactly
+   the shape APEX §23 forbids.
+3. **Accept it.** Keep research-only serving until option 1 is funded. This is
+   the current de facto state, and it is honest — but it should be a recorded
+   decision rather than an unnoticed side effect of a missing dependency.
+
+Nothing was changed. Recording the mechanism so the choice is made
+deliberately.
+
 ## 41. The homepage published the model's internal provenance as consumer branding — APEX §11 violation, live, untracked
 
 **Tier:** `RESOLVED 2026-08-26`. Consumer surfaces now render product language;
