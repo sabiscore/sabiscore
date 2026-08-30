@@ -26,6 +26,22 @@ Two things to know before wiring a consumer:
   repo-wide guard `model-identity-contract.test.ts` covers the frontend only; it
   cannot see an API field.
 
+**A second reason it is inert, found by live probing after the 2026-08-30 deploy:**
+`market_intelligence` is `None` for every current fixture because none has a row
+in the legacy `odds` table. Probed six live fixtures across five leagues
+(`fd-559709`, `fd-565782`, `fd-560553`, `fd-558626`, `fd-564651`, `fd-558249`) —
+all returned HTTP 200 with `market_intelligence: null`, and
+`/api/v1/fixtures/upcoming` reports `odds_status: DATA_UNAVAILABLE` for all 12
+rows it returns. The table is **not** orphaned — `odds_service.py:221`,
+`fixtures.py:593`, `endpoints/odds.py:293`, `data_ingestion.py` and the football-data
+loader all write it — it is simply unpopulated for upcoming fixtures, because live
+market capture goes to `market_snapshots` (the CLV path) instead.
+
+Consequence for verification: **the odds branch this route shipped broken is
+currently verified by unit test only.** `tests/unit/test_advanced_insights.py`
+exercises it against the real `Odds` schema, but no production request reaches it.
+Do not report it as live-verified until a fixture with an `odds` row exists.
+
 **Trigger to revisit:** a job that writes `match_contexts` rows (PPDA/PSxG from
 `statsbomb_aggregator.py`, weather from `open_meteo.py`), or a referee scraper
 per item 44's pattern. Until then the endpoint returns honest nulls.
