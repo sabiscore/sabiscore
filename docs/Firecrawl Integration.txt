@@ -1,0 +1,601 @@
+Firecrawl Integration
+
+You are in the **SabiScore monorepo root**, so pnpm is correctly blocking an ambiguous root-level install. The repo declares separate workspaces for `apps/web`, `apps/scraper`, `apps/ws`, and `packages/*`.
+
+There is also an important architectural distinction:
+
+* `apps/web` is the Next.js product UI package `@sabiscore/web`.
+* `apps/scraper` is explicitly SabiScore's public-data scraping worker, already using Crawlee and S3.
+
+Given the files we designed earlier such as `lib/server/firecrawl.ts`, the **correct target is `apps/web`** if Firecrawl is being used for a server-side Next.js feature. Do **not** use `-w` at the root.
+
+## 1. Install Firecrawl into the web workspace
+
+From your current directory:
+
+```powershell
+(.venv) PS C:\Users\UBEC-DC-ANAMBRA\Documents\sabiscore>
+```
+
+run:
+
+```powershell
+pnpm --filter @sabiscore/web add firecrawl@^4.34.2 server-only@^0.0.1
+```
+
+Then:
+
+```powershell
+pnpm --filter @sabiscore/web add -D dotenv@^17.4.2
+```
+
+Equivalent directory-based form:
+
+```powershell
+cd apps\web
+pnpm add firecrawl@^4.34.2 server-only@^0.0.1
+pnpm add -D dotenv@^17.4.2
+cd ..\..
+```
+
+I prefer the `--filter` form because you remain at the monorepo root and pnpm makes the target explicit.
+
+### Do not run
+
+```powershell
+pnpm add -w firecrawl ...
+```
+
+That would place Firecrawl in the monorepo root unnecessarily.
+
+---
+
+# 2. Verify where pnpm installed it
+
+Run:
+
+```powershell
+pnpm --filter @sabiscore/web list firecrawl server-only dotenv
+```
+
+You want the packages associated with:
+
+```text
+@sabiscore/web
+```
+
+Then inspect:
+
+```powershell
+git diff -- apps/web/package.json pnpm-lock.yaml
+```
+
+Expected:
+
+```text
+apps/web/package.json
+    dependencies:
+      firecrawl
+      server-only
+
+    devDependencies:
+      dotenv
+
+pnpm-lock.yaml
+    updated
+```
+
+No root `package.json` dependency entry should be added.
+
+---
+
+# 3. Adjust the file paths from the earlier portfolio example
+
+This is the major correction.
+
+SabiScore's web package uses:
+
+```json
+"@/*": ["./src/*"]
+```
+
+so `@/lib/...` resolves under:
+
+```text
+apps/web/src/lib/...
+```
+
+not directly under `apps/web/lib`.
+
+Therefore your SabiScore paths should be:
+
+```text
+C:\Users\UBEC-DC-ANAMBRA\Documents\sabiscore\
+│
+├── apps\
+│   └── web\
+│       ├── src\
+│       │   └── lib\
+│       │       ├── firecrawl\
+│       │       │   ├── client.ts
+│       │       │   └── evidence.ts
+│       │       │
+│       │       └── server\
+│       │           └── firecrawl.ts
+│       │
+│       ├── scripts\
+│       │   └── firecrawl-refresh.ts
+│       │
+│       └── package.json
+│
+└── pnpm-lock.yaml
+```
+
+So the earlier:
+
+```text
+lib/server/firecrawl.ts
+```
+
+becomes:
+
+```text
+apps/web/src/lib/server/firecrawl.ts
+```
+
+And:
+
+```text
+lib/firecrawl/client.ts
+```
+
+becomes:
+
+```text
+apps/web/src/lib/firecrawl/client.ts
+```
+
+---
+
+# 4. Put `client.ts` here
+
+Exact path:
+
+```text
+C:\Users\UBEC-DC-ANAMBRA\Documents\sabiscore\apps\web\src\lib\firecrawl\client.ts
+```
+
+The import structure should remain:
+
+```ts
+import { Firecrawl } from 'firecrawl';
+```
+
+And application code should eventually import through the server boundary:
+
+```ts
+import {
+  scrapePage,
+  searchWeb,
+} from '@/lib/server/firecrawl';
+```
+
+Because the alias maps `@/lib/*` → `apps/web/src/lib/*`.
+
+---
+
+# 5. Put the server-only boundary here
+
+Exact path:
+
+```text
+C:\Users\UBEC-DC-ANAMBRA\Documents\sabiscore\apps\web\src\lib\server\firecrawl.ts
+```
+
+Use:
+
+```ts
+import 'server-only';
+
+export {
+  FirecrawlIntegrationError,
+  normalizeFirecrawlUrl,
+  scrapePage,
+  searchWeb,
+} from '@/lib/firecrawl/client';
+
+export type {
+  FirecrawlFailureCode,
+  ScrapedPage,
+  ScrapePageOptions,
+  SearchWebOptions,
+  WebSearchHit,
+} from '@/lib/firecrawl/client';
+```
+
+This ensures client components cannot accidentally import the Firecrawl SDK/API key path.
+
+---
+
+# 6. Put the evidence helper here
+
+Exact path:
+
+```text
+C:\Users\UBEC-DC-ANAMBRA\Documents\sabiscore\apps\web\src\lib\firecrawl\evidence.ts
+```
+
+However, for SabiScore I would **not blindly reuse the portfolio evidence model**.
+
+The portfolio version was about:
+
+```text
+project URLs
+→ scrape
+→ generated evidence JSON
+```
+
+For SabiScore, Firecrawl should have a football-analytics-specific contract such as:
+
+```text
+fixture context
+team news
+competition announcement
+injury/suspension source
+market/news context
+provider corroboration
+```
+
+not generic portfolio metadata.
+
+So keep the transport layer first:
+
+```text
+client.ts
+server/firecrawl.ts
+```
+
+and add the evidence model only after defining the specific SabiScore feature.
+
+---
+
+# 7. More important: decide whether Firecrawl actually belongs in `apps/web`
+
+For SabiScore's architecture, I would actually rank integration locations like this:
+
+### Preferred: `apps/scraper`
+
+For production football web acquisition:
+
+```text
+public football websites
+       ↓
+apps/scraper
+       ↓
+Firecrawl / Crawlee
+       ↓
+normalization
+       ↓
+S3/database
+       ↓
+backend prediction pipeline
+       ↓
+apps/web
+```
+
+This is the cleaner production architecture.
+
+Your scraper package explicitly describes itself as:
+
+> `"Zero-paid-API public data scraping worker for SabiScore"`
+
+and already contains Crawlee and S3.
+
+Therefore, if Firecrawl's purpose is:
+
+* team news retrieval;
+* injury pages;
+* squad updates;
+* public football data;
+* source verification;
+* live context enrichment;
+* historical page extraction;
+
+then it belongs more naturally in:
+
+```text
+apps/scraper
+```
+
+not `apps/web`.
+
+---
+
+# 8. In that architecture, install Firecrawl into `apps/scraper` instead
+
+Run:
+
+```powershell
+pnpm --filter @sabiscore/scraper add firecrawl@^4.34.2
+```
+
+You would **not need**:
+
+```text
+server-only
+```
+
+there because `apps/scraper` is already a Node worker, not a browser-capable Next.js application.
+
+You likely also do not need `dotenv` if the worker already has an environment-loading convention.
+
+Inspect first:
+
+```powershell
+Get-ChildItem apps\scraper -Force
+```
+
+and:
+
+```powershell
+Get-ChildItem apps\scraper\src -Recurse -Depth 2
+```
+
+Then search env handling:
+
+```powershell
+rg "process\.env|dotenv|REDIS|AWS_|S3" apps\scraper
+```
+
+This will tell you how Firecrawl should fit the existing worker rather than inventing a second configuration pattern.
+
+---
+
+# 9. My recommended SabiScore architecture
+
+For the actual SabiScore platform, I recommend:
+
+```text
+                      ┌───────────────────┐
+                      │ Firecrawl Cloud   │
+                      └────────┬──────────┘
+                               │
+                               ▼
+                     apps/scraper
+                  ┌────────────────┐
+                  │ firecrawl.mjs  │
+                  │ crawlee        │
+                  │ source policy  │
+                  └───────┬────────┘
+                          │
+                  normalized evidence
+                          │
+             ┌────────────┴────────────┐
+             ▼                         ▼
+            S3                 backend/Postgres
+             │                         │
+             └──────────┬──────────────┘
+                        ▼
+                 prediction engine
+                        │
+                        ▼
+                    FastAPI
+                        │
+                        ▼
+                   apps/web
+```
+
+This prevents your Next.js frontend from becoming responsible for ingestion.
+
+---
+
+# 10. Use Firecrawl as a fallback/enrichment provider, not your canonical source
+
+This matters substantially for SabiScore.
+
+Your scraper already has Crawlee. Firecrawl should not replace everything.
+
+Use a provider abstraction:
+
+```text
+primary structured provider
+        ↓
+Crawlee source
+        ↓
+Firecrawl fallback
+        ↓
+cross-source corroboration
+```
+
+Example conceptual interface:
+
+```ts
+interface WebEvidenceProvider {
+  search(query: string): Promise<SearchResult[]>;
+
+  scrape(
+    url: string,
+  ): Promise<ScrapedDocument>;
+}
+```
+
+Then:
+
+```text
+CrawleeProvider
+FirecrawlProvider
+```
+
+can be switched independently.
+
+This gives you:
+
+* provider redundancy;
+* cost control;
+* deterministic fallback;
+* easier attribution;
+* easier testing;
+* less vendor lock-in.
+
+---
+
+# 11. Firecrawl should never directly influence probabilities without normalization
+
+For SabiScore, this is especially important.
+
+Do not do:
+
+```text
+Firecrawl page
+    ↓
+LLM
+    ↓
+prediction probability
+```
+
+Instead:
+
+```text
+Firecrawl source
+      ↓
+source classification
+      ↓
+entity resolution
+      ↓
+fixture/team mapping
+      ↓
+timestamp validation
+      ↓
+duplicate detection
+      ↓
+confidence/provenance
+      ↓
+feature extraction
+      ↓
+prediction pipeline
+```
+
+A scraped article is evidence, not a feature until it passes validation.
+
+---
+
+# 12. Suggested Firecrawl use cases for SabiScore
+
+### Tier 1 — high value
+
+Use Firecrawl for:
+
+* official club injury/team-news pages;
+* league announcements;
+* official suspension notices;
+* public pre-match reports;
+* fixture postponements;
+* venue changes;
+* coaching/team announcements.
+
+### Tier 2 — contextual enrichment
+
+* reputable sports-media previews;
+* tactical commentary;
+* manager press conference summaries;
+* recent squad availability context.
+
+### Tier 3 — avoid as canonical quantitative input
+
+Do **not** rely on web scrape results as the authoritative source for:
+
+* live scores;
+* odds;
+* exact lineups;
+* match event timing;
+* historical match statistics;
+* betting settlements.
+
+Those should remain structured-provider/database-driven.
+
+---
+
+# 13. Immediate safest next step
+
+Since you already attempted:
+
+```powershell
+pnpm add firecrawl@^4.34.2 server-only@^0.0.1
+```
+
+nothing was changed because pnpm aborted before installation.
+
+Verify:
+
+```powershell
+git status --short
+```
+
+Then decide based on actual use:
+
+## If Firecrawl is for a Next.js server feature
+
+Run:
+
+```powershell
+pnpm --filter @sabiscore/web add firecrawl@^4.34.2 server-only@^0.0.1
+pnpm --filter @sabiscore/web add -D dotenv@^17.4.2
+```
+
+## If Firecrawl is for SabiScore data acquisition — **recommended**
+
+Run only:
+
+```powershell
+pnpm --filter @sabiscore/scraper add firecrawl@^4.34.2
+```
+
+Do not install `server-only`.
+
+---
+
+# 14. I recommend the scraper route for SabiScore
+
+Based on the actual repository layout, I would **change the integration plan from the earlier portfolio-style Next.js implementation**.
+
+For SabiScore specifically, use:
+
+```text
+apps/scraper/src/providers/firecrawl.mjs
+```
+
+rather than:
+
+```text
+apps/web/src/lib/server/firecrawl.ts
+```
+
+for the core ingestion integration.
+
+The worker already exists specifically for public-data scraping and already uses Crawlee/S3.  This is a much cleaner architectural fit.
+
+Then expose normalized evidence to the backend/web through existing SabiScore data contracts rather than making frontend requests to Firecrawl.
+
+## Run these next
+
+```powershell
+# Confirm nothing changed from the failed install
+git status --short
+
+# Inspect the scraper architecture
+Get-ChildItem apps\scraper\src -Recurse -Depth 3
+
+# Find current provider/env/storage conventions
+rg "process\.env|crawlee|S3|provider|source|scrape" apps\scraper\src
+
+# Install Firecrawl into the correct worker package
+pnpm --filter @sabiscore/scraper add firecrawl@^4.34.2
+
+# Verify
+pnpm --filter @sabiscore/scraper list firecrawl
+
+# Check resulting repository diff
+git diff -- apps/scraper/package.json pnpm-lock.yaml
+```
+
+Once that is done, the next production-correct files should be built around `apps/scraper/src/providers/firecrawl.mjs` and the scraper's existing normalization/storage contracts—not the generic portfolio `lib/server/firecrawl.ts` layout.
