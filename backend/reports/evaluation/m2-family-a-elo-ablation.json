@@ -1,0 +1,85 @@
+{
+  "report_version": "1.0.0",
+  "generated_at": "2026-08-30T18:17:46.674649+00:00",
+  "git_sha": "f1182c4",
+  "metric_contract_version": "1.0.0",
+  "milestone": "M2 Family A \u2014 Strength and recency (Elo)",
+  "corpus": {
+    "source": "backend/data/cache/fd_*.csv",
+    "n_matches_loaded": 12765,
+    "n_rows_with_5plus_history_both_sides": 12260,
+    "date_range": [
+      "2019-08-09",
+      "2026-05-24"
+    ],
+    "train_rows": 9808,
+    "val_rows": 2452
+  },
+  "motivating_finding": "elo_difference and all 4 sibling canonical Elo features are a constant 0.0 across all 12,256 rows train_on_real_matches.build_dataset() emits (measured directly this session) -- every trained artifact, including the served v5_phase7 generation, has never seen real Elo signal in training. This script computes real Elo via a fresh chronological EloEngine replay to measure what was actually never tested.",
+  "elo_resolved_val_rate": 1.0,
+  "results": {
+    "uniform": {
+      "rps_mean": 0.235907,
+      "rps_std": 0.072286,
+      "log_loss": 1.098612,
+      "brier": 0.666667,
+      "ece": 0.0679,
+      "accuracy": 0.4352,
+      "n": 2452
+    },
+    "home_bias": {
+      "rps_mean": 0.230547,
+      "rps_std": 0.070252,
+      "log_loss": 1.072836,
+      "brier": 0.649209,
+      "ece": 0.0035,
+      "accuracy": 0.4352,
+      "n": 2452
+    },
+    "league_prior": {
+      "rps_mean": 0.23051,
+      "rps_std": 0.071554,
+      "log_loss": 1.073633,
+      "brier": 0.64955,
+      "ece": 0.0054,
+      "accuracy": 0.4352,
+      "n": 2452
+    },
+    "elo_only": {
+      "rps_mean": 0.210709,
+      "rps_std": 0.125169,
+      "log_loss": 1.027424,
+      "brier": 0.614911,
+      "ece": 0.0653,
+      "accuracy": 0.4829,
+      "n": 2452,
+      "coverage_note": "scored on the 2452/2452 val rows where both sides had a resolved Elo rating; not comparable 1:1 with the full-val-set rows above without accounting for that."
+    },
+    "BASE_form_recency": {
+      "rps_mean": 0.223128,
+      "rps_std": 0.10543,
+      "log_loss": 1.063248,
+      "brier": 0.640678,
+      "ece": 0.0669,
+      "accuracy": 0.458,
+      "n": 2452
+    },
+    "BASE_plus_ELO": {
+      "rps_mean": 0.21017,
+      "rps_std": 0.126496,
+      "log_loss": 1.02535,
+      "brier": 0.613207,
+      "ece": 0.0655,
+      "accuracy": 0.4825,
+      "n": 2452
+    }
+  },
+  "m2_ablation_answer": {
+    "does_elo_improve_out_of_sample_rps": true,
+    "rps_base_form_recency": 0.223128,
+    "rps_base_plus_elo": 0.21017,
+    "rps_delta": -0.012958,
+    "interpretation": "Adding real Elo to the form/recency BASE improved out-of-sample RPS (0.2231 -> 0.2102, delta -0.0130); Elo was resolved for both sides on 100.0% of validation rows."
+  },
+  "not_done_here": "No artifact promoted or wired into serving. Elo replay is in-memory only for this measurement, not persisted or backfilled into any training corpus file. Promoting elo_difference from constant-default to a real, replayed feature in the actual training pipeline (train_on_real_matches.py) is a separate, larger change -- it would touch a script every retrain depends on and change what v_phase7's successor generation trains on -- and is not done in this M2 evaluation-only pass."
+}
