@@ -410,7 +410,29 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   LEAGUE_POLICY_UNAVAILABLE: "this competition has no calibrated staking policy yet",
   COHERENT_1X2_MARKET_UNAVAILABLE:
     "no stable market price to compare against yet",
+
+  // ── Feature-level evidence gap codes (emitted by full_analysis.py and upcoming_match_service.py)
+  // Convention: lowercase clause fragment, interpolated after an em-dash by the caller.
+  // e.g. `Not enough verified data — ${describeEvidenceCode(code)}.`
+  ppda_ratio: "pressing-intensity data is not published for this match",
+  progressive_carry_diff: "ball-carrying data is not published for this match",
+  set_piece_xg_diff: "set-piece chance quality is not available yet",
+  shot_quality_diff: "shot-quality breakdown is not available yet",
+  elo_league_adjusted: "the cross-league strength adjustment is unavailable",
+  causal_analysis: "driver analysis is not available for this match",
+  key_passes_under_pressure_diff:
+    "chance-creation-under-pressure data is unavailable",
+
+  // ── Casing-drift aliases (§3.3 v5 directive)
+  // full_analysis.py appends UPPERCASE; upcoming_match_service.py appends lowercase for
+  // the same semantic gaps. Both paths render through describeEvidenceCode(); without these
+  // aliases the lowercase variants fall through to titleCaseCode() and the raw identifier
+  // leaks to the user. The canonical UPPERCASE entries above are the authoritative copies.
+  model_generation_uncertified: "this model hasn't passed certification yet",
+  required_model_inputs_unavailable:
+    "the inputs the model requires — recent form, head-to-head, and a coherent market — are not available",
 };
+
 
 /** Title-case a backend code so an unmapped value still reads as words, not an enum. */
 function titleCaseCode(code: string): string {

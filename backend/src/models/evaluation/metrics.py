@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -125,5 +125,182 @@ def brier_score_decomposition(
         "mean": mean,
         "bin_counts": bin_counts,
         "n_bins": n_bins,
+        "n_samples": n,
+    }
+
+
+def log_loss_multiclass(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    eps: float = 1e-15,
+) -> float:
+    """Multiclass log loss (negative mean log-likelihood).
+
+    Convention: mean over samples of -log(p_c) where c is the true class.
+    Lower is better. Equivalent to sklearn's log_loss with normalise=True.
+
+    Args:
+        y_true: Integer class labels [0, 1, 2] shape (n_samples,).
+        y_proba: Predicted probabilities shape (n_samples, n_classes).
+        eps: Probability clipping floor to avoid log(0).
+
+    Returns:
+        Non-negative float. Perfect model → 0.0.
+    """
+    if y_proba.ndim != 2:
+        raise ValueError("y_proba must be 2D shaped (n_samples, n_classes)")
+    n = len(y_true)
+    if n == 0:
+        return 0.0
+    clipped = np.clip(y_proba[np.arange(n), y_true.astype(int)], eps, 1.0)
+    return float(-np.mean(np.log(clipped)))
+
+
+def accuracy_and_per_class(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+) -> Dict[str, Any]:
+    """Overall accuracy plus per-class precision, recall, and F1.
+
+    Argmax prediction is used (hard classification). Does NOT require
+    scipy or sklearn — pure numpy implementation.
+
+    Returns a dict with keys:
+        accuracy        – float [0, 1]
+        per_class       – dict keyed by 'class_0', 'class_1', 'class_2' each with:
+                            precision, recall, f1, support (int)
+        macro_precision – float
+        macro_recall    – float
+        macro_f1        – float
+        n_samples       – int
+    """
+    if y_proba.ndim != 2:
+        raise ValueError("y_proba must be 2D shaped (n_samples, n_classes)")
+    n = len(y_true)
+    if n == 0:
+        return {"accuracy": 0.0, "per_class": {}, "macro_precision": 0.0,
+                "macro_recall": 0.0, "macro_f1": 0.0, "n_samples": 0}
+
+    y_pred = np.argmax(y_proba, axis=1)
+    accuracy = float(np.mean(y_pred == y_true))
+
+    n_classes = y_proba.shape[1]
+    per_class: Dict[str, Any] = {}
+    precisions: List[float] = []
+    recalls: List[float] = []
+    f1s: List[float] = []
+
+    for cls in range(n_classes):
+        tp = int(np.sum((y_pred == cls) & (y_true == cls)))
+        fp = int(np.sum((y_pred == cls) & (y_true != cls)))
+        fn = int(np.sum((y_pred != cls) & (y_true == cls)))
+        support = int(np.sum(y_true == cls))
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * precision * recall / (precision + recall)
+              if (precision + recall) > 0 else 0.0)
+
+        per_class[f"class_{cls}"] = {
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4),
+            "support": support,
+        }
+        precisions.append(precision)
+        recalls.append(recall)
+        f1s.append(f1)
+
+    return {
+        "accuracy": round(accuracy, 4),
+        "per_class": per_class,
+        "macro_precision": round(float(np.mean(precisions)), 4),
+        "macro_recall": round(float(np.mean(recalls)), 4),
+        "macro_f1": round(float(np.mean(f1s)), 4),
+        "n_samples": n,
+    }
+
+
+def block_bootstrap_ci(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    metric_fn: Any,
+    *,
+    n_bootstrap: int = 1000,
+    block_size: int = 10,
+    ci_level: float = 0.95,
+    rng_seed: int = 42,
+) -> Dict[str, Any]:
+    """Block-bootstrap confidence interval for a scalar metric function.
+
+    Uses non-overlapping block resampling (Künsch 1989) rather than iid bootstrap
+    because consecutive football matches within a season share temporal
+    dependence — a block of matches is a more honest resampling unit than a
+    single random prediction.
+
+    Args:
+        y_true: Integer class labels (n_samples,).
+        y_proba: Predicted probability matrix (n_samples, n_classes).
+        metric_fn: Callable(y_true, y_proba) → float.
+        n_bootstrap: Number of bootstrap replicates.
+        block_size: Number of consecutive samples per block.
+        ci_level: Confidence level (e.g. 0.95 → 95% CI).
+        rng_seed: Random seed for reproducibility.
+
+    Returns:
+        Dict with keys: point_estimate, ci_lower, ci_upper, ci_level,
+        n_bootstrap, block_size, n_samples. Typed ``Any`` rather than ``float``
+        because ci_lower/ci_upper are ``None`` when no replicate scored, and an
+        under-sampled call adds a string ``note``.
+    """
+    n = len(y_true)
+    point = metric_fn(y_true, y_proba)
+
+    if n < block_size * 2:
+        # Too few samples for meaningful block resampling.
+        return {
+            "point_estimate": round(float(point), 4),
+            "ci_lower": round(float(point), 4),
+            "ci_upper": round(float(point), 4),
+            "ci_level": ci_level,
+            "n_bootstrap": 0,
+            "block_size": block_size,
+            "n_samples": n,
+            "note": "insufficient_samples_for_block_bootstrap",
+        }
+
+    rng = np.random.default_rng(rng_seed)
+    # Build non-overlapping blocks.
+    n_blocks = n // block_size
+    blocks: List[Tuple[int, int]] = [(i * block_size, (i + 1) * block_size)
+                                     for i in range(n_blocks)]
+
+    replicates: List[float] = []
+    for _ in range(n_bootstrap):
+        chosen = rng.choice(len(blocks), size=n_blocks, replace=True)
+        idx = np.concatenate([np.arange(blocks[b][0], blocks[b][1]) for b in chosen])
+        idx = idx[:n]  # trim to original length
+        try:
+            val = metric_fn(y_true[idx], y_proba[idx])
+            replicates.append(float(val))
+        except Exception:
+            continue
+
+    if not replicates:
+        return {"point_estimate": round(float(point), 4), "ci_lower": None,
+                "ci_upper": None, "ci_level": ci_level, "n_bootstrap": 0,
+                "block_size": block_size, "n_samples": n}
+
+    alpha = (1.0 - ci_level) / 2.0
+    ci_lower = float(np.quantile(replicates, alpha))
+    ci_upper = float(np.quantile(replicates, 1.0 - alpha))
+
+    return {
+        "point_estimate": round(float(point), 4),
+        "ci_lower": round(ci_lower, 4),
+        "ci_upper": round(ci_upper, 4),
+        "ci_level": ci_level,
+        "n_bootstrap": len(replicates),
+        "block_size": block_size,
         "n_samples": n,
     }

@@ -1,0 +1,46 @@
+{
+  "metric_contract_version": "1.0.0",
+  "generated_at": "2026-08-30T12:14:00Z",
+  "git_sha": "2146d9c",
+  "classification_task": "3-way 1X2 football match outcome prediction",
+  "outcome_encoding": {"0": "home_win", "1": "draw", "2": "away_win"},
+  "primary_metric": "rps",
+  "primary_metric_notes": "Ranked Probability Score (lower is better, range [0,1]). Implementation: metrics.ranked_probability_score(). Cumulative probability ordering, divided by 2 per standard 3-outcome RPS convention.",
+  "secondary_metrics": ["log_loss", "multiclass_brier", "accuracy", "ece"],
+  "secondary_metric_notes": {
+    "log_loss": "Mean negative log-likelihood. Implementation: metrics.log_loss_multiclass(). Convention: mean over samples of -log(p_c). Lower is better.",
+    "multiclass_brier": "Multiclass Brier score. Implementation: calibration._compute_brier_multiclass(). Convention: MEAN over samples of SUM_c(p_c - 1_{y=c})^2. Lower is better.",
+    "accuracy": "Overall accuracy from argmax. Implementation: metrics.accuracy_and_per_class().",
+    "ece": "Expected Calibration Error, multiclass. Implementation: metrics.expected_calibration_error(). Mean of per-class ECE."
+  },
+  "brier_convention": {
+    "aggregation": "mean",
+    "formula": "mean_over_samples(sum_over_classes((p_c - 1_{y=c})^2))",
+    "note": "MEAN is the authoritative aggregation. Both _compute_brier_multiclass (calibration.py:148) and brier_score_decomposition (metrics.py:52) use MEAN. This resolves the docstring-vs-code discrepancy cited in v2 of the directive."
+  },
+  "probability_requirements": {
+    "finite": true,
+    "bounded_0_1": true,
+    "sum_to_one": true,
+    "simplex_tolerance": 1e-4
+  },
+  "confidence_intervals": {
+    "method": "block_bootstrap",
+    "implementation": "metrics.block_bootstrap_ci()",
+    "block_size_default": 10,
+    "n_bootstrap_default": 1000,
+    "ci_level_default": 0.95,
+    "rationale": "Non-overlapping block resampling (Kuensch 1989) used instead of iid bootstrap because consecutive football matches within a season share temporal dependence."
+  },
+  "baseline_leaderboard_structure": {
+    "required_baselines": [
+      "uniform_prior", "league_prior", "home_bias", "elo_only",
+      "structural_score_model", "market_implied", "incumbent_model", "candidate_model"
+    ],
+    "note": "Baselines computed on the same chronological holdout set as the candidate. Market-implied baseline uses power-method de-vigged probabilities (connectors/odds_market.py)."
+  },
+  "policy_notes": {
+    "brier_gate_status": "The specific Brier gate constant 0.220 cited in directive v2 was NOT confirmed in certification_policy.py. Do not apply 0.220 as a gate threshold without re-reading the actual constant.",
+    "metric_version_provenance": "Every evaluation artifact must include metric_contract_version, git_sha, feature_schema_version, and model_version."
+  }
+}

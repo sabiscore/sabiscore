@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, AlertCircle, Loader2, ArrowUpRight, ExternalLink } from "lucide-react";
@@ -79,8 +79,24 @@ function formatKickoff(utcStr: string): string {
 }
 
 function PredictionAgePill({ createdAt }: { createdAt?: string }) {
-  if (!createdAt) return null;
-  const ageSecs = Math.round((Date.now() - new Date(createdAt).getTime()) / 1000);
+  // Hooks run unconditionally: `createdAt` is optional, so an early return above
+  // them changes hook count between renders (react-hooks/rules-of-hooks).
+  const [ageSecs, setAgeSecs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!createdAt) {
+      setAgeSecs(null);
+      return;
+    }
+    const ms = new Date(createdAt).getTime();
+    if (!Number.isFinite(ms)) {
+      setAgeSecs(null);
+      return;
+    }
+    setAgeSecs(Math.max(0, Math.round((Date.now() - ms) / 1000)));
+  }, [createdAt]);
+
+  if (!createdAt || ageSecs === null) return null;
   const title = `Prediction generated at ${formatLagosTimestamp(createdAt)} WAT`;
 
   if (ageSecs < 30 * 60) {

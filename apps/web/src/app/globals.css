@@ -196,3 +196,15 @@
     box-shadow: 0 0 0 2px rgb(41 207 243 / 0.08);
   }
 }
+
+/* ── Focus-visible token (WCAG 2.4.7 / §3.3 v5 directive) ──────────────────
+   Uses --conviction-actionable (cyan) from the existing design token set.
+   Shared base rule keeps every interactive element keyboard-accessible without
+   per-component duplication. No new raw hex values introduced. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid hsl(var(--conviction-actionable));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}

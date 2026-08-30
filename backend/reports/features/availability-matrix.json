@@ -1,0 +1,89 @@
+{
+  "matrix_version": "1.0.0",
+  "generated_at": "2026-08-30T12:44:00Z",
+  "git_sha": "2146d9c",
+  "serving_schema_version": "phase7_68",
+  "shadow_schema_version": "phase8_89",
+  "categories": {
+    "FORM_AND_GOALS": {
+      "feature_count": 17,
+      "source": "historical match statistics & team recent fixtures (FastAPI data layer)",
+      "status": "RESOLVED",
+      "features": [
+        "home_form_last5_home", "home_wins_last5_home", "home_draws_last5_home", "home_losses_last5_home",
+        "away_form_last5_away", "away_wins_last5_away", "away_draws_last5_away", "away_losses_last5_away",
+        "home_goals_for_avg", "home_goals_against_avg", "away_goals_for_avg", "away_goals_against_avg",
+        "total_goals_expected", "home_gd_recent", "away_gd_recent", "combined_attack", "combined_defense_weakness"
+      ]
+    },
+    "MARKET_ODDS_1X2": {
+      "feature_count": 14,
+      "source": "OddsAPI / Sportmonks / Football-Data bookmaker feed (connectors/odds_market.py)",
+      "status": "RESOLVED",
+      "features": [
+        "market_prob_home", "market_prob_draw", "market_prob_away", "market_edge_home", "market_favorite",
+        "odds_ratio", "log_odds_home", "log_odds_draw", "log_odds_away", "draw_probability",
+        "market_confidence", "ev_home", "ev_draw", "ev_away"
+      ]
+    },
+    "HEAD_TO_HEAD_AND_VENUE": {
+      "feature_count": 9,
+      "source": "H2H fixture records & venue win rates (FastAPI data layer)",
+      "status": "RESOLVED",
+      "features": [
+        "h2h_home_wins", "h2h_away_wins", "h2h_draws", "h2h_matches", "h2h_dominance",
+        "home_venue_win_rate", "home_venue_draw_rate", "home_venue_loss_rate", "home_advantage_strength"
+      ]
+    },
+    "TEMPORAL_AND_LEAGUE_CONTEXT": {
+      "feature_count": 13,
+      "source": "Match kickoff timestamp & league metadata tables",
+      "status": "RESOLVED",
+      "features": [
+        "day_of_week", "is_weekend", "month", "season_phase",
+        "league_home_rate", "league_avg_goals", "league_draw_rate",
+        "form_market_agreement_home", "form_market_disagreement",
+        "home_attack_vs_away_defense", "away_attack_vs_home_defense",
+        "venue_market_combo", "h2h_market_agreement"
+      ]
+    },
+    "LEAGUE_ONE_HOT": {
+      "feature_count": 5,
+      "source": "League identifier one-hot encoding",
+      "status": "RESOLVED",
+      "features": [
+        "league_Bundesliga", "league_EPL", "league_La_Liga", "league_Ligue_1", "league_Serie_A"
+      ]
+    },
+    "PHASE7_TACTICAL_AND_RATINGS": {
+      "feature_count": 10,
+      "source": "Elo state service, pressing proxy, StatsBomb enrichment",
+      "status": "MIXED",
+      "features": {
+        "elo_difference": {"status": "RESOLVED", "source": "elo_state_service.py"},
+        "elo_home_trend_5": {"status": "RESOLVED", "source": "elo_state_service.py"},
+        "elo_away_trend_5": {"status": "RESOLVED", "source": "elo_state_service.py"},
+        "elo_momentum_cross": {"status": "RESOLVED", "source": "elo_state_service.py"},
+        "home_pressing_intensity": {"status": "RESOLVED", "source": "Elo-derived pressing proxy (data/aggregator.py)"},
+        "progressive_carry_diff": {"status": "ADVISORY_GAP", "note": "Slot present; no live event stream at serving"},
+        "shot_quality_diff": {"status": "PERMANENT_DATA_GAP", "note": "Always default 0.0 until StatsBomb shot-map corpus verified"},
+        "elo_league_adjusted": {"status": "PERMANENT_DATA_GAP", "note": "Always default 0.0; collinear with elo_difference"},
+        "key_passes_under_pressure_diff": {"status": "PERMANENT_DATA_GAP", "note": "Always default 0.0; ATE below threshold"},
+        "set_piece_xg_diff": {"status": "PERMANENT_DATA_GAP", "note": "Always default 0.0; inconclusive directional signal"}
+      }
+    },
+    "PHASE8_CANDIDATE_FEATURES": {
+      "feature_count": 21,
+      "source": "Pi-ratings, Berrar, EWMA form, market drift, match importance",
+      "status": "SHADOW_ONLY",
+      "features": [
+        "home_pi_attack", "home_pi_defense", "away_pi_attack", "away_pi_defense", "pi_attack_diff", "pi_defense_diff",
+        "home_berrar_rating", "away_berrar_rating", "berrar_rating_diff",
+        "home_weighted_win_rate", "home_weighted_draw_rate", "home_weighted_ppg",
+        "away_weighted_win_rate", "away_weighted_draw_rate", "away_weighted_ppg",
+        "odds_drift_home", "odds_drift_draw", "odds_drift_away", "max_abs_odds_drift", "sharp_money_direction",
+        "match_importance_score"
+      ]
+    }
+  }
+}

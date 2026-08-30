@@ -1,5 +1,102 @@
 # SabiScore Debt Ledger
 
+## 47. `/advanced-insights` is mounted but has no consumer, and republishes model provenance
+
+**Tier:** `ACCEPTED` — not a defect, a scope boundary. Filed 2026-08-30.
+
+`GET /api/v1/matches/{match_id}/advanced-insights` is live and now correct (see
+CHANGELOG 2026-08-30 for the five defects it shipped with), but **nothing in
+`apps/web` calls it.** It is a read-only API with no UI surface. That is
+deliberate: directive v4 §3.4/§8.4 explicitly rejects building a speculative
+`AdvancedInsightsPanel` before a design pass against real data, and the two
+tactical metrics it exposes (`ppda_*`, `psxg_*`) are only populated when
+`match_contexts` rows exist, which no job writes yet.
+
+Two things to know before wiring a consumer:
+
+- `market_intelligence` carries **no model probability, edge, or EV** by design —
+  no prediction is linked on this read path, and the alternative was the invented
+  prior this route shipped with. A consumer must not present the market block as
+  a model-vs-market comparison until a real prediction is wired in.
+- The response includes `model_identity.{version, feature_schema_version,
+  certification_state}`. These are raw internal identifiers. `/api/v1/models/status`
+  already publishes the same fields, so this is not a new leak — but APEX §11
+  forbids them on consumer surfaces, so any frontend consumer must route them
+  through `apps/web/src/lib/model-identity.ts`, never render them directly. The
+  repo-wide guard `model-identity-contract.test.ts` covers the frontend only; it
+  cannot see an API field.
+
+**Trigger to revisit:** a job that writes `match_contexts` rows (PPDA/PSxG from
+`statsbomb_aggregator.py`, weather from `open_meteo.py`), or a referee scraper
+per item 44's pattern. Until then the endpoint returns honest nulls.
+
+---
+
+## 46. `prisma skills sync` runs on every production install
+
+**Tier:** `FIX-NOW` (cheap) — filed 2026-08-30, **not fixed**, needs an owner decision.
+
+Root `package.json` gained `"postinstall": "prisma skills sync || exit 0"` and a
+`prisma@8.0.0-rc.12` devDependency, with `pnpm-workspace.yaml` carrying
+`minimumReleaseAgeExclude` entries for it and `@prisma/composer*`.
+
+**This has nothing to do with the database.** `prisma.config.ts` is
+`definePrismaConfig({ skills: { agents: [...] } })` — the agent-skills sync tool
+that generates `.claude/`, `.cursor/`, `.devin/`, `.agents/`. There is no
+`schema.prisma`, no `prisma/` directory, and no `PrismaClient` anywhere in the
+repo; schema authority remains the 10 Alembic migrations. The CLAUDE.md appendix
+already records this correctly.
+
+The concern is placement, not the tool: `postinstall` runs on **every**
+`pnpm install`, including Vercel production builds and CI. That pulls a
+release-candidate dependency and executes an agent-tooling sync inside the deploy
+path. `|| exit 0` means it cannot fail the build, so severity is low — but it is
+unnecessary weight on every install and an odd thing to have in a production
+deploy.
+
+**Options:** move it to a local-only script developers run explicitly; gate it on
+`CI`/`VERCEL` being unset; or accept it and pin a stable (non-RC) version.
+Deliberately excluded from the 2026-08-30 production PR so it stays a separate,
+visible decision rather than being smuggled in beside product changes.
+
+---
+
+## 45. Migration `0009` is PostgreSQL-only, so the SQLite chain check no longer runs
+
+**Tier:** `ACCEPTED` — filed 2026-08-30. Records a lost verification path.
+
+`alembic upgrade head` against a fresh SQLite database now fails partway through
+with `sqlite3.OperationalError: unrecognized token: ":"` while running
+`0009_quarantine_post_kickoff_closings` — its `UPDATE ... FROM` statement uses
+`IS TRUE`, which SQLite does not parse. Nine revisions apply, then it stops.
+
+This is **not** a defect: production is PostgreSQL 16+ and `0009` is correct
+there. But it removes a check earlier sessions relied on — vΩ.37 verified the
+CLV migration by running the whole chain on the SQLite fallback, and that is no
+longer possible.
+
+**Workaround used to verify `0010`** (repeat this for any future migration until
+a local PostgreSQL is available):
+
+```bash
+export ALLOW_SQLITE_FALLBACK=true APP_ENV=development        DATABASE_URL="sqlite:///./.mig_verify.db"
+python -m alembic stamp 0009_quarantine_market_closings   # skip the PG-only one
+python -m alembic upgrade head                            # runs 0010 alone
+python -m alembic downgrade -1 && python -m alembic upgrade head
+```
+
+Note `APP_ENV`, not `ENVIRONMENT` — the settings field is
+`app_env: str = Field(alias="APP_ENV")` and the production guard rejects
+`ALLOW_SQLITE_FALLBACK` otherwise. Also note the exit code must be read directly:
+piping alembic through `tail` reports the pipe's status, and did mask this exact
+failure once during the session that filed this item.
+
+**Real fix:** a local PostgreSQL (or a CI job) that runs the full fresh-database
+chain plus `alembic check`. Until then, isolate-and-stamp is the honest substitute
+and must be stated as such — it verifies the new revision's DDL, not the chain.
+
+---
+
 ## 44. Weather acquisition is shipped; weather as a model feature is not
 
 **Tier:** `NEXT` — acquisition is complete and live-verified. Feature
