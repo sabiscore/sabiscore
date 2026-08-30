@@ -5,6 +5,51 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - M2 Family A (Elo) wired into training and retrained — real, honest, not yet certifiable (2026-08-30)
+
+### Added
+
+- **`backend/src/features/elo_replay.py`** — a shared, cross-verified historical
+  Elo replay (`FastEloReplay`, `default_fast_elo_replay()`,
+  `cross_verify_against_elo_engine()`, `compute_elo_training_columns()`),
+  extracted from `m2_family_a_elo_ablation.py`'s private `_FastEloReplay` so the
+  rating math (home-advantage expected score, per-league K-factor, 5-game
+  trend, season-carryover regression) is written once, not duplicated across
+  the ablation script and the training script.
+- Two regression test files: `backend/tests/unit/test_elo_replay.py` (the
+  replay module in isolation) and
+  `backend/tests/unit/test_train_on_real_matches_elo.py` (the actual
+  `build_dataset()` wiring) — both watched failing when the fix was reverted
+  before being trusted.
+
+### Fixed
+
+- **`docs/DEBT.md` item 48**: every trained artifact, including the served
+  `v5_phase7` generation, trained with `elo_difference` and its 3 resolvable
+  siblings at a constant `0.0` registry default — nothing replayed Elo over
+  the offline training corpus (`train_on_real_matches.py`). `build_dataset()`
+  now calls `compute_elo_training_columns()` and merges real, chronologically
+  replayed Elo into every emitted row. `elo_league_adjusted` is untouched —
+  permanently `PHASE7_FEATURES_ALWAYS_DATA_GAP` by ATE-review policy.
+- `models/feature_registry.py`'s `_training_source()` now attributes these 4
+  fields to the new module instead of `UNDECLARED`; `feature_contract.json`
+  regenerated to match (the attribution-string change moves
+  `contract_sha256()`).
+
+### Changed
+
+- `m2_family_a_elo_ablation.py` now imports the shared replay instead of
+  keeping its own copy. Re-run after the extraction and confirmed
+  byte-identical to the original measurement (RPS 0.2231 → 0.2102).
+- Retrained all 6 leagues (`backend/models/candidate/`) and re-ran
+  `compare_candidate_vs_incumbent.py` against the certified generation:
+  `no_league_regression` 3/6 → 4/6, `market_baseline` 0/6 → 1/6, mean RPS
+  improvement +0.0013. **Not promoted** — `promotion_permitted: false`,
+  correctly, since the gate needs 6/6 on both axes and
+  `serving_feature_availability` fails independently (item 37's apex/legacy
+  market-block schema deadlock, unrelated to this change). Full honest
+  before/after table in `docs/DEBT.md`'s item 48 follow-up.
+
 ## Unreleased - Advanced-insights route was dead behind a broad `except`; five stacked defects fixed (2026-08-30)
 
 ### Fixed

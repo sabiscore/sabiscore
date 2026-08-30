@@ -909,6 +909,18 @@ _PHASE8_RESOLVED_FIELDS: Tuple[str, ...] = (
     *PHASE8_FEATURES_PI, *PHASE8_FEATURES_BERRAR, *PHASE8_FEATURES_FORM,
 )
 
+# docs/DEBT.md item 48 follow-up: the 4 canonical Elo slots a real historical
+# replay can honestly compute (mirrors src/features/elo_replay.py's
+# ELO_TRAINING_COLUMNS rather than importing it — importing back would be
+# circular, same reason _PHASE8_RESOLVED_FIELDS mirrors phase8_historical.py
+# above). `elo_league_adjusted` is deliberately excluded: it is permanently in
+# PHASE7_FEATURES_ALWAYS_DATA_GAP by ATE-review policy (collinear proxy, no
+# independent causal signal — see the PHASE7_FEATURES_REMOVED comment above),
+# so it stays UNDECLARED regardless of what training can compute.
+_ELO_TRAINING_RESOLVED_FIELDS: Tuple[str, ...] = (
+    "elo_difference", "elo_home_trend_5", "elo_away_trend_5", "elo_momentum_cross",
+)
+
 _TRAINING_SOURCE_LAST5_FORM = (
     "scripts/train_on_real_matches.py:build_dataset() via "
     "models/feature_registry.py:derive_last5_form_features()"
@@ -990,6 +1002,20 @@ _TRAINING_SOURCE_PHASE8_RESOLVED = (
     "the same PiRatingSystem/BerrarRatingSystem/weighted_form_features "
     "classes serving calls"
 )
+_TRAINING_SOURCE_ELO_REPLAY = (
+    "src/features/elo_replay.py:compute_elo_training_columns(), wired into "
+    "scripts/train_on_real_matches.py:build_dataset() — docs/DEBT.md item 48 "
+    "follow-up. Rating math mirrors data/elo_engine.py:EloEngine (cross-verified "
+    "by cross_verify_against_elo_engine before being trusted at scale) but is "
+    "NOT the production serving authority: serving reads durable, "
+    "incrementally-updated PostgreSQL state via services/elo_state_service.py, "
+    "while training replays the full historical corpus in one chronological "
+    "pass. serving_source stays UNDECLARED here deliberately — FeatureTransformer "
+    "receives an already-computed elo_difference from its caller rather than "
+    "calling elo_state_service directly itself, so the 'both implementations "
+    "confirmed to invoke the identical function' bar this contract requires is "
+    "not yet verified for the serving side."
+)
 _SHADOW_SOURCE_PHASE8_RESOLVED = (
     "services/upcoming_match_feature_service.py:_inject_phase8_features() via "
     "PiRatingSystem/BerrarRatingSystem/weighted_form_features "
@@ -1048,6 +1074,8 @@ def _training_source(name: str, group: str, schema_version: str) -> str:
         )
     if name in _PHASE8_RESOLVED_FIELDS:
         return _TRAINING_SOURCE_PHASE8_RESOLVED
+    if name in _ELO_TRAINING_RESOLVED_FIELDS:
+        return _TRAINING_SOURCE_ELO_REPLAY
     return UNDECLARED
 
 

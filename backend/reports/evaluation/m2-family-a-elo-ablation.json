@@ -1,7 +1,7 @@
 {
   "report_version": "1.0.0",
-  "generated_at": "2026-08-30T18:17:46.674649+00:00",
-  "git_sha": "f1182c4",
+  "generated_at": "2026-08-30T21:10:28.996213+00:00",
+  "git_sha": "52f8609",
   "metric_contract_version": "1.0.0",
   "milestone": "M2 Family A \u2014 Strength and recency (Elo)",
   "corpus": {
@@ -81,5 +81,5 @@
     "rps_delta": -0.012958,
     "interpretation": "Adding real Elo to the form/recency BASE improved out-of-sample RPS (0.2231 -> 0.2102, delta -0.0130); Elo was resolved for both sides on 100.0% of validation rows."
   },
-  "not_done_here": "No artifact promoted or wired into serving. Elo replay is in-memory only for this measurement, not persisted or backfilled into any training corpus file. Promoting elo_difference from constant-default to a real, replayed feature in the actual training pipeline (train_on_real_matches.py) is a separate, larger change -- it would touch a script every retrain depends on and change what v_phase7's successor generation trains on -- and is not done in this M2 evaluation-only pass."
+  "not_done_here": "No artifact promoted or wired into serving BY THIS SCRIPT. Elo replay above is in-memory only for this measurement, not persisted. FOLLOW-UP (shipped in the same session, separate files): backend.src.features.elo_replay is now the shared replay both this script AND scripts/train_on_real_matches.py:build_dataset() call, so the next candidate retrain trains on real Elo instead of a constant default. That retrain's promotion over the certified v5_phase7 generation remains a separate, later, explicitly-gated decision \u2014 unaffected by this ablation script, which still only measures."
 }

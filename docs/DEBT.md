@@ -91,6 +91,87 @@ one combined retrain decision.
 
 **Tier:** `ACCEPTED` — not a defect, a scope boundary. Filed 2026-08-30.
 
+### Follow-up, same day: wired into `train_on_real_matches.py`, retrained, compared — real, not yet promoted
+
+**Decision taken:** retrain now on this one finding, rather than waiting for
+the remaining M2 families (B–F) — those are independently blocked on missing
+data (Family B/C need a real StatsBomb/xG corpus at scale, which does not
+exist; item 10/13), so gating this on their completion would have meant
+waiting on an unrelated, possibly indefinite blocker for a signal already
+proven real.
+
+`backend/src/features/elo_replay.py` extracts the ablation's `_FastEloReplay`
+and its `EloEngine` cross-verification into a shared module — `FastEloReplay`,
+`default_fast_elo_replay()`, `cross_verify_against_elo_engine()`,
+`compute_elo_training_columns()` — so the replay is written once, not
+duplicated across the ablation script and the training script (the same
+"one implementation per feature group" discipline Phase 3 already applied to
+last-5-form/goals-gd/temporal/league/combination). `m2_family_a_elo_ablation.py`
+now imports from it instead of keeping its own copy; re-run after the
+extraction and confirmed **byte-identical** to the original result (RPS
+0.2231 → 0.2102, delta −0.0130) — the refactor changed nothing observable.
+
+`train_on_real_matches.py`'s `build_dataset()` now calls
+`compute_elo_training_columns()` and merges the real `elo_difference` /
+`elo_home_trend_5` / `elo_away_trend_5` / `elo_momentum_cross` values into
+every emitted row (both the candidate `X` and the legacy-schema `X_incumbent`
+comparison copy), before the market-odds gate — `elo_league_adjusted` is left
+untouched at its permanent registry default, per the ATE-review policy that
+already excludes it from every canonical training path
+(`PHASE7_FEATURES_ALWAYS_DATA_GAP`). `main()` runs
+`cross_verify_against_elo_engine()` on a 300-match subset before trusting the
+replay at scale, same discipline as the ablation script. `feature_registry.py`'s
+`_training_source()` now attributes these 4 fields to the new module instead
+of `UNDECLARED`; `feature_contract.json` was regenerated
+(`scripts/generate_feature_contract.py`) since the attribution-string change
+moves `contract_sha256()`. `serving_source` for these 4 fields is deliberately
+left `UNDECLARED` — production serving resolves `elo_difference` via
+`elo_state_service.get_elo_context()` inside `UpcomingMatchFeatureProjector`
+directly, but `FeatureTransformer` receives an already-computed value from its
+own caller rather than calling `elo_state_service` itself, so the "both
+serving implementations confirmed to invoke the identical function" bar this
+contract requires is not yet verified for the serving side — a real, separate,
+smaller follow-up, not done here.
+
+Two new regression tests pin the fix: `tests/unit/test_elo_replay.py` (the
+replay module in isolation — cross-verification, first-meeting neutrality,
+self-play skip, a match never seeing its own result) and
+`tests/unit/test_train_on_real_matches_elo.py` (the actual wiring — both
+watched failing when the one-line merge was reverted, confirming they test
+the real defect, not a tautology).
+
+**Retrained all 6 leagues** (`train_on_real_matches.py`, default args,
+`backend/models/candidate/`) and re-ran
+`compare_candidate_vs_incumbent.py` against the certified `v5_phase7`
+generation on the identical `2526` holdout. Honest result, read directly off
+`comparison_report.json`, not narrated:
+
+| Gate | Before (last recorded, item 25) | After this retrain |
+|---|---|---|
+| `no_league_regression` (need 6/6) | 3/6 | **4/6** |
+| `market_baseline` (need 6/6) | 0/6 | **1/6** (EPL: candidate RPS 0.2051 vs market 0.2054) |
+| `primary_metric_improvement` | — | PASS, mean RPS +0.0013 |
+| `serving_feature_availability` | FAIL | FAIL (unchanged — item 37's apex/legacy market-block deadlock, unrelated to Elo) |
+| `promotion_permitted` | false | **false** |
+
+Candidate beats incumbent on RPS in Eredivisie (−0.0064), La Liga (−0.0048),
+Ligue 1 (−0.0029), and Serie A (−0.0055); loses in Bundesliga (+0.0100) and
+EPL (+0.0015). This is real, measured, incremental progress in the direction
+the ablation predicted — not a certifiable candidate. **Not promoted** — the
+gate requires 6/6 league wins, and `serving_feature_availability` fails
+independently of anything this change touched. Recorded honestly rather than
+either overstating it as a win or discarding it as a non-event.
+
+**What would move this further:** Optuna tuning (`--tune`, unused here — the
+baseline hyperparameters were kept so this comparison isolates the Elo effect
+alone) is the next lever with no new data dependency. Family E (weather) has
+real, keyless, historically-backfillable data (`docs/DEBT.md` item 44) and is
+the next family with an actual path to real evidence, once its own
+prerequisite chain (team→location mapping with a review step, a persisted
+corpus backfill, an archive/forecast parity check) is built — that is a
+materially larger effort than this Elo follow-up and was not attempted in
+this session.
+
 `GET /api/v1/matches/{match_id}/advanced-insights` is live and now correct (see
 CHANGELOG 2026-08-30 for the five defects it shipped with), but **nothing in
 `apps/web` calls it.** It is a read-only API with no UI surface. That is

@@ -1,9 +1,40 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-28
+Last reviewed: 2026-08-30
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## M2 Family A (Elo) wired into training and retrained, 2026-08-30
+
+Follow-up to `docs/DEBT.md` item 48 (the M2 Family A Elo ablation, commit
+`52f8609`, which measured a real +0.013 RPS signal but wired nothing into any
+training pipeline). This session made the decision to retrain now on that one
+finding rather than wait for M2 Families B–F, which are independently
+blocked on missing StatsBomb/xG corpus data (item 10/13) — gating a proven
+signal on an unrelated, possibly-indefinite blocker was the wrong call.
+
+`backend/src/features/elo_replay.py` is the new shared, cross-verified replay
+module (`FastEloReplay`, `compute_elo_training_columns()`,
+`cross_verify_against_elo_engine()`); both `m2_family_a_elo_ablation.py` and
+`train_on_real_matches.py` now import it rather than each keeping a private
+copy. `build_dataset()` merges real `elo_difference`/`elo_home_trend_5`/
+`elo_away_trend_5`/`elo_momentum_cross` into every emitted training row —
+every prior candidate, including the served `v5_phase7` generation, trained
+with these at a constant `0.0` default. `elo_league_adjusted` stays untouched
+(permanent `PHASE7_FEATURES_ALWAYS_DATA_GAP`). `feature_registry.py`'s
+`_training_source()` attributes these 4 fields to the new module;
+`feature_contract.json` was regenerated to match.
+
+Retrained all 6 leagues and re-ran `compare_candidate_vs_incumbent.py`:
+`no_league_regression` 3/6 → **4/6**, `market_baseline` 0/6 → **1/6**, mean
+RPS improvement +0.0013. **Not promoted** — `promotion_permitted: false`,
+correctly: the gate needs 6/6 on both axes, and `serving_feature_availability`
+still fails independently on item 37's apex/legacy market-block schema
+deadlock, unrelated to this change. Full honest before/after table in
+`docs/DEBT.md`'s item 48 follow-up section. Gates: ruff 0, backend suite 1854
+passed / 14 skipped (0 failed), mypy 772 ≤ 784, `verify_active_artifacts.py`
+exit 0. Frontend untouched this session — no web gates re-run.
 
 ## Live-state resync from 2026-08-28
 

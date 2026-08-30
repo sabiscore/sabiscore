@@ -1580,7 +1580,7 @@
       "feature_group": "PHASE7_FEATURES_10",
       "always_data_gap": false,
       "disposition": "ALIGNED_OBSERVED",
-      "training_source": "UNDECLARED",
+      "training_source": "src/features/elo_replay.py:compute_elo_training_columns(), wired into scripts/train_on_real_matches.py:build_dataset() \u2014 docs/DEBT.md item 48 follow-up. Rating math mirrors data/elo_engine.py:EloEngine (cross-verified by cross_verify_against_elo_engine before being trusted at scale) but is NOT the production serving authority: serving reads durable, incrementally-updated PostgreSQL state via services/elo_state_service.py, while training replays the full historical corpus in one chronological pass. serving_source stays UNDECLARED here deliberately \u2014 FeatureTransformer receives an already-computed elo_difference from its caller rather than calling elo_state_service directly itself, so the 'both implementations confirmed to invoke the identical function' bar this contract requires is not yet verified for the serving side.",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
       "version": "phase7_68",
@@ -1607,7 +1607,7 @@
       "feature_group": "PHASE7_FEATURES_10",
       "always_data_gap": false,
       "disposition": "ALIGNED_OBSERVED",
-      "training_source": "UNDECLARED",
+      "training_source": "src/features/elo_replay.py:compute_elo_training_columns(), wired into scripts/train_on_real_matches.py:build_dataset() \u2014 docs/DEBT.md item 48 follow-up. Rating math mirrors data/elo_engine.py:EloEngine (cross-verified by cross_verify_against_elo_engine before being trusted at scale) but is NOT the production serving authority: serving reads durable, incrementally-updated PostgreSQL state via services/elo_state_service.py, while training replays the full historical corpus in one chronological pass. serving_source stays UNDECLARED here deliberately \u2014 FeatureTransformer receives an already-computed elo_difference from its caller rather than calling elo_state_service directly itself, so the 'both implementations confirmed to invoke the identical function' bar this contract requires is not yet verified for the serving side.",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
       "version": "phase7_68",
@@ -1634,7 +1634,7 @@
       "feature_group": "PHASE7_FEATURES_10",
       "always_data_gap": false,
       "disposition": "ALIGNED_OBSERVED",
-      "training_source": "UNDECLARED",
+      "training_source": "src/features/elo_replay.py:compute_elo_training_columns(), wired into scripts/train_on_real_matches.py:build_dataset() \u2014 docs/DEBT.md item 48 follow-up. Rating math mirrors data/elo_engine.py:EloEngine (cross-verified by cross_verify_against_elo_engine before being trusted at scale) but is NOT the production serving authority: serving reads durable, incrementally-updated PostgreSQL state via services/elo_state_service.py, while training replays the full historical corpus in one chronological pass. serving_source stays UNDECLARED here deliberately \u2014 FeatureTransformer receives an already-computed elo_difference from its caller rather than calling elo_state_service directly itself, so the 'both implementations confirmed to invoke the identical function' bar this contract requires is not yet verified for the serving side.",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
       "version": "phase7_68",
@@ -1688,7 +1688,7 @@
       "feature_group": "PHASE7_FEATURES_10",
       "always_data_gap": false,
       "disposition": "ALIGNED_OBSERVED",
-      "training_source": "UNDECLARED",
+      "training_source": "src/features/elo_replay.py:compute_elo_training_columns(), wired into scripts/train_on_real_matches.py:build_dataset() \u2014 docs/DEBT.md item 48 follow-up. Rating math mirrors data/elo_engine.py:EloEngine (cross-verified by cross_verify_against_elo_engine before being trusted at scale) but is NOT the production serving authority: serving reads durable, incrementally-updated PostgreSQL state via services/elo_state_service.py, while training replays the full historical corpus in one chronological pass. serving_source stays UNDECLARED here deliberately \u2014 FeatureTransformer receives an already-computed elo_difference from its caller rather than calling elo_state_service directly itself, so the 'both implementations confirmed to invoke the identical function' bar this contract requires is not yet verified for the serving side.",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
       "version": "phase7_68",
@@ -1840,5 +1840,5 @@
       "unit": "UNDECLARED"
     }
   ],
-  "feature_contract_sha256": "bac523fc5bcc48a6a95245b2c50fc545e9befa808c7baa6814b6d3956c5ec1a1"
+  "feature_contract_sha256": "7681886093e33af49f1efcca2880e76d1fa66732fc26e2796f56a6c0ee6d6d13"
 }
