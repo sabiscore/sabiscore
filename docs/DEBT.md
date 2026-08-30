@@ -1,5 +1,70 @@
 # SabiScore Debt Ledger
 
+## 44. Weather acquisition is shipped; weather as a model feature is not
+
+**Tier:** `NEXT` — acquisition is complete and live-verified. Feature
+integration is deliberately gated. Filed 2026-08-30.
+
+`backend/src/providers/open_meteo.py` resolves match weather from Open-Meteo.
+Live-verified end to end: `probe` returns `VERIFIED` (the first keyless
+provider here to do so), geocoding resolves Liverpool GB to 53.41/-2.98, the
+archive path returned a real reading for a past kickoff and the forecast path
+for a future one, and a kickoff beyond the 16-day horizon returns `None`.
+
+### Why Open-Meteo and not the alternatives
+
+A weather feature is only usable if it resolves for **every historical match in
+the corpus** *and* for a **fixture that has not kicked off**. A source with only
+one half teaches the model to lean on a signal serving cannot supply — the
+train/serve skew that forced the vΩ.46 retrain.
+
+| Provider | Historical | Forecast | Key | Verdict |
+| --- | --- | --- | --- | --- |
+| **Open-Meteo** | archive to 1940 | 16 days | none | **chosen** — identical `hourly` schema on both, so one parser serves both paths and they cannot drift |
+| Visual Crossing | yes | yes | required | 1,000 records/day free — will not cover a 12,765-match backfill |
+| NOAA / NWS | yes | yes | none | US-only; every supported competition is European |
+
+### The venue problem, and why this is not a Firecrawl job
+
+`Match.venue` is NULL in production (`fixture_sync_service` never sets it) and
+`Team.stadium` is nullable free text. There are **zero coordinates anywhere in
+the repository**, so there was nothing to query a weather API with.
+
+The obvious answer — scrape ~130 stadium positions — was rejected. Hand-entered
+or model-recalled coordinates are invented reference data, and wrong ones
+produce *confidently wrong* weather, which is worse than no weather. Open-Meteo's
+own keyless geocoding endpoint resolves a location name instead. City-level
+resolution is adequate because the weather model's grid cell is coarser than the
+distance from a city centre to its stadium; the API snaps any request to that
+cell regardless, which is visible in the response echoing back a shifted
+lat/lon.
+
+### What is NOT done, deliberately
+
+Nothing here feeds a feature vector. Adding weather to the model means a new
+`feature_schema_version`, a full retrain against the 12,765-match corpus, and a
+promotion decision — the same staging ADR-0004 used for CLV capture, which
+shipped capture before computation.
+
+Before that work starts, three things must hold:
+
+1. **A team → location mapping with a review step.** Geocoding is derived, not
+   invented, but it is still a guess for clubs whose name is not their city
+   (Bayer Leverkusen, Hoffenheim, Atalanta). It needs the same
+   `VERIFIED`/`REQUIRES_REVIEW` treatment as team identity, not silent
+   acceptance.
+2. **A backfill over the corpus** — 12,765 archive lookups, rate-limited, with
+   the result persisted so training is reproducible rather than re-fetched.
+3. **A parity check** that the archive value used in training and the forecast
+   value used at serving are the same variable at the same hour, since they come
+   from different endpoints. `MatchWeather.source` records which answered
+   precisely so the two can never be silently interchanged.
+
+Until all three hold, a missing reading is an **advisory** gap. Weather can
+never be critical evidence: the trust tier is `OPEN_DATA` and the provider is
+not a football source.
+
+
 ## 43. The BNN Brier gate is below the bookmaker market's own score — unattainable by construction
 
 **Tier:** `BLOCKED-ON-DECISION` — a certification threshold, Class C. Filed
