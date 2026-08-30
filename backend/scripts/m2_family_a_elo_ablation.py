@@ -145,17 +145,17 @@ def _build_rows(matches: List[dict]) -> Tuple[List[dict], List[int], List[dateti
                 "away_goals_per_match_5": away_hist["away_goals_per_match_5"],
                 "home_gd_avg_5": home_hist["home_gd_avg_5"],
                 "away_gd_avg_5": away_hist["away_gd_avg_5"],
-                "elo_difference": elo_ctx["elo_difference"],
-                "elo_home_trend_5": elo_ctx["home_elo_trend_5"],
-                "elo_away_trend_5": elo_ctx["away_elo_trend_5"],
-                "elo_momentum_cross": elo_ctx["elo_momentum_cross"],
-                "elo_resolved": float(elo_ctx["resolved"]),
+                "elo_difference": elo_ctx.elo_difference,
+                "elo_home_trend_5": elo_ctx.home_elo_trend_5,
+                "elo_away_trend_5": elo_ctx.away_elo_trend_5,
+                "elo_momentum_cross": elo_ctx.elo_momentum_cross,
+                "elo_resolved": float(elo_ctx.resolved),
                 "league": league,
             }
             rows.append(row)
             labels.append(outcome)
             dates.append(date)
-            if elo_ctx["resolved"]:
+            if elo_ctx.resolved:
                 resolved_both += 1
 
         # Update AFTER emitting — a match never informs its own row.

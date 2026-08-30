@@ -43,7 +43,12 @@ from typing import Any, Deque, Dict, List, Mapping, Sequence, Tuple
 import numpy as np
 
 from ..core.config import settings
-from ..data.elo_engine import EloEngine
+# EloContext is reused rather than redeclared: this replay's output has exactly
+# its seven fields, and returning the offline research engine's own context type
+# is what makes cross_verify_against_elo_engine() a same-type comparison rather
+# than a dict-vs-dataclass one. Production serving returns the DIFFERENT
+# elo_state_service.DurableEloContext — see that module; do not conflate them.
+from ..data.elo_engine import EloContext, EloEngine
 
 _DEFAULT_BASE_ELO = 1500.0
 
@@ -89,16 +94,26 @@ class FastEloReplay:
             last_post = league_mean + 0.5 * (last_post - league_mean)
         return last_post, trend, True
 
-    def get_context(self, home: str, away: str, league: str, season: str) -> Dict[str, object]:
+    def get_context(self, home: str, away: str, league: str, season: str) -> EloContext:
+        """Pre-match context, in ``EloEngine``'s own return type.
+
+        Deliberately NOT a ``Dict[str, object]``: a heterogeneous dict forces
+        every consumer to read floats as ``object`` (which is what a bool
+        ``resolved`` field alongside floats produces), and the resulting
+        untyped arithmetic is exactly what a type checker cannot protect.
+        """
         home_pre, home_trend, home_found = self.get_pre_and_trend(home, league, season)
         away_pre, away_trend, away_found = self.get_pre_and_trend(away, league, season)
-        return {
-            "home_elo": home_pre, "away_elo": away_pre,
-            "elo_difference": home_pre - away_pre,
-            "home_elo_trend_5": home_trend, "away_elo_trend_5": away_trend,
-            "elo_momentum_cross": home_trend - away_trend,
-            "resolved": home_found and away_found,
-        }
+        return EloContext(
+            home_elo=home_pre,
+            away_elo=away_pre,
+            elo_difference=home_pre - away_pre,
+            home_elo_trend_5=home_trend,
+            away_elo_trend_5=away_trend,
+            elo_momentum_cross=home_trend - away_trend,
+            home_resolved=home_found,
+            away_resolved=away_found,
+        )
 
     def update(self, home: str, away: str, league: str, season: str, home_goals: int, away_goals: int) -> None:
         home_pre, _, _ = self.get_pre_and_trend(home, league, season)
@@ -156,8 +171,8 @@ def cross_verify_against_elo_engine(matches: Sequence[Mapping[str, Any]], n_chec
             real_ctx = real.get_context(home, away, league, season, date)
             fast_ctx = fast.get_context(home, away, league, season)
 
-            if not np.isclose(real_ctx.elo_difference, fast_ctx["elo_difference"], atol=1e-6) or (
-                real_ctx.resolved != fast_ctx["resolved"]
+            if not np.isclose(real_ctx.elo_difference, fast_ctx.elo_difference, atol=1e-6) or (
+                real_ctx.resolved != fast_ctx.resolved
             ):
                 mismatches += 1
 
@@ -237,12 +252,12 @@ def compute_elo_training_columns(matches: Sequence[Mapping[str, Any]]) -> EloRep
 
         ctx = replay.get_context(home, away, league, season)
         rows[index] = {
-            "elo_difference": ctx["elo_difference"],
-            "elo_home_trend_5": ctx["home_elo_trend_5"],
-            "elo_away_trend_5": ctx["away_elo_trend_5"],
-            "elo_momentum_cross": ctx["elo_momentum_cross"],
+            "elo_difference": ctx.elo_difference,
+            "elo_home_trend_5": ctx.home_elo_trend_5,
+            "elo_away_trend_5": ctx.away_elo_trend_5,
+            "elo_momentum_cross": ctx.elo_momentum_cross,
         }
-        if ctx["resolved"]:
+        if ctx.resolved:
             resolved_both_sides += 1
 
         # Update AFTER emitting — a match never informs its own row.
