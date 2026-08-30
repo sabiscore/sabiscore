@@ -62,7 +62,7 @@ describe("MobilePlatformSummary", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Generation 5")).toBeInTheDocument();
     expect(screen.getByText("Research mode")).toBeInTheDocument();
-    expect(screen.getByText("5 cfg · 5 on")).toBeInTheDocument();
+    expect(screen.getByText("5 cfg · 1 verified")).toBeInTheDocument();
     expect(screen.queryByText("v5_phase7")).not.toBeInTheDocument();
     expect(screen.queryByText("UNVERIFIED")).not.toBeInTheDocument();
   });

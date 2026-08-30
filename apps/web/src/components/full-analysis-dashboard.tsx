@@ -953,15 +953,15 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
       </svg>
       <div className="min-w-0 space-y-1">
         <p className="text-xs font-semibold text-amber-300 uppercase tracking-wider">
-          {gaps.length} data gap{gaps.length === 1 ? "" : "s"} detected
+          {gaps.length} advisory gap{gaps.length === 1 ? "" : "s"}
         </p>
         {gaps.length <= COLLAPSE_THRESHOLD ? (
           <p className="text-xs text-amber-200/60">{gaps.map(toLabel).join(" · ")}</p>
         ) : (
           <>
             <p className="text-xs text-amber-200/60">
-              Live evidence is missing for these inputs, so the model fell back to a reduced-evidence
-              baseline and the verdict stays cautious.
+              Live evidence is missing for these inputs. They reduce confidence but do not block
+              the verdict shown above.
             </p>
             {/* Grouped by kind rather than listed raw: ~50 canonical feature
                 names ("away_attack_vs_home_defense") are model internals, and
@@ -1583,8 +1583,16 @@ function FullAnalysisDashboardInner({
         <NarrativeBlock text={data.narrative ?? ""} />
       )}
 
-      {/* ── Data gap banner ── */}
-      <DataGapBanner gaps={data.data_gaps} />
+      {/* ── Data gap banner ──
+          Advisory gaps only, not data.data_gaps (the critical+advisory+conflicts
+          union). EvidenceStatusCard above already itemizes critical/conflict gaps
+          when staking is blocked; showing the union here on top of that duplicated
+          the same codes under a second, larger, unlabeled count on the same screen
+          (e.g. "3 required inputs unavailable" next to "30 data gaps detected" for
+          the same fixture). When stake IS permitted, critical_gaps and conflicts
+          are always empty by contract, so advisory_gaps === data.data_gaps anyway —
+          this is a no-op in that case and the fix only where it mattered. */}
+      <DataGapBanner gaps={data.evidence_quality.advisory_gaps} />
 
       {/* ── Ensemble + RL (2-col) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
