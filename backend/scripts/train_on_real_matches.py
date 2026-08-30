@@ -107,6 +107,10 @@ from src.features.phase8_historical import (  # noqa: E402 - after the sys.path 
     UNRESOLVED_FEATURES as PHASE8_UNRESOLVED_FEATURES,
     compute_phase8_training_columns,
 )
+from src.features.elo_replay import (  # noqa: E402 - after the sys.path bootstrap
+    compute_elo_training_columns,
+    cross_verify_against_elo_engine,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("retrain")
@@ -274,6 +278,14 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
     cannot be honestly derived from this corpus and stay at their registry
     default, exactly like any other unresolved slot. The replay is a separate
     chronological pass over ``matches`` and is aligned to it by index.
+
+    docs/DEBT.md item 48: ``elo_difference``, ``elo_home_trend_5``,
+    ``elo_away_trend_5`` and ``elo_momentum_cross`` are likewise replayed for
+    real via ``src.features.elo_replay.compute_elo_training_columns`` — every
+    prior candidate (including the served v5_phase7 generation) trained with
+    these at their constant registry default because nothing replayed Elo over
+    this corpus. ``elo_league_adjusted`` stays at its default; it is
+    permanently ``PHASE7_FEATURES_ALWAYS_DATA_GAP`` by ATE-review policy.
     """
     histories: Dict[str, TeamHistory] = defaultdict(TeamHistory)
     out: Dict[str, dict] = defaultdict(
@@ -315,6 +327,9 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
             len(PHASE8_UNRESOLVED_FEATURES), ", ".join(PHASE8_UNRESOLVED_FEATURES),
         )
 
+    elo_replay = compute_elo_training_columns(matches)
+    logger.info("Elo replay: %s", elo_replay.summary())
+
     for idx, m in enumerate(matches):
         league, hist = m["league"], histories[m["league"]]
         home_stats = hist.stats(m["home"], is_home=True)
@@ -351,6 +366,11 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
                 away_goals_for_avg=features["away_goals_for_avg"],
                 away_goals_against_avg=features["away_goals_against_avg"],
             ))
+            # docs/DEBT.md item 48: real, cross-verified Elo replay — see
+            # compute_elo_training_columns's module docstring. Merged before
+            # the incumbent_features copy below so both X and X_incumbent
+            # carry it.
+            features.update(elo_replay.rows[idx])
 
             if include_phase8:
                 # Aligned to `matches` by index; an empty dict (skipped record)
@@ -934,6 +954,13 @@ def main() -> int:
     if not matches:
         logger.error("No matches parsed — nothing to train on.")
         return 1
+
+    # docs/DEBT.md item 48: never trust the fast Elo replay at scale without
+    # first proving it agrees with the real EloEngine on a real subset — a
+    # from-scratch reimplementation can silently diverge from the algorithm
+    # it means to replicate.
+    cross_verify_against_elo_engine(matches, n_check=300)
+    logger.info("Elo replay cross-verified against EloEngine on 300 matches: identical.")
 
     feature_names = APEX_FEATURES_89 if args.include_phase8 else APEX_FEATURES_68
     # The generation tag is part of the filename because prediction.py's

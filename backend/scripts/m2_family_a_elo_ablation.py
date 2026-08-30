@@ -16,13 +16,14 @@ chronological replay. The rating math and state-transition rules (home-advantage
 expected score, per-league K-factor, season-carryover regression to the league
 mean, 5-game trend) are EloEngine's (backend.src.data.elo_engine — the offline
 research engine, explicitly not the production Postgres authority) — but the
-replay itself runs through `_FastEloReplay`, a dict-based accumulator, not
-EloEngine directly: EloEngine's per-call DataFrame filter-and-copy did not
-finish a 12,260-match bulk replay in 5 minutes, a mismatch between what it was
-built for (occasional single-match lookups) and this use (one bulk pass).
-`_FastEloReplay` is cross-verified against real EloEngine output on a 300-match
-subset (`_cross_verify_fast_replay`, called first in `main()`) before its output
-is trusted for the full corpus. Walked forward alongside the real,
+replay itself runs through `FastEloReplay` (`backend.src.features.elo_replay`),
+a dict-based accumulator, not EloEngine directly: EloEngine's per-call
+DataFrame filter-and-copy did not finish a 12,260-match bulk replay in 5
+minutes, a mismatch between what it was built for (occasional single-match
+lookups) and this use (one bulk pass). `FastEloReplay` is cross-verified
+against real EloEngine output on a 300-match subset
+(`cross_verify_against_elo_engine`, called first in `main()`) before its
+output is trusted for the full corpus. Walked forward alongside the real,
 already-verified form/recency features from train_on_real_matches.TeamHistory.
 Neither structure ever sees a match's own result before its row is emitted.
 
@@ -36,6 +37,14 @@ Nothing here retrains or replaces v5_phase7. This is M2 evaluation only —
 per §11/M2, no feature family becomes production-authoritative solely from
 this script; promotion is a separate, later, explicitly-gated decision.
 
+FOLLOW-UP, shipped in the same session: `backend.src.features.elo_replay` is
+shared, not duplicated — `train_on_real_matches.py`'s `build_dataset()` now
+also calls it, so the certified generation's *next* candidate retrain (a
+separate, later, explicitly-gated promotion decision, unaffected by this
+script) sees real Elo instead of a constant default. This script's own role
+is unchanged: it still only measures, on a controlled BASE-vs-BASE+ELO split,
+and never retrains or promotes anything itself.
+
 Run: PYTHONPATH=. .venv/Scripts/python.exe backend/scripts/m2_family_a_elo_ablation.py
 """
 from __future__ import annotations
@@ -45,10 +54,9 @@ import json
 import logging
 import subprocess
 import sys
-from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Deque, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -58,7 +66,10 @@ log = logging.getLogger("m2_family_a")
 _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT))
 
-from backend.src.data.elo_engine import EloEngine  # noqa: E402
+from backend.src.features.elo_replay import (  # noqa: E402
+    cross_verify_against_elo_engine,
+    default_fast_elo_replay,
+)
 from backend.src.models.evaluation.metrics import (  # noqa: E402
     accuracy_and_per_class,
     expected_calibration_error,
@@ -87,134 +98,6 @@ VAL_SPLIT = 0.20  # matches train_bnn.py's chronological split convention
 SEED = 42
 
 
-_DEFAULT_BASE_ELO = 1500.0
-
-
-class _FastEloReplay:
-    """Same rating math and state-transition rules as EloEngine
-    (backend/src/data/elo_engine.py), O(1)-amortized per match instead of
-    EloEngine's O(n) DataFrame filter-and-copy per call. EloEngine is built
-    for occasional single-match production/backfill lookups; calling it
-    12,260 times in a loop makes the underlying table copy grow with every
-    match (measured: did not finish in 5 minutes). Replicates, not
-    reinvents: home-advantage-adjusted expected score, per-league K-factor,
-    5-game post-minus-pre delta trend, and the 50% season-carryover
-    regression toward the league mean when a team's last rating predates the
-    current season -- cross-verified against real EloEngine output on a
-    300-match subset before being trusted on the full corpus (see main()).
-    """
-
-    def __init__(self, home_advantage: float, k_base: float, league_importance: Dict[str, float]) -> None:
-        self._home_advantage = home_advantage
-        self._k_base = k_base
-        self._league_importance = league_importance
-        self._history: Dict[Tuple[str, str], List[Tuple[str, float]]] = defaultdict(list)
-        self._deltas: Dict[Tuple[str, str], Deque[float]] = defaultdict(lambda: deque(maxlen=5))
-        self._league_season_sum: Dict[Tuple[str, str], float] = defaultdict(float)
-        self._league_season_n: Dict[Tuple[str, str], int] = defaultdict(int)
-
-    def get_pre_and_trend(self, team: str, league: str, season: str) -> Tuple[float, float, bool]:
-        key = (team, league)
-        hist = self._history[key]
-        if not hist:
-            return _DEFAULT_BASE_ELO, 0.0, False
-        last_season, last_post = hist[-1]
-        deltas = self._deltas[key]
-        trend = float(np.mean(deltas)) if deltas else 0.0
-        if last_season != season:
-            ls_key = (league, season)
-            n = self._league_season_n[ls_key]
-            league_mean = (self._league_season_sum[ls_key] / n) if n else _DEFAULT_BASE_ELO
-            last_post = league_mean + 0.5 * (last_post - league_mean)
-        return last_post, trend, True
-
-    def get_context(self, home: str, away: str, league: str, season: str) -> Dict[str, object]:
-        home_pre, home_trend, home_found = self.get_pre_and_trend(home, league, season)
-        away_pre, away_trend, away_found = self.get_pre_and_trend(away, league, season)
-        return {
-            "home_elo": home_pre, "away_elo": away_pre,
-            "elo_difference": home_pre - away_pre,
-            "home_elo_trend_5": home_trend, "away_elo_trend_5": away_trend,
-            "elo_momentum_cross": home_trend - away_trend,
-            "resolved": home_found and away_found,
-        }
-
-    def update(self, home: str, away: str, league: str, season: str, home_goals: int, away_goals: int) -> None:
-        home_pre, _, _ = self.get_pre_and_trend(home, league, season)
-        away_pre, _, _ = self.get_pre_and_trend(away, league, season)
-        adjusted_home = home_pre + self._home_advantage
-        home_expected = 1.0 / (1.0 + 10 ** ((away_pre - adjusted_home) / 400.0))
-        away_expected = 1.0 - home_expected
-        if home_goals > away_goals:
-            home_actual, away_actual = 1.0, 0.0
-        elif home_goals < away_goals:
-            home_actual, away_actual = 0.0, 1.0
-        else:
-            home_actual, away_actual = 0.5, 0.5
-        k = self._k_base * self._league_importance.get(league.lower(), 1.0)
-        home_post = home_pre + k * (home_actual - home_expected)
-        away_post = away_pre + k * (away_actual - away_expected)
-        for team, pre, post in ((home, home_pre, home_post), (away, away_pre, away_post)):
-            key = (team, league)
-            self._deltas[key].append(post - pre)
-            self._history[key].append((season, post))
-            ls_key = (league, season)
-            self._league_season_sum[ls_key] += post
-            self._league_season_n[ls_key] += 1
-
-
-def _cross_verify_fast_replay(matches: List[dict], n_check: int = 300) -> None:
-    """Run both engines over the first n_check matches and assert numerically
-    identical pre-match context -- the performance rewrite must not silently
-    diverge from the real, already-shipped Elo algorithm. Raises on mismatch;
-    never trusted without this passing first."""
-    from backend.src.data.elo_engine import EloEngine
-
-    scratch = Path(_ROOT / "backend" / "scripts" / "_m2_scratch_never_persisted.parquet")
-    real = EloEngine(parquet_path=scratch)
-    home_adv, k_base = _elo_settings()
-    fast = _FastEloReplay(
-        home_advantage=home_adv, k_base=k_base, league_importance=EloEngine.LEAGUE_IMPORTANCE,
-    )
-    mismatches = 0
-    for i, m in enumerate(matches[:n_check]):
-        league, season, date = m["league"], m["season"], m["date"]
-        home, away, hg, ag = m["home"], m["away"], m["hg"], m["ag"]
-
-        real_ctx = real.get_context(home, away, league, season, date)
-        fast_ctx = fast.get_context(home, away, league, season)
-
-        if not np.isclose(real_ctx.elo_difference, fast_ctx["elo_difference"], atol=1e-6) or (
-            real_ctx.resolved != fast_ctx["resolved"]
-        ):
-            mismatches += 1
-            log.error(
-                "Cross-verify mismatch at match %d (%s vs %s): real elo_diff=%.4f resolved=%s | "
-                "fast elo_diff=%.4f resolved=%s",
-                i, home, away, real_ctx.elo_difference, real_ctx.resolved,
-                fast_ctx["elo_difference"], fast_ctx["resolved"],
-            )
-
-        real.update_after_match(
-            match_id=f"verify_{i}", home_team_id=home, away_team_id=away,
-            home_goals=hg, away_goals=ag, league=league, season=season,
-            match_date=date, persist=False,
-        )
-        fast.update(home, away, league, season, hg, ag)
-
-    if mismatches:
-        raise RuntimeError(
-            f"_FastEloReplay diverged from EloEngine on {mismatches}/{n_check} matches -- "
-            "do not trust the fast replay's output until this is fixed."
-        )
-    log.info("Cross-verified _FastEloReplay against real EloEngine on %d matches: identical.", n_check)
-
-
-def _elo_settings() -> Tuple[float, float]:
-    from backend.src.core.config import settings
-    return float(settings.elo_home_advantage), float(settings.elo_k_base)
-
-
 def _load_trainer():
     """Dynamic-load train_on_real_matches.py for TeamHistory/load_matches reuse
     (same importlib pattern train_bnn.py already uses for the same module)."""
@@ -236,8 +119,7 @@ def _build_rows(matches: List[dict]) -> Tuple[List[dict], List[int], List[dateti
     """
     trainer = _load_trainer()
     history = trainer.TeamHistory()
-    home_adv, k_base = _elo_settings()
-    elo = _FastEloReplay(home_advantage=home_adv, k_base=k_base, league_importance=EloEngine.LEAGUE_IMPORTANCE)
+    elo = default_fast_elo_replay()
 
     rows: List[dict] = []
     labels: List[int] = []
@@ -337,7 +219,8 @@ def main() -> int:
     matches = trainer.load_matches(cache_dir)
     log.info("%d parseable matches, %s -> %s", len(matches), matches[0]["date"].date(), matches[-1]["date"].date())
 
-    _cross_verify_fast_replay(matches, n_check=300)
+    cross_verify_against_elo_engine(matches, n_check=300)
+    log.info("FastEloReplay cross-verified against real EloEngine on 300 matches: identical.")
 
     rows, labels, dates = _build_rows(matches)
     y = np.array(labels, dtype=np.int64)
@@ -448,14 +331,15 @@ def main() -> int:
             ),
         },
         "not_done_here": (
-            "No artifact promoted or wired into serving. Elo replay is in-memory "
-            "only for this measurement, not persisted or backfilled into any "
-            "training corpus file. Promoting elo_difference from constant-default "
-            "to a real, replayed feature in the actual training pipeline "
-            "(train_on_real_matches.py) is a separate, larger change -- it would "
-            "touch a script every retrain depends on and change what v_phase7's "
-            "successor generation trains on -- and is not done in this M2 "
-            "evaluation-only pass."
+            "No artifact promoted or wired into serving BY THIS SCRIPT. Elo replay "
+            "above is in-memory only for this measurement, not persisted. "
+            "FOLLOW-UP (shipped in the same session, separate files): "
+            "backend.src.features.elo_replay is now the shared replay both this "
+            "script AND scripts/train_on_real_matches.py:build_dataset() call, so "
+            "the next candidate retrain trains on real Elo instead of a constant "
+            "default. That retrain's promotion over the certified v5_phase7 "
+            "generation remains a separate, later, explicitly-gated decision — "
+            "unaffected by this ablation script, which still only measures."
         ),
     }
 
