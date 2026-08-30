@@ -92,7 +92,7 @@ describe("PerformancePageClient summary", () => {
     expect(notice).toHaveAttribute("role", "alert");
   });
 
-  it("never offers CLV or ROI, which this pipeline cannot compute", async () => {
+  it("never offers ROI, which this pipeline cannot compute", async () => {
     mockSummary({
       status: "OK",
       total_settled: 42,
@@ -104,12 +104,50 @@ describe("PerformancePageClient summary", () => {
     renderWithClient();
     await screen.findByText("48.0%");
 
-    // No stake is ever placed (NO_BET/shadow only) so ROI has no referent, and
-    // MatchPredictionLog stores no odds so CLV has nothing to join a closing line to.
+    // No stake is ever placed (NO_BET / shadow only), so ROI has no referent at
+    // all — unlike CLV below, which is a real capability still filling up.
     await waitFor(() => {
       expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/CLV/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/closing line/i)).not.toBeInTheDocument();
     });
+  });
+
+  // This case previously asserted CLV was never shown, on the rationale that
+  // "MatchPredictionLog stores no odds so CLV has nothing to join". That stopped
+  // being true when clv_service + get_clv_records shipped: production reports
+  // real joined pairs under the service's own floor. Below the floor the tile
+  // must report progress, never a mean computed from too few pairs.
+  it("shows CLV progress toward its floor instead of a premature mean", async () => {
+    mockSummary({
+      status: "OK",
+      total_settled: 21,
+      accuracy_overall: 0.4,
+      rps_overall: 0.2436,
+      n_splits: 5,
+      clv: { skipped: true, n: 6, reason: "need >= 10 joined predictions, got 6" },
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText(/closing line value/i)).toBeInTheDocument();
+    expect(screen.getByText(/6 of 10 joined predictions/i)).toBeInTheDocument();
+    expect(screen.queryByText(/pp$/)).not.toBeInTheDocument();
+  });
+
+  it("reports a measured CLV mean once the floor is cleared", async () => {
+    mockSummary({
+      status: "OK",
+      total_settled: 40,
+      accuracy_overall: 0.45,
+      rps_overall: 0.21,
+      n_splits: 5,
+      clv: { skipped: false, n: 12, mean_clv: 0.0231, positive_rate: 0.58 },
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText("+2.3pp")).toBeInTheDocument();
+    expect(
+      screen.getByText(/mean vs\. market close across 12 joined predictions/i),
+    ).toBeInTheDocument();
   });
 });

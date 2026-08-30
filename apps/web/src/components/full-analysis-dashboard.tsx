@@ -1139,8 +1139,13 @@ function DataFreshnessSection() {
 // ─── Evidence Status Card (WP-E): structured "why no prediction" summary ─────
 // Shown when stake is not permitted so users understand what's missing and
 // what would help, rather than seeing grey dashes with no explanation.
-
-function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
+//
+// ⚠️ Do NOT put `capitalize` on the gap text. `describeEvidenceCode` returns a
+// lowercase sentence fragment (it is also interpolated mid-sentence by
+// `mapFullAnalysisPresentation`), so `capitalize` Title-Cased real copy into
+// "This Model Hasn't Passed Certification Yet" — which reads exactly like the
+// raw-enum `titleCaseCode` fallback the map exists to replace.
+export function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
   const presentation = mapFullAnalysisPresentation(data);
   if (presentation.stakePermitted) return null;
 
@@ -1192,7 +1197,7 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
               {listGaps.map((gap) => (
                 <li key={gap} className="flex items-start gap-2 text-xs text-slate-400">
                   <span className="mt-0.5 flex-shrink-0 text-rose-400 text-[10px]" aria-hidden>✗</span>
-                  <span className="capitalize">{describeEvidenceCode(gap)}</span>
+                  <span className="first-letter:uppercase">{describeEvidenceCode(gap)}</span>
                 </li>
               ))}
             </ul>
@@ -1202,7 +1207,7 @@ function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }) {
             {listGaps.map((gap) => (
               <li key={gap} className="flex items-start gap-2 text-xs text-slate-400">
                 <span className="mt-0.5 flex-shrink-0 text-rose-400 text-[10px]" aria-hidden>✗</span>
-                <span className="capitalize">{describeEvidenceCode(gap)}</span>
+                <span className="first-letter:uppercase">{describeEvidenceCode(gap)}</span>
               </li>
             ))}
           </ul>

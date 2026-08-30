@@ -389,6 +389,12 @@ async def model_performance_summary(
 
     result = await _walk_forward_summary(db, league=None, window=None)
     records, validation = result["records"], result["validation"]
+    # Same independence as the sibling handler: CLV has its own data floor, so
+    # it is reported even while walk-forward is short — and vice versa. Unwindowed
+    # here because this summary is itself all-time (`window=None` above).
+    clv = compute_clv_summary(
+        await get_clv_records(db, model_version=str(result["model_version"]))
+    )
 
     if not records or validation.get("skipped"):
         return JSONResponse(
@@ -397,6 +403,7 @@ async def model_performance_summary(
                 "status": "METRICS_UNAVAILABLE",
                 "reason": "insufficient_settled_predictions",
                 "settled_predictions": len(records),
+                "clv": clv,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -408,5 +415,6 @@ async def model_performance_summary(
         "rps_overall": validation.get("rps_overall"),
         "n_splits": validation.get("n_splits"),
         "validated_at": validation.get("validated_at"),
+        "clv": clv,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

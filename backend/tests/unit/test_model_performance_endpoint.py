@@ -263,6 +263,10 @@ async def test_model_performance_summary_503_below_floor(session: AsyncSession) 
 
     assert status == 503
     assert body["reason"] == "insufficient_settled_predictions"
+    # CLV has its own floor, independent of walk-forward's. The /performance page
+    # reads it from this endpoint, so it must be present on the 503 body too —
+    # otherwise the tile can only ever say "0 of 10" while the join is working.
+    assert "clv" in body
 
 
 async def test_model_performance_summary_200_once_seeded(session: AsyncSession) -> None:
@@ -280,6 +284,28 @@ async def test_model_performance_summary_200_once_seeded(session: AsyncSession) 
     # card showing an em-dash even with real settled data behind it.
     assert 0.0 <= body["accuracy_overall"] <= 1.0
     assert body["n_splits"] >= 1
+    # _seed writes no closing lines, so CLV correctly skips — but the key must
+    # still be there. The /performance tile reads `n` to show progress toward the
+    # floor, and an absent key is indistinguishable from a zero join.
+    assert body["clv"]["skipped"] is True
+    assert body["clv"]["n"] == 0
+
+
+async def test_model_performance_summary_reports_clv_once_closing_lines_exist(
+    session: AsyncSession,
+) -> None:
+    """The summary endpoint feeds the /performance stat tiles, which had no CLV
+    at all until this shipped — the value was computed on the sibling windowed
+    route and never reached the page."""
+    from src.api.endpoints.performance import model_performance_summary
+
+    await _seed_with_closing_lines(session, n=10, finished=True)
+    response = await model_performance_summary(db=session)
+    status, body = _status_and_body(response)
+
+    assert status == 200
+    assert body["clv"]["skipped"] is False
+    assert body["clv"]["n"] == 10
 
 
 async def test_value_bet_scan_reads_only_fresh_persisted_actionable_rows(

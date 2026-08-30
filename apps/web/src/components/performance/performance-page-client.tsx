@@ -34,14 +34,26 @@ import { cn } from "@/lib/utils";
  * bets_tracked) was written against an endpoint that had never once returned
  * 200, and shares no field with what the settlement join actually produces.
  *
- * CLV and ROI are deliberately absent rather than pending:
- *   · CLV needs the closing price beside each prediction; `MatchPredictionLog`
- *     stores probabilities only, so there is nothing to join a closing line to.
- *   · ROI needs a realised return on a placed stake, and this platform never
- *     places one by construction (NO_BET / HOLD / shadow evaluation only).
- * Leaving them on screen as permanent em-dashes would imply they are merely
- * awaiting data. They are not.
+ * ROI is deliberately absent rather than pending: it needs a realised return on
+ * a placed stake, and this platform never places one by construction (NO_BET /
+ * HOLD / shadow evaluation only). Leaving it on screen as a permanent em-dash
+ * would imply it is merely awaiting data. It is not.
+ *
+ * CLV *is* pending, and that is a change: this comment previously said there was
+ * "nothing to join a closing line to". `clv_service` + `get_clv_records()` have
+ * since shipped and the join works — production reports real joined pairs below
+ * the service's own 10-record floor, not an absent capability. So it is shown
+ * with its progress toward that floor rather than hidden.
  */
+interface ClvSummary {
+  skipped: boolean;
+  /** Joined prediction/closing-line pairs found so far. */
+  n: number;
+  reason?: string;
+  mean_clv?: number;
+  positive_rate?: number;
+}
+
 interface PerfSummary {
   status?: "OK" | "METRICS_UNAVAILABLE";
   reason?: string;
@@ -51,8 +63,12 @@ interface PerfSummary {
   rps_overall?: number;
   n_splits?: number;
   validated_at?: string;
+  clv?: ClvSummary;
   error?: string;
 }
+
+/** The floor `services/clv_service.py` enforces before it will report a mean. */
+const CLV_MIN_JOINED = 10;
 
 // ─── Summary stats ────────────────────────────────────────────────────────────
 
@@ -169,20 +185,21 @@ export function PerformancePageClient() {
   const rps = summary?.rps_overall;
   const rpsMeetsGate = meetsRpsGate(rps);
   const settled = summary?.total_settled ?? summary?.settled_predictions ?? 0;
+  const clv = summary?.clv;
 
   return (
     <div className="space-y-6">
       {/* Summary stats — rendered only when a walk-forward run actually produced them */}
       <section aria-label="Model performance summary">
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-hidden="true">
-            {[...Array(4)].map((_, i) => (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-hidden="true">
+            {[...Array(5)].map((_, i) => (
               <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-800/50" />
             ))}
           </div>
         ) : hasMetrics ? (
           <>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <StatCard
                 label="Model accuracy"
                 value={accuracy !== undefined ? `${(accuracy * 100).toFixed(1)}%` : "—"}
@@ -204,6 +221,24 @@ export function PerformancePageClient() {
                 label="Validation folds"
                 value={summary?.n_splits !== undefined ? String(summary.n_splits) : "—"}
                 detail="Chronological splits — never random"
+              />
+              {/* Read-only diagnostic: model belief vs. the market's closing
+                  price. Never a stake signal — no bet is ever placed. Below the
+                  service floor the tile reports progress toward it rather than
+                  a mean computed from too few pairs. */}
+              <StatCard
+                label="Closing line value"
+                value={
+                  clv && !clv.skipped && clv.mean_clv !== undefined
+                    ? `${clv.mean_clv >= 0 ? "+" : ""}${(clv.mean_clv * 100).toFixed(1)}pp`
+                    : "—"
+                }
+                detail={
+                  clv && !clv.skipped
+                    ? `Mean vs. market close across ${clv.n} joined prediction${clv.n === 1 ? "" : "s"}`
+                    : `${clv?.n ?? 0} of ${CLV_MIN_JOINED} joined predictions — needs a captured closing line per prediction`
+                }
+                positive={clv && !clv.skipped && clv.mean_clv !== undefined ? clv.mean_clv > 0 : null}
               />
             </div>
             {summary?.validated_at && (
