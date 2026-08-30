@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,14 @@ from .model_status import router as model_status_router  # noqa: E402
 from .providers import router as providers_router  # noqa: E402
 from .advanced_insights import router as advanced_insights_router  # noqa: E402
 
-# Ultra predictions are optional - depends on catboost/xgboost/lightgbm
+# Ultra predictions are optional - depends on catboost/xgboost/lightgbm.
+# Declared Optional up front so the ImportError branch's `None` is a legal value
+# for the same name rather than a type error against the imported APIRouter.
+ultra_predictions_router: Optional[APIRouter]
 try:
-    from .ultra_predictions import router as ultra_predictions_router  # noqa: E402
+    from .ultra_predictions import router as _ultra_predictions_router  # noqa: E402
+
+    ultra_predictions_router = _ultra_predictions_router
     _ultra_available = True
 except ImportError as e:
     logger.warning(f"Ultra predictions endpoint not available: {e}")

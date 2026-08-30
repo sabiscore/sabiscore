@@ -96,7 +96,7 @@ class AdvancedInsightsService:
                     source=ref_row.source,
                 )
             else:
-                referee_payload = RefereeInsightPayload(name=match_row.referee)
+                referee_payload = RefereeInsightPayload(name=str(match_row.referee))
 
         # 4. Compute / assemble Advanced Metrics
         ppda_h = match_ctx.ppda_home if match_ctx else None
@@ -166,6 +166,11 @@ class AdvancedInsightsService:
         odds_row = odds_res.scalars().first()
 
         if odds_row and odds_row.home_win and odds_row.draw and odds_row.away_win:
+            captured_at = (
+                odds_row.timestamp
+                if isinstance(odds_row.timestamp, datetime)
+                else now
+            )
             odds_dict = {
                 "home_win": float(odds_row.home_win),
                 "draw": float(odds_row.draw),
@@ -179,7 +184,7 @@ class AdvancedInsightsService:
                 model_probabilities=None,
                 provider="odds_service",
                 bookmaker=getattr(odds_row, "bookmaker", "consensus") or "consensus",
-                captured_at=odds_row.timestamp or now,
+                captured_at=captured_at,
                 is_suspended=False,
                 pre_kickoff=bool(kickoff and kickoff > now),
                 uncertainty_available=False,
@@ -196,7 +201,7 @@ class AdvancedInsightsService:
             match_id=match_id,
             home_team=getattr(match_row.home_team, "name", str(match_row.home_team_id or "Home")),
             away_team=getattr(match_row.away_team, "name", str(match_row.away_team_id or "Away")),
-            league=match_row.league_id or "unknown",
+            league=str(match_row.league_id or "unknown"),
             kickoff_utc=kickoff.isoformat() if kickoff else None,
             advanced_metrics=advanced_metrics,
             match_context=context_payload,

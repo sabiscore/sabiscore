@@ -230,7 +230,7 @@ def block_bootstrap_ci(
     block_size: int = 10,
     ci_level: float = 0.95,
     rng_seed: int = 42,
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Block-bootstrap confidence interval for a scalar metric function.
 
     Uses non-overlapping block resampling (Künsch 1989) rather than iid bootstrap
@@ -249,7 +249,9 @@ def block_bootstrap_ci(
 
     Returns:
         Dict with keys: point_estimate, ci_lower, ci_upper, ci_level,
-        n_bootstrap, block_size, n_samples.
+        n_bootstrap, block_size, n_samples. Typed ``Any`` rather than ``float``
+        because ci_lower/ci_upper are ``None`` when no replicate scored, and an
+        under-sampled call adds a string ``note``.
     """
     n = len(y_true)
     point = metric_fn(y_true, y_proba)
