@@ -1383,7 +1383,7 @@ become load-bearing.
 
 ---
 
-## 35. `fixture_sync.identity_rebind_pending` has zero consumers — the drift it correctly detects just accumulates in warning logs
+## 35. RESOLVED 2026-08-30 (live-verified) — `fixture_sync.identity_rebind_pending` has zero consumers — the drift it correctly detects just accumulates in warning logs
 
 > ⚠️ **Correction (2026-08-21):** fix (a) below — "surface
 > `identity_rebind_pending` in `/health` or `/metrics`" — **is already done and
@@ -1402,8 +1402,12 @@ become load-bearing.
 > every deploy forever with no visible total. Fix (a) should therefore be read as
 > **"expose a durable backlog gauge"**, not "add a counter" — the counter exists.
 
-**Tier:** `NEXT` — low urgency, no data-corruption risk (the guard fails
-closed exactly as designed).
+**Tier:** `RESOLVED` — both the review and apply tooling shipped (below), and
+a live probe of `GET /api/v1/release/fixture-identity-review` on
+2026-08-30 confirms the production backlog is now genuinely empty:
+`total_mismatched: 0`, `rebind_ready_count: 0`, `blocked_count: 0`,
+`leagues_affected: []`. Kept in the ledger as the historical record of the
+fix, not as an open item.
 **Found:** 2026-08-21, incidentally, reading a Render deploy log for an
 unrelated database-migration verification.
 
