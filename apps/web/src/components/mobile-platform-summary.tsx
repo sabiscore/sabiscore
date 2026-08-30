@@ -30,7 +30,7 @@ export function MobilePlatformSummary() {
   const health = healthData ? derivePlatformHealth(healthData) : null;
   const modelVersion = modelError ? "Unavailable" : modelData ? displayModelVersion(modelData) : "…";
   const certification = modelError ? "Unavailable" : modelData ? displayCertification(modelData) : "…";
-  const providerLabel = health ? `${health.configured} cfg · ${health.enabled} on` : "…";
+  const providerLabel = health ? `${health.configured} cfg · ${health.live} verified` : "…";
 
   return (
     <div
@@ -38,7 +38,7 @@ export function MobilePlatformSummary() {
       role="group"
       aria-label={
         health || modelData
-          ? `Model ${modelVersion}; certification ${certification}; providers ${health?.configured ?? 0} configured, ${health?.enabled ?? 0} enabled; explicit live validation ${health && health.live > 0 ? `${health.live} verified` : "not run"}`
+          ? `Model ${modelVersion}; certification ${certification}; providers ${health?.configured ?? 0} configured; live-validated ${health?.live ?? 0}`
           : "Checking platform and model status"
       }
     >

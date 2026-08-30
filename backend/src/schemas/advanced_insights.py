@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..services.advanced_metrics import MetricStatus
 from ..services.market_intel import MarketIntelligenceSummary
@@ -61,6 +61,8 @@ class DecisionStatePayload(BaseModel):
 
 class AdvancedInsightsResponse(BaseModel):
     """Unified Advanced Insights response payload."""
+    model_config = ConfigDict(protected_namespaces=())
+
     match_id: str
     home_team: str
     away_team: str

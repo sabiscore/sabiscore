@@ -756,13 +756,13 @@ export function MatchSelector() {
               <span
                 className={cn(
                   "h-1.5 w-1.5 rounded-full",
-                  platformHealth && platformHealth.enabled === platformHealth.configured
+                  platformHealth && platformHealth.live > 0
                     ? "animate-pulse bg-green-500/60"
                     : "bg-amber-500/60",
                 )}
               />
               {platformHealth
-                ? `${platformHealth.enabled} of ${platformHealth.configured} providers enabled`
+                ? `${platformHealth.configured} configured · ${platformHealth.live} live-validated`
                 : "Checking providers"}
             </span>
             <span>•</span>

@@ -57,14 +57,15 @@ export function PlatformHealthPills() {
         status={databaseReady ? "Ready" : "Unavailable"}
       />
       {/*
-        Live validation is intentionally separate: production keeps provider
-        probes off by default to preserve quota. This state instead shows
-        whether every configured provider is actually enabled.
+        Shows live-validated vs configured count. "Live-validated" means the
+        provider returned a successful response during the last explicit probe
+        (PROVIDER_LIVE_TESTS=true). Production keeps probes off by default to
+        preserve quota, so this may read 0 even when providers are working.
       */}
       <HealthPill
         icon={Activity}
         label="Providers"
-        value={health ? `${health.configured} configured · ${health.enabled} enabled` : "Checking"}
+        value={health ? `${health.configured} configured · ${health.live} live-validated` : "Checking"}
         status={health?.providerActivation.label ?? "Unavailable"}
       />
       <HealthPill

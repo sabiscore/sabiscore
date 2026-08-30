@@ -57,7 +57,7 @@ describe("MobilePlatformSummary", () => {
     // screen-reader label, which is consumer output too.
     expect(
       await screen.findByLabelText(
-        "Model Generation 5; certification Research mode; providers 5 configured, 5 enabled; explicit live validation 1 verified",
+        "Model Generation 5; certification Research mode; providers 5 configured; live-validated 1",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Generation 5")).toBeInTheDocument();
