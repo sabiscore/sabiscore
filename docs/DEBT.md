@@ -1,6 +1,93 @@
 # SabiScore Debt Ledger
 
-## 47. `/advanced-insights` is mounted but has no consumer, and republishes model provenance
+## 48. Every trained artifact, including the served generation, has never seen real Elo — `elo_difference` is a constant 0.0 across the entire training corpus
+
+**Tier:** `NEXT` — a real, measured, positive out-of-sample signal (M2
+evaluation, not yet wired into the training pipeline any model actually
+ships from). Filed 2026-08-30, M2 Family A session.
+
+Measured directly, not inferred: loaded the full real corpus (12,765
+matches) through `train_on_real_matches.build_dataset()` and read the
+`elo_difference`, `elo_home_trend_5`, `elo_away_trend_5`,
+`elo_league_adjusted`, `elo_momentum_cross` columns off the emitted
+`X_incumbent` vectors. **All five have exactly one unique value — 0.0 —
+across all 12,256 rows.** `TeamHistory`, `build_dataset()`'s only walk-forward
+accumulator, computes form/goals features only (`stats()`'s full return dict
+has no Elo field); nothing in the offline training script replays Elo over
+the corpus. Every artifact trained via this pipeline — including the
+currently-served `v5_phase7` generation — has therefore never seen Elo vary
+during training, and cannot have learned an Elo-outcome relationship,
+regardless of production serving `elo_difference` from a real, live,
+186-team/25,756-row durable Postgres store (`elo_state_service.py`) at
+inference time. **This directly contradicts `backend/reports/features/
+train-serve-parity.json`'s claim that `elo_difference` is `RESOLVED`** — it
+is resolved at serving, permanently silently-defaulted at training, which is
+exactly what M1's own exit gate (`training_defaulted_slots == 0`) exists to
+catch and did not.
+
+### What was measured (M2 Family A, `backend/scripts/m2_family_a_elo_ablation.py`)
+
+A fresh, honest, chronological Elo replay was built and cross-verified
+against the real `EloEngine`'s own output (300-match subset, byte-identical)
+before being trusted at full scale — `EloEngine` itself could not complete
+the 12,260-match bulk replay in 5 minutes (its per-call `DataFrame` filter-
+and-copy is built for occasional single-match production lookups, not a
+bulk pass; a fresh `_FastEloReplay` dict-based accumulator replicates the
+exact same rating math — home-advantage expected score, per-league
+K-factor, 5-game trend, season-carryover regression to the league mean — at
+tractable speed). Chronological 80/20 split (train 2019-09-20→2025-03-15,
+n=9,808; val 2025-03-15→2026-05-24, n=2,452), scored with the M0 canonical
+RPS/log-loss/Brier/ECE implementations:
+
+| forecaster | RPS (primary, lower better) | Brier | accuracy |
+|---|---|---|---|
+| uniform | 0.2359 | 0.6667 | 0.435 |
+| home_bias (overall empirical rate) | 0.2305 | 0.6492 | 0.435 |
+| league_prior (per-league empirical rate) | 0.2305 | 0.6496 | 0.435 |
+| BASE (form/recency only, 8 real features) | 0.2231 | 0.6407 | 0.458 |
+| **elo_only** (real elo_difference, 1 feature) | **0.2107** | 0.6149 | 0.483 |
+| **BASE + real ELO** (12 features) | **0.2102** | 0.6132 | 0.483 |
+
+**Elo alone beats the full 8-feature form/recency BASE.** Adding it to BASE
+improves RPS by −0.0130 (0.2231 → 0.2102) — most of that gain is already
+captured by Elo on its own; form/recency adds a small further refinement on
+top. Elo was resolved for both sides on **100% of validation rows** (once a
+team has ≥5 prior matches — the same inclusion floor `TeamHistory` already
+enforces — it has necessarily also played ≥1 prior match, so it always has
+*some* Elo rating; coverage is not a limiting factor here). ⚠️ **Read the ECE
+column with the calibration/resolution tradeoff in mind, not at face value**:
+`home_bias`/`league_prior` show near-zero ECE (0.004–0.005) only because a
+constant predictor is trivially "calibrated" against its own marginal rate —
+it is uninformative, not well-calibrated in any useful sense. The
+Elo-augmented models' higher ECE (~0.065) comes with far lower RPS and
+higher accuracy; a full reliability/resolution/uncertainty decomposition
+(`brier_score_decomposition()`, already built by M0) was not run for this
+pass and would be the right next check before reading the ECE numbers as
+"Elo is less trustworthy."
+
+**Full corpus context, not directly comparable (different slice/split) but
+worth knowing:** item 43 measured the de-vigged bookmaker market at Brier
+0.5787 (sum-over-classes convention, same as this table) on the full
+12,761-row corpus. This ablation's best result (BASE+ELO, Brier 0.6132 on
+the 2,452-row validation slice only) is still short of the market — expected;
+beating the market is M7's job, not M2's, and this is a bare logistic
+regression on 12 features, not a tuned ensemble.
+
+### What is NOT done here, deliberately
+
+Nothing is wired into `train_on_real_matches.py` or any served artifact.
+The replay is in-memory only, never persisted, never touches
+`backend/data/cache/` or `data/processed/`. Promoting `elo_difference` from a
+constant default to a real, replayed feature in the actual training
+pipeline — the change that would let a *retrained* `v5_phase7` successor
+actually learn from Elo — is a separate, larger change: it touches a script
+every retrain depends on, changes `feature_contract.json`'s per-feature
+`training_source` attribution (Phase 3's own machinery would need to record
+the new source), and is exactly the kind of change that needs the M2 Family
+B–F sweep finished first so the retrain decision is made once, not
+feature-by-feature. **Trigger:** either an explicit decision to retrain now
+on this one finding, or completing the remaining M2 families (B–F) first for
+one combined retrain decision.
 
 **Tier:** `ACCEPTED` — not a defect, a scope boundary. Filed 2026-08-30.
 
@@ -229,6 +316,49 @@ real-corpus run passes ECE and draw ratio on the MC-Dropout path.
 session's "Recommendation: add more training data" advice implied. More data
 will not move this; the corpus went 2,058 → 12,256 rows and the score moved
 0.615 → 0.583, converging on the market rather than on 0.220.
+
+### Addendum — 2026-08-30: independently reproduced, and a new coupling found — the honest script cannot save ANY artifact while this gate stands
+
+Re-ran `python scripts/train_bnn.py --corpus real` fresh this session, after
+finding an unverified-provenance `bnn_ensemble.pt`/`bnn_fallback_mc.pt` pair
+already on disk (mtime 2026-08-29, untracked — matches item 42's addendum
+exactly: "any local run will load it... delete it before running the stack
+locally"). Deleted both rather than trust or inspect them, to get a fully
+first-hand result instead of reasoning about an artifact of unknown origin.
+
+**EDL reproduced item 43's figure exactly**: val Brier **0.5831** (12,256 real
+matches, 2019-09-20→2026-05-24, 37 variance-filtered features — no
+`causal_feature_report.json` present locally, so the script's own documented
+fallback engaged, not a defect). ECE 0.0302 ✓ and CI coverage 1.0000 ✓ both
+pass independently of the Brier question. **New finding: EDL's draw_ratio is
+0.2090 against a ≥0.600 gate** — it collapsed to almost never predicting a
+draw, a real defect distinct from the Brier-attainability question, and
+`_LAMBDA_DRAW`'s calibration penalty did not save it this run. The MC-Dropout
+fallback fixes the draw problem (0.8691 ✓) but scores Brier 0.5936 — still
+2.7× the gate.
+
+**Net result: neither model was saved.** `_gates_pass()` requires all four
+gates simultaneously, so the run correctly exited 1 with "No model saved" —
+the exact behavior described in this item's body, now confirmed by direct
+execution rather than by reasoning about it alone.
+
+**This closes a question §3.1/Decision 1 (item 42) left implicit: the two
+decisions are coupled, not independent.** `train_bnn.py`'s own internal gate
+check — not `certification_policy.py`, not `uncertainty_service.py`, not
+`requirements.txt` — is what refuses to write `bnn_ensemble.pt` today. Item
+42's "Option 1: ship the capability" (add torch, train, commit an artifact)
+is therefore **not executable as a mechanical checklist** while `BRIER_GATE =
+0.220` stands: the script will not save what it produces, no matter how
+honest the corpus or how correct the split. Resolving *this* item (choosing
+between the mean-convention reading, a market-relative threshold, or leaving
+research-only) is now the actual first step of item 42's Option 1, not a
+parallel, independent question.
+
+**Not changed:** `BRIER_GATE`, `certification_policy.py`, `requirements.txt`,
+`uncertainty_service.py`. `backend/models/` now holds no `.pt` files locally —
+the same state as production (gitignored, never committed, `torch` absent
+from every `requirements*.txt`). This is Option 3 (research-only) by current
+default, not a new decision made here.
 
 
 ## 42. Staking is blocked by a permanent critical gap that no amount of model certification can clear
