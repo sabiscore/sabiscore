@@ -40,6 +40,7 @@ ADR-0004 used for CLV capture, which shipped capture before computation.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
@@ -267,7 +268,17 @@ def _require_list(container: Mapping[str, Any], key: str) -> Optional[list]:
 
 
 def _is_finite_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value == value and abs(value) != float("inf")
+    """Reject None, bools, strings, NaN and +/-inf in one predicate.
+
+    ``math.isfinite`` covers NaN and both infinities; the explicit bool guard is
+    separate because ``bool`` is an ``int`` subclass and ``True`` would otherwise
+    pass as the temperature 1.
+    """
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
 
 def _as_utc(value: datetime) -> datetime:

@@ -74,6 +74,9 @@ def test_a_missing_kickoff_hour_is_absent_not_nearest_neighbour() -> None:
     [
         pytest.param(lambda p: p["hourly"].pop("precipitation"), id="variable-missing"),
         pytest.param(lambda p: p["hourly"].update({"temperature_2m": [1.0, None, 2.0]}), id="null-value"),
+        pytest.param(lambda p: p["hourly"].update({"temperature_2m": [1.0, float("nan"), 2.0]}), id="nan-value"),
+        pytest.param(lambda p: p["hourly"].update({"wind_speed_10m": [1.0, float("inf"), 2.0]}), id="inf-value"),
+        pytest.param(lambda p: p["hourly"].update({"precipitation": [0.0, True, 0.1]}), id="bool-not-a-reading"),
         pytest.param(lambda p: p["hourly"].update({"wind_speed_10m": [1.0]}), id="short-series"),
         pytest.param(lambda p: p.update({"hourly": []}), id="hourly-not-an-object"),
     ],
