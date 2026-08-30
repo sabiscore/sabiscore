@@ -33,7 +33,7 @@ import {
   refreshFixtureEvidence,
   submitManualOddsSnapshot,
 } from "@/lib/betting-intelligence-api";
-import { describeEvidenceCode } from "@/lib/full-analysis-contract";
+import { describeEvidenceCode, groupEvidenceGaps } from "@/lib/full-analysis-contract";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { evidenceStateFor } from "@/lib/evidence-state";
 
@@ -777,10 +777,33 @@ export function BettingIntelligenceDashboard() {
                     <div className="bi-panel-title text-[hsl(var(--signal-warning))]">
                       Advisory
                     </div>
+                    {/* Advisory gaps are mostly raw canonical feature names
+                        ("away_attack_vs_home_defense"), because the backend
+                        classifies every unmapped data_gap as advisory. Listing
+                        them one title-cased line each told a reader nothing.
+                        Group by family — the same treatment DataGapBanner
+                        already gives the identical codes — and keep the exact
+                        list one disclosure away for auditability. */}
                     {result.advisory_gaps?.length ? (
-                      <ul className="bi-list gap">
-                        {result.advisory_gaps.map((gap) => <li key={gap}>{describeEvidenceCode(gap)}</li>)}
-                      </ul>
+                      result.advisory_gaps.length > 5 ? (
+                        <>
+                          <ul className="bi-list gap">
+                            {groupEvidenceGaps(result.advisory_gaps).map((group) => (
+                              <li key={group.label}>{group.label} <strong>{group.count}</strong></li>
+                            ))}
+                          </ul>
+                          <details>
+                            <summary className="bi-gap-summary">Show all {result.advisory_gaps.length} advisory inputs ▸</summary>
+                            <ul className="bi-list gap">
+                              {result.advisory_gaps.map((gap) => <li key={gap}>{describeEvidenceCode(gap)}</li>)}
+                            </ul>
+                          </details>
+                        </>
+                      ) : (
+                        <ul className="bi-list gap">
+                          {result.advisory_gaps.map((gap) => <li key={gap}>{describeEvidenceCode(gap)}</li>)}
+                        </ul>
+                      )
                     ) : null}
                     {result.conflicts?.length ? (
                       <ul className="bi-list risk" style={{ marginTop: 8 }}>

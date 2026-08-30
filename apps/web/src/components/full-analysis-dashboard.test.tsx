@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   EloContextCard,
   EnsembleCard,
+  EvidenceStatusCard,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
@@ -212,5 +213,44 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
       expect(screen.getByText(expectedText[i])).toBeInTheDocument();
       fireEvent.blur(trigger);
     });
+  });
+});
+
+describe("EvidenceStatusCard blocking-gap copy", () => {
+  // `describeEvidenceCode` returns a lowercase sentence fragment because it is
+  // also interpolated mid-sentence. A `capitalize` class here Title-Cased that
+  // real copy into "This Model Hasn't Passed Certification Yet", which is
+  // indistinguishable from the raw-enum `titleCaseCode` fallback the map exists
+  // to replace — and that is exactly what the live /match page rendered.
+  const blocked = {
+    partial_intelligence: true,
+    prediction_status: "REDUCED_EVIDENCE_BASELINE",
+    probabilities_available: false,
+    is_reduced_evidence_baseline: true,
+    verdict: "NO_BET",
+    stake_permitted: false,
+    effective_kelly_cap: 0.025,
+    narrative: "No bet — insufficient verified evidence.",
+    freshness_tag: "UNKNOWN",
+    generated_at: "2026-08-30T02:36:00Z",
+    odds_edge: null,
+    rl_recommendation: { abstain: true, stake_fraction: 0, reason: null },
+    evidence_quality: {
+      critical_gaps: ["MODEL_GENERATION_UNCERTIFIED", "MODEL_UNCERTAINTY_UNAVAILABLE"],
+      advisory_gaps: [],
+      conflicts: [],
+      critical_gap_count: 2,
+      advisory_gap_count: 0,
+      conflict_count: 0,
+      total_gap_count: 2,
+    },
+  } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
+
+  it("renders mapped sentence copy without Title-Casing it", () => {
+    render(<EvidenceStatusCard data={blocked} />);
+
+    const gap = screen.getByText(/model hasn't passed certification yet/i);
+    expect(gap.className).not.toMatch(/\bcapitalize\b/);
+    expect(gap).toHaveTextContent("this model hasn't passed certification yet");
   });
 });

@@ -53,6 +53,32 @@ async function fetchModelPerformance(
   return (await res.json()) as ModelPerformanceResponse;
 }
 
+// ─── Fold labels ──────────────────────────────────────────────────────────────
+
+/**
+ * Label each fold for the x axis and the tooltip.
+ *
+ * Points are folds, not calendar days, so two chronological splits can end on
+ * the same date — which rendered as two identical "Aug 29" ticks with two
+ * identical tooltips and no way to tell the folds apart. Prefix the fold
+ * ordinal only for the dates that actually repeat, so the common case stays a
+ * clean date.
+ */
+export function withFoldLabels<T extends { date: string | null }>(
+  series: readonly T[],
+): Array<T & { label: string }> {
+  const dates = series.map((pt) =>
+    pt.date
+      ? new Date(pt.date).toLocaleDateString([], { month: "short", day: "numeric" })
+      : "—",
+  );
+  const repeated = new Set(dates.filter((d, i) => dates.indexOf(d) !== i));
+  return series.map((pt, i) => ({
+    ...pt,
+    label: repeated.has(dates[i]) ? `F${i + 1} · ${dates[i]}` : dates[i],
+  }));
+}
+
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
 
 function AccuracyTooltip({
@@ -147,12 +173,7 @@ export const RollingAccuracyChart = memo(function RollingAccuracyChart({
   const currentAccuracy = data?.current_accuracy;
   const baselineAccuracy = data?.baseline_accuracy ?? RANDOM_BASELINE_ACCURACY;
 
-  const chartData = series.map((pt) => ({
-    ...pt,
-    label: pt.date
-      ? new Date(pt.date).toLocaleDateString([], { month: "short", day: "numeric" })
-      : "—",
-  }));
+  const chartData = withFoldLabels(series);
 
   return (
     <section

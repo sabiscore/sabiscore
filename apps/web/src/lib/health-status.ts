@@ -105,7 +105,15 @@ function providerId(row: ProviderHealthRow): string | null {
     : null;
 }
 
-function providerOperationalStatus(provider: ProviderHealthRow): string {
+/**
+ * The one place that decides which field carries a provider's operational state.
+ *
+ * `state` wins over `status` because `mergeProviderEvidence` layers a live
+ * evidence reading on top of the registry row. Exported so `ProviderMeter` reads
+ * the same field this module does — it used to read `row.status` directly and
+ * rendered the raw enum with a "?" whenever evidence had supplied `state`.
+ */
+export function providerOperationalStatus(provider: ProviderHealthRow): string {
   const raw = provider.state ?? provider.status;
   return String(raw ?? "UNKNOWN").toUpperCase();
 }

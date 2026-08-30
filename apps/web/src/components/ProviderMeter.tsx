@@ -7,45 +7,32 @@
  *   Football-Data.org | API-Football | Sportmonks | The Odds API | ESPN
  *
  * Status semantics keep configuration separate from explicit live validation:
- *   ✓ Live-validated — VERIFIED
- *   ◌ Not validated  — CONFIGURED_UNVERIFIED (neutral, not an outage)
- *   ⚠ Partial        — PARTIAL
+ *   ✓ Live-validated — VERIFIED / LIVE_VERIFIED
+ *   ◌ Not validated  — CONFIGURED_UNVERIFIED / UNKNOWN (neutral, not an outage)
+ *   ⚠ Partial        — PARTIAL / DEGRADED / STALE
  *   ✗ Unavailable    — UNAVAILABLE / CIRCUIT_OPEN / INVALID / SCHEMA_INVALID
  *   ○ Not configured — UNCONFIGURED
  *   ⏸ Quota          — RATE_LIMITED
+ *   ⚡ Conflict       — CONFLICTING
  *
  * Data comes from /api/providers/health (proxied to backend); never from
  * provider hosts directly.
+ *
+ * ⚠️ The backend's status vocabulary grows. This component must never render an
+ * unrecognised token: an earlier `default:` branch returned `label: row.status`,
+ * so `LIVE_VERIFIED` and `UNKNOWN` — states `health-status.ts` already knew —
+ * reached users as raw enums beside a "?" icon, styled as "not configured".
+ * The default is neutral copy, matching `evidence-state.ts`'s fail-closed shape.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchPlatformHealth,
   PLATFORM_HEALTH_QUERY_KEY,
+  providerOperationalStatus,
   type BackendHealthPayload,
+  type ProviderHealthRow,
 } from "@/lib/health-status";
-
-type ProviderStatus =
-  | "VERIFIED"
-  | "CONFIGURED_UNVERIFIED"
-  | "UNCONFIGURED"
-  | "PARTIAL"
-  | "UNAVAILABLE"
-  | "CIRCUIT_OPEN"
-  | "RATE_LIMITED"
-  | "INVALID"
-  | "SCHEMA_INVALID"
-  | "CONFLICTING";
-
-interface ProviderRow {
-  provider: string;
-  display_name: string;
-  enabled: boolean;
-  configured: boolean;
-  status: ProviderStatus;
-  trust_tier: string;
-  requires_key: boolean;
-}
 
 // Canonical display order matching directive registry
 const CANONICAL_ORDER = [
@@ -64,10 +51,15 @@ const DISPLAY_NAMES: Record<string, string> = {
   espn: "ESPN",
 };
 
-function statusBadge(row: ProviderRow): { icon: string; label: string; className: string } {
+export function statusBadge(row: ProviderHealthRow): {
+  icon: string;
+  label: string;
+  className: string;
+} {
   if (!row.enabled) return { icon: "○", label: "Not configured", className: "pm-off" };
-  switch (row.status) {
+  switch (providerOperationalStatus(row)) {
     case "VERIFIED":
+    case "LIVE_VERIFIED":
       return { icon: "✓", label: "Live-validated", className: "pm-live" };
     case "RATE_LIMITED":
       return { icon: "⏸", label: "Quota exhausted", className: "pm-quota" };
@@ -81,11 +73,15 @@ function statusBadge(row: ProviderRow): { icon: string; label: string; className
     case "CONFLICTING":
       return { icon: "⚡", label: "Conflict", className: "pm-conflict" };
     case "PARTIAL":
+    case "DEGRADED":
       return { icon: "⚠", label: "Partial evidence", className: "pm-stale" };
+    case "STALE":
+      return { icon: "⚠", label: "Stale", className: "pm-stale" };
     case "CONFIGURED_UNVERIFIED":
+    case "UNKNOWN":
       return { icon: "◌", label: "Not live-validated", className: "pm-unverified" };
     default:
-      return { icon: "?", label: row.status, className: "pm-off" };
+      return { icon: "◌", label: "Status unavailable", className: "pm-unverified" };
   }
 }
 
@@ -96,7 +92,7 @@ export function ProviderMeter() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
-  const rows = data?.providers as ProviderRow[] | undefined;
+  const rows = data?.providers;
   const error = data && data.backendStatus === "unavailable"
     ? "Provider status unavailable — backend unreachable"
     : null;
@@ -104,10 +100,10 @@ export function ProviderMeter() {
 
   // Sort by canonical order; append unknown providers at end
   const sorted = rows
-    ? [
-        ...CANONICAL_ORDER.map((id) => rows.find((r) => r.provider === id)).filter(Boolean),
-        ...rows.filter((r) => !CANONICAL_ORDER.includes(r.provider)),
-      ].filter(Boolean) as ProviderRow[]
+    ? ([
+        ...CANONICAL_ORDER.map((id) => rows.find((r) => String(r.provider) === id)),
+        ...rows.filter((r) => !CANONICAL_ORDER.includes(String(r.provider))),
+      ].filter(Boolean) as ProviderHealthRow[])
     : null;
 
   return (
@@ -133,11 +129,12 @@ export function ProviderMeter() {
         <ul className="pm-list" role="list">
           {sorted.map((row) => {
             const badge = statusBadge(row);
+            const id = String(row.provider);
             return (
-              <li key={row.provider} className={`pm-row ${badge.className}`}>
+              <li key={id} className={`pm-row ${badge.className}`}>
                 <span className="pm-icon" aria-hidden="true">{badge.icon}</span>
                 <span className="pm-name">
-                  {DISPLAY_NAMES[row.provider] ?? row.display_name}
+                  {DISPLAY_NAMES[id] ?? String(row.display_name ?? id)}
                 </span>
                 <span className="pm-label">{badge.label}</span>
               </li>
