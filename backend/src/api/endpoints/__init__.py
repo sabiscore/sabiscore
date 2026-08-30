@@ -31,6 +31,7 @@ from .betting_intelligence import router as betting_intelligence_router  # noqa:
 from .fixtures import router as fixtures_router  # noqa: E402
 from .model_status import router as model_status_router  # noqa: E402
 from .providers import router as providers_router  # noqa: E402
+from .advanced_insights import router as advanced_insights_router  # noqa: E402
 
 # Ultra predictions are optional - depends on catboost/xgboost/lightgbm
 try:
@@ -66,6 +67,7 @@ router.include_router(betting_intelligence_router)
 router.include_router(fixtures_router)
 router.include_router(model_status_router)
 router.include_router(providers_router)
+router.include_router(advanced_insights_router)
 
 if _ultra_available and ultra_predictions_router is not None:
     router.include_router(ultra_predictions_router)

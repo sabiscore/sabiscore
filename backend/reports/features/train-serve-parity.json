@@ -1,0 +1,77 @@
+{
+  "report_version": "1.0.0",
+  "generated_at": "2026-08-30T12:20:00Z",
+  "git_sha": "2146d9c",
+  "metric_contract_version": "1.0.0",
+  "feature_schema_versions": {
+    "active_serving": "phase7_68",
+    "shadow_candidate": "phase8_89",
+    "registered_schemas": ["phase7_68", "apex_v1_68", "phase8_89", "apex_v1_89"]
+  },
+  "parity_status": {
+    "schema_mismatch_slots": 0,
+    "silently_defaulted_slots": 0,
+    "positional_schema_correct": true,
+    "notes": "Active serving schema is phase7_68 (68 features: 58 base + 10 Phase 7). Artifacts are byte-for-byte compatible. Three slots (elo_league_adjusted, key_passes_under_pressure_diff, set_piece_xg_diff) are permanently DATA_GAP in PHASE7_FEATURES_ALWAYS_DATA_GAP — their vector positions exist and are always the registry default (0.0), never computed from live data. This is INTENTIONAL for artifact backward compatibility, NOT a silent default bug."
+  },
+  "serving_schema": {
+    "name": "phase7_68",
+    "feature_count": 68,
+    "source": "backend/src/models/feature_registry.py CANONICAL_FEATURES_68"
+  },
+  "feature_status_summary": {
+    "RESOLVED": 56,
+    "ADVISORY_GAP": 6,
+    "PERMANENT_DATA_GAP": 4,
+    "SHADOW_ONLY": 21,
+    "note": "See availability-matrix.json for per-feature detail"
+  },
+  "train_serve_invariants": {
+    "same_feature_names": true,
+    "same_positional_order": true,
+    "same_dtype": "float64",
+    "same_default_semantics": "All DATA_GAP slots use DEFAULT_FEATURE_VALUES_68 values; registry default is the only value ever used — nothing computes them from live data",
+    "canonical_default_source": "backend/src/models/feature_registry.py DEFAULT_FEATURE_VALUES_68"
+  },
+  "known_gaps_requiring_attention": {
+    "ppda_ratio": {
+      "status": "ADVISORY_GAP",
+      "note": "Slot proxied as home_pressing_intensity (Elo-derived). Real PPDA exists in statsbomb_aggregator.py but has no live-serving resolution path. Consumer-copy gap: raw code leaks to UI via describeEvidenceCode(). Fix: add to EVIDENCE_CODE_COPY in full-analysis-contract.ts."
+    },
+    "progressive_carry_diff": {
+      "status": "ADVISORY_GAP",
+      "note": "Slot present but always DATA_GAP at serving (no live StatsBomb event stream). Consumer-copy gap confirmed in §3.3 of v5 directive."
+    },
+    "shot_quality_diff": {
+      "status": "PERMANENT_DATA_GAP",
+      "note": "In PHASE7_FEATURES_ALWAYS_DATA_GAP. Proxy ATE unreliable without real StatsBomb shot-map. Will remain DATA_GAP until StatsBomb corpus confirms ATE >= 0.02."
+    },
+    "elo_league_adjusted": {
+      "status": "PERMANENT_DATA_GAP",
+      "note": "In PHASE7_FEATURES_ALWAYS_DATA_GAP. Collinear proxy with elo_difference, no independent ATE signal. Consumer-copy gap confirmed."
+    },
+    "key_passes_under_pressure_diff": {
+      "status": "PERMANENT_DATA_GAP",
+      "note": "In PHASE7_FEATURES_ALWAYS_DATA_GAP. Proxy ATE=0.005, below 0.02 threshold. Consumer-copy gap confirmed."
+    },
+    "set_piece_xg_diff": {
+      "status": "PERMANENT_DATA_GAP",
+      "note": "In PHASE7_FEATURES_ALWAYS_DATA_GAP. Mixed directional signal across leagues. Consumer-copy gap confirmed."
+    }
+  },
+  "shadow_schema_status": {
+    "name": "phase8_89",
+    "feature_count": 89,
+    "status": "SHADOW_ONLY",
+    "env_guard": "PHASE9_SHADOW_ONLY=true (default)",
+    "note": "Phase 8 features (Pi-ratings, Berrar, EWMA form, market drift, match importance) are built but disabled in production. CANONICAL_FEATURES_89 must be the training set for any v6_phase8 model. Do not activate without full temporal ablation per M2."
+  },
+  "next_actions": {
+    "M1_complete": true,
+    "pending": [
+      "Implement evidence-copy map for 6 gap codes (§3.3 of v5 directive) — Class B, ~30 min",
+      "Run temporal ablation for Phase 8 features per M2 (requires real settled corpus)",
+      "Update guard test evidence-copy-contract.test.ts with hand-maintained code list"
+    ]
+  }
+}

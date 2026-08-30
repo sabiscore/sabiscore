@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useEffect, useCallback } from "react";
 import { HelpCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -480,9 +480,15 @@ function FreshnessPill({
 
 function PredictionAgePill({ generatedAt }: { generatedAt: string }) {
   const generatedMs = new Date(generatedAt).getTime();
-  const ageSecs = Number.isFinite(generatedMs)
-    ? Math.max(0, Math.round((Date.now() - generatedMs) / 1000))
-    : 0;
+  const [ageSecs, setAgeSecs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (Number.isFinite(generatedMs)) {
+      setAgeSecs(Math.max(0, Math.round((Date.now() - generatedMs) / 1000)));
+    }
+  }, [generatedMs]);
+
+  if (ageSecs === null) return null;
 
   const title = `Prediction generated at ${formatLagosTimestamp(generatedAt)} WAT. Regenerate for latest signal.`;
 

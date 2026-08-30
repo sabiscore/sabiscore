@@ -356,6 +356,51 @@ class CircuitState(Base):
     state_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSON, nullable=True)
 
 
+class RefereeProfile(Base):
+    __tablename__ = "referee_profiles"
+    __table_args__ = (
+        Index("ix_referee_profiles_name", "name"),
+        UniqueConstraint("name", name="uq_referee_profiles_name"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    avg_yellow_cards: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_red_cards: Mapped[float | None] = mapped_column(Float, nullable=True)
+    penalties_awarded: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    strictness_index: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sample_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class MatchContext(Base):
+    __tablename__ = "match_contexts"
+    __table_args__ = (
+        Index("ix_match_contexts_match_id", "match_id"),
+        UniqueConstraint("match_id", name="uq_match_contexts_match_id"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    match_id: Mapped[str] = mapped_column(String, ForeignKey("matches.id"), nullable=False)
+    weather_condition: Mapped[str | None] = mapped_column(String, nullable=True)
+    weather_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    weather_observed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fatigue_index_home: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fatigue_index_away: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ppda_home: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ppda_away: Mapped[float | None] = mapped_column(Float, nullable=True)
+    psxg_home: Mapped[float | None] = mapped_column(Float, nullable=True)
+    psxg_away: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 __all__ = [
     "Base",
     "FeatureVector",
@@ -385,4 +430,7 @@ __all__ = [
     "ProviderHealthLog",
     "ProviderCapabilityObservation",
     "CircuitState",
+    "RefereeProfile",
+    "MatchContext",
 ]
+

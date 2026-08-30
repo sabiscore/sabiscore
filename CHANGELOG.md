@@ -5,6 +5,93 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Advanced-insights route was dead behind a broad `except`; five stacked defects fixed (2026-08-30)
+
+### Fixed
+
+- **`GET /api/v1/matches/{match_id}/advanced-insights` could not succeed for any
+  fixture that had odds.** The route was already mounted into the live `/api/v1`
+  router (`api/endpoints/__init__.py`), and its endpoint wrapped the whole service
+  call in one `except Exception` -> HTTP 500, so five independent defects all
+  surfaced as the same opaque error. Each was proven individually before fixing,
+  not inferred:
+  1. **Zero-fabrication violation.** `advanced_insights_service.py` passed a
+     hardcoded `{"home_win": 0.42, "draw": 0.28, "away_win": 0.30}` "diagnostic
+     prior" into `build_market_intelligence()`, which computed and published real
+     `probability_edge` / `expected_value` figures from it. Reverting the fix shows
+     the values that were being served: `probability_edge=-0.1021,
+     expected_value=-0.223`. `build_market_intelligence` already types
+     `model_probabilities` as `Optional`, so the fix is to pass `None` — edge, EV
+     and `best_edge_value` now stay `None` and the decision falls through
+     fail-closed instead of being derived from a constant.
+  2. **Four keyword arguments the callee does not accept** (`kickoff_utc`,
+     `is_certified`, `model_version`, `feature_schema_version`) — `market_intel.py`
+     resolves certification and model identity internally (lines 188-202). Live
+     symptom: `TypeError: build_market_intelligence() got an unexpected keyword
+     argument 'kickoff_utc'`.
+  3. **Wrong `Odds` column names.** The real table (`src/core/database.py:371`) is
+     `home_win` / `draw` / `away_win` / `timestamp`; the service read
+     `home_odds` / `draw_odds` / `away_odds` / `updated_at`, and ordered by
+     `Odds.updated_at` — `AttributeError: type object 'Odds' has no attribute
+     'updated_at'`.
+  4. **Async lazy-load.** `Match.home_team` / `Match.away_team` are relationships
+     with no `selectinload`, so reading `.name` in an async session raises. Now
+     matches the established precedent at `api/endpoints/fixtures.py:175`.
+  5. **The test fixture used the non-existent columns**, so the odds branch had
+     never executed once. `tests/unit/test_advanced_insights.py` now builds `Odds`
+     from the real schema and asserts the branch runs, that no outcome carries a
+     model probability / edge / EV, and that `stake_permitted` stays `False`.
+- **`ruff check src/` was red (11 F401 errors)** across the three new
+  advanced-insights modules. The repo gate is zero.
+- **Two `react-hooks/rules-of-hooks` errors in `value-bet-scanner.tsx`.**
+  `PredictionAgePill` returned early on a falsy `createdAt` *above* its `useState`
+  / `useEffect`, so the hook count changed between renders whenever that prop
+  toggled ("rendered fewer hooks than expected"). Hooks now run unconditionally
+  and the guard moved below them. The sibling `PredictionAgePill` in
+  `full-analysis-dashboard.tsx` was already correct — only the scanner regressed.
+- **The three M0/M1 evaluation artifacts were unreadable.**
+  `reports/evaluation/metric-contract.json`, `reports/features/train-serve-parity.json`
+  and `reports/features/availability-matrix.json` each carried a UTF-8 BOM, so
+  `json.load(open(f, encoding="utf-8"))` raised `JSONDecodeError` on every one.
+  Latent today (nothing consumes them yet), fatal for the first reader. Stripped,
+  along with the BOM on the new `.py` sources.
+- **`RAW_IDENTIFIER_PATTERNS` in the new `evidence-copy-contract.test.ts` was
+  declared and never used** (a lint error, and a guard that asserted nothing). It
+  is now applied to `describeEvidenceCode()`'s output, so the test actually
+  catches the `titleCaseCode()` fall-through it was written to catch.
+
+### Added
+
+- **M0 measurement integrity** (`models/evaluation/metrics.py`):
+  `log_loss_multiclass()`, `accuracy_and_per_class()` (pure-numpy precision /
+  recall / F1 / macro averages), and `block_bootstrap_ci()` — non-overlapping
+  block resampling (Kuensch 1989) rather than iid bootstrap, because consecutive
+  matches within a season are temporally dependent. Documented in
+  `reports/evaluation/metric-contract.json` (v1.0.0), which also records that the
+  authoritative multiclass Brier aggregation is MEAN in both implementations, and
+  that the `0.220` Brier gate constant cited in earlier directives could not be
+  located in `certification_policy.py` and must not be applied as a threshold.
+- **`match_contexts` and `referee_profiles` tables** (migration
+  `0010_match_context_referee`, models in `db/models.py`). Verified by applying
+  the migration: both tables created with 14 and 11 columns respectively, and a
+  downgrade/re-upgrade round-trip is clean.
+- **Agent-tooling scratch directories are gitignored** (`.agents/`, `.cursor/`,
+  `.devin/`, `.scratch/`, and their `backend/` counterparts) — output of
+  `prisma skills sync`, not product source.
+
+### Verified
+
+- Backend: ruff 0, pytest 1846 passed / 14 skipped, mypy 774 <= 784 ceiling,
+  `verify_active_artifacts.py` exit 0.
+- Web: lint 0, typecheck 0, Vitest 280 passed, `NODE_ENV=production` build exit 0.
+- Every new guard was watched failing before being trusted: reverting the
+  zero-fabrication fix reddens with `assert 0.42 is None`; reverting the column
+  fix reddens with `'Odds' has no attribute 'updated_at'`.
+- Live probe (backend `sha: 2146d9c`, matching HEAD): `settled_predictions: 22`,
+  `rps_overall: 0.2436` (gate is <= 0.21, not met), `clv: {skipped: true,
+  reason: "need >= 10 joined predictions, got 6"}`, and all five providers report
+  `CONFIGURED_UNVERIFIED`.
+
 ## Unreleased - Evidence-state tokens now render as distinct visual states; docs page density pass; SAB-22 authorization confirmed stale (2026-08-26)
 
 ### Fixed
