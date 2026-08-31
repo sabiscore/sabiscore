@@ -236,8 +236,18 @@ def build_training_manifest(
 
 
 def write_training_manifest(manifest: Mapping[str, Any], out_dir: Path) -> Path:
-    """Write the manifest beside the artifacts it describes."""
-    out_dir = Path(out_dir)
+    """Write the manifest beside the artifacts it describes.
+
+    ``out_dir`` comes from a CLI argument, so it is resolved and constrained to
+    the repository before anything is written. The filename is a fixed literal —
+    never taken from input — so the resolved path cannot escape via traversal.
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    out_dir = Path(out_dir).resolve()
+    if not out_dir.is_relative_to(repo_root):
+        raise ValueError(
+            f"refusing to write a training manifest outside the repository: {out_dir}"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "training_manifest.json"
     path.write_text(

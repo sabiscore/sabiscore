@@ -932,6 +932,54 @@ def train_pooled(
     )
 
 
+def _feature_contract_sha() -> Optional[str]:
+    """The committed feature contract's digest, or None when it is unreadable.
+
+    None is honest here: a fabricated hash in a reproducibility record is worse
+    than an absent one.
+    """
+    path = _BACKEND_ROOT / "models" / "feature_contract.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("feature_contract_sha256")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report) -> None:
+    """Record what produced this run (certification Stage 4/8).
+
+    The training report says how well the run scored; this says what produced
+    it — corpus fingerprint, contract hashes, seed, interpreter and library
+    versions. Without it, "retrain and you get the same model" is an assertion,
+    and a metric change cannot be attributed to data versus a library upgrade.
+    """
+    manifest = build_training_manifest(
+        cache_dir=args.cache_dir,
+        feature_schema_version=f"apex_v1_{len(feature_names)}",
+        feature_names=feature_names,
+        feature_contract_sha256=_feature_contract_sha(),
+        holdout_season=args.holdout_season,
+        seed=_TRAINING_SEED,
+        tune_trials=args.tune,
+        leagues=report,
+        artifact_suffix=artifact_suffix,
+    )
+    manifest_path = write_training_manifest(manifest, args.out_dir)
+    logger.info(
+        "Reproducibility manifest -> %s (dataset %s, reproducibility %s)",
+        manifest_path.name,
+        manifest["dataset"]["dataset_sha256"][:12],
+        manifest["reproducibility_sha256"][:12],
+    )
+    if manifest["git"]["dirty"]:
+        logger.warning(
+            "Working tree is DIRTY — the recorded commit does not fully describe "
+            "the code that produced these artifacts."
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
@@ -1023,46 +1071,8 @@ def main() -> int:
     )
     (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    # Reproducibility manifest (certification Stage 4/8). The report above says
-    # how well the run scored; this says what produced it — corpus fingerprint,
-    # contract hashes, seed, and interpreter/library versions. Without it,
-    # "retrain and you get the same model" is an assertion, and a metric change
-    # cannot be attributed to data versus a library upgrade.
-    feature_contract_path = _BACKEND_ROOT / "models" / "feature_contract.json"
-    feature_contract_sha = None
-    if feature_contract_path.exists():
-        try:
-            feature_contract_sha = json.loads(
-                feature_contract_path.read_text(encoding="utf-8")
-            ).get("feature_contract_sha256")
-        except (json.JSONDecodeError, OSError):
-            feature_contract_sha = None
-
-    manifest = build_training_manifest(
-        cache_dir=args.cache_dir,
-        feature_schema_version=f"apex_v1_{len(feature_names)}",
-        feature_names=feature_names,
-        feature_contract_sha256=feature_contract_sha,
-        holdout_season=args.holdout_season,
-        seed=_TRAINING_SEED,
-        tune_trials=args.tune,
-        leagues=report,
-        artifact_suffix=artifact_suffix,
-    )
-    manifest_path = write_training_manifest(manifest, args.out_dir)
-
     logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
-    logger.info(
-        "Reproducibility manifest -> %s (dataset %s, reproducibility %s)",
-        manifest_path.name,
-        manifest["dataset"]["dataset_sha256"][:12],
-        manifest["reproducibility_sha256"][:12],
-    )
-    if manifest["git"]["dirty"]:
-        logger.warning(
-            "Working tree is DIRTY — the recorded commit does not fully describe "
-            "the code that produced these artifacts."
-        )
+    _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0
 

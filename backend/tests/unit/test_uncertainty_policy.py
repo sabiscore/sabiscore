@@ -75,7 +75,9 @@ def test_policy_is_deep_copied_so_it_cannot_be_mutated_in_process():
 
 
 def test_digest_is_stable_and_content_addressed():
-    assert uncertainty_policy_sha256() == uncertainty_policy_sha256()
+    # The default-argument path and an explicitly-passed policy must agree —
+    # comparing the function to itself would be a tautology that proves nothing.
+    assert uncertainty_policy_sha256(uncertainty_policy()) == uncertainty_policy_sha256()
     assert len(uncertainty_policy_sha256()) == 64
 
     perturbed = uncertainty_policy()

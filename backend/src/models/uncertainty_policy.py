@@ -60,6 +60,10 @@ FORBIDDEN_EPISTEMIC_SOURCES: Tuple[str, ...] = (
     "any deterministic function of the aggregate predicted probability vector",
 )
 
+#: Where the gates below are exercised. Does not exist until M2 lands — see
+#: IMPLEMENTATION_STATUS.
+_VALIDATION_TEST = "tests/unit/test_uncertainty_contract.py"
+
 #: Validation gates. Every one must pass before `MODEL_UNCERTAINTY_UNAVAILABLE`
 #: may be cleared. Mirrors PROMOTION_GATES' shape: `rule` is prose for a
 #: reviewer, `source` is where to verify it, `threshold` is the applied bar.
@@ -87,7 +91,7 @@ UNCERTAINTY_GATES: Dict[str, Dict[str, Any]] = {
     },
     "determinism": {
         "rule": "identical inputs and artifacts reproduce identical uncertainty",
-        "source": "tests/unit/test_uncertainty_contract.py",
+        "source": _VALIDATION_TEST,
         "threshold": {"max_abs_deviation": 1e-12},
     },
     "independence_from_confidence": {
@@ -97,7 +101,7 @@ UNCERTAINTY_GATES: Dict[str, Dict[str, Any]] = {
             "rejects that decisively without demanding zero correlation, which an "
             "honest signal need not have."
         ),
-        "source": "tests/unit/test_uncertainty_contract.py",
+        "source": _VALIDATION_TEST,
         "threshold": {"max_abs_confidence_correlation": 0.70},
     },
     "informative_within_confidence_band": {
@@ -107,7 +111,7 @@ UNCERTAINTY_GATES: Dict[str, Dict[str, Any]] = {
             "check: any 1-confidence proxy is constant across such a band by "
             "construction, so a proxy scores 1.0x and cannot pass."
         ),
-        "source": "tests/unit/test_uncertainty_contract.py",
+        "source": _VALIDATION_TEST,
         "threshold": {"min_spread_ratio": 2.0, "band_width": 0.02, "min_band_rows": 30},
     },
     "error_association": {
@@ -117,7 +121,7 @@ UNCERTAINTY_GATES: Dict[str, Dict[str, Any]] = {
             "the lowest. Deliberately not a monotonicity requirement across all "
             "buckets — the statistical setup does not justify one at these sample sizes."
         ),
-        "source": "tests/unit/test_uncertainty_contract.py",
+        "source": _VALIDATION_TEST,
         "threshold": {"buckets": 4, "min_rps_gap_top_vs_bottom": 0.0, "strict": True},
     },
 }

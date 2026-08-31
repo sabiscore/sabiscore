@@ -134,6 +134,57 @@ def _score(y_true: np.ndarray, probs: np.ndarray, y_train: np.ndarray) -> Dict[s
     }
 
 
+def _evaluate_origin(
+    league: str,
+    bundle: Dict[str, Any],
+    seasons: np.ndarray,
+    ordered: List[str],
+    origin: str,
+    feature_names: List[str],
+) -> Dict[str, Any] | None:
+    """Retrain on every strictly-earlier season and score `origin`.
+
+    Returns None when the origin cannot be evaluated — too little history for
+    train_league's own split floors, or a rejected holdout. A skipped origin is
+    reported and omitted, never silently scored on a degraded split.
+    """
+    upto = set(ordered[: ordered.index(origin) + 1])
+    keep = np.asarray([s in upto for s in seasons], dtype=bool)
+    sliced = {
+        key: [v for v, k in zip(bundle[key], keep) if k]
+        for key in ("X", "X_incumbent", "y", "seasons", "dates")
+    }
+
+    try:
+        trained = train_mod.train_league(league, sliced, origin, feature_names=feature_names)
+    except ValueError as exc:
+        logger.warning("  %s @ %s: %s", league, origin, exc)
+        return None
+    if trained is None:
+        logger.info("  %s @ %s: split floors not met — skipped", league, origin)
+        return None
+
+    X = np.asarray(sliced["X"], dtype=np.float32)
+    y = np.asarray(sliced["y"], dtype=int)
+    test = np.asarray(sliced["seasons"]) == origin
+    probs = trained["meta_model"].predict_proba(
+        train_mod._build_meta_features(trained["models"], X[test])
+    )
+
+    record = _score(y[test], np.asarray(probs, dtype=float), y[~test])
+    record["origin_season"] = origin
+    record["train_rows"] = int((~test).sum())
+    record["training_seasons"] = ordered[: ordered.index(origin)]
+    logger.info(
+        "  %-12s @ %s  train=%5d test=%4d  rps=%.4f [%.4f, %.4f]  ll=%.4f  "
+        "market_free_best_baseline=%.4f",
+        league, origin, record["train_rows"], record["n"], record["rps"],
+        record["rps_ci"]["ci_lower"], record["rps_ci"]["ci_upper"],
+        record["log_loss"], min(record["baselines"].values()),
+    )
+    return record
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
@@ -187,45 +238,9 @@ def main() -> int:
 
         league_rows: List[Dict[str, Any]] = []
         for origin in origins:
-            keep = np.asarray(
-                [s in set(ordered[: ordered.index(origin) + 1]) for s in seasons], dtype=bool
-            )
-            sliced = {
-                "X": [row for row, k in zip(bundle["X"], keep) if k],
-                "X_incumbent": [row for row, k in zip(bundle["X_incumbent"], keep) if k],
-                "y": [v for v, k in zip(bundle["y"], keep) if k],
-                "seasons": [v for v, k in zip(bundle["seasons"], keep) if k],
-                "dates": [v for v, k in zip(bundle["dates"], keep) if k],
-            }
-            try:
-                trained = train_mod.train_league(
-                    league, sliced, origin, feature_names=feature_names
-                )
-            except ValueError as exc:
-                logger.warning("  %s @ %s: %s", league, origin, exc)
-                continue
-            if trained is None:
-                logger.info("  %s @ %s: split floors not met — skipped", league, origin)
-                continue
-
-            X = np.asarray(sliced["X"], dtype=np.float32)
-            y = np.asarray(sliced["y"], dtype=int)
-            season_arr = np.asarray(sliced["seasons"])
-            test = season_arr == origin
-            probs = train_mod._build_meta_features(trained["models"], X[test])
-            probs = trained["meta_model"].predict_proba(probs)
-
-            record = _score(y[test], np.asarray(probs, dtype=float), y[~test])
-            record["origin_season"] = origin
-            record["train_rows"] = int((~test).sum())
-            record["training_seasons"] = ordered[: ordered.index(origin)]
-            league_rows.append(record)
-            logger.info(
-                "  %-12s @ %s  train=%5d test=%4d  rps=%.4f [%.4f, %.4f]  ll=%.4f  market_free_best_baseline=%.4f",
-                league, origin, record["train_rows"], record["n"], record["rps"],
-                record["rps_ci"]["ci_lower"], record["rps_ci"]["ci_upper"],
-                record["log_loss"], min(record["baselines"].values()),
-            )
+            record = _evaluate_origin(league, bundle, seasons, ordered, origin, feature_names)
+            if record is not None:
+                league_rows.append(record)
 
         if not league_rows:
             continue
