@@ -1,0 +1,81 @@
+{
+  "conclusion": "Reproducible to floating-point tolerance. Stage 17's 'training is irreproducible without explanation' is NOT triggered: the divergence is characterised, bounded at ~1e-16, and does not affect the fitted model.",
+  "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+  "environment": {
+    "implementation": "CPython",
+    "libraries": {
+      "joblib": "1.5.3",
+      "lightgbm": "4.6.0",
+      "numpy": "2.5.0",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.8.0",
+      "scipy": "1.18.0",
+      "xgboost": "3.3.0"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.6"
+  },
+  "finding": {
+    "explanation": "Fitted artifacts are bit-for-bit identical: all 300 random-forest trees match in split feature, threshold and leaf value across runs. The residual delta is introduced at PREDICT time by parallel float reduction over the tree ensemble; float addition is not associative, so a differing reduction order moves the result by about one ULP. LightGBM and XGBoost are exactly identical.",
+    "fitted_models_identical": true,
+    "max_abs_prediction_delta": 2.220446049250313e-16,
+    "pickle_bytes_differ": true,
+    "pickle_note": "Artifact bytes differ across runs (pickle memo/dict ordering) while the deserialised models are identical; byte equality is therefore not a valid reproducibility test."
+  },
+  "generated_at": "2026-08-31T13:00:22.428683+00:00",
+  "per_league": {
+    "bundesliga": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 1.1102230246251565e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    },
+    "epl": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 1.1102230246251565e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    },
+    "eredivisie": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 2.220446049250313e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    },
+    "la_liga": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 1.1102230246251565e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    },
+    "ligue_1": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 1.1102230246251565e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    },
+    "serie_a": {
+      "per_learner_max_abs_prediction_delta": {
+        "lightgbm": 0.0,
+        "random_forest": 2.220446049250313e-16,
+        "xgboost": 0.0
+      },
+      "random_forest_fitted_structure_identical": true
+    }
+  },
+  "procedure": "scripts/train_on_real_matches.py executed twice with identical inputs, different processes",
+  "reproducibility_sha256": "061fc28f502bee0ee1c7ad0345b6240cf5a9ac06c48371ea672dd774deaa1054",
+  "reproducibility_sha256_match": true,
+  "runs": 2,
+  "schema": "sabiscore_reproducibility_evidence_v1"
+}
