@@ -1,5 +1,75 @@
 # SabiScore Debt Ledger
 
+## 49. `serving_feature_availability` is STILL structurally unsatisfiable — item 38's defect survives in a sibling counter
+
+**Tier:** `NEXT` — **Class C, requires explicit authorization. Deliberately NOT
+applied.** Filed 2026-08-31, found while regenerating the stale availability
+matrix (item 48 follow-up).
+
+Item 38 (authorized 2026-08-22) removed `always_data_gap_slots` from
+`promotion_evidence._expected_gate()`'s `blockers` tuple, with this reasoning
+in the code comment it left behind:
+
+> `PHASE7_FEATURES_ALWAYS_DATA_GAP` is a permanent, declared 4-slot gap
+> present in every 68-wide schema by design — counting it here made the gate
+> structurally unsatisfiable for any candidate, however good.
+
+That reasoning is correct and the fix was right. **But the same four features
+are still counted by `training_defaulted_slots`, which remains a blocker.**
+Measured directly against the freshly regenerated matrix, not inferred:
+
+```
+always_data_gap features: 4
+  elo_league_adjusted              defaulted_training_slot=True
+  shot_quality_diff                defaulted_training_slot=True
+  key_passes_under_pressure_diff   defaulted_training_slot=True
+  set_piece_xg_diff                defaulted_training_slot=True
+
+OVERLAP: 4 of 4 policy-gapped slots also count in training_defaulted_slots
+=> training_defaulted_slots has a hard floor of 4; the gate requires == 0
+```
+
+The mechanism is definitional, not incidental: `_column_is_default_only()`
+marks a slot defaulted when its training column is constant at the registry
+default — and a feature in `PHASE7_FEATURES_ALWAYS_DATA_GAP` is *by policy*
+always exactly that, in every candidate, forever. So `training_defaulted_slots`
+can never reach 0, and `serving_feature_availability` can never PASS, for any
+candidate however good — precisely the condition item 38 set out to remove.
+
+⚠️ **This was found by testing a hypothesis, and the first test was wrong** —
+it filtered on `serving_status == "ALWAYS_DATA_GAP"`, a key from the *stale*
+matrix's schema, and returned 0 overlaps. The regenerated matrix uses
+`always_data_gap` + `classification` instead. The stale file was not merely
+out of date in its values; it was a **different shape**. Re-run with the
+correct key, the overlap is 4 of 4. Verify against a freshly generated
+matrix, never a committed one.
+
+### Recommended fix (one line) — NOT applied, needs authorization
+
+Exclude policy-gapped slots from the blocking count, so it measures
+*unexpectedly* defaulted slots — a measurement correction that mirrors item
+38's own reasoning rather than a threshold relaxation:
+
+```python
+# promotion_evidence._summary_from_features()
+"training_defaulted_slots": sum(
+    bool(row.get("defaulted_training_slot")) and not bool(row.get("always_data_gap"))
+    for row in features
+),
+```
+
+Under today's candidate that reads **20 → 16**; the gate still FAILs (16 ≠ 0,
+and `serving_schema_misaligned_slots` is 11 from item 37's deadlock), so this
+promotes nothing and cannot be mistaken for making a failing candidate pass.
+
+**Not applied deliberately.** Changing a certification gate after observing
+that it blocks promotion is exactly the shape APEX §23 forbids, and item 38's
+own precedent was to record the one-line change for an authorized decision
+rather than take it unilaterally. Confidence that a fix is correct is not the
+same as authority to make it.
+
+---
+
 ## 48. Every trained artifact, including the served generation, has never seen real Elo — `elo_difference` is a constant 0.0 across the entire training corpus
 
 **Tier:** `NEXT` — a real, measured, positive out-of-sample signal (M2
@@ -151,8 +221,35 @@ generation on the identical `2526` holdout. Honest result, read directly off
 | `no_league_regression` (need 6/6) | 3/6 | **4/6** |
 | `market_baseline` (need 6/6) | 0/6 | **1/6** (EPL: candidate RPS 0.2051 vs market 0.2054) |
 | `primary_metric_improvement` | — | PASS, mean RPS +0.0013 |
-| `serving_feature_availability` | FAIL | FAIL (unchanged — item 37's apex/legacy market-block deadlock, unrelated to Elo) |
+| `serving_feature_availability` | FAIL, 24 defaulted slots | FAIL, **20** defaulted slots |
 | `promotion_permitted` | false | **false** |
+
+⚠️ **`feature_availability_matrix.json` is a stale input to this gate unless
+explicitly regenerated.** `compare_candidate_vs_incumbent.py` *reads* it
+(line ~98) but never writes it; the committed copy dated from 2026-08-10 and
+still listed all four replayed Elo slots as `defaulted_training_slot: true`,
+so the first run of this comparison reported `training_defaulted_slots: 24`
+— a figure that predated the very change being measured. The real producer is
+`scripts/generate_feature_availability_matrix.py`
+(→ `promotion_evidence.build_promotion_feature_evidence()`), which
+`feature_registry.py`'s own line-800 comment already flagged as the
+authority. Regenerated here: **24 → 20**, with `elo_league_adjusted` the only
+remaining Elo entry (correctly — it is permanently
+`PHASE7_FEATURES_ALWAYS_DATA_GAP`). **Always regenerate the matrix before
+reading this gate**, or it reports the previous candidate's feature coverage
+against the current candidate's model metrics.
+
+The 20 remaining defaulted slots, which are the concrete certification
+backlog for this gate (`h2h_*` ×5, `home_venue_*` ×3, `total_goals_expected`,
+`home_advantage_strength`, the 4 cross-signal agreement/combo fields,
+`elo_league_adjusted`, `home_pressing_intensity`, `progressive_carry_diff`,
+and the 3 permanently-gapped Phase-7 slots): note that h2h and home-venue
+**already resolve at serving** (item 13, resolved 2026-08-11) but are still
+defaulted *in training* — `build_dataset()` has no h2h/venue accumulator, the
+exact asymmetry this Elo work just fixed for a different family. That is the
+single largest, cheapest remaining reduction available: ~9 slots, computable
+from the same committed corpus with the same walk-forward pattern, no new
+data source required.
 
 Candidate beats incumbent on RPS in Eredivisie (−0.0064), La Liga (−0.0048),
 Ligue 1 (−0.0029), and Serie A (−0.0055); loses in Bundesliga (+0.0100) and
