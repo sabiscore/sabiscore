@@ -8,6 +8,8 @@ correlation inside aleatoric strata.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -52,12 +54,33 @@ def test_a_flat_baseline_would_remove_nothing():
     ordering untouched, so if `_INCREASING` is ever pinned back to True this
     equality starts holding for the real (decreasing) fixture too, and
     `test_residual_removes_the_monotone_aleatoric_trend` fails alongside it.
+
+    ⚠️ **The first version of this fixture passed here and failed in CI.** It
+    made `u_alea` vary and `flat_epi` a *tiny but exactly monotonic* ramp
+    (`linspace`) built from the same 200-point index order as `u_alea` — so
+    `corr(u_alea, flat_epi) == 1.0` exactly, isotonic regression fit it with
+    zero training error, and the residual was EXACTLY 0.0 everywhere, not
+    merely small. `argsort` of an all-tied array is implementation-defined
+    (numpy's default sort is not guaranteed stable on ties), so the assertion
+    only ever passed by an accident of which numpy/sklearn build happened to
+    order those ties the same way `argsort(flat_epi)` did — it broke the
+    moment CI's pinned numpy 1.26/sklearn 1.3 (vs. a newer local venv)
+    produced a different tie order. A genuinely flat *baseline* means `u_alea`
+    itself carries no discriminating signal, forcing `f` to a single fitted
+    constant by construction (whatever `_INCREASING` resolves to, one unique
+    x-value collapses to one bin) — then `residual = flat_epi - constant` is a
+    plain scalar shift, which preserves order via ordinary float comparison,
+    not tie-breaking. Deterministic regardless of numpy/scipy/sklearn version.
     """
-    u_alea = np.linspace(0.6, 1.05, 200)
-    flat_epi = np.full(200, 0.09) + np.linspace(-0.01, 0.01, 200)
-    residual = EpistemicResidualizer().fit_transform(u_alea, flat_epi)
-    # A flat/near-flat baseline shifts every row by nearly the same amount, so
-    # the ordering is preserved — the property that made the bug invisible.
+    rng = np.random.default_rng(0)
+    u_alea = np.full(200, 0.8)
+    flat_epi = np.full(200, 0.09) + rng.normal(0.0, 0.01, 200)
+    with warnings.catch_warnings():
+        # Constant x makes the auto-direction Spearman check undefined —
+        # expected and harmless here; the point of this fixture IS that x
+        # carries no signal.
+        warnings.simplefilter("ignore")
+        residual = EpistemicResidualizer().fit_transform(u_alea, flat_epi)
     np.testing.assert_array_equal(np.argsort(residual), np.argsort(flat_epi))
 
 
