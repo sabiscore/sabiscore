@@ -27,6 +27,7 @@ from ..data.transformers import FeatureTransformer
 from ..models.edge_detector import EdgeDetector
 from ..models.active_generation import active_artifact_path, active_generation_is_certified
 from ..models.ensemble import SabiScoreEnsemble
+from ..models.evaluation.metrics import expected_brier_score
 from ..monitoring.metrics import metrics_collector
 from ..schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ..schemas.value_bet import ValueBetResponse
@@ -679,7 +680,14 @@ class PredictionService:
         return intervals
 
     def _calculate_brier_score(self, probabilities: Dict[str, float]) -> float:
-        return float(sum(prob * (1.0 - prob) for prob in probabilities.values()) / len(probabilities))
+        """Delegates to the single canonical implementation.
+
+        Previously computed ``sum(p*(1-p))/C`` inline — the per-class-MEAN
+        convention, i.e. exactly 1/C of the SUM convention the metric contract
+        declares authoritative. Two sibling services populated the same
+        ``PredictionResponse.brier_score`` field on two other scales.
+        """
+        return expected_brier_score(probabilities)
 
     def _generate_explanations(
         self,

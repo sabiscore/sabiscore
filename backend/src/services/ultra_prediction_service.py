@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.cache import cache_manager
 from ..core.league_policy import get_league_policy, LeaguePolicyUnavailableError
 from ..models.edge_detector import EdgeDetector
+from ..models.evaluation.metrics import expected_brier_score
 from ..monitoring.metrics import metrics_collector
 from ..schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ..schemas.value_bet import ValueBetResponse
@@ -391,12 +392,15 @@ class UltraPredictionService:
         return value_bets
     
     def _calculate_brier_score(self, probabilities: Dict[str, float]) -> float:
-        """Calculate expected Brier score"""
-        probs = [probabilities.get("home_win", 0.33), 
-                 probabilities.get("draw", 0.33), 
-                 probabilities.get("away_win", 0.33)]
-        # Expected Brier score for well-calibrated predictions
-        return float(1.0 - sum(p**2 for p in probs))
+        """Delegates to the single canonical implementation.
+
+        This site already used the correct SUM convention; the inline copy is
+        removed so all three services share one authority. The old 0.33
+        per-key defaults are dropped deliberately — silently substituting a
+        uniform prior for a missing outcome key would publish a sharpness
+        reading for a distribution the model never produced.
+        """
+        return expected_brier_score(probabilities)
     
     def _calculate_confidence_intervals(
         self,

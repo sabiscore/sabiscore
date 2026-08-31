@@ -422,6 +422,7 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   causal_analysis: "driver analysis is not available for this match",
   key_passes_under_pressure_diff:
     "chance-creation-under-pressure data is unavailable",
+  total_goals_expected: "the projected goals total for this fixture is unavailable",
 
   // ── Casing-drift aliases (§3.3 v5 directive)
   // full_analysis.py appends UPPERCASE; upcoming_match_service.py appends lowercase for
