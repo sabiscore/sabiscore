@@ -135,6 +135,77 @@ random forest additionally exposes 300 bootstrap-resampled trees via
   must be re-derived for any future generation — a differently-trained ensemble
   can have differently-correlated dispersion.
 
+## Addendum — 2026-08-31 (M2 implementation and validation)
+
+`src/models/ensemble_uncertainty.py` implements `ensemble_dispersion` exactly
+as specified above, over the shipped `random_forest` member's 300 bootstrap
+trees (`estimators_`) — the "bootstrap variants preferred over distinct
+algorithms" design `UNCERTAINTY_GATES.sufficient_members` already called for.
+`tests/unit/test_uncertainty_contract.py` is the validation test cited
+throughout `uncertainty_policy.py`; it genuinely runs, against the full real
+2,571-row EPL corpus scored by the real shipped `epl_ensemble_v5_phase7.pkl`
+artifact — not a synthetic stand-in, for the same reason a synthetic corpus
+could trivially be constructed to pass any of these gates.
+
+**Five of six gates pass on that real evidence:**
+
+| Gate | Measured |
+|---|---|
+| `method_is_authorised` | `ensemble_dispersion`, bootstrap trees |
+| `sufficient_members` | 300 members (preferred floor: 30) |
+| `non_negative` | `epistemic >= 0` and `epistemic <= total` on all 2,571 rows |
+| `determinism` | 0.0 deviation (repeated calls, identical input) |
+| `independence_from_confidence` | `corr(epistemic, 1-confidence) = -0.003` (bar: `\|corr\| <= 0.70`) |
+| `informative_within_confidence_band` | spread_ratio 3.47 in a 281-row band (bar: `>= 2.0`) |
+
+**One does not: `error_association`.** The gate requires the
+highest-epistemic quartile to show *worse* mean RPS than the lowest. Measured,
+it is the reverse — monotonically, across all four quartiles:
+
+```text
+bucket 0 (lowest epistemic,  mean 0.070): mean RPS 0.2134
+bucket 1                    (mean 0.084): mean RPS 0.2024
+bucket 2                    (mean 0.094): mean RPS 0.2002
+bucket 3 (highest epistemic, mean 0.113): mean RPS 0.1905
+```
+
+This was cross-checked against a second, independent member-selection design
+— the 3 distinct base learners (random_forest / xgboost / lightgbm) instead of
+the RF's bootstrap trees — as a design-finalisation step, not post-hoc
+threshold shopping: both designs were already named as candidates in this
+ADR's own feasibility table before any Stage 11 test was written. The
+base-learner design reproduces `corr(epistemic, 1-confidence) = -0.281`,
+matching the `-0.28` this ADR reported almost exactly (independent
+confirmation the implementation is faithful to the measurement that motivated
+it) — and shows the *same* RPS reversal, more strongly (gap −0.070 vs the
+bootstrap-tree design's −0.023). Two independent designs agreeing rules out
+"wrong member selection" as the explanation; this is a real property of the
+current `v5_phase7` EPL artifact against this corpus, not an implementation
+artifact.
+
+**Reading:** for this specific model, rows where trees/learners disagree most
+tend to be rows the ensemble mean already handles *better*, not worse —
+plausibly because disagreement here correlates with a more evenly-spread
+predicted distribution, and RPS (a proper scoring rule) rewards a
+well-calibrated spread over an overconfident call that occasionally misses
+badly. Plausible, but not yet established; not investigated further this
+session, since `UNCERTAINTY_REQUIRES_ALL_GATES = True` already settles the
+certification question regardless of the mechanism.
+
+**Decision: the gate is not opened.** `MODEL_UNCERTAINTY_UNAVAILABLE` stays
+unconditionally CRITICAL in `full_analysis.py::_uncertainty_from_features`,
+which returns `None` regardless of whether the underlying computation would
+succeed — per this ADR's own "no fallback, no partial pass" semantics and the
+certification directive's stop conditions. `uncertainty_policy.py`'s
+`IMPLEMENTATION_STATUS` is updated to `IMPLEMENTED_VALIDATION_FAILED`
+(`gates_exercised: true`, `gates_failed: ["error_association"]`) rather than
+`SPECIFIED_NOT_IMPLEMENTED` — the method is built and genuinely tested; it is
+tested-and-failing, not untested. `docs/DEBT.md` item 50 records this as an
+open finding: whether the reversal is inherent to this artifact (in which case
+a future `v5_phase7`-successor generation may simply pass) or is fixable by a
+methodological change (e.g. weighting members, a different epistemic
+aggregation) is not yet known and is out of this session's scope to resolve.
+
 ## References
 
 - `docs/adr/0007-evidence-authority-and-apex-promotion.md`

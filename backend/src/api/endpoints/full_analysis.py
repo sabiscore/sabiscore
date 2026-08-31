@@ -4,7 +4,8 @@ Route: GET /matches/upcoming/{match_id}/full-analysis
 
 Orchestrates the 6-layer intelligence pipeline:
   1. Ensemble prediction (league model)
-  2. BNN uncertainty breakdown
+  2. Uncertainty breakdown (ADR 0009 / M2 — MODEL_UNCERTAINTY_UNAVAILABLE stays
+     unconditionally CRITICAL pending certification; see _uncertainty_from_features)
   3. Causal feature analysis
   4. RL betting recommendation (Kelly fallback)
   5. Elo context
@@ -28,7 +29,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-import pandas as pd
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +64,7 @@ from ...services.prediction_log_service import (
     persist_prediction_log,
 )
 from ...services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
-from ...services.uncertainty_service import UncertaintyBreakdown, UncertaintyService
+from ...services.uncertainty_service import UncertaintyBreakdown
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
 
 logger = logging.getLogger(__name__)
@@ -225,14 +225,31 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
     )
 
 
-def _uncertainty_from_features(
+async def _uncertainty_from_features(
+    league: str,
     features: Dict[str, Any],
 ) -> Optional[UncertaintyBreakdown]:
-    """Return measured BNN uncertainty, never a probability-derived proxy."""
+    """`MODEL_UNCERTAINTY_UNAVAILABLE` stays unconditionally CRITICAL (ADR 0009 / M2).
 
-    if not features:
-        return None
-    return UncertaintyService().decompose_measured(pd.DataFrame([features]))
+    `models/ensemble_uncertainty.py` implements the certified `ensemble_dispersion`
+    method (BALD decomposition over the shipped `random_forest`'s bootstrap
+    trees) and 5 of its 6 `UNCERTAINTY_GATES` (`uncertainty_policy.py`) pass on
+    real measured evidence against the full real 2,571-row EPL corpus:
+    `method_is_authorised`, `sufficient_members`, `non_negative`, `determinism`,
+    `independence_from_confidence` (|corr|=0.003), `informative_within_confidence_band`
+    (spread_ratio=3.47). The sixth, `error_association`, does not: the
+    highest-epistemic quartile shows BETTER, not worse, mean RPS than the
+    lowest (0.1905 vs 0.2134) — the reverse of the required relationship,
+    monotonically across all four buckets, and confirmed on a second,
+    independent member-selection design (the 3 base learners), which shows the
+    same reversal even more strongly (see `test_uncertainty_contract.py::TestRealCorpusValidation`).
+    `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
+    certified, and per the certification directive's stop conditions this gate
+    stays closed rather than being wired open on a partial pass — never a
+    probability-derived proxy either way (`FORBIDDEN_EPISTEMIC_SOURCES`).
+    """
+
+    return None
 
 
 def _causal_results_from_report(
@@ -520,7 +537,7 @@ def _build_actionability(
     # Caveats: low evidence, data gaps, or score-below-threshold warnings
     caveats: List[str] = []
     if uncertainty is None:
-        caveats.append("Measured model uncertainty unavailable")
+        caveats.append("Certified ensemble-dispersion uncertainty unavailable")
     elif uncertainty.confidence_tier == "LOW_EVIDENCE":
         caveats.append(f"Low model evidence (epistemic {uncertainty.epistemic_unc:.2f})")
     # Exclude structural always-gap features from user-visible caveat count
@@ -730,8 +747,9 @@ async def get_full_analysis(
         )
     features_dict = live.get("features_dict", {})
 
-    # Layer 2: BNN uncertainty
-    uncertainty = _uncertainty_from_features(features_dict)
+    # Layer 2: uncertainty (ADR 0009) — gate stays closed; see
+    # _uncertainty_from_features for why.
+    uncertainty = await _uncertainty_from_features(league, features_dict)
     if uncertainty is None:
         critical_gaps.append("MODEL_UNCERTAINTY_UNAVAILABLE")
 
@@ -837,7 +855,7 @@ async def get_full_analysis(
             "fixture": "Stable verified fixture identity unavailable",
             "prediction": "Certified model output unavailable",
             "market": "Coherent single-bookmaker 1X2 snapshot unavailable",
-            "uncertainty": "Measured BNN uncertainty unavailable",
+            "uncertainty": "Certified ensemble-dispersion uncertainty unavailable",
             "elo": "Resolved Elo history unavailable for one or both teams",
         }.items()
         if not field_availability[key]

@@ -1,12 +1,13 @@
 """Pins the frozen uncertainty-certification policy (ADR 0009).
 
 Mirrors `test_certification_policy.py`: the policy is a specification written
-BEFORE its implementation, so what can be checked today is that it stays frozen,
-stays honest about not being implemented, and cannot be quietly mutated.
+BEFORE its implementation, so what can be checked today is that it stays
+frozen, stays honest about its real validation outcome, and cannot be quietly
+mutated.
 
-The gates themselves are exercised by the M2 implementation's own tests, which
-do not exist yet — `test_specification_does_not_claim_to_be_implemented` is what
-stops this module from being mistaken for a passing result in the meantime.
+The gates themselves are exercised by `test_uncertainty_contract.py` (M2) —
+`test_specification_reports_its_real_validation_outcome` is what stops this
+module from claiming a pass beyond what that file actually measured.
 """
 
 from __future__ import annotations
@@ -25,14 +26,19 @@ from src.models.uncertainty_policy import (
 )
 
 
-def test_specification_does_not_claim_to_be_implemented():
-    """The gate must stay closed while only the specification exists.
+def test_specification_reports_its_real_validation_outcome():
+    """The gate must stay closed unless every UNCERTAINTY_GATES entry passed.
 
-    If this ever flips, the M2 implementation and its validation tests must have
-    landed — not merely the intent to build them.
+    M2 landed and its validation tests DID run
+    (`test_uncertainty_contract.py::TestRealCorpusValidation`) — but
+    `error_association` failed on real evidence, so `gates_exercised=True`
+    coexists with the gate staying closed. If `gate_remains_closed` is ever
+    cleared, `gates_failed` must be empty first — never the other way around.
     """
-    assert IMPLEMENTATION_STATUS["state"] == "SPECIFIED_NOT_IMPLEMENTED"
-    assert IMPLEMENTATION_STATUS["gates_exercised"] is False
+    assert IMPLEMENTATION_STATUS["state"] == "IMPLEMENTED_VALIDATION_FAILED"
+    assert IMPLEMENTATION_STATUS["gates_exercised"] is True
+    assert IMPLEMENTATION_STATUS["gates_failed"] == ["error_association"]
+    assert set(IMPLEMENTATION_STATUS["gates_passed"]) == set(UNCERTAINTY_GATES) - {"error_association"}
     assert IMPLEMENTATION_STATUS["gate_remains_closed"] == "MODEL_UNCERTAINTY_UNAVAILABLE"
 
 
