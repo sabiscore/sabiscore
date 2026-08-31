@@ -118,6 +118,43 @@ Item 50 therefore stays **open**. `UNCERTAINTY_GATES` is unmodified,
 `MODEL_UNCERTAINTY_UNAVAILABLE` remains unconditionally CRITICAL, and the
 `certification_policy.py` promotion machinery is untouched.
 
+### Research-only accepted; shadow now accumulates the evidence (2026-08-31)
+
+Operator decision: **accept research-only.** `stake_permitted` stays false and
+both critical gates stay closed. To keep that a *stage* rather than a dead end,
+the canonical shadow path (`full_analysis.py`'s prediction-log capture) now
+computes the ensemble-dispersion measurement and stores it on the existing
+`MatchPredictionLog.payload` JSON column as `research_uncertainty`
+(epistemic / aleatoric / total / credible_interval / method / model_count /
+version / available — Stage 15's required uncertainty fields).
+
+**Why this is the unblocking step.** Every `error_association` measurement so
+far — including all of the above — comes from the 2024-25 backtest corpus.
+Item 50's one surviving hypothesis is that the reversal is a property of a
+weak generation and resolves once a better-generalizing one ships. That cannot
+be tested against **live settled outcomes** unless the number is recorded per
+fixture at prediction time, and nothing recorded it. Now the data accrues on
+its own as fixtures settle, and the gate becomes answerable on real evidence
+instead of only on backtest.
+
+Deliberately additive and gate-neutral: `_uncertainty_from_features` still
+returns `None` unconditionally, so the same stored payload that now carries a
+real epistemic number **also** still carries `MODEL_UNCERTAINTY_UNAVAILABLE`
+in its `critical_gaps`. No migration (the JSON column already existed), and
+the measurement is computed outside the persistence `try` so a research
+failure can never roll back the snapshot settlement and CLV depend on.
+Pinned by `tests/unit/test_shadow_uncertainty_capture.py`, whose gate-closed
+guard was watched failing against a deliberately reopened gate before being
+trusted.
+
+**Not done:** the other two capture sites (`api/endpoints/predictions.py`,
+`services/analytics.py`) do not record it. `analytics.py` is the separate
+dual-engine tier with a different result shape; wire them only if the
+volume from the canonical path proves insufficient. There is also no consumer
+yet that re-derives `error_association` from settled shadow rows — that is the
+natural next step once enough fixtures have settled, and it needs the
+10-record floor that `clv_service`/`walk_forward_validate` already use.
+
 `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
 certified. `full_analysis.py::_uncertainty_from_features` returns `None`
 unconditionally — the real computation exists and is tested, but is

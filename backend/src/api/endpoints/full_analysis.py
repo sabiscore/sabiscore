@@ -41,6 +41,7 @@ from ...data.elo_engine import EloContext
 from ...services.elo_state_service import DurableEloContext
 from ...db.session import get_async_session
 from ...models.causal_selector import CausalFeatureResult
+from ...models.ensemble_uncertainty import compute_ensemble_uncertainty
 from ...models.feature_registry import active_canonical_features
 from ...models.active_generation import active_generation_is_certified
 from ...schemas.full_analysis import (
@@ -223,6 +224,46 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
         calibration_applied=bool(pred.get("calibration_applied", False)),
         overlay_applied=bool(pred.get("overlay_applied", False)),
     )
+
+
+def _shadow_log_payload(
+    *,
+    evaluated_at: datetime,
+    prediction_status: PredictionStatus,
+    prediction_source: PredictionSource,
+    fixture_verified: bool,
+    critical_gaps: List[str],
+    advisory_gaps: List[str],
+    conflicts: List[str],
+    research_uncertainty: Dict[str, Any],
+) -> Dict[str, Any]:
+    """The immutable shadow snapshot settlement and CLV evaluate later.
+
+    `research_uncertainty` is the ADR 0009 ensemble-dispersion measurement,
+    recorded for research **only**. It does not gate anything: the fixture's
+    `critical_gaps` in this same payload still carry
+    `MODEL_UNCERTAINTY_UNAVAILABLE`, because `_uncertainty_from_features`
+    returns None unconditionally while `error_association` fails. Persisting it
+    is what makes that gate answerable later — every measurement to date comes
+    from the 2024-25 backtest corpus, and docs/DEBT.md item 50's remaining
+    hypothesis (that a better-generalizing generation simply passes) cannot be
+    tested against live settled outcomes while nothing stores the number.
+    """
+    return {
+        "capture_trigger": "interactive_full_analysis",
+        "evaluation_at": evaluated_at.isoformat(),
+        "prediction_status": prediction_status.value,
+        "prediction_source": prediction_source.value,
+        "fixture_verified": fixture_verified,
+        "evidence": {
+            "critical_gaps": sorted(set(critical_gaps)),
+            "advisory_gaps": sorted(set(advisory_gaps)),
+            "conflicts": sorted(set(conflicts)),
+        },
+        # Research-only; see this function's docstring. `stake_permitted` and
+        # every gate are computed without reference to this block.
+        "research_uncertainty": research_uncertainty,
+    }
 
 
 async def _uncertainty_from_features(
@@ -906,6 +947,12 @@ async def get_full_analysis(
         and prediction_status == PredictionStatus.AVAILABLE
     ):
         evaluated_at = datetime.now(timezone.utc)
+        # Computed OUTSIDE the persistence try/except below: this is a research
+        # measurement, and it must never be able to roll back the prediction
+        # snapshot that settlement and CLV depend on. `compute_ensemble_uncertainty`
+        # is fail-safe by construction (returns an `available=False` result rather
+        # than raising), so a failure here is recorded honestly, not propagated.
+        research_uncertainty = (await compute_ensemble_uncertainty(league, features_dict)).as_dict()
         input_hash = deterministic_input_hash(
             {
                 "match_id": match_id,
@@ -947,18 +994,16 @@ async def get_full_analysis(
                     confidence=ensemble.confidence,
                     input_hash=input_hash,
                     evaluated_at=evaluated_at,
-                    payload={
-                        "capture_trigger": "interactive_full_analysis",
-                        "evaluation_at": evaluated_at.isoformat(),
-                        "prediction_status": prediction_status.value,
-                        "prediction_source": prediction_source.value,
-                        "fixture_verified": fixture_verified,
-                        "evidence": {
-                            "critical_gaps": sorted(set(critical_gaps)),
-                            "advisory_gaps": sorted(set(advisory_gaps)),
-                            "conflicts": sorted(set(conflicts)),
-                        },
-                    },
+                    payload=_shadow_log_payload(
+                        evaluated_at=evaluated_at,
+                        prediction_status=prediction_status,
+                        prediction_source=prediction_source,
+                        fixture_verified=fixture_verified,
+                        critical_gaps=critical_gaps,
+                        advisory_gaps=advisory_gaps,
+                        conflicts=conflicts,
+                        research_uncertainty=research_uncertainty,
+                    ),
                 ),
                 require_scheduled_pre_kickoff=True,
             )
