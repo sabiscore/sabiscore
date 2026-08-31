@@ -5,6 +5,85 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Production-readiness verification sweep (2026-08-31)
+
+### Verified
+
+- **Deploy parity.** Vercel (`web-lac-theta-42.vercel.app/api/health`) and the
+  Render backend both report `sha: 7f2d331` — full parity with `origin/master`
+  HEAD. `readiness` reports database/migrations/cache/models all `ready`
+  (migrations head `0010_match_context_referee`), Elo at 25,782 rows / 186
+  teams.
+- **CI.** The five required workflows on `master`'s tip (`CI - Canonical
+  Platform`, `Secret Scan`, `Block large files`, `Validate Model Artifacts`,
+  `Keep-alive ping`) all report `success`.
+- **Docker image build proof** (`docs/DEBT.md` item 16) remains genuinely
+  blocked in this environment too — no Docker daemon is reachable here, same
+  class of limitation prior sessions recorded under a resource-constrained VM.
+  Not resolved; extending the existing evidence, not new information.
+- Swept `docs/DEBT.md`'s 50 items against live code/production state.
+  Confirmed the remaining open items are, without exception, blocked on one
+  of: an operator-only action (credential revocation, AWS IAM, a real Docker
+  build run), real-world elapsed match/settlement volume (drift monitor,
+  portfolio-exposure calibration, `error_association`), or a Class-C decision
+  requiring explicit authorization (the promotion gate, the BNN Brier gate,
+  the staking-blocking critical gap) — none yield to an unprompted code
+  change, and none were forced.
+
+### Fixed
+
+- **`docs/DEBT.md` item 46** (`prisma skills sync` postinstall risk): the
+  change it described was never actually merged — `package.json` has no
+  `postinstall` script and no `prisma` dependency anywhere in the workspace.
+  Closed with a recorded decision: do not add the hook; the three originally
+  documented mitigations remain as guidance if it is ever proposed again.
+
+## Unreleased - M1/M2 model certification milestone — measured, gates stay closed (2026-08-31, PRs #119-125)
+
+Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
+
+### Added
+
+- **PR A / M0** (`#119`): stabilized prediction and evidence contracts as the
+  certification baseline (evidence-copy mapping, canonical
+  `expected_brier_score()` across all three prediction services, metric-contract
+  documentation).
+- **M1** (`#120`): a versioned model-certification specification, a
+  reproducible temporal training pipeline, a leakage contract, and
+  chronological (train/calibrate/holdout) evaluation. `docs/adr/0009-*`
+  records that certifying model generation alone does not unlock staking.
+- **M2** (`#121`, `#122`): `src/models/ensemble_uncertainty.py` — BALD
+  (mutual-information) ensemble-dispersion epistemic uncertainty over the
+  shipped `random_forest`'s 300 bootstrap trees. 5 of 6 `UNCERTAINTY_GATES`
+  pass on a genuine chronological holdout (method authorization, member
+  count, non-negativity, determinism, independence from the model's own
+  confidence, informativeness within the confidence band). In-bag scoring
+  contamination was investigated and ruled out as an explanation for the one
+  failing gate.
+- **Stage 11 completion** (unmerged commit, folded into `#124`): out-of-support
+  and cross-league robustness validation completed; `error_association`
+  confirmed to reverse (highest-epistemic-quartile RPS *better* than lowest)
+  systematically across all 5 scoreable leagues, not one artifact.
+- **`#124`**: `src/models/epistemic_residualizer.py` — an isotonic
+  aleatoric-residualization diagnostic, measured out-of-fold. Result: it does
+  not resolve `error_association` either (1 of 5 leagues passes, the same 1
+  of 5 that passes on raw epistemic).
+- **`#125`**: the canonical shadow-capture path (`full_analysis.py`) now
+  persists the ensemble-dispersion measurement as `research_uncertainty` on
+  `MatchPredictionLog.payload` for every certified-generation prediction —
+  gate-neutral (`_uncertainty_from_features` still returns `None`
+  unconditionally). Turns `docs/DEBT.md` item 50's open question into
+  something answerable from live settled outcomes instead of only the
+  2024-25 backtest, once volume crosses the same 10-record floor
+  `clv_service`/`walk_forward_validate` already use.
+
+### Unchanged (by design)
+
+- `MODEL_GENERATION_UNCERTIFIED` and `MODEL_UNCERTAINTY_UNAVAILABLE` remain
+  CRITICAL. `stake_permitted` remains `false`. `operating_mode` remains
+  `research-only`. No certification gate was loosened or bypassed to reach a
+  green result.
+
 ## Unreleased - M2 Family A (Elo) wired into training and retrained — real, honest, not yet certifiable (2026-08-30)
 
 ### Added

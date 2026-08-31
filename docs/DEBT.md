@@ -460,32 +460,41 @@ per item 44's pattern. Until then the endpoint returns honest nulls.
 
 ---
 
-## 46. `prisma skills sync` runs on every production install
+## 46. `prisma skills sync` runs on every production install — RESOLVED 2026-08-31 (never merged; decided against)
 
-**Tier:** `FIX-NOW` (cheap) — filed 2026-08-30, **not fixed**, needs an owner decision.
+**Tier:** `RESOLVED` — filed 2026-08-30 as `FIX-NOW (cheap)`, re-verified
+2026-08-31 during a production-readiness sweep: **the described change was
+never actually committed.**
 
-Root `package.json` gained `"postinstall": "prisma skills sync || exit 0"` and a
-`prisma@8.0.0-rc.12` devDependency, with `pnpm-workspace.yaml` carrying
-`minimumReleaseAgeExclude` entries for it and `@prisma/composer*`.
+Root `package.json` has no `postinstall` script and no `prisma` dependency of
+any kind (`grep -rn '"postinstall"' package.json apps/*/package.json
+backend/package.json` and `grep -n '"prisma"' package.json pnpm-lock.yaml` both
+return zero matches). `pnpm-workspace.yaml` has no `minimumReleaseAgeExclude`
+entries either. Whatever this item originally described — a
+`"postinstall": "prisma skills sync || exit 0"` line and a
+`prisma@8.0.0-rc.12` devDependency — was either a local, uncommitted experiment
+or was reverted before it reached `master`; either way, the production install
+path this item warned about does not exist in the shipped codebase.
 
 **This has nothing to do with the database.** `prisma.config.ts` is
-`definePrismaConfig({ skills: { agents: [...] } })` — the agent-skills sync tool
-that generates `.claude/`, `.cursor/`, `.devin/`, `.agents/`. There is no
-`schema.prisma`, no `prisma/` directory, and no `PrismaClient` anywhere in the
-repo; schema authority remains the 10 Alembic migrations. The CLAUDE.md appendix
-already records this correctly.
+`definePrismaConfig({ skills: { agents: [...] } })` — an agent-skills sync tool
+(a locally-installed Claude Code skill, `prisma-composer`) that can generate
+`.claude/agents/`, `.claude/hooks/`, `.claude/skills/teamwork/`, etc. on a
+developer's machine. There is no `schema.prisma`, no `prisma/` directory, and
+no `PrismaClient` anywhere in the repo; schema authority remains the Alembic
+migration chain. `prisma.config.ts` and its generated output sit untracked in
+some local checkouts (harmless — never read by any committed script) and are
+not part of this item's resolution.
 
-The concern is placement, not the tool: `postinstall` runs on **every**
-`pnpm install`, including Vercel production builds and CI. That pulls a
-release-candidate dependency and executes an agent-tooling sync inside the deploy
-path. `|| exit 0` means it cannot fail the build, so severity is low — but it is
-unnecessary weight on every install and an odd thing to have in a production
-deploy.
-
-**Options:** move it to a local-only script developers run explicitly; gate it on
-`CI`/`VERCEL` being unset; or accept it and pin a stable (non-RC) version.
-Deliberately excluded from the 2026-08-30 production PR so it stays a separate,
-visible decision rather than being smuggled in beside product changes.
+**Decision:** do not add the postinstall hook. There is no product reason for
+an agent-tooling sync to run inside a production/CI install, so the correct
+resolution is declining to introduce it rather than adding it and then gating
+it. If a future change proposes adding it back, apply one of the originally
+recorded mitigations before merging: move it to a local-only script developers
+run explicitly; gate it on `CI`/`VERCEL` being unset; or pin a stable
+(non-RC) version instead of `8.0.0-rc.12`. Kept as the incident record so the
+next session that finds `prisma.config.ts` untracked in a checkout does not
+re-open this as a live production risk.
 
 ---
 
