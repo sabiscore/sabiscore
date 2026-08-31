@@ -1,5 +1,75 @@
 # SabiScore Debt Ledger
 
+## 49. `serving_feature_availability` is STILL structurally unsatisfiable — item 38's defect survives in a sibling counter
+
+**Tier:** `NEXT` — **Class C, requires explicit authorization. Deliberately NOT
+applied.** Filed 2026-08-31, found while regenerating the stale availability
+matrix (item 48 follow-up).
+
+Item 38 (authorized 2026-08-22) removed `always_data_gap_slots` from
+`promotion_evidence._expected_gate()`'s `blockers` tuple, with this reasoning
+in the code comment it left behind:
+
+> `PHASE7_FEATURES_ALWAYS_DATA_GAP` is a permanent, declared 4-slot gap
+> present in every 68-wide schema by design — counting it here made the gate
+> structurally unsatisfiable for any candidate, however good.
+
+That reasoning is correct and the fix was right. **But the same four features
+are still counted by `training_defaulted_slots`, which remains a blocker.**
+Measured directly against the freshly regenerated matrix, not inferred:
+
+```
+always_data_gap features: 4
+  elo_league_adjusted              defaulted_training_slot=True
+  shot_quality_diff                defaulted_training_slot=True
+  key_passes_under_pressure_diff   defaulted_training_slot=True
+  set_piece_xg_diff                defaulted_training_slot=True
+
+OVERLAP: 4 of 4 policy-gapped slots also count in training_defaulted_slots
+=> training_defaulted_slots has a hard floor of 4; the gate requires == 0
+```
+
+The mechanism is definitional, not incidental: `_column_is_default_only()`
+marks a slot defaulted when its training column is constant at the registry
+default — and a feature in `PHASE7_FEATURES_ALWAYS_DATA_GAP` is *by policy*
+always exactly that, in every candidate, forever. So `training_defaulted_slots`
+can never reach 0, and `serving_feature_availability` can never PASS, for any
+candidate however good — precisely the condition item 38 set out to remove.
+
+⚠️ **This was found by testing a hypothesis, and the first test was wrong** —
+it filtered on `serving_status == "ALWAYS_DATA_GAP"`, a key from the *stale*
+matrix's schema, and returned 0 overlaps. The regenerated matrix uses
+`always_data_gap` + `classification` instead. The stale file was not merely
+out of date in its values; it was a **different shape**. Re-run with the
+correct key, the overlap is 4 of 4. Verify against a freshly generated
+matrix, never a committed one.
+
+### Recommended fix (one line) — NOT applied, needs authorization
+
+Exclude policy-gapped slots from the blocking count, so it measures
+*unexpectedly* defaulted slots — a measurement correction that mirrors item
+38's own reasoning rather than a threshold relaxation:
+
+```python
+# promotion_evidence._summary_from_features()
+"training_defaulted_slots": sum(
+    bool(row.get("defaulted_training_slot")) and not bool(row.get("always_data_gap"))
+    for row in features
+),
+```
+
+Under today's candidate that reads **20 → 16**; the gate still FAILs (16 ≠ 0,
+and `serving_schema_misaligned_slots` is 11 from item 37's deadlock), so this
+promotes nothing and cannot be mistaken for making a failing candidate pass.
+
+**Not applied deliberately.** Changing a certification gate after observing
+that it blocks promotion is exactly the shape APEX §23 forbids, and item 38's
+own precedent was to record the one-line change for an authorized decision
+rather than take it unilaterally. Confidence that a fix is correct is not the
+same as authority to make it.
+
+---
+
 ## 48. Every trained artifact, including the served generation, has never seen real Elo — `elo_difference` is a constant 0.0 across the entire training corpus
 
 **Tier:** `NEXT` — a real, measured, positive out-of-sample signal (M2
