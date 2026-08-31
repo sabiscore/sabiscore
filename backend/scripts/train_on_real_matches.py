@@ -107,6 +107,10 @@ from src.features.phase8_historical import (  # noqa: E402 - after the sys.path 
     UNRESOLVED_FEATURES as PHASE8_UNRESOLVED_FEATURES,
     compute_phase8_training_columns,
 )
+from src.models.training_manifest import (  # noqa: E402 - after the sys.path bootstrap
+    build_training_manifest,
+    write_training_manifest,
+)
 from src.features.elo_replay import (  # noqa: E402 - after the sys.path bootstrap
     compute_elo_training_columns,
     cross_verify_against_elo_engine,
@@ -114,6 +118,12 @@ from src.features.elo_replay import (  # noqa: E402 - after the sys.path bootstr
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("retrain")
+
+#: Single seed for every fitted estimator and sampler in this pipeline. It is
+#: recorded verbatim in the reproducibility manifest, so it must be the value
+#: actually used — five separate `random_state=42` literals would let the
+#: manifest keep reporting 42 after someone edited one of them.
+_TRAINING_SEED = 42
 
 # football-data.co.uk division code -> canonical SabiScore league id / model slug.
 _DIV_TO_LEAGUE = {
@@ -552,7 +562,7 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
 
     # multinomial is the default for multiclass in sklearn >= 1.5; the explicit
     # multi_class kwarg was removed in 1.8.
-    fitted = LogisticRegression(max_iter=1000, random_state=42)
+    fitted = LogisticRegression(max_iter=1000, random_state=_TRAINING_SEED)
     fitted.fit(oof, y_train[usable])
 
     # The fitted estimator is NOT what gets pickled. Production runs
@@ -636,14 +646,14 @@ def _instantiate(learner: str, params: Dict[str, object], *, n_jobs: int = -1):
     from xgboost import XGBClassifier
 
     if learner == "random_forest":
-        return RandomForestClassifier(random_state=42, n_jobs=n_jobs, **params)
+        return RandomForestClassifier(random_state=_TRAINING_SEED, n_jobs=n_jobs, **params)
     if learner == "xgboost":
         return XGBClassifier(
-            objective="multi:softprob", num_class=3, random_state=42,
+            objective="multi:softprob", num_class=3, random_state=_TRAINING_SEED,
             tree_method="hist", eval_metric="mlogloss", n_jobs=n_jobs, **params,
         )
     return LGBMClassifier(
-        objective="multiclass", num_class=3, random_state=42, verbose=-1,
+        objective="multiclass", num_class=3, random_state=_TRAINING_SEED, verbose=-1,
         n_jobs=n_jobs, **params,
     )
 
@@ -700,7 +710,7 @@ def tune_hyperparameters(
 
         study = optuna.create_study(
             direction="minimize",                    # RPS: lower is better
-            sampler=optuna.samplers.TPESampler(seed=42 + offset),
+            sampler=optuna.samplers.TPESampler(seed=_TRAINING_SEED + offset),
             pruner=optuna.pruners.MedianPruner(n_warmup_steps=1),
             study_name=f"{league}_{learner}",
         )
@@ -922,6 +932,54 @@ def train_pooled(
     )
 
 
+def _feature_contract_sha() -> Optional[str]:
+    """The committed feature contract's digest, or None when it is unreadable.
+
+    None is honest here: a fabricated hash in a reproducibility record is worse
+    than an absent one.
+    """
+    path = _BACKEND_ROOT / "models" / "feature_contract.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("feature_contract_sha256")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report) -> None:
+    """Record what produced this run (certification Stage 4/8).
+
+    The training report says how well the run scored; this says what produced
+    it — corpus fingerprint, contract hashes, seed, interpreter and library
+    versions. Without it, "retrain and you get the same model" is an assertion,
+    and a metric change cannot be attributed to data versus a library upgrade.
+    """
+    manifest = build_training_manifest(
+        cache_dir=args.cache_dir,
+        feature_schema_version=f"apex_v1_{len(feature_names)}",
+        feature_names=feature_names,
+        feature_contract_sha256=_feature_contract_sha(),
+        holdout_season=args.holdout_season,
+        seed=_TRAINING_SEED,
+        tune_trials=args.tune,
+        leagues=report,
+        artifact_suffix=artifact_suffix,
+    )
+    manifest_path = write_training_manifest(manifest, args.out_dir)
+    logger.info(
+        "Reproducibility manifest -> %s (dataset %s, reproducibility %s)",
+        manifest_path.name,
+        manifest["dataset"]["dataset_sha256"][:12],
+        manifest["reproducibility_sha256"][:12],
+    )
+    if manifest["git"]["dirty"]:
+        logger.warning(
+            "Working tree is DIRTY — the recorded commit does not fully describe "
+            "the code that produced these artifacts."
+        )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
@@ -1012,7 +1070,9 @@ def main() -> int:
         "training_report_real_phase8.json" if args.include_phase8 else "training_report_real.json"
     )
     (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
+
     logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
+    _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0
 

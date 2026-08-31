@@ -1,0 +1,2881 @@
+{
+  "dataset": {
+    "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "file_count": 36,
+    "pattern": "fd_*.csv",
+    "source_dir": "C:/Users/UBEC-DC-ANAMBRA/Documents/sabiscore/backend/data/cache",
+    "total_bytes": 6280588
+  },
+  "design": "rolling-origin: for each origin season, the model is retrained from scratch on every strictly-earlier season and scored on the origin. No random splitting anywhere.",
+  "environment": {
+    "implementation": "CPython",
+    "libraries": {
+      "joblib": "1.5.3",
+      "lightgbm": "4.6.0",
+      "numpy": "2.5.0",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.8.0",
+      "scipy": "1.18.0",
+      "xgboost": "3.3.0"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.6"
+  },
+  "generated_at": "2026-08-31T13:32:49.754229+00:00",
+  "git_commit": "fe33033545b4ccc45ff8cd9a8fe16ceee99bdb09",
+  "leagues": {
+    "BUNDESLIGA": {
+      "origins": [
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5065,
+            "macro_f1": 0.375,
+            "macro_precision": 0.4395,
+            "macro_recall": 0.4174,
+            "n_samples": 306,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6393,
+                "precision": 0.5294,
+                "recall": 0.8069,
+                "support": 145
+              },
+              "class_1": {
+                "f1": 0.0494,
+                "precision": 0.3333,
+                "recall": 0.0267,
+                "support": 75
+              },
+              "class_2": {
+                "f1": 0.4364,
+                "precision": 0.4557,
+                "recall": 0.4186,
+                "support": 86
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.24223039215686276,
+            "league_prior": 0.227857958922975,
+            "uniform": 0.2369281045751634
+          },
+          "class_distribution": {
+            "away_win": 86,
+            "draw": 75,
+            "fractions": [
+              0.4739,
+              0.2451,
+              0.281
+            ],
+            "home_win": 145
+          },
+          "ece": {
+            "class_0": 0.0705,
+            "class_1": 0.0384,
+            "class_2": 0.0284,
+            "mean": 0.0458
+          },
+          "log_loss": 1.003762,
+          "multiclass_brier": 0.600928,
+          "n": 306,
+          "origin_season": "2223",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                14,
+                23,
+                96,
+                83,
+                64,
+                26,
+                0,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                9,
+                207,
+                89,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                92,
+                91,
+                72,
+                23,
+                15,
+                12,
+                1,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.2003,
+              "reliability": 0.005,
+              "resolution": 0.0153,
+              "uncertainty": 0.2121
+            },
+            "n_bins": 10,
+            "n_samples": 306,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2315,
+                "reliability": 0.007,
+                "resolution": 0.0229,
+                "uncertainty": 0.2493
+              },
+              "class_1": {
+                "brier_score": 0.1869,
+                "reliability": 0.0051,
+                "resolution": 0.0028,
+                "uncertainty": 0.185
+              },
+              "class_2": {
+                "brier_score": 0.1826,
+                "reliability": 0.003,
+                "resolution": 0.0202,
+                "uncertainty": 0.2021
+              }
+            }
+          },
+          "rps": 0.207024,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1953,
+            "ci_upper": 0.2179,
+            "n_bootstrap": 1000,
+            "n_samples": 306,
+            "point_estimate": 0.207
+          },
+          "train_rows": 853,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.4966,
+            "macro_f1": 0.3701,
+            "macro_precision": 0.3317,
+            "macro_recall": 0.433,
+            "n_samples": 296,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6131,
+                "precision": 0.4952,
+                "recall": 0.8047,
+                "support": 128
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 79
+              },
+              "class_2": {
+                "f1": 0.4972,
+                "precision": 0.5,
+                "recall": 0.4944,
+                "support": 89
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25324324324324327,
+            "league_prior": 0.2279953280287071,
+            "uniform": 0.23329579579579585
+          },
+          "class_distribution": {
+            "away_win": 89,
+            "draw": 79,
+            "fractions": [
+              0.4324,
+              0.2669,
+              0.3007
+            ],
+            "home_win": 128
+          },
+          "ece": {
+            "class_0": 0.0587,
+            "class_1": 0.0384,
+            "class_2": 0.0613,
+            "mean": 0.0528
+          },
+          "log_loss": 0.981189,
+          "multiclass_brier": 0.583227,
+          "n": 296,
+          "origin_season": "2324",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                28,
+                26,
+                68,
+                80,
+                27,
+                60,
+                7,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                39,
+                220,
+                37,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                80,
+                82,
+                65,
+                32,
+                15,
+                22,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1944,
+              "reliability": 0.0035,
+              "resolution": 0.0243,
+              "uncertainty": 0.2171
+            },
+            "n_bins": 10,
+            "n_samples": 296,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2133,
+                "reliability": 0.0041,
+                "resolution": 0.0333,
+                "uncertainty": 0.2454
+              },
+              "class_1": {
+                "brier_score": 0.1923,
+                "reliability": 0.002,
+                "resolution": 0.0011,
+                "uncertainty": 0.1957
+              },
+              "class_2": {
+                "brier_score": 0.1777,
+                "reliability": 0.0045,
+                "resolution": 0.0385,
+                "uncertainty": 0.2103
+              }
+            }
+          },
+          "rps": 0.19548,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1819,
+            "ci_upper": 0.2074,
+            "n_bootstrap": 1000,
+            "n_samples": 296,
+            "point_estimate": 0.1955
+          },
+          "train_rows": 1159,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.4662,
+            "macro_f1": 0.3277,
+            "macro_precision": 0.3463,
+            "macro_recall": 0.4074,
+            "n_samples": 296,
+            "per_class": {
+              "class_0": {
+                "f1": 0.5983,
+                "precision": 0.439,
+                "recall": 0.9391,
+                "support": 115
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 75
+              },
+              "class_2": {
+                "f1": 0.3846,
+                "precision": 0.6,
+                "recall": 0.283,
+                "support": 106
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2777364864864865,
+            "league_prior": 0.2359977277202806,
+            "uniform": 0.23554804804804808
+          },
+          "class_distribution": {
+            "away_win": 106,
+            "draw": 75,
+            "fractions": [
+              0.3885,
+              0.2534,
+              0.3581
+            ],
+            "home_win": 115
+          },
+          "ece": {
+            "class_0": 0.1259,
+            "class_1": 0.0208,
+            "class_2": 0.1168,
+            "mean": 0.0878
+          },
+          "log_loss": 1.034239,
+          "multiclass_brier": 0.620647,
+          "n": 296,
+          "origin_season": "2425",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                16,
+                15,
+                32,
+                100,
+                41,
+                49,
+                43,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                55,
+                235,
+                6,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                36,
+                74,
+                92,
+                50,
+                24,
+                7,
+                13,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.2069,
+              "reliability": 0.0118,
+              "resolution": 0.0233,
+              "uncertainty": 0.2189
+            },
+            "n_bins": 10,
+            "n_samples": 296,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.216,
+                "reliability": 0.0184,
+                "resolution": 0.0406,
+                "uncertainty": 0.2376
+              },
+              "class_1": {
+                "brier_score": 0.1884,
+                "reliability": 0.0007,
+                "resolution": 0.0009,
+                "uncertainty": 0.1892
+              },
+              "class_2": {
+                "brier_score": 0.2163,
+                "reliability": 0.0164,
+                "resolution": 0.0284,
+                "uncertainty": 0.2299
+              }
+            }
+          },
+          "rps": 0.216122,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1942,
+            "ci_upper": 0.2347,
+            "n_bootstrap": 1000,
+            "n_samples": 296,
+            "point_estimate": 0.2161
+          },
+          "train_rows": 1455,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5249,
+            "macro_f1": 0.3642,
+            "macro_precision": 0.3706,
+            "macro_recall": 0.4293,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6632,
+                "precision": 0.5081,
+                "recall": 0.9545,
+                "support": 132
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 73
+              },
+              "class_2": {
+                "f1": 0.4295,
+                "precision": 0.6038,
+                "recall": 0.3333,
+                "support": 96
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25902408637873753,
+            "league_prior": 0.23175646002919764,
+            "uniform": 0.2373569582871909
+          },
+          "class_distribution": {
+            "away_win": 96,
+            "draw": 73,
+            "fractions": [
+              0.4385,
+              0.2425,
+              0.3189
+            ],
+            "home_win": 132
+          },
+          "ece": {
+            "class_0": 0.0878,
+            "class_1": 0.0414,
+            "class_2": 0.0542,
+            "mean": 0.0611
+          },
+          "log_loss": 0.98184,
+          "multiclass_brier": 0.58352,
+          "n": 301,
+          "origin_season": "2526",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                8,
+                16,
+                80,
+                114,
+                43,
+                37,
+                3,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                4,
+                238,
+                59,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                3,
+                71,
+                117,
+                77,
+                19,
+                8,
+                6,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1945,
+              "reliability": 0.0065,
+              "resolution": 0.024,
+              "uncertainty": 0.2157
+            },
+            "n_bins": 10,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2085,
+                "reliability": 0.0107,
+                "resolution": 0.0437,
+                "uncertainty": 0.2462
+              },
+              "class_1": {
+                "brier_score": 0.1835,
+                "reliability": 0.0027,
+                "resolution": 0.0009,
+                "uncertainty": 0.1837
+              },
+              "class_2": {
+                "brier_score": 0.1915,
+                "reliability": 0.006,
+                "resolution": 0.0275,
+                "uncertainty": 0.2172
+              }
+            }
+          },
+          "rps": 0.199998,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1868,
+            "ci_upper": 0.2123,
+            "n_bootstrap": 1000,
+            "n_samples": 301,
+            "point_estimate": 0.2
+          },
+          "train_rows": 1751,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324",
+            "2425"
+          ]
+        }
+      ],
+      "summary": {
+        "origin_count": 4,
+        "origins_beating_best_non_market_baseline": 4,
+        "rps_max": 0.216122,
+        "rps_mean": 0.204656,
+        "rps_min": 0.19548,
+        "rps_std": 0.007794
+      }
+    },
+    "EPL": {
+      "origins": [
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5173,
+            "macro_f1": 0.3854,
+            "macro_precision": 0.3478,
+            "macro_recall": 0.4531,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6464,
+                "precision": 0.6464,
+                "recall": 0.6464,
+                "support": 181
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 86
+              },
+              "class_2": {
+                "f1": 0.5099,
+                "precision": 0.3969,
+                "recall": 0.713,
+                "support": 108
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.24378333333333338,
+            "league_prior": 0.23114882205605553,
+            "uniform": 0.23955555555555558
+          },
+          "class_distribution": {
+            "away_win": 108,
+            "draw": 86,
+            "fractions": [
+              0.4827,
+              0.2293,
+              0.288
+            ],
+            "home_win": 181
+          },
+          "ece": {
+            "class_0": 0.0626,
+            "class_1": 0.0309,
+            "class_2": 0.0936,
+            "mean": 0.0624
+          },
+          "log_loss": 0.989646,
+          "multiclass_brier": 0.588077,
+          "n": 375,
+          "origin_season": "2223",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                37,
+                85,
+                79,
+                38,
+                42,
+                63,
+                31,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                195,
+                180,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                80,
+                59,
+                52,
+                89,
+                60,
+                18,
+                17,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1961,
+              "reliability": 0.0064,
+              "resolution": 0.0205,
+              "uncertainty": 0.2105
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2177,
+                "reliability": 0.0059,
+                "resolution": 0.0378,
+                "uncertainty": 0.2497
+              },
+              "class_1": {
+                "brier_score": 0.1766,
+                "reliability": 0.001,
+                "resolution": 0.0006,
+                "uncertainty": 0.1767
+              },
+              "class_2": {
+                "brier_score": 0.1939,
+                "reliability": 0.0122,
+                "resolution": 0.023,
+                "uncertainty": 0.2051
+              }
+            }
+          },
+          "rps": 0.205762,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1905,
+            "ci_upper": 0.2235,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.2058
+          },
+          "train_rows": 1071,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.568,
+            "macro_f1": 0.4214,
+            "macro_precision": 0.3762,
+            "macro_recall": 0.4827,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6757,
+                "precision": 0.6313,
+                "recall": 0.7267,
+                "support": 172
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 81
+              },
+              "class_2": {
+                "f1": 0.5886,
+                "precision": 0.4972,
+                "recall": 0.7213,
+                "support": 122
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25925000000000004,
+            "league_prior": 0.23413991571158288,
+            "uniform": 0.24177777777777784
+          },
+          "class_distribution": {
+            "away_win": 122,
+            "draw": 81,
+            "fractions": [
+              0.4587,
+              0.216,
+              0.3253
+            ],
+            "home_win": 172
+          },
+          "ece": {
+            "class_0": 0.064,
+            "class_1": 0.024,
+            "class_2": 0.0672,
+            "mean": 0.0517
+          },
+          "log_loss": 0.926923,
+          "multiclass_brier": 0.544783,
+          "n": 375,
+          "origin_season": "2324",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                7,
+                46,
+                90,
+                39,
+                48,
+                59,
+                63,
+                23,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                92,
+                283,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                2,
+                94,
+                67,
+                53,
+                55,
+                68,
+                17,
+                19,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1816,
+              "reliability": 0.0045,
+              "resolution": 0.0346,
+              "uncertainty": 0.2124
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2014,
+                "reliability": 0.0071,
+                "resolution": 0.0522,
+                "uncertainty": 0.2483
+              },
+              "class_1": {
+                "brier_score": 0.167,
+                "reliability": 0.001,
+                "resolution": 0.003,
+                "uncertainty": 0.1693
+              },
+              "class_2": {
+                "brier_score": 0.1763,
+                "reliability": 0.0054,
+                "resolution": 0.0485,
+                "uncertainty": 0.2195
+              }
+            }
+          },
+          "rps": 0.188872,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1756,
+            "ci_upper": 0.2045,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1889
+          },
+          "train_rows": 1446,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5333,
+            "macro_f1": 0.3998,
+            "macro_precision": 0.3562,
+            "macro_recall": 0.4622,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6373,
+                "precision": 0.5302,
+                "recall": 0.7987,
+                "support": 154
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 90
+              },
+              "class_2": {
+                "f1": 0.562,
+                "precision": 0.5385,
+                "recall": 0.5878,
+                "support": 131
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.27245,
+            "league_prior": 0.23530680712331362,
+            "uniform": 0.23777777777777784
+          },
+          "class_distribution": {
+            "away_win": 131,
+            "draw": 90,
+            "fractions": [
+              0.4107,
+              0.24,
+              0.3493
+            ],
+            "home_win": 154
+          },
+          "ece": {
+            "class_0": 0.0636,
+            "class_1": 0.0371,
+            "class_2": 0.04,
+            "mean": 0.0469
+          },
+          "log_loss": 0.97831,
+          "multiclass_brier": 0.583048,
+          "n": 375,
+          "origin_season": "2425",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                6,
+                34,
+                73,
+                39,
+                58,
+                27,
+                66,
+                66,
+                6,
+                0
+              ],
+              "class_1": [
+                0,
+                155,
+                220,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                25,
+                112,
+                35,
+                66,
+                46,
+                63,
+                20,
+                8,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1944,
+              "reliability": 0.0038,
+              "resolution": 0.0263,
+              "uncertainty": 0.2172
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2088,
+                "reliability": 0.0054,
+                "resolution": 0.0376,
+                "uncertainty": 0.242
+              },
+              "class_1": {
+                "brier_score": 0.1832,
+                "reliability": 0.0018,
+                "resolution": 0.0001,
+                "uncertainty": 0.1824
+              },
+              "class_2": {
+                "brier_score": 0.1911,
+                "reliability": 0.0043,
+                "resolution": 0.0411,
+                "uncertainty": 0.2273
+              }
+            }
+          },
+          "rps": 0.199936,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.186,
+            "ci_upper": 0.2149,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1999
+          },
+          "train_rows": 1821,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.4853,
+            "macro_f1": 0.3621,
+            "macro_precision": 0.3167,
+            "macro_recall": 0.4287,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6173,
+                "precision": 0.5081,
+                "recall": 0.7862,
+                "support": 159
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 102
+              },
+              "class_2": {
+                "f1": 0.4691,
+                "precision": 0.4419,
+                "recall": 0.5,
+                "support": 114
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25525000000000003,
+            "league_prior": 0.2284901750491869,
+            "uniform": 0.23244444444444448
+          },
+          "class_distribution": {
+            "away_win": 114,
+            "draw": 102,
+            "fractions": [
+              0.424,
+              0.272,
+              0.304
+            ],
+            "home_win": 159
+          },
+          "ece": {
+            "class_0": 0.0493,
+            "class_1": 0.0438,
+            "class_2": 0.024,
+            "mean": 0.039
+          },
+          "log_loss": 1.015521,
+          "multiclass_brier": 0.60977,
+          "n": 375,
+          "origin_season": "2526",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                2,
+                27,
+                68,
+                48,
+                72,
+                55,
+                81,
+                22,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                79,
+                296,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                4,
+                118,
+                57,
+                80,
+                58,
+                43,
+                12,
+                3,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.2033,
+              "reliability": 0.0024,
+              "resolution": 0.0165,
+              "uncertainty": 0.2179
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2164,
+                "reliability": 0.0037,
+                "resolution": 0.0307,
+                "uncertainty": 0.2442
+              },
+              "class_1": {
+                "brier_score": 0.1995,
+                "reliability": 0.002,
+                "resolution": 0.0009,
+                "uncertainty": 0.198
+              },
+              "class_2": {
+                "brier_score": 0.1939,
+                "reliability": 0.0014,
+                "resolution": 0.0179,
+                "uncertainty": 0.2116
+              }
+            }
+          },
+          "rps": 0.205139,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1916,
+            "ci_upper": 0.2178,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.2051
+          },
+          "train_rows": 2196,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324",
+            "2425"
+          ]
+        }
+      ],
+      "summary": {
+        "origin_count": 4,
+        "origins_beating_best_non_market_baseline": 4,
+        "rps_max": 0.205762,
+        "rps_mean": 0.199927,
+        "rps_min": 0.188872,
+        "rps_std": 0.006772
+      }
+    },
+    "LA_LIGA": {
+      "origins": [
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5514,
+            "macro_f1": 0.4334,
+            "macro_precision": 0.4709,
+            "macro_recall": 0.4714,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6602,
+                "precision": 0.5756,
+                "recall": 0.774,
+                "support": 177
+              },
+              "class_1": {
+                "f1": 0.08,
+                "precision": 0.3077,
+                "recall": 0.046,
+                "support": 87
+              },
+              "class_2": {
+                "f1": 0.56,
+                "precision": 0.5294,
+                "recall": 0.5943,
+                "support": 106
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.24368243243243246,
+            "league_prior": 0.22770669613559869,
+            "uniform": 0.2385885885885886
+          },
+          "class_distribution": {
+            "away_win": 106,
+            "draw": 87,
+            "fractions": [
+              0.4784,
+              0.2351,
+              0.2865
+            ],
+            "home_win": 177
+          },
+          "ece": {
+            "class_0": 0.0685,
+            "class_1": 0.0489,
+            "class_2": 0.0533,
+            "mean": 0.0569
+          },
+          "log_loss": 0.987151,
+          "multiclass_brier": 0.587302,
+          "n": 370,
+          "origin_season": "2223",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                44,
+                71,
+                36,
+                105,
+                39,
+                55,
+                20,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                23,
+                192,
+                155,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                23,
+                83,
+                124,
+                46,
+                44,
+                32,
+                18,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1958,
+              "reliability": 0.0041,
+              "resolution": 0.018,
+              "uncertainty": 0.2112
+            },
+            "n_bins": 10,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.228,
+                "reliability": 0.0057,
+                "resolution": 0.0239,
+                "uncertainty": 0.2495
+              },
+              "class_1": {
+                "brier_score": 0.1826,
+                "reliability": 0.0027,
+                "resolution": 0.0007,
+                "uncertainty": 0.1798
+              },
+              "class_2": {
+                "brier_score": 0.1767,
+                "reliability": 0.004,
+                "resolution": 0.0293,
+                "uncertainty": 0.2044
+              }
+            }
+          },
+          "rps": 0.202334,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1894,
+            "ci_upper": 0.2165,
+            "n_bootstrap": 1000,
+            "n_samples": 370,
+            "point_estimate": 0.2023
+          },
+          "train_rows": 1072,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.544,
+            "macro_f1": 0.4285,
+            "macro_precision": 0.435,
+            "macro_recall": 0.4815,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.7024,
+                "precision": 0.5854,
+                "recall": 0.878,
+                "support": 164
+              },
+              "class_1": {
+                "f1": 0.0645,
+                "precision": 0.2105,
+                "recall": 0.0381,
+                "support": 105
+              },
+              "class_2": {
+                "f1": 0.5185,
+                "precision": 0.5091,
+                "recall": 0.5283,
+                "support": 106
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.24645000000000006,
+            "league_prior": 0.2245148311374696,
+            "uniform": 0.23111111111111113
+          },
+          "class_distribution": {
+            "away_win": 106,
+            "draw": 105,
+            "fractions": [
+              0.4373,
+              0.28,
+              0.2827
+            ],
+            "home_win": 164
+          },
+          "ece": {
+            "class_0": 0.0581,
+            "class_1": 0.0064,
+            "class_2": 0.0652,
+            "mean": 0.0432
+          },
+          "log_loss": 0.948042,
+          "multiclass_brier": 0.564075,
+          "n": 375,
+          "origin_season": "2324",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                72,
+                38,
+                50,
+                72,
+                65,
+                52,
+                26,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                27,
+                194,
+                152,
+                2,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                29,
+                101,
+                102,
+                48,
+                40,
+                45,
+                10,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.188,
+              "reliability": 0.0036,
+              "resolution": 0.0318,
+              "uncertainty": 0.2168
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.1936,
+                "reliability": 0.0038,
+                "resolution": 0.0565,
+                "uncertainty": 0.2461
+              },
+              "class_1": {
+                "brier_score": 0.1996,
+                "reliability": 0.0009,
+                "resolution": 0.0023,
+                "uncertainty": 0.2016
+              },
+              "class_2": {
+                "brier_score": 0.1709,
+                "reliability": 0.006,
+                "resolution": 0.0365,
+                "uncertainty": 0.2028
+              }
+            }
+          },
+          "rps": 0.182229,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1696,
+            "ci_upper": 0.1951,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1822
+          },
+          "train_rows": 1442,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5447,
+            "macro_f1": 0.4024,
+            "macro_precision": 0.3655,
+            "macro_recall": 0.4644,
+            "n_samples": 380,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6758,
+                "precision": 0.5502,
+                "recall": 0.8757,
+                "support": 169
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 97
+              },
+              "class_2": {
+                "f1": 0.5315,
+                "precision": 0.5463,
+                "recall": 0.5175,
+                "support": 114
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25177631578947374,
+            "league_prior": 0.2286756540999977,
+            "uniform": 0.235233918128655
+          },
+          "class_distribution": {
+            "away_win": 114,
+            "draw": 97,
+            "fractions": [
+              0.4447,
+              0.2553,
+              0.3
+            ],
+            "home_win": 169
+          },
+          "ece": {
+            "class_0": 0.0617,
+            "class_1": 0.0197,
+            "class_2": 0.0554,
+            "mean": 0.0456
+          },
+          "log_loss": 0.964355,
+          "multiclass_brier": 0.572523,
+          "n": 380,
+          "origin_season": "2425",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                5,
+                62,
+                34,
+                29,
+                64,
+                73,
+                54,
+                55,
+                4,
+                0
+              ],
+              "class_1": [
+                0,
+                79,
+                247,
+                54,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                65,
+                96,
+                95,
+                25,
+                19,
+                41,
+                28,
+                11,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1908,
+              "reliability": 0.0046,
+              "resolution": 0.0281,
+              "uncertainty": 0.2157
+            },
+            "n_bins": 10,
+            "n_samples": 380,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2066,
+                "reliability": 0.0072,
+                "resolution": 0.0456,
+                "uncertainty": 0.2469
+              },
+              "class_1": {
+                "brier_score": 0.1869,
+                "reliability": 0.0004,
+                "resolution": 0.0022,
+                "uncertainty": 0.1901
+              },
+              "class_2": {
+                "brier_score": 0.179,
+                "reliability": 0.0061,
+                "resolution": 0.0364,
+                "uncertainty": 0.21
+              }
+            }
+          },
+          "rps": 0.192797,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1777,
+            "ci_upper": 0.2087,
+            "n_bootstrap": 1000,
+            "n_samples": 380,
+            "point_estimate": 0.1928
+          },
+          "train_rows": 1817,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5493,
+            "macro_f1": 0.4055,
+            "macro_precision": 0.5982,
+            "macro_recall": 0.4516,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6901,
+                "precision": 0.5751,
+                "recall": 0.8626,
+                "support": 182
+              },
+              "class_1": {
+                "f1": 0.0619,
+                "precision": 0.75,
+                "recall": 0.0323,
+                "support": 93
+              },
+              "class_2": {
+                "f1": 0.4646,
+                "precision": 0.4694,
+                "recall": 0.46,
+                "support": 100
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.23604999999999998,
+            "league_prior": 0.22353145359594712,
+            "uniform": 0.23644444444444448
+          },
+          "class_distribution": {
+            "away_win": 100,
+            "draw": 93,
+            "fractions": [
+              0.4853,
+              0.248,
+              0.2667
+            ],
+            "home_win": 182
+          },
+          "ece": {
+            "class_0": 0.0505,
+            "class_1": 0.0226,
+            "class_2": 0.0453,
+            "mean": 0.0395
+          },
+          "log_loss": 0.972741,
+          "multiclass_brier": 0.575552,
+          "n": 375,
+          "origin_season": "2526",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                10,
+                48,
+                31,
+                41,
+                110,
+                47,
+                46,
+                42,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                48,
+                209,
+                118,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                46,
+                77,
+                136,
+                34,
+                22,
+                36,
+                15,
+                9,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1919,
+              "reliability": 0.0034,
+              "resolution": 0.0214,
+              "uncertainty": 0.2106
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2135,
+                "reliability": 0.0053,
+                "resolution": 0.0427,
+                "uncertainty": 0.2498
+              },
+              "class_1": {
+                "brier_score": 0.1816,
+                "reliability": 0.0006,
+                "resolution": 0.0018,
+                "uncertainty": 0.1865
+              },
+              "class_2": {
+                "brier_score": 0.1805,
+                "reliability": 0.0042,
+                "resolution": 0.0197,
+                "uncertainty": 0.1956
+              }
+            }
+          },
+          "rps": 0.196972,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1832,
+            "ci_upper": 0.2098,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.197
+          },
+          "train_rows": 2197,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324",
+            "2425"
+          ]
+        }
+      ],
+      "summary": {
+        "origin_count": 4,
+        "origins_beating_best_non_market_baseline": 4,
+        "rps_max": 0.202334,
+        "rps_mean": 0.193583,
+        "rps_min": 0.182229,
+        "rps_std": 0.007376
+      }
+    },
+    "LIGUE_1": {
+      "origins": [
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5378,
+            "macro_f1": 0.4054,
+            "macro_precision": 0.3562,
+            "macro_recall": 0.4712,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6554,
+                "precision": 0.5888,
+                "recall": 0.7389,
+                "support": 157
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 90
+              },
+              "class_2": {
+                "f1": 0.5608,
+                "precision": 0.4798,
+                "recall": 0.6748,
+                "support": 123
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.26516891891891897,
+            "league_prior": 0.23314243406973773,
+            "uniform": 0.2372372372372373
+          },
+          "class_distribution": {
+            "away_win": 123,
+            "draw": 90,
+            "fractions": [
+              0.4243,
+              0.2432,
+              0.3324
+            ],
+            "home_win": 157
+          },
+          "ece": {
+            "class_0": 0.0793,
+            "class_1": 0.026,
+            "class_2": 0.0542,
+            "mean": 0.0532
+          },
+          "log_loss": 0.991547,
+          "multiclass_brier": 0.592555,
+          "n": 370,
+          "origin_season": "2223",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                20,
+                47,
+                70,
+                60,
+                76,
+                89,
+                8,
+                0,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                43,
+                289,
+                38,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                5,
+                143,
+                73,
+                75,
+                45,
+                10,
+                19,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1975,
+              "reliability": 0.0046,
+              "resolution": 0.0237,
+              "uncertainty": 0.2168
+            },
+            "n_bins": 10,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2093,
+                "reliability": 0.0081,
+                "resolution": 0.0434,
+                "uncertainty": 0.2443
+              },
+              "class_1": {
+                "brier_score": 0.184,
+                "reliability": 0.0018,
+                "resolution": 0.003,
+                "uncertainty": 0.1841
+              },
+              "class_2": {
+                "brier_score": 0.1992,
+                "reliability": 0.0038,
+                "resolution": 0.0248,
+                "uncertainty": 0.2219
+              }
+            }
+          },
+          "rps": 0.204258,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1926,
+            "ci_upper": 0.2164,
+            "n_bootstrap": 1000,
+            "n_samples": 370,
+            "point_estimate": 0.2043
+          },
+          "train_rows": 970,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.505,
+            "macro_f1": 0.3872,
+            "macro_precision": 0.339,
+            "macro_recall": 0.452,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6084,
+                "precision": 0.521,
+                "recall": 0.7311,
+                "support": 119
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 78
+              },
+              "class_2": {
+                "f1": 0.5532,
+                "precision": 0.4962,
+                "recall": 0.625,
+                "support": 104
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2726453488372093,
+            "league_prior": 0.2330408116481114,
+            "uniform": 0.23458840900701372
+          },
+          "class_distribution": {
+            "away_win": 104,
+            "draw": 78,
+            "fractions": [
+              0.3953,
+              0.2591,
+              0.3455
+            ],
+            "home_win": 119
+          },
+          "ece": {
+            "class_0": 0.0473,
+            "class_1": 0.041,
+            "class_2": 0.0296,
+            "mean": 0.0393
+          },
+          "log_loss": 1.018122,
+          "multiclass_brier": 0.611355,
+          "n": 301,
+          "origin_season": "2324",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                7,
+                32,
+                57,
+                58,
+                44,
+                52,
+                40,
+                11,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                38,
+                210,
+                53,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                67,
+                73,
+                60,
+                56,
+                34,
+                6,
+                5,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.2038,
+              "reliability": 0.0033,
+              "resolution": 0.0187,
+              "uncertainty": 0.219
+            },
+            "n_bins": 10,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2159,
+                "reliability": 0.0042,
+                "resolution": 0.0288,
+                "uncertainty": 0.239
+              },
+              "class_1": {
+                "brier_score": 0.1951,
+                "reliability": 0.0038,
+                "resolution": 0.0013,
+                "uncertainty": 0.192
+              },
+              "class_2": {
+                "brier_score": 0.2004,
+                "reliability": 0.0019,
+                "resolution": 0.0261,
+                "uncertainty": 0.2261
+              }
+            }
+          },
+          "rps": 0.208116,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1946,
+            "ci_upper": 0.2209,
+            "n_bootstrap": 1000,
+            "n_samples": 301,
+            "point_estimate": 0.2081
+          },
+          "train_rows": 1340,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5458,
+            "macro_f1": 0.3991,
+            "macro_precision": 0.3584,
+            "macro_recall": 0.4503,
+            "n_samples": 306,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6541,
+                "precision": 0.5943,
+                "recall": 0.7273,
+                "support": 143
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 62
+              },
+              "class_2": {
+                "f1": 0.5431,
+                "precision": 0.4809,
+                "recall": 0.6238,
+                "support": 101
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2600408496732027,
+            "league_prior": 0.2363966542983256,
+            "uniform": 0.24400871459694995
+          },
+          "class_distribution": {
+            "away_win": 101,
+            "draw": 62,
+            "fractions": [
+              0.4673,
+              0.2026,
+              0.3301
+            ],
+            "home_win": 143
+          },
+          "ece": {
+            "class_0": 0.0683,
+            "class_1": 0.0467,
+            "class_2": 0.0343,
+            "mean": 0.0498
+          },
+          "log_loss": 0.978859,
+          "multiclass_brier": 0.578523,
+          "n": 306,
+          "origin_season": "2425",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                13,
+                41,
+                54,
+                38,
+                49,
+                47,
+                47,
+                17,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                58,
+                219,
+                29,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                1,
+                67,
+                74,
+                50,
+                61,
+                37,
+                14,
+                2,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1928,
+              "reliability": 0.0045,
+              "resolution": 0.023,
+              "uncertainty": 0.2105
+            },
+            "n_bins": 10,
+            "n_samples": 306,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2184,
+                "reliability": 0.0081,
+                "resolution": 0.04,
+                "uncertainty": 0.2489
+              },
+              "class_1": {
+                "brier_score": 0.1634,
+                "reliability": 0.0032,
+                "resolution": 0.0026,
+                "uncertainty": 0.1616
+              },
+              "class_2": {
+                "brier_score": 0.1967,
+                "reliability": 0.0023,
+                "resolution": 0.0265,
+                "uncertainty": 0.2211
+              }
+            }
+          },
+          "rps": 0.207571,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.195,
+            "ci_upper": 0.2187,
+            "n_bootstrap": 1000,
+            "n_samples": 306,
+            "point_estimate": 0.2076
+          },
+          "train_rows": 1641,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5216,
+            "macro_f1": 0.3907,
+            "macro_precision": 0.3417,
+            "macro_recall": 0.4588,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "f1": 0.645,
+                "precision": 0.5858,
+                "recall": 0.7174,
+                "support": 138
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 75
+              },
+              "class_2": {
+                "f1": 0.5273,
+                "precision": 0.4394,
+                "recall": 0.6591,
+                "support": 88
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2477284053156146,
+            "league_prior": 0.2289393106683951,
+            "uniform": 0.23624953857512
+          },
+          "class_distribution": {
+            "away_win": 88,
+            "draw": 75,
+            "fractions": [
+              0.4585,
+              0.2492,
+              0.2924
+            ],
+            "home_win": 138
+          },
+          "ece": {
+            "class_0": 0.067,
+            "class_1": 0.0134,
+            "class_2": 0.0695,
+            "mean": 0.05
+          },
+          "log_loss": 0.987479,
+          "multiclass_brier": 0.586782,
+          "n": 301,
+          "origin_season": "2526",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                14,
+                36,
+                65,
+                32,
+                52,
+                43,
+                41,
+                18,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                50,
+                238,
+                13,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                2,
+                65,
+                75,
+                41,
+                56,
+                40,
+                10,
+                12,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1956,
+              "reliability": 0.0044,
+              "resolution": 0.0226,
+              "uncertainty": 0.2141
+            },
+            "n_bins": 10,
+            "n_samples": 301,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2196,
+                "reliability": 0.0055,
+                "resolution": 0.0344,
+                "uncertainty": 0.2483
+              },
+              "class_1": {
+                "brier_score": 0.1862,
+                "reliability": 0.0004,
+                "resolution": 0.0016,
+                "uncertainty": 0.1871
+              },
+              "class_2": {
+                "brier_score": 0.181,
+                "reliability": 0.0074,
+                "resolution": 0.0318,
+                "uncertainty": 0.2069
+              }
+            }
+          },
+          "rps": 0.200273,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1862,
+            "ci_upper": 0.2129,
+            "n_bootstrap": 1000,
+            "n_samples": 301,
+            "point_estimate": 0.2003
+          },
+          "train_rows": 1947,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324",
+            "2425"
+          ]
+        }
+      ],
+      "summary": {
+        "origin_count": 4,
+        "origins_beating_best_non_market_baseline": 4,
+        "rps_max": 0.208116,
+        "rps_mean": 0.205055,
+        "rps_min": 0.200273,
+        "rps_std": 0.003131
+      }
+    },
+    "SERIE_A": {
+      "origins": [
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5027,
+            "macro_f1": 0.375,
+            "macro_precision": 0.3301,
+            "macro_recall": 0.4424,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6334,
+                "precision": 0.5184,
+                "recall": 0.8141,
+                "support": 156
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 99
+              },
+              "class_2": {
+                "f1": 0.4917,
+                "precision": 0.472,
+                "recall": 0.513,
+                "support": 115
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2578716216216216,
+            "league_prior": 0.22971598157525167,
+            "uniform": 0.2331831831831832
+          },
+          "class_distribution": {
+            "away_win": 115,
+            "draw": 99,
+            "fractions": [
+              0.4216,
+              0.2676,
+              0.3108
+            ],
+            "home_win": 156
+          },
+          "ece": {
+            "class_0": 0.0448,
+            "class_1": 0.0262,
+            "class_2": 0.0212,
+            "mean": 0.0307
+          },
+          "log_loss": 1.005859,
+          "multiclass_brier": 0.602364,
+          "n": 370,
+          "origin_season": "2223",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                68,
+                32,
+                52,
+                47,
+                103,
+                54,
+                14,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                27,
+                317,
+                26,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                104,
+                106,
+                55,
+                27,
+                69,
+                9,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.2008,
+              "reliability": 0.0015,
+              "resolution": 0.0169,
+              "uncertainty": 0.218
+            },
+            "n_bins": 10,
+            "n_samples": 370,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2162,
+                "reliability": 0.0027,
+                "resolution": 0.0311,
+                "uncertainty": 0.2439
+              },
+              "class_1": {
+                "brier_score": 0.1954,
+                "reliability": 0.0012,
+                "resolution": 0.0001,
+                "uncertainty": 0.196
+              },
+              "class_2": {
+                "brier_score": 0.1908,
+                "reliability": 0.0006,
+                "resolution": 0.0196,
+                "uncertainty": 0.2142
+              }
+            }
+          },
+          "rps": 0.203489,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1904,
+            "ci_upper": 0.2172,
+            "n_bootstrap": 1000,
+            "n_samples": 370,
+            "point_estimate": 0.2035
+          },
+          "train_rows": 1058,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.544,
+            "macro_f1": 0.4176,
+            "macro_precision": 0.3634,
+            "macro_recall": 0.4986,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6667,
+                "precision": 0.5418,
+                "recall": 0.8662,
+                "support": 157
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 110
+              },
+              "class_2": {
+                "f1": 0.5862,
+                "precision": 0.5484,
+                "recall": 0.6296,
+                "support": 108
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.25018333333333337,
+            "league_prior": 0.2253665878115952,
+            "uniform": 0.22888888888888892
+          },
+          "class_distribution": {
+            "away_win": 108,
+            "draw": 110,
+            "fractions": [
+              0.4187,
+              0.2933,
+              0.288
+            ],
+            "home_win": 157
+          },
+          "ece": {
+            "class_0": 0.0462,
+            "class_1": 0.023,
+            "class_2": 0.0662,
+            "mean": 0.0451
+          },
+          "log_loss": 0.972871,
+          "multiclass_brier": 0.580626,
+          "n": 375,
+          "origin_season": "2324",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                0,
+                69,
+                30,
+                54,
+                92,
+                91,
+                39,
+                0,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                4,
+                308,
+                63,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                0,
+                80,
+                142,
+                55,
+                24,
+                37,
+                37,
+                0,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1936,
+              "reliability": 0.0026,
+              "resolution": 0.0265,
+              "uncertainty": 0.2186
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2062,
+                "reliability": 0.0023,
+                "resolution": 0.0392,
+                "uncertainty": 0.2434
+              },
+              "class_1": {
+                "brier_score": 0.2074,
+                "reliability": 0.0005,
+                "resolution": 0.0003,
+                "uncertainty": 0.2073
+              },
+              "class_2": {
+                "brier_score": 0.1671,
+                "reliability": 0.0049,
+                "resolution": 0.0401,
+                "uncertainty": 0.2051
+              }
+            }
+          },
+          "rps": 0.18663,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.1758,
+            "ci_upper": 0.1953,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1866
+          },
+          "train_rows": 1428,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5307,
+            "macro_f1": 0.409,
+            "macro_precision": 0.3572,
+            "macro_recall": 0.4863,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6357,
+                "precision": 0.5168,
+                "recall": 0.8255,
+                "support": 149
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 106
+              },
+              "class_2": {
+                "f1": 0.5914,
+                "precision": 0.5547,
+                "recall": 0.6333,
+                "support": 120
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.26351666666666673,
+            "league_prior": 0.2286280701203916,
+            "uniform": 0.23066666666666671
+          },
+          "class_distribution": {
+            "away_win": 120,
+            "draw": 106,
+            "fractions": [
+              0.3973,
+              0.2827,
+              0.32
+            ],
+            "home_win": 149
+          },
+          "ece": {
+            "class_0": 0.0379,
+            "class_1": 0.0438,
+            "class_2": 0.0348,
+            "mean": 0.0388
+          },
+          "log_loss": 0.95803,
+          "multiclass_brier": 0.571954,
+          "n": 375,
+          "origin_season": "2425",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                5,
+                63,
+                45,
+                43,
+                71,
+                69,
+                39,
+                38,
+                2,
+                0
+              ],
+              "class_1": [
+                0,
+                55,
+                255,
+                65,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                36,
+                87,
+                98,
+                45,
+                35,
+                30,
+                41,
+                3,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1906,
+              "reliability": 0.0022,
+              "resolution": 0.0309,
+              "uncertainty": 0.22
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.1981,
+                "reliability": 0.002,
+                "resolution": 0.0419,
+                "uncertainty": 0.2395
+              },
+              "class_1": {
+                "brier_score": 0.2017,
+                "reliability": 0.0021,
+                "resolution": 0.0021,
+                "uncertainty": 0.2028
+              },
+              "class_2": {
+                "brier_score": 0.1721,
+                "reliability": 0.0024,
+                "resolution": 0.0486,
+                "uncertainty": 0.2176
+              }
+            }
+          },
+          "rps": 0.185114,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.172,
+            "ci_upper": 0.1959,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1851
+          },
+          "train_rows": 1803,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324"
+          ]
+        },
+        {
+          "accuracy_and_per_class": {
+            "accuracy": 0.5333,
+            "macro_f1": 0.408,
+            "macro_precision": 0.3694,
+            "macro_recall": 0.4751,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "f1": 0.6193,
+                "precision": 0.4939,
+                "recall": 0.8299,
+                "support": 147
+              },
+              "class_1": {
+                "f1": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "support": 97
+              },
+              "class_2": {
+                "f1": 0.6047,
+                "precision": 0.6142,
+                "recall": 0.5954,
+                "support": 131
+              }
+            }
+          },
+          "baselines": {
+            "home_bias": 0.2743166666666667,
+            "league_prior": 0.23326563995409474,
+            "uniform": 0.23466666666666666
+          },
+          "class_distribution": {
+            "away_win": 131,
+            "draw": 97,
+            "fractions": [
+              0.392,
+              0.2587,
+              0.3493
+            ],
+            "home_win": 147
+          },
+          "ece": {
+            "class_0": 0.0627,
+            "class_1": 0.0055,
+            "class_2": 0.0503,
+            "mean": 0.0395
+          },
+          "log_loss": 0.991079,
+          "multiclass_brier": 0.588564,
+          "n": 375,
+          "origin_season": "2526",
+          "reliability": {
+            "bin_counts": {
+              "class_0": [
+                15,
+                63,
+                30,
+                44,
+                55,
+                77,
+                54,
+                37,
+                0,
+                0
+              ],
+              "class_1": [
+                0,
+                48,
+                228,
+                99,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "class_2": [
+                45,
+                120,
+                61,
+                44,
+                18,
+                27,
+                47,
+                13,
+                0,
+                0
+              ]
+            },
+            "mean": {
+              "brier_score": 0.1962,
+              "reliability": 0.003,
+              "resolution": 0.0255,
+              "uncertainty": 0.2191
+            },
+            "n_bins": 10,
+            "n_samples": 375,
+            "per_class": {
+              "class_0": {
+                "brier_score": 0.2094,
+                "reliability": 0.0053,
+                "resolution": 0.0351,
+                "uncertainty": 0.2383
+              },
+              "class_1": {
+                "brier_score": 0.1892,
+                "reliability": 0.0001,
+                "resolution": 0.0012,
+                "uncertainty": 0.1918
+              },
+              "class_2": {
+                "brier_score": 0.19,
+                "reliability": 0.0037,
+                "resolution": 0.0403,
+                "uncertainty": 0.2273
+              }
+            }
+          },
+          "rps": 0.199686,
+          "rps_ci": {
+            "block_size": 10,
+            "ci_level": 0.95,
+            "ci_lower": 0.187,
+            "ci_upper": 0.2126,
+            "n_bootstrap": 1000,
+            "n_samples": 375,
+            "point_estimate": 0.1997
+          },
+          "train_rows": 2178,
+          "training_seasons": [
+            "1920",
+            "2021",
+            "2122",
+            "2223",
+            "2324",
+            "2425"
+          ]
+        }
+      ],
+      "summary": {
+        "origin_count": 4,
+        "origins_beating_best_non_market_baseline": 4,
+        "rps_max": 0.203489,
+        "rps_mean": 0.19373,
+        "rps_min": 0.185114,
+        "rps_std": 0.00799
+      }
+    }
+  },
+  "metric_contract": "reports/evaluation/metric-contract.json",
+  "promotion_claim": "NONE \u2014 this is evidence, not a gate",
+  "schema": "sabiscore_temporal_evaluation_v1"
+}
