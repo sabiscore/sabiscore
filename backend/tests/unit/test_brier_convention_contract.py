@@ -164,6 +164,57 @@ def test_services_delegate_brier_to_the_single_authority(relative):
         )
 
 
+# ── The three services must now agree numerically, not just textually ─────────
+#
+# The source-level guard above proves each site *delegates*; these prove the
+# delegation actually executes and that all three return the SAME number. That
+# is the defect itself: they previously differed by up to 3x on one shared
+# response field. `_calculate_brier_score` never touches `self`, so it is called
+# unbound — instantiating these services would require live PostgreSQL/Redis.
+
+_PROBS = {"home_win": 0.55, "draw": 0.27, "away_win": 0.18}
+_EXPECTED = 1.0 - (0.55**2 + 0.27**2 + 0.18**2)
+
+
+def _unbound_brier(module_path: str, class_name: str):
+    module = pytest.importorskip(
+        module_path,
+        reason="optional ML extra unavailable on this interpreter (e.g. catboost on 3.14)",
+    )
+    return getattr(module, class_name).__dict__["_calculate_brier_score"]
+
+
+@pytest.mark.parametrize(
+    ("module_path", "class_name"),
+    [
+        ("src.services.prediction", "PredictionService"),
+        ("src.services.ultra_prediction", "UltraPredictionService"),
+        ("src.services.ultra_prediction_service", "UltraPredictionService"),
+    ],
+)
+def test_each_service_returns_the_canonical_expected_brier(module_path, class_name):
+    fn = _unbound_brier(module_path, class_name)
+    assert fn(None, _PROBS) == pytest.approx(_EXPECTED)
+
+
+def test_all_services_agree_with_each_other():
+    """The regression that mattered: one field, three scales, up to 3x apart."""
+    values = []
+    for module_path, class_name in (
+        ("src.services.prediction", "PredictionService"),
+        ("src.services.ultra_prediction", "UltraPredictionService"),
+        ("src.services.ultra_prediction_service", "UltraPredictionService"),
+    ):
+        try:
+            values.append(_unbound_brier(module_path, class_name)(None, _PROBS))
+        except pytest.skip.Exception:
+            continue
+
+    assert len(values) >= 2, "need at least two importable services to compare"
+    assert max(values) - min(values) < 1e-12, f"services disagree: {values}"
+    assert values[0] == pytest.approx(expected_brier_score(_PROBS))
+
+
 def test_metric_contract_records_the_corrected_convention():
     """The contract must not reassert the false equivalence it once carried."""
     import json
