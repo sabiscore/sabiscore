@@ -151,8 +151,35 @@ generation on the identical `2526` holdout. Honest result, read directly off
 | `no_league_regression` (need 6/6) | 3/6 | **4/6** |
 | `market_baseline` (need 6/6) | 0/6 | **1/6** (EPL: candidate RPS 0.2051 vs market 0.2054) |
 | `primary_metric_improvement` | — | PASS, mean RPS +0.0013 |
-| `serving_feature_availability` | FAIL | FAIL (unchanged — item 37's apex/legacy market-block deadlock, unrelated to Elo) |
+| `serving_feature_availability` | FAIL, 24 defaulted slots | FAIL, **20** defaulted slots |
 | `promotion_permitted` | false | **false** |
+
+⚠️ **`feature_availability_matrix.json` is a stale input to this gate unless
+explicitly regenerated.** `compare_candidate_vs_incumbent.py` *reads* it
+(line ~98) but never writes it; the committed copy dated from 2026-08-10 and
+still listed all four replayed Elo slots as `defaulted_training_slot: true`,
+so the first run of this comparison reported `training_defaulted_slots: 24`
+— a figure that predated the very change being measured. The real producer is
+`scripts/generate_feature_availability_matrix.py`
+(→ `promotion_evidence.build_promotion_feature_evidence()`), which
+`feature_registry.py`'s own line-800 comment already flagged as the
+authority. Regenerated here: **24 → 20**, with `elo_league_adjusted` the only
+remaining Elo entry (correctly — it is permanently
+`PHASE7_FEATURES_ALWAYS_DATA_GAP`). **Always regenerate the matrix before
+reading this gate**, or it reports the previous candidate's feature coverage
+against the current candidate's model metrics.
+
+The 20 remaining defaulted slots, which are the concrete certification
+backlog for this gate (`h2h_*` ×5, `home_venue_*` ×3, `total_goals_expected`,
+`home_advantage_strength`, the 4 cross-signal agreement/combo fields,
+`elo_league_adjusted`, `home_pressing_intensity`, `progressive_carry_diff`,
+and the 3 permanently-gapped Phase-7 slots): note that h2h and home-venue
+**already resolve at serving** (item 13, resolved 2026-08-11) but are still
+defaulted *in training* — `build_dataset()` has no h2h/venue accumulator, the
+exact asymmetry this Elo work just fixed for a different family. That is the
+single largest, cheapest remaining reduction available: ~9 slots, computable
+from the same committed corpus with the same walk-forward pattern, no new
+data source required.
 
 Candidate beats incumbent on RPS in Eredivisie (−0.0064), La Liga (−0.0048),
 Ligue 1 (−0.0029), and Serie A (−0.0055); loses in Bundesliga (+0.0100) and
