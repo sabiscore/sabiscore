@@ -135,6 +135,80 @@ random forest additionally exposes 300 bootstrap-resampled trees via
   must be re-derived for any future generation — a differently-trained ensemble
   can have differently-correlated dispersion.
 
+## Addendum 3 — 2026-08-31 (Stage 11 completed; reversal is systematic and largely an aleatoric confound)
+
+Addenda 1-2 exercised three of Stage 11's five validation categories
+(determinism, independence, error association). The remaining two —
+**out-of-support behaviour** and **robustness** — are now exercised, and both
+changed what we know.
+
+**Out-of-support: PASS, and it was not guaranteed.** Tree ensembles
+extrapolate flat by construction (a value past the last split lands in the
+same leaf as the boundary), so member disagreement could easily have been
+blind to novelty. It is not — every out-of-support regime lifts mean epistemic
+well above the in-distribution holdout (mean 0.0928):
+
+| Regime | Mean epistemic | vs in-distribution |
+|---|---|---|
+| Feature values +10 spans above training range | 0.2352 | 2.54x |
+| Feature values -10 spans below training range | 0.1430 | 1.54x |
+| All-zero vector | 0.1241 | 1.34x |
+| Per-row shuffled features (joint structure broken) | 0.1445 | 1.56x |
+
+The signal carries genuine information about support. Note this is **not** a
+frozen `UNCERTAINTY_GATES` entry — the policy declares no out-of-support gate —
+so it is recorded as evidence and pinned by a regression guard, and it cannot
+contribute to certification.
+
+**Robustness: the `error_association` reversal is systematic, not an EPL
+quirk.** Every league whose artifact holdout season has corpus rows fails, each
+on its own independently-trained artifact:
+
+```text
+BUNDESLIGA  n=296  low=0.2562  high=0.2114  gap=-0.0448
+LIGUE_1     n=306  low=0.2382  high=0.2095  gap=-0.0288
+EPL         n=375  low=0.2345  high=0.2128  gap=-0.0217
+SERIE_A     n=375  low=0.2155  high=0.2058  gap=-0.0098
+LA_LIGA     n=380  low=0.2139  high=0.2114  gap=-0.0025
+```
+
+EREDIVISIE is not scoreable: its artifact is the pooled all-league model, whose
+metadata reports the pooled `holdout_season: 2425` while the Eredivisie corpus
+holds 260 rows, all season 2526 — zero rows in its own declared holdout. Skipped
+with that reason recorded, not silently dropped.
+
+**Mechanism — most of the reversal is an aleatoric confound.** Measured on the
+EPL holdout:
+
+```text
+corr(epistemic, aleatoric) = -0.267     epistemic is anti-correlated with aleatoric
+corr(aleatoric,  RPS)      = +0.072     aleatoric tracks error in the CORRECT direction
+corr(epistemic,  RPS)      = -0.031     epistemic anti-tracks it (the reversal)
+aleatoric bucketed by quartile: gap +0.0230 (correct sign)
+```
+
+Bucketing by epistemic therefore implicitly *reverse*-buckets by aleatoric,
+and aleatoric is the component that legitimately predicts error. Conditioning
+on aleatoric collapses the reversal, monotonically across terciles:
+
+```text
+low aleatoric  (n=125): gap -0.0104
+mid aleatoric  (n=125): gap -0.0022
+high aleatoric (n=125): gap +0.0013   (correct sign)
+```
+
+Directional and small-n (62 rows/bucket, 2 buckets per stratum) — suggestive,
+not conclusive, and deliberately **not** turned into a test.
+
+⚠️ **This is not grounds to change the gate.** The obvious move — re-specify
+`error_association` as a within-aleatoric-stratum measurement — would be
+re-defining a certification threshold *after* observing that it blocks
+promotion, which is exactly what APEX §23 and the certification directive
+forbid, regardless of how sound the statistics are. It would not even cleanly
+pass: two of three strata still carry the wrong sign. The measurement is
+recorded so an authorized decision can be made on evidence; it is not acted on
+here.
+
 ## Addendum 2 — 2026-08-31 (in-bag contamination ruled out)
 
 Addendum 1 below measured `error_association` against the full 2,571-row EPL

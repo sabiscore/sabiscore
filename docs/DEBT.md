@@ -22,14 +22,35 @@ quartile to show worse mean RPS than the lowest. Measured, it is the reverse:
 gap (highest − lowest bucket RPS) = −0.022, on the clean holdout — see the
 ADR 0009 addendum for the full bucket table.
 
-**Two hypotheses were recorded when this item was first filed; one is now
-closed:**
+**Two hypotheses were recorded when this item was first filed; one is closed
+and one is now substantially explained:**
 
-1. ~~Open~~ **Hypothesis 1 (artifact-inherent) — still open, not investigated
-   further.** Plausible: RPS is a proper scoring rule and may reward the more
-   evenly-spread predictions that correlate with member disagreement over an
-   overconfident wrong call. If so, a future, better-trained generation may
-   simply satisfy the gate without any change to `ensemble_uncertainty.py`.
+1. **Hypothesis 1 (artifact-inherent) — substantially explained, 2026-08-31,
+   but NOT resolved into a pass.** Two new measurements:
+
+   *It is systematic, not artifact-specific.* Every league whose artifact
+   holdout has corpus rows fails, each on its own independently-trained
+   artifact: BUNDESLIGA −0.0448, LIGUE_1 −0.0288, EPL −0.0217, SERIE_A
+   −0.0098, LA_LIGA −0.0025. (EREDIVISIE is unscoreable — pooled model, zero
+   rows in its own declared holdout season.) So this is a property of the
+   decomposition on this feature set, not of one weak artifact.
+
+   *Most of it is an aleatoric confound.* `corr(epistemic, aleatoric) = −0.267`
+   while `corr(aleatoric, RPS) = +0.072` — aleatoric is the component that
+   legitimately tracks error, and epistemic is anti-correlated with it, so
+   bucketing by epistemic implicitly reverse-buckets by aleatoric. Conditioning
+   on aleatoric collapses the reversal monotonically across terciles
+   (−0.0104 → −0.0022 → **+0.0013**). Directional and small-n (62 rows/bucket),
+   so suggestive, not conclusive.
+
+   ⚠️ **The obvious fix is forbidden.** Re-specifying `error_association` as a
+   within-aleatoric-stratum measurement would be re-defining a certification
+   threshold *after* observing that it blocks promotion — APEX §23 and the
+   certification directive both forbid exactly that, however sound the
+   statistics. It would not cleanly pass anyway (two of three strata still
+   carry the wrong sign). **This needs an authorized decision on the recorded
+   evidence, not a unilateral edit.** See ADR 0009 Addendum 3.
+
 2. **Hypothesis 2 (in-bag/out-of-bag scoring bias) — RULED OUT, 2026-08-31.**
    The original measurement scored the full 2,571-row corpus, 85% of which
    (2,196 rows) is the RandomForest's own bootstrap training data — in-bag
@@ -41,6 +62,13 @@ closed:**
    learners instead of RF bootstrap trees) too, which shows the same
    reversal even more strongly on the full corpus — ruling out "wrong member
    design" as well.
+
+**Stage 11 is now complete (5/5 categories).** The two previously unexercised
+categories were closed 2026-08-31: **out-of-support PASSES** (every novel
+regime lifts mean epistemic 1.34x–2.54x above in-distribution — not guaranteed,
+since tree ensembles extrapolate flat by construction), and **robustness**
+now covers all five scoreable leagues, seven temporal windows, and the
+missing/partial-data fail-closed path on the real artifact.
 
 `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
 certified. `full_analysis.py::_uncertainty_from_features` returns `None`
