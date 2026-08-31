@@ -191,13 +191,27 @@ IMPLEMENTATION_STATUS: Dict[str, Any] = {
     "gates_failed": ["error_association"],
     "gate_remains_closed": "MODEL_UNCERTAINTY_UNAVAILABLE",
     "blocking_reason": (
-        "error_association fails on real measured evidence: RPS improves, "
-        "rather than degrades, as ensemble-dispersion epistemic uncertainty "
-        "rises (full real EPL corpus, both a bootstrap-tree and a "
-        "base-learner member design)"
+        "error_association fails on real measured evidence, systematically: RPS "
+        "improves rather than degrades as ensemble-dispersion epistemic "
+        "uncertainty rises, in all five leagues whose artifact holdout season "
+        "has corpus rows (gap -0.0025 to -0.0448), on each league's own "
+        "independently-trained artifact and its own chronological holdout. Not "
+        "in-bag contamination (re-measured holdout-only) and not member-design "
+        "specific (reproduced on a base-learner ensemble)"
     ),
-    "validation_evidence": "tests/unit/test_uncertainty_contract.py::TestRealCorpusValidation",
+    "validation_evidence": (
+        "tests/unit/test_uncertainty_contract.py — TestRealCorpusValidation "
+        "(per-gate, EPL holdout), TestOutOfSupport, TestRobustness "
+        "(cross-league, temporal, partial-data)"
+    ),
     "feasibility_evidence": "docs/adr/0009-uncertainty-certification-and-epistemic-independence.md",
+    "stage11_categories_exercised": [
+        "determinism",
+        "independence",
+        "out_of_support",
+        "error_association",
+        "robustness",
+    ],
 }
 
 

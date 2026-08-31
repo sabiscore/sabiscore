@@ -45,6 +45,53 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+_MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
+_CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
+
+#: League -> artifact slug, matching `PredictionEngine._LEAGUE_SLUG`'s canonical ids.
+_LEAGUE_SLUGS = {
+    "EPL": "epl",
+    "LA_LIGA": "la_liga",
+    "BUNDESLIGA": "bundesliga",
+    "SERIE_A": "serie_a",
+    "LIGUE_1": "ligue_1",
+    "EREDIVISIE": "eredivisie",
+}
+
+
+def _artifact_metadata(slug: str) -> dict:
+    import joblib
+
+    return joblib.load(_MODELS_DIR / f"{slug}_ensemble_v5_phase7.pkl")["model_metadata"]
+
+
+def _batched_member_probabilities(models_dict, X: np.ndarray) -> list:
+    """Test-only: `member_probabilities` for a whole matrix, one pass per tree.
+
+    Production scores exactly one fixture per call, so batching buys it nothing
+    and `ensemble_uncertainty.py` deliberately does not carry this. Here it
+    turns each league's validation from ~30s into ~3s, which is what makes
+    scoring five real artifacts affordable in the always-run suite under the
+    repo's lean-local-environment constraint.
+
+    `test_batched_helper_is_exactly_equivalent_to_production` pins this to the
+    production function bit-for-bit: every cross-league result below would be
+    worthless evidence if this shortcut ever drifted from what production
+    actually computes.
+    """
+    trees = getattr(models_dict.get("random_forest"), "estimators_", None)
+    if not trees:
+        return [[] for _ in range(X.shape[0])]
+    stacked = np.stack(
+        [np.asarray(tree.predict_proba(X), dtype=np.float64) for tree in trees], axis=0
+    )  # (M, N, 3)
+    out = []
+    for row_idx in range(X.shape[0]):
+        rows = stacked[:, row_idx, :]
+        totals = rows.sum(axis=1)
+        out.append([r / t for r, t in zip(rows, totals) if t > 0])
+    return out
+
 
 # ── Pure-math contract (fast, synthetic, exact) ───────────────────────────────
 
@@ -353,3 +400,276 @@ class TestRealCorpusValidation:
                 f"highest-epistemic bucket RPS={highest_epistemic_rps:.4f}, "
                 f"gap={gap:.4f} (need > {gate['min_rps_gap_top_vs_bottom']})"
             )
+
+
+# ── Stage 11: out-of-support behaviour ───────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def epl_holdout_matrix():
+    """The real EPL artifact's holdout feature matrix + its loaded bundle."""
+    import asyncio
+
+    from train_on_real_matches import build_dataset, load_matches  # type: ignore[import-not-found]
+
+    from src.models.prediction import PredictionEngine
+
+    if not _CACHE_DIR.exists() or not (_MODELS_DIR / "epl_ensemble_v5_phase7.pkl").exists():
+        pytest.skip("real corpus or EPL artifact not present")
+
+    epl = build_dataset(load_matches(_CACHE_DIR)).get("EPL")
+    if not epl:
+        pytest.skip("no real EPL rows")
+    seasons = np.asarray(epl["seasons"])
+    mask = seasons == _artifact_metadata("epl")["holdout_season"]
+
+    bundle = asyncio.run(PredictionEngine().get_artifact_bundle("EPL"))
+    if bundle is None or not bundle.models_dict:
+        pytest.skip("real EPL artifact not loadable in this environment")
+    return {
+        "bundle": bundle,
+        "X": np.asarray(epl["X_incumbent"], dtype=np.float64)[mask],
+        "X_all": np.asarray(epl["X_incumbent"], dtype=np.float64),
+        "seasons_all": seasons,
+    }
+
+
+def test_batched_helper_is_exactly_equivalent_to_production(epl_holdout_matrix):
+    """The cross-league and out-of-support evidence below is only as good as
+    this equivalence. Bit-for-bit, not approximately — there is no floating
+    point reordering between the two paths, so any deviation means drift."""
+    bundle, X = epl_holdout_matrix["bundle"], epl_holdout_matrix["X"][:25]
+    batched = [dispersion_from_members(m) for m in _batched_member_probabilities(bundle.models_dict, X)]
+    per_row = [
+        dispersion_from_members(member_probabilities(bundle.models_dict, row.reshape(1, -1)))
+        for row in X
+    ]
+    for got, want in zip(batched, per_row):
+        assert got.epistemic == want.epistemic
+        assert got.aleatoric == want.aleatoric
+        assert got.total == want.total
+        assert got.model_count == want.model_count
+
+
+class TestOutOfSupport:
+    """Stage 11 out-of-support: 'low-support / novel regimes should exhibit
+    meaningfully different epistemic uncertainty than well-supported regimes'.
+
+    This is NOT a frozen `UNCERTAINTY_GATES` entry and cannot contribute to
+    certification — the policy declares no out-of-support gate. It is a
+    regression guard pinning measured behaviour, and its 1.15x floor was chosen
+    after measurement, deliberately well below every observed ratio
+    (1.34x-2.54x), to catch the signal going flat rather than to grade it.
+
+    Worth having precisely because the result was not guaranteed: tree
+    ensembles extrapolate flat by construction (a value past the last split
+    lands in the same leaf as the boundary), so an RF's member disagreement
+    could easily have been *insensitive* to novelty. It is not.
+    """
+
+    @pytest.fixture(scope="class")
+    def regimes(self, epl_holdout_matrix):
+        bundle, X = epl_holdout_matrix["bundle"], epl_holdout_matrix["X"]
+        span = np.where(X.max(axis=0) - X.min(axis=0) > 0, X.max(axis=0) - X.min(axis=0), 1.0)
+        rng = np.random.default_rng(0)
+
+        def epistemic_for(matrix):
+            results = [dispersion_from_members(m)
+                       for m in _batched_member_probabilities(bundle.models_dict, matrix)]
+            assert all(r.available for r in results), "every regime must still compute"
+            return np.array([r.epistemic for r in results])
+
+        return {
+            "in_distribution": epistemic_for(X),
+            "far_above_range": epistemic_for(X + 10.0 * span),
+            "far_below_range": epistemic_for(X - 10.0 * span),
+            "all_zero": epistemic_for(np.zeros_like(X[:50])),
+            "shuffled_features": epistemic_for(
+                np.apply_along_axis(rng.permutation, 1, X[:100].copy())
+            ),
+        }
+
+    @pytest.mark.parametrize(
+        "regime", ["far_above_range", "far_below_range", "all_zero", "shuffled_features"]
+    )
+    def test_novel_regimes_raise_epistemic_above_in_distribution(self, regimes, regime):
+        in_dist = regimes["in_distribution"].mean()
+        novel = regimes[regime].mean()
+        assert novel / in_dist >= 1.15, (
+            f"{regime}: mean epistemic {novel:.4f} vs in-distribution {in_dist:.4f} "
+            f"({novel / in_dist:.2f}x) — the signal has gone flat on novel input"
+        )
+
+    def test_out_of_support_output_stays_within_the_declared_range(self, regimes):
+        for name, values in regimes.items():
+            assert bool((values >= 0.0).all()), f"{name} produced a negative epistemic"
+            assert bool((values <= MAX_ENTROPY_NATS).all()), f"{name} exceeded ln(3)"
+
+
+# ── Stage 11: robustness (leagues, temporal windows, partial data) ───────────
+
+
+@pytest.fixture(scope="module")
+def cross_league_scores():
+    """Every league whose artifact holdout season has real corpus rows.
+
+    EREDIVISIE is excluded by the evidence floor, not by choice: its artifact
+    is the pooled all-league model (docs/DEBT.md — one season of Eredivisie
+    data, so it borrows a pooled fit), and its `model_metadata` reports that
+    pooled model's `holdout_season: 2425` while the Eredivisie corpus itself
+    holds 260 rows, all season 2526. There are zero Eredivisie rows in its own
+    declared holdout to score, so it is skipped with that reason recorded
+    rather than silently dropped.
+    """
+    import asyncio
+
+    from train_on_real_matches import build_dataset, load_matches  # type: ignore[import-not-found]
+
+    from src.models.prediction import PredictionEngine
+
+    if not _CACHE_DIR.exists():
+        pytest.skip(f"real corpus not present at {_CACHE_DIR}")
+
+    dataset = build_dataset(load_matches(_CACHE_DIR))
+    floor = UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"]
+    scored, skipped = {}, {}
+
+    for league, slug in _LEAGUE_SLUGS.items():
+        if not (_MODELS_DIR / f"{slug}_ensemble_v5_phase7.pkl").exists():
+            skipped[league] = "artifact not present"
+            continue
+        data = dataset.get(league)
+        if not data:
+            skipped[league] = "no corpus rows"
+            continue
+        holdout = _artifact_metadata(slug)["holdout_season"]
+        mask = np.asarray(data["seasons"]) == holdout
+        if int(mask.sum()) < floor:
+            skipped[league] = f"{int(mask.sum())} rows in declared holdout {holdout} (floor {floor})"
+            continue
+        bundle = asyncio.run(PredictionEngine().get_artifact_bundle(league))
+        if bundle is None or not bundle.models_dict:
+            skipped[league] = "artifact not loadable"
+            continue
+
+        X = np.asarray(data["X_incumbent"], dtype=np.float64)[mask]
+        y = np.asarray(data["y"])[mask]
+        members = _batched_member_probabilities(bundle.models_dict, X)
+        results = [dispersion_from_members(m) for m in members]
+        scored[league] = {
+            "results": results,
+            "epistemic": np.array([r.epistemic for r in results]),
+            "total": np.array([r.total for r in results]),
+            "rps": np.array([
+                ranked_probability_score(int(y[i]), list(np.mean(np.stack(members[i]), axis=0)))
+                for i in range(len(y))
+            ]),
+            "n": len(y),
+            "holdout_season": holdout,
+        }
+
+    if not scored:
+        pytest.skip(f"no league met the evidence floor; skipped={skipped}")
+    return {"scored": scored, "skipped": skipped}
+
+
+class TestRobustness:
+    """Stage 11 robustness: leagues, temporal windows, confidence regimes, and
+    missing/partial data.
+
+    'Teams with different sample sizes' is covered only indirectly — early
+    seasons carry less accumulated per-team history than late ones, so the
+    temporal test exercises it — and is called out here rather than claimed as
+    dedicated coverage, because `build_dataset` does not emit a per-row team
+    history depth to bucket on.
+    """
+
+    def test_every_scored_league_produces_a_valid_measurement(self, cross_league_scores):
+        scored = cross_league_scores["scored"]
+        assert len(scored) >= 5, f"expected >=5 leagues, got {sorted(scored)}"
+        tolerance = UNCERTAINTY_GATES["non_negative"]["threshold"]["tolerance"]
+        min_members = UNCERTAINTY_GATES["sufficient_members"]["threshold"]["min_members"]
+        for league, s in scored.items():
+            assert all(r.available for r in s["results"]), f"{league}: a row failed to compute"
+            assert bool((s["epistemic"] >= -tolerance).all()), f"{league}: negative epistemic"
+            assert bool((s["epistemic"] <= s["total"] + tolerance).all()), f"{league}: epistemic > total"
+            assert bool((s["total"] <= MAX_ENTROPY_NATS + tolerance).all()), f"{league}: total > ln(3)"
+            assert all(r.model_count >= min_members for r in s["results"]), f"{league}: too few members"
+
+    def test_eredivisie_is_skipped_for_a_recorded_reason_not_silently(self, cross_league_scores):
+        """The pooled-model coverage gap must stay visible. If Eredivisie ever
+        becomes scoreable this fails, which is the prompt to re-read the skip
+        reason rather than let stale prose survive."""
+        skipped = cross_league_scores["skipped"]
+        assert "EREDIVISIE" in skipped, "Eredivisie now scores — update the fixture docstring"
+        assert "floor" in skipped["EREDIVISIE"]
+
+    def test_error_association_direction_is_consistent_across_leagues(self, cross_league_scores):
+        """Robustness view of the one failing gate: is the reversal an EPL
+        quirk or systematic?
+
+        Systematic. Every scored league fails, on its own independently-trained
+        artifact and its own holdout season. That is materially stronger
+        evidence than the single-league result in `TestRealCorpusValidation`,
+        and it is what moves docs/DEBT.md item 50's hypothesis 1 from 'maybe
+        artifact-specific' to 'a property of this decomposition on this feature
+        set'. xfail carries the full per-league table so the reason string is
+        the evidence.
+        """
+        gate = UNCERTAINTY_GATES["error_association"]["threshold"]
+        n_buckets = gate["buckets"]
+        rows = []
+        passing = []
+        for league, s in sorted(cross_league_scores["scored"].items()):
+            order = np.argsort(s["epistemic"])
+            size = len(order) // n_buckets
+            lowest = float(s["rps"][order[:size]].mean())
+            highest = float(s["rps"][order[(n_buckets - 1) * size:]].mean())
+            gap = highest - lowest
+            rows.append(f"{league} n={s['n']} low={lowest:.4f} high={highest:.4f} gap={gap:+.4f}")
+            if gap > gate["min_rps_gap_top_vs_bottom"]:
+                passing.append(league)
+        if not passing:
+            pytest.xfail("error_association fails in every scored league: " + "; ".join(rows))
+
+    def test_measurement_is_valid_in_every_temporal_window(self, epl_holdout_matrix):
+        """Seasons span 1920-2526; the method must produce a valid measurement
+        in each, not only in the recent ones it was most recently fit near."""
+        bundle = epl_holdout_matrix["bundle"]
+        X_all, seasons = epl_holdout_matrix["X_all"], epl_holdout_matrix["seasons_all"]
+        checked = 0
+        for season in sorted(set(seasons.tolist())):
+            rows = X_all[seasons == season][:100]
+            if len(rows) < 30:
+                continue
+            results = [dispersion_from_members(m)
+                       for m in _batched_member_probabilities(bundle.models_dict, rows)]
+            assert all(r.available for r in results), f"season {season}: a row failed to compute"
+            epistemic = np.array([r.epistemic for r in results])
+            total = np.array([r.total for r in results])
+            assert bool((epistemic >= 0.0).all()), f"season {season}: negative epistemic"
+            assert bool((epistemic <= total + 1e-9).all()), f"season {season}: epistemic > total"
+            checked += 1
+        assert checked >= 5, f"only {checked} temporal windows had enough rows"
+
+    def test_a_missing_feature_fails_closed_on_the_real_artifact(self, epl_holdout_matrix):
+        """The production async entry point, end to end: an incomplete evidence
+        set must return `available=False`, never a zero-filled measurement."""
+        import asyncio
+
+        from src.models.ensemble_uncertainty import compute_ensemble_uncertainty
+
+        columns = epl_holdout_matrix["bundle"].feature_columns
+        complete = dict(zip(columns, epl_holdout_matrix["X"][0]))
+
+        assert asyncio.run(compute_ensemble_uncertainty("EPL", complete)).available is True
+
+        missing = dict(complete)
+        missing.pop(columns[0])
+        assert asyncio.run(compute_ensemble_uncertainty("EPL", missing)) == UNAVAILABLE
+
+        not_finite = dict(complete)
+        not_finite[columns[0]] = float("nan")
+        assert asyncio.run(compute_ensemble_uncertainty("EPL", not_finite)) == UNAVAILABLE
+
+        assert asyncio.run(compute_ensemble_uncertainty("EPL", {})) == UNAVAILABLE
