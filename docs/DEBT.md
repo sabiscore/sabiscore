@@ -70,6 +70,54 @@ since tree ensembles extrapolate flat by construction), and **robustness**
 now covers all five scoreable leagues, seven temporal windows, and the
 missing/partial-data fail-closed path on the real artifact.
 
+### Residualization was proposed, built, and MEASURED — it does not resolve the gate (2026-08-31)
+
+A "decoupled uncertainty" remedy was proposed: recompute the Shannon
+decomposition (Vector 1) and measure `error_association` on an
+aleatoric-residualized epistemic metric within aleatoric strata (Vector 3).
+Both were implemented and measured before any gate was touched.
+**Result: it does not work.**
+
+- **Vector 1 is already shipped.** `ensemble_uncertainty.py` has computed the
+  same BALD decomposition since PR #121. The only proposed difference was
+  `log2` instead of `ln` — a constant rescale, which every rank statistic and
+  every bucket boundary is invariant to. It cannot move a gate outcome.
+- **Vector 3 was built** (`src/models/epistemic_residualizer.py`, isotonic
+  `f(u_alea) -> E[u_epi | u_alea]`) and measured out-of-fold, fitting the
+  baseline on pre-holdout seasons and applying it to the holdout
+  (`scripts/diagnose_decoupled_uncertainty.py`).
+
+Per-stratum Spearman correlations of the residual against RPS, out-of-fold:
+
+```text
+league       S1      S2      S3     verdict
+EPL        -0.043  +0.102  +0.008   FAIL (S1)
+LA_LIGA    +0.173  +0.154  +0.057   pass
+BUNDESLIGA +0.177  +0.020  -0.077   FAIL (S3)
+SERIE_A    +0.018  +0.174  -0.137   FAIL (S3)
+LIGUE_1    -0.044  +0.072  +0.100   FAIL (S1)
+```
+
+**1 of 5 leagues passes — the same 1 of 5 that passes on raw epistemic.**
+Residualization genuinely moves individual strata (Serie A S3: −0.230 → −0.137)
+and in-sample ≈ out-of-fold, so this is not an overfitting artifact. The signal
+simply is not consistently present. Adopting the change would have produced a
+gate that still fails four leagues.
+
+⚠️ **A bug in the first implementation nearly produced a false conclusion.**
+The direction was hardcoded `IsotonicRegression(increasing=True)`, but the
+confound is *negative* — epistemic falls as aleatoric rises. An increasing-only
+fit against a decreasing trend collapses to a near-constant, so the "residual"
+was rank-identical to the raw signal and the first diagnostic run reported
+residualization as a perfect no-op. That was the bug talking, not the data.
+Caught by `test_epistemic_residualizer.py`, fixed to `increasing="auto"`, and
+pinned by `test_a_flat_baseline_would_remove_nothing`. **Re-derive any
+conclusion that rests on a residualizer whose direction was assumed.**
+
+Item 50 therefore stays **open**. `UNCERTAINTY_GATES` is unmodified,
+`MODEL_UNCERTAINTY_UNAVAILABLE` remains unconditionally CRITICAL, and the
+`certification_policy.py` promotion machinery is untouched.
+
 `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
 certified. `full_analysis.py::_uncertainty_from_features` returns `None`
 unconditionally — the real computation exists and is tested, but is
