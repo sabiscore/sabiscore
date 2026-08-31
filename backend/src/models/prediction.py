@@ -223,6 +223,17 @@ class PredictionEngine:
 
     # ── Model loading ──────────────────────────────────────────────────────────
 
+    async def get_artifact_bundle(self, league: str) -> Optional["_ArtifactBundle"]:
+        """Public accessor for the cached model bundle.
+
+        Shared with `models/ensemble_uncertainty.py` (ADR 0009 / M2) so
+        epistemic-uncertainty computation reads the identical cached artifact
+        — same generation, same feature-column order — a live prediction for
+        the same fixture already loaded, rather than opening a second,
+        independently-cached copy of the model file.
+        """
+        return await self._load_model(league)
+
     async def _load_model(self, league: str) -> Optional["_ArtifactBundle"]:
         slug = _LEAGUE_SLUG.get(league, league.lower().replace(" ", "_"))
         with self._lock:

@@ -157,21 +157,46 @@ AVAILABILITY_SEMANTICS: Dict[str, str] = {
 UNCERTAINTY_REQUIRES_ALL_GATES = True
 
 #: ⚠️ Implementation status, stated plainly so this module is never mistaken for
-#: a passing result. This is a SPECIFICATION written before the implementation,
-#: which is the required order — thresholds declared after seeing a result are
-#: exactly what the certification directive forbids.
+#: a passing result. The specification (this file) was written and frozen
+#: before any implementation or measurement — the required order, since a
+#: threshold declared after seeing a result is exactly what the certification
+#: directive forbids.
 #:
-#: The gates above are DECLARED but NOT YET EXERCISED. `test_uncertainty_contract.py`
-#: (cited as several gates' `source`) does not exist until the M2 implementation
-#: lands, and `MODEL_UNCERTAINTY_UNAVAILABLE` therefore remains CRITICAL and
-#: fail-closed. A feasibility measurement recorded in ADR 0009 shows the method
-#: CAN satisfy these bars on the current artifacts; that is not the same as
-#: having satisfied them.
+#: The M2 implementation now exists (`src/models/ensemble_uncertainty.py`) and
+#: `test_uncertainty_contract.py` DOES exercise every gate above against real
+#: measured evidence — the full real 2,571-row EPL corpus, scored against the
+#: real shipped `epl_ensemble_v5_phase7.pkl` artifact. Five of six pass:
+#: `method_is_authorised`, `sufficient_members`, `non_negative`, `determinism`,
+#: `independence_from_confidence` (|corr|=0.003), `informative_within_confidence_band`
+#: (spread_ratio=3.47). `error_association` does not: the highest-epistemic
+#: quartile shows BETTER, not worse, mean RPS than the lowest — the reverse of
+#: the required relationship, confirmed on two independent member-selection
+#: designs (see the ADR addendum and `TestRealCorpusValidation::test_error_association`).
+#: `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
+#: certified, and `MODEL_UNCERTAINTY_UNAVAILABLE` stays CRITICAL and
+#: unconditionally fail-closed — `api/endpoints/full_analysis.py::_uncertainty_from_features`
+#: returns `None` unconditionally rather than wiring the real (but uncertified)
+#: computation into the gate on a partial pass.
 IMPLEMENTATION_STATUS: Dict[str, Any] = {
-    "state": "SPECIFIED_NOT_IMPLEMENTED",
-    "gates_exercised": False,
+    "state": "IMPLEMENTED_VALIDATION_FAILED",
+    "gates_exercised": True,
+    "gates_passed": [
+        "method_is_authorised",
+        "sufficient_members",
+        "non_negative",
+        "determinism",
+        "independence_from_confidence",
+        "informative_within_confidence_band",
+    ],
+    "gates_failed": ["error_association"],
     "gate_remains_closed": "MODEL_UNCERTAINTY_UNAVAILABLE",
-    "blocking_milestone": "M2 — independent uncertainty implementation and validation",
+    "blocking_reason": (
+        "error_association fails on real measured evidence: RPS improves, "
+        "rather than degrades, as ensemble-dispersion epistemic uncertainty "
+        "rises (full real EPL corpus, both a bootstrap-tree and a "
+        "base-learner member design)"
+    ),
+    "validation_evidence": "tests/unit/test_uncertainty_contract.py::TestRealCorpusValidation",
     "feasibility_evidence": "docs/adr/0009-uncertainty-certification-and-epistemic-independence.md",
 }
 
