@@ -135,6 +135,47 @@ random forest additionally exposes 300 bootstrap-resampled trees via
   must be re-derived for any future generation — a differently-trained ensemble
   can have differently-correlated dispersion.
 
+## Addendum 2 — 2026-08-31 (in-bag contamination ruled out)
+
+Addendum 1 below measured `error_association` against the full 2,571-row EPL
+corpus — but ~85% of that corpus (2,196/2,571 rows) is the artifact's own
+`RandomForestClassifier` bootstrap training data (`model_metadata["training_samples"]
+== 2196`, confirmed via `estimators_samples_`, matches exactly). In-bag
+dispersion is a known-unreliable proxy for genuine epistemic uncertainty: a
+tree that memorized a row via its own bootstrap sample can "agree" with its
+siblings on that row for reasons unrelated to true predictive confidence,
+which is exactly the certification directive's Stage 7 mandate against using
+random or in-sample evaluation as primary evidence.
+
+Re-measured on the artifact's own genuine chronological holdout season
+(`model_metadata["holdout_season"] == "2425"`, 375 rows, none seen in
+`.fit()` by any of the 300 trees):
+
+```text
+bucket 0 (lowest epistemic,  mean 0.070): mean RPS 0.2345
+bucket 1                    (mean 0.085): mean RPS 0.2301
+bucket 2                    (mean 0.097): mean RPS 0.2103
+bucket 3 (highest epistemic, mean 0.118): mean RPS 0.2128
+gap (bucket 3 - bucket 0): -0.0217
+```
+
+**Materially unchanged from the in-sample-contaminated measurement**
+(gap −0.023 there vs −0.022 here) — the other five gates hold too on this
+cleaner slice (`independence_from_confidence`: |corr|=0.056;
+`informative_within_confidence_band`: spread_ratio=3.17 in a 44-row band).
+**This rules out Addendum 1's hypothesis 2** (in-bag/out-of-bag scoring bias)
+as the explanation for the reversal. The reversal is a property of this
+artifact's genuine predictive behaviour on genuinely unseen matches, not a
+validation-methodology artifact. `tests/unit/test_uncertainty_contract.py`'s
+`real_epl_scores` fixture now scores the holdout-only slice as the primary
+(and only) real evidence, per Stage 7's own mandate — a strictly more
+rigorous measurement, and the one the certification ledger should cite going
+forward.
+
+`docs/DEBT.md` item 50 updated to close hypothesis 2 and keep hypothesis 1
+(the reversal is inherent to this artifact's calibration/sharpness tradeoff,
+not investigated further this session) as the sole remaining open question.
+
 ## Addendum — 2026-08-31 (M2 implementation and validation)
 
 `src/models/ensemble_uncertainty.py` implements `ensemble_dispersion` exactly

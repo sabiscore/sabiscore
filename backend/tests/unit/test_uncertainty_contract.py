@@ -13,10 +13,12 @@ intended evidence. Two tiers:
     require genuine predictive spread across many real fixtures — a synthetic
     corpus could be constructed to trivially pass any of them, which would
     defeat the purpose of "genuine evidence" ADR 0009 exists to require. These
-    score the real, shipped `epl_ensemble_v5_phase7.pkl` artifact against the
-    real corpus `scripts/train_on_real_matches.py` builds from
-    `backend/data/cache/fd_*.csv` — the same corpus and artifact ADR 0009's
-    own feasibility measurement used.
+    score the real, shipped `epl_ensemble_v5_phase7.pkl` artifact against its
+    own genuine chronological holdout season, drawn from the real corpus
+    `scripts/train_on_real_matches.py` builds from `backend/data/cache/fd_*.csv`
+    — rows the artifact's RandomForest never saw in `.fit()`, per the
+    certification directive's Stage 7 mandate against evaluating on in-sample
+    or randomly-split data.
 """
 from __future__ import annotations
 
@@ -160,14 +162,29 @@ def test_member_probabilities_empty_when_no_random_forest_member():
 
 @pytest.fixture(scope="module")
 def real_epl_scores():
-    """Ensemble-dispersion + realised RPS for a real, temporally-recent slice
-    of the real EPL corpus, scored against the real shipped artifact.
+    """Ensemble-dispersion + realised RPS for the real EPL artifact's own
+    chronological holdout season — rows the RandomForest's 300 trees never
+    saw in `.fit()` — scored against the real shipped artifact.
+
+    Restricted to the genuine holdout (not the full 2,571-row corpus) per
+    the certification directive's own Stage 7 mandate: "Use chronological /
+    rolling-origin evaluation. Do not use random splitting as the primary
+    certification result." An earlier version of this fixture scored the
+    full corpus, which is ~85% (2,196/2,571) the RandomForest's own bootstrap
+    training rows — in-bag dispersion on memorized rows is a well-known bad
+    proxy for genuine epistemic uncertainty. Re-measuring on the clean
+    holdout-only slice was done specifically to test that concern (docs/DEBT.md
+    item 50): the result is materially unchanged (see `test_error_association`),
+    which rules out in-bag contamination as the explanation and is itself
+    part of the certification evidence.
 
     Module-scoped: the underlying `PredictionEngine._model_cache` is itself a
     class-level cache, so this fixture's cost (corpus load + per-row scoring)
     is paid once for the whole file, not once per test.
     """
     import asyncio
+
+    import joblib
 
     from train_on_real_matches import build_dataset, load_matches  # type: ignore[import-not-found]
 
@@ -177,21 +194,29 @@ def real_epl_scores():
     if not cache_dir.exists():
         pytest.skip(f"real corpus not present at {cache_dir}")
 
+    artifact_path = Path(__file__).resolve().parents[2] / "models" / "epl_ensemble_v5_phase7.pkl"
+    if not artifact_path.exists():
+        pytest.skip(f"real EPL artifact not present at {artifact_path}")
+    holdout_season = joblib.load(artifact_path)["model_metadata"]["holdout_season"]
+
     matches = load_matches(cache_dir)
     dataset = build_dataset(matches)
     epl = dataset.get("EPL")
+    if not epl:
+        pytest.skip("no real EPL rows in the corpus")
+
+    seasons = np.asarray(epl["seasons"])
+    holdout_mask = seasons == holdout_season
     min_rows = UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"]
-    if not epl or len(epl["y"]) < min_rows:
-        pytest.skip("insufficient real EPL rows for validation floor")
+    if int(holdout_mask.sum()) < min_rows:
+        pytest.skip(f"holdout season {holdout_season} has fewer than {min_rows} rows")
 
     bundle = asyncio.run(PredictionEngine().get_artifact_bundle("EPL"))
     if bundle is None or not bundle.models_dict:
         pytest.skip("real EPL artifact not loadable in this environment")
 
-    # Full corpus (2,571 rows as of this writing) — the same population size
-    # ADR 0009's own feasibility measurement used. Not subsampled: the
-    # error_association gate's statistical power depends on real bucket size.
-    X_all, y_all = epl["X_incumbent"], epl["y"]
+    X_all = np.asarray(epl["X_incumbent"])[holdout_mask]
+    y_all = np.asarray(epl["y"])[holdout_mask]
 
     epistemic = np.empty(len(X_all))
     aleatoric = np.empty(len(X_all))
@@ -208,7 +233,7 @@ def real_epl_scores():
         aleatoric[i] = result.aleatoric
         total[i] = result.total
         confidence[i] = float(np.max(mean_p))
-        rps[i] = ranked_probability_score(y_all[i], list(mean_p))
+        rps[i] = ranked_probability_score(int(y_all[i]), list(mean_p))
 
     return {
         "epistemic": epistemic,
@@ -217,6 +242,7 @@ def real_epl_scores():
         "confidence": confidence,
         "rps": rps,
         "n": len(X_all),
+        "holdout_season": holdout_season,
     }
 
 
@@ -282,18 +308,27 @@ class TestRealCorpusValidation:
         """UNCERTAINTY_GATES['error_association']: the highest-epistemic
         quartile must show strictly worse (higher) mean RPS than the lowest.
 
-        Measured against the full real EPL corpus, this does NOT hold for the
-        `ensemble_dispersion` method as implemented (RandomForest bootstrap-tree
-        dispersion): RPS *improves* monotonically across all four quartiles as
-        epistemic uncertainty rises (bucket 0, lowest epistemic: RPS ~0.213;
-        bucket 3, highest epistemic: RPS ~0.191). This is real, reproducible
-        evidence, not sampling noise — see docs/DEBT.md for the certification
-        finding this blocks. `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so this
-        single failing gate keeps the whole method unvalidated regardless of
-        the five gates above that do pass; `MODEL_UNCERTAINTY_UNAVAILABLE`
-        stays unconditionally CRITICAL in `full_analysis.py` until it is
-        resolved. xfail (not skip): this must start failing loudly the moment
-        a future change makes it pass, so nobody has to remember to re-enable it.
+        Measured against the real EPL artifact's own genuine chronological
+        holdout season (375 rows the RandomForest's 300 trees never saw in
+        `.fit()` — see `real_epl_scores`), this does NOT hold for the
+        `ensemble_dispersion` method as implemented (RandomForest
+        bootstrap-tree dispersion): mean RPS is essentially flat-to-improving
+        across the four quartiles as epistemic uncertainty rises (bucket 0,
+        lowest epistemic: RPS ~0.235; bucket 3, highest epistemic: RPS
+        ~0.213) — the reverse of the required direction. This was first
+        measured on the full 2,571-row corpus (85% of which is the model's
+        own in-bag training data) and re-measured here on the clean holdout
+        specifically to rule out in-bag memorization as the cause — both
+        show the same reversal, with the holdout-only gap
+        (~-0.022) and the full-corpus gap (~-0.023) essentially identical, so
+        this is real, reproducible evidence rather than a validation-set
+        artifact. See docs/DEBT.md item 50 for the certification finding this
+        blocks. `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so this single
+        failing gate keeps the whole method unvalidated regardless of the
+        five gates above that do pass; `MODEL_UNCERTAINTY_UNAVAILABLE` stays
+        unconditionally CRITICAL in `full_analysis.py` until it is resolved.
+        xfail (not skip): this must start failing loudly the moment a future
+        change makes it pass, so nobody has to remember to re-enable it.
         """
         gate = UNCERTAINTY_GATES["error_association"]["threshold"]
         n_buckets = gate["buckets"]

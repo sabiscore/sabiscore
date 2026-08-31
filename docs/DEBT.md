@@ -1,62 +1,73 @@
 # SabiScore Debt Ledger
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — but `error_association` fails on real evidence, so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypothesis 2 ruled out), so staking stays blocked
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C
 authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE`.**
 Owner: unassigned. Found 2026-08-31, building the M2 certification milestone
-(ADR 0009).
+(ADR 0009). Updated same day: hypothesis 2 investigated and ruled out.
 
 `src/models/ensemble_uncertainty.py` implements the ADR's `ensemble_dispersion`
 method (BALD decomposition over the shipped `random_forest`'s 300 bootstrap
-trees) and it is real, working code — not a stub. Scored against the full real
-2,571-row EPL corpus with the real shipped `epl_ensemble_v5_phase7.pkl`
-artifact (`tests/unit/test_uncertainty_contract.py::TestRealCorpusValidation`),
-5 of 6 `UNCERTAINTY_GATES` pass: `method_is_authorised`, `sufficient_members`,
-`non_negative`, `determinism`, `independence_from_confidence` (|corr|=0.003),
-`informative_within_confidence_band` (spread_ratio=3.47).
+trees) and it is real, working code — not a stub. Scored against the real
+shipped `epl_ensemble_v5_phase7.pkl` artifact's own genuine chronological
+holdout season (375 rows, none seen by any tree in `.fit()` —
+`tests/unit/test_uncertainty_contract.py::TestRealCorpusValidation`), 5 of 6
+`UNCERTAINTY_GATES` pass: `method_is_authorised`, `sufficient_members`,
+`non_negative`, `determinism`, `independence_from_confidence` (|corr|=0.056),
+`informative_within_confidence_band` (spread_ratio=3.17).
 
 **`error_association` does not.** The gate requires the highest-epistemic
-quartile to show worse mean RPS than the lowest. Measured, it is the reverse,
-monotonically across all four buckets (0.2134 → 0.1905 as epistemic rises —
-see the ADR 0009 addendum for the full table). Confirmed on a second,
-independent member-selection design (3 base learners instead of RF bootstrap
-trees) that shows the *same* reversal, more strongly — ruling out "wrong
-member design" as the explanation. This is a real, reproducible property of
-the current `v5_phase7` EPL artifact on this corpus.
+quartile to show worse mean RPS than the lowest. Measured, it is the reverse:
+gap (highest − lowest bucket RPS) = −0.022, on the clean holdout — see the
+ADR 0009 addendum for the full bucket table.
+
+**Two hypotheses were recorded when this item was first filed; one is now
+closed:**
+
+1. ~~Open~~ **Hypothesis 1 (artifact-inherent) — still open, not investigated
+   further.** Plausible: RPS is a proper scoring rule and may reward the more
+   evenly-spread predictions that correlate with member disagreement over an
+   overconfident wrong call. If so, a future, better-trained generation may
+   simply satisfy the gate without any change to `ensemble_uncertainty.py`.
+2. **Hypothesis 2 (in-bag/out-of-bag scoring bias) — RULED OUT, 2026-08-31.**
+   The original measurement scored the full 2,571-row corpus, 85% of which
+   (2,196 rows) is the RandomForest's own bootstrap training data — in-bag
+   dispersion is a known-unreliable epistemic-uncertainty proxy, and this was
+   flagged as a live confound. Re-measured against the artifact's genuine
+   holdout season alone: the gap is materially unchanged (−0.022 holdout-only
+   vs −0.023 full-corpus). In-bag contamination is not the explanation.
+   Confirmed on a second, independent member-selection design (3 base
+   learners instead of RF bootstrap trees) too, which shows the same
+   reversal even more strongly on the full corpus — ruling out "wrong member
+   design" as well.
 
 `UNCERTAINTY_REQUIRES_ALL_GATES = True`, so the method as a whole is not
 certified. `full_analysis.py::_uncertainty_from_features` returns `None`
 unconditionally — the real computation exists and is tested, but is
 deliberately not wired into the live `MODEL_UNCERTAINTY_UNAVAILABLE` gate.
 
-**Not resolved this session, by design.** Two live hypotheses, neither
-investigated:
-
-1. The reversal is inherent to this specific artifact/corpus (plausible: RPS
-   is a proper scoring rule and may reward the more evenly-spread predictions
-   that correlate with member disagreement over an overconfident wrong call)
-   — in which case a future, better-trained generation may simply satisfy the
-   gate without any change to `ensemble_uncertainty.py`.
-2. It is a fixable property of *this* aggregation (e.g. a different epistemic
-   weighting, or scoring against out-of-fold trees rather than in-sample
-   trees) — in which case the fix belongs in the module, not the policy.
-
 **Do not resolve this by loosening `UNCERTAINTY_GATES.error_association`** —
 that is exactly the "manufacture a pass" the certification directive
-forbids. Investigate the mechanism (hypothesis 1 vs 2) before touching
-anything the gate measures.
+forbids. Hypothesis 1 (whether the reversal is a fixable property of this
+specific model's calibration/sharpness tradeoff, or is simply inherent and
+will resolve itself once a genuinely better-generalizing generation ships) is
+the only remaining open thread, and was not investigated further this session
+— it would require probing calibration/sharpness decomposition or an
+alternative epistemic aggregation, which is real methodology work, not a
+threshold edit.
 
 **Blast radius:** none today — the gate stays exactly as closed as it was
 before this session (unconditionally, via `decompose_measured()`'s permanent
 `torch is None` failure) so no live behavior changed.
-**Cost:** unknown until the mechanism is understood — could be zero (wait for
-a better-trained generation) or a real methodology change.
+**Cost:** unknown until hypothesis 1 is resolved — could be zero (wait for a
+better-trained generation) or real methodology work.
 **Impact:** this is the second of the two critical gates ADR 0009 names as
 required before any stake can be authorized (`MODEL_GENERATION_UNCERTIFIED`,
 tracked separately, is the first). Both must clear before shadow production.
 **Priority:** medium — no deadline, but it is the sole remaining blocker
-specific to the uncertainty gate now that 5/6 of its own validation is done.
+specific to the uncertainty gate now that 5/6 of its own validation is done
+on a methodologically clean (holdout-only) measurement.
 
 ---
 
