@@ -39,6 +39,48 @@ def expected_calibration_error(
     return ece_per_class
 
 
+def expected_brier_score(probabilities: Dict[str, float] | List[float]) -> float:
+    """Expected multiclass Brier score under the model's *own* predictive
+    distribution, for a fixture whose outcome is not yet known.
+
+    A realized Brier score needs ground truth. Before kickoff there is none, so
+    the only defensible quantity is the expectation of the Brier score taken
+    over the model's own distribution:
+
+        E[ sum_c (p_c - 1{y=c})^2 ]  =  1 - sum_c p_c^2
+
+    (the algebra collapses because sum_c p_c = 1). This is a *sharpness*
+    reading — how concentrated the forecast is — not a calibration measurement,
+    and it can never reward or punish the model for being right.
+
+    Convention: SUM over classes, matching ``brier_convention.aggregation`` in
+    ``backend/reports/evaluation/metric-contract.json`` and the sum-form used by
+    ``calibration._compute_brier_multiclass``. Range [0, 1 - 1/C]; for C=3 the
+    maximum is 2/3 at a uniform forecast, and 0 at a point-mass forecast.
+
+    ⚠️ Do NOT compare this against the per-class-mean values reported by
+    ``brier_score_decomposition()['mean']``, ``base_model``, ``ensemble`` or
+    ``enhanced_training``: those divide by the class count, so they are this
+    quantity / C. See the ``brier_convention`` block in the metric contract.
+    """
+    values = (
+        list(probabilities.values())
+        if isinstance(probabilities, dict)
+        else list(probabilities)
+    )
+    if not values:
+        raise ValueError("probabilities must be non-empty")
+    arr = np.asarray(values, dtype=float)
+    if not np.isfinite(arr).all():
+        raise ValueError("probabilities must be finite")
+    if (arr < 0).any() or (arr > 1).any():
+        raise ValueError("probabilities must lie in [0, 1]")
+    total = float(arr.sum())
+    if abs(total - 1.0) > 1e-4:
+        raise ValueError(f"probabilities must sum to 1 (got {total:.6f})")
+    return float(max(0.0, 1.0 - float(np.sum(arr**2))))
+
+
 def ranked_probability_score(y_true_outcome: int, probs: list[float]) -> float:
     """Ranked Probability Score for a 3-outcome match (0=home, 1=draw, 2=away).
 

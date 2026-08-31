@@ -14,9 +14,24 @@
     "ece": "Expected Calibration Error, multiclass. Implementation: metrics.expected_calibration_error(). Mean of per-class ECE."
   },
   "brier_convention": {
-    "aggregation": "mean",
+    "aggregation": "mean_over_samples_sum_over_classes",
     "formula": "mean_over_samples(sum_over_classes((p_c - 1_{y=c})^2))",
-    "note": "MEAN is the authoritative aggregation. Both _compute_brier_multiclass (calibration.py:148) and brier_score_decomposition (metrics.py:52) use MEAN. This resolves the docstring-vs-code discrepancy cited in v2 of the directive."
+    "range": [0, 2],
+    "authoritative_implementation": "calibration._compute_brier_multiclass (calibration.py:148)",
+    "expected_form_implementation": "metrics.expected_brier_score() — pre-kickoff expectation under the model's own distribution, 1 - sum_c(p_c^2); SAME sum-over-classes convention.",
+    "note": "CORRECTED 2026-08-31. The previous note claimed _compute_brier_multiclass and brier_score_decomposition 'both use MEAN' and were therefore consistent. That was FALSE: both take a mean, but over DIFFERENT AXES. _compute_brier_multiclass means over samples of the SUM over classes; brier_score_decomposition means over CLASSES of a per-class one-vs-rest Brier. They differ by exactly the class count — verified numerically at 3.0000x for C=3. Do not compare values across the two conventions.",
+    "per_class_mean_convention": {
+      "formula": "mean_over_classes(mean_over_samples((p_c - 1_{y=c})^2)) == authoritative / C",
+      "range": [0, 0.6667],
+      "implementations": [
+        "metrics.brier_score_decomposition()['mean']['brier_score']",
+        "base_model._calculate_multiclass_brier() (base_model.py:133)",
+        "ensemble.py:231 (brier /= 3)",
+        "enhanced_training.py:314 (brier /= n_classes)"
+      ],
+      "status": "RETAINED, NOT MIGRATED. These four are internally consistent with each other and their stored training reports; no certification gate reads them (no Brier threshold exists in certification_policy.py). Migrating them to the sum convention would rescale every historical training report by 3x for no gate benefit, so it is recorded as an open decision rather than swept silently.",
+      "decision_required": "Whether to migrate the four per-class-mean sites to the authoritative sum convention, accepting the 3x rescale of historical training reports."
+    }
   },
   "probability_requirements": {
     "finite": true,

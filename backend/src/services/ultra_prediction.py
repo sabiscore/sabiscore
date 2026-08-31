@@ -14,6 +14,7 @@ from ..ml_ultra.ultra_predictor import UltraPredictor
 from ..schemas.prediction import MatchPredictionRequest, PredictionResponse
 from ..schemas.value_bet import ValueBetResponse
 from ..core.cache import cache_manager
+from ..models.evaluation.metrics import expected_brier_score
 from ..monitoring.metrics import metrics_collector
 
 logger = logging.getLogger(__name__)
@@ -343,12 +344,15 @@ class UltraPredictionService:
         }
     
     def _calculate_brier_score(self, probabilities: Dict[str, float]) -> float:
-        """Calculate Brier score (calibration metric)"""
-        # Simplified - actual Brier score needs ground truth
-        # This estimates based on probability concentration
-        probs = list(probabilities.values())
-        max_prob = max(probs)
-        return 1 - max_prob  # Lower is better
+        """Delegates to the single canonical implementation.
+
+        Previously returned ``1 - max(p)``, which is not a Brier score under any
+        convention — the original comment ("Simplified - actual Brier score
+        needs ground truth") conceded as much while still publishing the value
+        as ``brier_score``. The honest pre-kickoff quantity is the expectation
+        under the model's own distribution.
+        """
+        return expected_brier_score(probabilities)
     
     def _build_cache_key(self, match_id: str, league: str) -> str:
         """Build cache key for prediction"""

@@ -63,6 +63,9 @@ const BACKEND_EMITTED_CODES: string[] = [
   "elo_league_adjusted",
   "causal_analysis",
   "key_passes_under_pressure_diff",
+  // Observed live 2026-08-31 in advisory_gaps on EPL/SERIE_A/LA_LIGA fixtures;
+  // was the only unmapped code across the 11 the backend actually emitted.
+  "total_goals_expected",
 
   // ── Casing-drift aliases (upcoming_match_service.py uses lowercase) ────────
   // Without these aliases the code falls through to titleCaseCode() and the raw
