@@ -61,6 +61,7 @@ function analysisPayload(options: {
       probabilities_available: available,
       league: "EPL",
       model_version: status === "AVAILABLE" ? "v5_phase7" : "diagnostic",
+      certification_state: status === "AVAILABLE" ? "CERTIFIED" : "UNVERIFIED",
       calibration_method: status === "AVAILABLE" ? "isotonic" : "raw",
       calibration_applied: status === "AVAILABLE",
       overlay_applied: false,
@@ -110,12 +111,11 @@ function analysisPayload(options: {
 
 test.describe("match-analysis decision integrity", () => {
   test("renders real, advisory, baseline, unavailable, critical, and conflicting evidence", async ({ page }) => {
-    const scenarios = [
+    const rawScenarios = [
       {
         id: "real",
         payload: analysisPayload({}),
         decision: "Consider home win",
-        coverage: "0 critical / 0 advisory / 0 conflicts",
       },
       {
         id: "advisory",
@@ -123,7 +123,6 @@ test.describe("match-analysis decision integrity", () => {
           evidence: { critical_gaps: [], advisory_gaps: ["lineup_context"], conflicts: [] },
         }),
         decision: "Consider home win",
-        coverage: "0 critical / 1 advisory / 0 conflicts",
       },
       {
         id: "baseline",
@@ -135,7 +134,6 @@ test.describe("match-analysis decision integrity", () => {
           evidence: { critical_gaps: ["MODEL_PREDICTION_REDUCED_EVIDENCE"], advisory_gaps: [], conflicts: [] },
         }),
         decision: "No bet",
-        coverage: "1 critical / 0 advisory / 0 conflicts",
       },
       {
         id: "unavailable",
@@ -147,7 +145,6 @@ test.describe("match-analysis decision integrity", () => {
           evidence: { critical_gaps: ["MODEL_PREDICTION_UNAVAILABLE"], advisory_gaps: [], conflicts: [] },
         }),
         decision: "No bet",
-        coverage: "1 critical / 0 advisory / 0 conflicts",
       },
       {
         id: "critical",
@@ -157,7 +154,6 @@ test.describe("match-analysis decision integrity", () => {
           evidence: { critical_gaps: ["COHERENT_1X2_MARKET_UNAVAILABLE"], advisory_gaps: [], conflicts: [] },
         }),
         decision: "No bet",
-        coverage: "1 critical / 0 advisory / 0 conflicts",
       },
       {
         id: "conflict",
@@ -167,9 +163,18 @@ test.describe("match-analysis decision integrity", () => {
           evidence: { critical_gaps: [], advisory_gaps: [], conflicts: ["CONFLICTING_MARKET_SNAPSHOTS"] },
         }),
         decision: "No bet",
-        coverage: "0 critical / 0 advisory / 1 conflicts",
       },
     ];
+
+    // Matches the exact template rendered by full-analysis-dashboard.tsx's
+    // Decision region: "Evidence quality: {n} critical gaps · {n} advisory gaps · {n} conflicts".
+    const scenarios = rawScenarios.map((scenario) => {
+      const { critical_gap_count, advisory_gap_count, conflict_count } = scenario.payload.evidence_quality;
+      return {
+        ...scenario,
+        coverageText: `Evidence quality: ${critical_gap_count} critical gaps · ${advisory_gap_count} advisory gaps · ${conflict_count} conflicts`,
+      };
+    });
 
     let activePayload = scenarios[0].payload;
     await page.route("**/api/full-analysis/**", (route) => route.fulfill({
@@ -181,9 +186,9 @@ test.describe("match-analysis decision integrity", () => {
     for (const scenario of scenarios) {
       activePayload = scenario.payload;
       await page.goto(`/match/${scenario.id}?league=EPL`);
-      const summary = page.getByLabel("Actionability summary");
-      await expect(summary.getByText(scenario.decision, { exact: true })).toBeVisible();
-      await expect(summary.getByText(scenario.coverage, { exact: true })).toBeVisible();
+      const decision = page.getByRole("region", { name: "Decision" });
+      await expect(decision.getByText(scenario.decision, { exact: true })).toBeVisible();
+      await expect(decision.getByText(scenario.coverageText, { exact: true })).toBeVisible();
       if (scenario.decision === "No bet") {
         await expect(page.getByText("Top outcome probability").first()).toBeVisible();
         await expect(page.getByRole("img", { name: "No bet" })).toBeVisible();

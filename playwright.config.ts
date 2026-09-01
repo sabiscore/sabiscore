@@ -6,6 +6,17 @@ import { defineConfig, devices } from '@playwright/test';
 // Local development keeps Playwright's normal bundled Chromium semantics.
 const ciChromeChannel = process.env.CI ? { channel: 'chrome' as const } : {};
 
+const acceptedConsent = JSON.stringify({
+  necessary: true,
+  analytics: true,
+  marketing: false,
+  personalization: true,
+  ageVerified: true,
+  responsibleGambling: true,
+  timestamp: '2026-09-01T00:00:00.000Z',
+  version: '1.0.0',
+});
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
@@ -14,6 +25,18 @@ export default defineConfig({
   },
   use: {
     baseURL: 'http://localhost:3000',
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: 'http://localhost:3000',
+          localStorage: [
+            { name: 'sabiscore_age_gate_accepted_v1', value: 'true' },
+            { name: 'sabiscore_consent_v1', value: acceptedConsent },
+          ],
+        },
+      ],
+    },
     trace: 'on-first-retry',
     // Playwright video recording requires its private FFmpeg bundle even when
     // the browser itself comes from the system Chrome channel. Keep CI free of

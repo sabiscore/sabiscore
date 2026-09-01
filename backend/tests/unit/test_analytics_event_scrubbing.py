@@ -50,6 +50,7 @@ def test_scrub_pii_and_secrets_removes_sensitive_data() -> None:
 @pytest.mark.asyncio
 async def test_analytics_ingestion_service_batch() -> None:
     db = AsyncMock()
+    db.add_all = MagicMock()
 
     events = [
         {

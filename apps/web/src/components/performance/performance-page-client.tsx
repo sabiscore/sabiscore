@@ -19,6 +19,19 @@ const RollingAccuracyChart = dynamic(
     ),
   },
 );
+const CalibrationCurveChart = dynamic(
+  () => import("@/components/CalibrationCurveChart").then((m) => m.CalibrationCurveChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-80 animate-pulse rounded-2xl bg-slate-800/50"
+        role="status"
+        aria-label="Loading calibration curve"
+      />
+    ),
+  },
+);
 import { ValueBetScanner } from "@/components/value-bet-scanner";
 import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 import { canonicalLeagueId } from "@/lib/league";
@@ -327,6 +340,10 @@ export function PerformancePageClient() {
       <RollingAccuracyChart
         league={canonicalLeagueId(selectedLeague) ?? ""}
         window={selectedWindow}
+      />
+
+      <CalibrationCurveChart
+        league={canonicalLeagueId(selectedLeague) ?? ""}
       />
 
       <ValueBetScanner days={7} />

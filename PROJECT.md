@@ -47,9 +47,9 @@ SabiScore is an evidence-backed football intelligence and predictive modeling pl
 | 6 | Public Trust & Interactive Calibration | Reliability diagrams / calibration curves with Künsch bootstrap CIs, Murphy Brier decomposition, walk-forward methodology on `/performance` & `/docs` | M2 | R2 |
 | 7 | Developer Platform & Entitlements | API key generation (SHA-256 hashed), Redis sliding-window rate limiting (FREE/PRO), usage metering, strictly NO billing/checkout UX | M2 | R4 |
 | 8 | First-Party Privacy-Preserving Analytics | Strictly typed event catalog, client batching tracker, backend PII and secret sanitization engine | M2 | R2 |
-| 9 | Timezone-Aware Match Notifications | Opt-in kickoff reminders, significant probability delta alerts, Celery background worker, in-app notification center | M3 | R3 |
-| 10 | Dynamic Social Share & Viral Loop | `next/og` OpenGraph dynamic image cards for matches/teams, Web Share API, formatted clipboard analysis export | M3 | R3 |
-| 11 | Programmatic SEO & Structured Data | Dynamic `sitemap.ts` pulling live fixtures/teams/competitions, Schema.org JSON-LD (`SportsEvent`, `SportsTeam`, `BreadcrumbList`) | M3 | R3 |
+| 9 | Timezone-Aware Match Notifications | Opt-in subscription and preference APIs plus an in-app notification center; scheduled kickoff/probability delivery remains operationally unwired | M3 | R3 |
+| 10 | Dynamic Social Share & Viral Loop | Evidence-safe `next/og` match cards, Web Share API, and formatted clipboard analysis export | M3 | R3 |
+| 11 | Programmatic SEO & Structured Data | Core/team/league/sample-fixture sitemap entries plus Schema.org JSON-LD (`SportsEvent`, `SportsTeam`, `BreadcrumbList`); live fixture discovery remains pending | M3 | R3 |
 | 12 | Anti-Casino Polish & WCAG AA A11y | Pure analytical terminology (`Market Discrepancy Spotlight`), full WCAG AA accessibility compliance (Radix Tooltip keyboard triggers, visible focus, semantic landmarks) | M3 | R3, R5 |
 | 13 | Fail-Closed UX & Empty State Guards | Comprehensive handling of unverified/missing evidence across all new pages, zero synthetic predictions, responsible gambling language | M3 | R5 |
 | 14 | Opaque-Box E2E Test Suite (Tiers 1-4) | Comprehensive requirement-driven test suite covering all features in isolation, boundaries, pairwise combinations, and real-world user journeys | E2E-Track | Acceptance Criteria |
@@ -60,9 +60,9 @@ SabiScore is an evidence-backed football intelligence and predictive modeling pl
 |---|------|-------|-------------|--------|
 | E2E | E2E Testing Suite | Requirements-driven test runner, harness, and test suites across Tiers 1-4 | none | DONE |
 | M1 | Backend Schema, Ingestion & ML Foundation | Alembic migration 0011, IngestionCoordinator, candidate model shadow promotion tools, auth/dev/analytics backend services | none | DONE |
-| M2 | Public Trust, Identity & Developer Platform Full-Stack | Calibration curve UI/API, httpOnly cookie auth flow, anonymous merging, /dashboard, /developer portal, typed analytics | M1 | IN_PROGRESS |
-| M3 | Retention, Sharing, Programmatic SEO & A11y Polish | Notifications (in-app + workers), dynamic OG image cards, dynamic sitemaps, JSON-LD, anti-casino wording, WCAG AA compliance | M1, M2 | PLANNED |
-| M4 | Final Milestone: 100% E2E Pass & Adversarial Hardening | Phase 1: 100% pass on Tiers 1-4 E2E suite; Phase 2: Tier 5 adversarial edge-case stress hardening | E2E, M1, M2, M3 | PLANNED |
+| M2 | Public Trust, Identity & Developer Platform Full-Stack | Calibration curve UI/API, httpOnly cookie auth flow, anonymous merging, `/dashboard`, `/developer`, typed analytics | M1 | IMPLEMENTED; RELEASE VALIDATION IN PROGRESS |
+| M3 | Retention, Sharing, Programmatic SEO & A11y Polish | Notification CRUD/in-app UI, evidence-safe OG cards, sitemap baseline, JSON-LD, responsible copy, accessibility | M1, M2 | PARTIAL; DELIVERY WORKER AND LIVE SITEMAP DATA PENDING |
+| M4 | Final Milestone: E2E & Adversarial Hardening | Tier 1-4 browser execution plus adversarial security and failure-mode coverage | E2E, M1, M2, M3 | IN PROGRESS; SUITES AUTHORED, FULL RUN PENDING |
 
 ## Interface Contracts
 
@@ -123,11 +123,18 @@ SabiScore is an evidence-backed football intelligence and predictive modeling pl
 
 ### Notifications & Reminders Contract (R3)
 - Endpoints:
-  - `POST /api/v1/notifications/subscribe` (match reminder / odds swing)
-  - `GET /api/v1/notifications` (in-app notifications)
-  - `PATCH /api/v1/notifications/{id}/read`
+  - `POST /api/v1/notifications/subscriptions/matches` (match reminder / probability swing)
+  - `DELETE /api/v1/notifications/subscriptions/matches/{match_id}`
+  - `GET /api/v1/notifications/in-app` (in-app notifications)
+  - `POST /api/v1/notifications/in-app/{id}/read`
+  - `POST /api/v1/notifications/in-app/read-all`
   - `GET /api/v1/notifications/preferences`
   - `PUT /api/v1/notifications/preferences` (timezone, delivery channels, thresholds)
+
+These endpoints persist preferences, subscriptions, and in-app read state. No
+production scheduler currently invokes the notification service to generate
+kickoff or probability-swing deliveries, so delivery must not be described as
+operational until a worker is wired, tested, and observed.
 
 ## Code Layout
 - `backend/alembic/versions/`: Alembic schema migrations.

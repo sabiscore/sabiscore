@@ -972,45 +972,6 @@ export interface TeamIntelligenceResponse {
   queried_at: string;
 }
 
-/** Fetch rolling form, H2H, and upcoming fixtures for a team by slug. */
-export async function getTeamIntelligence(
-  slug: string,
-  options: { history_matches?: number; upcoming_days?: number } = {},
-): Promise<TeamIntelligenceResponse> {
-  const qs = new URLSearchParams();
-  if (options.history_matches !== undefined) qs.set("history_matches", String(options.history_matches));
-  if (options.upcoming_days !== undefined) qs.set("upcoming_days", String(options.upcoming_days));
-  const url = `/api/teams/${encodeURIComponent(slug)}/intelligence${qs.size ? `?${qs}` : ""}`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8_000);
-
-  try {
-    const response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      next: { revalidate: 300 },
-      signal: controller.signal,
-    } as RequestInit);
-
-    if (!response.ok) {
-      let detail = `HTTP ${response.status}`;
-      try {
-        const err = await response.json();
-        detail = err.detail || err.error || detail;
-      } catch { /* ignore */ }
-      throw new APIError(detail, response.status, "TEAM_INTELLIGENCE_ERROR");
-    }
-
-    return (await response.json()) as TeamIntelligenceResponse;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new APIError("Team intelligence request timed out (8s)", 408, "TEAM_INTELLIGENCE_TIMEOUT");
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 export function parseApiError(error: unknown): { message: string; code?: string } {
   if (error instanceof APIError) {
     return { message: error.message, code: error.code };

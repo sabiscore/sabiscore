@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from src.api.main import app
 from src.core.database import UserAccount
-from src.core.security import create_access_token, get_password_hash
-from src.db.models import UserFavorite, UserPreference, UserSavedMatch
+from src.core.security import get_password_hash
+from src.db.models import UserFavorite, UserSavedMatch
 from src.services.auth_service import UserStateService
 
 
 @pytest.mark.asyncio
 async def test_user_state_service_favorites_crud() -> None:
     db = AsyncMock()
+    db.add = MagicMock()
 
     # Mock empty select
     scalar_mock = MagicMock()
@@ -53,6 +53,7 @@ async def test_user_state_service_favorites_crud() -> None:
 @pytest.mark.asyncio
 async def test_user_state_service_saved_matches_crud() -> None:
     db = AsyncMock()
+    db.add = MagicMock()
 
     # Mock empty select
     scalar_mock = MagicMock()

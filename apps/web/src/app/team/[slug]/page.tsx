@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getTeamIntelligence, APIError, TeamIntelligenceResponse, TeamFormVerdict } from "@/lib/api";
+import { APIError, TeamIntelligenceResponse, TeamFormVerdict } from "@/lib/api";
+import { getTeamIntelligence } from "@/lib/team-intelligence-server";
 import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
+import { JsonLd } from "@/components/JsonLd";
+import { generateSportsTeamJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
+import { FavoriteTeamButton } from "@/components/team/favorite-team-button";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -99,12 +103,25 @@ export default async function TeamIntelligencePage({ params }: PageProps) {
     throw err;
   }
 
+  const teamJsonLd = generateSportsTeamJsonLd({
+    teamName: data.team_name,
+    slug,
+    league: data.league || "Football",
+  });
+
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd([
+    { name: "Home", url: "/" },
+    { name: "Teams", url: "/team" },
+    { name: data.team_name, url: `/team/${encodeURIComponent(slug)}` },
+  ]);
+
   return (
     // No horizontal padding here, and <div> not <main>: the root <main>
     // (app/layout.tsx) already supplies px-4 py-5 sm:px-6 lg:px-8 and is the
     // page's sole <main> landmark — same container-parity convention as
     // /performance and /monitoring.
     <div className="mx-auto max-w-3xl space-y-10">
+      <JsonLd data={[teamJsonLd, breadcrumbJsonLd]} />
       {/* Header */}
       <section aria-label="Team header" className="space-y-3">
         <Link
@@ -114,14 +131,17 @@ export default async function TeamIntelligencePage({ params }: PageProps) {
         >
           ← Home
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-zinc-100">{data.team_name}</h1>
-          {data.league && (
-            <span className="rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
-              {data.league}
-            </span>
-          )}
-          <VerdictBadge verdict={data.form_verdict} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-zinc-100">{data.team_name}</h1>
+            {data.league && (
+              <span className="rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
+                {data.league}
+              </span>
+            )}
+            <VerdictBadge verdict={data.form_verdict} />
+          </div>
+          <FavoriteTeamButton slug={slug} teamName={data.team_name} />
         </div>
       </section>
 

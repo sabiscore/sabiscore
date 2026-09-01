@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 
-from src.db.models import UserNotificationLog, UserNotificationSubscription, UserPreference
+from src.db.models import UserPreference
 from src.services.notification_service import NotificationService
 
 
@@ -31,6 +31,7 @@ async def test_notification_preferences_and_timezone_update() -> None:
 @pytest.mark.asyncio
 async def test_notification_subscription_and_in_app_logs() -> None:
     db = AsyncMock()
+    db.add = MagicMock()
     db.execute.return_value = MagicMock(scalar_one_or_none=lambda: None)
 
     # Subscribe

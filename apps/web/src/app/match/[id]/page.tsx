@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { FullAnalysisSection } from "@/components/full-analysis-section";
 import { Phase8AnalyticsSection } from "@/components/phase8-analytics-section";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
+import { MatchHeaderActions } from "@/components/match/match-header-actions";
+import { JsonLd } from "@/components/JsonLd";
+import { generateSportsEventJsonLd, generateBreadcrumbJsonLd } from "@/lib/seo";
 import { canonicalLeagueId } from "@/lib/league";
 
 export const dynamic = "force-dynamic";
@@ -63,9 +66,26 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
   const rawId = decodeURIComponent(id);
   const matchup = matchupLabelFor(id, home, away);
   const isVerifiedFixturePath = Boolean(home && away);
+  const homeTeamName = home || rawId.split(" vs ")[0] || "Home";
+  const awayTeamName = away || rawId.split(" vs ")[1] || "Away";
+
+  const eventJsonLd = generateSportsEventJsonLd({
+    matchId: rawId,
+    homeTeam: homeTeamName,
+    awayTeam: awayTeamName,
+    startDate: new Date().toISOString(),
+    league,
+  });
+
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd([
+    { name: "Home", url: "/" },
+    { name: "Matches", url: "/match" },
+    { name: matchup, url: `/match/${encodeURIComponent(rawId)}` },
+  ]);
 
   return (
     <article className="mx-auto max-w-6xl space-y-4 sm:space-y-5" aria-labelledby="match-analysis-title">
+      <JsonLd data={[eventJsonLd, breadcrumbJsonLd]} />
       <header className="flex flex-col gap-2.5 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">
@@ -79,15 +99,23 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
             Odds-derived edge, EV, CLV, and stake context require verified market evidence and remain fail-closed.
           </p>
         </div>
-        <span
-          className={`inline-flex min-h-10 items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${
-            isVerifiedFixturePath
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-              : "border-amber-500/40 bg-amber-500/10 text-amber-200"
-          }`}
-        >
-          {isVerifiedFixturePath ? "Verified fixture path" : "Hypothetical — non-executable"}
-        </span>
+        <div className="flex flex-col sm:items-end gap-2">
+          <span
+            className={`inline-flex min-h-8 items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+              isVerifiedFixturePath
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+            }`}
+          >
+            {isVerifiedFixturePath ? "Verified fixture path" : "Hypothetical — non-executable"}
+          </span>
+          <MatchHeaderActions
+            matchId={rawId}
+            homeTeam={homeTeamName}
+            awayTeam={awayTeamName}
+            league={league}
+          />
+        </div>
       </header>
       <ResearchModeBanner />
       <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
