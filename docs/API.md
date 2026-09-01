@@ -1,39 +1,58 @@
-# SabiScore API Documentation
+# SabiScore API
 
-## Overview
+Last verified against the repository: 2026-09-01.
 
-The SabiScore API provides RESTful endpoints for football match analysis and betting insights. Built with FastAPI, it offers automatic OpenAPI documentation and comprehensive error handling.
+The FastAPI application at `backend/src/api/main.py` is the production authority.
+Its generated OpenAPI document is the field-level contract; this guide describes
+the supported route families and the safety rules clients must preserve.
 
-**Base URL**: `http://localhost:8000/api/v1`
+Local base URL:
 
-## Authentication
+```text
+http://localhost:8000/api/v1
+```
 
-Currently, the API is open for development. In production, implement JWT-based authentication.
+The committed contract is generated and checked with
+`backend/scripts/verify_openapi.py`.
 
-## Endpoints
+## Authentication and identity
 
-### Provider Gateway
+SabiScore supports authenticated users and anonymous browser state. The Next.js
+proxy stores session and anonymous identifiers in `HttpOnly`, `Secure`,
+`SameSite=Lax` cookies; browser code must not place credentials in local storage.
 
-Provider routes expose redacted health, capability, and quota state for the backend-only provider gateway.
+```text
+POST /auth/register
+POST /auth/login
+POST /auth/cookie-login
+POST /auth/logout
+GET  /auth/me
+POST /auth/token
+
+GET    /users/favorites
+POST   /users/favorites
+DELETE /users/favorites/{favorite_id}
+GET    /users/saved-matches
+POST   /users/saved-matches
+DELETE /users/saved-matches/{match_id}
+GET    /users/preferences
+PUT    /users/preferences
+POST   /users/merge-anonymous
+```
+
+Registration and login attempts use a dedicated bounded rate limit. Developer
+API quotas are separate; there is no single global rate limit for every route.
+
+## Provider and evidence routes
 
 ```text
 GET /providers
 GET /providers/health
+GET /providers/evidence
 GET /providers/capabilities
 GET /providers/quota
-```
 
-Optional query parameter:
-
-- `provider`: provider id such as `espn`, `football_data_org`, `api_football`, `sportmonks`, or `the_odds_api`.
-
-Providers return standard envelopes with `status`, `trust_tier`, `warnings`, `quota`, and acquired timestamps. ESPN is keyless and supplementary only.
-
-### Fixture Intelligence
-
-```text
 GET  /fixtures/upcoming
-GET  /fixtures/{fixture_id}
 GET  /fixtures/{fixture_id}/evidence
 POST /fixtures/{fixture_id}/refresh
 GET  /fixtures/{fixture_id}/odds-snapshots
@@ -41,392 +60,159 @@ POST /fixtures/{fixture_id}/odds-snapshot
 POST /fixtures/{fixture_id}/analyze
 ```
 
-`/odds-snapshots` exposes legacy one-bookmaker 1X2 references as
-`RESEARCH_ONLY` and `executable=false`. A user-confirmed manual snapshot is
-`HYPOTHETICAL_NON_EXECUTABLE`: it does not establish provider provenance, enter
-market-drift features or CLV, enable value analysis, or permit a stake. Canonical
-market evidence is captured by the backend provider lifecycle into `OddsHistory`
-and `MarketSnapshot`.
+Provider responses carry redacted state, trust tier, warnings, quota, and
+acquisition timestamps. ESPN is keyless and supplementary; it cannot establish
+executable market, lineup, injury, or model evidence by itself.
 
-The legacy `/odds` namespace is retained for compatibility as a deprecated
-research surface. Its responses include `evidence_state=RESEARCH_ONLY` and
-`executable=false`; rows written there have no verified provider provenance.
+Manual and legacy odds routes are research-only. A coherent executable 1X2
+market must come from one provider event and one bookmaker snapshot. Never merge
+home, draw, and away prices across books into a synthetic market.
 
-### Upcoming Discovery
+## Match discovery and analysis
 
-**GET** `/upcoming/matches`
-
-The response includes `next_season_start` and the additive nullable boolean
-`next_season_start_estimated`. When the flag is `true`, clients must describe the
-date as an estimate and must not present an exact countdown. Fail-closed proxy
-responses carry `next_season_start_estimated: null`. The field does not change
-fixture identity, probability, verdict, or staking semantics.
-
-### Health Check
-
-**GET** `/health`
-
-Basic health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "database": true,
-  "models": true,
-  "cache": true
-}
+```text
+GET  /matches/upcoming
+GET  /matches/search
+GET  /matches/{match_id}
+GET  /matches/league/{league_name}
+GET  /upcoming/matches
+GET  /upcoming/all
+GET  /matches/upcoming/{match_id}/full-analysis
+GET  /matches/{match_id}/advanced-insights
+POST /insights
+POST /core-engine/analyze
+POST /betting-intelligence/analyze
 ```
 
-### Match Search
+Full analysis is the consumer product authority. Missing identity, evidence,
+uncertainty, coherent odds, model metadata, or certification returns an explicit
+reduced/unavailable state with zero public stake. It never substitutes a neutral
+probability and presents it as a measured forecast.
 
-**GET** `/matches/search`
+Caller-supplied probabilities are external input, not certified model output.
+They remain non-executable unless the backend independently satisfies every
+identity, evidence, model, uncertainty, league-policy, and staking gate.
 
-Search for matches and teams.
+Supported competition identifiers are:
 
-**Query Parameters:**
-- `q` (string, required): Search query
-- `league` (string, optional): League filter
-
-**Response:**
-```json
-[
-  {
-    "id": "1",
-    "home_team": "Manchester City",
-    "away_team": "Liverpool",
-    "league": "EPL",
-    "match_date": "2024-10-26T15:00:00Z",
-    "venue": "Etihad Stadium"
-  }
-]
+```text
+EPL
+LA_LIGA
+BUNDESLIGA
+SERIE_A
+LIGUE_1
+EREDIVISIE
+UCL
 ```
 
-### Generate Insights
+UCL cannot reach `HIGH_CONVICTION`. `SPECULATIVE` is watchlist-only. Only
+critical gaps and conflicts force `PARTIAL`; advisory gaps reduce confidence but
+do not independently block an otherwise valid analysis.
 
-**POST** `/insights`
+Public stake sizing is Quarter-Kelly and remains bounded by the applicable
+league policy and hard cap. Do not infer a stake from a probability response in
+client code.
 
-Generate comprehensive betting insights for a match.
+## Model performance and provenance
 
-**Request Body:**
-```json
-{
-  "matchup": "Manchester City vs Liverpool",
-  "league": "EPL"
-}
+```text
+GET /models/status
+GET /model-performance
+GET /model-performance/summary
+GET /model-performance/calibration
+GET /model-performance/calibration-curve
+GET /calibration-stats
+GET /explain/{match_id}
+GET /{match_id}/uncertainty
 ```
 
-**Response:**
-```json
-{
-  "matchup": "Manchester City vs Liverpool",
-  "league": "EPL",
-  "predictions": {
-    "home_win_prob": 0.65,
-    "draw_prob": 0.20,
-    "away_win_prob": 0.15,
-    "prediction": "home_win",
-    "confidence": 78.5
-  },
-  "xg_analysis": {
-    "home_xg": 2.1,
-    "away_xg": 1.3,
-    "total_xg": 3.4,
-    "xg_difference": 0.8
-  },
-  "value_analysis": [
-    {
-      "bet_type": "home_win",
-      "market_odds": 2.10,
-      "expected_odds": 1.54,
-      "expected_value": 0.12,
-      "confidence": 78.5,
-      "recommendation": "Consider"
-    }
-  ],
-  "monte_carlo": {
-    "simulations_run": 10000,
-    "home_win_prob": 0.652,
-    "draw_prob": 0.198,
-    "away_win_prob": 0.150
-  },
-  "scenarios": [
-    {
-      "name": "Most Likely",
-      "probability": 0.65,
-      "home_score": 2,
-      "away_score": 1,
-      "result": "home_win"
-    }
-  ],
-  "explanation": {
-    "feature_importance": {
-      "home_attack_strength": 0.15,
-      "away_defense_strength": 0.12,
-      "home_win_rate": 0.10
-    }
-  },
-  "risk_assessment": {
-    "risk_level": "low",
-    "confidence_score": 78.5,
-    "value_available": true,
-    "recommendation": "Proceed"
-  },
-  "narrative": "Our model predicts Home Win with 79% confidence...",
-  "generated_at": "2024-10-25T20:00:00.000Z"
-}
+`/models/status` exposes internal artifact provenance for developer/admin use.
+Raw generation names, hashes, feature-schema identifiers, served-head names, and
+promotion states must not be rendered directly on consumer surfaces. The web
+application maps them through `apps/web/src/lib/model-identity.ts`.
+
+Performance routes derive metrics from settled predictions and return explicit
+insufficient-data states below their configured sample floors. They do not fill
+missing calibration, RPS, Brier, CLV, or accuracy values with demonstration
+numbers.
+
+## Personalization and notifications
+
+```text
+GET    /notifications/preferences
+PUT    /notifications/preferences
+POST   /notifications/subscriptions/matches
+DELETE /notifications/subscriptions/matches/{match_id}
+GET    /notifications/in-app
+POST   /notifications/in-app/{notification_id}/read
+POST   /notifications/in-app/read-all
 ```
 
-### Core Engine Analyze
+Notification preferences accept IANA timezone names. Match subscriptions support
+kickoff reminders and probability-swing alerts. In-app notification reads are
+scoped to the authenticated user or anonymous session.
 
-**POST** `/core-engine/analyze`
+## First-party analytics
 
-Runs the deterministic SabiScore Core Engine v2.1 betting-decision layer over one or more verified pre-match input envelopes. This endpoint does not fetch live data, infer missing odds, inject league averages, or reuse legacy value-bet fallbacks. Inputs are evaluated independently, then actionable outputs are ranked into `top_opportunities`.
-
-Use this endpoint when the caller already has:
-
-- calibrated 1X2 model probabilities;
-- one unified 1X2 market price matrix from a single bookmaker;
-- freshness timestamps and source-status flags;
-- team-strength and availability signals.
-
-**Request Body (abridged):**
-```json
-{
-  "matches": [
-    {
-      "match_id": "epl-2026-001",
-      "home_team": "Arsenal",
-      "away_team": "Chelsea",
-      "competition": "EPL",
-      "kickoff_utc": "2026-08-15T15:00:00Z",
-      "model": {
-        "home_probability": 0.55,
-        "draw_probability": 0.25,
-        "away_probability": 0.20,
-        "model_version": "core-v1",
-        "calibration_method": "isotonic",
-        "calibration_validated": true,
-        "epistemic_uncertainty": 0.05,
-        "aleatoric_uncertainty": 0.12,
-        "confidence_tier": "OK"
-      },
-      "market": {
-        "bookmaker": "ExampleBook",
-        "market_type": "1X2",
-        "home_odds": 2.1,
-        "draw_odds": 3.4,
-        "away_odds": 4.5,
-        "captured_at": "2026-08-15T13:45:00Z"
-      },
-      "signals": {
-        "lineup_status": "CONFIRMED",
-        "sharp_market_signal": "CONFIRMING",
-        "confirmed_absences": []
-      },
-      "freshness": {
-        "model_features_seconds": 300,
-        "market_seconds": 120,
-        "injury_news_seconds": 400,
-        "lineup_seconds": 180
-      },
-      "source_status": {
-        "model": "VERIFIED",
-        "market": "VERIFIED",
-        "team_metrics": "VERIFIED",
-        "availability": "VERIFIED"
-      }
-    }
-  ]
-}
+```text
+POST /analytics/events
 ```
 
-**Response (abridged):**
-```json
-{
-  "engine_version": "2.1.0-prod",
-  "generated_at": "2026-06-25T18:00:00Z",
-  "top_opportunities": ["epl-2026-001"],
-  "matches": [
-    {
-      "match_id": "epl-2026-001",
-      "match_identifier": "Arsenal vs Chelsea",
-      "verdict": "ACTIONABLE",
-      "best_market": "HOME_ML",
-      "market_odds": 2.1,
-      "fair_market_probability": 0.43,
-      "edge": 0.12,
-      "expected_value": 0.155,
-      "stake": "1u",
-      "stake_fraction": 0.019375,
-      "data_gaps": [],
-      "calculation_audit": {
-        "bookmaker": "ExampleBook",
-        "market_overround": 1.06,
-        "calibration_method": "isotonic",
-        "model_version": "core-v1",
-        "kelly_fraction": 0.125,
-        "kelly_cap": 0.025
-      }
-    }
-  ]
-}
+The endpoint accepts a bounded batch from the typed web analytics client and
+returns `202 Accepted`. The backend recursively removes credential and PII-like
+fields before persistence. Analytics data is never a model input or evidence
+source.
+
+## Developer platform
+
+```text
+POST   /developer/keys
+GET    /developer/keys
+DELETE /developer/keys/{key_id}
+GET    /developer/usage
 ```
 
-**Verdicts:**
+Raw keys use the `sbk_live_` prefix, are returned only at creation, and are stored
+as SHA-256 hashes. `GET /developer/usage` requires `X-API-Key` and reports the
+key's current limits and counters. Current entitlement defaults are:
 
-- `PARTIAL`: critical data is missing, stale, conflicting, or mathematically invalid. Value fields are `null` and stake is `pass`.
-- `NO_BET`: data is valid but the best market has non-positive edge or EV.
-- `HOLD`: positive value exists but gating restrictions force inaction.
-- `SPECULATIVE`: positive EV exists below the actionable edge threshold with confirming signals; it is watchlist-only, is excluded from `top_opportunities`, and always exposes zero public stake.
-- `ACTIONABLE`: EV is positive, edge clears 4.2 percentage points, and model/market gates pass.
-- `HIGH_CONVICTION`: action criteria plus very low epistemic uncertainty and confirmed lineup; UCL fixtures are excluded.
+| Tier | Per minute | Per day |
+| --- | ---: | ---: |
+| `FREE` | 10 | 100 |
+| `PRO` | 60 | 5,000 |
 
-Full contract and implementation notes: [`docs/CORE_ENGINE.md`](./CORE_ENGINE.md).
+These are technical entitlement tiers only. The product has no billing,
+checkout, or payment API.
 
-### Model Status
+## Health and operations
 
-**GET** `/models/status`
+Health routes are intentionally split by purpose:
 
-Reports the active generation's artifact facts. Every field is read from the
-hash-verified manifest; nothing is inferred from infrastructure health.
-
-**Response** (shape captured live 2026-08-30, one league shown):
-```json
-{
-  "active_version": "v5_phase7",
-  "generation": "v5_phase7-20260808",
-  "generation_hash": "6bab9609e900c253…",
-  "certification_state": "UNVERIFIED",
-  "promotion_state": "ACTIVE_FAIL_CLOSED",
-  "validation_status": "UNVERIFIED",
-  "manifest_valid": true,
-  "models_loaded": true,
-  "stake_permitted": false,
-  "models": {
-    "epl": {
-      "feature_schema_version": "phase7_68",
-      "feature_count": 68,
-      "served_head": "SoftmaxMetaModel",
-      "artifact": "epl_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "9928f9f8307e260f…",
-      "required": true,
-      "loaded": true
-    }
-  }
-}
+```text
+GET /health
+GET /health/live
+GET /health/ready
+GET /metrics
 ```
 
-Six league artifacts ship in this generation — `epl`, `la_liga`, `bundesliga`,
-`serie_a`, `ligue_1` (all `required: true`) and `eredivisie`
-(`required: false`). **There is no UCL model**; UCL fixtures are capped at
-`ACTIONABLE` and never reach `HIGH_CONVICTION`.
+Liveness answers whether the process is serving. Readiness separately reports
+database, migration, cache, model, Elo, and prediction-capability state. A
+healthy process does not certify a prediction or authorize staking.
 
-> ⚠️ This response carries internal provenance. `active_version`,
-> `generation`, `generation_hash`, `feature_schema_version`, `served_head`,
-> `promotion_state` and the artifact hashes are **developer/admin diagnostics
-> only** and must not be rendered on a consumer surface — map them through
-> `apps/web/src/lib/model-identity.ts` first. This is machine-enforced by
-> `model-identity-contract.test.ts`.
+## Errors and cache policy
 
-No aggregate accuracy is published here. Model quality is reported separately
-by `GET /model-performance`, computed from settled predictions, and is
-`503 bet_history_aggregation_not_yet_integrated` until the sample floor is met.
+FastAPI validation errors use the framework's structured `detail` response.
+Domain endpoints may add stable error codes such as `INSUFFICIENT_EVIDENCE`,
+`FIXTURE_IDENTITY_REQUIRED`, or `SERVICE_UNAVAILABLE`. Clients must branch on
+HTTP status and machine-readable code where present, not on human prose.
 
-## Error Handling
+Evidence and decision endpoints are served with `Cache-Control: no-store` through
+the Next.js proxy. Public metadata and season-status routes may use bounded cache
+policies when their route implementation declares one.
 
-All endpoints return consistent error responses:
+## Deprecated compatibility surface
 
-```json
-{
-  "detail": "Error description",
-  "error_code": "VALIDATION_ERROR"
-}
-```
-
-### Common Error Codes
-
-- `VALIDATION_ERROR`: Invalid request data
-- `NOT_FOUND`: Resource not found
-- `SERVICE_UNAVAILABLE`: Backend service error
-- `RATE_LIMITED`: Too many requests
-
-## Rate Limiting
-
-- **60 requests per minute** per IP address
-- Applied to all endpoints
-- Returns HTTP 429 when exceeded
-
-## Data Models
-
-### Matchup
-String format: `"Home Team vs Away Team"`
-
-### League Codes
-- `EPL`: Premier League
-- `LA_LIGA`: La Liga
-- `BUNDESLIGA`: Bundesliga
-- `SERIE_A`: Serie A
-- `LIGUE_1`: Ligue 1
-- `EREDIVISIE`: Eredivisie
-- `UCL`: UEFA Champions League
-
-### Bet Types
-- `home_win`: Home team to win
-- `draw`: Match to end in draw
-- `away_win`: Away team to win
-- `over_under`: Over/under goals line
-- `btts`: Both teams to score
-
-## WebSocket Support
-
-Real-time updates are planned for future implementation using WebSockets for live match data.
-
-## SDKs and Libraries
-
-### JavaScript Client
-
-```javascript
-import APIClient from './api-client.js';
-
-const api = new APIClient();
-const insights = await api.generateInsights("Man City vs Liverpool", "EPL");
-```
-
-### Python Client
-
-```python
-import requests
-
-response = requests.post("http://localhost:8000/api/v1/insights",
-    json={"matchup": "Man City vs Liverpool", "league": "EPL"}
-)
-insights = response.json()
-```
-
-## Versioning
-
-API versioning follows semantic versioning:
-- `/api/v1/` - Current stable version
-- Breaking changes will increment the major version
-
-## Monitoring
-
-### Health Checks
-- `/health`: Basic service health
-- `/metrics`: Prometheus metrics (planned)
-
-### Logging
-All requests are logged with timing and error information.
-
-## Security
-
-### Headers
-All responses include security headers:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `X-XSS-Protection: 1; mode=block`
-- `Strict-Transport-Security: max-age=31536000`
-
-### CORS
-Configured for frontend domain access with credentials support.
+The `/odds` namespace and selected legacy prediction/insights routes remain for
+compatibility and research. Their presence does not make them production betting
+authority. New clients should use fixture evidence, full analysis, model status,
+and model-performance routes.

@@ -6,6 +6,8 @@ import {
   BarChart3,
   BookOpen,
   CalendarClock,
+  Code,
+  LayoutDashboard,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -22,6 +24,8 @@ import { MobileNav } from "../components/mobile-nav";
 import { PlatformHealthPills } from "../components/platform-health-pills";
 import { MobilePlatformSummary } from "../components/mobile-platform-summary";
 import { SabiScoreBrand } from "../components/brand/sabiscore-brand";
+import { NotificationCenter } from "../components/NotificationCenter";
+import { UserNav } from "../components/auth/user-nav";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -31,6 +35,8 @@ const WORKSPACE_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },
   { label: "Matches", href: "/match", icon: CalendarClock },
   { label: "Performance", href: "/performance", icon: BarChart3 },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Developers", href: "/developer", icon: Code },
   { label: "Monitoring", href: "/monitoring", icon: Activity },
   { label: "Docs", href: "/docs", icon: BookOpen },
 ];
@@ -192,11 +198,15 @@ export default function RootLayout({
                         </div>
                       </div>
 
-                      <div className="hidden flex-wrap items-center gap-2 md:flex">
-                        <PlatformHealthPills />
-                        <div className="min-w-[132px] rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1">
-                          <ReadinessRing />
+                      <div className="flex items-center gap-2">
+                        <div className="hidden flex-wrap items-center gap-2 md:flex">
+                          <PlatformHealthPills />
+                          <div className="min-w-[132px] rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1">
+                            <ReadinessRing />
+                          </div>
                         </div>
+                        <NotificationCenter />
+                        <UserNav />
                       </div>
 
                       <div className="w-full md:hidden">

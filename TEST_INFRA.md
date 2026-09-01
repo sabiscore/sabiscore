@@ -8,7 +8,9 @@ SabiScore's End-to-End (E2E) testing framework provides requirement-driven, opaq
 2. **Zero-Fabrication & Fail-Closed Assertions**: In line with ADR 0009 and SabiScore core invariants, tests strictly enforce that missing, stale, or conflicting data results in fail-closed states (`PARTIAL`, `HOLD`, `No bet`, `—` placeholders), and never synthetic probabilities, simulated accuracy, or fake consensus.
 3. **Anti-Casino Terminology Compliance**: All user-facing surfaces and shared snippets are continuously scanned for prohibited gambling phrasing (`lock`, `banker`, `sure bet`, `free money`, `guaranteed`).
 4. **Progressive Testability & Isolation**: Every test is self-contained, sets up its own deterministic state/mock routes, avoids inter-test coupling, and runs reliably in CI and local environments.
-5. **Full Platform & Device Parity**: Tests run across desktop (`chromium`) and mobile (`mobile-chrome` / Pixel 5 emulation) viewports with strict WCAG AA accessibility validation.
+5. **Full Platform & Device Parity**: Tests are configured for desktop
+  (`chromium`) and mobile (`mobile-chrome` / Pixel 5 emulation). Parity is
+  established only by a successful browser run, not by test discovery.
 
 ---
 
@@ -165,3 +167,8 @@ npx playwright test -g "Journey 2: Developer Onboard"
 - **Accessibility Standards**: Zero automatically detectable WCAG 2.1 Level A / AA violations via `axe-core`.
 - **Security & Privacy**: Zero raw JWT/secret tokens stored in `localStorage`; 100% PII/credential sanitization on analytics payloads.
 - **Terminology Invariant**: 0 occurrences of prohibited gambling terms across all user-facing copy and export payloads.
+
+These are acceptance targets. As of 2026-09-01, `pnpm exec playwright test
+--project=chromium --project=mobile-chrome` passes all 328 executions across
+nine files (164 unique tests). Rerun this command after any change to the
+tested surfaces — a prior pass does not certify a later commit.

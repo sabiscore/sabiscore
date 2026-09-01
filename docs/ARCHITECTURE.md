@@ -1,18 +1,20 @@
 # SabiScore Architecture
 
-Last verified against the repository: 2026-08-10.
+Last verified against the repository: 2026-09-01.
 
 ## Production boundaries
 
 ```text
 Browser
   -> apps/web (Next.js 15, React 18; UI and validated proxy routes)
+   -> HttpOnly session/anonymous cookies; no browser token persistence
+   -> dashboard, developer keys, notifications, analytics, share/SEO UI
        -> backend/src/api/main.py (FastAPI authority)
             -> provider registry + one lifespan httpx.AsyncClient
             -> one request-scoped evidence snapshot
             -> feature projection -> active model -> evidence/stake gates
             -> PostgreSQL (Alembic schema authority)
-            -> Redis (cache/rate-limit acceleration; explicit degraded state)
+            -> Redis (cache, leases, and developer rate limits; explicit degraded state)
 
 apps/scraper -> open/batch acquisition and raw manifests only
 ```
@@ -105,6 +107,19 @@ an individual prediction.
 The API uses `Cache-Control: no-store` for evidence and decision traffic. The web
 proxy validates parameters and bodies and uses `SABISCORE_BACKEND_URL`. The CSP is
 generated per request with a nonce and `strict-dynamic`.
+
+User identity, favorites, saved matches, preferences, developer keys, first-party
+analytics events, notification subscriptions, and in-app notification logs are
+durable PostgreSQL state introduced by Alembic revision
+`0011_user_identity_dev_platform`. Browser auth is mediated by Next.js route
+handlers and `HttpOnly` cookies. Raw developer keys are shown once and persisted
+only as hashes.
+
+Notification persistence and UI are implemented, but scheduled kickoff and
+probability-swing generation have no production caller yet. The sitemap includes
+core routes, supported league filters, a bounded team catalogue, and sample
+fixture routes; it does not yet query live fixture identity. These distinctions
+are operational gaps, not reasons to invent delivery or indexing claims.
 
 ## Persistence and observation
 

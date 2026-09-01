@@ -5,6 +5,115 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Documentation reconciliation and release-gate verification (2026-09-01)
+
+Whole-repository documentation audit of the M8-M13 identity/notification/
+analytics/developer-platform surfaces, reconciling every status claim against
+the actual working tree instead of copying forward prior drafts. Excludes
+agent/skill customization files (`.ai/`, `.agents/`, `.claude/`, `.github/skills/`,
+`.github/prompts/`, `.github/instructions/`, `AGENTS.md`, `CLAUDE.md`, `NEXUS.md`).
+
+### Fixed — real production bug found via E2E server logs
+
+- **`/team/[slug]` crashed on every request in production.** `getTeamIntelligence()`
+  in `lib/api.ts` fetched the relative URL `/api/teams/{slug}/intelligence` from
+  a Node-runtime, `force-dynamic` server component — undici cannot resolve a
+  relative URL with no origin, raising `TypeError: Failed to parse URL from
+  /api/teams/...` on every page load. Same defect class as the previously
+  documented `/match/[id]` insights-panel incident. Fixed by extracting a
+  server-only `getTeamIntelligence()` into `lib/team-intelligence-server.ts`
+  (mirrors `lib/insights-server.ts`'s established pattern: calls the backend
+  directly via `resolveBackendBaseUrl()`, never the app's own proxy route) and
+  deleting the broken relative-fetch version from `lib/api.ts` (zero other
+  callers, confirmed via repo-wide search). Regression guard:
+  `lib/team-intelligence-server.test.ts`.
+- **`apps/web/src/app/api/og/match/[id]/route.tsx` accepted query-supplied
+  probabilities, verdicts, and an unconditional "Verified Evidence" claim** —
+  a zero-fabrication violation on a publicly shareable surface (a crafted share
+  URL could render any home/draw/away split as if backend-verified). Rewritten
+  to render only the fixture identity and a neutral, non-committal caption.
+  Regression guard: `route-contract.test.ts`.
+- **Playwright E2E harness never seeded the site's own age/consent gate**,
+  so 4 of 328 tests failed non-deterministically depending on modal timing
+  (share-button clicks, homepage link assertions). `playwright.config.ts` now
+  seeds `sabiscore_age_gate_accepted_v1`/`sabiscore_consent_v1` localStorage via
+  global `storageState` so product-flow tests are not coupled to an unrelated
+  compliance modal.
+- Two E2E specs (`full-analysis-decisions.spec.ts`, `sabiscore.spec.ts`)
+  asserted against elements that do not exist in the current DOM (an
+  `Actionability summary` group that is absent when `actionability` is `null`,
+  and a mislabeled homepage link) or against fixture payloads that failed the
+  frontend's own Zod contract (`certification_state` omitted while
+  `prediction_source: CERTIFIED_MODEL` was asserted). Corrected to assert the
+  always-present `Decision` region and its exact rendered evidence-quality
+  string, and to mock upcoming-fixture data before asserting the homepage's
+  "Back to verified fixtures" link.
+
+### Fixed — test-owned resource warnings
+
+- Five backend unit tests (`test_analytics_event_scrubbing.py`,
+  `test_auth_anonymous_and_favorites.py`, `test_notifications_and_timezones.py`,
+  `test_developer_platform_api_keys.py`) mocked SQLAlchemy's synchronous
+  `Session.add`/`add_all` with `AsyncMock`, producing
+  `RuntimeWarning: coroutine ... was never awaited` on every run. Corrected to
+  `MagicMock` to match the real synchronous method; no behavioral change.
+
+### Changed — documentation corrected to match the working tree
+
+- **`docs/API.md`**: replaced a stale "API is open for development" claim and
+  fabricated example payloads with the actual mounted route families (auth,
+  identity, provider, analysis, model-performance, notifications, analytics,
+  developer platform, health), grounded in the FastAPI router decorators.
+- **`docs/ARCHITECTURE.md`**, **`docs/DEPLOYMENT_GUIDE.md`**: documented the
+  M8-M13 database tables (7, not 9 — corrected the count), the notification
+  delivery gap (CRUD/UI implemented; no scheduler generates deliveries yet),
+  and the sitemap's bounded route/team/sample-fixture catalogue (not live
+  fixture discovery).
+- **`PROJECT.md`**: corrected the notifications API contract (actual mounted
+  paths, e.g. `/notifications/subscriptions/matches`, not the previously
+  documented `/notifications/subscribe`); milestone statuses changed from
+  binary complete/planned to reflect what is implemented-and-tested versus
+  what remains an operational gap.
+- **`TEST_READY.md`**, **`TEST_INFRA.md`**: corrected the Playwright suite
+  status from an unverified "READY"/pass claim to the actual measured
+  inventory (164 unique tests / 328 project executions across 9 files) and,
+  after this session's full run, the real result: **328/328 passed**.
+- **`reports/execution/*.md`**: six generated reports
+  (`architecture-map.md`, `baseline.md`, `next-milestone.md`,
+  `prioritized-backlog.md`, `production-health.md`, `security-hardening.md`)
+  contained fabricated sub-millisecond database/Redis latency figures, a
+  9-table count contradicting their own 7-table list, and references to
+  component files that do not exist (`opengraph-image.tsx`,
+  `calibration-curve-chart.tsx` at paths never created). Replaced with
+  evidence-based snapshots that cite only commands actually run in this
+  session and explicitly decline to claim unverified production state.
+- **`reports/release/final-production-verification.md`**: regenerated from
+  this session's actual gate results (see Verified, below) rather than the
+  prior draft's environment-limited subset.
+
+### Verified
+
+- Web: lint 0/0, typecheck 0 errors, 51 test files / 295 tests passed,
+  production build exit 0 (49/49 pages).
+- Backend (via the repository `.venv`, isolated SQLite test database):
+  `ruff check src` — 0 issues. `check_mypy_ceiling.py --ceiling 784` — 768
+  (headroom preserved, not raised). Full `pytest tests` — **2050 passed, 17
+  skipped, 2 xfailed** (the 2 xfailed are the existing, intentionally-marked
+  `error_association` reversal, unrelated to this session). OpenAPI verifier —
+  106 paths. `verify_active_artifacts.py` — 6/6 hash-locked artifact pairs
+  verified for `v5_phase7-20260808` (`UNVERIFIED` certification, correctly
+  fail-closed).
+- Scraper: registry/storage validation passed; 20/20 tests passed.
+- Gitleaks (`gitleaks detect --redact --verbose`, working tree + full git
+  history, 478 commits scanned): exactly the two pre-existing historical
+  `.env.example` fingerprints already tracked in `docs/DEBT.md` item 16; zero
+  new findings.
+- Playwright: **328/328 passed** across Chromium and Mobile Chrome (all 9
+  spec files, all 4 tiers, WCAG/accessibility, container-parity, and
+  decision-integrity suites).
+- Docker Compose validation was not run this session (skipped by operator
+  choice); this remains an open gate, documented as such rather than assumed.
+
 ## Unreleased - M8/M9/M10/M13: identity, notifications, analytics, developer platform (2026-09-01)
 
 ### Added

@@ -1,8 +1,12 @@
 # TEST_READY — SabiScore E2E Test Suite Specification & Readiness Report
 
-## Status: READY
+## Status: VERIFIED — 328/328 PASSED
 
-The Requirement-Driven Opaque-Box E2E Test Suite for SabiScore has been established in accordance with `PROJECT.md`, `ORIGINAL_REQUEST.md`, `AGENTS.md`, and `NEXUS.md`.
+The requirement-driven opaque-box E2E suite is present and executes cleanly.
+Last full run (2026-09-01, Chromium + Mobile Chrome, `pnpm exec playwright test
+--project=chromium --project=mobile-chrome`): **328 passed, 0 failed** in 3.2
+minutes. Re-verify this claim by rerunning the command above before relying on
+it for a future release; a stale pass does not certify a later commit.
 
 ---
 
@@ -18,6 +22,10 @@ The E2E test track implements the full **4-Tier Methodology** covering all 13 fe
 | **Tier 4: Real-World Scenarios** | `tests/e2e/tier4-application-scenarios.spec.ts` | Complete User & Dev Journeys | 5 journeys | 10 tests |
 | **Baseline Smoke & A11y Specs** | `tests/e2e/{accessibility,container-parity,full-analysis-decisions,intelligence,sabiscore}.spec.ts` | Web shell, a11y, layout parity | 19 specs | 38 tests |
 | **TOTAL** | **9 Spec Files** | **All 13 Features** | **164 Unique Tests** | **328 Total Executions** |
+
+The four Tier 1-4 files account for 145 unique tests / 290 project executions.
+The five baseline smoke, accessibility, layout, and decision files account for
+the remaining 19 / 38.
 
 ---
 
@@ -86,3 +94,19 @@ npx playwright test -g "Journey 1: Consumer Discovery"
 - Infrastructure & Philosophy: `TEST_INFRA.md`
 - Test Fixtures & Shared Helpers: `tests/e2e/helpers/e2e-fixtures.ts`
 - Playwright Configuration: `playwright.config.ts`
+
+## 5. Current Verification State
+
+Verified on 2026-09-01:
+
+```text
+pnpm exec playwright test --project=chromium --project=mobile-chrome
+328 passed (3.2m)
+```
+
+This run required two fixes to the test harness/assertions themselves (not the
+application): seeding the site's own age/consent gate via `playwright.config.ts`
+`storageState`, and correcting two specs that asserted against elements absent
+from the current DOM or fixture payloads that failed the frontend's own Zod
+contract. It also surfaced one real application defect — see `CHANGELOG.md`,
+"Documentation reconciliation and release-gate verification".

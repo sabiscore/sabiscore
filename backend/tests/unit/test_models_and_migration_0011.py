@@ -2,16 +2,8 @@
 
 from __future__ import annotations
 
-import importlib
 from datetime import datetime, timezone
 
-from alembic.config import Config
-from alembic.script import ScriptDirectory
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
-from src.core.database import Base
 from src.db.models import (
     AnalyticsEvent,
     ApiKey,

@@ -1,6 +1,6 @@
 # SabiScore Deployment Guide
 
-Last verified against the repository: 2026-08-10.
+Last verified against the repository: 2026-09-01.
 
 Production entrypoints are `backend/src/api/main.py` and `apps/web`. Do not deploy
 the archived `frontend/` or reintroduce `apps/api/`.
@@ -20,10 +20,11 @@ pnpm --filter @sabiscore/web test
 pnpm --filter @sabiscore/web build
 ```
 
-Run backend Ruff, mypy, full pytest, OpenAPI verification, Gitleaks, Alembic
-upgrade/check against staging PostgreSQL, sequential backend/web image builds, and
-Playwright desktop/mobile gates using the exact commands in current CI/Makefile.
-Default CI keeps `PROVIDER_LIVE_TESTS=false`.
+Run backend Ruff, mypy, full pytest with branch coverage, OpenAPI verification,
+Gitleaks, Alembic upgrade/check against PostgreSQL, scraper validation/tests,
+web lint/typecheck/unit tests/build, and Playwright smoke plus Tier 1-4 desktop
+and mobile gates using the exact commands in current CI/Makefile. Default CI
+keeps `PROVIDER_LIVE_TESTS=false`.
 
 If the evidence-acquisition worker is part of a release, also validate scraper
 parsers and source policy before enabling cron execution:
@@ -54,6 +55,12 @@ PHASE9_SHADOW_ONLY=true
 `DATABASE_URL` must be PostgreSQL with TLS. Production `REDIS_URL` must be a
 complete `rediss://` URL; plaintext `redis://` is local-development only. Provider keys and `SECRET_KEY` are
 server-only. Never expose them as `NEXT_PUBLIC_*` values.
+
+Alembic revision `0011_user_identity_dev_platform` creates the user-state,
+developer-key, analytics, and notification tables. Its revision identifier is
+intentionally at most 32 characters to fit the existing
+`alembic_version.version_num` column. A release must exercise the complete chain
+on PostgreSQL; SQLite does not enforce that length and cannot prove this gate.
 
 `REVALIDATE_SECRET` is a separate server-only secret shared by the backend and
 Vercel. Configure the same non-empty value in both secret stores before relying
@@ -123,6 +130,12 @@ After CI succeeds:
 5. confirm frontend and backend report the expected release SHAs;
 6. exercise homepage fixture selection and one verified full-analysis flow on
    desktop and mobile.
+
+Also exercise registration/login/logout, anonymous-state merge, dashboard CRUD,
+developer-key create/list/revoke, analytics ingestion, notification subscription
+and read state, calibration rendering, share-card generation, and sitemap/JSON-LD
+output. Notification delivery scheduling and live fixture sitemap discovery are
+not release-ready until their production callers are implemented and observed.
 
 ## 5. Database and models
 
