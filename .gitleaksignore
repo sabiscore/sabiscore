@@ -3,3 +3,11 @@
 92a0adac4371f21de5ef85a39ae1f81910e0d783:apps/web/.env.example:generic-api-key:13
 92a0adac4371f21de5ef85a39ae1f81910e0d783:ENVIRONMENT_VARIABLES.md:curl-auth-header:827
 92a0adac4371f21de5ef85a39ae1f81910e0d783:docs/CODEBASE_AUDIT_REPORT.md:generic-api-key:53
+# PR #127: fake sbk_live_-prefixed test fixtures (M13 developer platform key
+# format), fixed with inline gitleaks:allow comments in the same commit range
+# — kept here too because history-mode scanning still sees the introducing
+# commit's own patch, which predates the inline-comment fix by one commit.
+6a32d91ecb29d7d078dd6069c5914a33ce3d9372:backend/tests/unit/test_analytics_event_scrubbing.py:generic-api-key:19
+6a32d91ecb29d7d078dd6069c5914a33ce3d9372:tests/e2e/tier3-cross-feature-combinations.spec.ts:generic-api-key:76
+6a32d91ecb29d7d078dd6069c5914a33ce3d9372:tests/e2e/tier1-feature-coverage.spec.ts:generic-api-key:609
+6a32d91ecb29d7d078dd6069c5914a33ce3d9372:tests/e2e/tier2-boundary-corner-cases.spec.ts:generic-api-key:501

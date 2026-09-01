@@ -401,6 +401,164 @@ class MatchContext(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class UserFavorite(Base):
+    __tablename__ = "user_favorites"
+    __table_args__ = (
+        Index("ix_user_favorites_user_id", "user_id"),
+        Index("ix_user_favorites_anon_id", "anonymous_session_id"),
+        UniqueConstraint("user_id", "entity_type", "entity_id", name="uq_user_favorites_user_entity"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    entity_type: Mapped[str] = mapped_column(String, nullable=False)  # 'team' | 'competition'
+    entity_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class UserSavedMatch(Base):
+    __tablename__ = "user_saved_matches"
+    __table_args__ = (
+        Index("ix_user_saved_matches_user_id", "user_id"),
+        Index("ix_user_saved_matches_anon_id", "anonymous_session_id"),
+        Index("ix_user_saved_matches_match_id", "match_id"),
+        UniqueConstraint("user_id", "match_id", name="uq_user_saved_matches_user_match"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    match_id: Mapped[str] = mapped_column(String, nullable=False)
+    target_outcome: Mapped[str | None] = mapped_column(String, nullable=True)
+    notes: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+    __table_args__ = (
+        Index("ix_user_preferences_user_id", "user_id"),
+        Index("ix_user_preferences_anon_id", "anonymous_session_id"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    odds_format: Mapped[str] = mapped_column(String, nullable=False, default="DECIMAL")
+    timezone: Mapped[str] = mapped_column(String, nullable=False, default="Africa/Lagos")
+    default_league: Mapped[str | None] = mapped_column(String, nullable=True, default="EPL")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+    __table_args__ = (
+        Index("ix_api_keys_user_id", "user_id"),
+        Index("ix_api_keys_key_prefix", "key_prefix"),
+        Index("ix_api_keys_key_hash", "key_hash"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String, nullable=False)
+    key_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    tier: Mapped[str] = mapped_column(String, nullable=False, default="FREE")
+    rate_limit_per_minute: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    daily_quota: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AnalyticsEvent(Base):
+    __tablename__ = "analytics_events"
+    __table_args__ = (
+        Index("ix_analytics_events_event_name", "event_name"),
+        Index("ix_analytics_events_user_id", "user_id"),
+        Index("ix_analytics_events_anon_id", "anonymous_session_id"),
+        Index("ix_analytics_events_timestamp", "timestamp"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    event_name: Mapped[str] = mapped_column(String, nullable=False)
+    properties: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_platform: Mapped[str | None] = mapped_column(String, nullable=True, default="web")
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class UserNotificationSubscription(Base):
+    __tablename__ = "user_notification_subscriptions"
+    __table_args__ = (
+        Index("ix_notif_subs_user_id", "user_id"),
+        Index("ix_notif_subs_anon_id", "anonymous_session_id"),
+        Index("ix_notif_subs_match_id", "match_id"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    match_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    subscription_type: Mapped[str] = mapped_column(
+        String, nullable=False, default="KICKOFF_REMINDER"
+    )
+    channel: Mapped[str] = mapped_column(String, nullable=False, default="IN_APP")
+    destination: Mapped[str | None] = mapped_column(String, nullable=True)
+    threshold_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reminder_minutes_before: Mapped[int | None] = mapped_column(Integer, nullable=True, default=60)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class UserNotificationLog(Base):
+    __tablename__ = "user_notification_logs"
+    __table_args__ = (
+        Index("ix_notif_logs_user_unread", "user_id", "read", "created_at"),
+        Index("ix_notif_logs_anon_unread", "anonymous_session_id", "read", "created_at"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    subscription_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    match_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False, default="INFO")
+    read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 __all__ = [
     "Base",
     "FeatureVector",
@@ -432,5 +590,12 @@ __all__ = [
     "CircuitState",
     "RefereeProfile",
     "MatchContext",
+    "UserFavorite",
+    "UserSavedMatch",
+    "UserPreference",
+    "ApiKey",
+    "AnalyticsEvent",
+    "UserNotificationSubscription",
+    "UserNotificationLog",
 ]
 

@@ -183,6 +183,21 @@ describe("platform provider health", () => {
       label: "Partial",
     });
   });
+
+  it("fails closed instead of throwing when providers is not an array", () => {
+    // Regression guard: /api/health crosses an unchecked fetch/JSON boundary
+    // (fetchPlatformHealth's `as Promise<BackendHealthPayload>` cast), and this
+    // is called from the root layout on every page — a malformed shape here
+    // must degrade, not crash the whole app shell.
+    expect(deriveProviderActivation({} as never)).toMatchObject({
+      total: 0,
+      configured: 0,
+      enabled: 0,
+      live: 0,
+      degraded: 0,
+      label: "Unavailable",
+    });
+  });
 });
 
 describe("backend readiness aggregation", () => {

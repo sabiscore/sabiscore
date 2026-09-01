@@ -2,14 +2,13 @@
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .core.config import settings
 from .core.database import UserAccount
-from .core.security import decode_access_token
+from .core.security import JWTError, decode_access_token
 from .db.session import get_async_session
 from .schemas.token import TokenPayload
 

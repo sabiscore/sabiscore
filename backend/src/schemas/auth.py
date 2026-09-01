@@ -1,6 +1,12 @@
 """Authentication request/response schemas."""
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
+
+try:
+    import email_validator  # noqa: F401
+    from pydantic import EmailStr
+except ImportError:
+    EmailStr = str  # type: ignore
 
 from .token import Token
 from .user import UserResponse

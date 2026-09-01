@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+import numpy as np
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -21,6 +22,12 @@ from ...models.active_generation import (
     CERTIFIED,
     active_model_version,
     load_active_generation,
+)
+from ...models.evaluation.metrics import (
+    block_bootstrap_ci,
+    brier_score_decomposition,
+    expected_calibration_error,
+    ranked_probability_score,
 )
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
 from ...services.clv_service import compute_clv_summary
@@ -327,14 +334,12 @@ def _accuracy_series(validation: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-@router.get("/model-performance")
+@router.get("/model-performance", response_model=None)
 async def model_performance(
     league: Optional[str] = Query(None),
     window: int = Query(30, ge=7, le=180),
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any]:
-    from fastapi.responses import JSONResponse
-
+) -> Dict[str, Any] | JSONResponse:
     result = await _walk_forward_summary(db, league=league, window=window)
     records, validation = result["records"], result["validation"]
     model_version = str(result["model_version"])
@@ -381,12 +386,10 @@ async def model_performance(
     }
 
 
-@router.get("/model-performance/summary")
+@router.get("/model-performance/summary", response_model=None)
 async def model_performance_summary(
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any]:
-    from fastapi.responses import JSONResponse
-
+) -> Dict[str, Any] | JSONResponse:
     result = await _walk_forward_summary(db, league=None, window=None)
     records, validation = result["records"], result["validation"]
     # Same independence as the sibling handler: CLV has its own data floor, so
@@ -418,3 +421,135 @@ async def model_performance_summary(
         "clv": clv,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _compute_calibration_metrics(
+    records: List[Dict[str, Any]],
+    n_bins: int = 10,
+    league: Optional[str] = None,
+    model_version: Optional[str] = None,
+) -> Dict[str, Any]:
+    if not records:
+        return {
+            "status": "METRICS_UNAVAILABLE",
+            "reason": "insufficient_settled_predictions",
+            "sample_size": 0,
+            "league": league,
+            "model_version": model_version,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    y_true = np.array([r["outcome"] for r in records], dtype=int)
+    y_proba = np.array([r["probs"] for r in records], dtype=float)
+    n_samples = len(y_true)
+
+    # Compute ECE
+    ece_data = expected_calibration_error(y_true, y_proba, n_bins=n_bins)
+
+    # Compute Brier Decomposition
+    brier_decomp = brier_score_decomposition(y_true, y_proba, n_bins=n_bins)
+
+    # Compute detailed reliability curves for each outcome class
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    curves: Dict[str, List[Dict[str, Any]]] = {"home_win": [], "draw": [], "away_win": []}
+    class_names = ["home_win", "draw", "away_win"]
+
+    for cls_idx, cls_name in enumerate(class_names):
+        binary = (y_true == cls_idx).astype(float)
+        probs = y_proba[:, cls_idx]
+
+        for b_idx, (lo, hi) in enumerate(zip(bins[:-1], bins[1:])):
+            mask = (probs > lo) & (probs <= hi) if b_idx > 0 else (probs >= lo) & (probs <= hi)
+            count = int(mask.sum())
+            if count > 0:
+                p_mean = round(float(probs[mask].mean()), 4)
+                emp_freq = round(float(binary[mask].mean()), 4)
+            else:
+                p_mean = round(float((lo + hi) / 2.0), 4)
+                emp_freq = 0.0
+
+            curves[cls_name].append({
+                "bin_index": b_idx,
+                "bin_lower": round(float(lo), 4),
+                "bin_upper": round(float(hi), 4),
+                "bin_midpoint": round(float((lo + hi) / 2.0), 4),
+                "predicted_mean": p_mean,
+                "empirical_frequency": emp_freq,
+                "count": count,
+            })
+
+    # Künsch (1989) block bootstrap confidence intervals
+    def rps_metric(yt, yp):  # noqa: E306
+        return float(np.mean([ranked_probability_score(int(yt[i]), yp[i].tolist()) for i in range(len(yt))]))
+
+    def brier_metric(yt, yp):  # noqa: E306
+        return brier_score_decomposition(yt, yp, n_bins=n_bins)["mean"]["brier_score"]
+
+    def ece_metric(yt, yp):  # noqa: E306
+        return expected_calibration_error(yt, yp, n_bins=n_bins)["mean"]
+
+    ci_rps = block_bootstrap_ci(y_true, y_proba, rps_metric, block_size=10)
+    ci_brier = block_bootstrap_ci(y_true, y_proba, brier_metric, block_size=10)
+    ci_ece = block_bootstrap_ci(y_true, y_proba, ece_metric, block_size=10)
+
+    return {
+        "status": "OK",
+        "league": league,
+        "model_version": model_version,
+        "n_bins": n_bins,
+        "sample_size": n_samples,
+        "ece": ece_data,
+        "brier_decomposition": brier_decomp,
+        "curves": curves,
+        "confidence_intervals": {
+            "rps": ci_rps,
+            "brier_score": ci_brier,
+            "ece_mean": ci_ece,
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/model-performance/calibration", response_model=None)
+@router.get("/model-performance/calibration-curve", response_model=None)
+async def model_performance_calibration(
+    league: Optional[str] = Query(None),
+    n_bins: int = Query(10, ge=5, le=20),
+    window: Optional[int] = Query(None, ge=7, le=365),
+    db: AsyncSession = Depends(get_async_session),
+) -> Dict[str, Any] | JSONResponse:
+    """Expose binned probability calibration curves, Murphy Brier score decomposition,
+    Multiclass ECE, and Künsch block bootstrap confidence intervals for public trust transparency.
+    """
+    model_version = active_model_version()
+    started_at = None
+    if window is not None:
+        started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
+
+    records = await get_settled_predictions(
+        db,
+        league=_resolve_league_filter(league),
+        started_at=started_at,
+        model_version=model_version,
+    )
+
+    if not records:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "METRICS_UNAVAILABLE",
+                "reason": "insufficient_settled_predictions",
+                "sample_size": 0,
+                "league": league,
+                "model_version": model_version,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    return _compute_calibration_metrics(
+        records=records,
+        n_bins=n_bins,
+        league=league,
+        model_version=model_version,
+    )
+

@@ -5,6 +5,139 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - M8/M9/M10/M13: identity, notifications, analytics, developer platform (2026-09-01)
+
+### Added
+
+- **M8 auth/identity** (`services/auth_service.py`, `api/endpoints/auth.py`):
+  anonymous-session identity (`X-Anonymous-Session`/`sabi_anon_id` cookie) sits
+  alongside JWT-authenticated users; `UserStateService` manages favorites,
+  saved matches, and preferences keyed by either identity and merges
+  anonymous state into an account on login/signup.
+- **M9 notifications** (`services/notification_service.py`,
+  `api/endpoints/notifications.py`): kickoff-reminder and probability-swing
+  match subscriptions, timezone-aware preferences (default `Africa/Lagos`),
+  and an in-app notification log with unread counts and mark-as-read/mark-all.
+- **M10 analytics** (`services/analytics_service.py`,
+  `api/endpoints/analytics.py`): batch client-event ingestion through
+  `scrub_pii_and_secrets()`, a recursive redaction filter keyed on a sensitive-field
+  allowlist plus regex scrubbing for inline emails and bearer tokens —
+  applied before any event payload reaches the database.
+- **M13 developer platform** (`services/developer_service.py`,
+  `api/endpoints/developer.py`): `sbk_live_`-prefixed API keys (SHA-256
+  stored, never the raw value), FREE/PRO entitlement tiers, and sliding-window
+  rate limiting (per-minute + daily quota) backed by Redis with an in-memory
+  fallback when the cache is unavailable.
+- **Migration `0011_user_identity_dev_platform`**: adds
+  `user_favorites`, `user_saved_matches`, `user_preferences`, `api_keys`,
+  `api_usage_records`, `user_notification_subscriptions`,
+  `user_notification_logs`, `analytics_events`.
+- **M2 research artifacts, unrelated to the M8-M13 milestones above but
+  landed in the same commit**: `uncertainty/decomposition.py`,
+  `uncertainty/residualizer.py`, `uncertainty/uncertainty_policy.py` and
+  `policies/certification_policy.py` extend the existing uncertainty/
+  certification research surface (see the M1/M2 entry below); gates remain
+  closed, nothing here changes `stake_permitted`.
+- `tests/e2e/tier{1,2,3,4}-*.spec.ts` — four new Playwright suites (feature
+  coverage, boundary/corner cases, cross-feature combinations, application
+  scenarios) plus `tests/e2e/helpers/e2e-fixtures.ts`, wired to
+  `pnpm test:e2e:tier{1,2,3,4}` in the root `package.json`.
+
+### Fixed
+
+- **Type safety**: `GET /model-performance`, `/model-performance/summary`,
+  and `/model-performance/calibration` returned a bare
+  `Dict[str, Any]`-annotated function that also returned `JSONResponse` on
+  the 503 (`insufficient_settled_predictions`) path — a real mypy
+  `[return-value]` error, not a pre-existing one, introduced by this
+  milestone's move to unconditional CLV computation. Widened the return
+  annotation to `Dict[str, Any] | JSONResponse` and added
+  `response_model=None` to all three routes (FastAPI cannot build a Pydantic
+  response model from that union and raises `FastAPIError` at import time
+  otherwise — caught by re-running the endpoint's own test file, not by mypy).
+- `services/developer_service.py` / `services/notification_service.py`:
+  removed unused SQLAlchemy imports and fixed 5 `E712` boolean-comparison
+  lint errors (`.is_(True)`/`.is_(False)` instead of `== True`/`== False`
+  in `where()` clauses) so `ruff check src/` stays at zero.
+
+### Fixed — real bugs found by actually running the committed tier1-4 suites
+
+The four tier1-4 Playwright suites above were committed with matching
+`package.json` scripts but were never once run — `.github/workflows/ci.yml`'s
+Playwright job only names `intelligence.spec.ts`. Running them (145 tests ×
+chromium) surfaced 5 failures; two were real application defects, three were
+defects in the test fixtures/assertions themselves:
+
+- **`lib/health-status.ts` `deriveProviderActivation()`** called `.filter()`
+  directly on `BackendHealthPayload.providers` with no shape guard. This
+  function is invoked from the root layout on every single page (via
+  `PlatformHealthPills`/`MobilePlatformSummary`/`match-selector.tsx`), so any
+  malformed `/api/health` response — including from a version-skewed backend,
+  not only a wrong test mock — crashed the entire app shell into the generic
+  error boundary. Added an `Array.isArray()` guard that fails closed to an
+  empty/`"Unavailable"` stats object instead of throwing. New regression test
+  in `health-status.test.ts` (30 total, was 29).
+- **`tests/e2e/helpers/e2e-fixtures.ts` `setupMockApiRoutes()`** had two
+  malformed mock payloads that don't match their real response contracts:
+  `/api/health`'s `providers` field was a flat status-map object
+  (`{ sportmonks: 'healthy', ... }`) instead of `ProviderHealthRow[]` (the
+  shape that tripped the bug above), and `/api/upcoming`'s body used a
+  `fixtures` wrapper key with `id`/`kickoff`/`home_team` fields instead of
+  the real `UpcomingMatchesResponse` shape (`upcoming_matches`, `match_id`,
+  `match_date`, plus the response-level `total`/`offseason`/`data_gap`
+  fields `upcoming-matches-panel.tsx` and `match-selector.tsx` read
+  unguarded). Both corrected to match `apps/web/src/lib/api.ts`'s real
+  interfaces; comments added at each mock explaining why the shape matters.
+- **`tests/e2e/tier3-cross-feature-combinations.spec.ts` test 3.4** asserted
+  a clipboard string contained `'52.0%'` computed from
+  `createMockAnalysisPayload()`'s default `home_win_prob: 0.5` — always
+  `50.0%`. Pure test-arithmetic drift, no app code involved; corrected the
+  literal.
+- **CI**: added a `playwright-tier-suites` job (mirrors `playwright-smoke`'s
+  setup, `needs: web-quality`) so these 290 test executions (145 tests ×
+  chromium + mobile-chrome) actually run in CI going forward instead of
+  sitting as dead test code.
+
+### Verified
+
+- `ruff check src/`: 0 errors. Full backend suite: 2038 passed / 17 skipped /
+  2 xfailed (the 2 xfailed are the pre-existing, intentionally-marked
+  `error_association` reversal — DEBT item 50, unrelated to this milestone).
+  Frontend `lint`/`typecheck`: 0 errors/warnings. App import smoke test:
+  125 routes register cleanly after the `response_model=None` fix.
+  `tests/e2e/intelligence.spec.ts` (the existing CI gate): 4/4 unaffected by
+  the `health-status.ts` change. Tier1-4 suites: 290/290 passed
+  (145 tests × chromium + mobile-chrome) after all fixes — wired into a new
+  `playwright-tier-suites` CI job.
+
+### Fixed — migration 0011's revision id exceeded Alembic's version_num column
+
+`backend-quality` CI failed with `psycopg.errors.StringDataRightTruncation:
+value too long for type character varying(32)` on the final statement of
+`alembic upgrade head` — the `UPDATE alembic_version SET version_num=...`
+that stamps the new head. Migration 0011's `revision` string,
+`0011_user_identity_dev_platform_notifications`, is 45 characters; Alembic's
+own bookkeeping table defaults `version_num` to `VARCHAR(32)`, and every
+prior revision in this repo stays at or under that (`0009_quarantine_market_
+closings` is exactly 32). Invisible locally: SQLite, which the local venv
+falls back to, doesn't enforce `VARCHAR` length, so this only surfaces once
+a real-Postgres gate runs the chain — which local `pytest`/`ruff`/`mypy`
+never do, and which this session had no local Postgres or Docker daemon to
+reproduce with (verified instead via CI's own failure log plus the
+documented SQLite stamp-and-upgrade round-trip for the migration's DDL
+correctness). Fixed by shortening the revision id to
+`0011_user_identity_dev_platform` (31 chars) and renaming the file to
+match; updated the one test (`test_models_and_migration_0011.py`) and one
+doc reference (this file, above) that named the old string.
+
+**New regression guard**: `test_every_alembic_revision_id_fits_the_version_num_
+column` in `backend/tests/test_database_migration_hardening.py` loads every
+file in `alembic/versions/` and asserts both `revision` and `down_revision`
+are ≤32 characters — catches this class of bug for migration 0012+ without
+needing a live Postgres, closing the exact local/CI verification gap that
+let this one through. Watched failing (reverted to the 45-char id, asserted
+the exact failure) before trusting it.
+
 ## Unreleased - Production-readiness verification sweep (2026-08-31)
 
 ### Verified
