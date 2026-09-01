@@ -334,14 +334,12 @@ def _accuracy_series(validation: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-@router.get("/model-performance")
+@router.get("/model-performance", response_model=None)
 async def model_performance(
     league: Optional[str] = Query(None),
     window: int = Query(30, ge=7, le=180),
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any]:
-    from fastapi.responses import JSONResponse
-
+) -> Dict[str, Any] | JSONResponse:
     result = await _walk_forward_summary(db, league=league, window=window)
     records, validation = result["records"], result["validation"]
     model_version = str(result["model_version"])
@@ -388,12 +386,10 @@ async def model_performance(
     }
 
 
-@router.get("/model-performance/summary")
+@router.get("/model-performance/summary", response_model=None)
 async def model_performance_summary(
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any]:
-    from fastapi.responses import JSONResponse
-
+) -> Dict[str, Any] | JSONResponse:
     result = await _walk_forward_summary(db, league=None, window=None)
     records, validation = result["records"], result["validation"]
     # Same independence as the sibling handler: CLV has its own data floor, so
@@ -514,14 +510,14 @@ def _compute_calibration_metrics(
     }
 
 
-@router.get("/model-performance/calibration")
-@router.get("/model-performance/calibration-curve")
+@router.get("/model-performance/calibration", response_model=None)
+@router.get("/model-performance/calibration-curve", response_model=None)
 async def model_performance_calibration(
     league: Optional[str] = Query(None),
     n_bins: int = Query(10, ge=5, le=20),
     window: Optional[int] = Query(None, ge=7, le=365),
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any]:
+) -> Dict[str, Any] | JSONResponse:
     """Expose binned probability calibration curves, Murphy Brier score decomposition,
     Multiclass ECE, and Künsch block bootstrap confidence intervals for public trust transparency.
     """

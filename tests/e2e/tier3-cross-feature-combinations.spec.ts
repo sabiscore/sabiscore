@@ -230,7 +230,8 @@ test.describe('Tier 3: Cross-Feature Combinations Suite', () => {
     // 2. Build and verify shared clipboard output
     const clipboardText = `SabiScore Analytical Forecast\nMatch: ${matchAnalysis.match_id}\nModel Probability: ${(matchAnalysis.ensemble.home_win_prob * 100).toFixed(1)}%\nVerdict: ${matchAnalysis.verdict}\nLink: https://sabiscore.com/match/arsenal-vs-chelsea`;
 
-    expect(clipboardText).toContain('52.0%');
+    // createMockAnalysisPayload defaults home_win_prob to 0.5 (50.0%).
+    expect(clipboardText).toContain('50.0%');
     expect(clipboardText).toContain('ACTIONABLE');
     expect(clipboardText).not.toMatch(/lock|banker|sure bet|guaranteed/i);
   });

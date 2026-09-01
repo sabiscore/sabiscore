@@ -222,6 +222,13 @@ export function deriveBackendReadiness(
 export function deriveProviderActivation(
   providers: NonNullable<BackendHealthPayload["providers"]>,
 ): ProviderActivationStats {
+  // `providers` crosses a fetch/JSON boundary (see fetchPlatformHealth's unchecked
+  // `as Promise<BackendHealthPayload>` cast) — an unexpected shape here must not
+  // crash the root layout that renders this on every page. Fail closed to "no
+  // data" rather than throwing on `.filter()`.
+  if (!Array.isArray(providers)) {
+    return { total: 0, configured: 0, enabled: 0, live: 0, degraded: 0, label: "Unavailable" };
+  }
   const configured = providers.filter((provider) => provider.configured === true).length;
   const enabled = providers.filter((provider) => provider.enabled === true).length;
   const live = providers.filter((provider) =>

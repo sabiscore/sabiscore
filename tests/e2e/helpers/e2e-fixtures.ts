@@ -304,7 +304,10 @@ export async function pageFetch(
 }
 
 export async function setupMockApiRoutes(page: Page) {
-  // Mock Health API
+  // Mock Health API. `providers` mirrors the real /api/health shape — an array
+  // of ProviderHealthRow (see apps/web/src/lib/health-status.ts) — not a status
+  // map. `deriveProviderActivation`, called from the root layout on every page,
+  // calls `.filter()` on this field directly.
   await page.route('**/api/health', (route: Route) => {
     route.fulfill({
       status: 200,
@@ -315,12 +318,18 @@ export async function setupMockApiRoutes(page: Page) {
         sha: 'abc1234',
         database: 'connected',
         redis: 'connected',
-        providers: {
-          sportmonks: 'healthy',
-          the_odds_api: 'healthy',
-          api_football: 'healthy',
-          football_data_org: 'healthy',
+        backendChecks: {
+          database: { status: 'ready' },
+          migrations: { status: 'ready' },
+          cache: { status: 'ready' },
+          models: { status: 'ready' },
         },
+        providers: [
+          { provider: 'sportmonks', configured: true, enabled: true, state: 'VERIFIED' },
+          { provider: 'the_odds_api', configured: true, enabled: true, state: 'VERIFIED' },
+          { provider: 'api_football', configured: true, enabled: true, state: 'VERIFIED' },
+          { provider: 'football_data_org', configured: true, enabled: true, state: 'VERIFIED' },
+        ],
       }),
     });
   });
@@ -350,25 +359,47 @@ export async function setupMockApiRoutes(page: Page) {
     });
   });
 
-  // Mock Upcoming Fixtures API
+  // Mock Upcoming Fixtures API. Field is `upcoming_matches`, not `fixtures` — see
+  // UpcomingMatchesResponse in apps/web/src/lib/api.ts. upcoming-matches-panel.tsx
+  // and match-selector.tsx both read `data.upcoming_matches.length` unguarded.
   await page.route('**/api/upcoming**', (route: Route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        fixtures: [
+        upcoming_matches: [
           {
-            id: 'arsenal-vs-chelsea',
             match_id: 'Arsenal vs Chelsea',
             home_team: 'Arsenal',
             away_team: 'Chelsea',
             league: 'EPL',
-            kickoff: new Date(Date.now() + 86400000).toISOString(),
+            match_date: new Date(Date.now() + 86400000).toISOString(),
+            venue: null,
             status: 'PREMATCH',
-            verified: true,
-            has_prediction: true,
+            predictions: null,
+            value_bets: [],
+            has_value: false,
+            best_value_bet: null,
+            data_gaps: [],
+            staleness_seconds: 120,
+            staleness_available: true,
+            source: 'mock',
+            edge_quality_score: null,
+            clv_pct: null,
           },
         ],
+        total: 1,
+        matches_with_value: 0,
+        avg_edge_pct: 0,
+        cache_hit: false,
+        ttl_seconds: 300,
+        source: 'mock',
+        offseason: false,
+        next_season_start: null,
+        next_season_start_estimated: null,
+        data_gap: false,
+        unavailable_reasons: [],
+        generated_at: new Date().toISOString(),
       }),
     });
   });
