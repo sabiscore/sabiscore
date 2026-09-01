@@ -33,6 +33,9 @@ from .fixtures import router as fixtures_router  # noqa: E402
 from .model_status import router as model_status_router  # noqa: E402
 from .providers import router as providers_router  # noqa: E402
 from .advanced_insights import router as advanced_insights_router  # noqa: E402
+from .developer import router as developer_router  # noqa: E402
+from .analytics import router as analytics_router  # noqa: E402
+from .notifications import router as notifications_router  # noqa: E402
 
 # Ultra predictions are optional - depends on catboost/xgboost/lightgbm.
 # Declared Optional up front so the ImportError branch's `None` is a legal value
@@ -51,6 +54,9 @@ except ImportError as e:
 # Include sub-routers without adding additional prefixes here. The application
 # will apply the API version prefix (e.g. /api/v1) at the app level.
 router.include_router(auth_router)
+router.include_router(developer_router)
+router.include_router(analytics_router)
+router.include_router(notifications_router)
 router.include_router(matches_router)
 router.include_router(predictions_router)
 router.include_router(odds_router)
