@@ -1,14 +1,22 @@
 """User identity, developer platform, analytics, and notification schemas.
 
-Revision ID: 0011_user_identity_dev_platform_notifications
+Revision ID: 0011_user_identity_dev_platform
 Revises: 0010_match_context_referee
+
+Note: the revision id is intentionally shorter than the migration's own
+description. Alembic's bookkeeping table (``alembic_version.version_num``)
+defaults to VARCHAR(32); every prior revision in this repo stays under that
+ceiling ("0009_quarantine_market_closings" is exactly 32) and this one must
+too, or `alembic upgrade head`'s final version-stamp UPDATE raises
+StringDataRightTruncation on real PostgreSQL (SQLite doesn't enforce VARCHAR
+length, so this only surfaces once a Postgres-backed gate runs the chain).
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0011_user_identity_dev_platform_notifications"
+revision = "0011_user_identity_dev_platform"
 down_revision = "0010_match_context_referee"
 branch_labels = None
 depends_on = None

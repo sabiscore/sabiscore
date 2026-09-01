@@ -120,13 +120,17 @@ def test_alembic_migration_0011_script_loads() -> None:
     import importlib.util
     from pathlib import Path
 
-    migration_path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0011_user_identity_dev_platform_notifications.py"
+    migration_path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0011_user_identity_dev_platform.py"
     assert migration_path.exists()
     spec = importlib.util.spec_from_file_location("migration_0011", str(migration_path))
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.revision == "0011_user_identity_dev_platform_notifications"
+    assert module.revision == "0011_user_identity_dev_platform"
+    # Alembic's alembic_version.version_num defaults to VARCHAR(32); every
+    # revision id in this repo must fit, or the final upgrade-head version
+    # stamp raises StringDataRightTruncation on real PostgreSQL.
+    assert len(module.revision) <= 32
     assert module.down_revision == "0010_match_context_referee"
     assert callable(module.upgrade)
     assert callable(module.downgrade)

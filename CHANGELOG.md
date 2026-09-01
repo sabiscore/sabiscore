@@ -28,7 +28,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   stored, never the raw value), FREE/PRO entitlement tiers, and sliding-window
   rate limiting (per-minute + daily quota) backed by Redis with an in-memory
   fallback when the cache is unavailable.
-- **Migration `0011_user_identity_dev_platform_notifications`**: adds
+- **Migration `0011_user_identity_dev_platform`**: adds
   `user_favorites`, `user_saved_matches`, `user_preferences`, `api_keys`,
   `api_usage_records`, `user_notification_subscriptions`,
   `user_notification_logs`, `analytics_events`.
@@ -109,6 +109,34 @@ defects in the test fixtures/assertions themselves:
   the `health-status.ts` change. Tier1-4 suites: 290/290 passed
   (145 tests × chromium + mobile-chrome) after all fixes — wired into a new
   `playwright-tier-suites` CI job.
+
+### Fixed — migration 0011's revision id exceeded Alembic's version_num column
+
+`backend-quality` CI failed with `psycopg.errors.StringDataRightTruncation:
+value too long for type character varying(32)` on the final statement of
+`alembic upgrade head` — the `UPDATE alembic_version SET version_num=...`
+that stamps the new head. Migration 0011's `revision` string,
+`0011_user_identity_dev_platform_notifications`, is 45 characters; Alembic's
+own bookkeeping table defaults `version_num` to `VARCHAR(32)`, and every
+prior revision in this repo stays at or under that (`0009_quarantine_market_
+closings` is exactly 32). Invisible locally: SQLite, which the local venv
+falls back to, doesn't enforce `VARCHAR` length, so this only surfaces once
+a real-Postgres gate runs the chain — which local `pytest`/`ruff`/`mypy`
+never do, and which this session had no local Postgres or Docker daemon to
+reproduce with (verified instead via CI's own failure log plus the
+documented SQLite stamp-and-upgrade round-trip for the migration's DDL
+correctness). Fixed by shortening the revision id to
+`0011_user_identity_dev_platform` (31 chars) and renaming the file to
+match; updated the one test (`test_models_and_migration_0011.py`) and one
+doc reference (this file, above) that named the old string.
+
+**New regression guard**: `test_every_alembic_revision_id_fits_the_version_num_
+column` in `backend/tests/test_database_migration_hardening.py` loads every
+file in `alembic/versions/` and asserts both `revision` and `down_revision`
+are ≤32 characters — catches this class of bug for migration 0012+ without
+needing a live Postgres, closing the exact local/CI verification gap that
+let this one through. Watched failing (reverted to the 45-char id, asserted
+the exact failure) before trusting it.
 
 ## Unreleased - Production-readiness verification sweep (2026-08-31)
 
