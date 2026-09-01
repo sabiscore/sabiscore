@@ -606,7 +606,7 @@ test.describe('Tier 1: Feature Coverage Suite', () => {
           body: JSON.stringify({
             id: 'key_123',
             name: 'Ingestion Script',
-            key: 'sbk_live_8f3b2a9c1d4e7f6a',
+            key: 'sbk_live_8f3b2a9c1d4e7f6a', // gitleaks:allow — mocked route response, not a real key
             tier: 'FREE',
             created_at: new Date().toISOString(),
           }),

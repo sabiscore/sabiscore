@@ -16,7 +16,7 @@ def test_scrub_pii_and_secrets_removes_sensitive_data() -> None:
         "user_email": "analyst@sabiscore.com",
         "nested": {
             "password": "supersecretpassword",
-            "api_key": "sbk_live_1234567890",
+            "api_key": "sbk_live_1234567890",  # gitleaks:allow — fake fixture proving the scrubber redacts this shape
             "safe_property": "Chelsea vs Arsenal",
             "feedback_text": "Contact support at user.name@domain.co.uk for details",
             "auth_header": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xyz",

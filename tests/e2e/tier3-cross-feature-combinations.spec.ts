@@ -73,7 +73,7 @@ test.describe('Tier 3: Cross-Feature Combinations Suite', () => {
   // --------------------------------------------------------------------------
   test('3.2: Developer generates API key, invokes predictions, hits 10 req/min limit, receives 429 Retry-After', async ({ page }) => {
     let callCount = 0;
-    const generatedKey = 'sbk_live_test_apikey_12345';
+    const generatedKey = 'sbk_live_test_apikey_12345'; // gitleaks:allow — mocked route response, not a real key
 
     await page.route('**/api/v1/developer/keys', (route) => {
       route.fulfill({

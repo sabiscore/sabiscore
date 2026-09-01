@@ -498,7 +498,7 @@ test.describe('Tier 2: Boundary & Corner Cases Suite', () => {
       await page.goto('/');
 
       const res = await pageFetch(page, '/api/v1/predict/101', {
-        headers: { 'x-api-key': 'sbk_live_revoked_key_123' },
+        headers: { 'x-api-key': 'sbk_live_revoked_key_123' }, // gitleaks:allow — mocked request header, not a real key
       });
       expect(res.status).toBe(401);
     });
