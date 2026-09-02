@@ -131,7 +131,7 @@ export function KellyTooltip() {
 export function EdgeTooltip() {
   return (
     <Tooltip 
-      content="Edge represents the difference between our model's probability and the bookmaker's implied probability. Positive edge suggests potential value."
+      content="Edge is our model's probability minus the bookmaker's fair probability — the price with the bookmaker's margin removed, not the raw odds. A positive edge means the model rates the outcome higher than the fair market does."
       type="info"
     >
       <Info className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />

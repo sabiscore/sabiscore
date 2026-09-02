@@ -1,5 +1,89 @@
 # SabiScore Debt Ledger
 
+## 53. The match page rendered two different edges for the same market — one of them computed in the browser from vigged odds — RESOLVED 2026-09-02
+
+**Tier:** `RESOLVED`. Found from an operator screenshot of a live Ligue 1
+fixture (`/match/fd-559696`, Toulouse FC vs Lille), not from a failing test.
+
+**What was shown.** The `EDGE DELTA` card read
+`Model 39.3% | Market 29.9% | +9.4% EV advantage`. Directly beneath it, in the
+same scroll, `MARKET EDGE` printed the backend's own `odds_edge.edge`. The two
+numbers were **structurally guaranteed to disagree**, and the visible one was
+the wrong one.
+
+**Root cause.** `EdgeDeltaBar` (`apps/web/src/components/full-analysis-dashboard.tsx`)
+ignored the `edge` the backend already ships and recomputed its own:
+
+```ts
+const impliedProb = oddsEdge.market_odds > 0 ? 1 / oddsEdge.market_odds : 0;
+const deltaPct = (modelProb - impliedProb) * 100;
+```
+
+`1 / market_odds` is the **vigged** price — the bookmaker's margin still in it.
+The backend de-vigs before computing anything
+(`_odds_edge_from_features`, `backend/src/api/endpoints/full_analysis.py`):
+`fair = (1/odds) / overround`, then `edge = model_prob - fair`. Since
+`overround > 1` for any real book, `fair < raw`, so the card's delta was
+always *smaller* than the authoritative edge by `raw * (1 - 1/overround)` —
+roughly 1.5pp on a typical 1X2 book. The screenshot's `29.9%` was the vigged
+price labelled "Market"; the platform's own gloss elsewhere
+(`betting-intelligence-dashboard.tsx`) defines edge as "Model prob. minus
+**fair** implied".
+
+**Three defects in one component, all fixed:**
+
+1. **Backend-authority violation.** CLAUDE.md is explicit that `apps/web` must
+   not "calculate verdicts, stake sizes, or EV independently", and that market
+   de-vigging is backend-owned. This was frontend edge arithmetic. It now reads
+   `oddsEdge.model_prob` and `oddsEdge.edge` and derives the fair probability
+   exactly as `model_prob - edge` — no recomputation, no new backend field, and
+   no way for the two cards to drift again.
+2. **`EV advantage` on a probability-point delta.** Expected value is a
+   different quantity the backend does compute internally
+   (`model_prob * odds - 1`) and deliberately does not publish. The label is now
+   `Model above fair market` / `Model below fair market` / `Level with fair
+   market`. `Fade signal` (a betting-action word on a staking-disabled page)
+   went with it.
+3. **`%` for a difference of two percentages.** Now `pp`, matching
+   `intelligence_synthesizer`'s own `+{edge}pp` narrative string and
+   `fmtPp()` in the betting-intelligence dashboard.
+
+`EdgeTooltip` (`ui/ResponsibleGamblingTooltip.tsx`) described edge against "the
+bookmaker's implied probability" — the same vigged-vs-fair error in prose,
+shown on the very card that renders the correct number. Corrected in the same
+pass; it is the shared tooltip, so every caller is fixed at once.
+
+⚠️ **The card's `ensemble` prop is gone.** It previously re-derived
+`modelProb` by string-matching `oddsEdge.market` against the three ensemble
+probabilities, with `draw_prob` as the silent fallback for any unrecognised
+market string. `oddsEdge.model_prob` is the backend's own probability for the
+market it actually selected — one field, no fallback, no way to mismatch.
+
+**Sweep.** `grep -rnE "1 */ *[a-zA-Z_.]*[Oo]dds|implied"` over `apps/web/src`
+found exactly one recomputation site (this one). `value-bet-scanner.tsx` reads
+a backend-supplied `implied_prob`; every other hit is copy or a type
+declaration. No sibling caller was left broken.
+
+**Guards.** Three tests in `full-analysis-dashboard.test.tsx` pin the fair
+probability, the `pp` unit, the absence of "EV advantage", and — the one that
+matters most — that `EdgeDeltaBar` and `OddsEdgeCard` print the *same* number
+for the same `odds_edge`. The fixture uses a 6% overround so the vigged and
+fair figures are 1.7pp apart, far enough that the old code cannot pass by
+rounding. **All three were watched failing against a reverted fix** (3 failed /
+12 passed) before being trusted, then re-run green (15/15).
+
+⚠️ **Why no zero-fabrication scan or copy-contract test could have caught
+this.** Every prior truthfulness sweep hunted values that were *absent* or
+*fabricated* (neutral Elo defaults, RL reward zeros, the structurally-false
+`LIVE` badge). This number was real, derived from real odds, and internally
+consistent — it was just **the wrong quantity, computed by the wrong
+authority, under the wrong name**. The detectable signature was not the value
+but the *disagreement with the card 40 lines below it*, which only a
+side-by-side assertion catches.
+
+**Gates:** web lint 0 · typecheck 0 · Vitest 304/304 · `NODE_ENV=production`
+build exit 0. Backend untouched — it was already correct.
+
 ## 52. Live sitemap fixture discovery — RESOLVED 2026-09-02
 
 **Tier:** `RESOLVED`. `apps/web/src/app/sitemap.ts` published 5 hand-typed
