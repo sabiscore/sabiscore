@@ -5,6 +5,54 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - WEB_PUSH notification channel (2026-09-02)
+
+### Added — browser push delivery, end to end, with zero new dependencies
+
+- **`WEB_PUSH` is now a dispatched channel**, closing the last open half of
+  `docs/DEBT.md` item 51. The scheduled dispatch worker writes the in-app log
+  row as before and additionally pushes to every active device the
+  subscription's owner registered. See `docs/DEBT.md` item 54.
+- New `backend/src/services/web_push_delivery.py` implements VAPID (RFC 8292)
+  and the `aes128gcm` content encoding (RFC 8291) directly on `cryptography`,
+  which is already a runtime dependency. `pywebpush`/`py-vapid`/`http-ece` are
+  deliberately **not** added — `requirements.runtime.txt` is kept lean to
+  shorten Render deploy windows, and the composition is pinned byte-for-byte
+  against **RFC 8291 section 5's own published test vector** plus a
+  decrypt-as-a-browser-would round trip, which is stronger evidence than
+  trusting a vendored implementation.
+- New `push_devices` table (migration `0013_push_devices`) records the RFC 8030
+  endpoint and its key material. Deliberately separate from
+  `user_notification_subscriptions`: that row is *intent*, this one is
+  *transport*, so one browser registration serves every match a reader
+  subscribes to. `endpoint` is unique — a re-subscribe updates in place instead
+  of accumulating rows that can no longer be decrypted.
+- New endpoints: `GET /api/v1/notifications/push/public-key`,
+  `POST /api/v1/notifications/push/devices`,
+  `DELETE /api/v1/notifications/push/devices`, with Next.js proxy routes.
+  The VAPID public key is **served by the backend**, not baked into a
+  `NEXT_PUBLIC_*` build variable, so rotating it is a restart rather than a
+  frontend redeploy.
+- New `apps/web/public/sw.js` (push receiver only — deliberately caches
+  nothing, because a stale cached analysis on an evidence-gated product would
+  show an old verdict with no indication it was stale) and
+  `apps/web/src/lib/web-push.ts` (permission, subscribe, register, unregister;
+  every failure returns a named reason, never a silent no-op).
+- `MatchSubscribeModal.tsx` gained a third Delivery option and, for the first
+  time, an **error surface** — the previous `catch {}` swallowed every failure,
+  so a rejected subscription looked identical to a successful one.
+- `middleware.ts` CSP gained an explicit `worker-src 'self'`. It cannot be
+  inherited: `worker-src` falls back to `script-src`, which carries
+  `'strict-dynamic'`, and that neutralises `'self'`.
+
+### Configuration
+
+`ENABLE_WEB_PUSH_NOTIFICATIONS` (default `false`), `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `VAPID_CLAIMS_SUB`, `WEB_PUSH_TTL_SECONDS`. Inert and
+fail-closed until an operator supplies a keypair — the public-key endpoint
+reports `configured: false` and the browser never attempts a subscription that
+could not be delivered to.
+
 ## Unreleased - Live sitemap fixture discovery + EMAIL notification channel (2026-09-02)
 
 ### Added — live, bounded, fail-closed sitemap fixture discovery
