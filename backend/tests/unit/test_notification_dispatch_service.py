@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -28,6 +29,19 @@ from src.services.notification_dispatch_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _reset_notification_dispatch_module_state():
+    from src.services import notification_dispatch_service
+
+    notification_dispatch_service._last_result = {
+        "outcome": "never_run",
+        "consecutive_failures": 0,
+        "total_failures": 0,
+        "last_success_at": None,
+    }
+    yield
+
+
 @pytest.fixture
 async def session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
@@ -36,6 +50,19 @@ async def session():
     factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as s:
         yield s
+    await engine.dispose()
+
+
+@pytest.fixture
+async def factory():
+    """Session factory (not an opened session) for run_notification_dispatch_pass(),
+    which opens its own session via ``AsyncSessionLocal()`` — same fixture shape as
+    test_clv_capture_service.py's ``factory``."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    yield session_factory
     await engine.dispose()
 
 
@@ -231,3 +258,115 @@ async def test_probability_swing_idempotent_across_repeated_passes(session: Asyn
     assert first["created"] == 1
     assert second["created"] == 0
     assert second["skipped_existing"] == 1
+
+
+# ── run_notification_dispatch_pass() (public entry point) ──────────────────
+
+
+async def test_run_notification_dispatch_pass_db_not_ready() -> None:
+    from src.services.notification_dispatch_service import run_notification_dispatch_pass
+
+    with patch("src.db.session.AsyncSessionLocal", new=None):
+        result = await run_notification_dispatch_pass()
+
+    assert result["outcome"] == "db_not_ready"
+
+
+async def test_run_notification_dispatch_pass_success_creates_kickoff_reminder(factory) -> None:
+    from src.services.notification_dispatch_service import run_notification_dispatch_pass
+
+    async with factory() as session:
+        await _make_match(session, "m-pass-1", minutes_until_kickoff=30)
+        await _make_subscription(
+            session,
+            match_id="m-pass-1",
+            subscription_type="KICKOFF_REMINDER",
+            reminder_minutes_before=60,
+        )
+        await session.commit()
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        result = await run_notification_dispatch_pass()
+
+    assert result["outcome"] == "ok"
+    assert result["kickoff_reminders"]["created"] == 1
+    assert result["probability_swing_alerts"]["created"] == 0
+    assert result["consecutive_failures"] == 0
+
+    async with factory() as session:
+        logs = (await session.execute(select(UserNotificationLog))).scalars().all()
+    assert len(logs) == 1
+    assert logs[0].category == "KICKOFF_REMINDER"
+
+
+async def test_run_notification_dispatch_pass_genuine_exception_yields_error(factory) -> None:
+    from src.services import notification_dispatch_service
+
+    with patch("src.db.session.AsyncSessionLocal", new=factory), patch.object(
+        notification_dispatch_service,
+        "_dispatch_kickoff_reminders",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        result = await notification_dispatch_service.run_notification_dispatch_pass()
+
+    assert result["outcome"] == "error"
+    assert result["consecutive_failures"] == 1
+
+
+# ── last_notification_dispatch_result() (sync /health accessor) ────────────
+
+
+def test_last_notification_dispatch_result_computes_age_from_iso_timestamp() -> None:
+    from src.services import notification_dispatch_service
+
+    past = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    notification_dispatch_service._last_result = {
+        "outcome": "ok",
+        "last_success_at": past,
+        "consecutive_failures": 0,
+        "total_failures": 0,
+    }
+
+    result = notification_dispatch_service.last_notification_dispatch_result()
+
+    assert result["last_success_age_seconds"] is not None
+    assert result["last_success_age_seconds"] >= 120
+
+
+def test_last_notification_dispatch_result_handles_missing_last_success_at() -> None:
+    from src.services import notification_dispatch_service
+
+    notification_dispatch_service._last_result = {"outcome": "never_run"}
+
+    result = notification_dispatch_service.last_notification_dispatch_result()
+
+    assert result["last_success_age_seconds"] is None
+
+
+# ── _background_notification_dispatch() loop wiring (main.py) ──────────────
+
+
+async def test_background_notification_dispatch_calls_run_pass_then_stops(monkeypatch) -> None:
+    """Same pattern as test_settlement_startup_coordination.py: force the loop
+    to run exactly once via a controlled asyncio.sleep, then cancel."""
+    import asyncio
+
+    from src.api import main
+
+    run_pass = AsyncMock(return_value={"outcome": "ok"})
+    sleep_calls = 0
+
+    async def controlled_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls >= 2:
+            raise asyncio.CancelledError
+
+    with patch(
+        "src.services.notification_dispatch_service.run_notification_dispatch_pass", run_pass
+    ), patch("src.api.main.asyncio.sleep", new=controlled_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await main._background_notification_dispatch()
+
+    run_pass.assert_awaited_once()
+
