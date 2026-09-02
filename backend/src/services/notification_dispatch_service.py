@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
@@ -97,6 +98,17 @@ async def _already_logged(
     return existing.scalar_one_or_none() is not None
 
 
+async def _add_notification_log(session: AsyncSession, log: UserNotificationLog) -> bool:
+    """Insert one notification, returning false if another worker already did."""
+    try:
+        async with session.begin_nested():
+            session.add(log)
+            await session.flush()
+    except IntegrityError:
+        return False
+    return True
+
+
 async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
     counters = {
         "examined": 0,
@@ -141,7 +153,8 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
             counters["skipped_existing"] += 1
             continue
 
-        session.add(
+        created = await _add_notification_log(
+            session,
             UserNotificationLog(
                 id=str(uuid.uuid4()),
                 user_id=sub.user_id,
@@ -155,15 +168,18 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
                 read_at=None,
                 payload={"match_id": sub.match_id, "reminder_minutes_before": minutes_before},
                 created_at=datetime.now(timezone.utc),
+            ),
+        )
+        if created:
+            counters["created"] += 1
+            _dispatch_email_if_applicable(
+                sub,
+                title="Kickoff reminder",
+                message=f"Match starts in about {minutes_before} minutes.",
+                counters=counters,
             )
-        )
-        counters["created"] += 1
-        _dispatch_email_if_applicable(
-            sub,
-            title="Kickoff reminder",
-            message=f"Match starts in about {minutes_before} minutes.",
-            counters=counters,
-        )
+        else:
+            counters["skipped_existing"] += 1
 
     return counters
 
@@ -223,7 +239,8 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
             counters["skipped_existing"] += 1
             continue
 
-        session.add(
+        created = await _add_notification_log(
+            session,
             UserNotificationLog(
                 id=str(uuid.uuid4()),
                 user_id=sub.user_id,
@@ -237,15 +254,18 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
                 read_at=None,
                 payload={"match_id": sub.match_id, "delta": round(delta, 4)},
                 created_at=datetime.now(timezone.utc),
+            ),
+        )
+        if created:
+            counters["created"] += 1
+            _dispatch_email_if_applicable(
+                sub,
+                title="Model probability shift",
+                message=f"Model probabilities moved by {delta:.0%} since the last snapshot.",
+                counters=counters,
             )
-        )
-        counters["created"] += 1
-        _dispatch_email_if_applicable(
-            sub,
-            title="Model probability shift",
-            message=f"Model probabilities moved by {delta:.0%} since the last snapshot.",
-            counters=counters,
-        )
+        else:
+            counters["skipped_existing"] += 1
 
     return counters
 

@@ -538,6 +538,12 @@ class UserNotificationSubscription(Base):
 class UserNotificationLog(Base):
     __tablename__ = "user_notification_logs"
     __table_args__ = (
+        UniqueConstraint(
+            "subscription_id",
+            "match_id",
+            "category",
+            name="uq_notification_log_subscription_match_category",
+        ),
         Index("ix_notif_logs_user_unread", "user_id", "read", "created_at"),
         Index("ix_notif_logs_anon_unread", "anonymous_session_id", "read", "created_at"),
         {"extend_existing": True},
@@ -598,4 +604,3 @@ __all__ = [
     "UserNotificationSubscription",
     "UserNotificationLog",
 ]
-
