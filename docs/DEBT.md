@@ -105,10 +105,45 @@ would produce a row that can never deliver, and the dispatch worker would count
 (both channels route through `_dispatch_channel_side_effects`, so swing alerts
 push today without a separate code path).
 
-**Gates:** backend ruff 0 · 13 new `test_web_push_delivery.py` (incl. the RFC
-vector) · `test_notification_dispatch_service.py` 24/24 with 5 rewritten/new
-WEB_PUSH cases · Alembic `0013` upgrade/downgrade/re-upgrade round trip clean ·
-web lint 0 · typecheck 0 · 15 new `web-push.test.ts`.
+**Gates (final, PR #134 green):** backend **2116 passed / 15 skipped / 2
+xfailed** in CI (2117/17/2 locally — the difference is the platform-dependent
+optional-ML skip set) · ruff 0 · mypy **771 ≤ 784, unchanged from baseline** ·
+18 `test_web_push_delivery.py` (incl. the RFC vector) · 15
+`test_push_device_registry.py` · `test_notification_dispatch_service.py` 26/26
+with 7 rewritten/new WEB_PUSH cases · Alembic `0013`
+upgrade/downgrade/re-upgrade round trip clean · OpenAPI 108 paths · web lint 0 ·
+typecheck 0 · Vitest 319/319 · production build exit 0 · Gitleaks clean over
+the full branch range · **SonarCloud quality gate OK, new-code coverage 98.0%**.
+
+⚠️ **Three CI failures on the way in, all worth recording:**
+
+1. **Gitleaks flagged `const VAPID_KEY = "<87-char base64url>"`** — RFC 8291's
+   *public* P-256 point, not a credential, but indistinguishable from one to a
+   scanner. Fixed by constructing the fixture instead of pasting it, and by
+   generating the backend test keypair per run rather than hardcoding a
+   32-byte scalar next to a `PRIVATE_KEY` identifier. **Gitleaks was never run
+   locally before pushing** — it is installed and takes under a second
+   (`gitleaks detect -c .gitleaks.toml --log-opts="origin/master..HEAD"`).
+2. **The `pull_request`-event scan still failed after the fix**, because it
+   scans the whole branch range and the introducing commit's own patch remains
+   in it. Force-push was denied (correctly — rewriting a branch with an open PR
+   is the wrong tool), so this took the disposition the ledger already records
+   twice: a `.gitleaksignore` fingerprint with the reasoning beside it.
+3. **Two typecheck errors CI never reached**, because the Gitleaks gate failed
+   first and skipped every downstream job. `vi.fn()` without declared
+   parameters records calls as a 0- or 1-tuple, so `mock.calls[n][1]` does not
+   compile. ⚠️ **The first commit claimed a clean typecheck; it had been run
+   before the test file existed and not re-run after.** Re-run every gate after
+   the last edit, not after the last edit you remember making.
+4. **SonarCloud: new-code coverage 71.0% against a required 80%.** The
+   uncovered lines were the ones that most needed testing —
+   `notification_service.py` 36/45 and the three endpoints 12/35 had no direct
+   coverage, only indirect exercise through the dispatch tests. Backfilled to
+   **98.0%** with 22 tests that each pin a branch where the wrong behaviour is
+   silent (upsert-on-endpoint, owner scoping, fail-closed endpoints, PEM key
+   loading). Same trap the prior session recorded: **Sonar measures the diff,
+   so touching a function makes its untested siblings newly count against
+   you.**
 
 ## 53. The match page rendered two different edges for the same market — one of them computed in the browser from vigged odds — RESOLVED 2026-09-02
 

@@ -188,9 +188,11 @@ document could not have known.
 |---|---|
 | RFC 8291 §5 published test vector | **byte-for-byte match** |
 | Decrypt-as-a-browser round trip (independent HKDF via `cryptography`) | passes |
-| `test_web_push_delivery.py` (new) | 13/13 |
-| `test_notification_dispatch_service.py` (5 new/rewritten WEB_PUSH cases) | 24/24 |
-| Full backend suite | **2095 passed**, 17 skipped, 2 xfailed, 0 failed |
+| `test_web_push_delivery.py` (new) | 18/18 |
+| `test_push_device_registry.py` (new) | 15/15 |
+| `test_notification_dispatch_service.py` (7 new/rewritten WEB_PUSH cases) | 26/26 |
+| Full backend suite — CI (Linux) | **2116 passed**, 15 skipped, 2 xfailed, 0 failed |
+| Full backend suite — local | 2117 passed, 17 skipped, 2 xfailed, exit 0 |
 | Backend ruff | 0 |
 | mypy ceiling | 771 ≤ 784 — **unchanged from baseline**, no new errors |
 | Alembic `0013` upgrade → downgrade → re-upgrade | clean |
@@ -200,6 +202,25 @@ document could not have known.
 | Full web suite | **319/319** (was 304) |
 | Web lint / typecheck | 0 / 0 |
 | `NODE_ENV=production` build | exit 0 |
+| Gitleaks over the full branch range | no leaks found |
+| **SonarCloud quality gate** | **OK — new-code coverage 98.0%** (was 71.0%) |
+| PR #134 checks | **22/22 pass**, `mergeStateStatus: CLEAN` |
+
+The two suite counts differ by the platform-dependent optional-ML skip set
+(catboost/SHAP are unavailable on the local Python 3.14 interpreter), not by
+any test outcome.
+
+### Three CI failures on the way in
+
+Recorded in `docs/DEBT.md` item 54 in full. In short: Gitleaks flagged an RFC
+public key literal (**never run locally before pushing, though it is installed
+and takes under a second**); the `pull_request`-event scan still saw the
+introducing commit after the fix, so a `.gitleaksignore` fingerprint was added
+per the ledger's existing precedent rather than force-pushing a rewritten
+branch; and two typecheck errors were only reachable once the Gitleaks gate
+stopped skipping every downstream job — **the first commit claimed a clean
+typecheck that had been run before the test file existed.** Finally SonarCloud
+failed on new-code coverage at 71%, backfilled to 98%.
 
 ### Deliberately not built
 
