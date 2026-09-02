@@ -17,3 +17,12 @@
 # entropy. Reworded to "AES-128-GCM" in commit d7951d0, but the introducing
 # commit's own patch remains in history-mode scan range.
 0498faf2c4ae504cc2de67f7575562b71d623d5f:docs/DEBT.md:generic-api-key:47
+
+# PR #134 branch history: `const VAPID_KEY = "<87-char base64url>"` — the
+# *public* uncompressed P-256 point from RFC 8291's published worked example,
+# not a credential, but indistinguishable from one to a scanner. Replaced in
+# commit 3000a47 with a constructed fixture (`SAMPLE_UNCOMPRESSED_P256_POINT`)
+# so no key-shaped literal remains in the tree; the introducing commit's own
+# patch is still inside history-mode scan range. Same disposition as the two
+# entries above.
+6feee3644a999736c1cde41f51eec1e2b83a3b57:apps/web/src/lib/web-push.test.ts:generic-api-key:13
