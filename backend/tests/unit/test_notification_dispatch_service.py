@@ -337,6 +337,57 @@ async def test_expired_subscription_deactivates_the_device(session: AsyncSession
     assert device.is_active is False
 
 
+async def test_web_push_reaches_an_anonymous_reader_s_own_device(session: AsyncSession) -> None:
+    """Push does not require an account. The anonymous session id is the owner
+    key, and it must scope the device lookup exactly as a user id does."""
+    await _make_match(session, "m4j", minutes_until_kickoff=10)
+    sub = await _make_subscription(
+        session, match_id="m4j", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+    )
+    sub.user_id = None
+    sub.anonymous_session_id = "anon-9"
+    await _make_push_device(
+        session, endpoint="https://push.example/anon", user_id=None, anonymous_session_id="anon-9"
+    )
+    await _make_push_device(session, endpoint="https://push.example/someone-else")
+    await session.flush()
+
+    with patch(
+        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
+    ), patch(
+        "src.services.notification_dispatch_service.send_web_push",
+        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+    ) as mocked_send:
+        await _dispatch_kickoff_reminders(session)
+
+    assert mocked_send.await_count == 1
+    assert mocked_send.await_args.kwargs["endpoint"] == "https://push.example/anon"
+
+
+async def test_web_push_with_no_owner_at_all_sends_nothing(session: AsyncSession) -> None:
+    """A subscription with neither identifier has no safe device query — an
+    unscoped select would reach every browser in the table."""
+    await _make_match(session, "m4k", minutes_until_kickoff=10)
+    sub = await _make_subscription(
+        session, match_id="m4k", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+    )
+    sub.user_id = None
+    sub.anonymous_session_id = None
+    await _make_push_device(session, endpoint="https://push.example/orphan")
+    await session.flush()
+
+    with patch(
+        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
+    ), patch(
+        "src.services.notification_dispatch_service.send_web_push",
+        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+    ) as mocked_send:
+        counts = await _dispatch_kickoff_reminders(session)
+
+    assert mocked_send.await_count == 0
+    assert counts["web_push_skipped_no_device"] == 1
+
+
 async def test_web_push_never_reaches_another_owners_device(session: AsyncSession) -> None:
     """The subscription belongs to user-1; an unscoped device query would fan a
     private alert out to every browser in the table."""

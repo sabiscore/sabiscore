@@ -14,13 +14,15 @@ import json
 import httpx
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric import utils as asym_utils
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from src.core.config import settings
 from src.services.web_push_delivery import (
+    _shared_client,
+    aclose,
     build_vapid_headers,
     encrypt_payload,
     is_web_push_configured,
@@ -142,6 +144,12 @@ def test_not_configured_by_default(monkeypatch) -> None:
     monkeypatch.setattr(settings, "enable_web_push_notifications", False)
     assert is_web_push_configured() is False
     assert vapid_public_key() is None
+
+
+def test_public_key_is_exposed_once_configured(monkeypatch) -> None:
+    _configure(monkeypatch)
+    assert is_web_push_configured() is True
+    assert vapid_public_key() == _e(_VAPID_PUBLIC_RAW)
 
 
 def test_enabled_without_a_keypair_is_not_configured(monkeypatch) -> None:
@@ -288,6 +296,65 @@ async def test_malformed_subscription_keys_never_raise(monkeypatch) -> None:
     )
     assert result.sent is False
     assert result.reason == "encryption_failed"
+
+
+def test_a_pem_private_key_is_accepted_as_well_as_the_base64url_scalar(monkeypatch) -> None:
+    """`npx web-push generate-vapid-keys` emits a base64url scalar, but an
+    operator arriving from another toolchain may hold a PEM block."""
+    _configure(monkeypatch)
+    pem = _VAPID_PRIVATE_KEY_OBJ.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("ascii")
+    monkeypatch.setattr(settings, "vapid_private_key", pem)
+
+    token = build_vapid_headers("https://push.example/x")["Authorization"]
+    header_b64, claims_b64, signature_b64 = token[len("vapid t=") :].split(",")[0].split(".")
+    signature = _d(signature_b64)
+    _VAPID_PRIVATE_KEY_OBJ.public_key().verify(
+        asym_utils.encode_dss_signature(
+            int.from_bytes(signature[:32], "big"), int.from_bytes(signature[32:], "big")
+        ),
+        f"{header_b64}.{claims_b64}".encode("ascii"),
+        ec.ECDSA(hashes.SHA256()),
+    )
+
+
+def test_a_non_ec_pem_is_rejected_rather_than_used(monkeypatch) -> None:
+    _configure(monkeypatch)
+    rsa_pem = (
+        rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        .private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        .decode("ascii")
+    )
+    monkeypatch.setattr(settings, "vapid_private_key", rsa_pem)
+
+    with pytest.raises(ValueError, match="EC P-256"):
+        build_vapid_headers("https://push.example/x")
+
+
+def test_missing_vapid_settings_raise_rather_than_signing_with_nothing(monkeypatch) -> None:
+    _configure(monkeypatch)
+    monkeypatch.setattr(settings, "vapid_claims_sub", None)
+    with pytest.raises(ValueError, match="VAPID keypair and subject"):
+        build_vapid_headers("https://push.example/x")
+
+
+async def test_the_http_client_is_shared_and_closable() -> None:
+    """One module-scoped client, not one per send — the same rule the provider
+    gateway follows for its lifespan client."""
+    first = _shared_client()
+    assert _shared_client() is first
+    await aclose()
+    assert first.is_closed
+    # A send after shutdown must rebuild rather than reuse a closed client.
+    assert _shared_client() is not first
+    await aclose()
 
 
 async def test_incomplete_subscription_is_rejected_before_any_request(monkeypatch) -> None:
