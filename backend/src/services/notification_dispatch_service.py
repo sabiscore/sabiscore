@@ -12,7 +12,7 @@ EMAIL additionally attempts a best-effort SMTP send via ``email_delivery``,
 config-gated and never blocking the log write on failure. ``WEB_PUSH``
 subscriptions are still persisted but explicitly skipped and counted, not
 silently ignored (docs/DEBT.md notification-delivery gap) — it needs new
-frontend (service worker, subscribe UI) and backend (VAPID/AES128GCM)
+frontend (service worker, subscribe UI) and backend (VAPID / AES-128-GCM)
 infrastructure that doesn't exist yet.
 """
 from __future__ import annotations

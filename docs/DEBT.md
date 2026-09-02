@@ -44,7 +44,7 @@ never blocks the log write on failure. `apps/web/src/components/MatchSubscribeMo
 gained a Delivery selector (In-App / Email) with a destination-email input —
 the `channel`/`destination` fields the backend `MatchSubscriptionCreate`
 endpoint already accepted end-to-end but the UI never exposed. `WEB_PUSH`
-remains genuinely deferred: it needs VAPID-signed, AES128GCM-encrypted
+remains genuinely deferred: it needs VAPID-signed, AES-128-GCM encrypted
 requests (a real new dependency — `pywebpush` or equivalent, no stdlib path)
 and a frontend service worker + subscribe UI that doesn't exist yet, a
 materially larger lift than EMAIL's reuse of already-installed tooling.

@@ -29,7 +29,7 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   standard `SMTP_*` settings — inert until an operator configures real
   credentials. `MatchSubscribeModal.tsx` gained a Delivery selector
   (In-App / Email) with a destination-email input. `WEB_PUSH` remains
-  deferred — it needs a new crypto dependency (VAPID/AES128GCM) and a
+  deferred — it needs a new crypto dependency (VAPID / AES-128-GCM) and a
   frontend service worker that don't exist yet.
 
 ## Unreleased - Documentation reconciliation and release-gate verification (2026-09-01)
