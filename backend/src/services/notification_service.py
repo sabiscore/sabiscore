@@ -9,7 +9,12 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import UserNotificationLog, UserNotificationSubscription, UserPreference
+from ..db.models import (
+    PushDevice,
+    UserNotificationLog,
+    UserNotificationSubscription,
+    UserPreference,
+)
 
 
 class NotificationService:
@@ -284,3 +289,115 @@ class NotificationService:
         res = await db.execute(stmt)
         await db.commit()
         return int(res.rowcount or 0)
+
+    # ── WEB_PUSH device registry ──────────────────────────────────────────────
+    #
+    # A push device is transport, not intent: it records *where* a WEB_PUSH
+    # message can be delivered, while UserNotificationSubscription above records
+    # *what* the person asked to hear about. Keeping them apart is what lets one
+    # browser registration serve every match a person subscribes to.
+
+    @staticmethod
+    async def register_push_device(
+        db: AsyncSession,
+        *,
+        user_id: Optional[str] = None,
+        anonymous_session_id: Optional[str] = None,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        user_agent: Optional[str] = None,
+    ) -> PushDevice:
+        """Upsert on ``endpoint``.
+
+        The push service treats the endpoint as the device identity, so a
+        re-subscribe from the same browser (new keys after a permission reset,
+        say) must overwrite in place. Inserting instead would leave a row whose
+        keys no longer decrypt, and every send to it would fail forever.
+        """
+        clean_endpoint = endpoint.strip()
+        result = await db.execute(
+            select(PushDevice).where(PushDevice.endpoint == clean_endpoint)
+        )
+        existing = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+
+        if existing:
+            existing.p256dh = p256dh
+            existing.auth = auth
+            existing.user_agent = user_agent
+            existing.user_id = user_id
+            existing.anonymous_session_id = anonymous_session_id if not user_id else None
+            existing.is_active = True
+            existing.updated_at = now
+            await db.commit()
+            await db.refresh(existing)
+            return existing
+
+        device = PushDevice(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            anonymous_session_id=anonymous_session_id if not user_id else None,
+            endpoint=clean_endpoint,
+            p256dh=p256dh,
+            auth=auth,
+            user_agent=user_agent,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(device)
+        await db.commit()
+        await db.refresh(device)
+        return device
+
+    @staticmethod
+    async def unregister_push_device(db: AsyncSession, *, endpoint: str) -> bool:
+        """Deactivate rather than delete, so a browser that re-subscribes to the
+        same endpoint reuses one row instead of churning the unique index."""
+        result = await db.execute(
+            select(PushDevice).where(PushDevice.endpoint == endpoint.strip())
+        )
+        device = result.scalar_one_or_none()
+        if device is None:
+            return False
+        device.is_active = False
+        device.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        return True
+
+    @staticmethod
+    async def get_active_push_devices(
+        db: AsyncSession,
+        *,
+        user_id: Optional[str] = None,
+        anonymous_session_id: Optional[str] = None,
+    ) -> List[PushDevice]:
+        """Devices a WEB_PUSH notification for this owner should reach.
+
+        Returns [] when neither identifier is supplied — an unscoped query here
+        would fan a private notification out to every device in the table.
+        """
+        if user_id:
+            stmt = select(PushDevice).where(
+                PushDevice.user_id == user_id, PushDevice.is_active.is_(True)
+            )
+        elif anonymous_session_id:
+            stmt = select(PushDevice).where(
+                PushDevice.anonymous_session_id == anonymous_session_id,
+                PushDevice.is_active.is_(True),
+            )
+        else:
+            return []
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def mark_push_device_expired(db: AsyncSession, *, device_id: str) -> None:
+        """The push service reported 404/410 — the subscription is gone for good.
+        Flushes without committing; the caller owns the transaction boundary."""
+        await db.execute(
+            update(PushDevice)
+            .where(PushDevice.id == device_id)
+            .values(is_active=False, updated_at=datetime.now(timezone.utc))
+        )

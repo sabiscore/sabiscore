@@ -144,3 +144,91 @@ shared `EdgeTooltip` no longer describes edge against the vigged price.
 `performance-page-client.test.tsx > distinguishes a real outage from having no
 settled data` time out at 5000 ms under parallel load. It passes in isolation
 and the suite is 304/304 on re-run. Not caused by this change; not fixed here.
+
+---
+
+## Milestone executed 2026-09-02 (second) — WEB_PUSH notification channel
+
+### Why this, and why not the alternative offered alongside it
+
+The operator supplied `Recommendations2.txt`, which proposes two paths and
+states "Starting execution on Path A." Both were reconciled first
+(`plan-reconciliation.md` Appendix C):
+
+- **Path A (WEB_PUSH)** — accepted. It was the one product gap the prior
+  session explicitly left open, it is bounded, and it closes the last half of
+  `docs/DEBT.md` item 51.
+- **Path B (certification thresholds)** — **rejected, deliberately.** Its first
+  step is "define the exact mathematical baselines a model must hit." Those
+  baselines already exist, frozen and SHA-256-hashed in
+  `certification_policy.py` v1.0.0, pinned *before* the candidate was
+  evaluated precisely so they could not be tuned afterwards. Redefining them
+  now, having seen the candidate fail, is the exact action APEX §23 forbids
+  and is Class C — an operator decision, not an agent's. Its step 4's claim
+  that a parity test closes DEBT 42/49/50 is also factually wrong about all
+  three; the per-item reasoning is in Appendix C.
+
+### What shipped
+
+Full record in `docs/DEBT.md` item 54; operator setup in
+`docs/NOTIFICATION_CHANNELS.md`. Backend transport (VAPID + RFC 8291 on the
+already-present `cryptography`, no new dependency), `push_devices` table +
+migration `0013`, three endpoints + Next proxies, dispatch wiring, service
+worker, browser enrolment helper, a third Delivery option in the subscribe
+modal, and an explicit `worker-src 'self'` CSP directive.
+
+Six specifics from the attached plan were corrected rather than followed —
+BullMQ, `apps/api/`, raw SQL migration, a colliding endpoint name,
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, and `pywebpush`. Each is a repo constraint the
+document could not have known.
+
+### Evidence
+
+| Gate | Result |
+|---|---|
+| RFC 8291 §5 published test vector | **byte-for-byte match** |
+| Decrypt-as-a-browser round trip (independent HKDF via `cryptography`) | passes |
+| `test_web_push_delivery.py` (new) | 18/18 |
+| `test_push_device_registry.py` (new) | 15/15 |
+| `test_notification_dispatch_service.py` (7 new/rewritten WEB_PUSH cases) | 26/26 |
+| Full backend suite — CI (Linux) | **2116 passed**, 15 skipped, 2 xfailed, 0 failed |
+| Full backend suite — local | 2117 passed, 17 skipped, 2 xfailed, exit 0 |
+| Backend ruff | 0 |
+| mypy ceiling | 771 ≤ 784 — **unchanged from baseline**, no new errors |
+| Alembic `0013` upgrade → downgrade → re-upgrade | clean |
+| OpenAPI | 108 paths (was 106; +2 for the push routes) |
+| Artifact verifier | 6/6 hash-locked pairs |
+| `web-push.test.ts` (new) | 15/15 |
+| Full web suite | **319/319** (was 304) |
+| Web lint / typecheck | 0 / 0 |
+| `NODE_ENV=production` build | exit 0 |
+| Gitleaks over the full branch range | no leaks found |
+| **SonarCloud quality gate** | **OK — new-code coverage 98.0%** (was 71.0%) |
+| PR #134 checks | **22/22 pass**, `mergeStateStatus: CLEAN` |
+
+The two suite counts differ by the platform-dependent optional-ML skip set
+(catboost/SHAP are unavailable on the local Python 3.14 interpreter), not by
+any test outcome.
+
+### Three CI failures on the way in
+
+Recorded in `docs/DEBT.md` item 54 in full. In short: Gitleaks flagged an RFC
+public key literal (**never run locally before pushing, though it is installed
+and takes under a second**); the `pull_request`-event scan still saw the
+introducing commit after the fix, so a `.gitleaksignore` fingerprint was added
+per the ledger's existing precedent rather than force-pushing a rewritten
+branch; and two typecheck errors were only reachable once the Gitleaks gate
+stopped skipping every downstream job — **the first commit claimed a clean
+typecheck that had been run before the test file existed.** Finally SonarCloud
+failed on new-code coverage at 71%, backfilled to 98%.
+
+### Deliberately not built
+
+- A standalone push-preferences screen — the existing per-match modal is the
+  only place a reader currently opts in, and a second surface would need its
+  own state reconciliation.
+- `render.yaml` declarations for the new env vars. The EMAIL channel set the
+  precedent of dashboard-only configuration, and a `render.yaml` change forces
+  a Blueprint-sync approval that has repeatedly been a blocker in this repo.
+  Every variable is named in `docs/NOTIFICATION_CHANNELS.md` instead.
+- Anything under Path B.

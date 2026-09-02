@@ -1,5 +1,150 @@
 # SabiScore Debt Ledger
 
+## 54. WEB_PUSH notification channel — RESOLVED 2026-09-02
+
+**Tier:** `RESOLVED`. Closes the last open half of item 51 (the EMAIL half
+closed 2026-09-02). `WEB_PUSH` had been an accepted value on
+`user_notification_subscriptions.channel` and an option in the API schema since
+the notification system shipped, but the dispatch worker explicitly skipped it
+and counted `skipped_channel`. Persisted, never delivered.
+
+**What shipped.**
+
+| Layer | File |
+|---|---|
+| Transport | `backend/src/services/web_push_delivery.py` (new) |
+| Schema | `push_devices` + `backend/alembic/versions/0013_push_devices.py` (new) |
+| Persistence | `NotificationService.register_push_device` / `unregister_push_device` / `get_active_push_devices` |
+| API | `/api/v1/notifications/push/public-key` + `/push/devices` (POST, DELETE) |
+| Dispatch | `_dispatch_channel_side_effects` in `notification_dispatch_service.py` |
+| Browser | `apps/web/public/sw.js`, `apps/web/src/lib/web-push.ts`, `MatchSubscribeModal.tsx` |
+| CSP | `worker-src 'self'` in `apps/web/src/middleware.ts` |
+
+**Decision: no new dependency, and the proof is the RFC's own test vector.**
+The obvious route is `pywebpush`, which pulls `py-vapid` and `http-ece` — both
+of which sit on `cryptography`, already a runtime dependency here. The web-push
+content encoding is a fully specified HKDF chain plus one AES-128-GCM seal, so
+composing it directly costs ~80 lines and adds nothing to
+`requirements.runtime.txt`, which was deliberately trimmed to shorten Render
+deploy windows. This follows the EMAIL precedent exactly (stdlib `smtplib`
+over a vendor SDK).
+
+⚠️ **Composing crypto yourself is only defensible with proof, so the proof is
+the first test in the file.** RFC 8291 §5 publishes a complete worked example —
+fixed UA keys, fixed sender key, fixed salt, fixed expected body — and
+`encrypt_payload` reproduces it **byte for byte**. A second test decrypts a
+freshly generated payload the way a user agent would (ECDH → HKDF → AES-GCM,
+via `cryptography`'s own `HKDF`, not our helper), so the non-deterministic
+production path is verified too. **This failure mode is otherwise completely
+invisible from our side**: a push service accepts and forwards an
+undecryptable body with a `201`, so without the vector, a wrong HKDF chain
+would look like a fully working feature that no browser ever displays.
+
+**Two tables, not one — deliberately.** `push_devices` is *transport* (where a
+message can physically be delivered); `user_notification_subscriptions` stays
+*intent* (what someone asked to hear about). Folding them together would have
+meant re-registering the browser for every match subscribed to. `endpoint`
+carries the unique constraint because it is the device identity as far as the
+push service is concerned — a re-subscribe after a permission reset must
+overwrite the stored keys in place, or the row keeps keys that no longer
+decrypt and every send to it fails forever.
+
+**Ownership scoping is a safety property, not an optimisation.**
+`_active_devices_for` returns `[]` when a subscription has neither a `user_id`
+nor an `anonymous_session_id`. An unscoped `select(PushDevice)` there would fan
+one person's alert out to every registered browser in the table. Pinned by
+`test_web_push_never_reaches_another_owners_device`.
+
+**404/410 deactivates; 5xx does not.** A push service reports 404/410 when the
+subscription is permanently gone, and the device is deactivated on the spot —
+otherwise every future pass burns a request on an endpoint that can never
+deliver. A 500 is the push service's problem, not a dead reader, and
+deactivating on it would silently lose someone. Both pinned.
+
+**The VAPID public key is served by the backend, not `NEXT_PUBLIC_*`.** It is
+public by design (RFC 8292 §2), but routing it through
+`GET /notifications/push/public-key` means a rotation is a backend restart
+rather than a frontend redeploy, and the repo gains no new
+credential-shaped build variable. The endpoint reports `configured: false`
+while the channel is off, so the browser never attempts a subscription that
+could not be delivered to.
+
+⚠️ **`worker-src 'self'` had to be stated explicitly in the CSP.** It falls
+back to `script-src`, which carries `'strict-dynamic'` — and that neutralises
+`'self'`, so `/sw.js` would have been blocked with no nonce available to give
+it. Service-worker registration failure is silent from the page's perspective;
+this is the same class as the vΩ.8 CSP hydration bug, caught before shipping
+rather than after.
+
+**Also fixed, found while wiring the UI:** `MatchSubscribeModal.handleSubmit`
+ended in `catch {}`. Every failure — a rejected subscription, a network error —
+was swallowed, and the modal simply stayed put with the button re-enabled, so a
+failed alert looked exactly like one the reader had not submitted yet. The
+modal now has an error surface, which is also what makes the four named
+WEB_PUSH failure reasons (`unsupported`, `not_configured`, `permission_denied`,
+`registration_failed`) visible instead of collapsing into silence.
+
+⚠️ **Browser enrolment happens *before* the subscription row is created.**
+Creating a `WEB_PUSH` subscription for a browser that never granted permission
+would produce a row that can never deliver, and the dispatch worker would count
+`web_push_skipped_no_device` forever with nothing on screen having said so.
+
+**Rejected from the attached plan** (`Recommendations2.txt`, Path A), and why:
+
+| Proposal | Disposition |
+|---|---|
+| BullMQ worker for push dispatch | **Rejected — competing job system.** BullMQ/ioredis is the TaxBridge/Hashablanca stack; SabiScore's background work runs in the FastAPI lifespan over direct Redis. Same rejection already recorded for the diagnostics plan in `reports/execution/plan-reconciliation.md` Appendix B. |
+| `apps/api/routers/notifications.py` | **Rejected — banned legacy surface.** `apps/api/` is a known legacy skeleton CLAUDE.md forbids referencing in production. The real path is `backend/src/api/endpoints/notifications.py`. |
+| Raw `0013_push_subscriptions.sql` | **Rejected — Alembic is the only schema authority.** Also `user_id UUID`: `users.id` is `String` here, so the proposed FK type would not have matched. |
+| `POST /api/v1/notifications/subscribe` | **Renamed.** That path collides with the existing match-subscription flow; WEB_PUSH is a delivery channel, not a second subscription system. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | **Replaced** by the backend-served endpoint, above. |
+| `pywebpush` | **Replaced** by `cryptography`, above. |
+
+**Not built:** a standalone push-preferences screen, and push for
+`PROBABILITY_SWING` beyond what the shared dispatch path already gives it
+(both channels route through `_dispatch_channel_side_effects`, so swing alerts
+push today without a separate code path).
+
+**Gates (final, PR #134 green):** backend **2116 passed / 15 skipped / 2
+xfailed** in CI (2117/17/2 locally — the difference is the platform-dependent
+optional-ML skip set) · ruff 0 · mypy **771 ≤ 784, unchanged from baseline** ·
+18 `test_web_push_delivery.py` (incl. the RFC vector) · 15
+`test_push_device_registry.py` · `test_notification_dispatch_service.py` 26/26
+with 7 rewritten/new WEB_PUSH cases · Alembic `0013`
+upgrade/downgrade/re-upgrade round trip clean · OpenAPI 108 paths · web lint 0 ·
+typecheck 0 · Vitest 319/319 · production build exit 0 · Gitleaks clean over
+the full branch range · **SonarCloud quality gate OK, new-code coverage 98.0%**.
+
+⚠️ **Three CI failures on the way in, all worth recording:**
+
+1. **Gitleaks flagged `const VAPID_KEY = "<87-char base64url>"`** — RFC 8291's
+   *public* P-256 point, not a credential, but indistinguishable from one to a
+   scanner. Fixed by constructing the fixture instead of pasting it, and by
+   generating the backend test keypair per run rather than hardcoding a
+   32-byte scalar next to a `PRIVATE_KEY` identifier. **Gitleaks was never run
+   locally before pushing** — it is installed and takes under a second
+   (`gitleaks detect -c .gitleaks.toml --log-opts="origin/master..HEAD"`).
+2. **The `pull_request`-event scan still failed after the fix**, because it
+   scans the whole branch range and the introducing commit's own patch remains
+   in it. Force-push was denied (correctly — rewriting a branch with an open PR
+   is the wrong tool), so this took the disposition the ledger already records
+   twice: a `.gitleaksignore` fingerprint with the reasoning beside it.
+3. **Two typecheck errors CI never reached**, because the Gitleaks gate failed
+   first and skipped every downstream job. `vi.fn()` without declared
+   parameters records calls as a 0- or 1-tuple, so `mock.calls[n][1]` does not
+   compile. ⚠️ **The first commit claimed a clean typecheck; it had been run
+   before the test file existed and not re-run after.** Re-run every gate after
+   the last edit, not after the last edit you remember making.
+4. **SonarCloud: new-code coverage 71.0% against a required 80%.** The
+   uncovered lines were the ones that most needed testing —
+   `notification_service.py` 36/45 and the three endpoints 12/35 had no direct
+   coverage, only indirect exercise through the dispatch tests. Backfilled to
+   **98.0%** with 22 tests that each pin a branch where the wrong behaviour is
+   silent (upsert-on-endpoint, owner scoping, fail-closed endpoints, PEM key
+   loading). Same trap the prior session recorded: **Sonar measures the diff,
+   so touching a function makes its untested siblings newly count against
+   you.**
+
 ## 53. The match page rendered two different edges for the same market — one of them computed in the browser from vigged odds — RESOLVED 2026-09-02
 
 **Tier:** `RESOLVED`. Found from an operator screenshot of a live Ligue 1

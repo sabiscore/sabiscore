@@ -243,3 +243,44 @@ parity rule, one is data-blocked. All three code samples are rejected.**
 **Net new work from this document: none.** Its two sound ideas are already in
 production; its two remaining ones are gated on data volume and on the
 train/serve parity rule respectively.
+
+---
+
+## Appendix C — Reconciliation of "Recommendations2.txt" (2026-09-02)
+
+Proposes two paths. **Path A was executed** (corrected to this repo's
+architecture — see the table below and `docs/DEBT.md` item 54). **Path B was
+not, and must not be executed as written.**
+
+### C.1 Path A — WEB_PUSH infrastructure
+
+Direction accepted; six specifics corrected. Every correction is a repo
+constraint the document could not have known, not a matter of taste.
+
+| Proposal | Disposition | Basis |
+|---|---|---|
+| Build WEB_PUSH end to end | **ACCEPTED — shipped** | Closes the last open half of `docs/DEBT.md` item 51 |
+| BullMQ worker for push dispatch | **REJECTED — competing job system** | BullMQ/ioredis is the TaxBridge/Hashablanca stack. SabiScore's background work runs in the FastAPI lifespan over direct Redis. Same rejection as Appendix B row 5 — this is the second document to propose it. |
+| `apps/api/routers/notifications.py` | **REJECTED — banned legacy surface** | `apps/api/` is a known legacy skeleton CLAUDE.md forbids referencing in production scripts, CI, or runbooks. Correct path: `backend/src/api/endpoints/notifications.py`. |
+| Raw SQL `0013_push_subscriptions.sql` | **REJECTED — Alembic is the only schema authority** | `Base.metadata.create_all()` and hand-run SQL are both prohibited. Also `user_id UUID`: `users.id` is `String` in this schema, so the proposed FK type would not have matched, and `gen_random_uuid()` conflicts with the application-generated `str(uuid4())` PKs every sibling table uses. |
+| `POST /api/v1/notifications/subscribe` | **RENAMED** | Collides with the existing match-subscription flow (`/notifications/subscriptions/matches`). WEB_PUSH is a delivery *channel*, not a second subscription system. Shipped as `/notifications/push/devices`. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | **REPLACED** | Serving the key from `GET /notifications/push/public-key` makes rotation a backend restart instead of a frontend redeploy, and avoids adding another `NEXT_PUBLIC_*` credential-shaped variable to a repo whose CI scans for exactly that. |
+| `pywebpush` | **REPLACED by `cryptography`** | `pywebpush` pulls `py-vapid` + `http-ece`, which themselves sit on `cryptography` — already a runtime dependency. `requirements.runtime.txt` was deliberately trimmed to shorten Render deploy windows. Correctness is proved against RFC 8291 §5's published test vector rather than assumed from a vendored library. |
+| (not mentioned) `worker-src` CSP | **ADDED** | The document does not mention CSP. This deployment sets a per-request nonce CSP with `'strict-dynamic'`, which neutralises `'self'` in the `worker-src` fallback — `/sw.js` would have been silently blocked. |
+
+### C.2 Path B — model certification debt (items 42, 49, 50)
+
+**REJECTED as written. Its step 1 is the single action the repository's
+governance most explicitly forbids.**
+
+| Proposal | Disposition | Basis |
+|---|---|---|
+| 1. "Establish certification thresholds… define the exact mathematical baselines" | **REJECTED — Class C, and forbidden in this order** | The thresholds already exist: `backend/src/models/certification_policy.py`, policy v1.0.0, SHA-256 `41cb7703…`, frozen and hashed **before** the candidate was evaluated precisely so they could not be tuned afterwards. Defining them *now*, having observed that the candidate fails, is the exact move APEX §23 and this directive's own §9/§26 prohibit ("Do not alter certification thresholds merely to obtain PASS"). A threshold change here needs explicit operator authorization, not an agent's judgement. |
+| 2. "Unblock settled data volume" | **ALREADY RUNNING; the constraint is calendar time** | `run_settlement_pass` executes on the lifespan loop and `/performance` reports 34 settled predictions across 5 walk-forward folds. Nothing is blocked; the season simply has not produced more matches yet. `docs/DEBT.md` item 25 records this as "the system working", not a defect. |
+| 3. "Build the automated certification job… flip the model status to certified if it passes" | **REJECTED — an auto-promoting job is the wrong shape** | `load_active_generation()` already refuses a `CERTIFIED` claim unless it carries hash-verified evidence whose gates all passed, and `verify_active_artifacts.py` runs that check in Render's `buildCommand`, so an unearned claim fails the deploy. Comparison already exists (`compare_candidate_vs_incumbent.py`). What is missing is not automation but a *passing candidate*: today it fails `no_league_regression` (4/6) and `market_baseline` (1/6). A job that flips the flag adds risk and closes nothing. |
+| 4. "Update `test_feature_vector_parity.py`… permanently closing DEBT 42, 49, 50" | **REJECTED — factually wrong about all three items** | **42** is `MODEL_UNCERTAINTY_UNAVAILABLE`: `torch` is in neither requirements file and no trained BNN artifact exists, so a parity test cannot touch it. **49** is the `serving_feature_availability` counter being structurally unsatisfiable — a counting defect, not a parity defect. **50** is `error_association` reversing on real settled evidence across all five scoreable leagues (currently recorded as two `xfail`s with the measured gaps), an open research question. None is a train/serve parity problem, and parity is already enforced by that file plus `feature_contract.json`'s build-time freshness gate. |
+
+**Net new work from Path B: none, deliberately.** The honest position is the
+one the platform already takes: staking stays blocked, `/match` renders
+"Research forecast — staking disabled", and certification waits for evidence
+rather than for a redefinition.

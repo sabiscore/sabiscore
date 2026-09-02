@@ -23,6 +23,12 @@ export function middleware(request: NextRequest) {
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    // Explicit, not inherited. `worker-src` falls back to `script-src`, and
+    // that value carries 'strict-dynamic', which neutralises 'self' — the
+    // WEB_PUSH service worker at /sw.js would be blocked with no nonce to give
+    // it. Registration failure is silent from the page's perspective, so this
+    // has to be stated rather than relied on.
+    "worker-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://media.api-sports.io https://flagcdn.com",
     "font-src 'self' data:",

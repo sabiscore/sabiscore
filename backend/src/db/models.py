@@ -565,6 +565,43 @@ class UserNotificationLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class PushDevice(Base):
+    """A browser push endpoint (RFC 8030) — the *transport*, not the intent.
+
+    Deliberately separate from ``UserNotificationSubscription``: that row says
+    *what* a person wants to hear about, this one says *where* a WEB_PUSH
+    notification can physically be delivered. One person can hold several
+    devices, and a device outlives any single match subscription. Folding the
+    two together would have meant re-registering the browser for every match.
+
+    ``endpoint`` is unique because it *is* the device identity as far as the
+    push service is concerned; a re-subscribe from the same browser must update
+    the keys in place rather than accumulate rows.
+    """
+
+    __tablename__ = "push_devices"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_devices_endpoint"),
+        Index("ix_push_devices_user_id", "user_id"),
+        Index("ix_push_devices_anon_id", "anonymous_session_id"),
+        {"extend_existing": True},
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    anonymous_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    endpoint: Mapped[str] = mapped_column(String, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String, nullable=False)
+    auth: Mapped[str] = mapped_column(String, nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_delivery_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
 __all__ = [
     "Base",
     "FeatureVector",
@@ -603,4 +640,5 @@ __all__ = [
     "AnalyticsEvent",
     "UserNotificationSubscription",
     "UserNotificationLog",
+    "PushDevice",
 ]

@@ -6,14 +6,14 @@ and predictions (``MatchPredictionLog``) and writes in-app notification rows
 stake state, and never raises into the caller's background loop — the same
 swallow-and-log convention ``run_fixture_sync``/``run_settlement_pass`` use.
 
-``IN_APP`` and ``EMAIL`` are dispatched in this release — both get an in-app
-log row (so the notification inbox stays complete regardless of channel);
-EMAIL additionally attempts a best-effort SMTP send via ``email_delivery``,
-config-gated and never blocking the log write on failure. ``WEB_PUSH``
-subscriptions are still persisted but explicitly skipped and counted, not
-silently ignored (docs/DEBT.md notification-delivery gap) — it needs new
-frontend (service worker, subscribe UI) and backend (VAPID / AES-128-GCM)
-infrastructure that doesn't exist yet.
+All three channels are dispatched: ``IN_APP``, ``EMAIL`` and ``WEB_PUSH``.
+Every one of them writes an in-app log row first, so the notification inbox
+stays complete regardless of channel; the out-of-app transports are then
+attempted as best-effort side effects that are counted but never allowed to
+block or undo the log write. ``EMAIL`` goes through ``email_delivery``
+(stdlib SMTP), ``WEB_PUSH`` through ``web_push_delivery`` (VAPID + RFC 8291
+aes128gcm). Both are config-gated and inert until an operator supplies
+credentials.
 """
 from __future__ import annotations
 
@@ -27,13 +27,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
-from ..db.models import MatchPredictionLog, UserNotificationLog, UserNotificationSubscription
+from ..db.models import (
+    MatchPredictionLog,
+    PushDevice,
+    UserNotificationLog,
+    UserNotificationSubscription,
+)
 from ..monitoring.metrics import metrics_collector
 from .email_delivery import send_notification_email
+from .web_push_delivery import is_web_push_configured, send_web_push
 
 logger = logging.getLogger(__name__)
 
-_DISPATCHED_CHANNELS = {"IN_APP", "EMAIL"}
+_DISPATCHED_CHANNELS = {"IN_APP", "EMAIL", "WEB_PUSH"}
 _DEFAULT_SWING_THRESHOLD_PCT = 0.05
 
 
@@ -52,6 +58,87 @@ def _dispatch_email_if_applicable(
     result = send_notification_email(to_address=sub.destination, subject=title, body=message)
     key = "email_sent" if result.sent else f"email_{result.reason}"
     counters[key] = counters.get(key, 0) + 1
+
+
+async def _active_devices_for(
+    session: AsyncSession, sub: UserNotificationSubscription
+) -> list[PushDevice]:
+    """Scope strictly to the subscription's owner. Without an owner there is no
+    safe query — an unscoped select would push one person's alert to every
+    registered browser."""
+    if sub.user_id:
+        stmt = select(PushDevice).where(
+            PushDevice.user_id == sub.user_id, PushDevice.is_active.is_(True)
+        )
+    elif sub.anonymous_session_id:
+        stmt = select(PushDevice).where(
+            PushDevice.anonymous_session_id == sub.anonymous_session_id,
+            PushDevice.is_active.is_(True),
+        )
+    else:
+        return []
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def _dispatch_web_push_if_applicable(
+    session: AsyncSession,
+    sub: UserNotificationSubscription,
+    *,
+    title: str,
+    message: str,
+    counters: Dict[str, int],
+) -> None:
+    """Best-effort WEB_PUSH fan-out to every active device this owner registered.
+
+    Same contract as the EMAIL helper: never raises, never blocks the in-app log
+    row. A device the push service reports as permanently gone (404/410) is
+    deactivated here rather than retried forever — that is the only way a stale
+    endpoint ever leaves the send set.
+    """
+    if sub.channel != "WEB_PUSH":
+        return
+    if not is_web_push_configured():
+        counters["web_push_not_configured"] = counters.get("web_push_not_configured", 0) + 1
+        return
+
+    devices = await _active_devices_for(session, sub)
+    if not devices:
+        counters["web_push_skipped_no_device"] = counters.get("web_push_skipped_no_device", 0) + 1
+        return
+
+    for device in devices:
+        result = await send_web_push(
+            endpoint=device.endpoint,
+            p256dh=device.p256dh,
+            auth=device.auth,
+            title=title,
+            body=message,
+            url=f"/match/{sub.match_id}" if sub.match_id else None,
+        )
+        if result.expired:
+            device.is_active = False
+            device.updated_at = datetime.now(timezone.utc)
+        elif result.sent:
+            device.last_delivery_at = datetime.now(timezone.utc)
+        key = "web_push_sent" if result.sent else f"web_push_{result.reason}"
+        counters[key] = counters.get(key, 0) + 1
+
+
+async def _dispatch_channel_side_effects(
+    session: AsyncSession,
+    sub: UserNotificationSubscription,
+    *,
+    title: str,
+    message: str,
+    counters: Dict[str, int],
+) -> None:
+    """One place every out-of-app channel is fanned out from, so adding the next
+    one does not mean finding every notification-creation site again."""
+    _dispatch_email_if_applicable(sub, title=title, message=message, counters=counters)
+    await _dispatch_web_push_if_applicable(
+        session, sub, title=title, message=message, counters=counters
+    )
 
 
 _last_result: Dict[str, Any] = {
@@ -182,7 +269,8 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
         )
         if created:
             counters["created"] += 1
-            _dispatch_email_if_applicable(
+            await _dispatch_channel_side_effects(
+                session,
                 sub,
                 title="Kickoff reminder",
                 message=f"Match starts in about {remaining_minutes} minutes.",
@@ -268,7 +356,8 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
         )
         if created:
             counters["created"] += 1
-            _dispatch_email_if_applicable(
+            await _dispatch_channel_side_effects(
+                session,
                 sub,
                 title="Model probability shift",
                 message=f"Model probabilities moved by {delta:.0%} since the last snapshot.",

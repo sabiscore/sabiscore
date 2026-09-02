@@ -150,6 +150,24 @@ class Settings(BaseSettings):
     smtp_from_address: str | None = Field(default=None, alias="SMTP_FROM_ADDRESS")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
 
+    # WEB_PUSH notification channel (RFC 8291 / RFC 8292). Disabled by default,
+    # same fail-closed shape as EMAIL above: inert until an operator supplies a
+    # VAPID keypair, never a crash. Encryption is built on `cryptography`, which
+    # is already a runtime dependency — no pywebpush/py-vapid/http-ece added.
+    # The public key is served to browsers by the backend
+    # (`GET /notifications/push/public-key`) rather than baked into a
+    # NEXT_PUBLIC_* build variable, so rotating it is a config change and not a
+    # frontend redeploy.
+    enable_web_push_notifications: bool = Field(
+        default=False,
+        alias="ENABLE_WEB_PUSH_NOTIFICATIONS",
+        description="Enable WEB_PUSH-channel notification delivery via VAPID.",
+    )
+    vapid_public_key: str | None = Field(default=None, alias="VAPID_PUBLIC_KEY")
+    vapid_private_key: str | None = Field(default=None, alias="VAPID_PRIVATE_KEY")
+    vapid_claims_sub: str | None = Field(default=None, alias="VAPID_CLAIMS_SUB")
+    web_push_ttl_seconds: int = Field(default=86400, ge=0, alias="WEB_PUSH_TTL_SECONDS")
+
     # Application
     app_env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False)

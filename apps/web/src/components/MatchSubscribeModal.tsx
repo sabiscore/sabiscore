@@ -4,8 +4,9 @@ import React, { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Bell, Check, X, Clock, TrendingUp, Loader2, Mail, Smartphone } from "lucide-react";
 import { analytics } from "@/lib/analytics";
+import { WEB_PUSH_FAILURE_COPY, enableWebPush } from "@/lib/web-push";
 
-type NotificationChannel = "IN_APP" | "EMAIL";
+type NotificationChannel = "IN_APP" | "EMAIL" | "WEB_PUSH";
 
 interface MatchSubscribeModalProps {
   open: boolean;
@@ -29,10 +30,26 @@ export function MatchSubscribeModal({
   const [deltaThreshold, setDeltaThreshold] = useState<number>(0.05);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
+
+    // Browser enrolment has to succeed before the subscription is created.
+    // Persisting a WEB_PUSH row for a browser that never granted permission
+    // would leave a subscription that can never deliver, and the dispatch
+    // worker would count `web_push_skipped_no_device` forever with nothing on
+    // this screen ever having said so.
+    if (channel === "WEB_PUSH") {
+      const enrolment = await enableWebPush();
+      if (!enrolment.enabled) {
+        setError(WEB_PUSH_FAILURE_COPY[enrolment.reason as keyof typeof WEB_PUSH_FAILURE_COPY]);
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     try {
       const res = await fetch("/api/notifications/subscriptions/matches", {
@@ -59,8 +76,12 @@ export function MatchSubscribeModal({
           setSuccess(false);
           onOpenChange(false);
         }, 1500);
+      } else {
+        setError("Could not save this alert. Please try again.");
       }
-    } catch {}
+    } catch {
+      setError("Could not save this alert. Please try again.");
+    }
     setIsSubmitting(false);
   };
 
@@ -102,6 +123,8 @@ export function MatchSubscribeModal({
               <p className="text-xs text-slate-400">
                 {channel === "EMAIL"
                   ? "You will receive an in-app notification and an email before kickoff."
+                  : channel === "WEB_PUSH"
+                  ? "You will receive an in-app notification and a browser push before kickoff."
                   : "You will receive an in-app notification before kickoff."}
               </p>
             </div>
@@ -109,7 +132,7 @@ export function MatchSubscribeModal({
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">Delivery</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setChannel("IN_APP")}
@@ -135,8 +158,34 @@ export function MatchSubscribeModal({
                     <Mail className="h-4 w-4 text-sky-400 shrink-0" />
                     <p className="text-xs font-semibold">Email</p>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setChannel("WEB_PUSH")}
+                    className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
+                      channel === "WEB_PUSH"
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-white"
+                        : "border-white/10 bg-slate-950 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Bell className="h-4 w-4 text-violet-400 shrink-0" />
+                    <p className="text-xs font-semibold">Push</p>
+                  </button>
                 </div>
               </div>
+
+              {channel === "WEB_PUSH" && (
+                <p className="text-[10px] text-slate-500">
+                  Your browser will ask for notification permission. Push alerts are best-effort and
+                  arrive alongside the in-app notification.
+                </p>
+              )}
+
+              {error && (
+                <p role="alert" className="text-[11px] text-amber-300">
+                  {error}
+                </p>
+              )}
 
               {channel === "EMAIL" && (
                 <div>
@@ -239,7 +288,13 @@ export function MatchSubscribeModal({
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span>{channel === "EMAIL" ? "Set Email Alert" : "Set In-App Alert"}</span>
+                  <span>
+                    {channel === "EMAIL"
+                      ? "Set Email Alert"
+                      : channel === "WEB_PUSH"
+                      ? "Set Push Alert"
+                      : "Set In-App Alert"}
+                  </span>
                 )}
               </button>
             </form>
