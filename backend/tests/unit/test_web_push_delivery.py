@@ -37,12 +37,13 @@ def _e(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
 
-# A fixed VAPID keypair so signature verification is deterministic. Test-only —
-# generated for this file, never used by any deployment.
-_VAPID_PRIVATE_SCALAR = _d("uK8Ck6JS7cKZVw3Rsx7YvDCCQmH4bAY4vXV3sQkMTHY")
-_VAPID_PRIVATE_KEY_OBJ = ec.derive_private_key(
-    int.from_bytes(_VAPID_PRIVATE_SCALAR, "big"), ec.SECP256R1()
-)
+# Generated per test run rather than pasted as a literal. The VAPID assertions
+# verify a signature against the same key that produced it, so a fresh keypair
+# is exactly as good — and a hardcoded 32-byte base64url scalar beside an
+# identifier containing "PRIVATE_KEY" is indistinguishable from a real
+# credential to a secret scanner.
+_VAPID_PRIVATE_KEY_OBJ = ec.generate_private_key(ec.SECP256R1())
+_VAPID_PRIVATE_SCALAR = _VAPID_PRIVATE_KEY_OBJ.private_numbers().private_value.to_bytes(32, "big")
 _VAPID_PUBLIC_RAW = _VAPID_PRIVATE_KEY_OBJ.public_key().public_bytes(
     encoding=serialization.Encoding.X962,
     format=serialization.PublicFormat.UncompressedPoint,

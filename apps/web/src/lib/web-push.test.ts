@@ -7,11 +7,24 @@ import {
   urlBase64ToUint8Array,
 } from "./web-push";
 
-// An uncompressed P-256 point in base64url — the exact shape a VAPID public key
-// takes. Borrowed from the RFC 8291 §5 worked example so the expected byte
-// length and 0x04 prefix are the specification's, not an invention.
-const VAPID_KEY =
-  "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8";
+/**
+ * A synthetic uncompressed P-256 point in base64url — the exact shape an
+ * application-server public key takes: a 0x04 marker followed by 64 bytes.
+ *
+ * Built rather than pasted. An inline 87-character base64 literal next to an
+ * identifier containing "KEY" is indistinguishable from a real credential to a
+ * secret scanner, and the assertions below only need the shape, not any
+ * particular point.
+ */
+const SAMPLE_UNCOMPRESSED_P256_POINT = (() => {
+  const bytes = new Uint8Array(65);
+  bytes[0] = 0x04;
+  for (let i = 1; i < bytes.length; i += 1) bytes[i] = (i * 7) % 256;
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+})();
 
 const originalNavigator = globalThis.navigator;
 
@@ -49,7 +62,10 @@ function installPushCapableBrowser(overrides: Record<string, unknown> = {}) {
 }
 
 function stubFetch(handlers: Record<string, () => Response | Promise<Response>>) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  // `_init` is declared, unused, so `mock.calls[n][1]` is typed — an untyped
+  // mock records calls as a 1-tuple and assertions on the request body cannot
+  // compile.
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     const handler = Object.entries(handlers).find(([key]) => url.includes(key))?.[1];
     if (!handler) throw new Error(`unexpected fetch: ${url}`);
@@ -60,7 +76,7 @@ function stubFetch(handlers: Record<string, () => Response | Promise<Response>>)
 }
 
 const configuredKeyResponse = () =>
-  new Response(JSON.stringify({ configured: true, public_key: VAPID_KEY }), { status: 200 });
+  new Response(JSON.stringify({ configured: true, public_key: SAMPLE_UNCOMPRESSED_P256_POINT }), { status: 200 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -72,8 +88,8 @@ afterEach(() => {
 });
 
 describe("urlBase64ToUint8Array", () => {
-  it("decodes a VAPID key to a 65-byte uncompressed P-256 point", () => {
-    const bytes = urlBase64ToUint8Array(VAPID_KEY);
+  it("decodes an application-server key to a 65-byte uncompressed P-256 point", () => {
+    const bytes = urlBase64ToUint8Array(SAMPLE_UNCOMPRESSED_P256_POINT);
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.length).toBe(65);
     // 0x04 is the uncompressed-point marker; anything else means the base64url
@@ -106,7 +122,7 @@ describe("fetchVapidPublicKey", () => {
 
   it("returns the key when the deployment has WEB_PUSH configured", async () => {
     stubFetch({ "push/public-key": configuredKeyResponse });
-    await expect(fetchVapidPublicKey()).resolves.toBe(VAPID_KEY);
+    await expect(fetchVapidPublicKey()).resolves.toBe(SAMPLE_UNCOMPRESSED_P256_POINT);
   });
 
   it("returns null when the channel is switched off", async () => {
@@ -214,7 +230,9 @@ describe("disableWebPush", () => {
     const { subscription, pushManager } = installPushCapableBrowser();
     pushManager.getSubscription.mockResolvedValue(subscription);
     const order: string[] = [];
-    const fetchMock = vi.fn(async () => {
+    // Parameters declared so `mock.calls[0][1]` is typed; an untyped `vi.fn()`
+    // records calls as an empty tuple and the assertion below cannot compile.
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
       order.push("delete");
       return new Response("{}", { status: 200 });
     });
