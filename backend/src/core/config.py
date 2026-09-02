@@ -119,6 +119,20 @@ class Settings(BaseSettings):
         description="Secret token for Next.js ISR revalidation API"
     )
 
+    # Notification dispatch worker (kickoff reminders + probability-swing alerts).
+    # In-app only in this release; advisory and never blocks startup/readiness.
+    enable_notification_dispatch: bool = Field(
+        default=True,
+        alias="ENABLE_NOTIFICATION_DISPATCH",
+        description="Enable the scheduled in-app notification dispatch background task.",
+    )
+    notification_dispatch_interval_seconds: int = Field(
+        default=300,
+        ge=30,
+        alias="NOTIFICATION_DISPATCH_INTERVAL_SECONDS",
+        description="Polling cadence for kickoff/probability-swing notification generation.",
+    )
+
     # Application
     app_env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False)

@@ -45,10 +45,11 @@ are not model inputs.
 
 ## Known architecture gaps
 
-- No production caller schedules kickoff or probability-swing notification
-  generation; only preferences, subscriptions, logs, and UI are implemented.
 - The sitemap uses a bounded route/team/sample-fixture catalogue rather than live
   fixture discovery.
+- `WEB_PUSH`/`EMAIL` notification channels are persisted but not yet dispatched;
+  scheduled kickoff/probability-swing generation is now wired for `IN_APP`
+  (see `backend/src/services/notification_dispatch_service.py`).
 - Full PostgreSQL migration, Redis-backed lifecycle, Playwright, container, and
   deployment verification remain release gates.
 

@@ -13,6 +13,28 @@ the actual working tree instead of copying forward prior drafts. Excludes
 agent/skill customization files (`.ai/`, `.agents/`, `.claude/`, `.github/skills/`,
 `.github/prompts/`, `.github/instructions/`, `AGENTS.md`, `CLAUDE.md`, `NEXUS.md`).
 
+### Added — scheduled in-app notification delivery worker
+
+- **Kickoff reminders and probability-swing alerts are now generated**, closing
+  the gap the M8-M13 audit below documents (CRUD/UI existed; nothing dispatched).
+  New `backend/src/services/notification_dispatch_service.py` runs two
+  generators against existing `UserNotificationSubscription`/`MatchPredictionLog`
+  data: a kickoff-reminder pass (fires inside `[kickoff - reminder_minutes_before,
+  kickoff)`) and a probability-swing pass (fires when the max home/draw/away
+  probability delta between the two most recent prediction snapshots meets
+  `threshold_pct`). Only the `IN_APP` channel dispatches in this release;
+  `WEB_PUSH`/`EMAIL` subscriptions are persisted but explicitly skipped and
+  counted. Idempotency is log-based (no migration): a
+  `(subscription_id, match_id, category)` existence check before insert.
+  Wired into the FastAPI lifespan (`backend/src/api/main.py`) with the same
+  handle-stored/cancel-on-shutdown shape as the fixture-sync/settlement/CLV
+  loops, gated by `ENABLE_NOTIFICATION_DISPATCH` and polled every
+  `NOTIFICATION_DISPATCH_INTERVAL_SECONDS` (default 300s); a failed pass is
+  logged/counted, never raised, so it cannot affect `/health/ready` or startup.
+  New `GET /api/v1/notifications/subscriptions/matches` lists a caller's active
+  subscriptions (the frontend proxy already forwarded this method). See
+  `docs/DEBT.md` item 51.
+
 ### Fixed — real production bug found via E2E server logs
 
 - **`/team/[slug]` crashed on every request in production.** `getTeamIntelligence()`

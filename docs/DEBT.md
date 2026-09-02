@@ -1,5 +1,62 @@
 # SabiScore Debt Ledger
 
+## 51. Scheduled in-app notification delivery — RESOLVED 2026-09-01
+
+**Tier:** `RESOLVED`. Filed and closed same day, APEX Ω milestone execution.
+
+Notification subscription CRUD, in-app log CRUD, and the frontend
+`NotificationCenter`/`MatchSubscribeModal` UI existed (`docs/ARCHITECTURE.md`,
+`reports/execution/plan-reconciliation.md` Feature 9), but no production
+caller ever generated a kickoff-reminder or probability-swing in-app
+notification — subscriptions sat inert forever.
+
+`backend/src/services/notification_dispatch_service.py` (new) implements two
+generators, both `IN_APP`-channel only in this release (`WEB_PUSH`/`EMAIL`
+subscriptions are persisted but explicitly skipped and counted, never
+silently dropped):
+
+- **Kickoff reminders:** active `KICKOFF_REMINDER` subscriptions with a
+  scheduled match inside `[kickoff - reminder_minutes_before, kickoff)`.
+- **Probability-swing alerts:** active `PROBABILITY_SWING` subscriptions
+  where the max absolute delta across home/draw/away probability between the
+  two most recent `MatchPredictionLog` snapshots meets `threshold_pct`
+  (default 5%).
+
+Idempotency is log-based (no migration): a `(subscription_id, match_id,
+category)` existence check against `UserNotificationLog` before insert, so a
+repeated pass over identical state creates zero duplicates — verified by
+`test_kickoff_reminder_idempotent_across_repeated_passes` and
+`test_probability_swing_idempotent_across_repeated_passes`.
+
+Wired into `backend/src/api/main.py`'s lifespan as
+`_background_notification_dispatch()`, same handle-stored/cancel-on-shutdown
+shape as fixture-sync/settlement/CLV, gated by
+`ENABLE_NOTIFICATION_DISPATCH` (default true) and polled every
+`NOTIFICATION_DISPATCH_INTERVAL_SECONDS` (default 300s). A failed pass is
+logged and counted, never raised — it cannot affect `/health/ready` or
+startup. `/health`'s `components.notification_dispatch` reports the same
+informational-only snapshot shape as `settlement`/`clv_capture`.
+
+`GET /api/v1/notifications/subscriptions/matches` (new) lists the caller's
+active match subscriptions — the frontend proxy
+(`apps/web/src/app/api/notifications/subscriptions/matches/route.ts`)
+already forwarded `GET` here before this endpoint existed.
+
+**Blast radius:** none on prediction/verdict/stake paths — this module never
+reads or writes model, evidence, or betting-engine state; it only reads
+`MatchPredictionLog`'s already-persisted probabilities.
+**Deferred by design:** `WEB_PUSH`/`EMAIL` transport adapters (channel is
+recorded and skipped, not built); repeated re-alerting after the first
+probability-swing notification for a subscription (avoids notification
+storms in this first release — a controlled re-alerting window is a
+follow-up, not this milestone).
+**Tests:** `backend/tests/unit/test_notification_dispatch_service.py` (8
+cases: due-window in/out, idempotency ×2, non-IN_APP channel skip, threshold
+met/not-met, missing-snapshot skip). `backend/tests/unit/test_notifications_and_timezones.py`
+gains one case for the new list-subscriptions service method.
+
+---
+
 ## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypothesis 2 ruled out), so staking stays blocked
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C

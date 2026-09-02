@@ -115,11 +115,14 @@ durable PostgreSQL state introduced by Alembic revision
 handlers and `HttpOnly` cookies. Raw developer keys are shown once and persisted
 only as hashes.
 
-Notification persistence and UI are implemented, but scheduled kickoff and
-probability-swing generation have no production caller yet. The sitemap includes
-core routes, supported league filters, a bounded team catalogue, and sample
-fixture routes; it does not yet query live fixture identity. These distinctions
-are operational gaps, not reasons to invent delivery or indexing claims.
+Notification persistence, UI, and scheduled `IN_APP` delivery (kickoff
+reminders and probability-swing alerts) are implemented via a background
+dispatch worker in `backend/src/api/main.py`
+(`backend/src/services/notification_dispatch_service.py`); `WEB_PUSH`/`EMAIL`
+channels are persisted but not yet dispatched. The sitemap includes core
+routes, supported league filters, a bounded team catalogue, and sample
+fixture routes; it does not yet query live fixture identity. This remaining
+distinction is an operational gap, not a reason to invent indexing claims.
 
 ## Persistence and observation
 

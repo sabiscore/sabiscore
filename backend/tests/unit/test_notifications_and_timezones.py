@@ -68,3 +68,15 @@ async def test_notification_subscription_and_in_app_logs() -> None:
     )
     assert marked is True
     assert log.read is True
+
+
+@pytest.mark.asyncio
+async def test_get_subscriptions_returns_active_matches_only() -> None:
+    db = AsyncMock()
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = []
+    db.execute.return_value = MagicMock(scalars=lambda: scalars_mock)
+
+    subs = await NotificationService.get_subscriptions(db, user_id="user-101")
+    assert subs == []
+    db.execute.assert_awaited()

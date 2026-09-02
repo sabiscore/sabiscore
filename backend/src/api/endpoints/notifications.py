@@ -173,6 +173,26 @@ async def unsubscribe_match_notifications(
     return {"status": "UNSUBSCRIBED" if success else "NOT_FOUND"}
 
 
+@router.get("/subscriptions/matches", response_model=List[MatchSubscriptionResponse])
+async def list_match_subscriptions(
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+):
+    """List active match kickoff/probability-swing subscriptions for the caller."""
+    user = await get_optional_user_from_request(request, db)
+    anon_id = get_anon_id_from_request(request)
+
+    if not user and not anon_id:
+        return []
+
+    subs = await NotificationService.get_subscriptions(
+        db,
+        user_id=str(user.id) if user else None,
+        anonymous_session_id=anon_id if not user else None,
+    )
+    return [MatchSubscriptionResponse.model_validate(sub) for sub in subs]
+
+
 @router.get("/in-app", response_model=InAppNotificationListResponse)
 async def get_in_app_notifications(
     request: Request,
