@@ -304,11 +304,12 @@ async def _add_prediction_log(
     draw: float,
     away: float,
     created_at: datetime,
+    model_version: str = "test-v1",
 ) -> None:
     session.add(
         MatchPredictionLog(
             match_id=match_id,
-            model_version="test-v1",
+            model_version=model_version,
             home_probability=home,
             draw_probability=draw,
             away_probability=away,
@@ -357,6 +358,38 @@ async def test_probability_swing_requires_two_snapshots(session: AsyncSession) -
     )
     await _make_subscription(
         session, match_id="m7", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+    )
+
+    counts = await _dispatch_probability_swing_alerts(session)
+
+    assert counts["created"] == 0
+    assert counts["skipped_missing_data"] == 1
+
+
+async def test_probability_swing_does_not_compare_model_versions(session: AsyncSession) -> None:
+    await _add_prediction_log(
+        session,
+        match_id="m-version",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        model_version="old-model",
+    )
+    await _add_prediction_log(
+        session,
+        match_id="m-version",
+        home=0.60,
+        draw=0.20,
+        away=0.20,
+        created_at=datetime.now(timezone.utc),
+        model_version="new-model",
+    )
+    await _make_subscription(
+        session,
+        match_id="m-version",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     counts = await _dispatch_probability_swing_alerts(session)
@@ -485,7 +518,7 @@ async def test_background_notification_dispatch_calls_run_pass_then_stops(monkey
     async def controlled_sleep(_seconds: float) -> None:
         nonlocal sleep_calls
         sleep_calls += 1
-        if sleep_calls >= 2:
+        if sleep_calls >= 1:
             raise asyncio.CancelledError
 
     with patch(

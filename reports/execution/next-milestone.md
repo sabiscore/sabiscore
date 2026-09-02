@@ -31,15 +31,17 @@ evidence, or staking gates.
 
 ## Remaining required work
 
-1. ~~Apply Alembic through `0011_user_identity_dev_platform` on a real
-   PostgreSQL instance and run `alembic check`~~ — **CONFIRMED 2026-09-02.**
+1. Apply Alembic through `0012_notification_idempotency` on a real PostgreSQL
+   instance and run `alembic check` — **0011 confirmed 2026-09-02; 0012 remains
+   to be confirmed after merge/deploy.**
    An operator-supplied Render deploy log for the `sabiscore-api` service
    (master branch, `rootDir: backend`) shows `alembic upgrade head` running
    against real PostgreSQL end-to-end: `Context impl PostgresqlImpl`,
    `PostgreSQL connection successful`, and
    `Alembic schema revision verified: 0011_user_identity_dev_platform`,
    followed by all 6 league models loading and repeated `GET /health/ready`
-   → `200 OK`. Migration 0011 is proven on production Postgres. (`alembic
+   → `200 OK`. Migration 0011 is proven on production Postgres, but this
+   evidence predates migration 0012. (`alembic
    check`'s drift output specifically was not visible in the log — the
    startup-time `require_alembic_current()` revision check is what's
    confirmed here, which is the check that gates boot.)
