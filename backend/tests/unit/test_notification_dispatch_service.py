@@ -24,6 +24,7 @@ from src.core.database import Base, Match
 from src.db import models as _db_models  # noqa: F401
 from src.db.models import MatchPredictionLog, UserNotificationLog, UserNotificationSubscription
 from src.services.notification_dispatch_service import (
+    _add_notification_log,
     _dispatch_kickoff_reminders,
     _dispatch_probability_swing_alerts,
 )
@@ -156,6 +157,44 @@ async def test_kickoff_reminder_idempotent_across_repeated_passes(session: Async
     assert first["created"] == 1
     assert second["created"] == 0
     assert second["skipped_existing"] == 1
+
+
+async def test_notification_log_unique_constraint_handles_dispatch_race(session: AsyncSession) -> None:
+    sub = await _make_subscription(
+        session, match_id="m-race", subscription_type="KICKOFF_REMINDER"
+    )
+    now = datetime.now(timezone.utc)
+    existing = UserNotificationLog(
+        id=str(uuid.uuid4()),
+        user_id=sub.user_id,
+        anonymous_session_id=None,
+        subscription_id=sub.id,
+        match_id=sub.match_id,
+        title="Kickoff reminder",
+        message="Match starts in about 60 minutes.",
+        category="KICKOFF_REMINDER",
+        read=False,
+        read_at=None,
+        payload={},
+        created_at=now,
+    )
+    duplicate = UserNotificationLog(
+        id=str(uuid.uuid4()),
+        user_id=sub.user_id,
+        anonymous_session_id=None,
+        subscription_id=sub.id,
+        match_id=sub.match_id,
+        title="Kickoff reminder",
+        message="Match starts in about 60 minutes.",
+        category="KICKOFF_REMINDER",
+        read=False,
+        read_at=None,
+        payload={},
+        created_at=now,
+    )
+
+    assert await _add_notification_log(session, existing)
+    assert not await _add_notification_log(session, duplicate)
 
 
 async def test_kickoff_reminder_skips_non_in_app_channel(session: AsyncSession) -> None:
@@ -369,4 +408,3 @@ async def test_background_notification_dispatch_calls_run_pass_then_stops(monkey
             await main._background_notification_dispatch()
 
     run_pass.assert_awaited_once()
-
