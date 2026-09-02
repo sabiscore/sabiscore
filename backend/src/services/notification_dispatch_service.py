@@ -104,7 +104,16 @@ async def _add_notification_log(session: AsyncSession, log: UserNotificationLog)
         async with session.begin_nested():
             session.add(log)
             await session.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
+        constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        sqlite_duplicate = (
+            "UNIQUE constraint failed: user_notification_logs.subscription_id,"
+            " user_notification_logs.match_id, user_notification_logs.category"
+        )
+        if constraint_name != "uq_notification_log_subscription_match_category" and (
+            sqlite_duplicate not in str(exc.orig)
+        ):
+            raise
         return False
     return True
 
@@ -153,6 +162,7 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
             counters["skipped_existing"] += 1
             continue
 
+        remaining_minutes = max(0, int((match.match_date - now).total_seconds() / 60))
         created = await _add_notification_log(
             session,
             UserNotificationLog(
@@ -162,7 +172,7 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
                 subscription_id=sub.id,
                 match_id=sub.match_id,
                 title="Kickoff reminder",
-                message=f"Match starts in about {minutes_before} minutes.",
+                message=f"Match starts in about {remaining_minutes} minutes.",
                 category="KICKOFF_REMINDER",
                 read=False,
                 read_at=None,
@@ -217,7 +227,7 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
                 .limit(2)
             )
         ).scalars().all()
-        if len(recent) < 2:
+        if len(recent) < 2 or recent[0].model_version != recent[1].model_version:
             counters["skipped_missing_data"] += 1
             continue
 

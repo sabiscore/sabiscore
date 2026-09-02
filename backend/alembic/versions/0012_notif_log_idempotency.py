@@ -1,6 +1,10 @@
 """Enforce notification dispatch idempotency.
 
+<<<<<<<< HEAD:backend/alembic/versions/0012_notif_log_idempotency.py
 Revision ID: 0012_notif_log_idempotency
+========
+Revision ID: 0012_notification_idempotency
+>>>>>>>> 179ca18 (Fix notification dispatch review feedback):backend/alembic/versions/0012_notification_idempotency.py
 Revises: 0011_user_identity_dev_platform
 
 Note: filename/revision id shortened from the original
@@ -14,7 +18,11 @@ this migration was ever deployed.
 from alembic import op
 
 
+<<<<<<<< HEAD:backend/alembic/versions/0012_notif_log_idempotency.py
 revision = "0012_notif_log_idempotency"
+========
+revision = "0012_notification_idempotency"
+>>>>>>>> 179ca18 (Fix notification dispatch review feedback):backend/alembic/versions/0012_notification_idempotency.py
 down_revision = "0011_user_identity_dev_platform"
 branch_labels = None
 depends_on = None

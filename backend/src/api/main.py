@@ -200,11 +200,11 @@ async def _background_notification_dispatch() -> None:
     from ..services.notification_dispatch_service import run_notification_dispatch_pass
 
     while True:
-        await asyncio.sleep(settings.notification_dispatch_interval_seconds)
         try:
             await run_notification_dispatch_pass()
         except Exception:
             logger.exception("Background notification dispatch failed")
+        await asyncio.sleep(settings.notification_dispatch_interval_seconds)
 
 
 # Lifespan context manager for modern FastAPI startup/shutdown

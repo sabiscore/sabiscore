@@ -15,7 +15,7 @@ This document formalizes the NEXUS skill routing engine, the repository-level sk
 
 ## 2. NEXUS Skill Registry & Discovery Topology
 
-SabiScore maintains a modular, 39-skill engineering intelligence suite. The canonical definitions reside in `.ai/skills/`, with agent discovery bridges mirrored via symbolic links in `.agents/skills/`.
+SabiScore maintains a modular, 39-skill engineering intelligence suite. The canonical definitions reside in `.ai/skills/`.
 
 ```
                         ┌───────────────────────────────┐
