@@ -1,8 +1,60 @@
 # SabiScore Debt Ledger
 
+## 52. Live sitemap fixture discovery — RESOLVED 2026-09-02
+
+**Tier:** `RESOLVED`. `apps/web/src/app/sitemap.ts` published 5 hand-typed
+sample fixture ids (`"arsenal-vs-chelsea"`, ...) as if they were real,
+crawlable matches — the exact "sample fixture entries" gap named in
+`reports/execution/next-milestone.md`'s product-gaps list. New
+`apps/web/src/lib/sitemap-fixtures-server.ts` fetches
+`GET /api/v1/fixtures/upcoming?limit=200` directly from the backend (same
+server-only-fetch shape as `team-intelligence-server.ts` — a relative URL
+cannot be fetched from `sitemap.ts`), validates each `fixture_id` against the
+same shape the fixture-proxy route already trusts
+(`/^[a-zA-Z0-9_-]{1,64}$/`), and fails closed to an empty list on any
+network error, non-OK response, HTML body, or malformed JSON — a broken
+backend must never crash sitemap generation or publish a fabricated fixture.
+`sitemap.ts`'s local league array was also replaced with the shared
+`CANONICAL_LEAGUES` export (`lib/league.ts`) it was duplicating, and the
+route gained `export const revalidate = 3600` (the fixture listing is a
+bounded, cheap DB read — no provider calls, no model inference — so this
+doesn't touch the no-store rule that genuinely applies to evidence/decision
+endpoints). `TOP_TEAMS` is unchanged — no canonical, verified team-slug list
+exists anywhere in `apps/web` to replace it with, and that's a separate gap.
+**Tests:** `apps/web/src/lib/sitemap-fixtures-server.test.ts` (6 cases: valid
+fixtures, invalid-id filtering, network error, non-ok response, HTML body,
+malformed/missing `fixtures` field — all fail closed to `[]`).
+
 ## 51. Scheduled in-app notification delivery — RESOLVED 2026-09-01
 
 **Tier:** `RESOLVED`. Filed and closed same day, APEX Ω milestone execution.
+
+**Follow-up 2026-09-02 — EMAIL channel adapter shipped, WEB_PUSH still
+deferred.** `backend/src/services/email_delivery.py` (new) sends via stdlib
+`smtplib`/`ssl` rather than a vendor SDK, so any SMTP-speaking provider (SES,
+Resend, Brevo, Gmail, ...) works with zero new dependency and no vendor
+lock-in; config-gated behind `ENABLE_EMAIL_NOTIFICATIONS` (default `False`)
+plus `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD`/
+`SMTP_FROM_ADDRESS`/`SMTP_USE_TLS` — the same safe-default shape as the
+provider `ENABLE_*` flags: inert until an operator supplies real credentials,
+never a crash. `_DISPATCHED_CHANNELS` now includes `EMAIL` alongside
+`IN_APP`, so an EMAIL subscription gets the in-app log row (inbox stays
+complete regardless of channel) plus a best-effort SMTP send attempt that
+never blocks the log write on failure. `apps/web/src/components/MatchSubscribeModal.tsx`
+gained a Delivery selector (In-App / Email) with a destination-email input —
+the `channel`/`destination` fields the backend `MatchSubscriptionCreate`
+endpoint already accepted end-to-end but the UI never exposed. `WEB_PUSH`
+remains genuinely deferred: it needs VAPID-signed, AES128GCM-encrypted
+requests (a real new dependency — `pywebpush` or equivalent, no stdlib path)
+and a frontend service worker + subscribe UI that doesn't exist yet, a
+materially larger lift than EMAIL's reuse of already-installed tooling.
+**Tests:** `backend/tests/unit/test_email_delivery.py` (5 cases: disabled by
+default, missing host/from-address, real SMTP send with TLS+auth, transport
+failure never raises, no-credentials skips login).
+`test_notification_dispatch_service.py` gained EMAIL-path coverage (log
+written + send attempted, no-destination skip, send-failure doesn't block
+the log write) and the old "non-IN_APP channel" skip test was retargeted at
+`WEB_PUSH`, the channel that's actually still skipped.
 
 Notification subscription CRUD, in-app log CRUD, and the frontend
 `NotificationCenter`/`MatchSubscribeModal` UI existed (`docs/ARCHITECTURE.md`,

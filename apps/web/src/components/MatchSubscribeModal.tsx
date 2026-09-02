@@ -2,8 +2,10 @@
 
 import React, { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Bell, Check, X, Clock, TrendingUp, Loader2 } from "lucide-react";
+import { Bell, Check, X, Clock, TrendingUp, Loader2, Mail, Smartphone } from "lucide-react";
 import { analytics } from "@/lib/analytics";
+
+type NotificationChannel = "IN_APP" | "EMAIL";
 
 interface MatchSubscribeModalProps {
   open: boolean;
@@ -21,6 +23,8 @@ export function MatchSubscribeModal({
   awayTeam,
 }: MatchSubscribeModalProps) {
   const [reminderType, setReminderType] = useState<"KICKOFF_REMINDER" | "PROBABILITY_SWING">("KICKOFF_REMINDER");
+  const [channel, setChannel] = useState<NotificationChannel>("IN_APP");
+  const [emailDestination, setEmailDestination] = useState("");
   const [minutesBefore, setMinutesBefore] = useState<number>(15);
   const [deltaThreshold, setDeltaThreshold] = useState<number>(0.05);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +41,8 @@ export function MatchSubscribeModal({
         body: JSON.stringify({
           match_id: matchId,
           subscription_type: reminderType,
-          channel: "IN_APP",
+          channel,
+          destination: channel === "EMAIL" ? emailDestination : undefined,
           reminder_minutes_before: minutesBefore,
           threshold_pct: deltaThreshold,
         }),
@@ -48,6 +53,7 @@ export function MatchSubscribeModal({
         analytics.track("notification_subscribed", {
           match_id: matchId,
           reminder_type: reminderType,
+          channel,
         });
         setTimeout(() => {
           setSuccess(false);
@@ -84,7 +90,7 @@ export function MatchSubscribeModal({
           </div>
 
           <p id="match-subscribe-description" className="mt-3 text-xs text-slate-400">
-            Configure in-app alerts for <strong className="text-white">{homeTeam} vs {awayTeam}</strong>.
+            Configure alerts for <strong className="text-white">{homeTeam} vs {awayTeam}</strong>.
           </p>
 
           {success ? (
@@ -93,10 +99,65 @@ export function MatchSubscribeModal({
                 <Check className="h-6 w-6" />
               </span>
               <p className="text-sm font-bold text-white">Alert Configured Successfully!</p>
-              <p className="text-xs text-slate-400">You will receive an in-app notification before kickoff.</p>
+              <p className="text-xs text-slate-400">
+                {channel === "EMAIL"
+                  ? "You will receive an in-app notification and an email before kickoff."
+                  : "You will receive an in-app notification before kickoff."}
+              </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Delivery</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChannel("IN_APP")}
+                    className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
+                      channel === "IN_APP"
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-white"
+                        : "border-white/10 bg-slate-950 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <p className="text-xs font-semibold">In-App</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setChannel("EMAIL")}
+                    className={`flex items-center gap-2 rounded-xl border p-3 text-left transition ${
+                      channel === "EMAIL"
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-white"
+                        : "border-white/10 bg-slate-950 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Mail className="h-4 w-4 text-sky-400 shrink-0" />
+                    <p className="text-xs font-semibold">Email</p>
+                  </button>
+                </div>
+              </div>
+
+              {channel === "EMAIL" && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1" htmlFor="sub-email">
+                    Email Address
+                  </label>
+                  <input
+                    id="sub-email"
+                    type="email"
+                    required
+                    value={emailDestination}
+                    onChange={(e) => setEmailDestination(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Email alerts are best-effort, sent alongside the in-app notification.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">Alert Type</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -178,7 +239,7 @@ export function MatchSubscribeModal({
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span>Set In-App Alert</span>
+                  <span>{channel === "EMAIL" ? "Set Email Alert" : "Set In-App Alert"}</span>
                 )}
               </button>
             </form>

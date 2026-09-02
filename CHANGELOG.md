@@ -5,6 +5,33 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Live sitemap fixture discovery + EMAIL notification channel (2026-09-02)
+
+### Added — live, bounded, fail-closed sitemap fixture discovery
+
+- `apps/web/src/app/sitemap.ts` no longer publishes 5 hand-typed sample
+  fixture ids as real matches. New `apps/web/src/lib/sitemap-fixtures-server.ts`
+  fetches real scheduled fixtures directly from `GET /api/v1/fixtures/upcoming`
+  (server-only, same shape as `team-intelligence-server.ts`), validates each
+  fixture id against the fixture-proxy route's own shape check, and fails
+  closed to an empty list on any backend error — never a fabricated URL.
+  `sitemap.ts`'s duplicated league array was replaced with the shared
+  `CANONICAL_LEAGUES` export; the route gained a 1h `revalidate`. See
+  `docs/DEBT.md` item 52.
+
+### Added — EMAIL notification channel adapter
+
+- The scheduled notification dispatch worker (`docs/DEBT.md` item 51) now
+  dispatches `EMAIL` alongside `IN_APP`. New
+  `backend/src/services/email_delivery.py` sends via stdlib `smtplib`
+  (any SMTP-speaking provider works, zero new dependency, no vendor
+  lock-in), gated behind `ENABLE_EMAIL_NOTIFICATIONS` (default off) plus
+  standard `SMTP_*` settings — inert until an operator configures real
+  credentials. `MatchSubscribeModal.tsx` gained a Delivery selector
+  (In-App / Email) with a destination-email input. `WEB_PUSH` remains
+  deferred — it needs a new crypto dependency (VAPID/AES128GCM) and a
+  frontend service worker that don't exist yet.
+
 ## Unreleased - Documentation reconciliation and release-gate verification (2026-09-01)
 
 Whole-repository documentation audit of the M8-M13 identity/notification/

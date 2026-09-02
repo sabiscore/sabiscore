@@ -6,9 +6,14 @@ and predictions (``MatchPredictionLog``) and writes in-app notification rows
 stake state, and never raises into the caller's background loop — the same
 swallow-and-log convention ``run_fixture_sync``/``run_settlement_pass`` use.
 
-Only the ``IN_APP`` channel is dispatched in this release; ``WEB_PUSH`` and
-``EMAIL`` subscriptions are persisted but explicitly skipped and counted, not
-silently ignored (docs/DEBT.md notification-delivery gap).
+``IN_APP`` and ``EMAIL`` are dispatched in this release — both get an in-app
+log row (so the notification inbox stays complete regardless of channel);
+EMAIL additionally attempts a best-effort SMTP send via ``email_delivery``,
+config-gated and never blocking the log write on failure. ``WEB_PUSH``
+subscriptions are still persisted but explicitly skipped and counted, not
+silently ignored (docs/DEBT.md notification-delivery gap) — it needs new
+frontend (service worker, subscribe UI) and backend (VAPID/AES128GCM)
+infrastructure that doesn't exist yet.
 """
 from __future__ import annotations
 
@@ -23,11 +28,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import Match
 from ..db.models import MatchPredictionLog, UserNotificationLog, UserNotificationSubscription
 from ..monitoring.metrics import metrics_collector
+from .email_delivery import send_notification_email
 
 logger = logging.getLogger(__name__)
 
-_DISPATCHED_CHANNELS = {"IN_APP"}
+_DISPATCHED_CHANNELS = {"IN_APP", "EMAIL"}
 _DEFAULT_SWING_THRESHOLD_PCT = 0.05
+
+
+def _dispatch_email_if_applicable(
+    sub: UserNotificationSubscription, *, title: str, message: str, counters: Dict[str, int]
+) -> None:
+    """Best-effort EMAIL side-effect alongside the in-app log row. Never raises
+    and never blocks the log write — a transport failure only affects the
+    counters, matching the swallow-and-log convention this module already
+    uses at the pass level."""
+    if sub.channel != "EMAIL":
+        return
+    if not sub.destination:
+        counters["email_skipped_no_destination"] = counters.get("email_skipped_no_destination", 0) + 1
+        return
+    result = send_notification_email(to_address=sub.destination, subject=title, body=message)
+    key = "email_sent" if result.sent else f"email_{result.reason}"
+    counters[key] = counters.get(key, 0) + 1
+
 
 _last_result: Dict[str, Any] = {
     "outcome": "never_run",
@@ -134,6 +158,12 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
             )
         )
         counters["created"] += 1
+        _dispatch_email_if_applicable(
+            sub,
+            title="Kickoff reminder",
+            message=f"Match starts in about {minutes_before} minutes.",
+            counters=counters,
+        )
 
     return counters
 
@@ -210,6 +240,12 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
             )
         )
         counters["created"] += 1
+        _dispatch_email_if_applicable(
+            sub,
+            title="Model probability shift",
+            message=f"Model probabilities moved by {delta:.0%} since the last snapshot.",
+            counters=counters,
+        )
 
     return counters
 
@@ -239,6 +275,8 @@ async def run_notification_dispatch_pass() -> Dict[str, Any]:
 
         metrics_collector.increment("notifications.dispatch.kickoff_created", kickoff_counts["created"])
         metrics_collector.increment("notifications.dispatch.swing_created", swing_counts["created"])
+        emails_sent = kickoff_counts.get("email_sent", 0) + swing_counts.get("email_sent", 0)
+        metrics_collector.increment("notifications.dispatch.email_sent", emails_sent)
 
         _last_result = {
             "outcome": "ok",

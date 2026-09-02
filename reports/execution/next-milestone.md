@@ -95,11 +95,15 @@ re-probed by this session:
 
 ## Product gaps after validation
 
-- `WEB_PUSH`/`EMAIL` notification channels are persisted but not dispatched;
-  a follow-up milestone should add channel-specific transport adapters
-  behind the same dispatch-pass contract.
-- Replace sample fixture sitemap entries with bounded, canonical live fixture
-  discovery that fails closed when the backend is unavailable.
+- ~~`WEB_PUSH`/`EMAIL` notification channels are persisted but not
+  dispatched~~ — **EMAIL closed 2026-09-02** (`docs/DEBT.md` item 51
+  follow-up): stdlib SMTP adapter, config-gated, zero new dependency.
+  `WEB_PUSH` remains open — it needs a new crypto dependency
+  (VAPID/AES128GCM) and a frontend service worker that don't exist yet,
+  materially more work than reusing what EMAIL already had available.
+- ~~Replace sample fixture sitemap entries with bounded, canonical live
+  fixture discovery that fails closed when the backend is unavailable~~ —
+  **closed 2026-09-02** (`docs/DEBT.md` item 52).
 
 ## Non-goals
 

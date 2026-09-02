@@ -133,6 +133,23 @@ class Settings(BaseSettings):
         description="Polling cadence for kickoff/probability-swing notification generation.",
     )
 
+    # EMAIL notification channel (SMTP). Disabled by default — safe-default,
+    # same shape as the provider ENABLE_* flags: inert until an operator
+    # supplies real SMTP credentials, never a crash. stdlib smtplib rather
+    # than a vendor SDK so any SMTP-speaking provider (SES, Resend, Gmail,
+    # Brevo, ...) works without a new dependency or vendor lock-in.
+    enable_email_notifications: bool = Field(
+        default=False,
+        alias="ENABLE_EMAIL_NOTIFICATIONS",
+        description="Enable EMAIL-channel notification delivery via SMTP.",
+    )
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from_address: str | None = Field(default=None, alias="SMTP_FROM_ADDRESS")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+
     # Application
     app_env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False)
