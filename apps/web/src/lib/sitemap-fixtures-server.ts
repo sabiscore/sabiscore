@@ -34,7 +34,12 @@ export async function getSitemapFixtures(limit = 200): Promise<SitemapFixture[]>
   try {
     response = await fetch(url, {
       headers: proxyHeaders(),
-      cache: "no-store",
+      // Cached, NOT no-store: this is a bounded fixture *listing*, not an
+      // evidence/decision endpoint, so the no-store rule doesn't apply here.
+      // A no-store fetch would opt the whole sitemap route into dynamic
+      // rendering and silently defeat its `export const revalidate = 3600`,
+      // turning "one cheap DB read per hour" into one per crawler request.
+      next: { revalidate: 3600 },
       signal: AbortSignal.timeout(8_000),
     });
   } catch {
