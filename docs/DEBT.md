@@ -97,8 +97,8 @@ already forwarded `GET` here before this endpoint existed.
 **Blast radius:** none on prediction/verdict/stake paths — this module never
 reads or writes model, evidence, or betting-engine state; it only reads
 `MatchPredictionLog`'s already-persisted probabilities.
-**Deferred by design:** `WEB_PUSH`/`EMAIL` transport adapters (channel is
-recorded and skipped, not built); repeated re-alerting after the first
+**Deferred by design:** `WEB_PUSH` transport adapter (channel is recorded and
+skipped, not built) — repeated re-alerting after the first
 probability-swing notification for a subscription (avoids notification
 storms in this first release — a controlled re-alerting window is a
 follow-up, not this milestone).

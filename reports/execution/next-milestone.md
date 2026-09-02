@@ -31,9 +31,18 @@ evidence, or staking gates.
 
 ## Remaining required work
 
-1. Apply Alembic through `0012_notification_idempotency` on a real PostgreSQL
-   instance and run `alembic check` — **0011 confirmed 2026-09-02; 0012 remains
-   to be confirmed after merge/deploy.**
+1. ~~Apply Alembic through `0012_notif_log_idempotency` on a real PostgreSQL
+   instance~~ — **BOTH CONFIRMED 2026-09-02.** A direct live probe of
+   `GET /health/ready` after PR #130 deployed returns
+   `migrations: {status: "ready", head: "0012_notif_log_idempotency",
+   applied: "0012_notif_log_idempotency"}` against production PostgreSQL.
+   (Note: the revision id is `0012_notif_log_idempotency`, not
+   `0012_notification_idempotency` as an earlier draft of this line said —
+   it was deliberately shortened to fit `alembic_version.version_num`'s
+   `VARCHAR(32)`.) `alembic check`'s drift output specifically is still not
+   independently captured; what is confirmed is the startup-time
+   `require_alembic_current()` revision check, which is the check that gates
+   boot.
    An operator-supplied Render deploy log for the `sabiscore-api` service
    (master branch, `rootDir: backend`) shows `alembic upgrade head` running
    against real PostgreSQL end-to-end: `Context impl PostgresqlImpl`,
@@ -50,7 +59,18 @@ evidence, or staking gates.
 3. Deploy the reviewed SHA, confirm backend/frontend SHA parity, and exercise
    the identity, dashboard, calibration, developer, analytics, notification
    CRUD/delivery, share, sitemap, and JSON-LD flows against the live
-   deployment.
+   deployment. — **Deploy + SHA parity CONFIRMED 2026-09-02:** Render
+   `/health` and the Vercel production alias `/api/health` both report
+   `sha: 59f21a1` (= local `master` HEAD), `backendStatus: ok`, all four
+   readiness components `ready`, and `components.notification_dispatch`
+   `outcome: ok` executing on its 5-minute cadence with zero failures.
+   **Flow exercise remains partial:** identity/dashboard/calibration/
+   developer/match-analysis were verified visually against a *preview* alias
+   earlier the same day; analytics, notification delivery, share, sitemap,
+   and JSON-LD are still unexercised live. Notification *delivery*
+   specifically cannot be observed yet — the worker reports `examined: 0`,
+   i.e. no real subscription exists to dispatch, so the EMAIL transport is
+   deployed and inert rather than proven.
 
 ## Product gaps after validation
 
