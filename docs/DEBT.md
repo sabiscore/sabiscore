@@ -98,7 +98,9 @@ already forwarded `GET` here before this endpoint existed.
 reads or writes model, evidence, or betting-engine state; it only reads
 `MatchPredictionLog`'s already-persisted probabilities.
 **Deferred by design:** `WEB_PUSH`/`EMAIL` transport adapters (channel is
-recorded and skipped, not built); repeated re-alerting after the first
+recorded and skipped, not built) — ⚠️ **EMAIL half is now superseded by the
+2026-09-02 follow-up at the top of this item; only `WEB_PUSH` is still
+skipped**; repeated re-alerting after the first
 probability-swing notification for a subscription (avoids notification
 storms in this first release — a controlled re-alerting window is a
 follow-up, not this milestone).
