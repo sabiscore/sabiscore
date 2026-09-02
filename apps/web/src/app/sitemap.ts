@@ -1,8 +1,17 @@
 import type { MetadataRoute } from "next";
 
+import { CANONICAL_LEAGUES } from "@/lib/league";
+import { getSitemapFixtures } from "@/lib/sitemap-fixtures-server";
+
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://sabiscore.com");
+
+// Fixture listing is a bounded, cheap DB read (no provider calls, no model
+// inference) — 1h keeps sitemap traffic off the hot path while staying fresh
+// enough for crawlers, matching the TTL convention used by /api/leagues and
+// /api/offseason/[league].
+export const revalidate = 3600;
 
 const CORE_ROUTES = [
   "/",
@@ -32,17 +41,7 @@ const TOP_TEAMS = [
   "ajax",
 ];
 
-const LEAGUES = [
-  "EPL",
-  "LA_LIGA",
-  "SERIE_A",
-  "BUNDESLIGA",
-  "LIGUE_1",
-  "EREDIVISIE",
-  "UCL",
-];
-
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
 
   const coreEntries: MetadataRoute.Sitemap = CORE_ROUTES.map((path) => ({
@@ -52,7 +51,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: path === "/" ? 1.0 : path === "/intelligence" || path === "/performance" ? 0.9 : 0.7,
   }));
 
-  const leagueEntries: MetadataRoute.Sitemap = LEAGUES.map((code) => ({
+  const leagueEntries: MetadataRoute.Sitemap = CANONICAL_LEAGUES.map((code) => ({
     url: `${SITE_URL}/intelligence?league=${encodeURIComponent(code)}`,
     lastModified,
     changeFrequency: "hourly",
@@ -66,17 +65,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  // Example verified fixture routes for programmatic discovery
-  const sampleFixtures = [
-    "arsenal-vs-chelsea",
-    "liverpool-vs-manchester-city",
-    "real-madrid-vs-barcelona",
-    "bayern-munich-vs-borussia-dortmund",
-    "inter-milan-vs-ac-milan",
-  ];
-
-  const fixtureEntries: MetadataRoute.Sitemap = sampleFixtures.map((id) => ({
-    url: `${SITE_URL}/match/${id}`,
+  // Live, bounded, fail-closed: real scheduled fixtures from the backend, or
+  // nothing at all if it's unreachable — never a fabricated/sample id.
+  const fixtures = await getSitemapFixtures();
+  const fixtureEntries: MetadataRoute.Sitemap = fixtures.map(({ fixtureId, competition }) => ({
+    url: `${SITE_URL}/match/${encodeURIComponent(fixtureId)}?league=${encodeURIComponent(competition)}`,
     lastModified,
     changeFrequency: "hourly",
     priority: 0.8,
