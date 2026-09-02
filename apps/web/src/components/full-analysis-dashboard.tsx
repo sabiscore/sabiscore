@@ -992,22 +992,22 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
 
 // ─── Edge delta bar (CE-2) ────────────────────────────────────────────────────
 
-function EdgeDeltaBar({
-  ensemble,
-  oddsEdge,
-}: {
-  ensemble: FullMatchAnalysisResponse["ensemble"];
-  oddsEdge: FullMatchOddsEdge;
-}) {
+export function EdgeDeltaBar({ oddsEdge }: { oddsEdge: FullMatchOddsEdge }) {
+  // Every figure here comes from the backend, which owns de-vigging (see
+  // `_odds_edge_from_features`: `fair = (1/odds) / overround`, `edge =
+  // model_prob - fair`). The fair market probability is therefore recoverable
+  // exactly as `model_prob - edge`.
+  //
+  // It must NOT be recomputed as `1 / market_odds` — that is the *vigged*
+  // price. Doing so understated the gap by the book's own margin and made this
+  // card disagree with the `OddsEdgeCard` rendered directly beneath it, which
+  // prints the backend's `edge`. Two different edges for one market, on one
+  // screen. Frontend edge/EV/stake arithmetic is a backend-authority
+  // violation regardless of whether the two happen to agree.
   const market = oddsEdge.market;
-  const modelProb =
-    market === "home_win"
-      ? ensemble.home_win_prob
-      : market === "away_win"
-      ? ensemble.away_win_prob
-      : ensemble.draw_prob;
-  const impliedProb = oddsEdge.market_odds > 0 ? 1 / oddsEdge.market_odds : 0;
-  const deltaPct = (modelProb - impliedProb) * 100;
+  const modelProb = oddsEdge.model_prob;
+  const fairMarketProb = modelProb - oddsEdge.edge;
+  const deltaPct = oddsEdge.edge * 100;
   const absDelta = Math.abs(deltaPct);
 
   const isPositive = deltaPct > 0;
@@ -1039,7 +1039,7 @@ function EdgeDeltaBar({
         <div className="flex-1 space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Model {pct(modelProb)}</span>
-            <span className="text-slate-400">Market {pct(impliedProb)}</span>
+            <span className="text-slate-400">Fair market {pct(fairMarketProb)}</span>
           </div>
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
             <div
@@ -1050,10 +1050,14 @@ function EdgeDeltaBar({
         </div>
         <div className="flex-shrink-0 text-right">
           <p className={cn("text-lg font-bold tabular-nums", textColor)}>
-            {isPositive ? "+" : ""}{deltaPct.toFixed(1)}%
+            {isPositive ? "+" : ""}{deltaPct.toFixed(1)}pp
           </p>
           <p className="text-[10px] text-slate-400">
-            {isNeutral ? "Neutral" : isPositive ? "EV advantage" : "Fade signal"}
+            {isNeutral
+              ? "Level with fair market"
+              : isPositive
+              ? "Model above fair market"
+              : "Model below fair market"}
           </p>
         </div>
       </div>
@@ -1612,9 +1616,7 @@ function FullAnalysisDashboardInner({
       </div>
 
       {/* ── Edge delta bar (CE-2): model vs market gap ── */}
-      {data.odds_edge && (
-        <EdgeDeltaBar ensemble={data.ensemble} oddsEdge={data.odds_edge} />
-      )}
+      {data.odds_edge && <EdgeDeltaBar oddsEdge={data.odds_edge} />}
 
       {/* ── Odds edge ── */}
       {data.odds_edge ? (

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
+  EdgeDeltaBar,
   EloContextCard,
   EnsembleCard,
   EvidenceStatusCard,
@@ -184,7 +185,7 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
     expect(triggers).toHaveLength(2);
 
     fireEvent.focus(triggers[0]);
-    expect(screen.getByText(/difference between our model's probability/i)).toBeInTheDocument();
+    expect(screen.getByText(/bookmaker's fair probability/i)).toBeInTheDocument();
     fireEvent.blur(triggers[0]);
 
     fireEvent.focus(triggers[1]);
@@ -252,5 +253,43 @@ describe("EvidenceStatusCard blocking-gap copy", () => {
     const gap = screen.getByText(/model hasn't passed certification yet/i);
     expect(gap.className).not.toMatch(/\bcapitalize\b/);
     expect(gap).toHaveTextContent("this model hasn't passed certification yet");
+  });
+});
+
+describe("EdgeDeltaBar uses the backend's de-vigged edge", () => {
+  // Backend contract (`_odds_edge_from_features`): the book is de-vigged
+  // (`fair = (1/odds) / overround`) and `edge = model_prob - fair`. Here the
+  // book carries a 6% overround, so the vigged price and the fair price are
+  // 1.7pp apart — enough that recomputing `1 / market_odds` in the browser
+  // produces a visibly different card from the backend's own number.
+  const oddsEdge = {
+    market: "home_win",
+    market_odds: 3.3, // raw implied 30.303%
+    model_prob: 0.393,
+    edge: 0.10712, // 0.393 − 0.28588 fair
+    kelly_stake: 0.02,
+  };
+
+  it("shows the fair market probability, not the vigged 1/odds price", () => {
+    const { container } = render(<EdgeDeltaBar oddsEdge={oddsEdge} />);
+    expect(container.textContent).toContain("Fair market 28.6%");
+    // 1 / 3.3 = 30.3% — the bookmaker's margin still in it.
+    expect(container.textContent).not.toContain("30.3%");
+  });
+
+  it("reports the backend edge in percentage points, never as EV", () => {
+    const { container } = render(<EdgeDeltaBar oddsEdge={oddsEdge} />);
+    expect(container.textContent).toContain("+10.7pp");
+    expect(container.textContent).toContain("Model above fair market");
+    // A probability-point gap is not expected value; the backend computes EV
+    // separately (`model_prob * odds − 1`) and does not publish it here.
+    expect(container.textContent).not.toContain("EV advantage");
+  });
+
+  it("agrees with the OddsEdgeCard rendered directly beneath it", () => {
+    const delta = render(<EdgeDeltaBar oddsEdge={oddsEdge} />).container.textContent ?? "";
+    const card = render(<OddsEdgeCard edge={oddsEdge} />).container.textContent ?? "";
+    expect(delta).toContain("10.7");
+    expect(card).toContain("10.7");
   });
 });

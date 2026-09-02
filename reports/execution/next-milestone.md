@@ -91,3 +91,56 @@ evidence, or staking gates.
 - Do not enable public staking while model/uncertainty gates are closed.
 - Do not add billing, checkout, automated bet placement, or provider calls from
   the browser.
+---
+
+## Milestone executed 2026-09-02 — market-edge display integrity
+
+### Why this outranked the alternatives
+
+Every P0/P1 item in `prioritized-backlog.md` is now either **Done** or blocked
+on something no code can move: a Docker daemon this environment does not have,
+a live PostgreSQL `alembic check` (the boot-gating revision check is already
+confirmed at `0012_notif_log_idempotency`), operator console access, or real
+settled-match volume. The genuinely new evidence this session was the operator's
+live screenshots — and one of them showed a defect.
+
+Ranked against the alternatives:
+
+- **Docker image proof** — environment-blocked, unchanged.
+- **Firecrawl / diagnostics plans** — reconciled in `plan-reconciliation.md`
+  Appendix B; net new work: none.
+- **`n ≥ 30` reporting floor** — right direction, but blanks every panel at
+  today's ~34 total settled predictions. Trigger recorded.
+- **Edge-delta defect** — live, consumer-facing, on the highest-traffic
+  product surface, a backend-authority violation, and fixable in one component.
+
+Selected on the guiding question: the smallest change that most increases
+trustworthy intelligence while reducing architectural risk.
+
+### What shipped
+
+`docs/DEBT.md` item 53 carries the full incident record. In short: the match
+page printed **two different edges for the same market** — `EDGE DELTA` at
+`+9.4% EV advantage` recomputed in the browser from `1 / market_odds` (the
+vigged price), and `MARKET EDGE` directly beneath it printing the backend's
+de-vigged `odds_edge.edge`. `EdgeDeltaBar` now reads the backend's own
+`model_prob` and `edge` and derives the fair probability exactly as
+`model_prob - edge`; the label is a probability-point gap, not "EV"; the
+shared `EdgeTooltip` no longer describes edge against the vigged price.
+
+### Evidence
+
+| Gate | Result |
+|---|---|
+| New regression tests watched failing on a reverted fix | 3 failed / 12 passed |
+| Same tests after the fix | 15/15 passed |
+| Full web unit suite | 304/304 passed |
+| Web lint | 0 errors, 0 warnings |
+| Web typecheck | 0 errors |
+| `NODE_ENV=production` production build | exit 0 |
+| Backend | untouched — it was already correct |
+
+⚠️ One flake observed and confirmed as unrelated: the first full-suite run had
+`performance-page-client.test.tsx > distinguishes a real outage from having no
+settled data` time out at 5000 ms under parallel load. It passes in isolation
+and the suite is 304/304 on re-run. Not caused by this change; not fixed here.

@@ -197,3 +197,49 @@ This document provides the authoritative, forensic reconciliation between the pl
 
 - **Milestone 1 Baseline:** Fully audited, forensic integrity verified, backend services and schema expansion (0011) complete.
 - **Milestone 2 Transition:** **ACTIVATED**. The platform is fully prepared to execute the complete frontend presentation layer for Public Trust, User Identity, Personalization, Developer Hub, and Analytics SDK.
+
+---
+
+## Appendix B — Reconciliation of documents attached 2026-09-02
+
+Two planning documents were supplied this session. Neither is authoritative;
+both are reconciled against the code as it stands at `ce7f912`. Verified by
+direct inspection, not inference — the checks are named per line.
+
+### B.1 "Firecrawl Integration"
+
+**Verdict: REJECTED for now, with a trigger. Its own architectural conclusion
+is correct.**
+
+| Recommendation | Disposition | Basis |
+|---|---|---|
+| Install into `apps/scraper`, **not** `apps/web` | **Correct, and the doc reaches it itself (§14)** | `apps/scraper` is the only package permitted batch acquisition; `apps/web` is barred from provider traffic (CLAUDE.md frontend constraints) |
+| Install `firecrawl@^4.34.2` now | **REJECTED** | `docs/DEBT.md` item 18: the scraper's production cron is **wired but deliberately inactive**, pending an approved source policy and storage credentials. Adding a second acquisition provider before the first is switched on adds dependency surface and zero data. APEX §26 forbids unnecessary dependencies. |
+| `@/lib/*` → `apps/web/src/lib/*` path correction (§3–§6) | Accurate but moot | The `@/*` → `./src/*` alias is real; the target package is wrong, so the paths never apply |
+| Firecrawl as fallback/enrichment, never a canonical quantitative source (§10, §12 Tier 3) | **Already the architecture** | CLAUDE.md scraper constraints already forbid the scraper computing probabilities, verdicts, EV, or Kelly |
+| "A scraped article is evidence, not a feature until it passes validation" (§11) | **Already the architecture** | `ScrapedTeamFormStore` → `_apply_scraped_fallback()` is provenance-tagged (`source: "scraped:…"`) and deliberately excluded from `is_synthetic`, so it cannot silently reach a published prediction |
+
+**Trigger to revisit:** DEBT item 18's source-policy and storage-credential
+approval lands, *and* a named Tier-1 use case (official injury / team-news
+pages) has a defined normalization and canonical-reconciliation path. Not
+before — an acquisition provider with no validated path into a feature is
+dependency weight, not evidence.
+
+### B.2 "Diagnostic Recommendations"
+
+**Verdict: two proposals are already shipped, one conflicts with a hard
+parity rule, one is data-blocked. All three code samples are rejected.**
+
+| Proposal | Disposition | Basis (verified this session) |
+|---|---|---|
+| 1. Automated league-level stratification of validation metrics | **ALREADY SHIPPED** | `GET /api/v1/model-performance/calibration` takes a `league` query param (`performance.py:516`); `/performance` renders an All-Leagues/EPL/…/UCL filter; `compare_candidate_vs_incumbent.py` already reports `no_league_regression` per league (currently 4/6) |
+| 4. Expose Brier decomposition + a calibration curve to the dashboard | **ALREADY SHIPPED** | `brier_score_decomposition()` (Murphy 1973) lives in `models/evaluation/metrics.py:94`, is wired into `walk_forward_validate()` and into the calibration endpoint (`performance.py:450`) alongside multiclass ECE and Künsch block-bootstrap CIs; `apps/web/src/components/CalibrationCurveChart.tsx` renders it |
+| 4b. The document's `compute_brier_decomposition()` implementation | **REJECTED — duplicate** | A second implementation of a metric the certification policy already cites by path (`certification_policy.py:122`) is exactly the "duplicate existing architecture" APEX §2/§26 forbids. Two decompositions that could disagree is strictly worse than one. |
+| 2. Minimum sample size `n ≥ 30` before reporting accuracy | **DEFERRED, with a trigger** | Direction is right and is *not* a certification-threshold change — it makes reporting more conservative, not less. But production holds ~34 settled predictions in total (`/performance`, 2026-08-31); an `n ≥ 30` **per-league** floor blanks every panel. Existing floors are 10 (`walk_forward_validate`, `clv_service`), each already failing honestly with `{"skipped": true, "reason": …}`. Revisit at ≥ 30 settled predictions in the smallest reported league. |
+| 3. EMA / time-decay feature weighting for the early-season cold start | **REJECTED as written; reconsider as a candidate feature family** | Violates the M2 hard rule (§5): *training availability = serving availability*. `derive_last5_form_features()` is shared by all three pipelines and pinned by `test_feature_vector_parity.py`; adding an EMA on the serving side alone would break train/serve parity silently and invisibly. The legitimate route is a Milestone 4 candidate family, measured in ablation against the incumbent — never a serving-side patch. |
+| 5. BullMQ diagnostics worker calling back into `ML_SERVICE_URL` | **REJECTED — competing job system** | BullMQ/ioredis is the TaxBridge/Hashablanca stack. SabiScore's background work runs in the FastAPI lifespan (`_background_settlement_sync`, `_background_clv_capture`, `_background_notification_dispatch`) over direct Redis. A Node worker that HTTP-calls FastAPI is a second orchestrator — APEX §2 forbids competing systems. |
+| 6. `CREATE INDEX idx_settled_league_date ON settled_predictions(league, settled_at DESC)` | **REJECTED — the table does not exist** | `grep -rn "settled_predictions" backend/src` returns only the *function* `get_settled_predictions()`; no `__tablename__ = "settled_predictions"` exists in `db/models.py`. Settlement reads join `match_prediction_logs` to `matches`. This DDL would fail on execution. |
+
+**Net new work from this document: none.** Its two sound ideas are already in
+production; its two remaining ones are gated on data volume and on the
+train/serve parity rule respectively.
