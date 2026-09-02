@@ -7,7 +7,9 @@ Contracts verified:
   2. Probability-swing alert fires only when the delta between the two most
      recent MatchPredictionLog snapshots meets/exceeds threshold_pct.
   3. Idempotency — a repeated pass over the same state creates no duplicates.
-  4. Non-IN_APP channels are skipped and counted, never silently dropped.
+  4. WEB_PUSH (no adapter yet) is skipped and counted, never silently dropped.
+  5. EMAIL gets an in-app log row plus a best-effort SMTP send attempt via
+     email_delivery, never blocking the log write on a transport failure.
 """
 from __future__ import annotations
 
@@ -23,7 +25,9 @@ from sqlalchemy.orm import sessionmaker
 from src.core.database import Base, Match
 from src.db import models as _db_models  # noqa: F401
 from src.db.models import MatchPredictionLog, UserNotificationLog, UserNotificationSubscription
+from src.services.email_delivery import EmailSendResult
 from src.services.notification_dispatch_service import (
+    _add_notification_log,
     _dispatch_kickoff_reminders,
     _dispatch_probability_swing_alerts,
 )
@@ -92,6 +96,7 @@ async def _make_subscription(
     match_id: str,
     subscription_type: str,
     channel: str = "IN_APP",
+    destination: str | None = None,
     reminder_minutes_before: int = 60,
     threshold_pct: float | None = None,
 ) -> UserNotificationSubscription:
@@ -103,7 +108,7 @@ async def _make_subscription(
         match_id=match_id,
         subscription_type=subscription_type,
         channel=channel,
-        destination=None,
+        destination=destination,
         threshold_pct=threshold_pct,
         reminder_minutes_before=reminder_minutes_before,
         is_active=True,
@@ -158,16 +163,137 @@ async def test_kickoff_reminder_idempotent_across_repeated_passes(session: Async
     assert second["skipped_existing"] == 1
 
 
-async def test_kickoff_reminder_skips_non_in_app_channel(session: AsyncSession) -> None:
+async def test_notification_log_unique_constraint_handles_dispatch_race(session: AsyncSession) -> None:
+    sub = await _make_subscription(
+        session, match_id="m-race", subscription_type="KICKOFF_REMINDER"
+    )
+    now = datetime.now(timezone.utc)
+    existing = UserNotificationLog(
+        id=str(uuid.uuid4()),
+        user_id=sub.user_id,
+        anonymous_session_id=None,
+        subscription_id=sub.id,
+        match_id=sub.match_id,
+        title="Kickoff reminder",
+        message="Match starts in about 60 minutes.",
+        category="KICKOFF_REMINDER",
+        read=False,
+        read_at=None,
+        payload={},
+        created_at=now,
+    )
+    duplicate = UserNotificationLog(
+        id=str(uuid.uuid4()),
+        user_id=sub.user_id,
+        anonymous_session_id=None,
+        subscription_id=sub.id,
+        match_id=sub.match_id,
+        title="Kickoff reminder",
+        message="Match starts in about 60 minutes.",
+        category="KICKOFF_REMINDER",
+        read=False,
+        read_at=None,
+        payload={},
+        created_at=now,
+    )
+
+    assert await _add_notification_log(session, existing)
+    assert not await _add_notification_log(session, duplicate)
+
+
+async def test_kickoff_reminder_skips_web_push_channel(session: AsyncSession) -> None:
     await _make_match(session, "m4", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m4", subscription_type="KICKOFF_REMINDER", channel="EMAIL"
+        session, match_id="m4", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
     )
 
     counts = await _dispatch_kickoff_reminders(session)
 
     assert counts["created"] == 0
     assert counts["skipped_channel"] == 1
+
+
+async def test_kickoff_reminder_email_channel_creates_log(session: AsyncSession) -> None:
+    """EMAIL is now dispatched like IN_APP for the in-app log; the transport
+    side-effect is covered separately below."""
+    await _make_match(session, "m4b", minutes_until_kickoff=10)
+    await _make_subscription(
+        session,
+        match_id="m4b",
+        subscription_type="KICKOFF_REMINDER",
+        channel="EMAIL",
+        destination="fan@example.com",
+    )
+
+    with patch(
+        "src.services.notification_dispatch_service.send_notification_email",
+        return_value=EmailSendResult(sent=False, reason="not_configured"),
+    ) as mocked_send:
+        counts = await _dispatch_kickoff_reminders(session)
+    await session.commit()
+
+    assert counts["created"] == 1
+    assert counts["email_not_configured"] == 1
+    mocked_send.assert_called_once()
+    logs = (await session.execute(select(UserNotificationLog))).scalars().all()
+    assert len(logs) == 1
+
+
+async def test_email_dispatch_sends_when_configured(session: AsyncSession) -> None:
+    await _make_match(session, "m4c", minutes_until_kickoff=10)
+    await _make_subscription(
+        session,
+        match_id="m4c",
+        subscription_type="KICKOFF_REMINDER",
+        channel="EMAIL",
+        destination="fan@example.com",
+    )
+
+    with patch(
+        "src.services.notification_dispatch_service.send_notification_email",
+        return_value=EmailSendResult(sent=True, reason="ok"),
+    ) as mocked_send:
+        counts = await _dispatch_kickoff_reminders(session)
+
+    assert counts["email_sent"] == 1
+    _, kwargs = mocked_send.call_args
+    assert kwargs["to_address"] == "fan@example.com"
+    assert "Kickoff" in kwargs["subject"]
+
+
+async def test_email_dispatch_no_destination_skips_send(session: AsyncSession) -> None:
+    await _make_match(session, "m4d", minutes_until_kickoff=10)
+    await _make_subscription(
+        session, match_id="m4d", subscription_type="KICKOFF_REMINDER", channel="EMAIL"
+    )
+
+    counts = await _dispatch_kickoff_reminders(session)
+
+    assert counts["created"] == 1
+    assert counts["email_skipped_no_destination"] == 1
+
+
+async def test_email_send_failure_does_not_block_log_write(session: AsyncSession) -> None:
+    await _make_match(session, "m4e", minutes_until_kickoff=10)
+    await _make_subscription(
+        session,
+        match_id="m4e",
+        subscription_type="KICKOFF_REMINDER",
+        channel="EMAIL",
+        destination="fan@example.com",
+    )
+
+    with patch(
+        "src.services.notification_dispatch_service.send_notification_email",
+        return_value=EmailSendResult(sent=False, reason="send_failed"),
+    ):
+        counts = await _dispatch_kickoff_reminders(session)
+    await session.commit()
+
+    assert counts["created"] == 1
+    assert counts["email_send_failed"] == 1
+    logs = (await session.execute(select(UserNotificationLog))).scalars().all()
+    assert len(logs) == 1
 
 
 async def _add_prediction_log(
@@ -178,11 +304,12 @@ async def _add_prediction_log(
     draw: float,
     away: float,
     created_at: datetime,
+    model_version: str = "test-v1",
 ) -> None:
     session.add(
         MatchPredictionLog(
             match_id=match_id,
-            model_version="test-v1",
+            model_version=model_version,
             home_probability=home,
             draw_probability=draw,
             away_probability=away,
@@ -231,6 +358,38 @@ async def test_probability_swing_requires_two_snapshots(session: AsyncSession) -
     )
     await _make_subscription(
         session, match_id="m7", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+    )
+
+    counts = await _dispatch_probability_swing_alerts(session)
+
+    assert counts["created"] == 0
+    assert counts["skipped_missing_data"] == 1
+
+
+async def test_probability_swing_does_not_compare_model_versions(session: AsyncSession) -> None:
+    await _add_prediction_log(
+        session,
+        match_id="m-version",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+        model_version="old-model",
+    )
+    await _add_prediction_log(
+        session,
+        match_id="m-version",
+        home=0.60,
+        draw=0.20,
+        away=0.20,
+        created_at=datetime.now(timezone.utc),
+        model_version="new-model",
+    )
+    await _make_subscription(
+        session,
+        match_id="m-version",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     counts = await _dispatch_probability_swing_alerts(session)
@@ -359,7 +518,7 @@ async def test_background_notification_dispatch_calls_run_pass_then_stops(monkey
     async def controlled_sleep(_seconds: float) -> None:
         nonlocal sleep_calls
         sleep_calls += 1
-        if sleep_calls >= 2:
+        if sleep_calls >= 1:
             raise asyncio.CancelledError
 
     with patch(
@@ -369,4 +528,3 @@ async def test_background_notification_dispatch_calls_run_pass_then_stops(monkey
             await main._background_notification_dispatch()
 
     run_pass.assert_awaited_once()
-

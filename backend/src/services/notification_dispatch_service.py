@@ -6,9 +6,14 @@ and predictions (``MatchPredictionLog``) and writes in-app notification rows
 stake state, and never raises into the caller's background loop — the same
 swallow-and-log convention ``run_fixture_sync``/``run_settlement_pass`` use.
 
-Only the ``IN_APP`` channel is dispatched in this release; ``WEB_PUSH`` and
-``EMAIL`` subscriptions are persisted but explicitly skipped and counted, not
-silently ignored (docs/DEBT.md notification-delivery gap).
+``IN_APP`` and ``EMAIL`` are dispatched in this release — both get an in-app
+log row (so the notification inbox stays complete regardless of channel);
+EMAIL additionally attempts a best-effort SMTP send via ``email_delivery``,
+config-gated and never blocking the log write on failure. ``WEB_PUSH``
+subscriptions are still persisted but explicitly skipped and counted, not
+silently ignored (docs/DEBT.md notification-delivery gap) — it needs new
+frontend (service worker, subscribe UI) and backend (VAPID / AES-128-GCM)
+infrastructure that doesn't exist yet.
 """
 from __future__ import annotations
 
@@ -18,16 +23,36 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
 from ..db.models import MatchPredictionLog, UserNotificationLog, UserNotificationSubscription
 from ..monitoring.metrics import metrics_collector
+from .email_delivery import send_notification_email
 
 logger = logging.getLogger(__name__)
 
-_DISPATCHED_CHANNELS = {"IN_APP"}
+_DISPATCHED_CHANNELS = {"IN_APP", "EMAIL"}
 _DEFAULT_SWING_THRESHOLD_PCT = 0.05
+
+
+def _dispatch_email_if_applicable(
+    sub: UserNotificationSubscription, *, title: str, message: str, counters: Dict[str, int]
+) -> None:
+    """Best-effort EMAIL side-effect alongside the in-app log row. Never raises
+    and never blocks the log write — a transport failure only affects the
+    counters, matching the swallow-and-log convention this module already
+    uses at the pass level."""
+    if sub.channel != "EMAIL":
+        return
+    if not sub.destination:
+        counters["email_skipped_no_destination"] = counters.get("email_skipped_no_destination", 0) + 1
+        return
+    result = send_notification_email(to_address=sub.destination, subject=title, body=message)
+    key = "email_sent" if result.sent else f"email_{result.reason}"
+    counters[key] = counters.get(key, 0) + 1
+
 
 _last_result: Dict[str, Any] = {
     "outcome": "never_run",
@@ -71,6 +96,26 @@ async def _already_logged(
         )
     )
     return existing.scalar_one_or_none() is not None
+
+
+async def _add_notification_log(session: AsyncSession, log: UserNotificationLog) -> bool:
+    """Insert one notification, returning false if another worker already did."""
+    try:
+        async with session.begin_nested():
+            session.add(log)
+            await session.flush()
+    except IntegrityError as exc:
+        constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        sqlite_duplicate = (
+            "UNIQUE constraint failed: user_notification_logs.subscription_id,"
+            " user_notification_logs.match_id, user_notification_logs.category"
+        )
+        if constraint_name != "uq_notification_log_subscription_match_category" and (
+            sqlite_duplicate not in str(exc.orig)
+        ):
+            raise
+        return False
+    return True
 
 
 async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
@@ -117,7 +162,9 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
             counters["skipped_existing"] += 1
             continue
 
-        session.add(
+        remaining_minutes = max(0, int((match.match_date - now).total_seconds() / 60))
+        created = await _add_notification_log(
+            session,
             UserNotificationLog(
                 id=str(uuid.uuid4()),
                 user_id=sub.user_id,
@@ -125,15 +172,24 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
                 subscription_id=sub.id,
                 match_id=sub.match_id,
                 title="Kickoff reminder",
-                message=f"Match starts in about {minutes_before} minutes.",
+                message=f"Match starts in about {remaining_minutes} minutes.",
                 category="KICKOFF_REMINDER",
                 read=False,
                 read_at=None,
                 payload={"match_id": sub.match_id, "reminder_minutes_before": minutes_before},
                 created_at=datetime.now(timezone.utc),
-            )
+            ),
         )
-        counters["created"] += 1
+        if created:
+            counters["created"] += 1
+            _dispatch_email_if_applicable(
+                sub,
+                title="Kickoff reminder",
+                message=f"Match starts in about {remaining_minutes} minutes.",
+                counters=counters,
+            )
+        else:
+            counters["skipped_existing"] += 1
 
     return counters
 
@@ -171,7 +227,7 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
                 .limit(2)
             )
         ).scalars().all()
-        if len(recent) < 2:
+        if len(recent) < 2 or recent[0].model_version != recent[1].model_version:
             counters["skipped_missing_data"] += 1
             continue
 
@@ -193,7 +249,8 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
             counters["skipped_existing"] += 1
             continue
 
-        session.add(
+        created = await _add_notification_log(
+            session,
             UserNotificationLog(
                 id=str(uuid.uuid4()),
                 user_id=sub.user_id,
@@ -207,9 +264,18 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
                 read_at=None,
                 payload={"match_id": sub.match_id, "delta": round(delta, 4)},
                 created_at=datetime.now(timezone.utc),
-            )
+            ),
         )
-        counters["created"] += 1
+        if created:
+            counters["created"] += 1
+            _dispatch_email_if_applicable(
+                sub,
+                title="Model probability shift",
+                message=f"Model probabilities moved by {delta:.0%} since the last snapshot.",
+                counters=counters,
+            )
+        else:
+            counters["skipped_existing"] += 1
 
     return counters
 
@@ -239,6 +305,8 @@ async def run_notification_dispatch_pass() -> Dict[str, Any]:
 
         metrics_collector.increment("notifications.dispatch.kickoff_created", kickoff_counts["created"])
         metrics_collector.increment("notifications.dispatch.swing_created", swing_counts["created"])
+        emails_sent = kickoff_counts.get("email_sent", 0) + swing_counts.get("email_sent", 0)
+        metrics_collector.increment("notifications.dispatch.email_sent", emails_sent)
 
         _last_result = {
             "outcome": "ok",

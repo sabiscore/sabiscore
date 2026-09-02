@@ -1,6 +1,7 @@
 # Next Milestone
 
-Verified against the working tree on 2026-09-01.
+Verified against the working tree on 2026-09-01. Updated 2026-09-02 with live
+evidence supplied by the operator (see "Live verification update" below).
 
 ## Objective
 
@@ -30,11 +31,22 @@ evidence, or staking gates.
 
 ## Remaining required work
 
-1. Apply Alembic through `0011_user_identity_dev_platform` on a real
-   PostgreSQL instance and run `alembic check` — no PostgreSQL server was
-   reachable in this environment.
-2. Build backend/web production images and validate Compose — skipped this
-   session by operator choice.
+1. Apply Alembic through `0012_notification_idempotency` on a real PostgreSQL
+   instance and run `alembic check` — **0011 confirmed 2026-09-02; 0012 remains
+   to be confirmed after merge/deploy.**
+   An operator-supplied Render deploy log for the `sabiscore-api` service
+   (master branch, `rootDir: backend`) shows `alembic upgrade head` running
+   against real PostgreSQL end-to-end: `Context impl PostgresqlImpl`,
+   `PostgreSQL connection successful`, and
+   `Alembic schema revision verified: 0011_user_identity_dev_platform`,
+   followed by all 6 league models loading and repeated `GET /health/ready`
+   → `200 OK`. Migration 0011 is proven on production Postgres, but this
+   evidence predates migration 0012. (`alembic
+   check`'s drift output specifically was not visible in the log — the
+   startup-time `require_alembic_current()` revision check is what's
+   confirmed here, which is the check that gates boot.)
+2. Build backend/web production images and validate Compose — still open;
+   no Docker evidence was supplied this session either.
 3. Deploy the reviewed SHA, confirm backend/frontend SHA parity, and exercise
    the identity, dashboard, calibration, developer, analytics, notification
    CRUD/delivery, share, sitemap, and JSON-LD flows against the live
@@ -42,11 +54,15 @@ evidence, or staking gates.
 
 ## Product gaps after validation
 
-- `WEB_PUSH`/`EMAIL` notification channels are persisted but not dispatched;
-  a follow-up milestone should add channel-specific transport adapters
-  behind the same dispatch-pass contract.
-- Replace sample fixture sitemap entries with bounded, canonical live fixture
-  discovery that fails closed when the backend is unavailable.
+- ~~`WEB_PUSH`/`EMAIL` notification channels are persisted but not
+  dispatched~~ — **EMAIL closed 2026-09-02** (`docs/DEBT.md` item 51
+  follow-up): stdlib SMTP adapter, config-gated, zero new dependency.
+  `WEB_PUSH` remains open — it needs a new crypto dependency
+  (VAPID/AES128GCM) and a frontend service worker that don't exist yet,
+  materially more work than reusing what EMAIL already had available.
+- ~~Replace sample fixture sitemap entries with bounded, canonical live
+  fixture discovery that fails closed when the backend is unavailable~~ —
+  **closed 2026-09-02** (`docs/DEBT.md` item 52).
 
 ## Non-goals
 
