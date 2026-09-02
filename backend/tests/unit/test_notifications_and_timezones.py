@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 import pytest
+from httpx import ASGITransport, AsyncClient
 
-from src.db.models import UserPreference
+from src.api.main import app
+from src.db.models import UserNotificationSubscription, UserPreference
 from src.services.notification_service import NotificationService
 
 
@@ -68,3 +71,71 @@ async def test_notification_subscription_and_in_app_logs() -> None:
     )
     assert marked is True
     assert log.read is True
+
+
+@pytest.mark.asyncio
+async def test_get_subscriptions_returns_active_matches_only() -> None:
+    db = AsyncMock()
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = []
+    db.execute.return_value = MagicMock(scalars=lambda: scalars_mock)
+
+    subs = await NotificationService.get_subscriptions(db, user_id="user-101")
+    assert subs == []
+    db.execute.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_match_subscriptions_endpoint_returns_active_subscriptions() -> None:
+    from src.db.session import get_async_session
+
+    now = datetime.now(timezone.utc)
+    sub = UserNotificationSubscription(
+        id="sub-1",
+        user_id=None,
+        anonymous_session_id="anon-77",
+        match_id="fd-500",
+        subscription_type="KICKOFF_REMINDER",
+        channel="IN_APP",
+        threshold_pct=None,
+        reminder_minutes_before=60,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    mock_db = AsyncMock()
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = [sub]
+    mock_db.execute.return_value = MagicMock(scalars=lambda: scalars_mock)
+
+    app.dependency_overrides[get_async_session] = lambda: mock_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(
+                "/api/v1/notifications/subscriptions/matches",
+                headers={"X-Anonymous-Session": "anon-77"},
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["match_id"] == "fd-500"
+        assert data[0]["subscription_type"] == "KICKOFF_REMINDER"
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest.mark.asyncio
+async def test_list_match_subscriptions_endpoint_empty_without_identity() -> None:
+    from src.db.session import get_async_session
+
+    mock_db = AsyncMock()
+    app.dependency_overrides[get_async_session] = lambda: mock_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/notifications/subscriptions/matches")
+        assert response.status_code == 200
+        assert response.json() == []
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)

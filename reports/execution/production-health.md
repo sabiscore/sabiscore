@@ -32,6 +32,8 @@ model availability.
 | Scraper validate + tests | 20/20 passed |
 | Gitleaks (working tree + full history) | 2 pre-existing historical findings only (`docs/DEBT.md` item 16); zero new |
 | Playwright (Chromium + Mobile Chrome) | **328/328 passed** |
+| Notification dispatch focused tests | 11/11 passed (`test_notification_dispatch_service.py` + `test_notifications_and_timezones.py`) |
+| Notification dispatch ruff/mypy | ruff 0; mypy ceiling 766<=784 (no new errors attributed to touched files) |
 
 ## Required production evidence
 

@@ -8,7 +8,7 @@ Verified against the working tree on 2026-09-01.
 | P0 | Full secret scan | **Done** | Gitleaks clean except 2 pre-existing historical fingerprints already tracked in `docs/DEBT.md` item 16; zero new findings |
 | P0 | Complete backend and web gates | **Done** | Ruff 0, mypy ceiling 768<=784, pytest 2050 passed/17 skipped/2 xfailed, Vitest 295 passed, production build exit 0, OpenAPI 106 paths, artifact verifier 6/6 |
 | P1 | Tier 1-4 and baseline browser suites | **Done** | 328/328 executions pass in Chromium and Mobile Chrome (2026-09-01 full run) |
-| P1 | Notification delivery worker | Not implemented | Durable scheduler, idempotent dispatch, retries, metrics, tests, live observation |
+| P1 | Notification delivery worker | **Done** | Scheduled kickoff-reminder + probability-swing IN_APP dispatch wired into lifespan; idempotent (log-based dedupe); 8 focused unit tests + 1 service test pass; ruff 0; mypy ceiling 766<=784 |
 | P1 | Live fixture sitemap discovery | Not implemented | Canonical fixture URLs, bounded fetch/cache policy, fail-closed test |
 | P1 | Production deployment proof | Pending | Render/Vercel reviewed SHA parity and smoke evidence |
 | P2 | Docker image proof | Pending | Backend/web images build and Compose validates — skipped this session |

@@ -192,6 +192,21 @@ async def _background_clv_capture(provider) -> None:
             logger.exception("Background CLV capture failed")
 
 
+async def _background_notification_dispatch() -> None:
+    """Periodic kickoff-reminder and probability-swing in-app notification
+    generation. Advisory only — never touches prediction/verdict/stake state,
+    and a failed pass is logged/counted rather than raised (same swallow-and-log
+    convention as the fixture/settlement/CLV loops above)."""
+    from ..services.notification_dispatch_service import run_notification_dispatch_pass
+
+    while True:
+        await asyncio.sleep(settings.notification_dispatch_interval_seconds)
+        try:
+            await run_notification_dispatch_pass()
+        except Exception:
+            logger.exception("Background notification dispatch failed")
+
+
 # Lifespan context manager for modern FastAPI startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -264,6 +279,14 @@ async def lifespan(app: FastAPI):
         _background_clv_capture(app.state.provider_registry.get("the_odds_api"))
     )
 
+    # Periodic in-app notification dispatch: kickoff reminders + probability-swing
+    # alerts. Same handle-stored/cancel-on-shutdown shape as the loops above.
+    app.state.notification_dispatch_task = None
+    if settings.enable_notification_dispatch:
+        app.state.notification_dispatch_task = asyncio.create_task(
+            _background_notification_dispatch()
+        )
+
     # Strict model initialization (blocking) - startup must fail if models are unavailable.
     try:
         _startup_load_models_strict(app)
@@ -289,9 +312,14 @@ async def lifespan(app: FastAPI):
     # === SHUTDOWN ===
     logger.info("Shutting down SabiScore API...")
 
-    # All three background loops run forever — cancel them explicitly or every
+    # These background loops run forever — cancel them explicitly or every
     # redeploy logs an asyncio "task destroyed while pending" warning.
-    for task_name in ("fixture_sync_task", "settlement_task", "clv_capture_task"):
+    for task_name in (
+        "fixture_sync_task",
+        "settlement_task",
+        "clv_capture_task",
+        "notification_dispatch_task",
+    ):
         task = getattr(app.state, task_name, None)
         if task is not None:
             task.cancel()

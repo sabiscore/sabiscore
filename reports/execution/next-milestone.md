@@ -19,6 +19,14 @@ evidence, or staking gates.
    process (see `CHANGELOG.md`).
 4. Gitleaks and the repository secret-safety gates — done; zero new
    findings.
+5. Scheduled in-app notification delivery (kickoff reminders +
+   probability-swing alerts) — done: new
+   `backend/src/services/notification_dispatch_service.py`, wired into the
+   FastAPI lifespan alongside fixture-sync/settlement/CLV, informational
+   `/health` snapshot, new `GET /api/v1/notifications/subscriptions/matches`
+   read endpoint, 8 new focused unit tests + 1 extended. Ruff 0; mypy
+   ceiling 766<=784; targeted pytest 11/11 passed; broader health/readiness
+   regression suite (10 tests) unaffected.
 
 ## Remaining required work
 
@@ -29,13 +37,14 @@ evidence, or staking gates.
    session by operator choice.
 3. Deploy the reviewed SHA, confirm backend/frontend SHA parity, and exercise
    the identity, dashboard, calibration, developer, analytics, notification
-   CRUD, share, sitemap, and JSON-LD flows against the live deployment.
+   CRUD/delivery, share, sitemap, and JSON-LD flows against the live
+   deployment.
 
 ## Product gaps after validation
 
-- Add a durable scheduled notification generator/dispatcher with idempotency,
-  retry policy, observability, and tests before claiming reminders or
-  probability-swing delivery is operational.
+- `WEB_PUSH`/`EMAIL` notification channels are persisted but not dispatched;
+  a follow-up milestone should add channel-specific transport adapters
+  behind the same dispatch-pass contract.
 - Replace sample fixture sitemap entries with bounded, canonical live fixture
   discovery that fails closed when the backend is unavailable.
 
