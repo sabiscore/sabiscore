@@ -284,3 +284,105 @@ governance most explicitly forbids.**
 one the platform already takes: staking stays blocked, `/match` renders
 "Research forecast — staking disabled", and certification waits for evidence
 rather than for a redefinition.
+
+---
+
+## Appendix D — Reconciliation of "Data Expansion & Feature Density Sprint" (2026-09-03)
+
+Attached alongside three documents already reconciled here (Appendix B.2
+"Diagnostic Recommendations", Appendix C "Recommendations2.txt") and the
+standing APEX Ω directive. Only this sprint document is new.
+
+**Verdict: REJECTED as specified. Its central mechanism is unsound, three of
+its four named targets do not exist, all seven of its named file paths are
+missing, and its verification script fabricates a measurement. One legitimate
+objective survives, on a different route.**
+
+### D.1 The central mechanism does not work
+
+The premise is: fill the four `PHASE7_FEATURES_ALWAYS_DATA_GAP` slots with real
+values, so ensemble dispersion becomes meaningful, so `error_association`
+(item 50) passes.
+
+Those four slots are **constant across every row of the training corpus**.
+`retrain_with_expanded_features.py:224-226` unconditionally overwrites them:
+
+```python
+for col in PHASE7_FEATURES_ALWAYS_DATA_GAP:
+    if col in frame.columns:
+        frame[col] = defaults.get(col, 0.0)
+```
+
+A zero-variance column yields zero information gain, so no tree in any member
+ever splits on it. It contributes nothing to the disagreement
+`dispersion_from_members()` measures. Populating these four columns therefore
+cannot move `error_association` in either direction — the causal arrow in the
+sprint document is backwards. What could plausibly help is *new observed
+features* carrying real signal, which is a different and larger change (new
+feature schema version, new artifacts, a fresh promotion gate), not a
+densification of four existing constants.
+
+`docs/DEBT.md` item 50 narrows the remaining space to exactly two threads:
+(a) the reversal is inherent to bagged-tree dispersion and a different epistemic
+aggregation is needed, or (b) it resolves once a genuinely better-generalizing
+generation ships. Data expansion is a legitimate attempt at (b) — but via a
+better corpus, not via these four slots.
+
+### D.2 Named targets vs. repository reality
+
+| Sprint document claims | Repository |
+|---|---|
+| 4 slots are `shot_quality_diff`, `xg_differential`, `defensive_vulnerability_index`, `finishing_efficiency_gap` | Actual list (`feature_registry.py:146`): `shot_quality_diff`, `elo_league_adjusted`, `key_passes_under_pressure_diff`, `set_piece_xg_diff` |
+| `defensive_vulnerability_index` | **0 hits repo-wide** — invented |
+| `finishing_efficiency_gap` | **0 hits repo-wide** — invented |
+| `xg_differential` is a Phase 7 gap slot | Exists, but as an *intermediate* in `data/transformers.py`, absent from `CANONICAL_FEATURES_68`. Conflated with a canonical slot. |
+| `backend/src/data/canonical_team_map.json` | missing |
+| `scripts/train_ensemble.py` | missing |
+| `backend/src/models/candidate/feature_availability_matrix.json` | missing (real path is `backend/models/candidate/`) |
+| `backend/src/models/candidate/feature_matrix.csv` | missing |
+| `backend/src/features/phase7_calculator.py` | missing |
+| `backend/src/data/underlying_metrics_ingestion.py` | missing |
+
+Three of the four real slots are `PHASE7_FEATURES_REMOVED` — deleted by ATE
+review on 2026-06-10 as carrying no independent signal, then restored **as slots
+only** for artifact dimension compatibility, under an explicit registry rule:
+"DO NOT include these in any training vector without re-running ATE validation."
+`elo_league_adjusted` is specifically a collinear proxy of `elo_difference`.
+Computing live values for them is the B13 invariant violation that registry
+comment exists to prevent.
+
+### D.3 Item-by-item disposition
+
+| Proposal | Disposition | Basis |
+|---|---|---|
+| Build async xG/PSxG ETL (`soccerdata`/Understat), cache raw payloads | **ALREADY EXISTS — never executed** | `connectors/understat_source.py` (`UnderstatTeamXGSource`, tested), `connectors/statsbomb_open.py` (tested), driven by `scripts/backfill_v4_data_sources.py` into `data/processed/v4_sources`. That directory is **absent**: the pipeline has never been run. The gap is execution plus one uninstalled dependency, not a greenfield build. Adding `underlying_metrics_ingestion.py` beside it creates a competing provider path — APEX section 1. |
+| New `canonical_team_map.json`, hard-fail on unmapped | **REJECTED as a new map; principle already implemented** | `team_identity._identity_key` plus `_AUDITED_ALIASES` plus `reconcile_team()` is the single canonical resolver. CLAUDE.md records three separate production incidents caused by introducing a *second* normalizer (odds `_team_key` twice, market aliases). `understat_source.py` already resolves via rapidfuzz. A third vocabulary is the exact recurring defect class. Fail-closed-on-unmapped is already `reconcile_team`'s `UNKNOWN` behaviour. |
+| Populate the 4 gap slots | **REJECTED** | See D.1 (mechanically inert) and D.2 (3 of 4 forbidden without ATE re-validation). |
+| `shot_quality_diff` specifically | **The one legitimate target — unblock condition already written** | Registry: "Permanent DATA_GAP until real StatsBomb event-level shots corpus confirms ATE >= 0.02 (guardrail 12, Sprint 4 brief)." The route is acquire corpus, run ATE, and if the estimate clears 0.02, remove it from the list. Not "compute the column and fill it". |
+| Strict temporal isolation, N=5, `shift(1)` | **ACCEPTED as principle — already enforced** | `test_feature_vector_parity.py` plus `derive_last5_form_features()`; the training builder replicates `_get_team_stats` window semantics verbatim. Any new rolling feature routes through the shared helper, never a new `Phase7FeatureEngine`. Note the supplied `compute_rolling_features()` also contradicts the document's own temporal-isolation section: it ends every slot with `.fillna(0.0)`, writing precisely the neutral-default-as-observation that section forbids and the repo bans. |
+| `_summary_from_features()` should key by name, not position | **ALREADY TRUE** | `promotion_evidence.py:122` reads `row.get("feature")`. No positional indexing exists. |
+| Retrain via `scripts/train_ensemble.py` | **WRONG PATH** | No such file. Authoritative trainers: `backend/scripts/train_on_real_matches.py` (real corpus) and `retrain_with_expanded_features.py` (walk-forward mandatory, aggregate RPS at or below 0.210 gate). |
+| Verification script writing `always_data_gap_slots = 0` and `training_defaulted_slots = 0` into the availability JSON | **REJECTED — fabrication** | It writes a measurement outcome without measuring anything. The real producer is `scripts/generate_feature_availability_matrix.py`; CLAUDE.md already records a session where a *stale* copy of that file made the promotion gate score the previous candidate. Hardcoding zeros is strictly worse than stale. |
+| ADR-0009 constraints (do not touch `UNCERTAINTY_METHOD`, `UNCERTAINTY_REQUIRES_ALL_GATES`, gate thresholds) | **ACCEPTED — already binding and unmodified** | `uncertainty_policy.py:37,125,157` unchanged. |
+
+### D.4 What actually survives
+
+One objective, restated honestly:
+
+> Acquire a real, timestamped, provenance-preserving underlying-metrics corpus
+> (xG / xGA / PSxG / shots) for the five scoreable leagues, using the ingestion
+> connectors that already exist and have never been run.
+
+That corpus is the binding prerequisite for four separate open items — the
+`shot_quality_diff` ATE re-validation named in the registry, `docs/DEBT.md`
+item 13 (tactical feature family), item 10 (offline artifacts frozen at
+2024-06-02 and synthetically keyed), and item 50 route (b). It is worth doing
+on its own merits. It is *not* what the sprint document describes, and it does
+not populate the four gap slots.
+
+**Blocked on two operator decisions**: `soccerdata` appears in no requirements
+file, and `understat_source.py`'s own docstring states Understat has no official
+public API and directs the operator to confirm robots.txt and ToS acceptability
+before enabling. Neither is an agent's call.
+
+**Net new code from this document: none.**

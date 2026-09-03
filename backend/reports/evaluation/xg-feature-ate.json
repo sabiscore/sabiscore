@@ -1,0 +1,56 @@
+{
+  "corpus_matches": 12459,
+  "usable_rows": 11419,
+  "window": 5,
+  "practical_ate": 0.02,
+  "results": [
+    {
+      "feature": "xg_differential",
+      "ate_win": 0.24635646116265253,
+      "ate_draw": -0.025790936300841866,
+      "ate_ci": [
+        0.2287769823569482,
+        0.26393593996835685
+      ],
+      "p_value": 1.3929223809401506e-145,
+      "classification": "CAUSAL_DRIVER",
+      "meets_practical_ate": true
+    },
+    {
+      "feature": "xg_attack_diff",
+      "ate_win": 0.21693181779836362,
+      "ate_draw": -0.007575680884853525,
+      "ate_ci": [
+        0.199222342597009,
+        0.23464129299971825
+      ],
+      "p_value": 2.4104920722460775e-112,
+      "classification": "CAUSAL_DRIVER",
+      "meets_practical_ate": true
+    },
+    {
+      "feature": "xg_defense_diff",
+      "ate_win": 0.17895029042540384,
+      "ate_draw": -0.022026457259174875,
+      "ate_ci": [
+        0.16109869449886557,
+        0.1968018863519421
+      ],
+      "p_value": 1.377028641548176e-76,
+      "classification": "CAUSAL_DRIVER",
+      "meets_practical_ate": true
+    },
+    {
+      "feature": "finishing_efficiency_gap",
+      "ate_win": 0.008156967261266579,
+      "ate_draw": 0.006436054050522111,
+      "ate_ci": [
+        -0.009993549589061096,
+        0.026307484111594254
+      ],
+      "p_value": 0.38507222727958185,
+      "classification": "INDEPENDENT",
+      "meets_practical_ate": false
+    }
+  ]
+}
