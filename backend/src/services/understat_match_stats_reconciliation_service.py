@@ -22,18 +22,17 @@ misalignment between football-data.org's and Understat's recorded kickoff,
 narrow enough that two fixtures of the *same* home/away pairing — always
 months apart in any real season — can never both fall inside it.
 
-COVID-cancelled rows (``has_data=False``, null xG — 101 Ligue 1 2019/20
-fixtures, see DEBT.md item 56) are excluded from the corpus before
-reconciliation even runs. They are not a resolution failure; there is no
-observation to report as blocked.
+Corpus filtering — COVID-cancelled rows and the cross-file ``game_id``
+duplication — is owned by ``data.understat_corpus.load_corpus_matches`` and
+documented there. Both matter here: a cancelled fixture is not a resolution
+failure (there is no observation to report as blocked), and a duplicated one
+would make this manifest propose the same ``match_stats`` row twice.
 """
 
 from __future__ import annotations
 
-import glob
 import hashlib
 import json
-import os
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -46,6 +45,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
 from ..core.league_policy import canonical_league_id
+# One corpus definition, shared with features.xg_replay: the write-ready set
+# here and the rows that reach training must describe the same population.
+from ..data.understat_corpus import load_corpus_matches
 from .fixture_sync_service import is_unusable_team_name
 from .team_identity import resolve_team_id
 
@@ -98,32 +100,6 @@ class UnderstatMatchStatsManifest:
     """Every row the corpus offered, ready or not. Kept in full (not just the
     ready subset) so the manifest hash a future --apply gate checks proves the
     reviewer saw the same complete picture, not a filtered one."""
-
-
-def load_corpus_matches(sources_dir: Path) -> pd.DataFrame:
-    """Every played Understat match across the tracked corpus.
-
-    Mirrors ``scripts/measure_xg_feature_ate.py``'s ``load_corpus()`` exactly
-    for the has_data/null-xG filter — the two must agree on what counts as a
-    real observation, or this module's write-ready set and that script's
-    measured ATE would silently describe different populations.
-    """
-    frames = []
-    for path in sorted(glob.glob(str(sources_dir / "understat_matches_*.parquet"))):
-        stem = os.path.basename(path)[len("understat_matches_") : -len(".parquet")]
-        league, season = stem.rsplit("_", 1)
-        frame = pd.read_parquet(path)
-        frame["sabi_league"] = league
-        frame["sabi_season"] = int(season)
-        frames.append(frame)
-    if not frames:
-        raise FileNotFoundError(f"No Understat parquet found under {sources_dir}")
-
-    corpus = pd.concat(frames, ignore_index=True)
-    corpus = corpus[corpus["home_xg"].notna() & corpus["away_xg"].notna()]
-    if "has_data" in corpus.columns:
-        corpus = corpus[corpus["has_data"].astype(bool)]
-    return corpus.sort_values("date", kind="stable").reset_index(drop=True)
 
 
 async def _resolve_team_cached(

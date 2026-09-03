@@ -22,6 +22,7 @@ from .feature_registry import (
     APEX_FEATURES_68,
     CANONICAL_FEATURES_68,
     DEFAULT_FEATURE_VALUES_68,
+    FEATURE_SCHEMA_VERSIONS,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
     UnknownFeatureSchemaError,
     resolve_feature_schema,
@@ -45,6 +46,15 @@ _FLOAT_ATOL = 1e-8
 def _contract_hash(features: Sequence[str]) -> str:
     payload = json.dumps(list(features), separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _registered_schema_version(features: Sequence[str]) -> str | None:
+    """The FEATURE_SCHEMA_VERSIONS key naming this exact contract, if any."""
+    wanted = list(features)
+    for version, contract in FEATURE_SCHEMA_VERSIONS.items():
+        if wanted == list(contract):
+            return version
+    return None
 
 
 def current_serving_contract() -> list[str]:
@@ -253,6 +263,11 @@ def build_promotion_feature_evidence(
         "schema_version": REPORT_SCHEMA_VERSION,
         "training_rows": training_rows,
         "rows_by_league": rows_by_league,
+        # Self-description, so a consumer reading this file back does not have
+        # to be told out-of-band which contract it was built from. None when the
+        # caller passed an ad-hoc list that matches no registered schema —
+        # absent beats a guessed label in evidence.
+        "candidate_feature_schema_version": _registered_schema_version(candidate),
         "candidate_contract_hash": _contract_hash(candidate),
         "serving_contract_hash": _contract_hash(serving_contract),
         "summary": summary,
@@ -276,13 +291,26 @@ def validate_promotion_feature_evidence(
     actually does.
 
     ``candidate_features`` must match whatever ``build_promotion_feature_evidence``
-    built ``report`` from — defaults to ``APEX_FEATURES_68``, same as there.
+    built ``report`` from. When omitted, the report's own
+    ``candidate_feature_schema_version`` is used; only a report that declares
+    nothing (every report written before that field existed) falls back to
+    ``APEX_FEATURES_68``. Guessing 68 for a 71-wide report would fail with
+    "must contain exactly 68 feature rows", which describes the validator's
+    assumption rather than the report.
     """
 
     if report.get("schema") != REPORT_SCHEMA:
         raise ValueError(f"unsupported promotion evidence schema: {report.get('schema')!r}")
 
-    candidate = list(candidate_features) if candidate_features is not None else list(APEX_FEATURES_68)
+    if candidate_features is not None:
+        candidate = list(candidate_features)
+    else:
+        declared = report.get("candidate_feature_schema_version")
+        candidate = (
+            list(resolve_feature_schema(declared))
+            if isinstance(declared, str) and declared
+            else list(APEX_FEATURES_68)
+        )
     raw_features = report.get("features")
     if not isinstance(raw_features, list) or len(raw_features) != len(candidate):
         raise ValueError(

@@ -89,6 +89,29 @@ the only configuration that moves the metric is the one the frozen policy calls
 the less principled one, which is a reason to distrust the effect rather than
 adopt it.
 
+REPLICATION (2026-09-03, seed block 4242 — a third, previously untested block,
+run because a proposal to adopt the heterogeneous basis reached review and the
+refutation deserved first-hand confirmation rather than a second reading of the
+numbers above):
+
+    trees (incumbent)   skill -0.0190              0/5
+    RF-only  N=3        skill -0.0161   gap>0 3/5, skill>0 0/5
+    RF-only  N=5        skill -0.0370   gap>0 0/5, skill>0 0/5
+    RF-only  N=10       skill -0.0244   gap>0 1/5, skill>0 1/5
+
+Three fresh points, declared as a ladder before the run, reported in full. All
+three mean skills are negative and N=5 is markedly WORSE than the incumbent
+tree basis. Independence is refuted for a third time on a third seed block.
+
+⚠️ ON ADOPTING THE HETEROGENEOUS BASIS ANYWAY. It would not deliver what it is
+usually proposed for. `uncertainty_policy.py` states that the two gates are
+independent: "clearing `MODEL_GENERATION_UNCERTIFIED` does not clear
+`MODEL_UNCERTAINTY_UNAVAILABLE`, and a fixture stays no-bet until both pass on
+their own evidence." Flipping `error_association` alone therefore does not
+enable staking — `active_generation.json` is `certification_state: UNVERIFIED`,
+and clearing THAT needs a candidate through `certification_policy.PROMOTION_GATES`,
+where `market_baseline` currently fails 0/5 for every model measured.
+
 ⚠️ **CERTIFIES NOTHING.** Measurement is always permitted; re-specifying a
 threshold after observing that it blocks promotion is not (APEX §23). A
 positive result here is evidence for an authorized decision, not a licence to

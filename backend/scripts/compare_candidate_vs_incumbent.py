@@ -20,6 +20,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -29,8 +30,9 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from scripts.train_on_real_matches import (  # noqa: E402
-    _FEATURE_REGISTRY,
     _LEAGUE_TO_SLUG,
+    _SCHEMAS,
+    _schema_for,
     _build_meta_features,
     build_dataset,
     derive_apex_market_features,
@@ -45,6 +47,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("compare")
 
 HOLDOUT_SEASON = "2526"
+_DEFAULT_SCHEMA = "apex_v1_68"
 
 
 def _predict(bundle: dict, X: np.ndarray) -> np.ndarray:
@@ -56,9 +59,23 @@ def _predict(bundle: dict, X: np.ndarray) -> np.ndarray:
     return meta_model.predict_proba(_build_meta_features(models, X))
 
 
-def _coherent_price_perturbation(bundle: dict, reference: np.ndarray) -> dict[str, Any]:
-    """Require sensible movement between coherent home- and away-favourite books."""
-    schema = list(_FEATURE_REGISTRY.APEX_FEATURES_68)
+def _coherent_price_perturbation(
+    bundle: dict, reference: np.ndarray, candidate_features: Sequence[str]
+) -> dict[str, Any]:
+    """Require sensible movement between coherent home- and away-favourite books.
+
+    ``candidate_features`` is the candidate's OWN contract, not a hardcoded
+    APEX_FEATURES_68. The two agree today for every registered schema (the
+    Apex market block sits at the same positions in all of them), but reading
+    the market-feature index out of a different list than the row was built
+    from is precisely the class of positional error that this repository has
+    already served two months of fallback predictions for.
+    """
+    schema = list(candidate_features)
+    if len(schema) != reference.shape[0]:
+        raise ValueError(
+            f"probe row has {reference.shape[0]} columns, contract has {len(schema)}"
+        )
     home_probe = reference.copy()
     away_probe = reference.copy()
     for feature, value in derive_apex_market_features(1.45, 4.50, 7.00).items():
@@ -86,22 +103,58 @@ def main() -> int:
         type=Path,
         default=_BACKEND_ROOT / "models" / "candidate" / "comparison_report.json",
     )
+    parser.add_argument(
+        "--candidate-schema",
+        choices=sorted(_SCHEMAS),
+        default=_DEFAULT_SCHEMA,
+        help=(
+            "The feature contract the candidate artifacts were trained on. The "
+            "INCUMBENT is always scored on its own CANONICAL_FEATURES_68 vector "
+            "(X_incumbent) — that is the point of the comparison; only the "
+            "candidate side follows this flag."
+        ),
+    )
+    parser.add_argument(
+        "--availability-report",
+        type=Path,
+        default=None,
+        help="Defaults to <candidate-dir>/feature_availability_matrix[_<suffix>].json",
+    )
     args = parser.parse_args()
 
+    candidate_features, candidate_suffix = _schema_for(args.candidate_schema)
     incumbent_dir = _BACKEND_ROOT / "models"
     candidate_dir = _BACKEND_ROOT / "models" / "candidate"
+    training_report_name = {
+        "apex_v1_68": "training_report_real.json",
+        "apex_v1_89": "training_report_real_phase8.json",
+    }.get(args.candidate_schema, f"training_report_real_{candidate_suffix}.json")
     training_report = json.loads(
-        (candidate_dir / "training_report_real.json").read_text(encoding="utf-8")
+        (candidate_dir / training_report_name).read_text(encoding="utf-8")
+    )
+    availability_path = args.availability_report or (
+        candidate_dir / "feature_availability_matrix.json"
+        if args.candidate_schema == _DEFAULT_SCHEMA
+        else candidate_dir / f"feature_availability_matrix_{candidate_suffix}.json"
     )
     availability_report = validate_promotion_feature_evidence(
         json.loads(
-            (candidate_dir / "feature_availability_matrix.json").read_text(
+            availability_path.read_text(
                 encoding="utf-8"
             )
         )
     )
 
-    dataset = build_dataset(load_matches(_BACKEND_ROOT / "data" / "cache"))
+    # One dataset serves both sides: `X` follows --candidate-schema while
+    # `X_incumbent` is always the 68-wide legacy vector the shipped artifacts
+    # were trained on. Under a schema that drops rows (apex_v2_71 drops every
+    # fixture with no honest xG answer), BOTH sides are scored on that same
+    # reduced holdout — the comparison stays like-for-like on identical
+    # fixtures, which is the property the gate depends on.
+    dataset = build_dataset(
+        load_matches(_BACKEND_ROOT / "data" / "cache"),
+        schema=args.candidate_schema,
+    )
 
     header = f"{'league':<12} {'model':<10} {'acc':>7} {'RPS':>8} {'Brier':>8} {'logloss':>8}"
     logger.info("\n%s", header)
@@ -110,6 +163,8 @@ def main() -> int:
     verdicts = {}
     report: dict[str, Any] = {
         "holdout_season": HOLDOUT_SEASON,
+        "candidate_schema": args.candidate_schema,
+        "candidate_feature_count": len(candidate_features),
         "served_head": True,
         "leagues": {},
         "gates": {},
@@ -129,8 +184,11 @@ def main() -> int:
 
         row = {}
         candidate_bundle = None
-        for label, directory in (("incumbent", incumbent_dir), ("candidate", candidate_dir)):
-            path = directory / f"{slug}_ensemble_v5_phase7.pkl"
+        for label, directory, suffix in (
+            ("incumbent", incumbent_dir, "v5_phase7"),
+            ("candidate", candidate_dir, candidate_suffix),
+        ):
+            path = directory / f"{slug}_ensemble_{suffix}.pkl"
             if not path.exists():
                 logger.info("%-12s %-10s (artifact absent)", league, label)
                 continue
@@ -152,7 +210,16 @@ def main() -> int:
 
         if "incumbent" in row and "candidate" in row:
             delta = row["incumbent"]["rps"] - row["candidate"]["rps"]
-            candidate_evidence = training_report.get(league, training_report["POOLED"])
+            # `.get(league, training_report["POOLED"])` evaluated the default
+            # eagerly, so a run that trained every league individually — and
+            # therefore wrote no POOLED entry — raised KeyError even for
+            # leagues that were present. Latent until apex_v2_71, whose
+            # row-dropping leaves no league needing the pooled fallback.
+            candidate_evidence = training_report.get(league) or training_report.get("POOLED")
+            if candidate_evidence is None:
+                raise KeyError(
+                    f"training report has neither a {league!r} entry nor a POOLED fallback"
+                )
             verdicts[league] = delta
             report["leagues"][league] = {
                 "incumbent": row["incumbent"],
@@ -167,6 +234,7 @@ def main() -> int:
                 "coherent_price_perturbation": _coherent_price_perturbation(
                     candidate_bundle,
                     candidate_X[0].copy(),
+                    candidate_features,
                 ),
             }
             logger.info(

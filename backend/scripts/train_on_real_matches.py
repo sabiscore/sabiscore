@@ -67,7 +67,7 @@ import sys
 from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -84,6 +84,7 @@ if _FEATURE_SPEC is None or _FEATURE_SPEC.loader is None:
 _FEATURE_REGISTRY = importlib.util.module_from_spec(_FEATURE_SPEC)
 _FEATURE_SPEC.loader.exec_module(_FEATURE_REGISTRY)
 APEX_FEATURES_68 = _FEATURE_REGISTRY.APEX_FEATURES_68
+APEX_FEATURES_71 = _FEATURE_REGISTRY.APEX_FEATURES_71
 APEX_FEATURES_89 = _FEATURE_REGISTRY.APEX_FEATURES_89
 APEX_MARKET_FEATURES_14 = _FEATURE_REGISTRY.APEX_MARKET_FEATURES_14
 CANONICAL_FEATURES_68 = _FEATURE_REGISTRY.CANONICAL_FEATURES_68
@@ -109,11 +110,16 @@ from src.features.phase8_historical import (  # noqa: E402 - after the sys.path 
 )
 from src.models.training_manifest import (  # noqa: E402 - after the sys.path bootstrap
     build_training_manifest,
+    dataset_fingerprint,
     write_training_manifest,
 )
 from src.features.elo_replay import (  # noqa: E402 - after the sys.path bootstrap
     compute_elo_training_columns,
     cross_verify_against_elo_engine,
+)
+from src.features.xg_replay import (  # noqa: E402 - after the sys.path bootstrap
+    XG_TRAINING_COLUMNS,
+    compute_xg_training_columns,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -142,6 +148,65 @@ _LEAGUE_TO_SLUG = {
     "LIGUE_1": "ligue_1",
     "EREDIVISIE": "eredivisie",
 }
+
+#: Every feature-schema version this script can train -> its artifact suffix,
+#: keyed exactly as `feature_registry.FEATURE_SCHEMA_VERSIONS` keys it. The
+#: suffix is part of the filename because `prediction.py._wrap_artifact` infers
+#: provenance from artifact shape: writing a differently-shaped model over a
+#: v5_phase7 filename would make the two disagree.
+_SCHEMAS: Dict[str, str] = {
+    "apex_v1_68": "v5_phase7",
+    "apex_v1_89": "v6_phase8",
+    "apex_v2_71": "v7_xg71",
+}
+_DEFAULT_SCHEMA = "apex_v1_68"
+
+
+def _schema_features(schema: str) -> List[str]:
+    """The column list for a schema, read from the module attribute each call.
+
+    Deliberately NOT a list captured in `_SCHEMAS` at import time. The
+    market-block assertion in `build_dataset` exists to catch a future edit that
+    swaps or reorders the Apex market block (docs/DEBT.md item 37), and
+    `test_train_on_real_matches_market_block` proves it by rebinding
+    `APEX_FEATURES_68` on this module. A captured list would keep pointing at
+    the original object, so the guard would report clean against a corrupted
+    contract — the guard testing itself rather than the schema.
+    """
+    if schema == "apex_v1_68":
+        return APEX_FEATURES_68
+    if schema == "apex_v1_89":
+        return APEX_FEATURES_89
+    if schema == "apex_v2_71":
+        return APEX_FEATURES_71
+    raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
+
+
+def _schema_for(schema: str) -> Tuple[List[str], str]:
+    """(columns, artifact suffix) for a registered schema."""
+    return _schema_features(schema), _SCHEMAS[schema]
+
+
+def _schema_version_for(feature_names: Sequence[str]) -> str:
+    """The declared schema version for an exact column list.
+
+    Derived from the columns themselves rather than formatted from their count.
+    A width-based `f"apex_v1_{len(feature_names)}"` cannot distinguish two
+    71-wide contracts and would happily stamp an unregistered string onto a
+    real artifact -- `resolve_feature_schema` then raises at serving time, and
+    `prediction.py` answers a schema failure with `_fallback_result()` rather
+    than an error. That combination is how a mislabelled generation serves
+    fallback probabilities while the API reports a confident schema.
+    """
+    wanted = list(feature_names)
+    for version in _SCHEMAS:
+        if wanted == list(_schema_features(version)):
+            return version
+    raise ValueError(
+        f"feature_names ({len(wanted)} columns) matches no registered schema in "
+        f"{sorted(_SCHEMAS)} -- refusing to stamp an undeclared version"
+    )
+
 
 # Serving reads the newest 20 finished matches and derives its last-5 window
 # from that list (upcoming_match_feature_service._get_team_stats).
@@ -267,7 +332,13 @@ def load_matches(cache_dir: Path) -> List[dict]:
     return rows
 
 
-def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str, dict]:
+def build_dataset(
+    matches: List[dict],
+    include_phase8: bool = False,
+    *,
+    schema: Optional[str] = None,
+    xg_sources_dir: Optional[Path] = None,
+) -> Dict[str, dict]:
     """Walk forward in time, emitting one feature row per match with enough history.
 
     History is keyed per (league, team) and updated only AFTER the row is
@@ -296,6 +367,20 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
     these at their constant registry default because nothing replayed Elo over
     this corpus. ``elo_league_adjusted`` stays at its default; it is
     permanently ``PHASE7_FEATURES_ALWAYS_DATA_GAP`` by ATE-review policy.
+
+    ``schema`` selects the feature contract and defaults to whatever
+    ``include_phase8`` already implied, so every existing caller
+    (``compare_candidate_vs_incumbent``, ``test_uncertainty_contract``) is
+    unaffected. ``apex_v2_71`` additionally replays real rolling xG from the
+    Understat corpus via ``src.features.xg_replay``.
+
+    ⚠️ Under ``apex_v2_71`` a row whose xG features are unavailable is DROPPED,
+    not defaulted. Serving answers the same fixture with None
+    (``project_xg_rolling_features``), so filling a default here would train the
+    model on a value serving can never reproduce — the train/serve parity break
+    ``promotion_evidence`` exists to catch, and APEX section 26's "treat
+    defaults as observations" prohibition. The dropped count is logged, and
+    Eredivisie drops out entirely: Understat publishes no Eredivisie corpus.
     """
     histories: Dict[str, TeamHistory] = defaultdict(TeamHistory)
     out: Dict[str, dict] = defaultdict(
@@ -305,7 +390,15 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
     odds_rows = 0
     total_rows = 0
 
-    feature_names = APEX_FEATURES_89 if include_phase8 else APEX_FEATURES_68
+    schema = schema or ("apex_v1_89" if include_phase8 else _DEFAULT_SCHEMA)
+    if schema not in _SCHEMAS:
+        raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
+    if include_phase8 and schema != "apex_v1_89":
+        raise ValueError(f"include_phase8=True contradicts schema={schema!r}")
+    include_phase8 = schema == "apex_v1_89"
+    include_xg = schema == "apex_v2_71"
+
+    feature_names = _schema_features(schema)
     base_defaults = DEFAULT_FEATURE_VALUES_89 if include_phase8 else DEFAULT_FEATURE_VALUES_68
 
     # docs/DEBT.md item 37: every candidate this script trains declares
@@ -339,6 +432,18 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
 
     elo_replay = compute_elo_training_columns(matches)
     logger.info("Elo replay: %s", elo_replay.summary())
+
+    xg_rows: List[Dict[str, float]] = []
+    dropped_no_xg = 0
+    if include_xg:
+        sources = xg_sources_dir or (_BACKEND_ROOT / "data" / "processed" / "v4_sources")
+        xg_replay = compute_xg_training_columns(matches, sources)
+        xg_rows = xg_replay.rows
+        logger.info("xG replay: %s", xg_replay.summary())
+        logger.info(
+            "xG columns computed from the Understat corpus: %d (%s)",
+            len(XG_TRAINING_COLUMNS), ", ".join(XG_TRAINING_COLUMNS),
+        )
 
     for idx, m in enumerate(matches):
         league, hist = m["league"], histories[m["league"]]
@@ -396,7 +501,23 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
                     market_features = None
             total_rows += 1
 
-            if market_features is not None:
+            # Empty dict = no corpus observation, or a side below the rolling
+            # minimum. Serving returns None for the same fixture, so the row
+            # leaves the candidate matrix rather than carrying a fabricated
+            # value. Expressed as a gate on the emit condition rather than a
+            # `continue`, so the history update at the bottom of the loop stays
+            # the single place a match is appended to it — a dropped row must
+            # still advance every team's form window.
+            xg_available = True
+            if include_xg:
+                xg_features = xg_rows[idx]
+                xg_available = bool(xg_features)
+                if xg_available:
+                    features.update(xg_features)
+                else:
+                    dropped_no_xg += 1
+
+            if market_features is not None and xg_available:
                 incumbent_features = dict(features)
                 incumbent_features.update(derive_market_features(*m["odds"]))
                 features.update(market_features)
@@ -416,6 +537,11 @@ def build_dataset(matches: List[dict], include_phase8: bool = False) -> Dict[str
         hist.append(m["away"], m["ag"], m["hg"])
 
     logger.info("Rows skipped for insufficient history (both sides need %d): %d", _MIN_HISTORY, skipped)
+    if include_xg:
+        logger.info(
+            "Rows dropped for unavailable xG (no corpus observation or side below "
+            "the rolling minimum): %d", dropped_no_xg,
+        )
     logger.info(
         "Rows with real market odds: %d/%d (%.0f%%)",
         odds_rows, total_rows, 100.0 * odds_rows / max(total_rows, 1),
@@ -869,7 +995,7 @@ def train_league(
             "calibration_error": metrics["stacked"]["calibration_error"],
             "trained_at": datetime.now().isoformat(),
             "feature_count": len(feature_names),
-            "feature_schema_version": f"apex_v1_{len(feature_names)}",
+            "feature_schema_version": _schema_version_for(feature_names),
             # The honesty record for docs/DEBT.md item 29: a bare
             # feature_count: 89 would let a reader assume all 21 Phase 8 columns
             # carry learned signal. These two lists say which actually varied in
@@ -955,9 +1081,20 @@ def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
     versions. Without it, "retrain and you get the same model" is an assertion,
     and a metric change cannot be attributed to data versus a library upgrade.
     """
+    # The Understat corpus is a real training input under apex_v2_71 and is
+    # invisible to cache_dir's fd_*.csv glob, so it is fingerprinted alongside
+    # it. Without this the manifest would claim reproducibility while omitting
+    # the source of three of the 71 columns.
+    auxiliary = {}
+    if any(name in feature_names for name in XG_TRAINING_COLUMNS):
+        auxiliary["understat_xg_corpus"] = dataset_fingerprint(
+            args.xg_sources_dir, pattern="understat_matches_*.parquet"
+        )
+
     manifest = build_training_manifest(
         cache_dir=args.cache_dir,
-        feature_schema_version=f"apex_v1_{len(feature_names)}",
+        auxiliary_datasets=auxiliary,
+        feature_schema_version=_schema_version_for(feature_names),
         feature_names=feature_names,
         feature_contract_sha256=_feature_contract_sha(),
         holdout_season=args.holdout_season,
@@ -966,7 +1103,14 @@ def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
         leagues=report,
         artifact_suffix=artifact_suffix,
     )
-    manifest_path = write_training_manifest(manifest, args.out_dir)
+    manifest_path = write_training_manifest(
+        manifest,
+        args.out_dir,
+        # apex_v1_68 keeps the bare historical filename; every other generation
+        # gets its own, so two candidates in one out-dir no longer overwrite
+        # each other's reproducibility evidence.
+        artifact_suffix=None if artifact_suffix == "v5_phase7" else artifact_suffix,
+    )
     logger.info(
         "Reproducibility manifest -> %s (dataset %s, reproducibility %s)",
         manifest_path.name,
@@ -1003,6 +1147,23 @@ def main() -> int:
             "v6_phase8 artifacts, never over the v5_phase7 filenames."
         ),
     )
+    ap.add_argument(
+        "--schema",
+        choices=sorted(_SCHEMAS),
+        default=None,
+        help=(
+            "Feature contract to train. Defaults to apex_v1_68 (or apex_v1_89 "
+            "with --include-phase8). apex_v2_71 appends the three validated "
+            "rolling-xG features and DROPS every row the Understat corpus "
+            "cannot answer, because serving returns a DATA_GAP for those."
+        ),
+    )
+    ap.add_argument(
+        "--xg-sources-dir",
+        type=Path,
+        default=_BACKEND_ROOT / "data" / "processed" / "v4_sources",
+        help="Tracked Understat parquet corpus, read only by --schema apex_v2_71.",
+    )
     args = ap.parse_args()
 
     import joblib
@@ -1020,12 +1181,22 @@ def main() -> int:
     cross_verify_against_elo_engine(matches, n_check=300)
     logger.info("Elo replay cross-verified against EloEngine on 300 matches: identical.")
 
-    feature_names = APEX_FEATURES_89 if args.include_phase8 else APEX_FEATURES_68
-    # The generation tag is part of the filename because prediction.py's
-    # _wrap_artifact infers provenance from artifact shape; writing an 89-wide
-    # model over a v5_phase7 filename would make the two disagree.
-    artifact_suffix = "v6_phase8" if args.include_phase8 else "v5_phase7"
-    dataset = build_dataset(matches, include_phase8=args.include_phase8)
+    if args.include_phase8 and args.schema not in (None, "apex_v1_89"):
+        logger.error(
+            "--include-phase8 and --schema %s disagree; pass one or the other.",
+            args.schema,
+        )
+        return 1
+    schema = args.schema or ("apex_v1_89" if args.include_phase8 else _DEFAULT_SCHEMA)
+    feature_names, artifact_suffix = _schema_for(schema)
+    logger.info("Feature schema: %s (%d columns) -> *_%s.pkl",
+                schema, len(feature_names), artifact_suffix)
+    dataset = build_dataset(
+        matches,
+        include_phase8=(schema == "apex_v1_89"),
+        schema=schema,
+        xg_sources_dir=args.xg_sources_dir,
+    )
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("\nTemporal holdout: season %s\n", args.holdout_season)
@@ -1066,9 +1237,13 @@ def main() -> int:
                 logger.info("  %s -> pooled model (own history: %d rows, no holdout)",
                             league, len(dataset[league]["y"]))
 
-    report_name = (
-        "training_report_real_phase8.json" if args.include_phase8 else "training_report_real.json"
-    )
+    # apex_v1_68 keeps the historical bare name (candidate_manifest.json and
+    # compare_candidate_vs_incumbent both reference it), phase8 keeps the name
+    # it has always written, and any further schema is named for its suffix.
+    report_name = {
+        "apex_v1_68": "training_report_real.json",
+        "apex_v1_89": "training_report_real_phase8.json",
+    }.get(schema, f"training_report_real_{artifact_suffix}.json")
     (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
