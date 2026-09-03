@@ -404,7 +404,7 @@ gains one case for the new list-subscriptions service method.
 
 ---
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2 and 3 ruled out), so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3 and 4 ruled out), so staking stays blocked
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C
 authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE`.**
@@ -444,7 +444,7 @@ quartile to show worse mean RPS than the lowest. Measured, it is the reverse:
 gap (highest − lowest bucket RPS) = −0.022, on the clean holdout — see the
 ADR 0009 addendum for the full bucket table.
 
-**Three hypotheses have now been tested. Two are ruled out and one is
+**Four hypotheses have now been tested. Three are ruled out and one is
 substantially explained; none produces a pass:**
 
 1. **Hypothesis 1 (artifact-inherent) — substantially explained, 2026-08-31,
@@ -472,6 +472,71 @@ substantially explained; none produces a pass:**
    statistics. It would not cleanly pass anyway (two of three strata still
    carry the wrong sign). **This needs an authorized decision on the recorded
    evidence, not a unilateral edit.** See ADR 0009 Addendum 3.
+
+4. **Hypothesis 4 (member basis — independently seeded ensembles) — RULED OUT,
+   2026-09-03.** The structural suspicion, and the strongest one: bootstrap
+   trees inside one RandomForest share hyperparameters, split logic and feature
+   space, so their disagreement measures variance *within one localized
+   hypothesis space* rather than ignorance of the data-generating function.
+   Replacing them with independently seeded, independently resampled ensembles
+   (a Deep-Ensembles-style basis) should yield a purer epistemic signal.
+   Implemented in `scripts/spike_independent_ensemble_uncertainty.py`; only the
+   *definition of a member* changes, `dispersion_from_members()` is called
+   verbatim so the certified BALD math is the math under test.
+
+   **It first appeared to work.** Two pre-declared member-count ladders
+   (N ∈ {3,5,10,20,30}, seed blocks 1000 and 7000) removed the systematic
+   reversal and turned mean skill positive in 9 of 10 points — block means
+   **+0.0056** and **+0.0191** against a deterministic tree baseline of
+   **−0.0190**:
+
+   ```text
+               seed 1000                    seed 7000
+    members   skill   gap>0 skill>0        skill   gap>0 skill>0
+      trees  -0.0190   0/5    0/5         -0.0190   0/5    0/5
+          3  +0.0048   2/5    2/5         +0.0183   3/5    3/5
+          5  +0.0175   4/5    4/5         +0.0282   5/5    5/5
+         10  +0.0158   5/5    5/5         +0.0152   5/5    5/5
+         20  -0.0102   3/5    1/5         +0.0321   5/5    5/5
+         30  -0.0001   5/5    3/5         +0.0208   5/5    5/5
+   ```
+
+   ⚠️ **It was a confound in the spike's own design, not a result.** The default
+   replica is an RF+XGB+LGBM stack while the incumbent basis is trees inside a
+   single RandomForest — so the headline comparison moved member
+   **independence** and member **composition** simultaneously. Re-run with
+   `--rf-only`, which changes *only* independence:
+
+   ```text
+    trees (incumbent)          skill -0.0190              0/5
+    RF-only seed 1000   +0.0007 / -0.0246 / -0.0323   2/5, 1/5, 1/5
+    RF-only seed 7000   -0.0076 / -0.0212 / -0.0236   2/5, 1/5, 0/5
+   ```
+
+   **Independently seeded, independently resampled RandomForests reproduce the
+   reversal** — 5 of 6 points negative, several *worse* than the incumbent.
+   Seeding and resampling independence buys nothing. The entire apparent gain
+   came from mixing model classes.
+
+   ⚠️ **And that is the member design the frozen policy explicitly deprecates.**
+   `UNCERTAINTY_GATES["sufficient_members"]`: *"Bootstrap or resampling variants
+   are preferred over distinct algorithms: they vary the training sample, which
+   is the sampling uncertainty epistemic uncertainty is meant to capture,
+   whereas distinct algorithms vary only model class."* The only configuration
+   that moves the metric is the one ADR 0009 calls less principled — a reason to
+   distrust the effect, not to adopt it. Independently, N=30 would mean 30
+   separately trained ensembles per league (180 artifacts, 30× training and
+   storage), which fails the serving-cost constraint regardless of the
+   statistics.
+
+   **Method notes, so this is not re-run naively.** Ladders are pre-declared and
+   reported in full — raising N until the result passes is goalpost-moving, and
+   the seed-1000 ladder alone would have read as a clean 5/5 success at N=10 and
+   a 1/5 failure at N=20 on the same rows. The two seed blocks are disjoint;
+   repeating a configuration reproduces it exactly (the `determinism` gate the
+   policy already passes). Ladder points within a seed block are nested prefixes
+   of one replica set, so they isolate member count from seed choice but are not
+   independent samples.
 
 3. **Hypothesis 3 (RPS outcome-mix artifact) — RULED OUT, 2026-09-03.**
    Ordered RPS over [home, draw, away] is not symmetric across outcomes: for a
