@@ -5,6 +5,97 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Resolve the staking safety gates: one real fix, one rejected "fix", one obsolete remedy closed (2026-09-03)
+
+Three Class C decisions authorized by the operator this session. Two were
+executed; the third was **investigated and rejected on evidence before
+executing**, because the ledger item it was granted against had gone stale.
+
+### Fixed
+
+- `promotion_evidence._summary_from_features()` no longer counts policy-gapped
+  slots as training defaults (`docs/DEBT.md` item 49). All four
+  `PHASE7_FEATURES_ALWAYS_DATA_GAP` features are *by policy* constant at their
+  registry default in every candidate forever, so `_column_is_default_only()`
+  marked them defaulted unconditionally — giving `training_defaulted_slots` a
+  hard floor of 4 against a gate requiring exactly 0, making
+  `serving_feature_availability` unsatisfiable for any candidate however good.
+  This is the identical defect item 38 removed from a sibling counter, surviving
+  one field over. Measured: **20 → 16**; the gate still **FAILs** and nothing is
+  promoted. The declared-gap count still surfaces in `always_data_gap_slots`.
+- The one-line fix proposed in the ledger was **not used as written** — it keyed
+  on each row's own `always_data_gap` boolean, but `_summary_from_features()`
+  also runs in the *validator* path against stored report rows, where a report
+  predating that key returns `None` and silently restores the old count on one
+  side only. Shipped version keys on the feature **name**, so builder and
+  validator agree by construction.
+- `backend/models/candidate/feature_availability_matrix.json` summary
+  re-derived (20 → 16) by running the real function over its unchanged feature
+  rows. No measurement was edited; `promotion_gate` remains `FAIL`.
+
+### Changed
+
+- `_brier_score()` in `scripts/train_bnn.py` — **docstring corrected, arithmetic
+  and `BRIER_GATE = 0.220` deliberately left byte-identical** (`docs/DEBT.md`
+  item 43). The authorized change was to rescale the metric to the per-class
+  mean "as documented"; auditing first showed the opposite was true:
+  `metric-contract.json` v1.0.0 declares
+  `mean_over_samples_sum_over_classes` authoritative, which is exactly what the
+  code already computed, so the **docstring was the error**. Rescaling would
+  have made this the fifth divergent implementation and the only
+  certification-adjacent gate off the authoritative convention — and, since
+  gate and metric are only meaningful as a pair, would have been arithmetically
+  identical to moving the gate to `0.660`, placing it *below* the uniform-1/3
+  baseline (0.2222 on that scale) where it would admit anything better than
+  random.
+
+### Documentation
+
+- `docs/DEBT.md` item 42 **CLOSED — superseded, not fixed.** Its Option 1 (add
+  `torch`, train and ship a BNN artifact) was authorized, then found obsolete:
+  ADR 0009 / `uncertainty_policy.py`, frozen two days *after* item 42 was filed,
+  declares `UNCERTAINTY_METHOD = "ensemble_dispersion"` the **only** method
+  authorised to satisfy the epistemic gate. A BNN fails `method_is_authorised`
+  on arrival, so torch plus a perfect artifact could never clear
+  `MODEL_UNCERTAINTY_UNAVAILABLE` — roughly 200 MB of production image for a
+  forbidden path. Verified preconditions recorded in the item (no torch in any
+  requirements file, no `.pt` on disk, `.pt` gitignored, no production importer
+  for `train_bnn.py`). The blocking *mechanism* it describes remains live and
+  now belongs to item 50.
+- `docs/DEBT.md` item 50 **promoted to THE active staking blocker.** The
+  authorised ensemble-dispersion path is implemented and passes 6 of 7
+  `UNCERTAINTY_GATES`; `error_association` is the sole remaining condition, and
+  it fails *in the wrong direction* — higher epistemic uncertainty yields
+  **better** RPS in all five scoreable leagues (gap −0.0025 to −0.0448), with
+  in-bag contamination and member-design already ruled out. Promotion note
+  states explicitly that being the last blocker is **not** grounds for relaxing
+  it: `UNCERTAINTY_REQUIRES_ALL_GATES` stays `True` and the gate stays
+  fail-closed.
+- `docs/DEBT.md` item 55 residual 1 **closed.** Verified empirically that a
+  SQLite round-trip silently discards `tzinfo` on a plain `DateTime` column, so
+  `test_push_device_registry.py` and `test_notification_dispatch_service.py`
+  now carry a note at their `session` fixture stating they cannot catch the
+  naive/aware defect class. Documentation only — an assertion there would pass
+  unconditionally and manufacture false confidence.
+- Standing lesson recorded in the ledger: **an authorization is only as current
+  as the item it was granted against.** Both stale-premise authorizations this
+  session were caught by re-auditing preconditions against live code before
+  executing.
+
+### Tests
+
+- Three guards in `backend/tests/unit/test_promotion_gate_satisfiability.py`
+  (the file that already pins item 38): policy-gapped slots read 0,
+  *unexpectedly* defaulted slots still block (no blanket exemption), and
+  builder/validator shape agreement. All three **watched failing against the
+  reverted pre-fix counter** before being trusted.
+- No test added for the `train_bnn.py` docstring, deliberately: the script
+  imports `torch` at module scope, absent from every `requirements*.txt`, so an
+  importing test would fail CI and be a weaker guard than the docstring itself.
+- Full backend suite: **2127 passed, 17 skipped, 2 xfailed, 0 failed.** The two
+  xfails are item 50's `error_association`, now surfacing the real per-league
+  numbers rather than hiding them. Ruff clean on `src/`.
+
 ## Unreleased - Fix naive/aware datetime 500s across identity, notifications, developer platform, and analytics (2026-09-03)
 
 ### Fixed

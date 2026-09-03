@@ -14,7 +14,7 @@
   "serving_contract_hash": "6f290862052dbd22f22045366fb687bf462103460407e49327fcb8e00afd71aa",
   "summary": {
     "features": 68,
-    "training_defaulted_slots": 20,
+    "training_defaulted_slots": 16,
     "non_variable_training_slots": 20,
     "serving_schema_misaligned_slots": 11,
     "always_data_gap_slots": 4
