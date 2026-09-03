@@ -98,7 +98,20 @@ backend/models/*.pth
 
 # Processed data and training artifacts
 data/processed/
-backend/data/processed/
+# The Understat xG corpus (35 league-seasons, 12,560 matches, 2.4 MB of
+# parquet + provenance manifests) is the training input for any candidate
+# carrying xG-derived features. It is tracked for the same reason
+# backend/data/cache is: a corpus CI cannot reach is a corpus no training
+# run can reproduce. Re-acquiring it means a 35-season Understat backfill.
+# Everything else under backend/data/processed/ stays ignored — note the
+# trailing /* so the directory itself is not excluded, because git cannot
+# re-include a path whose parent directory is excluded.
+backend/data/processed/*
+!backend/data/processed/v4_sources/
+# ...but not soccerdata's raw HTTP cache (15 MB, six times the corpus it
+# derives). It is a library-internal format that a soccerdata upgrade can
+# invalidate, and re-fetching it is what the backfill script already does.
+backend/data/processed/v4_sources/.soccerdata/
 backend/mlruns/
 backend/artifacts/
 artifacts/

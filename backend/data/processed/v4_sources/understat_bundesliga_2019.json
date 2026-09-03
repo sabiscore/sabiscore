@@ -1,0 +1,12 @@
+{
+  "fetched_at": "2026-09-03T10:17:42.630317+00:00",
+  "freshness_seconds": 0,
+  "league": "bundesliga",
+  "notes": [
+    "Unofficial scraping wrapper - keep disabled unless ToS/robots policy is acceptable."
+  ],
+  "raw_status": "ok",
+  "row_count": 306,
+  "season": 2019,
+  "source": "understat/soccerdata"
+}

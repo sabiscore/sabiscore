@@ -254,6 +254,69 @@ The ATE machinery itself is ready and needs nothing new:
 carries the guardrail's own threshold, and `analyze(frame, feature_cols=[...])`
 takes a features+outcome frame directly.
 
+### ⭐ Finding 5 — the corpus is now in git, and serving cannot produce the xG family (2026-09-03)
+
+**The corpus is tracked.** `backend/data/processed/v4_sources/` was gitignored
+and existed on exactly one developer machine, so neither CI nor any future
+training run could reach it and re-acquiring it meant a 35-league-season
+Understat backfill. It is now committed: 70 parquet + 42 JSON, **2.4 MB**.
+
+⚠️ The "18 MB" figure quoted at handoff was NTFS block allocation over 112 small
+files plus a hidden `.soccerdata/` HTTP cache. The derived corpus — the part any
+training run actually reads — is 2.4 MB, one fifth of `backend/data/cache`,
+which this repository has always tracked for precisely the same reason. **No
+object-storage bucket and no sync automation were needed**; proposals to add
+Supabase/S3 for this were sized against the wrong number. soccerdata's raw
+`.soccerdata/` cache (15 MB) stays ignored: it is a library-internal format a
+soccerdata upgrade can invalidate, and re-fetching it is what the backfill
+script already does.
+
+Tracking a data asset creates a failure mode the repo did not have — silent
+truncation by a partial commit, or `* text=auto` normalising a parquet. Pinned
+by `tests/unit/test_understat_corpus_integrity.py` (38 tests, watched failing on
+a deliberately truncated parquet before being trusted), which asserts every
+file's row count against the count its own acquisition manifest recorded, plus
+`*.parquet binary` in `.gitattributes`.
+
+⛔ **Serving cannot produce the xG family today, so Finding 4's licence cannot
+yet be exercised.** Probed against production `sabiscore-db-v3`
+(`alembic_version` = `0013_push_devices`, i.e. the live database) on 2026-09-03:
+
+```sql
+SELECT count(*) FROM matches;       -- 12965
+SELECT count(*) FROM match_stats;   --     0
+```
+
+`match_stats` is the *only* xG source serving has:
+`upcoming_match_feature_service._get_team_xg()` selects
+`MatchStats.expected_goals`, and `MatchContext.psxg_home/away` is likewise 0
+rows. Every serving-time xG lookup returns `None` and has always done so.
+
+Training the three validated features on the Understat corpus while serving
+observes none of them is exactly APEX §26's "train on unavailable serving
+features". It is also mechanically self-defeating: `promotion_evidence.py`'s
+`serving_feature_availability` gate compares the candidate contract against
+`current_serving_contract()`, so a schema carrying features serving cannot
+compute fails the gate **by construction** — the same gate that already
+quarantined the incumbent candidate. Authoring the schema first produces a
+second quarantined candidate and no information.
+
+⭐ **The blocker is operational, not architectural, and that is the useful part.**
+Writers for `MatchStats.expected_goals` already exist and are tested —
+`data/loaders/understat.py`, `data/orchestrator.py`, `data/loaders/football_data.py`,
+`services/data_ingestion.py`. This is the same "built, tested, wired to nothing"
+shape as Finding 2, one layer further down: the corpus ingestion now runs, but
+nothing carries its output into the serving store. **The ordering is therefore
+forced** — populate `match_stats` from the corpus and give serving a leak-free
+rolling-xG projection matching training's `shift(1)`, window-5, `min_periods=3`
+semantics; *then* author the candidate schema. Two further items to settle
+before that write: `_get_team_xg()` issues its `SELECT` with **no `ORDER BY`**
+while the caller takes `[:5]`, so "the last five matches" is currently whatever
+order Postgres returns; and `promotion_evidence.py` is hardwired to
+`APEX_FEATURES_68` (`REPORT_SCHEMA`, the width check in `_stack_candidate_rows`,
+and the row-count check in the validator), so any wider schema needs it
+parameterised first.
+
 **Trigger to close:** `data/processed/v4_sources` holds real Understat artefacts
 for the five scoreable leagues across the seasons the football-data corpus
 already covers (2019/20 through 2025/26), with manifests, and they have been
