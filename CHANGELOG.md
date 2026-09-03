@@ -5,6 +5,49 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Rule out the member basis as the error_association reversal, and catch a confound in the spike that made it look solved (2026-09-03)
+
+### Added
+
+- `backend/scripts/spike_independent_ensemble_uncertainty.py` — Path A of
+  `docs/DEBT.md` item 50: replace BALD's member basis (≈300 bootstrap trees
+  inside one RandomForest) with dispersion across N independently seeded,
+  independently resampled ensembles. Only the *definition of a member* changes;
+  `dispersion_from_members()` is called verbatim so the certified math is the
+  math under test. Supports a pre-declared member-count `--ladder`, a
+  `--seed-base` for replication, and `--rf-only` for isolating the variable.
+
+### Result — hypothesis refuted, after first appearing to succeed
+
+- Two pre-declared ladders (N ∈ {3,5,10,20,30}, disjoint seed blocks 1000 and
+  7000) removed the systematic reversal and turned mean skill positive in 9 of
+  10 points — block means **+0.0056** and **+0.0191** against a deterministic
+  tree baseline of **−0.0190**. At N=10 both seed blocks scored 5/5.
+- **That was a confound in the spike's own design.** The default replica is an
+  RF+XGB+LGBM stack while the incumbent basis is trees inside a single
+  RandomForest, so the comparison moved member *independence* and member
+  *composition* at once. Re-run with `--rf-only`, changing only independence:
+  RF replicas **reproduce the reversal** (skill +0.0007 / −0.0246 / −0.0323 and
+  −0.0076 / −0.0212 / −0.0236 across the two seed blocks — 5 of 6 points
+  negative, several worse than the incumbent).
+- **Seeding and resampling independence buys nothing.** The entire apparent
+  gain came from mixing model classes — which is the member design
+  `UNCERTAINTY_GATES["sufficient_members"]` explicitly deprecates ("distinct
+  algorithms vary only model class"). The one configuration that moves the
+  metric is the one ADR 0009 calls less principled, which is a reason to
+  distrust the effect rather than adopt it.
+- Method discipline recorded so this is not re-run naively: ladders are
+  declared up front and reported in full. The seed-1000 ladder alone reads as a
+  clean 5/5 success at N=10 and a 1/5 failure at N=20 **on the same rows** —
+  stopping at the first passing N would have shipped a false positive.
+
+### Documentation
+
+- `docs/DEBT.md` item 50 records hypothesis 4 as ruled out; header and intro
+  updated to four hypotheses. `UNCERTAINTY_GATES` is unmodified,
+  `UNCERTAINTY_REQUIRES_ALL_GATES` stays `True`, and
+  `MODEL_UNCERTAINTY_UNAVAILABLE` remains unconditionally CRITICAL.
+
 ## Unreleased - Rule out a third explanation for the error_association reversal (2026-09-03)
 
 ### Added
