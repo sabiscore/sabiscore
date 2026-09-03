@@ -5,6 +5,42 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Rule out a third explanation for the error_association reversal (2026-09-03)
+
+### Added
+
+- `backend/scripts/diagnose_error_association_outcome_mix.py` — tests whether
+  item 50's `error_association` reversal is an artifact of RPS's asymmetry
+  across outcomes rather than a genuinely reversed epistemic signal. Ordered
+  RPS makes a DRAW structurally cheap (0.140 for a typical prediction, vs 0.190
+  home / 0.360 away), and high-epistemic fixtures — trees disagree, sides
+  evenly matched — draw more often. The script scores a constant
+  league-base-rate forecaster on the same holdout rows with the same bucketing;
+  because it knows nothing about any individual fixture, every difference it
+  shows across buckets is pure outcome mix.
+- **Result: hypothesis refuted.** The draw-rate mechanism is real (rising with
+  epistemic in 4 of 5 leagues) but far too small: outcome mix explains **12%**
+  of the mean gap, and the model-attributable `skill_gap` stays negative in
+  **5 of 5** leagues. The reversal survives removing the mechanical effect.
+- The measurement is controlled — bucketing is rank-based and equal-size,
+  byte-identical to the gate's own test, so `gap_model` reproduces the
+  published per-league numbers **exactly** (−0.0217 / −0.0025 / −0.0448 /
+  −0.0098 / −0.0288). A first pass using quantile cuts matched only 2 of 5 and
+  was corrected before any conclusion was drawn.
+
+### Documentation
+
+- `docs/DEBT.md` item 50 records hypothesis 3 as ruled out, alongside one new
+  observation pointing opposite to the gate's premise: LA_LIGA's reference gap
+  is **+0.0215**, so by outcome mix its high-epistemic bucket should be
+  *harder*, yet the model scores flat there — its advantage over a naive prior
+  is **larger** where epistemic uncertainty is highest. Combined with
+  `out_of_support` passing, the emerging reading is that BALD dispersion over
+  RF bootstrap trees detects distributional **novelty** but does not rank
+  in-distribution **error**. Recorded as evidence for an authorized decision —
+  concluding "the gate is mis-specified" from evidence gathered after it
+  blocked promotion is the inversion APEX §23 forbids. No gate was touched.
+
 ## Unreleased - Resolve the staking safety gates: one real fix, one rejected "fix", one obsolete remedy closed (2026-09-03)
 
 Three Class C decisions authorized by the operator this session. Two were
