@@ -31,7 +31,7 @@ from src.models.feature_registry import (
     CANONICAL_FEATURES_68,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
 )
-from src.models.promotion_evidence import _expected_gate
+from src.models.promotion_evidence import _expected_gate, _summary_from_features
 
 
 def test_every_68_schema_carries_all_four_permanent_data_gap_slots() -> None:
@@ -103,3 +103,69 @@ def test_genuinely_disqualifying_counters_still_block() -> None:
         },
         training_rows=0,
     ) == "FAIL", "a candidate trained on zero rows must never pass"
+
+
+# ---------------------------------------------------------------------------
+# docs/DEBT.md item 49 — item 38's defect survived in a sibling counter.
+# `_column_is_default_only()` marks a policy-gapped feature defaulted in every
+# candidate by definition, so `training_defaulted_slots` carried a hard floor
+# of 4 and the gate stayed unsatisfiable. Authorized 2026-09-03.
+# ---------------------------------------------------------------------------
+
+def _row(feature: str, *, defaulted: bool) -> dict:
+    return {
+        "feature": feature,
+        "defaulted_training_slot": defaulted,
+        "variable_in_training": not defaulted,
+        "candidate_position_matches_current_serving_schema": True,
+    }
+
+
+def test_policy_gapped_slots_do_not_count_as_training_defaults() -> None:
+    """The item 49 defect: a candidate whose ONLY defaulted slots are the four
+    permanent policy gaps must read 0, not 4 — otherwise the counter can never
+    reach the 0 the gate requires, for any candidate however good.
+    """
+    rows = [_row(f, defaulted=True) for f in PHASE7_FEATURES_ALWAYS_DATA_GAP]
+    rows += [
+        _row(f, defaulted=False)
+        for f in APEX_FEATURES_68
+        if f not in PHASE7_FEATURES_ALWAYS_DATA_GAP
+    ]
+
+    summary = _summary_from_features(rows)
+    assert summary["training_defaulted_slots"] == 0, (
+        "policy-gapped slots are counting as training defaults again — this is "
+        "the exact hard floor docs/DEBT.md item 49 removed"
+    )
+    assert summary["always_data_gap_slots"] == 4, "the declared gaps must still surface"
+    assert _expected_gate(summary, training_rows=10_000) == "PASS"
+
+
+def test_unexpectedly_defaulted_slots_still_count() -> None:
+    """The correction must not become a blanket exemption: a default on a
+    feature that is *not* policy-gapped is still a real quality failure.
+    """
+    rows = [_row(f, defaulted=True) for f in PHASE7_FEATURES_ALWAYS_DATA_GAP]
+    genuine = [f for f in APEX_FEATURES_68 if f not in PHASE7_FEATURES_ALWAYS_DATA_GAP][:3]
+    rows += [_row(f, defaulted=True) for f in genuine]
+
+    summary = _summary_from_features(rows)
+    assert summary["training_defaulted_slots"] == 3
+    assert _expected_gate(summary, training_rows=10_000) == "FAIL"
+
+
+def test_counter_is_keyed_on_feature_name_not_a_stored_row_flag() -> None:
+    """`_summary_from_features` also runs in the validator path against stored
+    report rows. A report written before the `always_data_gap` key existed must
+    produce the same count, or builder and validator disagree and every stored
+    report fails validation. Keyed on the name, this holds by construction.
+    """
+    rows = [_row(f, defaulted=True) for f in PHASE7_FEATURES_ALWAYS_DATA_GAP]
+    with_flag = [{**r, "always_data_gap": True} for r in rows]
+
+    assert (
+        _summary_from_features(rows)["training_defaulted_slots"]
+        == _summary_from_features(with_flag)["training_defaulted_slots"]
+        == 0
+    )

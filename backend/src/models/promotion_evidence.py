@@ -122,8 +122,27 @@ def _classification(
 def _summary_from_features(features: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     return {
         "features": len(features),
+        # Policy-gapped slots are excluded here for the same reason item 38
+        # excluded them from `always_data_gap_slots`' role as a blocker
+        # (docs/DEBT.md item 49, authorized 2026-09-03). A feature in
+        # PHASE7_FEATURES_ALWAYS_DATA_GAP is *by policy* constant at its
+        # registry default in every candidate forever, so
+        # `_column_is_default_only()` marks it defaulted unconditionally —
+        # giving this counter a hard floor of 4 and making the gate
+        # structurally unsatisfiable, the exact condition item 38 set out to
+        # remove. This measures *unexpectedly* defaulted slots; the policy
+        # gaps still surface in `always_data_gap_slots` and the markdown.
+        #
+        # Keyed on the feature NAME, not on the row's own `always_data_gap`
+        # boolean: `_summary_from_features` also runs in the validator path
+        # against stored report rows, and a report written before that key
+        # existed would make `row.get(...)` return None, silently restoring
+        # the old count on one side only. The name is validated present on
+        # every row, so this agrees across both call sites by construction.
         "training_defaulted_slots": sum(
-            bool(row.get("defaulted_training_slot")) for row in features
+            bool(row.get("defaulted_training_slot"))
+            and str(row.get("feature")) not in PHASE7_FEATURES_ALWAYS_DATA_GAP
+            for row in features
         ),
         "non_variable_training_slots": sum(
             not bool(row.get("variable_in_training")) for row in features

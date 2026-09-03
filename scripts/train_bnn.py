@@ -333,7 +333,33 @@ def _make_loaders(
 # ---------------------------------------------------------------------------
 
 def _brier_score(probs: np.ndarray, labels: np.ndarray) -> float:
-    """Mean Brier score across all three classes."""
+    """Multiclass Brier score: MEAN over samples of the SUM over classes.
+
+    ``mean_over_samples(sum_over_classes((p_c - 1_{y=c})^2))``, range [0, 2].
+
+    This is the **authoritative** convention declared in
+    ``backend/reports/evaluation/metric-contract.json`` v1.0.0
+    (``brier_convention.aggregation = "mean_over_samples_sum_over_classes"``),
+    and it matches ``multiclass_brier()`` in
+    ``backend/scripts/train_on_real_matches.py`` and the ``brier_overall``
+    reported by ``walk_forward_validate()``.
+
+    ⚠️ It is NOT the per-class-mean convention (this value / 3, range
+    [0, 0.6667]) used by ``metrics.brier_score_decomposition()``,
+    ``base_model._calculate_multiclass_brier()``, ``ensemble.py`` and
+    ``enhanced_training.py`` — the contract records those four as a known,
+    deliberately unmigrated divergence. **Do not compare values across the two
+    conventions, and do not "correct" this function to the /3 form:** the
+    docstring previously said "Mean Brier score across all three classes",
+    which described that other convention and not this code. The docstring was
+    the error and was fixed (docs/DEBT.md item 43, authorized 2026-09-03);
+    the arithmetic here is unchanged and correct.
+
+    Rescaling this function while holding ``BRIER_GATE`` fixed would be a 3x
+    loosening of the gate wearing a bug fix's clothes — on the /3 scale the
+    uniform 1/3 forecaster scores 0.2222, so a 0.220 bar would admit anything
+    better than random.
+    """
     one_hot = np.eye(N_CLASSES)[labels]
     return float(np.mean(np.sum((probs - one_hot) ** 2, axis=1)))
 

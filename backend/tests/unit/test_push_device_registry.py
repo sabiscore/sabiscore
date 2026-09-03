@@ -29,6 +29,13 @@ from src.db.session import get_async_session
 from src.services.notification_service import NotificationService
 
 
+# ponytail: SQLite silently discards tzinfo on a plain (non-timezone-aware)
+# DateTime column round-trip — verified empirically (a tz-aware insert reads
+# back with tzinfo=None). This suite therefore CANNOT catch a naive/aware
+# datetime bug on PushDevice/UserNotificationLog writes: asyncpg raises at
+# bind time in production, SQLite here just silently normalizes it away.
+# Do not read a green run here as proof those writes are tz-safe.
+# See docs/DEBT.md item 55, residual 1.
 @pytest.fixture
 async def session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)

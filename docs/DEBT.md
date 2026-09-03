@@ -27,8 +27,8 @@ a different name and no shared import. Those seven working copies were left
 alone (no live bug, not worth the churn); new code should import the shared
 one instead of adding an eighth.
 
-**Residual 1 — the SQLite/AsyncMock test fixture convention cannot catch this
-bug class.** `test_push_device_registry.py` and `test_notification_dispatch_service.py`
+**Residual 1 — RESOLVED 2026-09-03 — the SQLite/AsyncMock test fixture
+convention cannot catch this bug class.** `test_push_device_registry.py` and `test_notification_dispatch_service.py`
 exercise `PushDevice`/`UserNotificationLog` writes against a real SQLite
 in-memory engine; SQLite has no native timestamp type and does not enforce
 tz-awareness the way asyncpg does, so these suites stayed green through the
@@ -40,11 +40,19 @@ are why this shipped unnoticed. Regression tests added this round assert
 rather than trusting either fixture style to fail on its own; not retrofitted
 onto the SQLite-backed suites since a round-trip through SQLite may silently
 normalize the value regardless of correctness, which would make such an
-assertion pass unconditionally and prove nothing — unverified either way this
-session. **Trigger to close:** confirm empirically whether a SQLite round-trip
-preserves or discards tzinfo for a plain `DateTime` column; if it discards it,
-these two suites need a documented note that they cannot catch this defect
-class, not a false-confidence assertion.
+assertion pass unconditionally and prove nothing.
+
+**Verified 2026-09-03**, via a standalone SQLAlchemy+aiosqlite repro against
+a plain (non-`timezone=True`) `DateTime` column, mirroring the exact column
+convention in `db/models.py`: a tz-aware insert (`datetime.now(timezone.utc)`,
+`tzinfo=UTC`) reads back with `tzinfo=None`. SQLite discards it. Both suites
+now carry a comment at their `session` fixture stating this explicitly — a
+green run there is not evidence those writes are tz-safe; only the
+`.tzinfo is None` assertions added this round (in the AsyncMock/direct-value
+suites) and production/asyncpg itself can prove that. No test behavior
+changed — documentation only, since retrofitting an assertion here would, as
+above, pass unconditionally and manufacture false confidence. Residual
+closed.
 
 **Residual 2 — 105 files use `datetime.now(timezone.utc)` repo-wide; only the
 newest (M10-M13) subsystem was audited.** The idiom is correct almost
@@ -403,6 +411,24 @@ authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE
 Owner: unassigned. Found 2026-08-31, building the M2 certification milestone
 (ADR 0009). Updated same day: hypothesis 2 investigated and ruled out.
 
+> ⭐ **PROMOTED 2026-09-03 (operator decision): this is now THE active blocker
+> for staking.** Item 42 — previously the headline staking blocker — was closed
+> the same day once ADR 0009 was found to have superseded its proposed fix: a
+> BNN cannot satisfy the epistemic gate at all, because
+> `uncertainty_policy.UNCERTAINTY_METHOD = "ensemble_dispersion"` is *the only
+> authorised method*. There is therefore no alternative route left. Every other
+> uncertainty gate passes; `error_association` is the single remaining
+> condition between the platform and a staking-capable state, and it is a
+> research question, not an authorization or a dependency. Nothing else in the
+> ledger can unblock staking by being resolved first.
+>
+> ⚠️ **This promotion does NOT lower the bar.** `UNCERTAINTY_REQUIRES_ALL_GATES`
+> stays `True`, the threshold stays `min_rps_gap_top_vs_bottom = 0.0, strict`,
+> and `_uncertainty_from_features` stays unconditionally `None`. Being the last
+> blocker is not grounds for relaxing it — that inversion is exactly what
+> APEX §23 forbids, and the gate failing in the *wrong direction* (see below)
+> is evidence about the signal, not about the threshold.
+
 `src/models/ensemble_uncertainty.py` implements the ADR's `ensemble_dispersion`
 method (BALD decomposition over the shipped `random_forest`'s 300 bootstrap
 trees) and it is real, working code — not a stub. Scored against the real
@@ -545,9 +571,9 @@ on a methodologically clean (holdout-only) measurement.
 
 ## 49. `serving_feature_availability` is STILL structurally unsatisfiable — item 38's defect survives in a sibling counter
 
-**Tier:** `NEXT` — **Class C, requires explicit authorization. Deliberately NOT
-applied.** Filed 2026-08-31, found while regenerating the stale availability
-matrix (item 48 follow-up).
+**Tier:** `RESOLVED 2026-09-03` — **Class C, authorized by the operator that
+day and applied.** Filed 2026-08-31, found while regenerating the stale
+availability matrix (item 48 follow-up).
 
 Item 38 (authorized 2026-08-22) removed `always_data_gap_slots` from
 `promotion_evidence._expected_gate()`'s `blockers` tuple, with this reasoning
@@ -604,6 +630,38 @@ Exclude policy-gapped slots from the blocking count, so it measures
 Under today's candidate that reads **20 → 16**; the gate still FAILs (16 ≠ 0,
 and `serving_schema_misaligned_slots` is 11 from item 37's deadlock), so this
 promotes nothing and cannot be mistaken for making a failing candidate pass.
+
+### Applied 2026-09-03 (authorized) — with one correction to the proposed one-liner
+
+Measured after the change, not predicted: `training_defaulted_slots` **20 → 16**,
+`always_data_gap_slots` still 4 (the declared gaps continue to surface),
+`promotion_gate` still **FAIL** both before and after. Nothing was promoted.
+
+⚠️ **The one-liner proposed above was subtly wrong and was not used as written.**
+It keys on `row.get("always_data_gap")` — but `_summary_from_features()` also
+runs in the **validator** path (`validate_promotion_feature_evidence`, line
+~281) against *stored* report rows. A report written before that key existed
+returns `None` there, silently restoring the old count on the validator side
+only, so builder and validator would disagree and every stored report would
+fail validation for the wrong reason. The shipped version keys on the feature
+**name** (`str(row.get("feature")) not in PHASE7_FEATURES_ALWAYS_DATA_GAP`) —
+the same idiom `always_data_gap_slots` already uses, validated present on every
+row, so both call sites agree by construction. This is the same "the stale file
+was a different *shape*" trap recorded in this item's own ⚠️ above, one layer
+down. Pinned by `test_counter_is_keyed_on_feature_name_not_a_stored_row_flag`.
+
+**Committed report updated:** `backend/models/candidate/feature_availability_matrix.json`'s
+`summary.training_defaulted_slots` 20 → 16. Only the derived counter's
+*definition* changed; every raw feature row is untouched, and the field was
+re-derived by running the real `_summary_from_features()` over those unchanged
+rows rather than hand-edited. `promotion_gate` remains `FAIL`.
+
+**Guards:** three new tests in `test_promotion_gate_satisfiability.py` (the
+file that already pins item 38, its sibling defect) — policy-gapped slots read
+0, *unexpectedly* defaulted slots still block (no blanket exemption), and the
+builder/validator shape agreement above. All three were **watched failing
+against the reverted pre-fix counter** before being trusted. Suite: 22 passed,
+ruff clean.
 
 **Not applied deliberately.** Changing a certification gate after observing
 that it blocks promotion is exactly the shape APEX §23 forbids, and item 38's
@@ -997,8 +1055,11 @@ not a football source.
 
 ## 43. The BNN Brier gate is below the bookmaker market's own score — unattainable by construction
 
-**Tier:** `BLOCKED-ON-DECISION` — a certification threshold, Class C. Filed
-2026-08-29 while pointing `train_bnn.py` at the real corpus.
+**Tier:** `ACCEPTED 2026-09-03` — reading 1 (units mismatch) **investigated and
+rejected on evidence**; the docstring was corrected instead and the threshold
+was deliberately left standing. Reading 2 (threshold mis-specification) remains
+open but is now low-stakes — see the resolution note at the end of this item.
+Originally filed 2026-08-29 while pointing `train_bnn.py` at the real corpus.
 
 `scripts/train_bnn.py` sets `BRIER_GATE = 0.220`. `_brier_score()` sums squared
 error over the three classes — the same convention as `multiclass_brier()` in
@@ -1084,6 +1145,66 @@ between the mean-convention reading, a market-relative threshold, or leaving
 research-only) is now the actual first step of item 42's Option 1, not a
 parallel, independent question.
 
+### RESOLUTION — 2026-09-03: reading 1 rejected, docstring fixed, threshold untouched
+
+Reading 1 ("units mismatch — the gate may have been specified against the
+docstring") was authorized for implementation this session and **was
+investigated before executing, then rejected on evidence.** The code was right
+and the docstring was wrong — the opposite of what this item assumed.
+
+`backend/reports/evaluation/metric-contract.json` v1.0.0 (frozen 2026-08-30,
+*after* this item was filed) declares the authoritative convention:
+
+```json
+"brier_convention": { "aggregation": "mean_over_samples_sum_over_classes" }
+```
+
+That is exactly what `_brier_score()` computes. The contract further records
+the four per-class-mean sites (`brier_score_decomposition`,
+`base_model._calculate_multiclass_brier`, `ensemble.py`, `enhanced_training.py`)
+as a known, deliberately unmigrated divergence, noting *"no certification gate
+reads them."* Rescaling `_brier_score()` would have made it the **fifth**
+divergent site and the only certification-adjacent gate on the
+non-authoritative convention.
+
+**And it would have been a threshold change, not a bug fix.** Gate and metric
+are only meaningful as a pair: dividing the metric by 3 while holding `0.220`
+fixed is arithmetically identical to holding the metric and moving the gate to
+`0.660`. On the /3 scale:
+
+| forecaster | /3-convention Brier | vs an unchanged 0.220 |
+|---|---|---|
+| de-vigged market | 0.1929 | passes |
+| honest BNN, real corpus | 0.1944 | passes |
+| **uniform 1/3** | **0.2222** | fails by 0.0022 |
+
+The "unchanged" gate would have sat *below the uniform baseline* — admitting
+anything better than random. That is the shape this item's own body warned
+about ("editing either the constant or the metric after observing a failing
+result is the same act").
+
+**Applied instead:** `_brier_score()`'s docstring now states the
+mean-over-samples-of-sum-over-classes convention, cites the metric contract as
+its authority, names the /3 convention explicitly as a different thing, and
+carries a standing warning against "correcting" the arithmetic. `BRIER_GATE =
+0.220` and the arithmetic are **byte-identical to before** (verified:
+`grep '^BRIER_GATE'` → `0.220`; `np.mean(np.sum(...))` unchanged). `py_compile`
+and `ruff` clean.
+
+**No regression test added, deliberately.** `scripts/train_bnn.py` imports
+`torch` at module scope, which is absent from every `requirements*.txt`, so a
+test importing it would fail in CI — the guard would be less reliable than the
+docstring it replaces. The convention is already pinned by the metric contract
+itself and by `multiclass_brier()`'s authoritative sibling implementation.
+
+**Reading 2 is still open and is still the real problem** — the gate genuinely
+sits 2.6× below the market on the authoritative scale, so no honest 1X2 model
+passes it. It is now **low-stakes**, because item 42's closing note establishes
+that `train_bnn.py` gates nothing that can reach production: it has no importer
+in `backend/src`, and ADR 0009 forbids a BNN from satisfying the epistemic gate
+regardless of its score. Fix it if the script is ever revived for research;
+there is no longer a production consequence either way.
+
 **Not changed:** `BRIER_GATE`, `certification_policy.py`, `requirements.txt`,
 `uncertainty_service.py`. `backend/models/` now holds no `.pt` files locally —
 the same state as production (gitignored, never committed, `torch` absent
@@ -1091,10 +1212,19 @@ from every `requirements*.txt`). This is Option 3 (research-only) by current
 default, not a new decision made here.
 
 
-## 42. Staking is blocked by a permanent critical gap that no amount of model certification can clear
+## 42. Staking is blocked by a permanent critical gap that no amount of model certification can clear — CLOSED 2026-09-03, superseded by ADR 0009
 
-**Tier:** `BLOCKED-ON-DECISION` — needs an authorized product/infra decision,
-not code. Filed 2026-08-29 while working the certification path.
+**Tier:** `CLOSED 2026-09-03` — **superseded, not fixed.** The mechanism this
+item describes is still real and still live (staking is still blocked), but its
+proposed remedy became structurally impossible two days after it was filed, and
+ownership of the remaining question moved to **item 50**. Filed 2026-08-29
+while working the certification path.
+
+> ⚠️ **Read this before acting on anything below.** The three options in the
+> body of this item are the state of knowledge on 2026-08-29 and **Option 1 is
+> now obsolete**. Do not add `torch`, do not train a BNN, and do not treat the
+> addendum's "option 1 remains open" line as current — it was written before
+> ADR 0009 existed. Full reasoning in the closing note at the end of this item.
 
 `stake_permitted` requires `not partial`, and any entry in `critical_gaps`
 forces `partial`. Every live analysis carries `MODEL_UNCERTAINTY_UNAVAILABLE`
@@ -1213,6 +1343,64 @@ reintroduced leak before being trusted.
 
 Option 1 remains open and still requires authorization. What changed is its
 cost: it needs a corpus fix first, not just a dependency and a training run.
+
+### CLOSING NOTE — 2026-09-03: Option 1 is structurally obsolete (ADR 0009)
+
+Option 1 was authorized by the operator this session ("add torch to
+dependencies, prepare the artifact for production"). **It was not executed, and
+must not be** — auditing its preconditions first showed the option had been
+superseded by work that landed *after* this item was written.
+
+`backend/src/models/uncertainty_policy.py` (ADR 0009, frozen 2026-08-31 —
+**two days after this item was filed**) declares:
+
+```python
+#: The only method authorised to satisfy the epistemic gate.
+UNCERTAINTY_METHOD = "ensemble_dispersion"
+```
+
+A BNN is a different method. It would fail the `method_is_authorised` gate on
+arrival, so **`torch` plus a perfectly trained BNN artifact cannot clear
+`MODEL_UNCERTAINTY_UNAVAILABLE`, however good the model is.** Adding `torch` to
+`requirements.runtime.txt` would have bought roughly 200 MB of production image
+and deploy time for a path the frozen policy forbids from satisfying the gate,
+while duplicating an implementation that already exists.
+
+Verified this session, not inferred:
+
+| precondition | state |
+|---|---|
+| `torch` in any `requirements*.txt` | absent (all files) |
+| `backend/models/*.pt` on disk | none — the item-42-addendum leaked artifact is gone |
+| `.gitignore` for `*.pt` | still ignored (lines 89-90, 96-97) — artifact could not ship anyway |
+| `scripts/train_bnn.py` production importer | **none** — research script, nothing in `backend/src` imports it |
+| authorised method | `ensemble_dispersion`, implemented in `src/models/ensemble_uncertainty.py` |
+| `_uncertainty_from_features` | returns `None` **unconditionally**, by design |
+
+**Where the question went.** The authorised path is already built and nearly
+certified: 6 of 7 `UNCERTAINTY_GATES` pass against the real corpus and the real
+shipped artifact. The single failure is `error_association`, which fails
+*systematically in the wrong direction* (higher epistemic uncertainty →
+**better** RPS, all five scoreable leagues), with in-bag contamination and
+member-design already ruled out. **That is item 50, now promoted to the active
+staking blocker.**
+
+**What survives of this item.** The mechanism at the top — `stake_permitted`
+requires `not partial`, any `critical_gaps` entry forces `partial`, and
+`MODEL_UNCERTAINTY_UNAVAILABLE` is unconditionally critical — is still exactly
+true and is *why* item 50 blocks staking. Option 2 (reclassify the gap to
+advisory) and Option 3 (accept research-only, the current de facto state) also
+remain live; Option 3 is now a recorded decision rather than an unnoticed side
+effect of a missing dependency, which is what this item asked for. Only Option
+1 is dead.
+
+⚠️ **Lesson, and it has now recurred twice in one session.** Both Class C
+authorizations granted this session rested on ledger text that had gone stale
+(this item's Option 1; item 43's "correct the metric" reading, which
+`metric-contract.json` had already answered in the opposite direction). **An
+authorization is only as current as the item it was granted against — re-audit
+the item's own preconditions against live code before executing it, even when
+the instruction is explicit.**
 
 ## 41. The homepage published the model's internal provenance as consumer branding — APEX §11 violation, live, untracked
 
