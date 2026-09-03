@@ -1,0 +1,12 @@
+{
+  "fetched_at": "2026-09-03T10:19:28.684462+00:00",
+  "freshness_seconds": 0,
+  "league": "epl",
+  "notes": [
+    "Unofficial scraping wrapper - keep disabled unless ToS/robots policy is acceptable."
+  ],
+  "raw_status": "ok",
+  "row_count": 380,
+  "season": 2021,
+  "source": "understat/soccerdata"
+}

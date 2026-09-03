@@ -68,6 +68,9 @@ Makefile   text eol=lf
 
 *.pdf      binary
 
+# Columnar training corpus — byte-exact or it does not load.
+*.parquet  binary
+
 *.woff     binary
 *.woff2    binary
 *.ttf      binary

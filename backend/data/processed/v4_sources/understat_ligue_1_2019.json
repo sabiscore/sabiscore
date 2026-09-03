@@ -1,0 +1,12 @@
+{
+  "fetched_at": "2026-09-03T10:17:59.603504+00:00",
+  "freshness_seconds": 0,
+  "league": "ligue_1",
+  "notes": [
+    "Unofficial scraping wrapper - keep disabled unless ToS/robots policy is acceptable."
+  ],
+  "raw_status": "ok",
+  "row_count": 380,
+  "season": 2019,
+  "source": "understat/soccerdata"
+}

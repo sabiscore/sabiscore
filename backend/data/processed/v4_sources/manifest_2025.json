@@ -1,0 +1,94 @@
+{
+  "dry_run": false,
+  "leagues": [
+    "epl",
+    "la_liga",
+    "serie_a",
+    "bundesliga",
+    "ligue_1"
+  ],
+  "results": [
+    {
+      "artefacts": [
+        {
+          "elapsed_s": 12.89,
+          "match_rows": 380,
+          "matches": "data\\processed\\v4_sources\\understat_matches_epl_2025.parquet",
+          "meta": "data\\processed\\v4_sources\\understat_epl_2025.json",
+          "rollup_rows": 760,
+          "rollups": "data\\processed\\v4_sources\\understat_rollups_epl_2025.parquet",
+          "source": "understat"
+        }
+      ],
+      "league": "epl",
+      "season": 2025,
+      "warnings": []
+    },
+    {
+      "artefacts": [
+        {
+          "elapsed_s": 11.94,
+          "match_rows": 380,
+          "matches": "data\\processed\\v4_sources\\understat_matches_la_liga_2025.parquet",
+          "meta": "data\\processed\\v4_sources\\understat_la_liga_2025.json",
+          "rollup_rows": 760,
+          "rollups": "data\\processed\\v4_sources\\understat_rollups_la_liga_2025.parquet",
+          "source": "understat"
+        }
+      ],
+      "league": "la_liga",
+      "season": 2025,
+      "warnings": []
+    },
+    {
+      "artefacts": [
+        {
+          "elapsed_s": 8.93,
+          "match_rows": 380,
+          "matches": "data\\processed\\v4_sources\\understat_matches_serie_a_2025.parquet",
+          "meta": "data\\processed\\v4_sources\\understat_serie_a_2025.json",
+          "rollup_rows": 760,
+          "rollups": "data\\processed\\v4_sources\\understat_rollups_serie_a_2025.parquet",
+          "source": "understat"
+        }
+      ],
+      "league": "serie_a",
+      "season": 2025,
+      "warnings": []
+    },
+    {
+      "artefacts": [
+        {
+          "elapsed_s": 15.47,
+          "match_rows": 306,
+          "matches": "data\\processed\\v4_sources\\understat_matches_bundesliga_2025.parquet",
+          "meta": "data\\processed\\v4_sources\\understat_bundesliga_2025.json",
+          "rollup_rows": 612,
+          "rollups": "data\\processed\\v4_sources\\understat_rollups_bundesliga_2025.parquet",
+          "source": "understat"
+        }
+      ],
+      "league": "bundesliga",
+      "season": 2025,
+      "warnings": []
+    },
+    {
+      "artefacts": [
+        {
+          "elapsed_s": 10.43,
+          "match_rows": 306,
+          "matches": "data\\processed\\v4_sources\\understat_matches_ligue_1_2025.parquet",
+          "meta": "data\\processed\\v4_sources\\understat_ligue_1_2025.json",
+          "rollup_rows": 612,
+          "rollups": "data\\processed\\v4_sources\\understat_rollups_ligue_1_2025.parquet",
+          "source": "understat"
+        }
+      ],
+      "league": "ligue_1",
+      "season": 2025,
+      "warnings": []
+    }
+  ],
+  "season": 2025,
+  "total_elapsed_s": 59.68
+}
