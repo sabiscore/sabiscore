@@ -34,11 +34,13 @@ shows is *pure outcome mix*, because the forecaster is constant.
     gap_reference = mean RPS_ref(Q4)   - mean RPS_ref(Q1)     <- pure outcome mix
     skill_gap     = gap_model - gap_reference                 <- model-attributable
 
-Bucketing is rank-based and equal-size, byte-identical to the gate's own test
-(`test_uncertainty_contract.py`), which is why `gap_model` reproduces the
-published per-league numbers exactly rather than approximately. That exact
-reproduction is the control: if it ever stops matching, this script is
-measuring something else and its conclusion does not hold.
+Bucketing, the control forecaster and the league/holdout iteration live in
+`_error_association_common` and are shared with
+`spike_independent_ensemble_uncertainty.py`. Bucketing there is rank-based and
+equal-size, byte-identical to the gate's own test, which is why `gap_model`
+reproduces the published per-league numbers exactly rather than approximately.
+That exact reproduction is the control: if it ever stops matching, this script
+is measuring something else and its conclusion does not hold.
 
 RESULT (2026-09-03): HYPOTHESIS REFUTED. Outcome mix explains ~12% of the mean
 gap; `skill_gap` stays negative in 5 of 5 leagues. See docs/DEBT.md item 50.
@@ -53,11 +55,11 @@ Usage:
 from __future__ import annotations
 
 import gc
+import math
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
-import joblib
 import numpy as np
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -65,48 +67,26 @@ for _path in (str(_BACKEND_ROOT), str(_BACKEND_ROOT / "scripts")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from src.models.evaluation.metrics import ranked_probability_score  # noqa: E402
-from src.models.uncertainty_policy import (  # noqa: E402
-    UNCERTAINTY_EVIDENCE_FLOORS,
-    UNCERTAINTY_GATES,
-)
 from train_on_real_matches import build_dataset, load_matches  # noqa: E402
+
+# Bucketing, the control forecaster and the league/holdout iteration are shared
+# with spike_independent_ensemble_uncertainty.py — both must agree on them or
+# their numbers cannot be compared to each other or to the gate.
+from _error_association_common import (  # noqa: E402
+    N_BUCKETS,
+    association,
+    bucket_indices,
+    iter_league_holdouts,
+)
 
 # Reused rather than re-implemented: `_score` routes every row through the
 # production `dispersion_from_members` and already handles the chunking that
-# keeps peak RSS inside this repo's lean-environment budget. Duplicating it
-# would risk the two diagnostics silently diverging — the exact failure mode
-# this codebase has repeatedly been bitten by.
+# keeps peak RSS inside this repo's lean-environment budget.
 from diagnose_decoupled_uncertainty import _LEAGUE_SLUGS, _score  # noqa: E402
-
-N_BUCKETS = int(UNCERTAINTY_GATES["error_association"]["threshold"]["buckets"])
-MIN_ROWS_PER_BUCKET = int(UNCERTAINTY_EVIDENCE_FLOORS["min_rows_per_error_bucket"])
-
-
-def bucket_indices(u_epi: np.ndarray, n: int) -> List[np.ndarray]:
-    """Rank-based equal-size buckets, matching the gate's own test exactly.
-
-    The gate uses `argsort` with equal-size slices, not quantile thresholds.
-    Quantile cuts give slightly different bucket membership under ties and
-    would not reproduce the published numbers.
-    """
-    order = np.argsort(u_epi)
-    size = len(order) // n
-    return [
-        order[i * size : (i + 1) * size] if i < n - 1 else order[i * size :]
-        for i in range(n)
-    ]
-
-
-def rps_of_fixed_forecaster(probs: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """The gate's own scorer, applied to one constant probability vector."""
-    p = list(np.asarray(probs, dtype=np.float64))
-    return np.array([ranked_probability_score(int(o), p) for o in y], dtype=np.float64)
 
 
 def main() -> int:
     dataset = build_dataset(load_matches(_BACKEND_ROOT / "data" / "cache"))
-    floor = int(UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"])
 
     print("error_association: outcome-mix artifact, or a genuinely reversed signal?")
     print(f"Buckets = {N_BUCKETS} (rank-based, gate-identical), holdout season only.")
@@ -120,56 +100,28 @@ def main() -> int:
     print(header)
     print("-" * len(header))
 
-    rows = []
-    for league, slug in _LEAGUE_SLUGS.items():
-        artifact = _BACKEND_ROOT / "models" / f"{slug}_ensemble_v5_phase7.pkl"
-        data = dataset.get(league)
-        if not artifact.exists() or not data:
-            continue
-
-        raw = joblib.load(artifact)
-        holdout_season = raw["model_metadata"]["holdout_season"]
-        models_dict = raw["models"]
-
-        seasons = np.asarray(data["seasons"])
-        X_all = np.asarray(data["X_incumbent"], dtype=np.float64)
-        y_all = np.asarray(data["y"])
-        eval_mask = seasons == holdout_season
-
-        if int(eval_mask.sum()) < floor:
-            del raw, models_dict
-            gc.collect()
-            continue
-
-        evaluation = _score(models_dict, X_all[eval_mask], y_all[eval_mask])
-        y_eval = y_all[eval_mask]
-        u_epi, rps_model = evaluation["u_epi"], evaluation["rps"]
-
-        # Reference forecaster: base rate over the PRE-HOLDOUT seasons only, so
-        # it never sees the rows it is scored on.
-        y_fit = y_all[~eval_mask]
-        base = np.array([(y_fit == k).mean() for k in (0, 1, 2)], dtype=np.float64)
-        rps_ref = rps_of_fixed_forecaster(base, y_eval)
-
-        buckets = bucket_indices(u_epi, N_BUCKETS)
-        if any(len(b) < MIN_ROWS_PER_BUCKET for b in buckets):
-            del raw, models_dict, evaluation
-            gc.collect()
-            continue
-
-        low, high = buckets[0], buckets[-1]
-        gap_model = float(rps_model[high].mean() - rps_model[low].mean())
-        gap_ref = float(rps_ref[high].mean() - rps_ref[low].mean())
-        skill_gap = gap_model - gap_ref
-
-        print(
-            f"{league:11} {int(eval_mask.sum()):>4} {gap_model:>+10.4f} "
-            f"{gap_ref:>+9.4f} {skill_gap:>+10.4f}  "
-            f"{(y_eval[low] == 1).mean():>7.1%} {(y_eval[high] == 1).mean():>7.1%}"
+    rows: List[Tuple[str, float, float, float]] = []
+    for holdout in iter_league_holdouts(dataset, _BACKEND_ROOT, _LEAGUE_SLUGS):
+        evaluation = _score(holdout.models_dict, holdout.X_eval, holdout.y_eval)
+        u_epi = evaluation["u_epi"]
+        gap_model, gap_ref, skill_gap = association(
+            u_epi, evaluation["rps"], holdout.rps_ref
         )
-        rows.append((league, gap_model, gap_ref, skill_gap))
+        if math.isnan(gap_model):
+            del evaluation
+            gc.collect()
+            continue
 
-        del raw, models_dict, evaluation
+        buckets = bucket_indices(u_epi)
+        low, high = buckets[0], buckets[-1]
+        print(
+            f"{holdout.league:11} {holdout.n_eval:>4} {gap_model:>+10.4f} "
+            f"{gap_ref:>+9.4f} {skill_gap:>+10.4f}  "
+            f"{(holdout.y_eval[low] == 1).mean():>7.1%} "
+            f"{(holdout.y_eval[high] == 1).mean():>7.1%}"
+        )
+        rows.append((holdout.league, gap_model, gap_ref, skill_gap))
+        del evaluation
         gc.collect()
 
     if not rows:
@@ -180,7 +132,10 @@ def main() -> int:
     mean_model = float(np.mean([r[1] for r in rows]))
     mean_ref = float(np.mean([r[2] for r in rows]))
     mean_skill = float(np.mean([r[3] for r in rows]))
-    print(f"{'MEAN':11} {'':>4} {mean_model:>+10.4f} {mean_ref:>+9.4f} {mean_skill:>+10.4f}")
+    print(
+        f"{'MEAN':11} {'':>4} {mean_model:>+10.4f} {mean_ref:>+9.4f} "
+        f"{mean_skill:>+10.4f}"
+    )
 
     rescued = sum(1 for r in rows if r[3] >= 0.0)
     share = (mean_ref / mean_model * 100.0) if mean_model else float("nan")

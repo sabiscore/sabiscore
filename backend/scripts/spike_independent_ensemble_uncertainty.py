@@ -105,9 +105,8 @@ import gc
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-import joblib
 import numpy as np
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -116,57 +115,26 @@ for _path in (str(_BACKEND_ROOT), str(_BACKEND_ROOT / "scripts")):
         sys.path.insert(0, _path)
 
 from src.models.ensemble_uncertainty import dispersion_from_members  # noqa: E402
-from src.models.evaluation.metrics import ranked_probability_score  # noqa: E402
-from src.models.uncertainty_policy import (  # noqa: E402
-    UNCERTAINTY_EVIDENCE_FLOORS,
-    UNCERTAINTY_GATES,
-)
+from src.models.uncertainty_policy import UNCERTAINTY_GATES  # noqa: E402
 
 import train_on_real_matches as trainer  # noqa: E402
 from train_on_real_matches import build_dataset, load_matches  # noqa: E402
 
-# Same reuse rationale as diagnose_error_association_outcome_mix.py: `_score`
-# routes the incumbent tree basis through the production dispersion path and
-# handles the chunking that keeps peak RSS inside budget.
+# Bucketing, the control forecaster and the league/holdout iteration are shared
+# with diagnose_error_association_outcome_mix.py — both must agree on them or
+# their numbers cannot be compared to each other or to the gate.
+from _error_association_common import (  # noqa: E402
+    association,
+    iter_league_holdouts,
+    rps_rows,
+)
+
+# Same reuse rationale: `_score` routes the incumbent tree basis through the
+# production dispersion path and handles the chunking that keeps peak RSS
+# inside budget.
 from diagnose_decoupled_uncertainty import _LEAGUE_SLUGS, _score  # noqa: E402
 
-N_BUCKETS = int(UNCERTAINTY_GATES["error_association"]["threshold"]["buckets"])
-MIN_ROWS_PER_BUCKET = int(UNCERTAINTY_EVIDENCE_FLOORS["min_rows_per_error_bucket"])
 MIN_MEMBERS = int(UNCERTAINTY_GATES["sufficient_members"]["threshold"]["min_members"])
-
-
-def bucket_indices(u_epi: np.ndarray, n: int) -> List[np.ndarray]:
-    """Rank-based equal-size buckets, byte-identical to the gate's own test."""
-    order = np.argsort(u_epi)
-    size = len(order) // n
-    return [
-        order[i * size : (i + 1) * size] if i < n - 1 else order[i * size :]
-        for i in range(n)
-    ]
-
-
-def rps_rows(probs: np.ndarray, y: np.ndarray) -> np.ndarray:
-    return np.array(
-        [ranked_probability_score(int(o), list(p)) for p, o in zip(probs, y)],
-        dtype=np.float64,
-    )
-
-
-def rps_fixed(prob: np.ndarray, y: np.ndarray) -> np.ndarray:
-    p = list(np.asarray(prob, dtype=np.float64))
-    return np.array([ranked_probability_score(int(o), p) for o in y], dtype=np.float64)
-
-
-def association(
-    u_epi: np.ndarray, rps_model: np.ndarray, rps_ref: np.ndarray
-) -> Tuple[float, float, float]:
-    buckets = bucket_indices(u_epi, N_BUCKETS)
-    if any(len(b) < MIN_ROWS_PER_BUCKET for b in buckets):
-        return float("nan"), float("nan"), float("nan")
-    low, high = buckets[0], buckets[-1]
-    gap = float(rps_model[high].mean() - rps_model[low].mean())
-    gap_ref = float(rps_ref[high].mean() - rps_ref[low].mean())
-    return gap, gap_ref, gap - gap_ref
 
 
 def train_replica(
@@ -226,7 +194,6 @@ def run_ladder(ladder: List[int], *, seed_base: int, rf_only: bool = False) -> i
     top = ladder[-1]
 
     dataset = build_dataset(load_matches(_BACKEND_ROOT / "data" / "cache"))
-    floor = int(UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"])
     print(f"Member-count ladder {ladder}, seed base {seed_base}. Pre-declared and "
           f"reported in full.\n")
 
@@ -234,38 +201,20 @@ def run_ladder(ladder: List[int], *, seed_base: int, rf_only: bool = False) -> i
     trees_rows: List[Dict[str, float]] = []
     started = time.time()
 
-    for league, slug in _LEAGUE_SLUGS.items():
-        artifact = _BACKEND_ROOT / "models" / f"{slug}_ensemble_v5_phase7.pkl"
-        data = dataset.get(league)
-        if not artifact.exists() or not data:
-            continue
-
-        raw = joblib.load(artifact)
-        holdout_season = raw["model_metadata"]["holdout_season"]
-        models_dict = raw["models"]
-        seasons = np.asarray(data["seasons"])
-        X_all = np.asarray(data["X_incumbent"], dtype=np.float64)
-        y_all = np.asarray(data["y"])
-        eval_mask = seasons == holdout_season
-        if int(eval_mask.sum()) < floor:
-            del raw, models_dict
-            gc.collect()
-            continue
-
-        X_eval, y_eval = X_all[eval_mask], y_all[eval_mask]
-        X_train, y_train = X_all[~eval_mask], y_all[~eval_mask]
-        base = np.array([(y_train == k).mean() for k in (0, 1, 2)], dtype=np.float64)
-        ref = rps_fixed(base, y_eval)
-
-        tree_eval = _score(models_dict, X_eval, y_eval)
-        gap_t, _, skill_t = association(tree_eval["u_epi"], tree_eval["rps"], ref)
+    for holdout in iter_league_holdouts(dataset, _BACKEND_ROOT, _LEAGUE_SLUGS):
+        tree_eval = _score(holdout.models_dict, holdout.X_eval, holdout.y_eval)
+        gap_t, _, skill_t = association(
+            tree_eval["u_epi"], tree_eval["rps"], holdout.rps_ref
+        )
         trees_rows.append({"gap": gap_t, "skill": skill_t})
-        del raw, models_dict, tree_eval
+        del tree_eval
         gc.collect()
 
         members = [
-            train_replica(X_train, y_train, X_eval, seed=seed_base + r,
-                          rf_only=rf_only)
+            train_replica(
+                holdout.X_train, holdout.y_train, holdout.X_eval,
+                seed=seed_base + r, rf_only=rf_only,
+            )
             for r in range(top)
         ]
         stacked = np.stack(members, axis=0)
@@ -273,12 +222,14 @@ def run_ladder(ladder: List[int], *, seed_base: int, rf_only: bool = False) -> i
             prefix = stacked[:n]
             u_epi = np.array(
                 [dispersion_from_members(list(prefix[:, i, :])).epistemic
-                 for i in range(len(y_eval))],
+                 for i in range(holdout.n_eval)],
                 dtype=np.float64,
             )
-            gap, _, skill = association(u_epi, rps_rows(prefix.mean(axis=0), y_eval), ref)
+            gap, _, skill = association(
+                u_epi, rps_rows(prefix.mean(axis=0), holdout.y_eval), holdout.rps_ref
+            )
             per_n[n].append({"gap": gap, "skill": skill, "u": float(u_epi.mean())})
-        print(f"  {league} done ({time.time() - started:.0f}s)")
+        print(f"  {holdout.league} done ({time.time() - started:.0f}s)")
         del members, stacked
         gc.collect()
 
@@ -344,7 +295,6 @@ def main() -> int:
         return 2
 
     dataset = build_dataset(load_matches(_BACKEND_ROOT / "data" / "cache"))
-    floor = int(UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"])
 
     print(f"error_association under two member bases  (N={args.replicas} replicas)")
     print("  trees = ~300 bootstrap trees inside the shipped RandomForest (incumbent)")
@@ -360,54 +310,39 @@ def main() -> int:
 
     rows: List[Dict[str, float]] = []
     started = time.time()
-    for league, slug in _LEAGUE_SLUGS.items():
-        artifact = _BACKEND_ROOT / "models" / f"{slug}_ensemble_v5_phase7.pkl"
-        data = dataset.get(league)
-        if not artifact.exists() or not data:
-            continue
-
-        raw = joblib.load(artifact)
-        holdout_season = raw["model_metadata"]["holdout_season"]
-        models_dict = raw["models"]
-
-        seasons = np.asarray(data["seasons"])
-        X_all = np.asarray(data["X_incumbent"], dtype=np.float64)
-        y_all = np.asarray(data["y"])
-        eval_mask = seasons == holdout_season
-        if int(eval_mask.sum()) < floor:
-            del raw, models_dict
-            gc.collect()
-            continue
-
-        X_eval, y_eval = X_all[eval_mask], y_all[eval_mask]
-        X_train, y_train = X_all[~eval_mask], y_all[~eval_mask]
-
-        # Control: constant base rate from pre-holdout rows only.
-        base = np.array([(y_train == k).mean() for k in (0, 1, 2)], dtype=np.float64)
-        ref = rps_fixed(base, y_eval)
-
+    for holdout in iter_league_holdouts(dataset, _BACKEND_ROOT, _LEAGUE_SLUGS):
         # --- incumbent basis: bootstrap trees within the shipped forest -------
-        tree_eval = _score(models_dict, X_eval, y_eval)
-        gap_t, ref_t, skill_t = association(tree_eval["u_epi"], tree_eval["rps"], ref)
+        tree_eval = _score(holdout.models_dict, holdout.X_eval, holdout.y_eval)
+        gap_t, _, skill_t = association(
+            tree_eval["u_epi"], tree_eval["rps"], holdout.rps_ref
+        )
         u_epi_trees = float(tree_eval["u_epi"].mean())
-        del raw, models_dict, tree_eval
+        del tree_eval
         gc.collect()
 
         # --- spike basis: independently seeded, independently resampled ------
         members = [
-            train_replica(X_train, y_train, X_eval, seed=args.seed_base + r,
-                          rf_only=args.rf_only)
+            train_replica(
+                holdout.X_train, holdout.y_train, holdout.X_eval,
+                seed=args.seed_base + r, rf_only=args.rf_only,
+            )
             for r in range(args.replicas)
         ]
         stacked = np.stack(members, axis=0)          # (R, n_eval, 3)
-        deep_mean = stacked.mean(axis=0)
-        u_epi_deep = np.empty(len(y_eval), dtype=np.float64)
-        for i in range(len(y_eval)):
-            u_epi_deep[i] = dispersion_from_members(list(stacked[:, i, :])).epistemic
-        gap_d, ref_d, skill_d = association(u_epi_deep, rps_rows(deep_mean, y_eval), ref)
+        u_epi_deep = np.array(
+            [dispersion_from_members(list(stacked[:, i, :])).epistemic
+             for i in range(holdout.n_eval)],
+            dtype=np.float64,
+        )
+        gap_d, _, skill_d = association(
+            u_epi_deep,
+            rps_rows(stacked.mean(axis=0), holdout.y_eval),
+            holdout.rps_ref,
+        )
 
         print(
-            f"{league:11} {int(eval_mask.sum()):>4} | {gap_t:>+9.4f} {skill_t:>+11.4f} "
+            f"{holdout.league:11} {holdout.n_eval:>4} | {gap_t:>+9.4f} "
+            f"{skill_t:>+11.4f} "
             f"{u_epi_trees:>8.4f} | {gap_d:>+9.4f} {skill_d:>+10.4f} "
             f"{float(u_epi_deep.mean()):>8.4f}"
         )
