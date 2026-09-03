@@ -118,9 +118,9 @@ async def _dispatch_web_push_if_applicable(
         )
         if result.expired:
             device.is_active = False
-            device.updated_at = datetime.now(timezone.utc)
+            device.updated_at = _now_naive_utc()
         elif result.sent:
-            device.last_delivery_at = datetime.now(timezone.utc)
+            device.last_delivery_at = _now_naive_utc()
         key = "web_push_sent" if result.sent else f"web_push_{result.reason}"
         counters[key] = counters.get(key, 0) + 1
 
@@ -264,7 +264,7 @@ async def _dispatch_kickoff_reminders(session: AsyncSession) -> Dict[str, int]:
                 read=False,
                 read_at=None,
                 payload={"match_id": sub.match_id, "reminder_minutes_before": minutes_before},
-                created_at=datetime.now(timezone.utc),
+                created_at=_now_naive_utc(),
             ),
         )
         if created:
@@ -351,7 +351,7 @@ async def _dispatch_probability_swing_alerts(session: AsyncSession) -> Dict[str,
                 read=False,
                 read_at=None,
                 payload={"match_id": sub.match_id, "delta": round(delta, 4)},
-                created_at=datetime.now(timezone.utc),
+                created_at=_now_naive_utc(),
             ),
         )
         if created:

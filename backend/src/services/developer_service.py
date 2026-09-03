@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.cache import cache
 from ..db.models import ApiKey
 from ..db.session import get_async_session
+from ..utils.db_time import naive_utc_now, to_naive_utc
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -71,7 +72,7 @@ class DeveloperPlatformService:
             rate_limit_per_minute=tier_config["rate_limit_per_minute"],
             daily_quota=tier_config["daily_quota"],
             is_active=True,
-            created_at=datetime.now(timezone.utc),
+            created_at=naive_utc_now(),
             last_used_at=None,
             expires_at=None,
         )
@@ -332,7 +333,13 @@ async def verify_developer_api_key(
             detail="API key has been revoked",
         )
 
-    if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+    # api_key.expires_at is a naive `DateTime` column, so a real Postgres
+    # read-back is naive — but callers (tests included) may hand this
+    # function an ApiKey built in-process with an aware value, so normalize
+    # whichever we got rather than assume. None do today — create_api_key
+    # always writes None — but this must not be a landmine for whenever a
+    # real expiry ships.
+    if api_key.expires_at and to_naive_utc(api_key.expires_at) < naive_utc_now():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key has expired",
@@ -342,10 +349,15 @@ async def verify_developer_api_key(
     await DeveloperPlatformService.check_and_record_usage(db, api_key)
 
     # Asynchronously touch last_used_at
-    api_key.last_used_at = datetime.now(timezone.utc)
+    api_key.last_used_at = naive_utc_now()
     try:
         await db.commit()
     except Exception:
-        pass
+        # A failed commit leaves this request-scoped session's transaction in
+        # a failed state; without rolling back, every subsequent db.execute()
+        # in this same request (the endpoint handler downstream of this
+        # dependency) would raise PendingRollbackError instead of the
+        # request's own logic ever running.
+        await db.rollback()
 
     return api_key

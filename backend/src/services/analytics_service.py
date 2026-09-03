@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import AnalyticsEvent
+from ..utils.db_time import naive_utc_now, to_naive_utc
 
 _SENSITIVE_KEYS = {
     "password",
@@ -79,7 +80,11 @@ class AnalyticsIngestionService:
         default_user_id: Optional[str] = None,
     ) -> int:
         """Batch sanitize and persist events to the database."""
-        now = datetime.now(timezone.utc)
+        # AnalyticsEvent.timestamp/created_at are naive `DateTime` columns;
+        # a client-supplied timestamp can arrive as an aware ISO string or a
+        # Unix epoch (always UTC), so every branch is normalized through
+        # to_naive_utc()/naive_utc_now() before it ever reaches the ORM.
+        now = naive_utc_now()
         records: List[AnalyticsEvent] = []
 
         for raw in events:
@@ -90,11 +95,11 @@ class AnalyticsIngestionService:
             raw_timestamp = raw.get("timestamp")
             if isinstance(raw_timestamp, str):
                 try:
-                    event_time = datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+                    event_time = to_naive_utc(datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00")))
                 except Exception:
                     event_time = now
             elif isinstance(raw_timestamp, (int, float)):
-                event_time = datetime.fromtimestamp(raw_timestamp, tz=timezone.utc)
+                event_time = to_naive_utc(datetime.fromtimestamp(raw_timestamp, tz=timezone.utc))
             else:
                 event_time = now
 

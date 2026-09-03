@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete, select, update
@@ -15,6 +14,7 @@ from ..db.models import (
     UserNotificationSubscription,
     UserPreference,
 )
+from ..utils.db_time import naive_utc_now
 
 
 class NotificationService:
@@ -36,7 +36,7 @@ class NotificationService:
         result = await db.execute(stmt)
         pref = result.scalar_one_or_none()
         if not pref:
-            now = datetime.now(timezone.utc)
+            now = naive_utc_now()
             pref = UserPreference(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
@@ -64,7 +64,7 @@ class NotificationService:
             db, user_id=user_id, anonymous_session_id=anonymous_session_id
         )
         pref.timezone = timezone_iana.strip()
-        pref.updated_at = datetime.now(timezone.utc)
+        pref.updated_at = naive_utc_now()
         await db.commit()
         await db.refresh(pref)
         return pref
@@ -105,12 +105,12 @@ class NotificationService:
             existing.destination = destination
             existing.threshold_pct = threshold_pct
             existing.reminder_minutes_before = reminder_minutes_before
-            existing.updated_at = datetime.now(timezone.utc)
+            existing.updated_at = naive_utc_now()
             await db.commit()
             await db.refresh(existing)
             return existing
 
-        now = datetime.now(timezone.utc)
+        now = naive_utc_now()
         sub = UserNotificationSubscription(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -205,7 +205,7 @@ class NotificationService:
             read=False,
             read_at=None,
             payload=payload,
-            created_at=datetime.now(timezone.utc),
+            created_at=naive_utc_now(),
         )
         db.add(log)
         await db.commit()
@@ -256,7 +256,7 @@ class NotificationService:
             return False
 
         log.read = True
-        log.read_at = datetime.now(timezone.utc)
+        log.read_at = naive_utc_now()
         await db.commit()
         return True
 
@@ -267,7 +267,7 @@ class NotificationService:
         user_id: Optional[str] = None,
         anonymous_session_id: Optional[str] = None,
     ) -> int:
-        now = datetime.now(timezone.utc)
+        now = naive_utc_now()
         if user_id:
             stmt = (
                 update(UserNotificationLog)
@@ -320,7 +320,7 @@ class NotificationService:
             select(PushDevice).where(PushDevice.endpoint == clean_endpoint)
         )
         existing = result.scalar_one_or_none()
-        now = datetime.now(timezone.utc)
+        now = naive_utc_now()
 
         if existing:
             existing.p256dh = p256dh
@@ -362,7 +362,7 @@ class NotificationService:
         if device is None:
             return False
         device.is_active = False
-        device.updated_at = datetime.now(timezone.utc)
+        device.updated_at = naive_utc_now()
         await db.commit()
         return True
 
@@ -399,5 +399,5 @@ class NotificationService:
         await db.execute(
             update(PushDevice)
             .where(PushDevice.id == device_id)
-            .values(is_active=False, updated_at=datetime.now(timezone.utc))
+            .values(is_active=False, updated_at=naive_utc_now())
         )

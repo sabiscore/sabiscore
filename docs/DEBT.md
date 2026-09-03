@@ -1,5 +1,63 @@
 # SabiScore Debt Ledger
 
+## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
+
+**Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.
+Found while root-causing a live `POST /api/auth/login` 500: `UserAccount`,
+`UserFavorite`, `UserSavedMatch`, `UserPreference`, `UserNotificationSubscription`,
+`UserNotificationLog`, `PushDevice`, `ApiKey`, and `AnalyticsEvent` are all
+naive `DateTime` columns (`db/models.py`/`core/database.py` — every timestamp
+column in this codebase is naive, no exceptions), and several M10-M13 write
+sites assigned `datetime.now(timezone.utc)` (tz-aware) straight to them —
+asyncpg raises `can't subtract offset-naive and offset-aware datetimes` at
+bind time. Same bug class already fixed repeatedly elsewhere in this codebase;
+this was the one corner of it still live. Fixed in `auth.py`/`auth_service.py`
+(PR #135, merged) and `notification_service.py`, `notification_dispatch_service.py`,
+`developer_service.py`, `analytics_service.py` (this change) — every login,
+favorite, saved match, preference write, push-device registration/delivery,
+API key creation/use, and analytics event was affected.
+
+**New shared helper, not an eighth reinvention.** `naive_utc_now()`/
+`to_naive_utc()` in `backend/src/utils/db_time.py` — this exact fix had
+already been independently reinvented at least seven times across
+`auth_service.py`, `elo_state_service.py`, `market_observation_service.py`,
+`clv_capture_service.py`, `prediction_log_service.py`,
+`provider_evidence_service.py`, `notification_dispatch_service.py`, each with
+a different name and no shared import. Those seven working copies were left
+alone (no live bug, not worth the churn); new code should import the shared
+one instead of adding an eighth.
+
+**Residual 1 — the SQLite/AsyncMock test fixture convention cannot catch this
+bug class.** `test_push_device_registry.py` and `test_notification_dispatch_service.py`
+exercise `PushDevice`/`UserNotificationLog` writes against a real SQLite
+in-memory engine; SQLite has no native timestamp type and does not enforce
+tz-awareness the way asyncpg does, so these suites stayed green through the
+entire time the bug was live. `AsyncMock`-backed suites (the `auth_service.py`
+precedent) are blind for the opposite reason — full mocking. Both blind spots
+are why this shipped unnoticed. Regression tests added this round assert
+`.tzinfo is None` directly (in `test_analytics_event_scrubbing.py`,
+`test_developer_platform_api_keys.py`, `test_notifications_and_timezones.py`)
+rather than trusting either fixture style to fail on its own; not retrofitted
+onto the SQLite-backed suites since a round-trip through SQLite may silently
+normalize the value regardless of correctness, which would make such an
+assertion pass unconditionally and prove nothing — unverified either way this
+session. **Trigger to close:** confirm empirically whether a SQLite round-trip
+preserves or discards tzinfo for a plain `DateTime` column; if it discards it,
+these two suites need a documented note that they cannot catch this defect
+class, not a false-confidence assertion.
+
+**Residual 2 — 105 files use `datetime.now(timezone.utc)` repo-wide; only the
+newest (M10-M13) subsystem was audited.** The idiom is correct almost
+everywhere else (business logic, comparisons, non-DB timestamps — the vΩ.5
+sweep deliberately made this the default). The other ~95 files were not
+individually re-checked against their target column's nullability/type this
+session — most predate M10-M13 and are already covered by earlier sweeps, but
+that is inference from age, not a verified sweep. **Trigger to close:** treat
+as low-priority unless a similar 500 surfaces elsewhere; a durable fix (a
+custom lint rule cross-referencing "assigned to a `Mapped[datetime]` naive
+column" against "value carries no tzinfo") would close this permanently but
+was not attempted — out of scope for a same-session bug fix.
+
 ## 54. WEB_PUSH notification channel — RESOLVED 2026-09-02
 
 **Tier:** `RESOLVED`. Closes the last open half of item 51 (the EMAIL half

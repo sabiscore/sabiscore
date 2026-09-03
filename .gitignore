@@ -206,6 +206,16 @@ redis-data/
 *secret_key*
 credentials.json
 service-account*.json
+# The two globs above are filename-substring matches with no extension/path
+# scoping, so they also silently swallow legitimately-named test files (e.g.
+# test_developer_platform_api_keys.py, which tests API-key creation and
+# contains no real secret — Gitleaks + its own `gitleaks:allow` annotation
+# are what actually guard against a real leaked key there, same as every
+# other test fixture in this repo). Confirmed via `git status --ignored`
+# that this was the only file caught. Scoped to *.py (not a bare **) so
+# this doesn't also resurrect __pycache__/ dirs nested under backend/tests,
+# which must stay ignored.
+!backend/tests/**/*.py
 
 # Monitoring
 monitoring/data/

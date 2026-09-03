@@ -5,6 +5,40 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Fix naive/aware datetime 500s across identity, notifications, developer platform, and analytics (2026-09-03)
+
+### Fixed
+
+- Every `DateTime` column in `db/models.py`/`core/database.py` is naive
+  (`TIMESTAMP WITHOUT TIME ZONE`) — asyncpg raises `can't subtract
+  offset-naive and offset-aware datetimes` at bind time if handed a tz-aware
+  value. Root-caused from a live `POST /api/auth/login` 500 (see PR #135,
+  already merged), then swept the rest of the same-era subsystem and found
+  the identical bug in four more services: `NotificationService` (favorites,
+  saved matches, preferences, match subscriptions, in-app logs, WEB_PUSH
+  device registration), `notification_dispatch_service` (push delivery
+  timestamps, reminder/swing-alert log rows — two sites the file's own
+  existing `_now_naive_utc()` helper was sitting right next to and not used
+  for), `DeveloperPlatformService` (API key creation and `last_used_at`,
+  touched on every authenticated developer request), and
+  `AnalyticsIngestionService` (every first-party analytics event — the
+  `timestamp`/`created_at` columns on `AnalyticsEvent`, including
+  client-supplied ISO/epoch timestamps that arrive tz-aware).
+- New `backend/src/utils/db_time.py` (`naive_utc_now()` / `to_naive_utc()`) —
+  this exact fix had been reinvented independently at least seven times
+  across the codebase already; new code should import this instead of an
+  eighth private copy. Existing correct copies were left untouched.
+- `verify_developer_api_key`'s failed-commit handler now rolls back instead
+  of swallowing silently — a failed commit was leaving the request-scoped
+  session's transaction in a failed state, which would have raised
+  `PendingRollbackError` on the endpoint handler's own first query
+  downstream of this dependency, regardless of what actually failed the
+  commit.
+- See `docs/DEBT.md` item 55 for two residuals opened by this fix: the
+  SQLite/AsyncMock test-fixture blind spot that let this ship unnoticed, and
+  the ~95 files using the (mostly correct) `datetime.now(timezone.utc)`
+  idiom that were not individually re-audited this session.
+
 ## Unreleased - WEB_PUSH notification channel (2026-09-02)
 
 ### Added — browser push delivery, end to end, with zero new dependencies
