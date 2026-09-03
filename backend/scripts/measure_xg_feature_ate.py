@@ -35,9 +35,7 @@ Run
 from __future__ import annotations
 
 import argparse
-import glob
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -49,6 +47,9 @@ BACKEND_ROOT = SCRIPT_PATH.parents[1]
 for _p in (str(BACKEND_ROOT), str(BACKEND_ROOT / "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+
+from src.data.understat_corpus import load_corpus_matches  # noqa: E402
 
 
 def _load_causal_selector():
@@ -91,32 +92,23 @@ PRACTICAL_ATE = 0.02  # the registry's own threshold
 
 
 def load_corpus(sources_dir: Path) -> pd.DataFrame:
-    """Load every Understat match parquet into one frame, dropping unplayed rows."""
-    frames = []
-    for path in sorted(glob.glob(str(sources_dir / "understat_matches_*.parquet"))):
-        stem = os.path.basename(path)[len("understat_matches_") : -len(".parquet")]
-        league, season = stem.rsplit("_", 1)
-        frame = pd.read_parquet(path)
-        frame["sabi_league"] = league
-        frame["sabi_season"] = int(season)
-        frames.append(frame)
-    if not frames:
-        raise SystemExit(f"No Understat parquet found under {sources_dir}")
+    """The tracked Understat corpus, via the one shared loader.
 
-    corpus = pd.concat(frames, ignore_index=True)
+    Was a local copy of the same globbing/filter logic. The copy has now been
+    replaced by ``src.data.understat_corpus.load_corpus_matches`` because the
+    ATE measured here and the rows the match_stats manifest and the xG training
+    replay operate on MUST describe the same population — three copies of a
+    population filter is three places for them to diverge silently, and the
+    number this script prints is quoted as the justification for the other two.
 
-    # ⚠️ Ligue 1 2019/20 carries 101 fixtures France cancelled for COVID, flagged
-    # has_data=False with null xG. They are unplayed matches, not missing
-    # measurements — drop them. Default-filling would fabricate xG for games that
-    # never happened (docs/DEBT.md item 56).
-    before = len(corpus)
-    corpus = corpus[corpus["home_xg"].notna() & corpus["away_xg"].notna()]
-    if "has_data" in corpus.columns:
-        corpus = corpus[corpus["has_data"].astype(bool)]
-    dropped = before - len(corpus)
-
-    corpus = corpus.sort_values("date", kind="stable").reset_index(drop=True)
-    print(f"corpus: {len(corpus)} played matches ({dropped} unplayed rows dropped)")
+    ⚠️ The shared loader deduplicates on ``game_id``. The committed corpus files
+    overlap (``understat_ligue_1_2020`` and ``understat_ligue_1_2021`` both hold
+    the whole 2020/21 season): 12,459 rows for 10,633 distinct matches. The
+    superseded 2026-09-03 measurement in ``reports/evaluation/xg-feature-ate.*``
+    was taken on the duplicated frame, where 1,826 matches counted twice.
+    """
+    corpus = load_corpus_matches(sources_dir)
+    print(f"corpus: {len(corpus)} played, distinct matches")
     return corpus
 
 

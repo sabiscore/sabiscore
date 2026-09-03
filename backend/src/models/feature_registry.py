@@ -346,6 +346,43 @@ CANONICAL_FEATURES_89: List[str] = [
 # Phase 8 training run needs this list rather than CANONICAL_FEATURES_89.
 APEX_FEATURES_89: List[str] = [*APEX_FEATURES_68, *PHASE8_FEATURES_21]
 
+# ── xG rolling family (candidate — NOT in any *served* schema) ───────────────
+# The three features `scripts/measure_xg_feature_ate.py` measured as CAUSAL_DRIVER
+# on the real Understat corpus (ATE 0.2464 / 0.2169 / 0.1790, all p=0.0000).
+#
+# `finishing_efficiency_gap` was measured in the same run and is deliberately
+# NOT here: ATE 0.0082, below the 0.02 practical threshold, p=0.3851. Goals
+# minus xG is dominated by finishing variance, and admitting it would put an
+# unvalidated slot in a candidate whose whole purpose is to carry validated
+# ones.
+#
+# ⚠️ Still absent from every CANONICAL_FEATURES_* and from APEX_FEATURES_68/89.
+# Adding a name to an ALREADY-SERVED list changes that list's vector width,
+# which is the 2026-06-10 incident this file records at line 95: 65 columns
+# emitted against 68-column artifacts, `model_version="fallback"` served on
+# every inference for two months. These names reach a model only through
+# APEX_FEATURES_71 below — a NEW schema key with its own artifacts, manifest and
+# contract hash, which no existing artifact declares and therefore no existing
+# artifact can be re-shaped by.
+#
+# They live here, defined once, because training and serving must compute them
+# identically or the `serving_feature_availability` gate is measuring two
+# different things. `tests/unit/test_xg_rolling_parity.py` asserts the pandas
+# training path and the scalar serving path agree to float tolerance.
+PHASE9_FEATURES_XG: List[str] = [
+    "xg_differential",
+    "xg_attack_diff",
+    "xg_defense_diff",
+]
+
+# The xG candidate contract: Apex 68 with the three validated xG features
+# APPENDED, never interleaved. Append order is load-bearing beyond taste —
+# `compare_candidate_vs_incumbent._coherent_price_perturbation` indexes the
+# market block through `APEX_FEATURES_68.index(...)` against a candidate row,
+# which stays correct only while positions 0..67 are byte-identical to
+# APEX_FEATURES_68.
+APEX_FEATURES_71: List[str] = [*APEX_FEATURES_68, *PHASE9_FEATURES_XG]
+
 # Deprecated aliases — the counts in these names are wrong (they hold 21, 89 and 89
 # respectively). Retained, not deleted: all are imported across production code
 # (`api/endpoints/phase8_features.py`) and tests, so removing them is a breaking
@@ -408,6 +445,21 @@ FEATURE_SCHEMA_VERSIONS: Dict[str, List[str]] = {
     "apex_v1_68": APEX_FEATURES_68,
     "phase8_89": CANONICAL_FEATURES_89,
     "apex_v1_89": APEX_FEATURES_89,
+    # ⚠️ EVALUATED AND REJECTED (2026-09-03) — see
+    # reports/evaluation/apex-v2-71-candidate-evaluation.{json,md}. A candidate
+    # trained on this contract fails four promotion gates, most decisively
+    # market_baseline (0/5 leagues). On the IDENTICAL holdout the xG block is
+    # neutral-to-worse in 4 of 5 leagues (mean RPS -0.00159) despite all three
+    # features carrying training_coverage 1.0 and ATE > 0.18 at p < 1e-68.
+    #
+    # The key stays registered anyway: it is the measurement contract that lets
+    # `resolve_feature_schema` answer for a 71-wide artifact at all, so a future
+    # xG candidate can be scored without re-deriving the replay, the crosswalk
+    # and the gate wiring. It is NOT an endorsement, and
+    # `active_generation.json` must not name it — no artifact in models/
+    # declares it, and none should until a candidate on this contract clears
+    # every gate on its own evidence.
+    "apex_v2_71": APEX_FEATURES_71,
 }
 
 
@@ -531,28 +583,7 @@ def derive_last5_form_features(
     }
 
 
-# ── xG rolling family (candidate — NOT in any served schema) ─────────────────
-# The three features `scripts/measure_xg_feature_ate.py` measured as CAUSAL_DRIVER
-# on the real Understat corpus (ATE 0.2464 / 0.2169 / 0.1790, all p=0.0000).
-#
-# ⚠️ Deliberately absent from CANONICAL_FEATURES_*, APEX_FEATURES_* and
-# FEATURE_SCHEMA_VERSIONS. Adding a name to a served list changes the vector
-# width, which is the 2026-06-10 incident this file records at line 95: 65
-# columns emitted against 68-column artifacts, `model_version="fallback"` served
-# on every inference for two months. These names enter a schema only through a
-# new candidate feature-schema version that goes to the promotion gate with its
-# own artifacts, manifest and contract hash.
-#
-# They live here anyway, defined once, because training and serving must compute
-# them identically or the `serving_feature_availability` gate is measuring two
-# different things. `tests/unit/test_xg_rolling_parity.py` asserts the pandas
-# training path and this scalar serving path agree to float tolerance.
-PHASE9_FEATURES_XG: List[str] = [
-    "xg_differential",
-    "xg_attack_diff",
-    "xg_defense_diff",
-]
-
+# ── xG rolling family ────────────────────────────────────────────────────────
 # The rolling contract, named once so both sides cannot drift apart:
 # mean of the last XG_ROLLING_WINDOW matches strictly BEFORE kickoff, and only
 # when at least XG_ROLLING_MIN_PERIODS of them exist. Matches the
@@ -900,6 +931,23 @@ _DEFAULT_VALUE_SOURCES: Dict[str, Dict[str, float]] = {
     "apex_v1_68": DEFAULT_FEATURE_VALUES_68,
     "phase8_89": DEFAULT_FEATURE_VALUES_89,
     "apex_v1_89": DEFAULT_FEATURE_VALUES_89,
+    # Same 68-wide source as apex_v1_68 (the Apex market block has no separate
+    # default table; see active_default_feature_values). The three
+    # PHASE9_FEATURES_XG names are deliberately ABSENT from it, so
+    # build_feature_contract records default_value=None and
+    # fallback_policy=UNDECLARED for them.
+    #
+    # That is the intended disposition, not an oversight this map should paper
+    # over. `rolling_xg_mean` returns None below its minimum-periods floor
+    # precisely so a cold-start team is not presented as 0.0, and
+    # `project_xg_rolling_features` propagates that None as a DATA_GAP. Giving
+    # these slots a static default would let a fixture with no observed xG be
+    # served a confident neutral value — "present unknown as zero", which APEX
+    # section 26 forbids. The schema KEY is wired here so the contract's
+    # UNDECLARED is a real statement about the features rather than an artefact
+    # of missing wiring, which is exactly the distinction
+    # test_default_value_sources_cover_every_registered_schema exists to keep.
+    "apex_v2_71": DEFAULT_FEATURE_VALUES_68,
 }
 
 # Named subgroups to check membership against, most specific first. Every

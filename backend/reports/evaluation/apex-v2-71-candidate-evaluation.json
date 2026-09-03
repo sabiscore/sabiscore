@@ -1,0 +1,204 @@
+{
+  "candidate_feature_schema_version": "apex_v2_71",
+  "candidate_vs_incumbent": {
+    "BUNDESLIGA": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.199383980316929,
+      "candidate_rps_improvement": -0.009422444852773465,
+      "incumbent_rps": 0.18996153546415553,
+      "market_baseline_rps": 0.19083929061889648
+    },
+    "EPL": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.20552177966885227,
+      "candidate_rps_improvement": -0.0019112892631259204,
+      "incumbent_rps": 0.20361049040572635,
+      "market_baseline_rps": 0.2053660899400711
+    },
+    "LA_LIGA": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.19789954115982533,
+      "candidate_rps_improvement": 0.003938270463270582,
+      "incumbent_rps": 0.20183781162309591,
+      "market_baseline_rps": 0.1967509537935257
+    },
+    "LIGUE_1": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.20633048037763613,
+      "candidate_rps_improvement": -0.0031503810284002065,
+      "incumbent_rps": 0.20318009934923592,
+      "market_baseline_rps": 0.19912628829479218
+    },
+    "SERIE_A": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.20129367720087565,
+      "candidate_rps_improvement": 0.00385548333268268,
+      "incumbent_rps": 0.20514916053355833,
+      "market_baseline_rps": 0.19714131951332092
+    }
+  },
+  "feature_evidence": {
+    "apex_v1_68_baseline_summary": {
+      "always_data_gap_slots": 4,
+      "features": 68,
+      "non_variable_training_slots": 20,
+      "serving_schema_misaligned_slots": 11,
+      "training_defaulted_slots": 16
+    },
+    "candidate_summary": {
+      "always_data_gap_slots": 4,
+      "features": 71,
+      "non_variable_training_slots": 20,
+      "serving_schema_misaligned_slots": 14,
+      "training_defaulted_slots": 16
+    },
+    "interpretation": "training_defaulted_slots is identical (16) to the apex_v1_68 baseline: the xG work added no defaulted slot. serving_schema_misaligned_slots moved 11 -> 14; the 11 are the pre-existing apex-vs-legacy market-block divergence against a phase7_68 active generation, the 3 new ones are the xG positions, which have no serving counterpart until active_generation.json declares the wider contract. That is a promotion decision, not a defect, and it is moot given the RPS result.",
+    "xg_columns": {
+      "xg_attack_diff": {
+        "classification": "SCHEMA_MISMATCH",
+        "training_coverage": 1.0,
+        "variable_in_training": true
+      },
+      "xg_defense_diff": {
+        "classification": "SCHEMA_MISMATCH",
+        "training_coverage": 1.0,
+        "variable_in_training": true
+      },
+      "xg_differential": {
+        "classification": "SCHEMA_MISMATCH",
+        "training_coverage": 1.0,
+        "variable_in_training": true
+      }
+    }
+  },
+  "generated_at": "2026-09-03T18:58:35.952913+00:00",
+  "holdout_season": "2526",
+  "mean_rps_improvement": -0.001338072269669266,
+  "per_league_training": {
+    "BUNDESLIGA": {
+      "holdout_n": 301,
+      "market_baseline_rps": 0.19083929061889648,
+      "responsive_features": 39,
+      "stacked_rps": 0.199383980316929,
+      "train_n": 1259
+    },
+    "EPL": {
+      "holdout_n": 375,
+      "market_baseline_rps": 0.2053660899400711,
+      "responsive_features": 41,
+      "stacked_rps": 0.20552177966885227,
+      "train_n": 1573
+    },
+    "LA_LIGA": {
+      "holdout_n": 372,
+      "market_baseline_rps": 0.1967509537935257,
+      "responsive_features": 41,
+      "stacked_rps": 0.19789954115982533,
+      "train_n": 1574
+    },
+    "LIGUE_1": {
+      "holdout_n": 301,
+      "market_baseline_rps": 0.19912628829479218,
+      "responsive_features": 38,
+      "stacked_rps": 0.20633048037763613,
+      "train_n": 1386
+    },
+    "SERIE_A": {
+      "holdout_n": 375,
+      "market_baseline_rps": 0.19714131951332092,
+      "responsive_features": 40,
+      "stacked_rps": 0.20129367720087565,
+      "train_n": 1537
+    }
+  },
+  "promotion_gates": {
+    "coherent_price_perturbation": {
+      "status": "PASS"
+    },
+    "input_responsiveness": {
+      "minimum_responsive_features": 38,
+      "status": "PASS"
+    },
+    "market_baseline": {
+      "leagues_beating_market": 0,
+      "status": "FAIL"
+    },
+    "no_league_regression": {
+      "league_wins": 2,
+      "leagues_compared": 5,
+      "status": "FAIL"
+    },
+    "primary_metric_improvement": {
+      "mean_rps_improvement": -0.001338072269669266,
+      "status": "FAIL"
+    },
+    "serving_feature_availability": {
+      "status": "FAIL",
+      "summary": {
+        "always_data_gap_slots": 4,
+        "features": 71,
+        "non_variable_training_slots": 20,
+        "serving_schema_misaligned_slots": 14,
+        "training_defaulted_slots": 16
+      }
+    },
+    "valid_probability_simplex": {
+      "evidence": "evaluate() rejected no candidate holdout probability row",
+      "status": "PASS"
+    }
+  },
+  "promotion_permitted": false,
+  "schema": "sabiscore_candidate_evaluation_v1",
+  "training": {
+    "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "leagues_without_any_corpus_coverage": [
+      "EREDIVISIE"
+    ],
+    "reproducibility_sha256": "cd51ba2b116105fed3181fed8a67ba99d59919db02fa49d31cfe6f80bcbecc7f",
+    "rows": 10779,
+    "rows_by_league": {
+      "BUNDESLIGA": 1856,
+      "EPL": 2323,
+      "LA_LIGA": 2326,
+      "LIGUE_1": 1990,
+      "SERIE_A": 2284
+    },
+    "rows_dropped_no_xg": 1478,
+    "understat_corpus_sha256": "cb5b9f2d434f8826d6ed74d3db4f3ad26f0f205e86af432767da14fbbf40d670"
+  },
+  "verdict": "REJECTED",
+  "verdict_reason": "The three CAUSAL_DRIVER xG features are genuinely observed (training coverage 1.0, variable in training) and add no out-of-sample RPS. On the identical holdout the xG block is neutral-to-worse in 4 of 5 leagues; the candidate beats the market baseline in 0 of 5.",
+  "xg_block_ablation_identical_rows": {
+    "leagues_compared": 5,
+    "leagues_improved_by_xg": 1,
+    "mean_xg_rps_improvement": -0.00158,
+    "note": "The headline comparison scores apex_v1_68 on 12,256 rows and apex_v2_71 on 10,779, so its delta mixes 'added xG' with 'dropped 1,478 rows'. This scores both candidate heads on the identical apex_v2_71 holdout: X[:, :68] is byte-identical to APEX_FEATURES_68 because apex_v2_71 appends.",
+    "per_league": {
+      "BUNDESLIGA": {
+        "apex_v1_68": 0.2,
+        "apex_v2_71": 0.1994,
+        "xg_rps_improvement": 0.0006
+      },
+      "EPL": {
+        "apex_v1_68": 0.2051,
+        "apex_v2_71": 0.2055,
+        "xg_rps_improvement": -0.0004
+      },
+      "LA_LIGA": {
+        "apex_v1_68": 0.1974,
+        "apex_v2_71": 0.1979,
+        "xg_rps_improvement": -0.0005
+      },
+      "LIGUE_1": {
+        "apex_v1_68": 0.2003,
+        "apex_v2_71": 0.2063,
+        "xg_rps_improvement": -0.006
+      },
+      "SERIE_A": {
+        "apex_v1_68": 0.1997,
+        "apex_v2_71": 0.2013,
+        "xg_rps_improvement": -0.0016
+      }
+    }
+  }
+}

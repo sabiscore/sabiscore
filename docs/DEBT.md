@@ -1,5 +1,157 @@
 # SabiScore Debt Ledger
 
+## 57. The tracked Understat corpus contains 1,826 duplicated matches, and 2021/22 is missing entirely
+
+**Tier:** `RESOLVED` for the duplication (deduplicated at load, 2026-09-03).
+`ACCEPTED` for the missing season — it is a data-acquisition gap, not a defect.
+
+The 35 committed files under `data/processed/v4_sources` are labelled by
+Understat's own season id and their coverage **overlaps**:
+`understat_ligue_1_2020` and `understat_ligue_1_2021` both contain the whole
+2020/21 season, game ids and all. Across the corpus that is **12,459 rows for
+10,633 distinct matches** — 1,826 present twice.
+
+Two live consequences, both found by building on it:
+
+1. `understat_match_stats_reconciliation_service` produced a manifest proposing
+   the same `(match_id, team_id)` `match_stats` row twice. The new backfill
+   executor refuses a duplicate outright, so the backfill could never have been
+   applied at all.
+2. A duplicate lets one match contribute **twice** to a rolling xG mean — a
+   quiet correctness bug rather than a loud one.
+
+Deduplication on `game_id` now lives in `src/data/understat_corpus.py`, the one
+loader shared by the reconciliation manifest, `features/xg_replay.py` and
+`scripts/measure_xg_feature_ate.py`. Three copies of a population filter is
+three places for them to diverge, and the ATE number is quoted as the
+justification for the other two.
+
+⚠️ **The deduplication changes the reconciliation manifest's SHA-256.** Any
+`--apply` must be preceded by a fresh review run; the old digest is stale by
+construction.
+
+⚠️ **`reports/evaluation/xg-feature-ate.*` was originally measured on the
+duplicated frame.** It has been re-measured. Every verdict is unchanged
+(0.2485 / 0.2181 / 0.1832, all p < 1e-68; `finishing_efficiency_gap` still
+INDEPENDENT at 0.0101, p=0.32); the point estimates moved in the third decimal.
+
+**The missing season.** Because two files per league cover the same season, the
+7 files per league span **6** distinct seasons: 2021/22 is absent from all five.
+Any coverage number computed from this corpus inherits that, and any future
+schema built on it will silently drop those rows. Understat also publishes **no
+Eredivisie corpus at all**, so a schema requiring xG trains no Eredivisie model.
+
+---
+
+## 58. A CAUSAL_DRIVER ATE did not translate into out-of-sample lift — apex_v2_71 rejected
+
+**Tier:** `CLOSED — negative result recorded.` Full evidence:
+`reports/evaluation/apex-v2-71-candidate-evaluation.{json,md}`.
+
+Item 50's remaining space is "(a) a different epistemic aggregation, or (b) it
+resolves once a genuinely better-generalizing generation ships." `apex_v2_71`
+was route (b)'s best available attempt: append the three features
+`measure_xg_feature_ate.py` classified `CAUSAL_DRIVER` to `APEX_FEATURES_68`,
+carry them into training with a leak-free replay, and take the result to the
+promotion gate.
+
+It failed, and the failure is informative rather than mechanical:
+
+- On an **identical** holdout the xG block is neutral-to-worse in 4 of 5 leagues
+  (mean RPS −0.00159, improved 1/5).
+- `market_baseline` **0/5**. `no_league_regression` 2/5. `promotion_permitted:
+  false`.
+- The features are genuinely observed: `training_coverage = 1.0` and
+  `variable_in_training = true` on all three, and `training_defaulted_slots` is
+  **16 — identical to the `apex_v1_68` baseline**. Nothing was defaulted,
+  nothing was fabricated, and the pipeline is not the explanation.
+
+**The lesson worth surviving this session: a large, significant ATE is not
+evidence of out-of-sample predictive lift.** ATE 0.2485 / 0.2181 / 0.1832 at
+p < 1e-68, and the block still costs RPS in 4 of 5 leagues. The causal screen is
+a filter against including *noise*; it is not a promotion criterion. A future
+proposal reading "high ATE, therefore ship it" is making this mistake again.
+
+Two mechanisms remain plausible and this evidence does not separate them: the
+market block may already price shot quality, so xG is largely redundant with
+features the model has; or dropping 1,478 rows (12% of the corpus, concentrated
+in the uncovered 2021/22 season and all of Eredivisie) may cost more than the
+features add. Distinguishing them needs `match_stats` populated in production
+plus a serving-side measurement, not another offline candidate.
+
+The `apex_v2_71` key stays registered in `FEATURE_SCHEMA_VERSIONS` as a
+measurement contract, so a future xG candidate can be scored without re-deriving
+the replay, the crosswalk and the gate wiring. The registry comment records the
+rejection so the key is never mistaken for an endorsement.
+
+---
+
+## 59. Gate 50, route (a): independence refuted a third time; the heterogeneous member basis is declined
+
+**Tier:** `CLOSED — hypothesis refuted.` Extends item 50 rather than replacing
+it; `error_association` remains failed and `MODEL_UNCERTAINTY_UNAVAILABLE`
+remains CRITICAL and fail-closed.
+
+A proposal reached review to clear `error_association` by replacing BALD's
+member basis with a **Heterogeneous Independent Ensemble** — N independently
+seeded RF + XGBoost + LightGBM replicas — on the argument that "independence
+alone does not fix the Random Forest; only heterogeneity does."
+
+That argument is correct about the first half and draws the wrong conclusion
+from the second. `spike_independent_ensemble_uncertainty.py` already caught the
+confound: its default replica is a 3-learner stack while the incumbent basis is
+trees inside one RandomForest, so the original headline moved member
+*independence* and member *composition* at once.
+
+Re-measured on seed block **4242** — a third, previously untested block — with
+`--rf-only`, the flag that isolates independence:
+
+```
+trees (incumbent)   skill -0.0190              0/5
+RF-only  N=3        skill -0.0161   gap>0 3/5, skill>0 0/5
+RF-only  N=5        skill -0.0370   gap>0 0/5, skill>0 0/5
+RF-only  N=10       skill -0.0244   gap>0 1/5, skill>0 1/5
+```
+
+Ladder declared before the run, reported in full. All three mean skills are
+negative and N=5 is markedly worse than the incumbent. **Independence buys
+nothing.** The entire apparent gain came from mixing model classes — precisely
+the design `UNCERTAINTY_GATES["sufficient_members"]` deprecates: "Bootstrap or
+resampling variants are preferred over distinct algorithms ... whereas distinct
+algorithms vary only model class."
+
+Adopting the deprecated design because it is the only one that moves a blocked
+metric is threshold-shopping by another name (APEX §23), and it would require an
+authorized ADR 0009 amendment, not a code change.
+
+**It would also not deliver what it is proposed for.** `uncertainty_policy.py`
+states the two gates are independent — "clearing `MODEL_GENERATION_UNCERTIFIED`
+does not clear `MODEL_UNCERTAINTY_UNAVAILABLE`" — and the converse holds equally.
+Flipping `error_association` alone does not enable staking:
+`active_generation.json` is `certification_state: UNVERIFIED`, and clearing that
+runs through `certification_policy.PROMOTION_GATES`, where **`market_baseline`
+fails 0/5 for every model measured to date** — the incumbent and both candidates.
+
+### The actual blocker, stated plainly
+
+Staking is not gated on uncertainty aggregation. It is gated on **no SabiScore
+model beating the market-implied RPS baseline in any league**. Until that
+changes, both gates stay closed on their own evidence, and the honest product
+state is the one production already serves:
+
+```
+/api/v1/models/status  ->  stake_permitted: false
+                           certification_state: UNVERIFIED
+                           manifest_valid: true, models_loaded: true
+```
+
+The certification directive is explicit that this is an acceptable outcome:
+"Either existing certification criteria are honestly satisfied, or uncertainty
+remains unavailable and fail-closed. Both outcomes are acceptable. Manufactured
+PASS is not."
+
+---
+
 ## 56. The "Data Expansion & Feature Density Sprint" directive is unexecutable as written — the surviving objective is a real xG corpus whose ingestion has never once been run
 
 **Tier:** `NEXT` for the corpus half. The directive itself is **REJECTED — no

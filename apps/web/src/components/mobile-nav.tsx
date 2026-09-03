@@ -3,7 +3,6 @@
 import { memo, useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
   BarChart3,
   BookOpen,
   CalendarClock,
@@ -18,7 +17,6 @@ const NAV_LINKS = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },
   { label: "Matches", href: "/match", icon: CalendarClock },
   { label: "Performance", href: "/performance", icon: BarChart3 },
-  { label: "Monitoring", href: "/monitoring", icon: Activity },
   { label: "Docs", href: "/docs", icon: BookOpen },
 ];
 

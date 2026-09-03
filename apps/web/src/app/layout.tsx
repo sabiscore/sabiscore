@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   BarChart3,
   BookOpen,
   CalendarClock,
@@ -37,7 +36,6 @@ const WORKSPACE_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Performance", href: "/performance", icon: BarChart3 },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Developers", href: "/developer", icon: Code },
-  { label: "Monitoring", href: "/monitoring", icon: Activity },
   { label: "Docs", href: "/docs", icon: BookOpen },
 ];
 

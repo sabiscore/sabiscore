@@ -5,6 +5,178 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Carry real xG into training, evaluate and reject the apex_v2_71 candidate, and keep the infrastructure (2026-09-03)
+
+The `apex_v2_71` candidate is **rejected**. The scaffolding built to evaluate it
+is kept, along with four pipeline defects it exposed.
+
+### Added
+
+- `backend/src/services/understat_match_stats_backfill_service.py` — the
+  `--apply` half of `docs/DEBT.md` item 56 Finding 5. Inserts reviewed Understat
+  xG into `match_stats` as two rows per fixture, populating `expected_goals` and
+  nothing else (the Understat match frame carries no shot counts, so every other
+  column stays NULL rather than being written as an observed zero). Production
+  safety mirrors `orphan_team_rebind_service` exactly: PostgreSQL only,
+  transaction-scoped `SHARE ROW EXCLUSIVE` locks, the reviewed manifest digest
+  re-derived *under* those locks, and read-back postconditions before the caller
+  commits.
+  - ⚠️ `match_stats` has **no unique constraint** on `(match_id, team_id)` — only
+    the non-unique `ix_match_stats_match_team` (alembic 0001). There is no
+    `ON CONFLICT` target available, and a blind re-INSERT would double every row,
+    which `_get_team_xg_series` would then read as one match contributing twice
+    to a rolling mean. Idempotency is enforced by reading the existing pairs
+    under the same lock and refusing to overwrite any of them.
+  - `review_understat_match_stats_backfill.py` gains `--apply`, gated on
+    `--manifest-sha256`, `--authorization-id` and the literal token
+    `APPLY_UNDERSTAT_MATCH_STATS`. All four are validated **before** anything
+    opens a connection, so an operator typo never holds a production session.
+- `backend/src/features/xg_replay.py` — the training half of the xG train/serve
+  pair. `upcoming_match_feature_service.project_xg_rolling_features` has computed
+  the three `PHASE9_FEATURES_XG` at serving time since #143; nothing computed
+  them at training time. Drives `feature_registry.rolling_xg_mean` itself rather
+  than a pandas re-implementation, and mirrors serving's 20-match lookback
+  horizon, so the two cannot drift on window size, minimum periods, or the
+  below-minimum `None`.
+  - The football-data ↔ Understat bridge is deliberately split in two: the
+    NORMALIZER is the single production `market_identity_key`, and a 20-entry
+    CROSSWALK maps already-normalized Understat keys onto already-normalized
+    football-data keys. The crosswalk is **not** merged into
+    `team_identity._AUDITED_ALIASES`: that table maps onto production `teams`
+    names ("club atletico de madrid"), this one onto football-data CSV shorthand
+    ("ath madrid"), a third vocabulary production identity resolution must never
+    be pointed at. Merging them is the cross-context defect PR #145 recorded.
+    Coverage 62% → 86% overall, 98–99% in the 2526 holdout.
+- `backend/src/data/understat_corpus.py` — one corpus definition, shared by the
+  `match_stats` reconciliation manifest, the xG training replay and
+  `measure_xg_feature_ate.py`. Three copies of a population filter is three
+  places for them to diverge, and the ATE number is quoted as the justification
+  for the other two.
+- `feature_registry.APEX_FEATURES_71` / schema key `apex_v2_71` — the three
+  CAUSAL_DRIVER xG features APPENDED to `APEX_FEATURES_68`, never interleaved.
+  Append order is load-bearing: `_coherent_price_perturbation` indexes the market
+  block through `APEX_FEATURES_68.index(...)` against a candidate row, which
+  stays correct only while positions 0..67 are byte-identical. No served list
+  changed; `active_generation.json` still declares `phase7_68`.
+  - The three names get **no** `DEFAULT_FEATURE_VALUES_*` entry, so
+    `build_feature_contract` records them `UNDECLARED`. That is the intended
+    disposition: `rolling_xg_mean` returns `None` below its minimum-periods floor
+    precisely so a cold-start team is not presented as 0.0. The schema *key* is
+    wired into `_DEFAULT_VALUE_SOURCES` so the `UNDECLARED` is a statement about
+    the features rather than an artefact of missing wiring.
+- `--schema {apex_v1_68,apex_v1_89,apex_v2_71}` on `train_on_real_matches.py`,
+  `--candidate-schema` on `compare_candidate_vs_incumbent.py`, `--schema` on
+  `generate_feature_availability_matrix.py`. Defaults are unchanged, so every
+  existing caller behaves exactly as before.
+- 27 tests across `test_xg_replay.py`, `test_understat_corpus.py` and
+  `test_understat_match_stats_backfill_service.py`.
+
+### Result — apex_v2_71 REJECTED
+
+Full evidence: `backend/reports/evaluation/apex-v2-71-candidate-evaluation.{json,md}`.
+
+- On the **identical** holdout the xG block is neutral-to-worse in 4 of 5 leagues
+  (mean RPS **−0.00159**, improved 1/5). The headline comparison would have mixed
+  "added xG" with "dropped 1,478 rows", so both candidate heads were scored on
+  the same reduced rows to separate them.
+- Promotion gates: `market_baseline` **0/5**, `no_league_regression` 2/5 wins,
+  `primary_metric_improvement` −0.00134. `promotion_permitted: false`.
+- The features are genuinely observed — `training_coverage = 1.0`,
+  `variable_in_training = true` on all three — and `training_defaulted_slots` is
+  **16, identical to the apex_v1_68 baseline**. The xG work added no defaulted
+  slot. This is a real negative result, not a pipeline artifact.
+- **A large, significant ATE is not evidence of out-of-sample predictive lift.**
+  ATE 0.2485 / 0.2181 / 0.1832 at p < 1e-68, and the block still costs RPS. The
+  causal screen is a filter against including noise, never a promotion criterion.
+- Candidate `.pkl` artifacts discarded (`backend/models/candidate/*.pkl` is
+  gitignored). The `apex_v2_71` key stays registered as a measurement contract so
+  a future xG candidate needs no re-derivation; the registry comment records the
+  rejection so it is never mistaken for an endorsement.
+
+### Fixed
+
+- **Corpus duplication, and every number derived from it.** The committed
+  Understat files overlap — `understat_ligue_1_2020` and
+  `understat_ligue_1_2021` both hold the whole 2020/21 season — giving 12,459
+  rows for **10,633 distinct matches**, 1,826 counted twice. Left in, the
+  reconciliation manifest proposes the same `(match_id, team_id)` row twice
+  (which the new executor refuses outright, blocking the backfill entirely) and
+  one match contributes twice to a rolling xG mean. Deduplication on `game_id`
+  now lives in the shared loader.
+  - ⚠️ **This changes the manifest SHA-256. Re-run the review before any
+    `--apply`.**
+  - `reports/evaluation/xg-feature-ate.{json,md}` re-measured on the corrected
+    corpus. Every verdict is unchanged; point estimates moved in the third
+    decimal.
+  - A consequence worth stating: the 7 files per league cover **6** distinct
+    seasons. 2021/22 is absent from all five leagues.
+- `compare_candidate_vs_incumbent.py:213` — `.get(league, training_report["POOLED"])`
+  evaluated its default eagerly, so a run that trained every league individually
+  and therefore wrote no `POOLED` entry raised `KeyError` **even for leagues that
+  were present**. Latent until a schema that drops rows left no league needing
+  the pooled fallback.
+- `write_training_manifest` wrote one fixed `training_manifest.json`, so training
+  a second candidate into the same `models/candidate/` destroyed the first one's
+  reproducibility evidence while both sets of `.pkl` sat there side by side. Now
+  scoped by artifact suffix, with the historical bare name kept for
+  `apex_v1_68`; the suffix is pattern-validated so the filename still cannot
+  carry a traversal component.
+- The reproducibility manifest fingerprinted only `data/cache/fd_*.csv`, so it
+  asserted reproducibility while silently omitting the Understat corpus that
+  feeds 3 of 71 columns. Recorded under `dataset.auxiliary` and folded into
+  `reproducibility_sha256`.
+- `feature_schema_version` was formatted as `f"apex_v1_{len(feature_names)}"`. A
+  71-wide candidate would have stamped `apex_v1_71`, which resolves to nothing —
+  and `prediction.py` answers a schema failure with `_fallback_result()` rather
+  than raising, so a mislabelled generation would serve fallback probabilities
+  while the API reported a confident schema. Now derived from the columns
+  themselves via `_schema_version_for()`.
+- Promotion evidence is now self-describing: the report carries
+  `candidate_feature_schema_version`, and `validate_promotion_feature_evidence`
+  resolves the contract from it instead of assuming `APEX_FEATURES_68` and
+  failing a 71-wide report with "must contain exactly 68 feature rows".
+- `apps/web`: removed the duplicate **Monitoring** entry from the sidebar and
+  mobile nav. `/monitoring` has always been a bare `redirect("/performance")`,
+  so two visibly different nav entries landed on the same page — and `robots.ts`
+  disallows `/monitoring/` while `/performance` is deliberately indexable, making
+  the linked entry the crawler-blocked spelling of a public page. The redirect
+  stays for existing bookmarks, with a comment against re-adding it to a nav
+  before the route has its own content.
+
+### Gate 50 — independence refuted a third time; the heterogeneous basis declined
+
+A proposal reached review to clear `error_association` by replacing BALD's member
+basis with a Heterogeneous Independent Ensemble (RF + XGBoost + LightGBM
+replicas). It was re-measured rather than accepted, on seed block **4242** — a
+third, previously untested block — with `--rf-only`, the flag that isolates
+member *independence* from member *composition*:
+
+    trees (incumbent)   skill -0.0190              0/5
+    RF-only  N=3        skill -0.0161   gap>0 3/5, skill>0 0/5
+    RF-only  N=5        skill -0.0370   gap>0 0/5, skill>0 0/5
+    RF-only  N=10       skill -0.0244   gap>0 1/5, skill>0 1/5
+
+Ladder declared before the run and reported in full. Independently seeded,
+independently resampled RandomForests reproduce the reversal, and N=5 is
+markedly worse than the incumbent. **Independence buys nothing**; the entire
+apparent gain in the original spike came from mixing model classes — the design
+`UNCERTAINTY_GATES["sufficient_members"]` explicitly deprecates ("distinct
+algorithms vary only model class").
+
+Adopting it would also not deliver what it is proposed for. `uncertainty_policy.py`
+states the two gates are independent: clearing `MODEL_GENERATION_UNCERTIFIED`
+does not clear `MODEL_UNCERTAINTY_UNAVAILABLE`, **and the converse holds**.
+Flipping `error_association` alone does not enable staking, because
+`active_generation.json` is `certification_state: UNVERIFIED` and clearing that
+runs through `certification_policy.PROMOTION_GATES`, where `market_baseline`
+fails **0/5 for every model measured to date** — incumbent and both candidates.
+
+Production confirms the fail-closed path is working as designed:
+`/api/v1/models/status` reports `stake_permitted: false`, `manifest_valid: true`,
+`models_loaded: true`. Uncertainty stays `MODEL_UNCERTAINTY_UNAVAILABLE`. Per the
+certification directive, "uncertainty remains unavailable and fail-closed" is an
+acceptable outcome; a manufactured PASS is not.
+
 ## Unreleased - Fix resolve_team_id() alias-ordering defect; measure real backfill coverage; clear promotion_evidence.py's candidate-schema prerequisite (2026-09-03)
 
 ### Fixed

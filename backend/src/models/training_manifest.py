@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
@@ -194,19 +195,31 @@ def build_training_manifest(
     tune_trials: int,
     leagues: Mapping[str, Mapping[str, Any]],
     artifact_suffix: str,
+    auxiliary_datasets: Optional[Mapping[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Assemble the full reproducibility record for one training run.
 
     ``leagues`` maps league -> that league's emitted metrics/split counts; it is
     passed in rather than recomputed so the manifest reports what the run
     actually produced, not a second opinion about it.
+
+    ``auxiliary_datasets`` fingerprints any corpus BESIDE ``cache_dir`` that fed
+    the run — name -> :func:`dataset_fingerprint` output. It exists because the
+    apex_v2_71 schema derives three of its columns from the Understat parquet
+    corpus, which ``cache_dir``'s ``fd_*.csv`` glob does not see: without it the
+    manifest would assert reproducibility while silently omitting a third of the
+    inputs. It is folded into ``reproducibility_sha256`` like any other dataset
+    field, so changing that corpus changes the digest.
     """
     feature_names = list(feature_names)
     manifest: Dict[str, Any] = {
         "schema": "sabiscore_training_manifest_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "git": {"commit": git_commit(), "dirty": git_is_dirty()},
-        "dataset": dataset_fingerprint(cache_dir),
+        "dataset": {
+            **dataset_fingerprint(cache_dir),
+            "auxiliary": {name: dict(fp) for name, fp in (auxiliary_datasets or {}).items()},
+        },
         "labels": {"contract": LABEL_CONTRACT, "sha256": label_contract_sha256()},
         "features": {
             "feature_schema_version": feature_schema_version,
@@ -235,12 +248,27 @@ def build_training_manifest(
     return manifest
 
 
-def write_training_manifest(manifest: Mapping[str, Any], out_dir: Path) -> Path:
+#: Artifact suffixes may only be a conservative slug. The filename is built
+#: from this, so the pattern is what keeps a path-traversal component out of it.
+_ARTIFACT_SUFFIX_RE = re.compile(r"^[a-z0-9_]{1,32}$")
+
+
+def write_training_manifest(
+    manifest: Mapping[str, Any], out_dir: Path, artifact_suffix: str | None = None
+) -> Path:
     """Write the manifest beside the artifacts it describes.
 
     ``out_dir`` comes from a CLI argument, so it is resolved and constrained to
-    the repository before anything is written. The filename is a fixed literal —
-    never taken from input — so the resolved path cannot escape via traversal.
+    the repository before anything is written.
+
+    ``artifact_suffix`` scopes the filename to one generation. Without it every
+    schema wrote ``training_manifest.json``, so training a second candidate into
+    the same ``models/candidate/`` destroyed the first one's reproducibility
+    evidence while both sets of .pkl files sat there side by side — the manifest
+    described whichever ran last. ``None`` keeps the historical bare name, so
+    the v5_phase7 candidate's manifest keeps the path everything already
+    references. The suffix is validated against a strict pattern rather than
+    trusted, so the resolved path still cannot escape via traversal.
     """
     repo_root = Path(__file__).resolve().parents[3]
     out_dir = Path(out_dir).resolve()
@@ -248,8 +276,15 @@ def write_training_manifest(manifest: Mapping[str, Any], out_dir: Path) -> Path:
         raise ValueError(
             f"refusing to write a training manifest outside the repository: {out_dir}"
         )
+    if artifact_suffix is not None and not _ARTIFACT_SUFFIX_RE.fullmatch(artifact_suffix):
+        raise ValueError(f"invalid artifact suffix for a manifest filename: {artifact_suffix!r}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / "training_manifest.json"
+    name = (
+        "training_manifest.json"
+        if artifact_suffix is None
+        else f"training_manifest_{artifact_suffix}.json"
+    )
+    path = out_dir / name
     path.write_text(
         json.dumps(dict(manifest), indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
