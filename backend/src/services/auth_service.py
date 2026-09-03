@@ -21,6 +21,19 @@ from ..db.models import (
 )
 
 
+def _naive_utc_now() -> datetime:
+    """UTC "now" with tzinfo stripped.
+
+    UserFavorite/UserSavedMatch/UserPreference all use naive `DateTime`
+    columns; asyncpg raises "can't subtract offset-naive and offset-aware
+    datetimes" at bind time if handed a tz-aware value (same bug class
+    documented elsewhere in this codebase for naive DateTime columns) — every
+    stored timestamp in this file must be stripped of tzinfo before
+    assignment.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def get_anon_id_from_request(request: Request) -> Optional[str]:
     """Extract anonymous session ID from header or cookie."""
     header_val = request.headers.get("X-Anonymous-Session") or request.headers.get("X-Anon-Id")
@@ -102,7 +115,7 @@ class UserStateService:
             anonymous_session_id=anonymous_session_id if not user_id else None,
             entity_type=entity_type_clean,
             entity_id=entity_id_clean,
-            created_at=datetime.now(timezone.utc),
+            created_at=_naive_utc_now(),
         )
         db.add(fav)
         await db.commit()
@@ -217,7 +230,7 @@ class UserStateService:
             match_id=clean_match_id,
             target_outcome=target_outcome,
             notes=notes,
-            created_at=datetime.now(timezone.utc),
+            created_at=_naive_utc_now(),
         )
         db.add(saved)
         await db.commit()
@@ -317,7 +330,7 @@ class UserStateService:
             return pref
 
         # Create default preference record
-        now = datetime.now(timezone.utc)
+        now = _naive_utc_now()
         new_pref = UserPreference(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -347,7 +360,7 @@ class UserStateService:
             db, user_id=user_id, anonymous_session_id=anonymous_session_id
         )
         if pref.id == "default":
-            now = datetime.now(timezone.utc)
+            now = _naive_utc_now()
             pref = UserPreference(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
@@ -366,7 +379,7 @@ class UserStateService:
                 pref.timezone = timezone_pref
             if default_league is not None:
                 pref.default_league = default_league
-            pref.updated_at = datetime.now(timezone.utc)
+            pref.updated_at = _naive_utc_now()
 
         await db.commit()
         await db.refresh(pref)
