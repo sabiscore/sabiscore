@@ -28,6 +28,8 @@ async def test_notification_preferences_and_timezone_update() -> None:
         db, user_id="user-101", timezone_iana="Europe/London"
     )
     assert updated.timezone == "Europe/London"
+    # Regression: UserPreference.updated_at is a naive `DateTime` column.
+    assert updated.updated_at.tzinfo is None
     db.commit.assert_awaited()
 
 
@@ -49,6 +51,10 @@ async def test_notification_subscription_and_in_app_logs() -> None:
     assert sub.user_id == "user-101"
     assert sub.match_id == "fd-500"
     assert sub.reminder_minutes_before == 30
+    # Regression: UserNotificationSubscription.created_at/updated_at are
+    # naive `DateTime` columns.
+    assert sub.created_at.tzinfo is None
+    assert sub.updated_at.tzinfo is None
     db.add.assert_called_once()
     db.commit.assert_awaited()
 
@@ -63,6 +69,8 @@ async def test_notification_subscription_and_in_app_logs() -> None:
     )
     assert log.title == "Match reminder"
     assert log.read is False
+    # Regression: UserNotificationLog.created_at is a naive `DateTime` column.
+    assert log.created_at.tzinfo is None
 
     # Mark as read
     db.execute.return_value = MagicMock(scalar_one_or_none=lambda: log)
@@ -71,6 +79,8 @@ async def test_notification_subscription_and_in_app_logs() -> None:
     )
     assert marked is True
     assert log.read is True
+    # Regression: UserNotificationLog.read_at is a naive `DateTime` column.
+    assert log.read_at.tzinfo is None
 
 
 @pytest.mark.asyncio

@@ -76,4 +76,28 @@ async def test_analytics_ingestion_service_batch() -> None:
     assert records[0].event_name == "match_viewed"
     assert records[0].properties["email"] == "[REDACTED_SECRET]"
     assert records[0].anonymous_session_id == "anon-777"
+    # Regression: AnalyticsEvent.timestamp/created_at are naive `DateTime`
+    # columns — a tz-aware value crashes asyncpg at bind time on every event.
+    assert records[0].created_at.tzinfo is None
+    assert records[0].timestamp.tzinfo is None
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_analytics_ingestion_normalizes_client_supplied_timestamps() -> None:
+    """A client can send its own event timestamp as an ISO string (with a Z or
+    numeric offset) or a Unix epoch float — both are tz-aware once parsed and
+    must be stripped before reaching the naive `timestamp` column."""
+    db = AsyncMock()
+    db.add_all = MagicMock()
+
+    events = [
+        {"event_name": "iso_ts", "properties": {}, "timestamp": "2026-01-01T12:00:00Z"},
+        {"event_name": "epoch_ts", "properties": {}, "timestamp": 1735732800.0},
+    ]
+
+    await AnalyticsIngestionService.record_events(db, events=events)
+
+    records = db.add_all.call_args[0][0]
+    assert records[0].timestamp.tzinfo is None
+    assert records[1].timestamp.tzinfo is None
