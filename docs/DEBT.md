@@ -1,5 +1,275 @@
 # SabiScore Debt Ledger
 
+## 56. The "Data Expansion & Feature Density Sprint" directive is unexecutable as written — the surviving objective is a real xG corpus whose ingestion has never once been run
+
+**Tier:** `NEXT` for the corpus half. The directive itself is **REJECTED — no
+action, no code.** Full item-by-item reconciliation lives in
+`reports/execution/plan-reconciliation.md` Appendix D; this ledger entry records
+the two findings worth surviving outside a session transcript.
+
+An operator-supplied directive proposed eradicating the four
+`PHASE7_FEATURES_ALWAYS_DATA_GAP` slots by ingesting xG/PSxG metrics, on the
+premise that denser features would make ensemble dispersion meaningful and so
+resolve item 50's `error_association` reversal.
+
+### Finding 1 — the proposed mechanism is inert, and this is worth remembering
+
+The four slots are **constant across every row of the training corpus**.
+`backend/scripts/retrain_with_expanded_features.py:224-226` overwrites them
+unconditionally:
+
+```python
+for col in PHASE7_FEATURES_ALWAYS_DATA_GAP:
+    if col in frame.columns:
+        frame[col] = defaults.get(col, 0.0)
+```
+
+A zero-variance column yields zero information gain, so no tree in any ensemble
+member ever splits on it, so it contributes nothing to the disagreement
+`dispersion_from_members()` measures. **Populating these four columns cannot
+move `error_association` in either direction.** Any future proposal that routes
+"more data" to "better epistemic uncertainty" through these specific slots is
+making the same error — the slots exist for artifact dimension compatibility
+(see the 2026-06-10 incident recorded in `feature_registry.py:95-114`, where
+removing them served `model_version="fallback"` on every inference for two
+months), not as an unfilled data opportunity.
+
+Item 50's remaining space is unchanged: (a) the reversal is inherent to
+bagged-tree dispersion and a different epistemic aggregation is needed, or
+(b) it resolves once a genuinely better-generalizing generation ships. A better
+*corpus* is a legitimate attempt at (b). These four *slots* are not.
+
+⚠️ Three further reasons the directive's §3 could not be executed as written:
+`defensive_vulnerability_index` and `finishing_efficiency_gap` have **zero hits
+repo-wide** (invented names); `xg_differential` exists only as an intermediate
+in `data/transformers.py`, not as a canonical slot; and three of the four real
+slots (`elo_league_adjusted`, `key_passes_under_pressure_diff`,
+`set_piece_xg_diff`) are `PHASE7_FEATURES_REMOVED`, carrying an explicit
+registry prohibition — "DO NOT include these in any training vector without
+re-running ATE validation." All seven file paths the directive names are
+missing from the repository.
+
+⚠️ Its supplied `verify_and_update_matrix()` also writes
+`always_data_gap_slots = 0` and `training_defaulted_slots = 0` into the
+availability JSON unconditionally — a measurement outcome recorded without
+measuring anything. The real producer is
+`scripts/generate_feature_availability_matrix.py`. **Do not run that snippet.**
+
+### Finding 2 — the xG ingestion exists, is tested, and has never been executed
+
+This is the genuine gap, and it is the recurring "built, tested, wired to
+nothing" shape this ledger has caught before (item 6's CLV capture, the
+`ScrapedTeamFormStore` zero-caller defect):
+
+- `backend/src/connectors/understat_source.py` — `UnderstatTeamXGSource`, with
+  `team_match_xg()` and `rolling_xg_features()`; tested in
+  `tests/test_connectors/test_understat_source.py`.
+- `backend/src/connectors/statsbomb_open.py` — `StatsBombOpenDataSource`;
+  tested in `tests/test_connectors/test_statsbomb_open.py`.
+- `backend/scripts/backfill_v4_data_sources.py` — the driver, writing Parquet +
+  JSON manifests to `data/processed/v4_sources`.
+
+**That output directory did not exist** before 2026-09-03. The pipeline had
+never produced a single artefact; `backend/data/processed/` held only the five
+synthetic `*_training.csv` files from the pre-vΩ.46 era.
+
+### ✅ The corpus now exists (2026-09-03)
+
+Fetched after fixing the two blocking defects below. 70 parquet files
+(35 league-seasons × matches + rollups) in `backend/data/processed/v4_sources/`:
+
+```text
+season      2019  2020  2021  2022  2023  2024  2025
+bundesliga   306   306   306   306   306   306   306
+epl          380   380   380   380   380   380   380
+la_liga      380   380   380   380   380   380   380
+ligue_1      380   380   380   380   306   306   306
+serie_a      380   380   380   380   380   380   380
+```
+
+**12,560 matches**, 0 empty frames, mean home xG 1.359–1.931 across all 35
+league-seasons. Cross-checks that the shape is real rather than plausible:
+Bundesliga is 306 throughout (18 teams × 34 ÷ 2); Ligue 1 drops 380 → 306 from
+2023 onward, which is the actual 20 → 18 team reduction; the 12,560 total sits
+just under the 12,765 real matches already in `backend/data/cache/fd_*.csv`.
+
+⚠️ **202 xG nulls, all in one place, and they must be DROPPED not filled.**
+Every one is Ligue 1 2019/20 between 2020-03-13 and 2020-07-09, flagged
+`is_result=False, has_data=False` — the 101 fixtures (× 2 sides) France
+cancelled when COVID ended that season early rather than resuming it. 380 − 279
+played = 101 exactly. These are genuinely unplayed matches, not missing
+measurements. **Any training builder that default-fills them (`fillna(0.0)`,
+registry defaults) is fabricating xG for matches that never happened** — filter
+on `has_data` / `is_result` instead. This is the same trap the rejected sprint
+directive's own `compute_rolling_features()` fell into with its trailing
+`.fillna(0.0)`.
+
+Not yet done: joining this into a candidate training frame, or measuring
+anything against the incumbent. The corpus is acquired; nothing consumes it yet.
+
+### ⭐ Finding 4 — the registry's "non-discriminative" ATE finding does not reproduce on real data (2026-09-03)
+
+`feature_registry.py` blocks `shot_quality_diff` because the xG-derived proxy
+"collapses to q75=0 **on synthetic training data**, making ATE estimates
+non-discriminative". That clause named the *data*, not the feature — so with a
+real corpus it was re-measurable for the first time
+(`scripts/measure_xg_feature_ate.py`, evidence in
+`reports/evaluation/xg-feature-ate.{md,json}`). 11,419 leak-free rows,
+`shift(1)` rolling-5 partitioned by (league, season), cold-start rows dropped
+rather than imputed:
+
+| feature | ate_win | p | class |
+|---|---|---|---|
+| `xg_differential` | **0.2464** | 0.0000 | CAUSAL_DRIVER |
+| `xg_attack_diff` | **0.2169** | 0.0000 | CAUSAL_DRIVER |
+| `xg_defense_diff` | **0.1790** | 0.0000 | CAUSAL_DRIVER |
+| `finishing_efficiency_gap` | 0.0082 | 0.3851 | INDEPENDENT |
+
+Roughly 12× the 0.02 practical threshold. And the estimator **discriminates**
+rather than rubber-stamping: `finishing_efficiency_gap` (goals minus xG, a
+famously mean-reverting quantity) correctly lands below threshold at p=0.385.
+
+⚠️ **This does not unblock `shot_quality_diff`, and must not be read as doing
+so.** That feature is PSxG-based; Understat publishes no PSxG and no shot
+counts. The registry's condition names a *StatsBomb event-level shots corpus*,
+which this is not. `defensive_vulnerability_index` is equally unmeasurable here.
+Finding 3's chain separation is unchanged.
+
+⚠️ **`xg_differential` is not a canonical slot** — it lives only as an
+intermediate in `data/transformers.py`. Putting it in `CANONICAL_FEATURES_68`
+changes the vector width, which is exactly the 2026-06-10 incident this file
+records: 65 columns emitted against 68-column artifacts, `PredictionEngine`
+correctly refusing to zero-pad, `model_version="fallback"` served on every
+inference for two months.
+
+⚠️ **The estimate is a median-split proxy, unadjusted for confounders.** Team
+quality drives both rolling xG and outcome, so part of the effect is
+association.
+
+**What it licenses:** a *candidate* feature-schema version carrying the xG
+family, trained and put through the existing promotion gate
+(`certification_policy.py` v1.0.0, SHA `41cb7703…`) against the incumbent. That
+is an authorised schema decision with a real cost (new artifacts, new manifest,
+new contract hash), not a unilateral edit — and specifically **not** achievable
+by deleting the constant-fill at `retrain_with_expanded_features.py:224-226`,
+which would silently feed the registry defaults' replacement into 68-column
+artifacts that were never trained on them.
+
+**Gate 50 is unchanged by any of this.** `test_uncertainty_contract.py`:
+25 passed / 2 xfailed, gaps identical to the documented baseline (EPL −0.0217,
+BUNDESLIGA −0.0448, LA_LIGA −0.0025, LIGUE_1 −0.0288, SERIE_A −0.0098).
+Acquiring a corpus does not move an uncertainty gate; only a
+better-generalizing *generation* could, and none has been trained.
+
+⭐ **And it could not have worked — a blocking defect was found the first time it
+was run for real (fixed 2026-09-03).** `LEAGUE_TO_UNDERSTAT` mapped SabiScore
+slugs to Understat's *website* slugs (`"epl" → "EPL"`, `"la_liga" → "La_Liga"`),
+but `sd.Understat(leagues=...)` takes **soccerdata's own standardized league
+IDs** (`"ENG-Premier League"`, `"ESP-La Liga"`, …) and its `_selected_leagues`
+setter raises `ValueError` on any id absent from `LEAGUE_DICT`. Every league of
+every season would have raised, been swallowed by
+`backfill_v4_data_sources.py`'s broad `except Exception`, and recorded as an
+opaque `"Understat error: ..."` warning — a manifest that looks like it ran,
+with zero artefacts and no stated cause.
+
+⚠️ **The two vocabularies are a trap of the exact shape this repo keeps hitting**
+(the canonical-vs-display league ids, the three team-name normalizers, the odds
+`_team_key` copies). `EPL` is even a *valid-looking* Understat URL slug —
+`understat.com/league/EPL` is a real page — so the map read as correct.
+
+It survived because the connector's soccerdata-facing half has **no test
+coverage**: the suite's own docstring says it "only exercises the parts that
+need no network / no soccerdata install", and its nine tests cover
+`_resolve_team_name` and the pure `rolling_xg_features`. Nothing had ever called
+`_reader` or `team_match_xg`. Now pinned by three tests in
+`tests/test_connectors/test_understat_source.py` asserting every mapped value is
+a real soccerdata id — deliberately **without** importing soccerdata, since it is
+absent from the default venv and an import-guard would skip the test in exactly
+the environment that needs it. `_reader` also now validates the league *before*
+importing the optional dependency and fails closed with a nameable error.
+
+⚠️ **Generalisable lesson: "tested" told us nothing here.** A green suite on a
+module whose only real integration path has never once executed is not evidence
+that path works. When a connector has zero artefacts on disk, suspect the
+connector, not the schedule.
+
+That corpus is the binding prerequisite for four separate open items:
+`shot_quality_diff`'s own written unblock condition ("Permanent DATA_GAP until
+real StatsBomb event-level shots corpus confirms ATE >= 0.02", guardrail 12 of
+the Sprint 4 brief), item 13 (tactical feature family), item 10 (offline
+artifacts frozen 2024-06-02 and synthetically keyed), and item 50 route (b).
+
+⚠️ **Do not add a second team-name map for it.** The directive proposed a new
+`canonical_team_map.json` with hard-fail-on-unmapped. The hard-fail principle is
+already `reconcile_team()`'s `UNKNOWN` behaviour, and this repository has
+recorded three separate production incidents caused by introducing a *second*
+normalizer beside `team_identity._identity_key` (the two odds `_team_key`
+copies, the market aliases). `understat_source.py` already resolves via
+rapidfuzz. A third vocabulary is the exact defect class.
+
+### Environment finding — the research stack does not install on Python 3.14
+
+`requirements-training.txt` pins every entry `python_version < "3.14"`, and the
+local dev venv is 3.14.6. A `pip install soccerdata rapidfuzz` there produced no
+output and no installed package after ten minutes — the same no-wheels trap
+CLAUDE.md already records for catboost/shap ("Do not 'fix' by pip-installing on
+3.14"). Offline research work of this kind belongs in a separate `.venv-ml`
+(already gitignored, line 11) built on the machine's Python 3.12, which the
+training pins accept.
+
+### Finding 3 — Understat and `shot_quality_diff` are two different chains
+
+⚠️ **Do not treat the Understat backfill as progress on `shot_quality_diff`.**
+They share the word "xG" and nothing else:
+
+- **Understat chain** (running): `understat_source.py` → `data/processed/v4_sources/*.parquet`
+  → team-level xG/xGA rollups. Serves item 50 route (b), item 13, and the
+  `phase9_xg_market_features` research surface. Understat publishes xG, xGA and
+  shot counts; it does **not** publish post-shot xG.
+- **`shot_quality_diff` chain** (not running, and its producer is the wrong one):
+  the feature is consumed by `StatsBombAggregator`, which only *reads*
+  `settings.statsbomb_cache_path` (`data/processed/statsbomb_features_cache.parquet`).
+  That file does not currently exist locally.
+
+The producer that does exist, `scripts/build_statsbomb_cache.py`, is titled
+"StatsBomb-**like**" and derives its columns from the database `MatchStats`
+table — i.e. it produces exactly the proxy `feature_registry.py:142` blames for
+the non-discriminative ATE in the first place ("proxy derived from `xg_avg_5`
+difference collapses to q75=0"). Re-running it cannot satisfy a guardrail whose
+text is "until **real StatsBomb event-level shot-map data** confirms ATE >=
+0.02". Item 10 says the same thing from the other direction: "Regenerating
+StatsBomb needs the open-data corpus re-cloned (offline, large)."
+
+So the `shot_quality_diff` unblock needs a distinct piece of work: clone
+`github.com/statsbomb/open-data`, extend `connectors/statsbomb_open.py`
+(`shot_features()` already exists) into a real producer for the Phase 8 cache
+schema, then run the ATE. ⚠️ **Scope that honestly before starting** — StatsBomb
+open data does not cover five top-flight European leagues across seven seasons;
+its free tier is a selected set of competitions. The likely outcome is that
+`shot_quality_diff` cannot be validated at corpus scale at all, which is a
+legitimate finding and leaves the feature exactly where it is.
+
+The ATE machinery itself is ready and needs nothing new:
+`models/causal_selector.py`'s `CausalFeatureSelector(practical_ate=0.02)` already
+carries the guardrail's own threshold, and `analyze(frame, feature_cols=[...])`
+takes a features+outcome frame directly.
+
+**Trigger to close:** `data/processed/v4_sources` holds real Understat artefacts
+for the five scoreable leagues across the seasons the football-data corpus
+already covers (2019/20 through 2025/26), with manifests, and they have been
+joined into a candidate training frame and measured against the incumbent. The
+`shot_quality_diff` ATE is explicitly **not** part of this trigger — see
+Finding 3; it is separate work with its own coverage risk. A passing ATE
+(>= 0.02) is what would authorise removing that one feature from
+`PHASE7_FEATURES_ALWAYS_DATA_GAP` — a failing one leaves it exactly where it is,
+and that is a legitimate outcome, not a blocked one.
+
+**Blast radius:** none. Nothing in this entry changes serving behaviour;
+`UNCERTAINTY_GATES`, `certification_policy.py`, and the feature registry are
+untouched.
+
+---
+
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
 
 **Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.

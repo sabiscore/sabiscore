@@ -5,6 +5,125 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Repair the never-executed Understat xG ingestion, acquire the first real corpus, and re-measure the proxy ATE the registry blocks on (2026-09-03)
+
+### Fixed
+
+- `backend/src/connectors/understat_source.py` — two stacked defects, the second
+  only visible after fixing the first. The connector had **never once executed**:
+  `data/processed/v4_sources` did not exist and zero artefacts had ever been
+  produced.
+  1. `LEAGUE_TO_UNDERSTAT` held Understat's *website* slugs (`"EPL"`,
+     `"La_Liga"`), but `sd.Understat(leagues=...)` takes **soccerdata's own**
+     standardized league IDs and its `_selected_leagues` setter raises
+     `ValueError` on anything absent from `LEAGUE_DICT`. Verified against the
+     installed library: the five mapped values now equal
+     `sd.Understat.available_leagues()` exactly.
+  2. `cache_dir` was passed through as a `str`, but soccerdata calls
+     `data_dir.mkdir()` → `'str' object has no attribute 'mkdir'`. Coerced at the
+     connector rather than the call site so every caller is covered; when
+     `cache_dir` is unset the key is now omitted entirely rather than passed as
+     `None`, which would override soccerdata's own `Path` default and
+     reintroduce the crash.
+- League validation now runs **before** the optional `soccerdata` import — a bad
+  league is a caller error and should say so regardless of whether the optional
+  dependency happens to be installed.
+
+⚠️ **Both defects would have surfaced as one opaque `"Understat error"` warning**
+per league per season, because the single caller
+(`scripts/backfill_v4_data_sources.py`) wraps the fetch in a broad
+`except Exception`: a manifest that looks like it ran, zero artefacts, no stated
+cause. Neither was reachable by any test — the suite's own docstring says it
+"only exercises the parts that need no network / no soccerdata install", so
+`_reader`/`team_match_xg` had zero coverage.
+
+⚠️ **Generalisable lesson:** a green suite on a module whose only real
+integration path has never executed is not evidence that path works. When a
+connector has zero artefacts on disk, suspect the connector, not the schedule.
+
+### Added
+
+- 6 regression tests in `backend/tests/test_connectors/test_understat_source.py`
+  (9 → 15), **watched failing before being trusted** — reverting one map entry
+  yields `These map to something soccerdata will reject: {'epl': 'EPL'}`. They
+  deliberately do not import `soccerdata`, which is absent from the default
+  venv; an import guard would skip them in exactly the environment that needs
+  them.
+- `backend/scripts/measure_xg_feature_ate.py` + evidence in
+  `backend/reports/evaluation/xg-feature-ate.{md,json}`.
+- `backend/requirements-training.txt` — pins `soccerdata==1.9.1` and
+  `rapidfuzz==3.14.6` under the existing `python_version < "3.14"` convention.
+  ⚠️ The research stack does not install on Python 3.14; use a 3.12 venv.
+
+### Corpus
+
+12,560 Understat matches across 35 league-seasons (5 leagues × 2019–2025), in
+the gitignored `backend/data/processed/v4_sources`. Shape checks that it is real
+rather than merely plausible: Bundesliga 306 throughout (18 teams × 34 ÷ 2),
+Ligue 1 breaking 380 → 306 at 2023 exactly as its real 20 → 18 team reduction,
+and the total sitting just under the 12,765 matches already in `fd_*.csv`.
+
+⚠️ All 202 xG nulls are Ligue 1 2019/20 between 2020-03-13 and 2020-07-09,
+flagged `has_data=False` — the 101 fixtures France cancelled when COVID ended
+that season early. **Unplayed matches, not missing measurements.** Any builder
+that default-fills them fabricates xG for games that never happened.
+
+### Measured — the registry's blocking clause named the data, not the feature
+
+`feature_registry.py` blocks `shot_quality_diff` because the xG-derived proxy
+"collapses to q75=0 **on synthetic training data**, making ATE estimates
+non-discriminative". With a real corpus it was re-measurable for the first time.
+On 11,419 leak-free rows (`shift(1)` rolling-5 partitioned by league+season,
+cold-start rows dropped rather than imputed):
+
+```text
+xg_differential           ate_win 0.2464  p 0.0000  CAUSAL_DRIVER
+xg_attack_diff            ate_win 0.2169  p 0.0000  CAUSAL_DRIVER
+xg_defense_diff           ate_win 0.1790  p 0.0000  CAUSAL_DRIVER
+finishing_efficiency_gap  ate_win 0.0082  p 0.3851  INDEPENDENT
+```
+
+Roughly 12× the 0.02 practical threshold, and the estimator **discriminates**
+rather than rubber-stamping: `finishing_efficiency_gap`, a famously
+mean-reverting quantity, correctly lands below threshold.
+
+### Unchanged, deliberately
+
+- **No gate, threshold, registry entry, artifact, or serving path was modified.**
+- `shot_quality_diff` remains a permanent `PHASE7_FEATURES_ALWAYS_DATA_GAP`
+  member: it is PSxG-based, Understat publishes no PSxG and no shot counts, and
+  the registry's condition names a *StatsBomb event-level* corpus.
+- **Gate 50 is unchanged** — `tests/unit/test_uncertainty_contract.py` still
+  reports 25 passed / 2 xfailed with the documented per-league gaps (EPL
+  −0.0217, BUNDESLIGA −0.0448, LA_LIGA −0.0025, LIGUE_1 −0.0288, SERIE_A
+  −0.0098). Acquiring a corpus cannot move an uncertainty gate; only a
+  better-generalizing *generation* could, and none has been trained.
+
+### Rejected — the supplied "Data Expansion & Feature Density Sprint" directive
+
+Recorded in `docs/DEBT.md` item 56 and
+`reports/execution/plan-reconciliation.md` Appendix D.
+
+- **Its central mechanism is inert.** The four
+  `PHASE7_FEATURES_ALWAYS_DATA_GAP` slots are constant-filled at
+  `retrain_with_expanded_features.py:224-226`, so no tree ever splits on them.
+  Filling them cannot move `error_association` in either direction.
+- **Three of its four named features do not exist.**
+  `defensive_vulnerability_index` and `finishing_efficiency_gap` have 0 hits
+  repo-wide; `xg_differential` is an intermediate in `data/transformers.py`, not
+  a canonical slot.
+- **All seven file paths it names are missing**, including
+  `scripts/train_ensemble.py`.
+- **Its verification snippet writes `always_data_gap_slots = 0`** into the
+  availability JSON without measuring anything.
+
+Acting on the ATE result requires a **new candidate feature-schema version**
+through the existing promotion gate (`models/certification_policy.py` v1.0.0) —
+an authorised decision with real cost, and specifically **not** achievable by
+deleting the constant-fill, which would feed values into 68-column artifacts
+never trained on them (the 2026-06-10 incident that served
+`model_version="fallback"` on every inference for two months).
+
 ## Unreleased - Rule out the member basis as the error_association reversal, and catch a confound in the spike that made it look solved (2026-09-03)
 
 ### Added

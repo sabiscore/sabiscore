@@ -20,3 +20,12 @@ optuna>=3.0.0,<5.0.0; python_version < "3.14"
 joblib==1.3.2; python_version < "3.14"
 evidently==0.7.21; python_version < "3.14"
 great-expectations==0.18.8; python_version < "3.14"
+
+# Offline xG corpus acquisition (backend/scripts/backfill_v4_data_sources.py →
+# src/connectors/understat_source.py). Research-only, never imported on the
+# request path — source_registry marks it request_time_safe=False.
+# Verified 2026-09-03 on Python 3.12.6 fetching 35 league-seasons.
+# ⚠️ soccerdata pulls a large tree (selenium/seleniumbase/lxml/pyarrow) for
+# readers we do not use; budget a long first install on a slow link.
+soccerdata==1.9.1; python_version < "3.14"
+rapidfuzz==3.14.6; python_version < "3.14"
