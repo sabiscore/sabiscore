@@ -5,6 +5,56 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Review-only manifest for backfilling match_stats from the Understat corpus (2026-09-03)
+
+### Added
+
+- `backend/src/services/understat_match_stats_reconciliation_service.py` +
+  `backend/scripts/review_understat_match_stats_backfill.py` — read-only
+  reconciliation of every tracked-corpus Understat match against canonical
+  identity. Reuses `team_identity.resolve_team_id()` verbatim (no second
+  team-name normalizer, per this file's standing prohibition); match
+  resolution is an exact `(home_team_id, away_team_id, match_date ± 36h)`
+  lookup once both sides are canonical IDs. Every row resolves to `READY`,
+  `TEAM_UNRESOLVED`, `MATCH_UNRESOLVED`, or `MATCH_AMBIGUOUS` — the last two
+  fail closed rather than guessing. Follows the review/apply-hash-gate house
+  pattern `scripts/repair_orphan_team_identities.py` established; no
+  `--apply` mode exists yet.
+- `tests/unit/test_understat_match_stats_reconciliation.py` (9 tests),
+  including a regression that reproduces the exact production-shaped
+  near-orphaned-duplicate defect found below and asserts it fails closed
+  (`MATCH_UNRESOLVED`) rather than misattributing a match.
+
+### Fixed
+
+- `/code-review` caught `_resolve_match_id` binding a tz-aware kickoff window
+  directly against `Match.match_date` (naive `TIMESTAMP WITHOUT TIME ZONE`) —
+  the same asyncpg `DataError` trap already fixed elsewhere in this codebase
+  (`upcoming_match_feature_service.py:230`,
+  `notification_dispatch_service._now_naive_utc()`). Every test passed
+  anyway, since they run on SQLite, which accepts either. Fixed by extracting
+  the windowing into `_kickoff_window()`, unit-tested directly for
+  `tzinfo is None`.
+
+### Found (docs/DEBT.md item 56, Finding 6)
+
+Probing production (`sabiscore-db-v3`, read-only) before trusting any review
+number surfaced a pre-existing defect in `resolve_team_id()` itself: EPL
+carries two provider-lineage id schemes for the same club (e.g. Manchester
+City — `fdco-team-epl-man_city`, 267 matches, vs.
+`fd-team-epl:manchester_city_fc`, 2 matches). `resolve_team_id("Manchester
+City", ...)` resolves to the **wrong**, near-orphaned duplicate: the
+affix-strip stage matches before the audited-alias stage (which already
+covers this exact pair for a different caller) ever runs, and
+`require_elo_history=True` only excludes a candidate at *zero* Elo rows, not
+two. The same nonzero-but-small-usage pattern was confirmed systemic across
+LA_LIGA/SERIE_A/BUNDESLIGA/LIGUE_1 too (Barcelona, PSG, Roma, Lazio, and
+others each carry a near-orphaned duplicate). The failure mode is fail-closed
+under-coverage, not corruption — affected fixtures report
+`MATCH_UNRESOLVED`, never a write against the wrong team. Fixing
+`resolve_team_id()`'s stage ordering is shared, heavily-depended-on
+infrastructure and is explicitly out of scope here.
+
 ## Unreleased - Track the Understat corpus in git; give serving a leak-free xG rolling projection (2026-09-03)
 
 ### Added
