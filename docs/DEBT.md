@@ -404,7 +404,7 @@ gains one case for the new list-subscriptions service method.
 
 ---
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypothesis 2 ruled out), so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2 and 3 ruled out), so staking stays blocked
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C
 authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE`.**
@@ -444,8 +444,8 @@ quartile to show worse mean RPS than the lowest. Measured, it is the reverse:
 gap (highest − lowest bucket RPS) = −0.022, on the clean holdout — see the
 ADR 0009 addendum for the full bucket table.
 
-**Two hypotheses were recorded when this item was first filed; one is closed
-and one is now substantially explained:**
+**Three hypotheses have now been tested. Two are ruled out and one is
+substantially explained; none produces a pass:**
 
 1. **Hypothesis 1 (artifact-inherent) — substantially explained, 2026-08-31,
    but NOT resolved into a pass.** Two new measurements:
@@ -472,6 +472,70 @@ and one is now substantially explained:**
    statistics. It would not cleanly pass anyway (two of three strata still
    carry the wrong sign). **This needs an authorized decision on the recorded
    evidence, not a unilateral edit.** See ADR 0009 Addendum 3.
+
+3. **Hypothesis 3 (RPS outcome-mix artifact) — RULED OUT, 2026-09-03.**
+   Ordered RPS over [home, draw, away] is not symmetric across outcomes: for a
+   prediction `p`, a DRAW costs `(p_h² + p_a²)/2` while a HOME costs
+   `((p_h−1)² + (p_h+p_d−1)²)/2` — for a typical `p=[.45,.27,.28]` that is
+   **0.140 (draw) vs 0.190 (home) vs 0.360 (away)**. Draws are structurally
+   cheap in RPS. Since high epistemic ↔ trees disagree ↔ evenly matched sides,
+   and evenly matched sides draw more often, the top bucket could be earning a
+   purely mechanical discount unrelated to the uncertainty signal. This is a
+   confound in *realised-outcome* space, distinct from Addendum 3's aleatoric
+   confound in *prediction* space, and had not been tested.
+
+   **Measured and refuted** (`backend/scripts/diagnose_error_association_outcome_mix.py`;
+   reproduce from the repository root with
+   `cd backend && PYTHONPATH=. python scripts/diagnose_error_association_outcome_mix.py`).
+   A constant league-base-rate forecaster — fitted on pre-holdout seasons, so it
+   knows nothing about any individual fixture — was scored on the same holdout
+   rows with the same bucketing. Every bucket-to-bucket difference it shows is
+   pure outcome mix:
+
+   ```text
+   league         n  gap_model   gap_ref  skill_gap  draw% Q1 draw% Q4
+   EPL          375    -0.0217   -0.0004    -0.0212    21.5%   24.0%
+   LA_LIGA      380    -0.0025   +0.0215    -0.0240    29.5%   23.2%
+   BUNDESLIGA   296    -0.0448   -0.0151    -0.0297    24.3%   27.0%
+   SERIE_A      375    -0.0098   -0.0032    -0.0065    24.7%   29.2%
+   LIGUE_1      306    -0.0288   -0.0151    -0.0137    18.4%   20.5%
+   MEAN                -0.0215   -0.0025    -0.0190
+   ```
+
+   The draw rate *does* rise with epistemic in 4 of 5 leagues, so the mechanism
+   is real — but it is far too small to matter. **Outcome mix explains 12% of
+   the mean gap, and `skill_gap` stays negative in 5 of 5 leagues.** The
+   reversal survives removing the mechanical effect entirely.
+
+   ✅ **The measurement is controlled**: bucketing is rank-based and equal-size,
+   byte-identical to the gate's own test, so `gap_model` reproduces the
+   published per-league numbers **exactly** (−0.0217 / −0.0025 / −0.0448 /
+   −0.0098 / −0.0288), not approximately. A first pass using quantile cuts
+   matched only 2 of 5 and was corrected before any conclusion was drawn — if
+   this script ever stops reproducing them, it is measuring something else and
+   its verdict does not hold.
+
+   ⚠️ **One genuinely new observation, pointing the opposite way from the
+   gate's premise.** LA_LIGA's `gap_ref` is **+0.0215**: by pure outcome mix its
+   high-epistemic bucket should be *harder*, yet the model scores essentially
+   flat there (`gap_model` −0.0025). Its advantage over a naive prior is
+   therefore substantially **larger** where epistemic uncertainty is highest.
+   Combined with `out_of_support` PASSING (novel regimes lift mean epistemic
+   1.34×–2.54×), the emerging picture is that BALD dispersion over RF bootstrap
+   trees detects **distributional novelty** but does not rank **in-distribution
+   error** — plausibly because tree disagreement tracks feature
+   *informativeness* (features push different trees to different confident
+   splits) rather than fixture *difficulty*. Those are different quantities,
+   and `error_association` assumes they are the same one.
+
+   **This does not license a gate change.** Concluding "the gate is
+   mis-specified" from evidence gathered after it blocked promotion is exactly
+   the inversion APEX §23 forbids, however plausible the mechanism. Recorded as
+   evidence for an authorized decision, nothing more. What it does do is close a
+   third hypothesis and narrow the remaining space to: (a) the signal is
+   inherent to bagged-tree dispersion and a different epistemic aggregation is
+   needed, or (b) it resolves itself once a better-generalizing generation
+   ships.
 
 2. **Hypothesis 2 (in-bag/out-of-bag scoring bias) — RULED OUT, 2026-08-31.**
    The original measurement scored the full 2,571-row corpus, 85% of which
