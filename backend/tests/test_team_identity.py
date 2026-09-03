@@ -257,6 +257,101 @@ async def test_paris_fc_still_resolves_to_itself(session: AsyncSession) -> None:
     )
 
 
+# docs/DEBT.md item 56 Finding 6: production carries a near-orphaned
+# duplicate Team row for several EPL clubs alongside the real historical row.
+# Affix-stripping the near-orphan's full legal name lands on an EXACT match
+# against the resolver's own normalization of the input, so the affix stage
+# used to win before the audited alias -- which already asserted the correct
+# target -- was ever consulted. Verified against sabiscore-db-v3 2026-09-03.
+
+
+async def test_manchester_city_alias_wins_over_the_near_orphan_duplicate(
+    session: AsyncSession,
+) -> None:
+    """"Manchester City FC" affix-strips to an exact match on "Manchester
+    City" -- the corpus's real spelling -- so without the reordering fix the
+    near-orphan duplicate wins before the existing alias is ever reached."""
+    await _seed_league(session, "EPL", "Man City", "Manchester City FC")
+    assert (
+        await resolve_team_id(
+            "Manchester City",
+            session,
+            league_id="EPL",
+            require_elo_history=True,
+        )
+        == "fdco-epl-0"
+    )
+
+
+async def test_newcastle_alias_wins_over_the_near_orphan_duplicate(
+    session: AsyncSession,
+) -> None:
+    """Same shape as Manchester City: Understat's corpus writes "Newcastle
+    United", which affix-strips to an exact match on the near-orphan
+    "Newcastle United FC" rather than the real "Newcastle" row."""
+    await _seed_league(session, "EPL", "Newcastle", "Newcastle United FC")
+    assert (
+        await resolve_team_id(
+            "Newcastle United",
+            session,
+            league_id="EPL",
+            require_elo_history=True,
+        )
+        == "fdco-epl-0"
+    )
+
+
+# docs/DEBT.md item 56 Finding 6 follow-up: a real review run of the full
+# tracked Understat corpus against sabiscore-db-v3 (2026-09-03) found exactly
+# 12 unique (league, name) pairs behind all 2,532 TEAM_UNRESOLVED rows. Each
+# below is a distinct failure shape the existing heuristics cannot bridge.
+
+
+async def test_celta_vigo_alias_survives_an_inserted_token_breaking_containment(
+    session: AsyncSession,
+) -> None:
+    """"Celta de Vigo" contains "de" between the two halves of "Celta Vigo",
+    so the padded-substring containment check never lines up -- "celta vigo"
+    is not a contiguous substring of "celta de vigo"."""
+    await _seed_league(session, "LA_LIGA", "RC Celta de Vigo", "Sevilla FC")
+    assert (
+        await resolve_team_id(
+            "Celta Vigo", session, league_id="LA_LIGA", require_elo_history=True
+        )
+        == "fdco-la_liga-0"
+    )
+
+
+async def test_cologne_alias_bridges_the_anglicized_corpus_spelling(
+    session: AsyncSession,
+) -> None:
+    """Understat anglicizes to "FC Cologne"; the corpus row is the German
+    transliteration "FC Koln" -- no heuristic here relates the two spellings
+    at all, only an explicit identity assertion can."""
+    await _seed_league(session, "BUNDESLIGA", "FC Koln", "Bayern Munich")
+    assert (
+        await resolve_team_id(
+            "FC Cologne", session, league_id="BUNDESLIGA", require_elo_history=True
+        )
+        == "fdco-bundesliga-0"
+    )
+
+
+async def test_short_name_below_the_containment_length_floor_resolves_via_alias(
+    session: AsyncSession,
+) -> None:
+    """"Lyon" (4 characters) is below containment's 5-character floor, so
+    without the alias it can never reach "Olympique Lyonnais" no matter how
+    obviously the two names refer to the same club."""
+    await _seed_league(session, "LIGUE_1", "Olympique Lyonnais", "Lille")
+    assert (
+        await resolve_team_id(
+            "Lyon", session, league_id="LIGUE_1", require_elo_history=True
+        )
+        == "fdco-ligue_1-0"
+    )
+
+
 async def test_containment_still_resolves_a_genuine_short_name(
     session: AsyncSession,
 ) -> None:

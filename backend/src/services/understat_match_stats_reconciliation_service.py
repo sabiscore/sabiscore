@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
@@ -151,6 +151,37 @@ async def _resolve_team_cached(
     return cache[key]
 
 
+async def _load_match_index(
+    session: AsyncSession, league_ids: set[str]
+) -> dict[tuple[str, str, str], list[tuple[str, datetime]]]:
+    """Prefetch every ``Match`` in the corpus's leagues, indexed by
+    ``(league_id, home_team_id, away_team_id)`` -> ``[(match_id, match_date), ...]``.
+
+    A first review run against production issued one ``SELECT`` per corpus
+    row (~13,000 sequential round trips over the WAN to Render's Postgres)
+    and died mid-run with ``ConnectionDoesNotExistError`` -- the connection
+    was reset partway through, not because anything was wrong, just because
+    holding one session open for that many round trips is fragile. The full
+    match table for these five leagues is a few thousand rows; loading it
+    once and resolving every corpus row against the in-memory index cuts
+    round trips from ~13,000 to one per league.
+    """
+    if not league_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Match.id, Match.league_id, Match.home_team_id, Match.away_team_id, Match.match_date).where(
+                Match.league_id.in_(league_ids)
+            )
+        )
+    ).all()
+    index: dict[tuple[str, str, str], list[tuple[str, datetime]]] = {}
+    for match_id, league_id, home_team_id, away_team_id, match_date in rows:
+        key = (str(league_id), str(home_team_id), str(away_team_id))
+        index.setdefault(key, []).append((str(match_id), match_date))
+    return index
+
+
 def _kickoff_window(kickoff: datetime) -> tuple[datetime, datetime]:
     """The (start, end) tolerance bounds around ``kickoff``, tz-stripped.
 
@@ -170,15 +201,16 @@ def _kickoff_window(kickoff: datetime) -> tuple[datetime, datetime]:
     )
 
 
-async def _resolve_match_id(
-    session: AsyncSession,
+def _resolve_match_id(
+    match_index: dict[tuple[str, str, str], list[tuple[str, datetime]]],
     *,
     league_id: str,
     home_team_id: str,
     away_team_id: str,
     kickoff: datetime,
 ) -> tuple[str | None, str]:
-    """Exact-ID lookup within a kickoff tolerance window.
+    """Exact-ID lookup within a kickoff tolerance window, against the
+    prefetched in-memory index (see ``_load_match_index``) — no DB round trip.
 
     Returns (match_id, status) where status is one of MATCH_UNRESOLVED (zero
     candidates), MATCH_AMBIGUOUS (more than one — fails closed rather than
@@ -186,25 +218,14 @@ async def _resolve_match_id(
     match_id as resolved).
     """
     window_start, window_end = _kickoff_window(kickoff)
-    rows = (
-        await session.execute(
-            select(Match.id).where(
-                and_(
-                    Match.league_id == league_id,
-                    Match.home_team_id == home_team_id,
-                    Match.away_team_id == away_team_id,
-                    Match.match_date >= window_start,
-                    Match.match_date <= window_end,
-                )
-            )
-        )
-    ).scalars().all()
+    candidates = match_index.get((league_id, home_team_id, away_team_id), ())
+    matches = [match_id for match_id, match_date in candidates if window_start <= match_date <= window_end]
 
-    if not rows:
+    if not matches:
         return None, _STATUS_MATCH_UNRESOLVED
-    if len(rows) > 1:
+    if len(matches) > 1:
         return None, _STATUS_MATCH_AMBIGUOUS
-    return str(rows[0]), ""
+    return matches[0], ""
 
 
 async def build_understat_match_stats_manifest(
@@ -221,6 +242,9 @@ async def build_understat_match_stats_manifest(
     corpus = load_corpus_matches(sources_dir)
     team_cache: dict[tuple[str, str], str | None] = {}
     entries: list[UnderstatMatchStatsEntry] = []
+
+    league_ids = {canonical_league_id(str(league)) for league in corpus["sabi_league"].unique()}
+    match_index = await _load_match_index(session, league_ids)
 
     for row in corpus.itertuples(index=False):
         league_id = canonical_league_id(str(row.sabi_league))
@@ -243,8 +267,8 @@ async def build_understat_match_stats_manifest(
         if blockers:
             status = _STATUS_TEAM_UNRESOLVED
         else:
-            match_id, match_status = await _resolve_match_id(
-                session,
+            match_id, match_status = _resolve_match_id(
+                match_index,
                 league_id=league_id,
                 home_team_id=home_team_id,  # type: ignore[arg-type]
                 away_team_id=away_team_id,  # type: ignore[arg-type]

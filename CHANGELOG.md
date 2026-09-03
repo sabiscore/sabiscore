@@ -5,6 +5,69 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Fix resolve_team_id() alias-ordering defect; measure real backfill coverage; clear promotion_evidence.py's candidate-schema prerequisite (2026-09-03)
+
+### Fixed
+
+- `resolve_team_id()` (`team_identity.py`) now checks `_AUDITED_ALIASES`
+  immediately after an exact-name match, before affix-stripping — not after
+  it. Affix-stripping a near-orphaned duplicate's full legal name
+  ("Manchester City FC" → "Manchester City") produced an exact match against
+  the resolver's own input normalization, so the alias never got a chance to
+  redirect it. 9 regression tests, including one that keeps a synthetic
+  near-orphan pair with no alias entry to prove fail-closed behavior still
+  holds where an alias doesn't (yet) cover a pair.
+- `understat_match_stats_reconciliation_service.py`: a real review run
+  against production died mid-way with
+  `asyncpg.exceptions.ConnectionDoesNotExistError` — ~12,459 sequential
+  per-row match-resolution round trips over the WAN to Render's Postgres,
+  all inside one long-lived session, is what killed it. Fixed by
+  prefetching the full `matches` table for the corpus's leagues once
+  (`_load_match_index`) and resolving every row against the in-memory index
+  — round trips dropped from ~12,459 to about 6.
+- `promotion_evidence.py`: all 9 call sites hardwired to `APEX_FEATURES_68`
+  now take an explicit `candidate_features` parameter, defaulting to
+  `APEX_FEATURES_68` for exact backward compatibility. Before this, any
+  candidate wider than what is currently active in production (e.g. a
+  71-feature schema adding the three xG features) indexed past the end of
+  the active serving contract and raised `IndexError` before evidence could
+  even be built. `_serving_feature_at()` now returns `None` past the
+  contract's end, which classifies as `SCHEMA_MISMATCH` — mechanically
+  correct, not a crash.
+
+### Added
+
+- 12 new `_AUDITED_ALIASES` entries (`team_identity.py`), each independently
+  confirmed against production before being asserted: Wolverhampton
+  Wanderers/West Bromwich Albion (EPL), Celta Vigo/Atletico Madrid
+  (LA_LIGA), Inter (SERIE_A), Lyon/Brest/Nice/Lens/Saint-Etienne (LIGUE_1),
+  RasenBallsport Leipzig/FC Cologne (BUNDESLIGA). These were the entire set
+  of `TEAM_UNRESOLVED` names in a real review run — not a sample.
+
+### Found (CI, mid-PR)
+
+`_AUDITED_ALIASES` is shared by `resolve_team_id()` *and* the live-market
+fixture matcher (`market_identity_key()`, via `odds_service.py` /
+`market_observation_service.py`). Adding the "Nice" alias also changed
+market-matching behavior, correctly resolving a fixture
+`test_shared_place_name_without_an_exact_key_fails_closed` had deliberately
+kept ambiguous to exercise a different property (the Paris FC/PSG
+shared-place-name collision, item 40). Test updated to a substitute pairing
+with no alias coverage so it keeps testing that property honestly. See
+DEBT.md Finding 7 for the full trace and the lesson for future aliases.
+
+### Found (docs/DEBT.md item 56, Finding 7)
+
+A real review run against `sabiscore-db-v3` (not an estimate) measured
+9,255/12,459 (74.3%) `READY` before these fixes, with all 2,532
+`TEAM_UNRESOLVED` rows collapsing to exactly 12 unique `(league, name)`
+pairs. After both fixes: **11,694/12,459 (93.9%) READY, 0 TEAM_UNRESOLVED**.
+The remaining 765 `MATCH_UNRESOLVED` rows are a different, already-understood
+shape — thin `matches`-table coverage for a handful of clubs' 2019/2020
+seasons (Barcelona, PSG, AC Milan), not a team-identity defect. Full
+reasoning, evidence, and the honest "not done here" list (no `--apply` write
+path; no candidate schema authored/trained yet) in DEBT.md.
+
 ## Unreleased - Review-only manifest for backfilling match_stats from the Understat corpus (2026-09-03)
 
 ### Added

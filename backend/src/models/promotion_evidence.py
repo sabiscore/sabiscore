@@ -69,10 +69,12 @@ def current_serving_contract() -> list[str]:
         return list(CANONICAL_FEATURES_68)
 
 
-def _stack_candidate_rows(dataset: Mapping[str, Mapping[str, Any]]) -> tuple[np.ndarray, dict[str, int]]:
+def _stack_candidate_rows(
+    dataset: Mapping[str, Mapping[str, Any]], candidate_features: Sequence[str]
+) -> tuple[np.ndarray, dict[str, int]]:
     matrices: list[np.ndarray] = []
     rows_by_league: dict[str, int] = {}
-    expected_width = len(APEX_FEATURES_68)
+    expected_width = len(candidate_features)
 
     for league in sorted(dataset):
         raw = dataset[league].get("X", [])
@@ -104,10 +106,24 @@ def _column_is_default_only(feature: str, column: np.ndarray) -> tuple[bool, flo
     return bool(not observed.any()), coverage
 
 
+def _serving_feature_at(serving_contract: Sequence[str], index: int) -> str | None:
+    """The serving contract's feature name at ``index``, or ``None`` past its end.
+
+    A candidate wider than what is currently active in production (e.g. a
+    71-wide xG candidate compared against today's 68-wide serving contract)
+    has positions with nothing on the serving side at all. ``None`` — never an
+    IndexError, and never silently reused from a shorter contract — makes that
+    an explicit, mechanically-checkable SCHEMA_MISMATCH: `feature != None` is
+    always true, so `_classification` classifies it correctly without special
+    casing.
+    """
+    return serving_contract[index] if index < len(serving_contract) else None
+
+
 def _classification(
     *,
     feature: str,
-    serving_feature: str,
+    serving_feature: str | None,
     defaulted_training_slot: bool,
 ) -> str:
     if feature != serving_feature:
@@ -174,6 +190,8 @@ def _expected_gate(summary: Mapping[str, Any], training_rows: int) -> str:
 
 def build_promotion_feature_evidence(
     dataset: Mapping[str, Mapping[str, Any]],
+    *,
+    candidate_features: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Build rich promotion evidence from the exact candidate ``X`` matrices.
 
@@ -181,15 +199,25 @@ def build_promotion_feature_evidence(
     never infers availability from filenames, family labels, or a hand-maintained
     report; every training statistic comes from those exact matrices and every
     serving alignment decision comes from the current positional registry.
+
+    ``candidate_features`` names the ordered contract the candidate matrices
+    were built against, defaulting to ``APEX_FEATURES_68`` — the only contract
+    this function was originally exercised with. Pass an explicit,
+    ``FEATURE_SCHEMA_VERSIONS``-registered contract (e.g. via
+    ``resolve_feature_schema``) to evaluate a wider candidate, such as one that
+    adds new features beyond today's active serving contract; positions past
+    the end of the current serving contract classify as SCHEMA_MISMATCH rather
+    than raising (see ``_serving_feature_at``).
     """
 
-    matrix, rows_by_league = _stack_candidate_rows(dataset)
+    candidate = list(candidate_features) if candidate_features is not None else list(APEX_FEATURES_68)
+    matrix, rows_by_league = _stack_candidate_rows(dataset, candidate)
     training_rows = int(matrix.shape[0])
     features: list[dict[str, Any]] = []
     serving_contract = current_serving_contract()
 
-    for index, feature in enumerate(APEX_FEATURES_68):
-        serving_feature = serving_contract[index]
+    for index, feature in enumerate(candidate):
+        serving_feature = _serving_feature_at(serving_contract, index)
         column = matrix[:, index] if training_rows else np.empty(0, dtype=np.float64)
         defaulted, training_coverage = _column_is_default_only(feature, column)
         variable = bool(column.size and not np.allclose(column, column[0], rtol=0.0, atol=_FLOAT_ATOL))
@@ -225,7 +253,7 @@ def build_promotion_feature_evidence(
         "schema_version": REPORT_SCHEMA_VERSION,
         "training_rows": training_rows,
         "rows_by_league": rows_by_league,
-        "candidate_contract_hash": _contract_hash(APEX_FEATURES_68),
+        "candidate_contract_hash": _contract_hash(candidate),
         "serving_contract_hash": _contract_hash(serving_contract),
         "summary": summary,
         "promotion_gate": _expected_gate(summary, training_rows),
@@ -233,7 +261,11 @@ def build_promotion_feature_evidence(
     }
 
 
-def validate_promotion_feature_evidence(report: Mapping[str, Any]) -> Mapping[str, Any]:
+def validate_promotion_feature_evidence(
+    report: Mapping[str, Any],
+    *,
+    candidate_features: Sequence[str] | None = None,
+) -> Mapping[str, Any]:
     """Validate a persisted promotion report against the current registry.
 
     The validator intentionally accepts the existing rich v1 report shape while
@@ -242,21 +274,24 @@ def validate_promotion_feature_evidence(report: Mapping[str, Any]) -> Mapping[st
     fields emitted above. This lets the repository close the producer/consumer
     gap without pretending the quarantined candidate has newer evidence than it
     actually does.
+
+    ``candidate_features`` must match whatever ``build_promotion_feature_evidence``
+    built ``report`` from — defaults to ``APEX_FEATURES_68``, same as there.
     """
 
     if report.get("schema") != REPORT_SCHEMA:
         raise ValueError(f"unsupported promotion evidence schema: {report.get('schema')!r}")
 
+    candidate = list(candidate_features) if candidate_features is not None else list(APEX_FEATURES_68)
     raw_features = report.get("features")
-    if not isinstance(raw_features, list) or len(raw_features) != len(APEX_FEATURES_68):
+    if not isinstance(raw_features, list) or len(raw_features) != len(candidate):
         raise ValueError(
-            f"promotion evidence must contain exactly {len(APEX_FEATURES_68)} feature rows"
+            f"promotion evidence must contain exactly {len(candidate)} feature rows"
         )
 
     serving_contract = current_serving_contract()
-    for index, (candidate_feature, serving_feature) in enumerate(
-        zip(APEX_FEATURES_68, serving_contract, strict=True)
-    ):
+    for index, candidate_feature in enumerate(candidate):
+        serving_feature = _serving_feature_at(serving_contract, index)
         row = raw_features[index]
         if not isinstance(row, Mapping):
             raise ValueError(f"promotion feature row {index} is not an object")
@@ -308,7 +343,7 @@ def validate_promotion_feature_evidence(report: Mapping[str, Any]) -> Mapping[st
             f"promotion_gate={gate} contradicts mechanically derived gate={expected_gate}"
         )
 
-    if "candidate_contract_hash" in report and report.get("candidate_contract_hash") != _contract_hash(APEX_FEATURES_68):
+    if "candidate_contract_hash" in report and report.get("candidate_contract_hash") != _contract_hash(candidate):
         raise ValueError("candidate feature-contract hash does not match the current registry")
     if "serving_contract_hash" in report and report.get("serving_contract_hash") != _contract_hash(serving_contract):
         raise ValueError("serving feature-contract hash does not match the current registry")
@@ -342,7 +377,7 @@ def render_promotion_feature_evidence_markdown(report: Mapping[str, Any]) -> str
         lines.append("")
     lines.extend(
         [
-            "This report is derived from the exact `build_dataset()` candidate matrices and the current positional `APEX_FEATURES_68` → active-serving-contract comparison (the schema live serving actually produces today). A FAIL is evidence, not an error to be thresholded away.",
+            "This report is derived from the exact `build_dataset()` candidate matrices and a positional candidate-contract → active-serving-contract comparison (the schema live serving actually produces today). A FAIL is evidence, not an error to be thresholded away.",
             "",
         ]
     )

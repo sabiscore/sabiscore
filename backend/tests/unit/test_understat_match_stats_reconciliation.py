@@ -312,7 +312,7 @@ async def test_manifest_sha256_is_deterministic_across_repeated_review_runs(
 # ---------------------------------------------------------------------------
 
 
-async def test_near_orphaned_duplicate_fails_closed_rather_than_misattributing(
+async def test_near_orphaned_duplicate_resolves_to_the_real_identity(
     session: AsyncSession, tmp_path: Path
 ) -> None:
     """Reproduces the exact production shape found by probing sabiscore-db-v3:
@@ -320,13 +320,13 @@ async def test_near_orphaned_duplicate_fails_closed_rather_than_misattributing(
     history, one a near-orphan with a handful of matches (and therefore a
     handful of Elo rows too, so require_elo_history=True cannot exclude it).
 
-    resolve_team_id("Manchester City", ...) resolves to the near-orphan (the
-    affix-strip stage matches "Manchester City FC" before the audited-alias
-    stage — which already maps "manchester city" -> "man city" for a
-    different call site — ever runs). This test does not assert that
-    resolve_team_id is correct; it asserts this service's response to that
-    outcome is safe: the affected fixture is reported MATCH_UNRESOLVED, never
-    written against the wrong team's history.
+    Before docs/DEBT.md item 56 Finding 6 was fixed, resolve_team_id(
+    "Manchester City", ...) resolved to the near-orphan: the affix-strip
+    stage matched "Manchester City FC" before the audited-alias stage —
+    which already maps "manchester city" -> "man city" — ever ran. The
+    resolver now checks the alias immediately after an exact match, ahead of
+    affix-stripping, so this now resolves to the real identity and the
+    fixture write-target end to end.
     """
     # The near-orphan: matches the input via affix-stripping, wins the
     # resolution, but has almost no real match history.
@@ -390,13 +390,83 @@ async def test_near_orphaned_duplicate_fails_closed_rather_than_misattributing(
     manifest = await build_understat_match_stats_manifest(session, sources_dir)
 
     entry = manifest.entries[0]
-    # Document the actual (defective) resolution this production shape
-    # produces, so a future resolve_team_id fix changes this assertion
-    # deliberately rather than by surprise.
-    assert entry.home_team_id == "fd-team-epl:manchester_city_fc", (
-        "if this now resolves to the correct id, docs/DEBT.md item 56 "
-        "Finding 6 has been fixed upstream — update this test and the doc"
+    assert entry.home_team_id == "fdco-team-epl-man_city"
+    assert entry.match_id == "the-real-fixture"
+    assert entry.status == "READY"
+    assert entry.repair_ready
+
+
+async def test_unaliased_near_orphan_still_fails_closed(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The alias reordering fix only helps pairs an audited alias actually
+    covers. For a club with no alias entry, the same near-orphan shape must
+    still fail closed (MATCH_UNRESOLVED) rather than resolve to whichever
+    duplicate the affix stage happens to prefer.
+    """
+    # A synthetic near-orphan pair, deliberately not a real club name, so this
+    # test's outcome depends only on there being no _AUDITED_ALIASES entry —
+    # not on which real clubs happen to be aliased today. Mirrors the real
+    # shape exactly: the real row uses an abbreviated name ("Man City"), the
+    # near-orphan the decorated legal name ("Manchester City FC"), and the
+    # corpus sends the undecorated full name ("Manchester City") -- which
+    # exact-matches neither row but affix-strips to match the orphan.
+    session.add(Team(id="fd-team-epl:fictional_rovers_fc", name="Fictional Rovers FC", league_id=LEAGUE, active=True))
+    session.add(Team(id="fdco-team-epl-fictional-rovers", name="Fic Rovers", league_id=LEAGUE, active=True))
+    session.add(Team(id="opponent", name="Arsenal", league_id=LEAGUE, active=True))
+    await session.flush()
+
+    orphan_match_date = KICKOFF - timedelta(days=900)
+    session.add(
+        Match(
+            id="orphan-match", league_id=LEAGUE, home_team_id="fd-team-epl:fictional_rovers_fc",
+            away_team_id="opponent", match_date=orphan_match_date, season="2019/2020",
+            status="finished", home_score=1, away_score=1,
+        )
     )
+    await session.flush()
+    session.add_all([
+        EloRatingSnapshot(
+            match_id="orphan-match", team_id="fd-team-epl:fictional_rovers_fc",
+            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
+            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
+        ),
+        EloRatingSnapshot(
+            match_id="orphan-match", team_id="opponent",
+            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
+            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
+        ),
+    ])
+
+    session.add(
+        Match(
+            id="the-real-fixture", league_id=LEAGUE, home_team_id="fdco-team-epl-fictional-rovers",
+            away_team_id="opponent", match_date=KICKOFF, season="2024/2025",
+            status="finished", home_score=3, away_score=1,
+        )
+    )
+    await session.flush()
+    session.add(
+        EloRatingSnapshot(
+            match_id="the-real-fixture", team_id="fdco-team-epl-fictional-rovers",
+            pre_match_elo=1800.0, post_match_elo=1815.0, league=LEAGUE,
+            season="2024/2025", match_date=KICKOFF, created_at=KICKOFF,
+        )
+    )
+    await session.commit()
+
+    sources_dir = _write_corpus_parquet(
+        tmp_path, league="epl", season=2024,
+        rows=[_row(home_team="Fictional Rovers", away_team="Arsenal", date=KICKOFF, home_xg=2.4, away_xg=1.1)],
+    )
+
+    manifest = await build_understat_match_stats_manifest(session, sources_dir)
+
+    entry = manifest.entries[0]
+    # "Fictional Rovers FC" affix-strips to an exact match on the corpus's
+    # "Fictional Rovers" -- the same trap Manchester City and Newcastle hit
+    # -- and with no audited alias to redirect it, the near-orphan wins.
+    assert entry.home_team_id == "fd-team-epl:fictional_rovers_fc"
     # The safety property that actually matters: no match found for the
     # near-orphan within the tolerance window, so nothing is misattributed.
     assert entry.status == "MATCH_UNRESOLVED"
