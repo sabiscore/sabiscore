@@ -484,7 +484,9 @@ substantially explained; none produces a pass:**
    confound in *realised-outcome* space, distinct from Addendum 3's aleatoric
    confound in *prediction* space, and had not been tested.
 
-   **Measured and refuted** (`scripts/diagnose_error_association_outcome_mix.py`).
+   **Measured and refuted** (`backend/scripts/diagnose_error_association_outcome_mix.py`;
+   reproduce from the repository root with
+   `cd backend && PYTHONPATH=. python scripts/diagnose_error_association_outcome_mix.py`).
    A constant league-base-rate forecaster — fitted on pre-holdout seasons, so it
    knows nothing about any individual fixture — was scored on the same holdout
    rows with the same bucketing. Every bucket-to-bucket difference it shows is
