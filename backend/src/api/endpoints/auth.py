@@ -164,8 +164,13 @@ def _serialize_user(user: UserAccount) -> UserResponse:
 
 
 async def _touch_last_login(db: AsyncSession, user: UserAccount) -> None:
-    user.last_login_at = datetime.now(timezone.utc)
-    user.updated_at = datetime.now(timezone.utc)
+    # UserAccount.last_login_at/updated_at are naive `DateTime` columns; asyncpg's
+    # timestamp codec raises `can't subtract offset-naive and offset-aware
+    # datetimes` at bind time if handed a tz-aware value (same class of bug
+    # documented repeatedly elsewhere in this codebase for naive DateTime columns).
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.last_login_at = now
+    user.updated_at = now
     await db.commit()
     await db.refresh(user)
 
