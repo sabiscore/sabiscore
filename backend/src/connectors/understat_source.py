@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -32,18 +33,31 @@ from .base import SourceMeta
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# League → Understat league-name mapping
+# SabiScore league slug → soccerdata league ID
 # ---------------------------------------------------------------------------
-
+# ⚠️ These values are ``soccerdata``'s OWN standardized league IDs, NOT
+# Understat's website slugs. The two look interchangeable and are not:
+# understat.com serves ``/league/EPL``, but ``sd.Understat(leagues="EPL")``
+# raises ``ValueError`` — ``_selected_leagues`` validates every id against
+# ``LEAGUE_DICT`` and rejects unknown ones outright.
+#
+# This map held the website slugs until 2026-09-03. Nothing caught it because
+# ``_reader``/``team_match_xg`` have no test coverage (the suite exercises only
+# ``_resolve_team_name`` and the pure ``rolling_xg_features``) and the one
+# caller, ``scripts/backfill_v4_data_sources.py``, wraps the fetch in a broad
+# ``except Exception`` that would have recorded the failure as an opaque
+# "Understat error" warning for every league of every season.
+#
+# Verify against ``sd.Understat.available_leagues()`` before adding a league.
 LEAGUE_TO_UNDERSTAT: dict[str, str] = {
-    "epl": "EPL",
-    "premier_league": "EPL",
-    "la_liga": "La_Liga",
-    "laliga": "La_Liga",
-    "serie_a": "Serie_A",
-    "bundesliga": "Bundesliga",
-    "ligue_1": "Ligue_1",
-    "ligue1": "Ligue_1",
+    "epl": "ENG-Premier League",
+    "premier_league": "ENG-Premier League",
+    "la_liga": "ESP-La Liga",
+    "laliga": "ESP-La Liga",
+    "serie_a": "ITA-Serie A",
+    "bundesliga": "GER-Bundesliga",
+    "ligue_1": "FRA-Ligue 1",
+    "ligue1": "FRA-Ligue 1",
 }
 
 
@@ -99,9 +113,42 @@ class UnderstatTeamXGSource:
         keep separate from the main data artefacts directory.
     """
 
-    cache_dir: str | None = None
+    cache_dir: str | Path | None = None
+
+    def _reader_kwargs(self, league: str, season: int) -> dict[str, Any]:
+        """Build the ``sd.Understat(**kwargs)`` arguments.
+
+        Kept pure and free of the ``soccerdata`` import so it stays testable in
+        an environment without the optional dependency — which is every
+        environment except the offline research venv.
+        """
+        # Validate the argument before the caller imports the optional heavy
+        # dependency: a bad league is a caller error and should say so
+        # regardless of whether soccerdata happens to be installed. Failing
+        # closed here also keeps the message nameable — passing the raw slug
+        # through would surface as soccerdata's generic ValueError inside the
+        # caller's broad `except Exception`, which is how the wrong-ID bug
+        # above stayed invisible.
+        league_name = LEAGUE_TO_UNDERSTAT.get(league.lower())
+        if league_name is None:
+            raise ValueError(
+                f"No soccerdata league ID mapped for {league!r}. "
+                f"Known: {sorted(LEAGUE_TO_UNDERSTAT)}"
+            )
+
+        kwargs: dict[str, Any] = {"leagues": league_name, "seasons": season}
+        if self.cache_dir is not None:
+            # ⚠️ soccerdata calls ``data_dir.mkdir()``, so this must be a Path.
+            # The one caller (backfill_v4_data_sources.py) passes a str, which
+            # raised `'str' object has no attribute 'mkdir'` inside that
+            # script's broad `except Exception`. Coerced here rather than at the
+            # call site so every caller is covered.
+            kwargs["data_dir"] = Path(self.cache_dir)
+        return kwargs
 
     def _reader(self, league: str, season: int) -> Any:
+        kwargs = self._reader_kwargs(league, season)
+
         try:
             import soccerdata as sd  # type: ignore
         except ImportError as exc:
@@ -110,12 +157,7 @@ class UnderstatTeamXGSource:
                 "pip install soccerdata"
             ) from exc
 
-        league_name = LEAGUE_TO_UNDERSTAT.get(league.lower(), league)
-        return sd.Understat(
-            leagues=league_name,
-            seasons=season,
-            data_dir=self.cache_dir,
-        )
+        return sd.Understat(**kwargs)
 
     def team_match_xg(
         self, *, league: str, season: int

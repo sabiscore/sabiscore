@@ -9,10 +9,16 @@ Run:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
-from src.connectors.understat_source import UnderstatTeamXGSource, _resolve_team_name
+from src.connectors.understat_source import (
+    LEAGUE_TO_UNDERSTAT,
+    UnderstatTeamXGSource,
+    _resolve_team_name,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -86,3 +92,72 @@ class TestRollingXgFeatures:
     def test_match_order_is_one_indexed(self, shuffled_matches):
         rollups = UnderstatTeamXGSource.rolling_xg_features(shuffled_matches)
         assert rollups["match_order"].min() == 1
+
+
+# ---------------------------------------------------------------------------
+# LEAGUE_TO_UNDERSTAT / _reader
+# ---------------------------------------------------------------------------
+#
+# Regression guard for 2026-09-03: the map held Understat's *website* slugs
+# ("EPL", "La_Liga") rather than soccerdata's standardized league IDs. Those
+# look interchangeable but are not — soccerdata's `_selected_leagues` setter
+# validates every id against LEAGUE_DICT and raises ValueError on a miss, so
+# every backfill run would have failed into the caller's broad
+# `except Exception` as an opaque "Understat error".
+#
+# Deliberately does NOT import soccerdata: it is an offline research-only
+# dependency (requirements-training.txt, python_version < "3.14") and is absent
+# from the default venv, so importing it would just skip the test in the
+# environment that most needs it.
+
+
+class TestSoccerdataLeagueIds:
+    # From `sd.FBref.available_leagues()` / soccerdata's LEAGUE_DICT — the same
+    # canonical ids every soccerdata reader accepts.
+    SOCCERDATA_LEAGUE_IDS = frozenset(
+        {
+            "ENG-Premier League",
+            "ESP-La Liga",
+            "FRA-Ligue 1",
+            "GER-Bundesliga",
+            "ITA-Serie A",
+        }
+    )
+
+    def test_every_mapped_value_is_a_soccerdata_league_id(self):
+        unknown = {
+            slug: value
+            for slug, value in LEAGUE_TO_UNDERSTAT.items()
+            if value not in self.SOCCERDATA_LEAGUE_IDS
+        }
+        assert not unknown, (
+            f"These map to something soccerdata will reject: {unknown}. "
+            "Values must be soccerdata league IDs, not understat.com URL slugs."
+        )
+
+    def test_all_five_scoreable_leagues_are_reachable(self):
+        assert {
+            LEAGUE_TO_UNDERSTAT[slug]
+            for slug in ("epl", "la_liga", "serie_a", "bundesliga", "ligue_1")
+        } == self.SOCCERDATA_LEAGUE_IDS
+
+    def test_unmapped_league_fails_closed_with_a_nameable_error(self):
+        # Not a silent pass-through into soccerdata's generic ValueError.
+        with pytest.raises(ValueError, match="No soccerdata league ID mapped"):
+            UnderstatTeamXGSource()._reader("eredivisie", 2025)
+
+    def test_cache_dir_is_coerced_to_path_for_soccerdata(self):
+        # soccerdata calls data_dir.mkdir(); a str raises
+        # "'str' object has no attribute 'mkdir'". The one caller passes a str.
+        kwargs = UnderstatTeamXGSource(cache_dir="some/cache")._reader_kwargs("epl", 2019)
+        assert isinstance(kwargs["data_dir"], Path)
+
+    def test_no_cache_dir_omits_data_dir_entirely(self):
+        # Rather than passing None, which would override soccerdata's own
+        # Path default and re-introduce the mkdir crash.
+        assert "data_dir" not in UnderstatTeamXGSource()._reader_kwargs("epl", 2019)
+
+    def test_reader_kwargs_carry_the_soccerdata_league_id(self):
+        kwargs = UnderstatTeamXGSource()._reader_kwargs("la_liga", 2019)
+        assert kwargs["leagues"] == "ESP-La Liga"
+        assert kwargs["seasons"] == 2019
