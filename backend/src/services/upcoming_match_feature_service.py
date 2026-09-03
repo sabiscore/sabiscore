@@ -48,6 +48,8 @@ from ..models.feature_registry import (
     MARKET_FEATURES_14,
     TEMPORAL_FEATURES,
     UnknownFeatureSchemaError,
+    derive_xg_rolling_features,
+    rolling_xg_mean,
     active_canonical_features,
     active_default_feature_values,
     derive_apex_market_features,
@@ -1047,20 +1049,7 @@ class UpcomingMatchFeatureProjector:
         fixed-day-window bug silently starved EWMA form of history in the
         close season.
         """
-        query = (
-            select(Match)
-            .where(
-                and_(
-                    (Match.home_team_id == team_id) | (Match.away_team_id == team_id),
-                    Match.match_date < match_date,
-                    Match.status == "finished",
-                )
-            )
-            .order_by(desc(Match.match_date))
-            .limit(n)
-        )
-        result = await db.execute(query)
-        matches = result.scalars().all()
+        matches = await self._completed_matches_before(team_id, db, match_date, n)
         results: list = []
         for match in reversed(matches):
             is_home = match.home_team_id == team_id
@@ -1109,21 +1098,7 @@ class UpcomingMatchFeatureProjector:
         parameter by name after this point.
         """
         prefix = "home" if is_home else "away"
-        query = (
-            select(Match)
-            .where(
-                and_(
-                    (Match.home_team_id == team_id) | (Match.away_team_id == team_id),
-                    Match.match_date < match_date,
-                    Match.status == "finished",
-                )
-            )
-            .order_by(desc(Match.match_date))
-            .limit(20)
-        )
-
-        result = await db.execute(query)
-        recent_matches = result.scalars().all()
+        recent_matches = await self._completed_matches_before(team_id, db, match_date, 20)
 
         if not recent_matches:
             logger.debug("No historical matches found for team %s before %s", team_id, match_date)
@@ -1260,25 +1235,135 @@ class UpcomingMatchFeatureProjector:
             "acquired_at": record.latest_match_date.isoformat() if record.latest_match_date else None,
         }
 
+    async def project_xg_rolling_features(
+        self,
+        *,
+        home_team_id: str,
+        away_team_id: str,
+        kickoff: datetime,
+        db: AsyncSession,
+    ) -> Optional[Dict[str, float]]:
+        """The three xG candidate features for an upcoming fixture, or None.
+
+        This is the serving half of the train/serve pair the
+        `serving_feature_availability` gate compares. It exists so that a future
+        candidate feature-schema version carrying `PHASE9_FEATURES_XG` has a real
+        serving answer instead of a registry default — training on a feature
+        serving cannot observe is what APEX section 26 forbids, and what
+        `promotion_evidence.py` would fail the candidate for.
+
+        ⚠️ Returns None, never zeros, when either side lacks the minimum history.
+        A None here is a DATA_GAP the caller must surface as such. It is also the
+        honest answer today for most fixtures: `match_stats` is populated only for
+        the league-seasons `scripts/backfill_match_stats_xg.py` has been run over,
+        so a fixture outside that coverage genuinely has no observed xG.
+
+        The window semantics — last 5 completed matches strictly before kickoff,
+        minimum 3 — come from `feature_registry.rolling_xg_mean`, the same
+        function the training path calls. They are not restated here on purpose.
+        """
+        rolling: Dict[str, Optional[float]] = {}
+        for side, team_id in (("home", home_team_id), ("away", away_team_id)):
+            # XG_ROLLING_WINDOW matches would be enough if every one carried xG,
+            # but coverage is per-league-season; over-fetch so a few uncovered
+            # matches do not starve a team that has plenty of observed history.
+            matches = await self._completed_matches_before(team_id, db, kickoff, 20)
+            series = await self._get_team_xg_series(team_id, db, matches)
+            observed = [(f, a) for f, a in series if f is not None and a is not None]
+            rolling[f"{side}_xg_for"] = rolling_xg_mean([f for f, _ in observed])
+            rolling[f"{side}_xg_against"] = rolling_xg_mean([a for _, a in observed])
+
+        return derive_xg_rolling_features(
+            home_xg_for=rolling["home_xg_for"],
+            home_xg_against=rolling["home_xg_against"],
+            away_xg_for=rolling["away_xg_for"],
+            away_xg_against=rolling["away_xg_against"],
+        )
+
+    async def _completed_matches_before(
+        self,
+        team_id: str,
+        db: AsyncSession,
+        match_date: datetime,
+        limit: int,
+    ) -> list:
+        """A team's finished matches strictly before ``match_date``, newest first.
+
+        This is the leak boundary for every backward-looking serving feature, and
+        it was written out three times (``_get_team_stats``,
+        ``_get_team_results_sequence``, and the xG projection below) with
+        identical predicates. Three copies of a temporal filter is three places
+        for a future edit to introduce a leak in one and not the others, so it is
+        stated once here.
+
+        No wall-clock lower bound — a fixed N-day window silently starves every
+        team of history whenever the gap since the last completed match exceeds
+        it (e.g. the close season). ``limit`` alone bounds the query.
+        """
+        query = (
+            select(Match)
+            .where(
+                and_(
+                    (Match.home_team_id == team_id) | (Match.away_team_id == team_id),
+                    Match.match_date < match_date,
+                    Match.status == "finished",
+                )
+            )
+            .order_by(desc(Match.match_date))
+            .limit(limit)
+        )
+        return list((await db.execute(query)).scalars().all())
+
+    async def _get_team_xg_series(
+        self,
+        team_id: str,
+        db: AsyncSession,
+        matches: list,
+    ) -> list[tuple[Optional[float], Optional[float]]]:
+        """(xg_for, xg_against) per match, in the order ``matches`` was given.
+
+        ``matches`` owns the leak boundary: callers pass the result of a query
+        already filtered to ``match_date < kickoff`` and ``status == finished``,
+        ordered most-recent-first. This method preserves that order and adds
+        nothing to it.
+
+        ⚠️ Order is the whole point, and it used to be absent. The previous
+        ``_get_team_xg`` issued ``SELECT expected_goals WHERE match_id IN (...)``
+        with **no ORDER BY** and its caller then took ``[:5]`` — so "the last
+        five matches" was whatever order Postgres happened to return, which for
+        a bitmap heap scan is physical row order, not recency. That was latent
+        rather than harmful only because ``match_stats`` has never held a single
+        row in production; the moment it does, an unordered read makes every
+        rolling xG value quietly wrong.
+
+        xG-against is the opponent's row in the same match, so one query per
+        team-match pair set covers both sides.
+        """
+        match_ids = [m.id for m in matches]
+        if not match_ids:
+            return []
+
+        query = select(
+            MatchStats.match_id, MatchStats.team_id, MatchStats.expected_goals
+        ).where(MatchStats.match_id.in_(match_ids))
+        rows = (await db.execute(query)).all()
+
+        by_match: Dict[str, Dict[str, Optional[float]]] = {}
+        for match_id, row_team_id, expected_goals in rows:
+            side = "for" if row_team_id == team_id else "against"
+            by_match.setdefault(match_id, {})[side] = expected_goals
+
+        return [
+            (by_match.get(m.id, {}).get("for"), by_match.get(m.id, {}).get("against"))
+            for m in matches
+        ]
+
     async def _get_team_xg(
         self,
         team_id: str,
         db: AsyncSession,
         matches: list,
     ) -> Optional[list]:
-        """Get xG values for team across matches."""
-        match_ids = [m.id for m in matches]
-        if not match_ids:
-            return None
-
-        query = select(MatchStats.expected_goals).where(
-            and_(
-                MatchStats.match_id.in_(match_ids),
-                MatchStats.team_id == team_id,
-                MatchStats.expected_goals.isnot(None),
-            )
-        )
-
-        result = await db.execute(query)
-        xg_values = result.scalars().all()
-        return list(xg_values) if xg_values else None
+        """Team xG across ``matches``, most-recent-first, or None if none exist."""
+        xg_values = [xg_for for xg_for, _ in await self._get_team_xg_series(team_id, db, matches) if xg_for is not None]
+        return xg_values or None
