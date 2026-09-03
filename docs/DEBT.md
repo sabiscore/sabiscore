@@ -309,13 +309,59 @@ shape as Finding 2, one layer further down: the corpus ingestion now runs, but
 nothing carries its output into the serving store. **The ordering is therefore
 forced** — populate `match_stats` from the corpus and give serving a leak-free
 rolling-xG projection matching training's `shift(1)`, window-5, `min_periods=3`
-semantics; *then* author the candidate schema. Two further items to settle
-before that write: `_get_team_xg()` issues its `SELECT` with **no `ORDER BY`**
-while the caller takes `[:5]`, so "the last five matches" is currently whatever
-order Postgres returns; and `promotion_evidence.py` is hardwired to
-`APEX_FEATURES_68` (`REPORT_SCHEMA`, the width check in `_stack_candidate_rows`,
-and the row-count check in the validator), so any wider schema needs it
-parameterised first.
+semantics; *then* author the candidate schema.
+
+### ✅ Serving-side half done (2026-09-03): the rolling projection exists, the corpus write-through does not
+
+The train/serve parity half of the forced ordering above is complete:
+
+- `feature_registry.rolling_xg_mean()` / `derive_xg_rolling_features()` — the
+  shift(1)/window-5/min_periods-3 rolling arithmetic, defined **once** and
+  called by both `scripts/measure_xg_feature_ate.py` (training/research) and
+  `UpcomingMatchFeatureProjector.project_xg_rolling_features()` (serving). A
+  cold-start side returns `None`, never a fabricated `0.0`.
+- `UpcomingMatchFeatureProjector.project_xg_rolling_features()` — the serving
+  projection itself. Returns `None` (a `DATA_GAP`) whenever either side falls
+  below `XG_ROLLING_MIN_PERIODS`, which is the honest answer for every fixture
+  today: `match_stats` still holds 0 rows in production.
+- **The `_get_team_xg()` `ORDER BY` bug named above is fixed**, not just
+  flagged. It never fired in production only because `match_stats` was always
+  empty; pinned by
+  `tests/unit/test_xg_rolling_parity.py::test_get_team_xg_series_orders_most_recent_first_regardless_of_insert_order`,
+  which seeds an older match *after* a newer one and asserts the series still
+  comes back newest-first. The three copies of the temporal leak-boundary
+  predicate (`_get_team_stats`, `_get_team_results_sequence`, and this new
+  projection) are now one function, `_completed_matches_before()` — three
+  copies of "matches strictly before kickoff" was three places a future edit
+  could diverge one from the others.
+- 10 tests in `test_xg_rolling_parity.py`, all passing; full regression run
+  across every test touching either file (150 tests) green; mypy: fixing the
+  two `None`-narrowing errors this change introduced left the local Windows
+  count at **765** (down from the pre-change baseline of 774), comfortably
+  under the 784 CI ceiling.
+
+**Still not done, and this PR does not attempt either:**
+
+1. **The corpus write-through itself.** No code carries the tracked Understat
+   corpus's xG into `match_stats`. `project_xg_rolling_features()` has nothing
+   to read until a backfill runs — writing `Match`/`MatchStats` rows requires
+   resolving Understat's team/match identifiers against the canonical
+   `teams`/`matches` tables (production has both `fd-team-epl:manchester_united_fc`
+   and `fdco-team-epl-man_city`-style ids from two different provider
+   lineages, so this is a real entity-resolution problem, not a straight
+   join). This is the actual "wire it up" work and is sized like Milestone 1,
+   not a follow-on to this PR.
+2. **`promotion_evidence.py` is still hardwired to `APEX_FEATURES_68`**
+   (`REPORT_SCHEMA`, the width check in `_stack_candidate_rows`, the row-count
+   check in the validator — 9 call sites total). Parameterising it needs its
+   own care: `REPORT_SCHEMA` is presently a module constant checked against
+   every stored report's `"schema"` field, so widening it touches the
+   validator's backward-compatibility contract with every historical report
+   on disk, not just new ones.
+
+Both remain prerequisites for items 1–2 of the schema-promotion directive.
+Authoring `apex_v2_71` before either exists still fails
+`serving_feature_availability` by construction — see the paragraph above.
 
 **Trigger to close:** `data/processed/v4_sources` holds real Understat artefacts
 for the five scoreable leagues across the seasons the football-data corpus

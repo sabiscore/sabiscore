@@ -531,6 +531,83 @@ def derive_last5_form_features(
     }
 
 
+# ── xG rolling family (candidate — NOT in any served schema) ─────────────────
+# The three features `scripts/measure_xg_feature_ate.py` measured as CAUSAL_DRIVER
+# on the real Understat corpus (ATE 0.2464 / 0.2169 / 0.1790, all p=0.0000).
+#
+# ⚠️ Deliberately absent from CANONICAL_FEATURES_*, APEX_FEATURES_* and
+# FEATURE_SCHEMA_VERSIONS. Adding a name to a served list changes the vector
+# width, which is the 2026-06-10 incident this file records at line 95: 65
+# columns emitted against 68-column artifacts, `model_version="fallback"` served
+# on every inference for two months. These names enter a schema only through a
+# new candidate feature-schema version that goes to the promotion gate with its
+# own artifacts, manifest and contract hash.
+#
+# They live here anyway, defined once, because training and serving must compute
+# them identically or the `serving_feature_availability` gate is measuring two
+# different things. `tests/unit/test_xg_rolling_parity.py` asserts the pandas
+# training path and this scalar serving path agree to float tolerance.
+PHASE9_FEATURES_XG: List[str] = [
+    "xg_differential",
+    "xg_attack_diff",
+    "xg_defense_diff",
+]
+
+# The rolling contract, named once so both sides cannot drift apart:
+# mean of the last XG_ROLLING_WINDOW matches strictly BEFORE kickoff, and only
+# when at least XG_ROLLING_MIN_PERIODS of them exist. Matches the
+# `shift(1).rolling(5, min_periods=3)` the ATE measurement used.
+XG_ROLLING_WINDOW = 5
+XG_ROLLING_MIN_PERIODS = 3
+
+
+def rolling_xg_mean(values: Sequence[Optional[float]]) -> Optional[float]:
+    """Mean of the most-recent ``XG_ROLLING_WINDOW`` observations, or None.
+
+    ``values`` must be ordered most-recent-first and contain only matches that
+    kicked off strictly before the target fixture — this function cannot check
+    either property, so its callers own the leak boundary.
+
+    Returns None rather than a registry default below the minimum-periods floor.
+    A cold-start team has no xG history; answering 0.0 would present unknown as
+    zero, which APEX section 26 forbids and which
+    `promotion_evidence._column_is_default_only()` would then read as a
+    defaulted training slot.
+    """
+    observed = [float(v) for v in values[:XG_ROLLING_WINDOW] if v is not None]
+    if len(observed) < XG_ROLLING_MIN_PERIODS:
+        return None
+    return sum(observed) / len(observed)
+
+
+def derive_xg_rolling_features(
+    *,
+    home_xg_for: Optional[float],
+    home_xg_against: Optional[float],
+    away_xg_for: Optional[float],
+    away_xg_against: Optional[float],
+) -> Optional[Dict[str, float]]:
+    """The three xG candidate features from four pre-match rolling means.
+
+    Every argument is a `rolling_xg_mean()` output for one side. Returns None if
+    any is None: the three features are all cross-team differences, so a single
+    cold-start side makes every one of them unanswerable. Partial credit here
+    would silently substitute one team's real form for the other's absence.
+    """
+    if (
+        home_xg_for is None
+        or home_xg_against is None
+        or away_xg_for is None
+        or away_xg_against is None
+    ):
+        return None
+    return {
+        "xg_differential": (home_xg_for - home_xg_against) - (away_xg_for - away_xg_against),
+        "xg_attack_diff": home_xg_for - away_xg_for,
+        "xg_defense_diff": away_xg_against - home_xg_against,
+    }
+
+
 # (canonical suffix, team-stats source suffix) for the goals/gd block. Both are
 # side-prefixed by the caller, so one table serves home and away.
 _GOALS_GD_KEY_MAP: Tuple[Tuple[str, str], ...] = (

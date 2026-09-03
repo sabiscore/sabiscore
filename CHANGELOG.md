@@ -5,6 +5,52 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Track the Understat corpus in git; give serving a leak-free xG rolling projection (2026-09-03)
+
+### Added
+
+- `backend/src/models/feature_registry.py` — `PHASE9_FEATURES_XG`,
+  `rolling_xg_mean()`, `derive_xg_rolling_features()`. The shift(1)/window-5/
+  min-periods-3 rolling arithmetic behind the three CAUSAL_DRIVER xG features
+  measured in the previous entry, defined once so training's research script
+  and serving's projection compute it identically rather than by convention.
+- `UpcomingMatchFeatureProjector.project_xg_rolling_features()` — the serving
+  half of that pair. Returns `None` (a `DATA_GAP`), never a fabricated `0.0`,
+  when either side lacks the minimum rolling history — which is every fixture
+  today, since `match_stats` holds 0 rows in production. See docs/DEBT.md item
+  56 Finding 5 for what still has to happen before this projection has
+  anything to read.
+- `tests/unit/test_understat_corpus_integrity.py` (38 tests) — the committed
+  corpus's row counts, checked against the counts its own acquisition
+  manifests recorded at fetch time; watched failing on a deliberately
+  truncated parquet before being trusted.
+- `tests/unit/test_xg_rolling_parity.py` (10 tests) — pure-math coverage for
+  the rolling functions above, plus the ORDER BY regression test below.
+
+### Fixed
+
+- `UpcomingMatchFeatureProjector._get_team_xg()` issued
+  `SELECT expected_goals WHERE match_id IN (...)` with **no `ORDER BY`**,
+  while its caller took `[:5]` believing it had the 5 most recent matches. Was
+  latent only because `match_stats` has never held a row in production;
+  replaced with `_get_team_xg_series()`, which follows the order of the
+  already-temporally-sorted match list its caller supplies rather than
+  whatever order Postgres returns. The three separate copies of "matches
+  strictly before kickoff" this touched (`_get_team_stats`,
+  `_get_team_results_sequence`, and the new xG projection) are now one
+  function, `_completed_matches_before()`.
+
+### Changed
+
+- `backend/data/processed/v4_sources/` (the 35-league-season Understat corpus
+  from the entry below) is now tracked in git — 2.4 MB, 70 parquet + 42 JSON.
+  It was gitignored and lived on one developer machine; neither CI nor any
+  future training run could reach it. `.gitattributes` declares `*.parquet`
+  binary so `* text=auto` cannot normalise a column-store file; soccerdata's
+  raw `.soccerdata/` HTTP cache (15 MB, six times the tracked corpus) stays
+  ignored, being library-internal and already re-fetched by the backfill
+  script on demand.
+
 ## Unreleased - Repair the never-executed Understat xG ingestion, acquire the first real corpus, and re-measure the proxy ATE the registry blocks on (2026-09-03)
 
 ### Fixed
