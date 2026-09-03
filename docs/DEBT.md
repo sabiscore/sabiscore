@@ -578,6 +578,26 @@ Finding 6's authorization-discipline reasoning is unchanged; what changed is
 that the number to build it against is now real (11,694 rows) rather than
 estimated.
 
+⚠️ **`_AUDITED_ALIASES` is shared by two different production call sites, not
+one — the first CI run of this PR caught the difference.** `resolve_team_id()`
+consults it directly; `market_identity_key()` (`odds_service.py`,
+`market_observation_service.py` — the live-market fixture matcher) also
+falls back to it via `_MARKET_ALIASES.get(...) or _AUDITED_ALIASES.get(...)
+or key`. Adding `("LIGUE_1", "nice"): "ogc nice"` for the corpus-resolution
+use case also changed market-matching: `test_shared_place_name_without_an_exact_key_fails_closed`
+fed abbreviated "Nice" specifically to prove a non-exact away key falls
+through to the ambiguity-prone permissive stage and re-triggers the Paris
+FC/PSG shared-place-name collision (item 40). With the alias in place, "Nice"
+becomes an exact away match, which is enough on its own for the home side's
+own exact match to disambiguate without ever reaching the permissive stage —
+a genuine market-matching accuracy improvement, not a bug, since a live feed
+sending bare "Nice" really does mean OGC Nice unambiguously. The test was
+updated to a substitute pairing (`RC Strasbourg Alsace` / `Strasbourg`, no
+alias, still permissive-stage-only) that keeps proving the same underlying
+property. **Lesson for the next alias added to this table:** check it against
+`test_odds_team_identity.py` too, not only the `resolve_team_id()` caller
+suite — this file's targeted regression list originally missed it.
+
 **Blast radius:** `resolve_team_id()` is shared, heavily-depended-on
 infrastructure (fixture sync, orphan-team repair, this manifest). The
 reordering was verified against every existing caller's test suite (67

@@ -44,6 +44,18 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   RasenBallsport Leipzig/FC Cologne (BUNDESLIGA). These were the entire set
   of `TEAM_UNRESOLVED` names in a real review run — not a sample.
 
+### Found (CI, mid-PR)
+
+`_AUDITED_ALIASES` is shared by `resolve_team_id()` *and* the live-market
+fixture matcher (`market_identity_key()`, via `odds_service.py` /
+`market_observation_service.py`). Adding the "Nice" alias also changed
+market-matching behavior, correctly resolving a fixture
+`test_shared_place_name_without_an_exact_key_fails_closed` had deliberately
+kept ambiguous to exercise a different property (the Paris FC/PSG
+shared-place-name collision, item 40). Test updated to a substitute pairing
+with no alias coverage so it keeps testing that property honestly. See
+DEBT.md Finding 7 for the full trace and the lesson for future aliases.
+
 ### Found (docs/DEBT.md item 56, Finding 7)
 
 A real review run against `sabiscore-db-v3` (not an estimate) measured
