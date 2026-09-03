@@ -1,5 +1,5 @@
 #!/bin/bash
-# teammate-idle-nudge.sh — TeammateIdle gate, registered in settings.json.
+# teammate-idle-nudge.sh — TeammateIdle gate, when configured in settings.json.
 #
 # Same confidence note as task-hygiene-gate.sh: the exact fields for
 # determining "does this teammate have unclaimed dependent work" weren't
@@ -16,8 +16,13 @@ if [ "$REQUIRE_EXPLICIT_HANDOFF" != "1" ]; then
   exit 0
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "teammate-idle-nudge: jq is unavailable; allowing hook to fail open." >&2
+  exit 0
+fi
+
 INPUT=$(cat)
 AGENT=$(echo "$INPUT" | jq -r '.agent_type // .agent_id // "teammate"')
 
-echo "Before going idle, confirm you've either marked your task complete via TaskUpdate or sent a status message to the lead. If neither is true, keep working." >&2
+echo "[$AGENT] Before going idle, confirm you've either marked your task complete via TaskUpdate or sent a status message to the lead. If neither is true, keep working." >&2
 exit 2

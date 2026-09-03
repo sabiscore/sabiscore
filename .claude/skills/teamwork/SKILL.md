@@ -69,4 +69,5 @@ don't leave them running.
 ## Activation
 
 Manual only: `/teamwork <task description>`. Not auto-triggered — see
-`disable-model-invocation` in the frontmatter and the cost note in `SETUP.md`.
+`disable-model-invocation` in the frontmatter and the cost note in the
+repository's team configuration.

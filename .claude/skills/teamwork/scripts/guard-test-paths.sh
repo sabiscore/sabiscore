@@ -1,5 +1,5 @@
 #!/bin/bash
-# guard-test-paths.sh — global PreToolUse gate, registered in settings.json.
+# guard-test-paths.sh — global PreToolUse gate, when configured in settings.json.
 #
 # Confirmed fields: `agent_type` (common hook input field, present when the
 # hook fires inside a subagent/teammate) and `tool_input.file_path` (directly
@@ -7,6 +7,11 @@
 # script only restricts the qa-verifier role; every other agent (lead,
 # architect, implementer, debugger) passes through untouched.
 set -euo pipefail
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "guard-test-paths: jq is unavailable; allowing hook to fail open." >&2
+  exit 0
+fi
 
 INPUT=$(cat)
 AGENT_TYPE=$(echo "$INPUT" | jq -r '.agent_type // empty')

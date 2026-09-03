@@ -1,5 +1,5 @@
 #!/bin/bash
-# task-hygiene-gate.sh — TaskCreated / TaskCompleted gate, registered in
+# task-hygiene-gate.sh — TaskCreated / TaskCompleted gate, when configured in
 # settings.json.
 #
 # CONFIDENCE NOTE: the common hook input fields (session_id, cwd,
@@ -12,6 +12,11 @@
 # run `claude --debug`, trigger a real TaskCreated/TaskCompleted event, read
 # the actual JSON from the debug log, then tighten the jq path below.
 set -euo pipefail
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "task-hygiene-gate: jq is unavailable; allowing hook to fail open." >&2
+  exit 0
+fi
 
 INPUT=$(cat)
 EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
