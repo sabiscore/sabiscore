@@ -363,6 +363,104 @@ Both remain prerequisites for items 1–2 of the schema-promotion directive.
 Authoring `apex_v2_71` before either exists still fails
 `serving_feature_availability` by construction — see the paragraph above.
 
+### ⭐ Finding 6 — the review-only backfill manifest exists; production probing found a pre-existing team-identity defect that bounds it (2026-09-03)
+
+`understat_match_stats_reconciliation_service.py` /
+`scripts/review_understat_match_stats_backfill.py` build a read-only manifest
+resolving every corpus row to (`home_team_id`, `away_team_id`, `match_id`) or
+an explicit `TEAM_UNRESOLVED` / `MATCH_UNRESOLVED` / `MATCH_AMBIGUOUS` reason.
+No `--apply` mode exists yet — see below.
+
+Entity resolution reuses `team_identity.resolve_team_id()` verbatim (the exact
+function `fixture_sync_service` and the orphan-team-repair manifest both
+call). **No second team-name normalizer was written**, per this file's own
+standing prohibition (Finding 3 of a different item, and three prior
+production incidents). Match resolution is a direct `(home_team_id,
+away_team_id, match_date ± 36h)` lookup — no fuzzy scoring needed once both
+sides are already canonical IDs.
+
+⚠️ **Before trusting a review-mode number, production was probed directly**
+(read-only, `sabiscore-db-v3`) rather than assumed, and it surfaced a real
+defect in `resolve_team_id()` itself — pre-existing, not introduced by this
+work, and out of scope to fix here:
+
+```sql
+-- EPL teams table carries two provider-lineage id schemes for the same club:
+fd-team-epl:manchester_city_fc  "Manchester City FC"   2 matches, 2 Elo rows
+fdco-team-epl-man_city          "Man City"           267 matches, 266 Elo rows
+fd-team-epl:newcastle_united_fc "Newcastle United FC"   1 match,  1 Elo row
+fdco-team-epl-newcastle         "Newcastle"          268 matches, 267 Elo rows
+```
+
+`resolve_team_id("Manchester City", ..., require_elo_history=True)` returns
+the **wrong** id. Trace: no exact-name match; the affix-strip stage reduces
+"Manchester City FC" → "Manchester City", matching the input exactly, and
+returns immediately — before the audited-alias stage (which already contains
+`("EPL", "manchester city"): "man city"`, added for a different call site)
+ever runs. `require_elo_history=True` does not save it: that gate excludes a
+candidate only at **zero** Elo rows, and this near-orphaned duplicate has 2,
+not 0. The identical trace applies to "Newcastle United" against
+"Newcastle United FC" — no audited alias for this pair exists at all.
+Brighton, by contrast, resolves correctly by pure luck: Understat's own name
+"Brighton" is an *exact* string match for the high-usage row's display name,
+so exact-match wins before affix-stripping ever runs.
+
+A broader probe (`match_count < 15` across LA_LIGA/SERIE_A/BUNDESLIGA/LIGUE_1)
+found the same low-but-nonzero-usage duplicate pattern is **systemic across
+every league**, not an EPL quirk — FC Barcelona, Paris Saint-Germain, AS Roma,
+SS Lazio, and others each carry a near-orphaned `fd-team-*:` duplicate
+alongside their real, high-usage row. Bundesliga's mojibake orphans
+(`fc_bayern_m??nchen`, `borussia_m??nchengladbach`, both **0** matches) are the
+one variant that *is* already handled correctly: zero Elo rows means
+`require_elo_history=True` excludes them, so the existing audited aliases for
+Bayern/M'gladbach/Frankfurt/Hamburg do fire as designed. The dangerous case is
+specifically nonzero-but-small — enough to survive the Elo-history gate, not
+enough to be the club's real identity.
+
+**This does not corrupt anything.** The failure mode is fail-closed
+under-coverage, not silent misattribution: `_resolve_match_id()` looks up
+`Match` rows by exact resolved `team_id`, and a near-orphaned duplicate has
+almost no real matches to find — so affected fixtures surface as
+`MATCH_UNRESOLVED` in the manifest, never a match written against the wrong
+team. Confirmed by `test_two_candidate_matches_in_window_is_ambiguous_not_guessed`
+and its `TEAM_UNRESOLVED` sibling in the new test suite: ambiguity and
+misresolution both fail closed, they do not fabricate a write.
+
+**What this bounds, honestly:** a real review run against production will
+undercount Manchester City, Newcastle, and — pending the same check against
+the other four leagues — an unknown-but-nonzero number of additional clubs,
+until `resolve_team_id()`'s stage ordering (or the affected duplicate rows
+themselves) is fixed separately. That is shared, heavily-depended-on
+infrastructure (fixture sync, orphan-team repair, this manifest all call it);
+reordering its resolution stages is its own careful, fully-regression-tested
+change, not a corollary of this PR.
+
+⚠️ **`/code-review` caught a real bug before this ever reached Postgres:**
+`_resolve_match_id` bound a tz-aware `kickoff` window directly against
+`Match.match_date` (a naive `TIMESTAMP WITHOUT TIME ZONE` column) — the exact,
+repeatedly-documented asyncpg `DataError` trap already fixed at
+`upcoming_match_feature_service.py:230` and
+`notification_dispatch_service._now_naive_utc()`. Every one of this module's
+own tests passed anyway, because they run on `sqlite+aiosqlite`, which accepts
+either. Since `review_understat_match_stats_backfill.py` refuses to run
+against anything but PostgreSQL, this would have failed on literally the first
+row of the first real review run — a defect the test suite was structurally
+incapable of catching on its own. Fixed by extracting the windowing into its
+own pure `_kickoff_window()` function, unit-tested directly for
+`tzinfo is None` without needing a live Postgres connection. Left as a
+standing note: any future datetime bound against `Match.match_date` in this
+codebase needs the same manual check — SQLite will not do it for you.
+
+**Still not built, deliberately:** the `--apply` write path. The orphan-team
+identity repair script (`scripts/repair_orphan_team_identities.py`)
+establishes the house pattern for a script that writes production identity
+data — reviewed-manifest-hash gate, explicit `--authorization-id`, a literal
+confirmation token, re-validation of each row's exact pre-state under
+write-conflict locks, single commit after postconditions pass. `--apply` for
+`match_stats` should follow that pattern once a real review run's numbers are
+in hand; building it against a hypothetical resolution rate would be
+guessing at the one thing this Finding exists to measure honestly.
+
 **Trigger to close:** `data/processed/v4_sources` holds real Understat artefacts
 for the five scoreable leagues across the seasons the football-data corpus
 already covers (2019/20 through 2025/26), with manifests, and they have been
