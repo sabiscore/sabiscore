@@ -157,10 +157,20 @@ def test_shared_place_name_without_an_exact_key_fails_closed() -> None:
 
     This is the residual exposure of subset comparison, and the honest outcome
     is an unpriced fixture rather than a fixture priced off the wrong market.
+
+    The away side uses "Strasbourg" against the stored "RC Strasbourg Alsace"
+    -- deliberately not "Nice" against "OGC Nice" (the original pairing): once
+    docs/DEBT.md item 56 Finding 7 added an audited alias for bare "Nice",
+    that pairing resolves via the alias exact-matching the away side too and
+    genuinely stops being ambiguous, which is a correct market-matching
+    outcome, not a bug. "Strasbourg" has no alias entry and legitimately
+    still needs the permissive stage (its legal name inserts "Alsace"), so it
+    keeps testing the same property: an exact home match alone is not enough
+    while the away side is only ever a subset match.
     """
-    paris_fc = _Fixture("Paris FC", "OGC Nice")
-    psg = _Fixture("Paris Saint-Germain", "OGC Nice")
-    match, ambiguous = _resolve([psg, paris_fc], "Paris FC", "Nice", "LIGUE_1")
+    paris_fc = _Fixture("Paris FC", "RC Strasbourg Alsace")
+    psg = _Fixture("Paris Saint-Germain", "RC Strasbourg Alsace")
+    match, ambiguous = _resolve([psg, paris_fc], "Paris FC", "Strasbourg", "LIGUE_1")
     assert match is None
     assert ambiguous is True
 
