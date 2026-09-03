@@ -477,6 +477,121 @@ untouched.
 
 ---
 
+### ⭐ Finding 7 — `resolve_team_id()`'s stage-ordering defect fixed; a real review run measured the actual coverage; `promotion_evidence.py`'s second prerequisite cleared (2026-09-03)
+
+With `DATABASE_URL` available this session, Finding 6's defect was fixed and
+the review script run for real against `sabiscore-db-v3`, rather than
+estimated.
+
+**The fix.** `resolve_team_id()` now checks `_AUDITED_ALIASES` immediately
+after an exact-name match, *before* affix-stripping — not after it, as
+Finding 6 found. Affix-stripping a near-orphaned duplicate's full legal name
+("Manchester City FC" → "Manchester City") produces an exact string match
+against the resolver's own normalization of the input, so the alias — an
+explicit human identity assertion — has to outrank that heuristic, the same
+way the existing code already made it outrank containment for Paris SG/Paris
+FC. Nine regression tests cover this (`test_team_identity.py`,
+`test_understat_match_stats_reconciliation.py`), including one that keeps a
+synthetic near-orphan pair with **no** alias entry to prove the fail-closed
+behavior survives for clubs an alias doesn't (yet) cover.
+
+**A real review run, not an estimate.** Before the fix: 9,255 `READY` /
+2,532 `TEAM_UNRESOLVED` / 672 `MATCH_UNRESOLVED` of 12,459 corpus rows
+(74.3% ready). The `TEAM_UNRESOLVED` sample turned out to be exactly **12**
+unique `(league, name)` pairs behind all 2,532 rows — not a long tail, a
+short, enumerable list, each independently confirmed against production
+before being asserted as a new `_AUDITED_ALIASES` entry:
+
+```text
+EPL         Wolverhampton Wanderers -> Wolves
+EPL         West Bromwich Albion    -> West Brom
+LA_LIGA     Celta Vigo              -> Celta de Vigo        ("de" breaks containment)
+LA_LIGA     Atletico Madrid         -> Club Atlético de Madrid (same "de"-in-the-middle shape)
+SERIE_A     Inter                   -> Internazionale Milano
+LIGUE_1     Lyon                    -> Olympique Lyonnais    (4 chars, below containment's 5-char floor)
+LIGUE_1     Brest                   -> Brestois
+LIGUE_1     Nice                    -> OGC Nice
+LIGUE_1     Lens                    -> Racing Club de Lens
+LIGUE_1     Saint-Etienne           -> St Etienne
+BUNDESLIGA  RasenBallsport Leipzig  -> RB Leipzig
+BUNDESLIGA  FC Cologne              -> FC Koln               (anglicized vs. transliterated spelling)
+```
+
+After both fixes, a second real review run: **11,694 `READY`** / **0**
+`TEAM_UNRESOLVED` / 765 `MATCH_UNRESOLVED` of the same 12,459 rows — **93.9%
+ready**, up from 74.3%. `TEAM_UNRESOLVED` is not reduced, it is exactly zero.
+Manifest SHA-256 for this run: `11e10486fbea3a1fc6288c8eb7aa2ee59999242cfc7f92b3534cf378ebc221ab`.
+
+**What the remaining 765 `MATCH_UNRESOLVED` rows are, honestly.** Sampling
+them shows a different, already-understood shape — not a team-identity bug.
+They cluster heavily in the 2019/2020 season and involve clubs whose
+canonical `matches` table history is itself thin (FC Barcelona: 14 matches;
+Paris Saint-Germain: 5; AC Milan: 17 — see Finding 6's production dump). The
+team side resolves correctly on both sides; there is simply no `Match` row
+in the `± 36h` kickoff window for that fixture yet. Closing this further
+means backfilling `matches` for these clubs' early seasons, a fixture-sync
+gap, not a team-identity one — separate scope, not opened here.
+
+**A second, real robustness bug found by actually running this against
+production**, not by inspection: the first real review run died mid-way
+through with `asyncpg.exceptions.ConnectionDoesNotExistError: connection was
+closed in the middle of operation`. The review issued one `SELECT` per
+corpus row for match resolution — ~12,459 sequential round trips over the
+WAN to Render's Postgres, all inside one long-lived session — and the
+connection was reset partway through purely from holding it open across that
+many round trips, nothing else. Fixed by prefetching the full `matches` table
+for the corpus's leagues once (`_load_match_index`, a handful of queries)
+and resolving every row against the in-memory index instead — round trips
+dropped from ~12,459 to about 6. The second run (pre-alias-fix) completed
+cleanly; both post-fix runs above did too.
+
+**`promotion_evidence.py`'s hardwiring, the other named prerequisite,
+cleared.** All 9 call sites that assumed the candidate contract is always
+`APEX_FEATURES_68` now take an explicit `candidate_features` parameter
+(`build_promotion_feature_evidence`, `validate_promotion_feature_evidence`),
+defaulting to `APEX_FEATURES_68` for exact backward compatibility with both
+existing callers (`generate_feature_availability_matrix.py`,
+`compare_candidate_vs_incumbent.py`) and all 8 pre-existing tests, which pass
+unchanged. This was not cosmetic: before this fix, evaluating a candidate
+*wider* than whatever is currently active in production — e.g. a 71-feature
+schema adding `xg_differential`/`xg_attack_diff`/`xg_defense_diff` to the
+68-feature base, exactly what this directive's next step requires — indexed
+`serving_contract[index]` past the end of the (68-wide) list and raised
+`IndexError` before any evidence could even be built. `_serving_feature_at()`
+now returns `None` past the end of the serving contract instead, which
+`_classification()` already treats as `SCHEMA_MISMATCH` (mechanically true:
+a feature the current schema has never heard of cannot align with it). A new
+regression test, `test_candidate_wider_than_active_serving_contract_does_not_crash`,
+pins exactly this shape.
+
+**What remains for candidate schema promotion, honestly:** the two named
+prerequisites (this Finding, and Finding 6's identity defect) are both now
+closed. What is *not* done here: no `apex_v2_71`-style candidate schema has
+been authored, registered in `FEATURE_SCHEMA_VERSIONS`, trained, or compared
+against the incumbent via `compare_candidate_vs_incumbent.py` — that is a
+`train_on_real_matches.py`-level pipeline change (computing the three xG
+rolling features per training row) with its own scope, deliberately not
+started as a rider on this fix.
+
+**Still not built, deliberately:** the `match_stats` `--apply` write path.
+Finding 6's authorization-discipline reasoning is unchanged; what changed is
+that the number to build it against is now real (11,694 rows) rather than
+estimated.
+
+**Blast radius:** `resolve_team_id()` is shared, heavily-depended-on
+infrastructure (fixture sync, orphan-team repair, this manifest). The
+reordering was verified against every existing caller's test suite (67
+tests across `test_team_identity.py`, `test_understat_match_stats_reconciliation.py`,
+`test_team_identity_containment_collisions.py`, `test_fixture_sync.py`,
+`test_orphan_team_reconciliation_service.py`, `test_provider_elo_identity_bridge.py`,
+`test_fixture_sync_identity.py`) plus 12 new alias entries — all pass
+unchanged or as newly asserted. `promotion_evidence.py`'s change is additive
+and backward-compatible by construction (optional parameter, same default).
+mypy: 766 errors — unchanged from Finding 6, comfortably under the 784 CI
+ceiling.
+
+---
+
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
 
 **Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.

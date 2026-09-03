@@ -68,7 +68,28 @@ _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     # committed CSVs across all seven seasons before being asserted here.
     ("BUNDESLIGA", "eintracht frankfurt"): "ein frankfurt",
     ("BUNDESLIGA", "hamburger sv"): "hamburg",
+    # 12 entries below (interspersed by league to match this dict's existing
+    # grouping), from docs/DEBT.md item 56 Finding 7: a real review run of
+    # the full tracked Understat corpus against sabiscore-db-v3 on
+    # 2026-09-03 found these were the ENTIRE set of TEAM_UNRESOLVED
+    # (league, name) pairs across all 12,459 rows, accounting for all 2,532
+    # unresolved rows. Each target was confirmed present with substantial
+    # real match/Elo history (138-520 rows) via read-only production SQL
+    # before being asserted; none is a guess.
+    ("BUNDESLIGA", "rasenballsport leipzig"): "rb leipzig",
+    ("BUNDESLIGA", "cologne"): "koln",  # Understat anglicizes; the corpus row is German-transliterated
     ("EPL", "manchester city"): "man city",
+    # Same shape as Manchester City below: fdco-team-epl-newcastle carries 268
+    # real matches / 267 Elo rows; fd-team-epl:newcastle_united_fc is a
+    # near-orphaned duplicate with exactly 1 of each. Understat's corpus
+    # writes the full "Newcastle United", which affix-strips to an exact
+    # match against the near-orphan's "Newcastle United FC" before this
+    # alias stage used to run. Verified against sabiscore-db-v3 2026-09-03.
+    ("EPL", "newcastle united"): "newcastle",
+    ("EPL", "wolverhampton wanderers"): "wolves",
+    ("EPL", "west bromwich albion"): "west brom",
+    ("LA_LIGA", "celta vigo"): "celta de vigo",  # "de" breaks containment's contiguous-substring check
+    ("LA_LIGA", "atletico madrid"): "club atletico de madrid",  # same "de"-in-the-middle shape
     ("LIGUE_1", "rennais"): "rennes",
     # Paris FC and Paris SG are two genuinely different clubs that both appear
     # in the Ligue 1 corpus. `_identity_key` reduces "Paris FC" to the bare
@@ -80,6 +101,12 @@ _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     # in seasons when Paris FC was in Ligue 2. Asserting the identity here is
     # what stops the heuristic from guessing. See docs/DEBT.md item 40.
     ("LIGUE_1", "paris sg"): "paris saint germain",
+    ("LIGUE_1", "lyon"): "olympique lyonnais",
+    ("LIGUE_1", "brest"): "brestois",
+    ("LIGUE_1", "nice"): "ogc nice",
+    ("LIGUE_1", "lens"): "racing club de lens",
+    ("LIGUE_1", "saint etienne"): "st etienne",
+    ("SERIE_A", "inter"): "internazionale milano",
 }
 
 
@@ -417,6 +444,36 @@ async def resolve_team_id(
     if exact:
         return exact
 
+    identity_key = _identity_key(name)
+
+    # An audited alias is an explicit human identity assertion, so it must
+    # outrank every heuristic below it -- including affix-stripping, not only
+    # containment. This ordering is load-bearing, not cosmetic: production
+    # carries a near-orphaned duplicate Team row for several clubs (e.g.
+    # "Manchester City FC" / "Newcastle United FC", each with 1-2 real
+    # matches) alongside the real historical row ("Man City" / "Newcastle",
+    # 267+ matches). Affix-stripping the full legal name lands on an EXACT
+    # match against the near-orphan's decorated spelling -- "Manchester City
+    # FC" strips to "Manchester City", "Newcastle United FC" strips to
+    # "Newcastle United" -- so the affix stage used to resolve to the
+    # near-orphan before this alias was ever consulted. Checking the alias
+    # immediately after the true-exact stage (and before affix-stripping)
+    # closes that window. Verified against sabiscore-db-v3 2026-09-03.
+    #
+    # "Paris SG" reduces to `paris sg`, which contains the bare place name
+    # `paris` that "Paris FC" reduces to, so containment would otherwise
+    # resolve PSG to a different real club before the alias was ever
+    # consulted. Verified by reverting only this block, with the alias left
+    # in place: the Paris regression test goes red.
+    #
+    # An alias that names a target we cannot find fails CLOSED rather than
+    # falling through: the assertion says this name means one specific
+    # club, so when that club is absent the honest answer is "unresolved",
+    # never "let the next heuristic guess".
+    if identity_key and league_id and (league_id, identity_key) in _AUDITED_ALIASES:
+        alias_target = _AUDITED_ALIASES[(league_id, identity_key)]
+        return _unique_match(rows, lambda row_name: _identity_key(row_name) == alias_target)
+
     normalized_affix = _strip_affixes(name).lower()
     affix = _unique_match(
         rows,
@@ -425,41 +482,10 @@ async def resolve_team_id(
     if affix:
         return affix
 
-    identity_key = _identity_key(name)
     if identity_key:
         deterministic = _unique_match(rows, lambda row_name: _identity_key(row_name) == identity_key)
         if deterministic:
             return deterministic
-
-        # An audited alias is an explicit human identity assertion, so it must
-        # outrank every heuristic below it -- including containment. This
-        # ordering is load-bearing, not cosmetic: "Paris SG" reduces to
-        # `paris sg`, which contains the bare place name `paris` that
-        # "Paris FC" reduces to, so containment would otherwise resolve PSG to
-        # a different real club before the alias was ever consulted.
-        #
-        # An alias that names a target we cannot find fails CLOSED rather than
-        # falling through: the assertion says this name means one specific
-        # club, so when that club is absent the honest answer is "unresolved",
-        # never "let the next heuristic guess".
-        # An audited alias is an explicit human identity assertion, so it must
-        # outrank every heuristic below it -- including containment. This
-        # ordering is load-bearing, not cosmetic: "Paris SG" reduces to
-        # `paris sg`, which contains the bare place name `paris` that
-        # "Paris FC" reduces to, so containment would otherwise resolve PSG to
-        # a different real club before the alias was ever consulted. Verified
-        # by reverting only this block, with the alias left in place: the
-        # Paris regression test goes red.
-        #
-        # An alias that names a target we cannot find fails CLOSED rather than
-        # falling through: the assertion says this name means one specific
-        # club, so when that club is absent the honest answer is "unresolved",
-        # never "let the next heuristic guess".
-        if league_id and (league_id, identity_key) in _AUDITED_ALIASES:
-            alias_target = _AUDITED_ALIASES[(league_id, identity_key)]
-            return _unique_match(
-                rows, lambda row_name: _identity_key(row_name) == alias_target
-            )
 
         # Safe containment handles long official names such as
         # ``Brighton & Hove Albion FC`` vs historical ``Brighton``. Ambiguity

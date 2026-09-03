@@ -119,6 +119,39 @@ def test_serving_comparison_follows_the_active_schema(monkeypatch) -> None:
     assert apex["candidate_contract_hash"] == apex["serving_contract_hash"]
 
 
+def test_candidate_wider_than_active_serving_contract_does_not_crash() -> None:
+    """docs/DEBT.md item 56 Finding 5's second prerequisite: promotion_evidence
+    was hardwired to APEX_FEATURES_68 in 9 call sites, so any candidate wider
+    than what is currently active in production (e.g. a 71-feature xG
+    candidate against today's 68-wide serving contract) indexed past the end
+    of ``serving_contract`` and raised IndexError before evidence could even
+    be built — this is exactly the shape the original 'author a wider
+    candidate schema' step needs to exercise.
+    """
+    candidate = [*APEX_FEATURES_68, "xg_differential", "xg_attack_diff", "xg_defense_diff"]
+    width = len(candidate)
+    dataset = {
+        "EPL": {
+            "X": [np.linspace(0.0, 1.0, width, dtype=np.float64).tolist()],
+            "X_incumbent": [],
+            "y": [0],
+            "seasons": ["2526"],
+            "dates": [],
+        }
+    }
+
+    report = build_promotion_feature_evidence(dataset, candidate_features=candidate)
+
+    assert len(report["features"]) == width
+    # The three new positions have nothing on the (68-wide) serving side.
+    for row in report["features"][-3:]:
+        assert row["serving_feature"] is None
+        assert row["classification"] == "SCHEMA_MISMATCH"
+        assert row["candidate_position_matches_current_serving_schema"] is False
+    assert report["promotion_gate"] == "FAIL"
+    assert validate_promotion_feature_evidence(report, candidate_features=candidate) is report
+
+
 def test_serving_contract_falls_back_to_legacy_when_unresolvable(monkeypatch) -> None:
     """Serving's own fallback is phase7_68; the gate must describe that, not raise."""
     import src.models.promotion_evidence as pe
