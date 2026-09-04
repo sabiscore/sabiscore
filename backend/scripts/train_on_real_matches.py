@@ -36,8 +36,13 @@ So this script computes exactly the feature set
     = mean over the newest 5,
   * real integer ``wins_5`` / ``draws_5`` / ``losses_5`` counts.
 
-Every other canonical slot is written as its registry default — identical to
-what serving supplies — so the learners cannot attach weight to it.
+docs/DEBT.md item 56: h2h, home-venue, and market-interaction (13 slots —
+``derive_h2h_features``/``derive_home_venue_features``/
+``derive_market_interaction_features``, walk-forward state on ``TeamHistory``)
+and Elo (docs/DEBT.md item 48, ``compute_elo_training_columns``) are likewise
+real, mirroring their own serving computations exactly. Every remaining
+canonical slot is written as its registry default — identical to what serving
+supplies for those — so the learners cannot attach weight to it.
 
 NO LEAKAGE
 ----------
@@ -97,6 +102,15 @@ derive_league_features = _FEATURE_REGISTRY.derive_league_features
 derive_apex_market_features = _FEATURE_REGISTRY.derive_apex_market_features
 derive_market_features = _FEATURE_REGISTRY.derive_market_features
 derive_temporal_features = _FEATURE_REGISTRY.derive_temporal_features
+# docs/DEBT.md item 56 / PRODUCTION_EXECUTIVE_DIRECTIVE.md §2/§5 Phase 2 — the
+# h2h/venue/interaction family. Formulas live in feature_registry so training
+# and serving (upcoming_match_feature_service.py) compute them identically;
+# TeamHistory below owns only the walk-forward state.
+H2H_WINDOW = _FEATURE_REGISTRY.H2H_WINDOW
+HOME_VENUE_WINDOW = _FEATURE_REGISTRY.HOME_VENUE_WINDOW
+derive_h2h_features = _FEATURE_REGISTRY.derive_h2h_features
+derive_home_venue_features = _FEATURE_REGISTRY.derive_home_venue_features
+derive_market_interaction_features = _FEATURE_REGISTRY.derive_market_interaction_features
 
 # src/features/ is free of database imports at module scope (market.py and
 # match_context.py guard theirs behind TYPE_CHECKING), so this is a plain import
@@ -158,6 +172,13 @@ _SCHEMAS: Dict[str, str] = {
     "apex_v1_68": "v5_phase7",
     "apex_v1_89": "v6_phase8",
     "apex_v2_71": "v7_xg71",
+    # Same 68-column contract as apex_v1_68 (feature_registry.py:
+    # FEATURE_SCHEMA_VERSIONS["apex_v3_68"] is the identical object as
+    # ["apex_v1_68"]) — this key exists only so a run that now varies the 13
+    # h2h/venue/interaction slots writes its own *_v8_dense68.pkl artifacts
+    # rather than overwriting the checked-in apex_v1_68 baseline Phase 3
+    # compares against.
+    "apex_v3_68": "v8_dense68",
 }
 _DEFAULT_SCHEMA = "apex_v1_68"
 
@@ -173,7 +194,7 @@ def _schema_features(schema: str) -> List[str]:
     the original object, so the guard would report clean against a corrupted
     contract — the guard testing itself rather than the schema.
     """
-    if schema == "apex_v1_68":
+    if schema in ("apex_v1_68", "apex_v3_68"):
         return APEX_FEATURES_68
     if schema == "apex_v1_89":
         return APEX_FEATURES_89
@@ -187,25 +208,33 @@ def _schema_for(schema: str) -> Tuple[List[str], str]:
     return _schema_features(schema), _SCHEMAS[schema]
 
 
-def _schema_version_for(feature_names: Sequence[str]) -> str:
-    """The declared schema version for an exact column list.
+def _schema_version_for(schema: str, feature_names: Sequence[str]) -> str:
+    """Validate, then return, the caller's own declared schema version.
 
-    Derived from the columns themselves rather than formatted from their count.
-    A width-based `f"apex_v1_{len(feature_names)}"` cannot distinguish two
-    71-wide contracts and would happily stamp an unregistered string onto a
-    real artifact -- `resolve_feature_schema` then raises at serving time, and
-    `prediction.py` answers a schema failure with `_fallback_result()` rather
-    than an error. That combination is how a mislabelled generation serves
-    fallback probabilities while the API reports a confident schema.
+    ⚠️ Was content-matching `feature_names` against every registered contract
+    and returning the first hit — correct while every registered contract had
+    a distinct column list, but apex_v3_68 registers the SAME 68-name list as
+    apex_v1_68 (docs/DEBT.md item 56: two schemas can share a contract while
+    differing in which slots training actually varied). Content-matching would
+    therefore always resolve to whichever of the two appears first in
+    `_SCHEMAS`'s insertion order, silently mislabelling every apex_v3_68
+    artifact as apex_v1_68 regardless of what was actually requested — the
+    exact fallback-serving-under-a-confident-wrong-label failure this
+    function's own docstring already warns about, just from the opposite
+    direction. The caller already knows which schema it asked for; this now
+    only confirms `feature_names` actually matches that schema's registered
+    contract (catching a mismatched pair) rather than re-deriving the answer
+    from columns that no longer uniquely determine it.
     """
-    wanted = list(feature_names)
-    for version in _SCHEMAS:
-        if wanted == list(_schema_features(version)):
-            return version
-    raise ValueError(
-        f"feature_names ({len(wanted)} columns) matches no registered schema in "
-        f"{sorted(_SCHEMAS)} -- refusing to stamp an undeclared version"
-    )
+    if schema not in _SCHEMAS:
+        raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
+    if list(feature_names) != list(_schema_features(schema)):
+        raise ValueError(
+            f"feature_names ({len(list(feature_names))} columns) does not match "
+            f"the registered contract for schema {schema!r} -- refusing to stamp "
+            "a mismatched version"
+        )
+    return schema
 
 
 # Serving reads the newest 20 finished matches and derives its last-5 window
@@ -218,11 +247,33 @@ _MIN_HISTORY = 5
 
 
 class TeamHistory:
-    """Rolling per-team result history, appended strictly in date order."""
+    """Rolling per-team result history, appended strictly in date order.
+
+    Keyed per-league (one instance per `histories[league]` in build_dataset),
+    same approximation _by_team already makes for form: serving's h2h/venue
+    queries have no league boundary, but the training corpus is organized
+    per-league from separate football-data.co.uk files, so a genuinely
+    cross-league meeting cannot be reconstructed here. Reported, not hidden —
+    see the Phase 2 evaluation report.
+    """
 
     def __init__(self) -> None:
         self._by_team: Dict[str, Deque[Tuple[int, int]]] = defaultdict(
             lambda: deque(maxlen=_HISTORY_WINDOW)
+        )
+        # docs/DEBT.md item 56: h2h/venue/interaction family. Two more
+        # keyed-deque accumulators over data already in this loop — no
+        # separate replay module, unlike Elo/xG, which need cross-verification
+        # or an external corpus.
+        self._home_venue: Dict[str, Deque[Tuple[int, int]]] = defaultdict(
+            lambda: deque(maxlen=HOME_VENUE_WINDOW)
+        )
+        # Keyed by the SORTED pair (order-independent, mirroring
+        # _get_h2h_stats()'s OR-both-orientations query); each stored entry
+        # keeps which side hosted THAT meeting so a read can flip perspective
+        # onto whichever team is home in the CURRENT fixture.
+        self._h2h: Dict[Tuple[str, str], Deque[Tuple[str, int, int]]] = defaultdict(
+            lambda: deque(maxlen=H2H_WINDOW)
         )
 
     def stats(self, team: str, *, is_home: bool) -> Optional[Dict[str, float]]:
@@ -253,6 +304,38 @@ class TeamHistory:
 
     def append(self, team: str, goals_for: int, goals_against: int) -> None:
         self._by_team[team].append((goals_for, goals_against))
+
+    def h2h(self, home: str, away: str) -> Optional[Dict[str, float]]:
+        """Last H2H_WINDOW meetings between this pair, from `home`'s
+        perspective as the CURRENT fixture's home side. Mirrors
+        _get_h2h_stats(): newest-first, arithmetic in derive_h2h_features().
+        """
+        log = self._h2h.get(tuple(sorted((home, away))))
+        if not log:
+            return None
+        newest_first = list(log)[::-1]
+        perspective = [
+            (hg, ag) if match_home == home else (ag, hg)
+            for match_home, hg, ag in newest_first
+        ]
+        return derive_h2h_features(perspective)
+
+    def venue(self, home: str) -> Optional[Dict[str, float]]:
+        """Home-venue record for `home` over its last HOME_VENUE_WINDOW hosted
+        matches. Mirrors _get_home_venue_stats(); arithmetic in
+        derive_home_venue_features().
+        """
+        log = self._home_venue.get(home)
+        if not log:
+            return None
+        return derive_home_venue_features(list(log)[::-1])
+
+    def record_match(self, home: str, away: str, home_goals: int, away_goals: int) -> None:
+        """Update the h2h/venue accumulators. Called once per match, after
+        that match's row has been emitted — same leak-boundary discipline as
+        `append()` above (see build_dataset's loop-bottom comment)."""
+        self._home_venue[home].append((home_goals, away_goals))
+        self._h2h[tuple(sorted((home, away)))].append((home, home_goals, away_goals))
 
 
 def _parse_date(raw: str) -> Optional[datetime]:
@@ -449,6 +532,11 @@ def build_dataset(
         league, hist = m["league"], histories[m["league"]]
         home_stats = hist.stats(m["home"], is_home=True)
         away_stats = hist.stats(m["away"], is_home=False)
+        # docs/DEBT.md item 56: reads only, mirroring home_stats/away_stats
+        # above — cheap (bounded deque lookups) and independent of whether a
+        # row ends up emitted, same as those two.
+        h2h_stats = hist.h2h(m["home"], m["away"])
+        venue_stats = hist.venue(m["home"])
 
         if home_stats is not None and away_stats is not None:
             features = dict(base_defaults)
@@ -481,6 +569,18 @@ def build_dataset(
                 away_goals_for_avg=features["away_goals_for_avg"],
                 away_goals_against_avg=features["away_goals_against_avg"],
             ))
+            # docs/DEBT.md item 56: unconditional across every schema, same as
+            # the Elo replay two lines below — NOT gated behind
+            # schema == "apex_v3_68" the way phase8/xg are, because h2h/venue
+            # (like Elo) are real for every schema's training corpus, not a
+            # property only one candidate contract carries. A cold-start
+            # pair/team leaves the slot at its registry default, matching
+            # exactly what _get_h2h_stats()/_get_home_venue_stats() answer
+            # serving with (None -> registry default), independent of market.
+            if h2h_stats:
+                features.update(h2h_stats)
+            if venue_stats:
+                features.update(venue_stats)
             # docs/DEBT.md item 48: real, cross-verified Elo replay — see
             # compute_elo_training_columns's module docstring. Merged before
             # the incumbent_features copy below so both X and X_incumbent
@@ -518,6 +618,19 @@ def build_dataset(
                     dropped_no_xg += 1
 
             if market_features is not None and xg_available:
+                # docs/DEBT.md item 56: mirrors the projector's interaction
+                # block exactly — market_prob_home from the JUST-computed
+                # apex block (not yet merged into `features`), each of the
+                # other three inputs independently gated on its own
+                # resolution. Merged into `features` BEFORE the incumbent
+                # copy below, so X_incumbent carries these too (see the
+                # inertness argument above the h2h/venue merge).
+                features.update(derive_market_interaction_features(
+                    market_prob_home=market_features["market_prob_home"],
+                    home_form_last5_home=features.get("home_form_last5_home"),
+                    home_venue_win_rate=(venue_stats or {}).get("home_venue_win_rate"),
+                    h2h_dominance=(h2h_stats or {}).get("h2h_dominance"),
+                ))
                 incumbent_features = dict(features)
                 incumbent_features.update(derive_market_features(*m["odds"]))
                 features.update(market_features)
@@ -535,6 +648,7 @@ def build_dataset(
 
         hist.append(m["home"], m["hg"], m["ag"])
         hist.append(m["away"], m["ag"], m["hg"])
+        hist.record_match(m["home"], m["away"], m["hg"], m["ag"])
 
     logger.info("Rows skipped for insufficient history (both sides need %d): %d", _MIN_HISTORY, skipped)
     if include_xg:
@@ -858,6 +972,7 @@ def train_league(
     holdout_season: str,
     feature_names: Optional[List[str]] = None,
     tune_trials: int = 0,
+    schema: str = _DEFAULT_SCHEMA,
 ) -> Optional[dict]:
     # Learner construction lives in _instantiate() so the tuning path and the
     # baseline path cannot drift into two different model definitions.
@@ -995,7 +1110,7 @@ def train_league(
             "calibration_error": metrics["stacked"]["calibration_error"],
             "trained_at": datetime.now().isoformat(),
             "feature_count": len(feature_names),
-            "feature_schema_version": _schema_version_for(feature_names),
+            "feature_schema_version": _schema_version_for(schema, feature_names),
             # The honesty record for docs/DEBT.md item 29: a bare
             # feature_count: 89 would let a reader assume all 21 Phase 8 columns
             # carry learned signal. These two lists say which actually varied in
@@ -1036,6 +1151,7 @@ def train_pooled(
     holdout_season: str,
     feature_names: Optional[List[str]] = None,
     tune_trials: int = 0,
+    schema: str = _DEFAULT_SCHEMA,
 ) -> Optional[dict]:
     """One model over every league, for leagues too small to train alone.
 
@@ -1054,7 +1170,7 @@ def train_pooled(
     logger.info("\nPooled model over %d leagues, %d rows", len(dataset), len(pooled["y"]))
     return train_league(
         "POOLED", pooled, holdout_season,
-        feature_names=feature_names, tune_trials=tune_trials,
+        feature_names=feature_names, tune_trials=tune_trials, schema=schema,
     )
 
 
@@ -1073,7 +1189,7 @@ def _feature_contract_sha() -> Optional[str]:
         return None
 
 
-def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report) -> None:
+def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report, schema) -> None:
     """Record what produced this run (certification Stage 4/8).
 
     The training report says how well the run scored; this says what produced
@@ -1094,7 +1210,7 @@ def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
     manifest = build_training_manifest(
         cache_dir=args.cache_dir,
         auxiliary_datasets=auxiliary,
-        feature_schema_version=_schema_version_for(feature_names),
+        feature_schema_version=_schema_version_for(schema, feature_names),
         feature_names=feature_names,
         feature_contract_sha256=_feature_contract_sha(),
         holdout_season=args.holdout_season,
@@ -1155,7 +1271,11 @@ def main() -> int:
             "Feature contract to train. Defaults to apex_v1_68 (or apex_v1_89 "
             "with --include-phase8). apex_v2_71 appends the three validated "
             "rolling-xG features and DROPS every row the Understat corpus "
-            "cannot answer, because serving returns a DATA_GAP for those."
+            "cannot answer, because serving returns a DATA_GAP for those. "
+            "apex_v3_68 is the SAME 68-column contract as apex_v1_68 — h2h, "
+            "home-venue, and market-interaction (13 slots) go from "
+            "training-constant to training-computed; writes its own "
+            "*_v8_dense68.pkl artifacts rather than overwriting apex_v1_68's."
         ),
     )
     ap.add_argument(
@@ -1205,7 +1325,7 @@ def main() -> int:
     for league in sorted(dataset):
         bundle = train_league(
             league, dataset[league], args.holdout_season,
-            feature_names=feature_names, tune_trials=args.tune,
+            feature_names=feature_names, tune_trials=args.tune, schema=schema,
         )
         if bundle is None:
             continue
@@ -1220,7 +1340,7 @@ def main() -> int:
     if uncovered:
         pooled_bundle = train_pooled(
             dataset, args.holdout_season, feature_names=feature_names,
-            tune_trials=args.tune,
+            tune_trials=args.tune, schema=schema,
         )
         if pooled_bundle is not None:
             report["POOLED"] = pooled_bundle.pop("_metrics")
@@ -1247,7 +1367,7 @@ def main() -> int:
     (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
-    _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report)
+    _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report, schema)
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0
 

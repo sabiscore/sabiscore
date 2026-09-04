@@ -48,7 +48,9 @@ def generate(cache_dir: Path, schema: str = _DEFAULT_SCHEMA) -> dict[str, Any]:
 
     dataset = build_dataset(load_matches(cache_dir), schema=schema)
     contract = resolve_feature_schema(schema)
-    report = build_promotion_feature_evidence(dataset, candidate_features=contract)
+    report = build_promotion_feature_evidence(
+        dataset, candidate_features=contract, candidate_schema=schema,
+    )
     validate_promotion_feature_evidence(report, candidate_features=contract)
     return report
 

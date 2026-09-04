@@ -892,6 +892,144 @@ PRODUCTION_EXECUTIVE_DIRECTIVE.md Phase 2/3, not started here.
 
 ---
 
+### Finding 8 — the 16 defaulted training slots populated (16 → 3); `apex_v3_68` trained, evaluated, and REJECTED — `market_baseline` still 0/6 (2026-09-04)
+
+`PRODUCTION_EXECUTIVE_DIRECTIVE.md` §2/§5 Phase 2, the directive's own
+best-argued attack on `market_baseline`: 14 of this item's 16 defaulted slots
+(h2h block, home-venue block, 3 market-interaction fields, `total_goals_expected`)
+are computed at serving time by `UpcomingMatchFeatureProjector` today, while
+`train_on_real_matches.build_dataset` left them constant across every training
+row — a column with zero variance is never split on, so no ensemble has ever
+used signal serving already pays to compute.
+
+**Two corrections to the directive's own premise, made before writing any
+code, not discovered after.** (1) The directive cites `data/transformers.py:
+407-474` as the parity reference; read directly, that is `FeatureTransformer.
+_project_to_canonical_features` — a second, divergent pipeline computing these
+fields from already-engineered keys through materially different formulas (a
+clamp on `h2h_matches`, `home_venue_loss_rate` assigned from the away team's
+away win rate). The real serving computation, and the one this work mirrors,
+is `upcoming_match_feature_service.py`'s `_get_h2h_stats()`/
+`_get_home_venue_stats()`/its post-market interaction block, verified by
+reading that code directly. (2) `total_goals_expected` has zero call sites in
+that real path — its only formula anywhere (`xg_differential + 2.60`) lives in
+the wrong pipeline above, and `xg_differential` is not a training column under
+this schema. Computing it in training would give training a value serving can
+never reproduce — the parity break in the opposite direction from what this
+work exists to fix. It stays defaulted. **`training_defaulted_slots` moves
+16 → 3** (the 2 event-data slots this item already named plus this one), not
+16 → 2 as the directive states.
+
+**Implementation.** Three pure functions in `feature_registry.py`
+(`derive_h2h_features`, `derive_home_venue_features`,
+`derive_market_interaction_features`), transcribed formula-for-formula from
+the projector — verified by reading `_get_h2h_stats`/`_get_home_venue_stats`/
+the interaction block directly, not assumed from either side's own docstring.
+`upcoming_match_feature_service.py` now delegates to these instead of carrying
+its own copy — parity by construction, not by a separate assertion; every
+existing test on that file passes unchanged, confirming the refactor is
+behaviour-preserving. `train_on_real_matches.py`'s `TeamHistory` (the existing
+per-league walk-forward class already used for form) gains two more
+keyed-deque accumulators, read before each row emits and updated after — the
+same leak-boundary position as its existing per-team history, and
+`test_a_matchs_own_result_never_enters_its_own_features` (the leakage
+contract's own decisive test) passes unchanged, confirming no leak was
+introduced. Registered as a new schema key, `apex_v3_68` — the *same*
+68-column contract as `apex_v1_68` (literally the same list object, matching
+this file's own "same object, not a copy" convention), existing only so this
+training run writes its own artifacts rather than overwriting the checked-in
+`apex_v1_68` baseline this evaluation compares against. `_schema_version_for`
+(the training script) and `_registered_schema_version`
+(`promotion_evidence.py`) both changed from content-matching a schema's column
+list against every registered contract to validating (or accepting) the
+caller's own declared key — necessary because `apex_v3_68` and `apex_v1_68`
+now share a column list by content, so content-matching would always resolve
+to whichever appears first.
+
+**Unconditional across every schema, matching the Elo precedent (2026-08-30,
+same item's earlier "M2 Family A" entry in CLAUDE.md).** h2h/venue/interaction
+populate for `apex_v1_68` too when it is rebuilt, not gated behind
+`schema == "apex_v3_68"` — provably inert on any artifact already trained
+before this change, since a feature constant across a model's own training set
+is never referenced by a split node regardless of what value it is fed at
+inference. Confirmed directly: `apex_v1_68`'s own freshly-rebuilt `X` now
+carries real h2h/venue values too (verified — 63 distinct `h2h_dominance`
+values in one league alone, not the single constant default), and row counts
+stayed byte-identical between the two schemas (12,256 total, matching this
+item's own previously-recorded per-league split) — no row was added or
+dropped by this change.
+
+**A new test file, watched failing before being trusted.**
+`tests/unit/test_h2h_venue_parity.py` (15 tests): pure-math correctness
+(empty input is `None`, never a fabricated 0; perspective-flip symmetry;
+window constants pinned), `TeamHistory`'s own deque-window discipline (an 11th
+meeting must not widen `h2h_matches` past `H2H_WINDOW`), the live serving
+query's ordering/exclusion guarantees (mirrors `test_xg_rolling_parity.py`'s
+structure for a genuinely different query), and the parity assertion itself —
+`TeamHistory`'s accumulator and the live projector, fed identical match
+history, agree **exactly** (`pytest.approx` equality, not "both non-null").
+The perspective-flip logic was deliberately broken (the home/away score swap
+removed) and the parity test was confirmed to fail before the fix was
+reverted and the suite confirmed green again — this file's own standing
+discipline for a new guard, not skipped as ceremony.
+
+**Trained, evaluated, and REJECTED — the real, measured answer, reported
+whichever way it came out.** `python scripts/train_on_real_matches.py
+--schema apex_v3_68`, `generate_feature_availability_matrix.py`,
+`compare_candidate_vs_incumbent.py --candidate-schema apex_v3_68`, scored on
+the **identical** rows (this candidate drops none, unlike `apex_v2_71` — no
+"added features" vs. "dropped rows" mixing to separate here). Full evidence:
+`backend/reports/evaluation/apex-v3-68-candidate-evaluation.{json,md}`.
+
+```
+serving_feature_availability   FAIL    training_defaulted_slots 16->3; serving_schema_misaligned_slots unchanged at 11
+primary_metric_improvement     PASS    mean RPS improvement +0.00028
+no_league_regression           FAIL    3 / 6 league wins (Bundesliga -0.0094 the largest single movement, a loss)
+market_baseline                FAIL    0 / 6 leagues beat the market
+promotion_permitted            False
+```
+
+`input_responsiveness` clears with room — every league gained 8-13 more
+responsive features over the incumbent (35→43 through 45→55 pooled) — so the
+model genuinely does split on some of this new signal, not merely carry it
+inertly. It did not matter: `market_baseline` reads exactly what it read
+before this work, 0 of however-many leagues, matching `apex_v2_71`'s own
+result on the same decisive gate. Denser, genuinely-observed, measurably-used
+features are still not sufficient to beat the market — the second candidate
+in a row to demonstrate that shape, by two different feature families in two
+different directions of incumbent-comparison result.
+
+**`serving_feature_availability` was known to be unpassable by this candidate
+before training ran, not discovered after — this item's own Finding 7 already
+measured `serving_schema_misaligned_slots: 11` as a property of the
+`apex_v1_68` baseline, entirely independent of h2h/venue/interaction.** That
+gate requires both counters at zero; this candidate can only ever move the
+first. Fixing the second means activating an apex generation, a separate
+promotion decision this candidate's scope never included. Stated in the
+implementation plan and confirmed unchanged in the measured result, not spun
+as a partial pass.
+
+**What remains open in this item.** `home_pressing_intensity` and
+`progressive_carry_diff` stay permanently defaulted — no event-level data
+source exists to compute them, and nothing in this Finding changes that. The
+remaining unexplored branch on `market_baseline` is a model-family question
+(this ensemble's own architecture), not a training-data-density one; the
+training-time-density branch this Finding and `apex_v2_71` both worked is now
+closed on two independent feature families with the same answer.
+
+**Blast radius:** `feature_registry.py`,
+`upcoming_match_feature_service.py`, `train_on_real_matches.py`,
+`promotion_evidence.py`, `generate_feature_availability_matrix.py` — every
+existing test file on all five passes unchanged; the only new test file is
+additive. `apex_v1_68`'s own checked-in baseline artifacts (`models/*.pkl`,
+not `models/candidate/`) are untouched; a future rebuild of that schema will
+pick up real h2h/venue (see the Elo precedent, already true since 2026-08-30).
+No `active_generation.json` change, no gate threshold changed. mypy: 769
+errors, comfortably under the 784 CI ceiling; ruff clean on every touched
+file.
+
+---
+
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
 
 **Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.

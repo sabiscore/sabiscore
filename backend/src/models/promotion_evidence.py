@@ -202,6 +202,7 @@ def build_promotion_feature_evidence(
     dataset: Mapping[str, Mapping[str, Any]],
     *,
     candidate_features: Sequence[str] | None = None,
+    candidate_schema: str | None = None,
 ) -> dict[str, Any]:
     """Build rich promotion evidence from the exact candidate ``X`` matrices.
 
@@ -218,9 +219,28 @@ def build_promotion_feature_evidence(
     adds new features beyond today's active serving contract; positions past
     the end of the current serving contract classify as SCHEMA_MISMATCH rather
     than raising (see ``_serving_feature_at``).
+
+    ``candidate_schema`` is the caller's own declared ``FEATURE_SCHEMA_VERSIONS``
+    key for ``candidate_features``, when the caller already knows it. Pass it
+    whenever two registered schemas share a column list by content — e.g.
+    apex_v3_68 registers the SAME 68-name contract as apex_v1_68 (docs/DEBT.md
+    item 56: they differ in which slots training actually varied, not in the
+    contract itself) — so ``_registered_schema_version``'s content-match would
+    always resolve to whichever key appears first in ``FEATURE_SCHEMA_VERSIONS``,
+    silently mislabelling the evidence file regardless of what was actually
+    evaluated. Validated against ``candidate_features`` (raises on mismatch)
+    rather than trusted blindly.
     """
 
     candidate = list(candidate_features) if candidate_features is not None else list(APEX_FEATURES_68)
+    if candidate_schema is not None:
+        if candidate_schema not in FEATURE_SCHEMA_VERSIONS:
+            raise ValueError(f"unknown candidate_schema {candidate_schema!r}")
+        if candidate != list(FEATURE_SCHEMA_VERSIONS[candidate_schema]):
+            raise ValueError(
+                f"candidate_features does not match the registered contract for "
+                f"candidate_schema {candidate_schema!r}"
+            )
     matrix, rows_by_league = _stack_candidate_rows(dataset, candidate)
     training_rows = int(matrix.shape[0])
     features: list[dict[str, Any]] = []
@@ -267,7 +287,10 @@ def build_promotion_feature_evidence(
         # to be told out-of-band which contract it was built from. None when the
         # caller passed an ad-hoc list that matches no registered schema —
         # absent beats a guessed label in evidence.
-        "candidate_feature_schema_version": _registered_schema_version(candidate),
+        "candidate_feature_schema_version": (
+            candidate_schema if candidate_schema is not None
+            else _registered_schema_version(candidate)
+        ),
         "candidate_contract_hash": _contract_hash(candidate),
         "serving_contract_hash": _contract_hash(serving_contract),
         "summary": summary,
