@@ -762,6 +762,61 @@ and backward-compatible by construction (optional parameter, same default).
 mypy: 766 errors — unchanged from Finding 6, comfortably under the 784 CI
 ceiling.
 
+### ✅ The `--apply` write path executed against production (2026-09-04)
+
+**Supersedes the "11,694 rows" figure above:** that number predates the corpus
+deduplication (#144), which moved both the manifest digest and the real
+ready-row count. A fresh review run immediately before applying measured the
+actual numbers: manifest `df9e7aa49a201e0434c52f92451c1baadff199a65a9264a8ca377a8c52304ac4`,
+**9,980 ready / 653 `MATCH_UNRESOLVED` / 10,633 total** — the total matching
+the corpus's independently-verified distinct-match count exactly. Do not
+requote 11,694 again; PRODUCTION_EXECUTIVE_DIRECTIVE.md §0 already flagged it
+as stale.
+
+```text
+--apply --manifest-sha256 df9e7aa4… \
+  --authorization-id operator-authorized-2026-09-04-debt56-directive-phase1 \
+  --confirm APPLY_UNDERSTAT_MATCH_STATS
+
+committed: true · inserted_rows: 19960 · matches_written: 9980
+already_present_rows: 0 · skipped_unresolved_entries: 653 · reversals_total: 19960
+```
+
+Both acceptance postconditions from PRODUCTION_EXECUTIVE_DIRECTIVE.md §5 Phase 1
+step 4 verified directly: `inserted_rows == 2 × ready_rows` (19,960 = 2×9,980)
+on the real apply; re-running the identical command afterward reported
+`inserted_rows: 0`, `already_present_rows: 19,960`, `reversals_total: 0` —
+nothing double-inserted, the refuse-to-overwrite guarantee holds.
+`reversals_total: 19960` from the real apply is retained with the
+authorization record for undo.
+
+One operational note, not a correctness issue: the first idempotency-check
+re-run (not the real apply) hit
+`asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the
+middle of operation` mid-query, against Render's free/starter Postgres tier.
+A plain retry succeeded cleanly with no special handling. No partial write
+resulted — Postgres aborts an in-flight transaction on connection loss, and
+the successful retry's own `already_present_rows: 19960` / `inserted_rows: 0`
+is the evidence nothing was double-written by the failed attempt.
+
+### ✅ Serving-side answer measured (2026-09-04) — this is what Finding 2 was waiting on
+
+`upcoming_match_feature_service.project_xg_rolling_features` measured directly
+(it has zero production call sites — this was ad hoc, not a real request path)
+against all 89 currently-scheduled fixtures: **57 (64%) now return real
+features**, where every one returned `None` before this backfill (empty
+`match_stats`). By league: EPL 14/18, LA_LIGA 11/16, BUNDESLIGA 16/17,
+SERIE_A 10/10, LIGUE_1 6/8, **EREDIVISIE 0/9, UCL 0/11**. The last two are
+zero because the Understat corpus this backfill draws from has no rows for
+either competition — confirmed independently: the apply's own `leagues` field
+lists exactly `BUNDESLIGA, EPL, LA_LIGA, LIGUE_1, SERIE_A`, nothing else. Not
+a fixture-identity or query defect; a real corpus-coverage gap.
+
+**xG has a real serving future in 5 of 7 leagues.** Wiring
+`project_xg_rolling_features` into a registered candidate feature schema —
+giving it its first production caller — is
+PRODUCTION_EXECUTIVE_DIRECTIVE.md Phase 2/3, not started here.
+
 ---
 
 ### Finding 8 — the 16 defaulted training slots populated (16 → 3); `apex_v3_68` trained, evaluated, and REJECTED — `market_baseline` still 0/6 (2026-09-04)
