@@ -545,10 +545,16 @@ async def model_performance_calibration(
     model_version = active_model_version()
     cache_key = f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
     cached = cache.get(cache_key) if cache else None
-    if cached:
+    if cached is not None:
         try:
+            if isinstance(cached, (bytes, bytearray)):
+                cached = cached.decode("utf-8")
+            if isinstance(cached, str):
+                cached = json.loads(cached)
+            if not isinstance(cached, dict):
+                raise TypeError("calibration cache payload must be an object")
             metrics_collector.increment("calibration.cache_hit")
-            return json.loads(cached) if isinstance(cached, str) else cached
+            return cached
         except Exception:
             pass
 
@@ -585,9 +591,8 @@ async def model_performance_calibration(
 
     if cache:
         try:
-            cache.set(cache_key, json.dumps(result), ttl=_CALIBRATION_CACHE_TTL_SECONDS)
+            cache.set(cache_key, result, ttl=_CALIBRATION_CACHE_TTL_SECONDS)
         except Exception as exc:
             logger.debug("Calibration cache write failed for %s: %s", cache_key, exc)
 
     return result
-
