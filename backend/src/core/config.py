@@ -29,7 +29,14 @@ class Settings(BaseSettings):
     )
     allow_sqlite_fallback: bool = Field(
         default=False,
-        validation_alias=AliasChoices("SABISCORE_ALLOW_INSECURE_FALLBACK", "ALLOW_SQLITE_FALLBACK"),
+        # Canonical name FIRST, legacy alias second -- AliasChoices precedence
+        # is by alias order and OUTRANKS env_file order, so a legacy name set in
+        # a less-local .env would otherwise silently beat the canonical name set
+        # in backend/.env. ALLOW_SQLITE_FALLBACK is what CLAUDE.md SAFE DEFAULTS,
+        # every .env*.example template, README, the Makefile release gate and
+        # backend/conftest.py all set; matches the canonical-first convention the
+        # provider-key aliases below already follow.
+        validation_alias=AliasChoices("ALLOW_SQLITE_FALLBACK", "SABISCORE_ALLOW_INSECURE_FALLBACK"),
         description="Development/test-only opt-in for SQLite fallback when PostgreSQL is unavailable.",
     )
     database_pool_size: int = Field(default=20, ge=1, le=100)

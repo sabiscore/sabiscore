@@ -120,7 +120,8 @@ async def init_db() -> None:
         database_url = _get_async_database_url(settings.database_url)
         if database_url.startswith("sqlite") and not _sqlite_fallback_allowed():
             raise RuntimeError(
-                "SQLite database URLs require SABISCORE_ALLOW_INSECURE_FALLBACK=true "
+                "SQLite database URLs require ALLOW_SQLITE_FALLBACK=true "
+                "(legacy alias: SABISCORE_ALLOW_INSECURE_FALLBACK) "
                 "and APP_ENV must not be production"
             )
 

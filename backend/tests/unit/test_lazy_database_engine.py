@@ -48,6 +48,12 @@ def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProce
         "PYTHONPATH": ".",
         **extra_env,
     }
+    # Both aliases of `allow_sqlite_fallback` must agree, or an ambient value
+    # for whichever one this test does not set would decide the subprocess's
+    # behaviour: AliasChoices precedence is by alias order and ignores
+    # env_file locality, and `env` inherits os.environ. Pinning both keeps
+    # these tests independent of that ordering and of the developer/CI shell.
+    env["SABISCORE_ALLOW_INSECURE_FALLBACK"] = env["ALLOW_SQLITE_FALLBACK"]
     return subprocess.run(
         [sys.executable, "-c", script],
         cwd=BACKEND_ROOT,
@@ -56,6 +62,42 @@ def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProce
         text=True,
         timeout=20,
     )
+
+
+def test_canonical_alias_outranks_the_legacy_one_when_both_conflict():
+    """AliasChoices precedence is by alias ORDER and outranks env_file locality,
+    so the canonical name must be listed first.
+
+    Otherwise a stale SABISCORE_ALLOW_INSECURE_FALLBACK in a less-local .env
+    silently beats the ALLOW_SQLITE_FALLBACK that backend/.env, every
+    .env*.example template, the Makefile release gate and backend/conftest.py
+    all set -- and the file that looks authoritative is inert. Builds its own
+    env rather than using _run(), which deliberately pins both aliases to the
+    same value and would mask exactly what this asserts.
+    """
+    env = {
+        **os.environ,
+        "APP_ENV": "development",
+        "DATABASE_URL": _UNREACHABLE_DATABASE_URL,
+        "PYTHONPATH": ".",
+        "ALLOW_SQLITE_FALLBACK": "false",             # canonical -- must win
+        "SABISCORE_ALLOW_INSECURE_FALLBACK": "true",  # legacy -- must lose
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from src.core.config import settings; "
+            "print('FALLBACK', settings.allow_sqlite_fallback)",
+        ],
+        cwd=BACKEND_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "FALLBACK False" in result.stdout, result.stdout
 
 
 def test_importing_for_base_and_models_does_not_require_a_live_database():
