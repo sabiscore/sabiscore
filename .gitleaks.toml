@@ -28,4 +28,20 @@ paths = [
   '''apps/web/\.next/''',
   '''backend/artifacts/''',
   '''test-results/''',
+  # Agent-tooling sync output (`prisma skills sync` via prisma.config.ts),
+  # gitignored at .gitignore:276-287 and never committable. Gate 1 of
+  # `make verify` runs `gitleaks detect --no-git`, which scans gitignored
+  # files too, so these must be allowlisted here as well or the release
+  # gate is red on a clean tree. Same precedent as `.env.local` (vΩ.13)
+  # and `.worktrees/`. Findings observed here were false positives: a
+  # 40-hex git commit SHA, and a prior gitleaks report echoing its own
+  # matches. The CI git-mode history scan is unaffected by this entry.
+  '''^\.agents/''',
+  '''^\.cursor/''',
+  '''^\.devin/''',
+  '''^\.scratch/''',
+  '''^backend/\.agents/''',
+  '''^backend/\.cursor/''',
+  '''^backend/\.devin/''',
+  '''^backend/\.scratch/''',
 ]
