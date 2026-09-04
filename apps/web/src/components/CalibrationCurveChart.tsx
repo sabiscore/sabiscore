@@ -423,13 +423,26 @@ export function CalibrationCurveChart({
 
       {/* Aggregate Künsch (1989) block-bootstrap confidence intervals — the only
           real CIs this endpoint computes; there is no per-bin CI on the wire. */}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-        <span>RPS 95% CI: {formatCi(data?.confidence_intervals?.rps, (v) => v.toFixed(3))}</span>
-        <span>Brier 95% CI: {formatCi(data?.confidence_intervals?.brier_score, (v) => v.toFixed(3))}</span>
-        <span>
-          ECE 95% CI: {formatCi(data?.confidence_intervals?.ece_mean, (v) => `${(v * 100).toFixed(2)}%`)}
-        </span>
-      </div>
+      {(data?.confidence_intervals?.rps?.n_bootstrap !== 0 ||
+        data?.confidence_intervals?.brier_score?.n_bootstrap !== 0 ||
+        data?.confidence_intervals?.ece_mean?.n_bootstrap !== 0) && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+          {data?.confidence_intervals?.rps?.n_bootstrap !== 0 && (
+            <span>RPS 95% CI: {formatCi(data?.confidence_intervals?.rps, (v) => v.toFixed(3))}</span>
+          )}
+          {data?.confidence_intervals?.brier_score?.n_bootstrap !== 0 && (
+            <span>
+              Brier 95% CI: {formatCi(data?.confidence_intervals?.brier_score, (v) => v.toFixed(3))}
+            </span>
+          )}
+          {data?.confidence_intervals?.ece_mean?.n_bootstrap !== 0 && (
+            <span>
+              ECE 95% CI:{" "}
+              {formatCi(data?.confidence_intervals?.ece_mean, (v) => `${(v * 100).toFixed(2)}%`)}
+            </span>
+          )}
+        </div>
+      )}
       </>
       )}
     </div>

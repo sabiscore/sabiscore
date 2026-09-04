@@ -121,6 +121,23 @@ describe("CalibrationCurveChart", () => {
     expect(screen.queryByText("Awaiting settled match prediction records.")).not.toBeInTheDocument();
   });
 
+  it("does not label zero-replicate intervals as 95% confidence intervals", async () => {
+    mockCalibration({
+      sample_size: 12,
+      curves: { home_win: [], draw: [], away_win: [] },
+      confidence_intervals: {
+        rps: { n_bootstrap: 0, ci_lower: null, ci_upper: null },
+        brier_score: { n_bootstrap: 0, ci_lower: null, ci_upper: null },
+        ece_mean: { n_bootstrap: 0, ci_lower: null, ci_upper: null },
+      },
+    });
+
+    renderWithClient();
+
+    await screen.findByText("Awaiting settled match prediction records.");
+    expect(screen.queryByText(/95% CI/)).not.toBeInTheDocument();
+  });
+
   it("uses aria-pressed outcome tabs (not the incomplete tablist pattern) and responds to clicks", async () => {
     mockCalibration({ sample_size: 5 });
 

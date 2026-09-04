@@ -60,3 +60,81 @@ async def test_calibration_endpoint_empty_fallback() -> None:
                 assert data["reason"] == "insufficient_settled_predictions"
     finally:
         app.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "cached",
+    [
+        {"status": "OK"},
+        '{"status": "OK"}',
+        b'{"status": "OK"}',
+    ],
+)
+async def test_calibration_endpoint_reads_serialized_cache_payloads(cached) -> None:
+    from src.db.session import get_async_session
+
+    class StubCache:
+        def get(self, _key):
+            return cached
+
+    mock_db = AsyncMock()
+    app.dependency_overrides[get_async_session] = lambda: mock_db
+    try:
+        transport = ASGITransport(app=app)
+        with (
+            patch("src.api.endpoints.performance.cache", StubCache()),
+            patch("src.api.endpoints.performance.active_model_version", return_value="test"),
+            patch("src.api.endpoints.performance.get_settled_predictions", new=AsyncMock()) as get_records,
+        ):
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/api/v1/model-performance/calibration")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "OK"}
+        get_records.assert_not_awaited()
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest.mark.asyncio
+async def test_calibration_endpoint_caches_result_without_double_encoding() -> None:
+    from src.db.session import get_async_session
+
+    class StubCache:
+        def __init__(self):
+            self.value = None
+
+        def get(self, _key):
+            return None
+
+        def set(self, _key, value, ttl):
+            self.value = (value, ttl)
+
+    cache_stub = StubCache()
+    records = [
+        {"outcome": 0, "probs": [0.6, 0.25, 0.15], "date": "2026-08-01T15:00:00"}
+        for _ in range(12)
+    ]
+    mock_db = AsyncMock()
+    app.dependency_overrides[get_async_session] = lambda: mock_db
+    try:
+        transport = ASGITransport(app=app)
+        with (
+            patch("src.api.endpoints.performance.cache", cache_stub),
+            patch("src.api.endpoints.performance.active_model_version", return_value="test"),
+            patch(
+                "src.api.endpoints.performance.get_settled_predictions",
+                new=AsyncMock(return_value=records),
+            ),
+        ):
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/api/v1/model-performance/calibration")
+
+        assert response.status_code == 200
+        assert cache_stub.value is not None
+        cached_value, _ = cache_stub.value
+        assert isinstance(cached_value, dict)
+        assert cached_value == response.json()
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)
