@@ -1,5 +1,7 @@
 {
   "holdout_season": "2526",
+  "candidate_schema": "apex_v4_66",
+  "candidate_feature_count": 66,
   "served_head": true,
   "leagues": {
     "BUNDESLIGA": {
@@ -12,30 +14,30 @@
         "n": 301
       },
       "candidate": {
-        "accuracy": 0.5249169435215947,
-        "rps": 0.19999750539183228,
-        "brier": 0.5835200440583594,
-        "log_loss": 0.9818402311716375,
-        "calibration_error": 0.05875086271620049,
+        "accuracy": 0.521594684385382,
+        "rps": 0.20026894675513923,
+        "brier": 0.5852513118832617,
+        "log_loss": 0.9843521097112127,
+        "calibration_error": 0.05433007892696183,
         "n": 301
       },
-      "candidate_rps_improvement": -0.010035969927676747,
+      "candidate_rps_improvement": -0.010307411290983698,
       "candidate_wins": false,
       "market_baseline_rps": 0.19083929061889648,
       "candidate_beats_market_baseline": false,
-      "responsive_features": 35,
+      "responsive_features": 43,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6231053240521333,
-          0.24545730833102047,
-          0.13143736761684624
+          0.6159507450508792,
+          0.24345467787816805,
+          0.1405945770709528
         ],
         "away_favourite_probabilities": [
-          0.3233075593686363,
-          0.30282348236140205,
-          0.37386895826996164
+          0.36222823158002093,
+          0.280023933176909,
+          0.3577478352430701
         ],
-        "max_probability_change": 0.29979776468349695,
+        "max_probability_change": 0.2537225134708583,
         "directionally_coherent": true
       }
     },
@@ -49,67 +51,67 @@
         "n": 375
       },
       "candidate": {
-        "accuracy": 0.48533333333333334,
-        "rps": 0.20513930208244938,
-        "brier": 0.6097700555166943,
-        "log_loss": 1.0155213917024575,
-        "calibration_error": 0.06938371137482627,
+        "accuracy": 0.49066666666666664,
+        "rps": 0.20487100504344502,
+        "brier": 0.6085259842953937,
+        "log_loss": 1.0138607507739024,
+        "calibration_error": 0.06938388051265341,
         "n": 375
       },
-      "candidate_rps_improvement": -0.0015288116767230298,
+      "candidate_rps_improvement": -0.0012605146377186738,
       "candidate_wins": false,
       "market_baseline_rps": 0.2053660899400711,
       "candidate_beats_market_baseline": true,
-      "responsive_features": 38,
+      "responsive_features": 49,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6854104314699102,
-          0.18096949509947047,
-          0.13362007343061932
+          0.6884700203936459,
+          0.18032747737814211,
+          0.13120250222821203
         ],
         "away_favourite_probabilities": [
-          0.14791188161033686,
-          0.2145742052123648,
-          0.6375139131772983
+          0.22355887119647067,
+          0.26470626470077113,
+          0.5117348641027583
         ],
-        "max_probability_change": 0.5374985498595733,
+        "max_probability_change": 0.46491114919717524,
         "directionally_coherent": true
       }
     },
     "EREDIVISIE": {
       "incumbent": {
         "accuracy": 0.49615384615384617,
-        "rps": 0.20477104658886608,
-        "brier": 0.6059831670334076,
+        "rps": 0.20477104658886605,
+        "brier": 0.6059831670334077,
         "log_loss": 1.012883633981648,
         "calibration_error": 0.06523864435644548,
         "n": 260
       },
       "candidate": {
-        "accuracy": 0.5269230769230769,
-        "rps": 0.1984073432263581,
-        "brier": 0.5927453718468515,
-        "log_loss": 0.9943203166998149,
-        "calibration_error": 0.06085947203800999,
+        "accuracy": 0.5307692307692308,
+        "rps": 0.19901572516540672,
+        "brier": 0.5941043199902112,
+        "log_loss": 0.9961426839629196,
+        "calibration_error": 0.059270413173160945,
         "n": 260
       },
-      "candidate_rps_improvement": 0.006363703362507966,
+      "candidate_rps_improvement": 0.005755321423459331,
       "candidate_wins": true,
       "market_baseline_rps": 0.19784937798976898,
       "candidate_beats_market_baseline": false,
-      "responsive_features": 45,
+      "responsive_features": 56,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6722188867897264,
-          0.215707910057051,
-          0.11207320315322254
+          0.6540483326141845,
+          0.22442123911325063,
+          0.12153042827256492
         ],
         "away_favourite_probabilities": [
-          0.13599012889405213,
-          0.21025220549969165,
-          0.6537576656062561
+          0.14468871610919268,
+          0.21241307993064798,
+          0.6428982039601593
         ],
-        "max_probability_change": 0.5416844624530336,
+        "max_probability_change": 0.5213677756875944,
         "directionally_coherent": true
       }
     },
@@ -124,29 +126,29 @@
       },
       "candidate": {
         "accuracy": 0.5493333333333333,
-        "rps": 0.19697167071959745,
-        "brier": 0.5755523827584088,
-        "log_loss": 0.9727408532611272,
-        "calibration_error": 0.03159963836978783,
+        "rps": 0.19719932004206753,
+        "brier": 0.5765593970826234,
+        "log_loss": 0.9753966670707638,
+        "calibration_error": 0.047630571052826,
         "n": 375
       },
-      "candidate_rps_improvement": 0.004831390736776603,
+      "candidate_rps_improvement": 0.004603741414306528,
       "candidate_wins": true,
       "market_baseline_rps": 0.19628490507602692,
       "candidate_beats_market_baseline": false,
-      "responsive_features": 38,
+      "responsive_features": 51,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.7086431465593257,
-          0.20128676802396583,
-          0.09007008541670845
+          0.6750306700732983,
+          0.219368001595774,
+          0.10560132833092763
         ],
         "away_favourite_probabilities": [
-          0.1095081544448607,
-          0.2119695958031089,
-          0.6785222497520303
+          0.1266519641512214,
+          0.23041784990293115,
+          0.6429301859458474
         ],
-        "max_probability_change": 0.599134992114465,
+        "max_probability_change": 0.5483787059220769,
         "directionally_coherent": true
       }
     },
@@ -160,30 +162,30 @@
         "n": 301
       },
       "candidate": {
-        "accuracy": 0.521594684385382,
-        "rps": 0.2002730580028545,
-        "brier": 0.586782231583316,
-        "log_loss": 0.9874792048441972,
-        "calibration_error": 0.037623669745478434,
+        "accuracy": 0.5149501661129569,
+        "rps": 0.20249080678457976,
+        "brier": 0.5910104175201035,
+        "log_loss": 0.9929599589345759,
+        "calibration_error": 0.04100759072541448,
         "n": 301
       },
-      "candidate_rps_improvement": 0.0029070413463814226,
+      "candidate_rps_improvement": 0.0006892925646561632,
       "candidate_wins": true,
       "market_baseline_rps": 0.19912628829479218,
       "candidate_beats_market_baseline": false,
-      "responsive_features": 37,
+      "responsive_features": 47,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.5767398935577878,
-          0.22189996065586748,
-          0.20136014578634484
+          0.5832317497426853,
+          0.22070891030194298,
+          0.19605933995537173
         ],
         "away_favourite_probabilities": [
-          0.06289079407187159,
-          0.20463208394080407,
-          0.7324771219873244
+          0.07164957358255133,
+          0.22069581861587098,
+          0.7076546078015777
         ],
-        "max_probability_change": 0.5311169762009795,
+        "max_probability_change": 0.511595267846206,
         "directionally_coherent": true
       }
     },
@@ -192,35 +194,35 @@
         "accuracy": 0.528,
         "rps": 0.20514916053355833,
         "brier": 0.6020618968743299,
-        "log_loss": 1.0063097831400947,
-        "calibration_error": 0.05516312508908698,
+        "log_loss": 1.0063097831400944,
+        "calibration_error": 0.055163125089086947,
         "n": 375
       },
       "candidate": {
-        "accuracy": 0.5333333333333333,
-        "rps": 0.199685715427185,
-        "brier": 0.5885635316377412,
-        "log_loss": 0.9910785662098743,
-        "calibration_error": 0.026889128458235188,
+        "accuracy": 0.528,
+        "rps": 0.20066471419578705,
+        "brier": 0.5913515274491353,
+        "log_loss": 0.9943014699326584,
+        "calibration_error": 0.04992861237911986,
         "n": 375
       },
-      "candidate_rps_improvement": 0.005463445106373338,
+      "candidate_rps_improvement": 0.004484446337771286,
       "candidate_wins": true,
       "market_baseline_rps": 0.19714131951332092,
       "candidate_beats_market_baseline": false,
-      "responsive_features": 37,
+      "responsive_features": 50,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.5706419883725681,
-          0.29492067157439283,
-          0.13443734005303898
+          0.5840625588379755,
+          0.2611955569082595,
+          0.15474188425376498
         ],
         "away_favourite_probabilities": [
-          0.11953435405434945,
-          0.22256579909596105,
-          0.6578998468496895
+          0.13152806273142867,
+          0.2436142403369422,
+          0.6248576969316292
         ],
-        "max_probability_change": 0.5234625067966505,
+        "max_probability_change": 0.4701158126778642,
         "directionally_coherent": true
       }
     }
@@ -232,7 +234,7 @@
     },
     "input_responsiveness": {
       "status": "PASS",
-      "minimum_responsive_features": 35
+      "minimum_responsive_features": 43
     },
     "coherent_price_perturbation": {
       "status": "PASS"
@@ -240,16 +242,16 @@
     "serving_feature_availability": {
       "status": "FAIL",
       "summary": {
-        "features": 68,
-        "training_defaulted_slots": 20,
-        "non_variable_training_slots": 20,
-        "serving_schema_misaligned_slots": 11,
+        "features": 66,
+        "training_defaulted_slots": 1,
+        "non_variable_training_slots": 5,
+        "serving_schema_misaligned_slots": 14,
         "always_data_gap_slots": 4
       }
     },
     "primary_metric_improvement": {
       "status": "PASS",
-      "mean_rps_improvement": 0.001333466491273259
+      "mean_rps_improvement": 0.0006608126352484894
     },
     "no_league_regression": {
       "status": "FAIL",
@@ -263,7 +265,7 @@
   },
   "candidate_league_wins": 4,
   "leagues_compared": 6,
-  "mean_rps_improvement": 0.001333466491273259,
+  "mean_rps_improvement": 0.0006608126352484894,
   "no_league_regression": false,
   "promotion_permitted": false
 }

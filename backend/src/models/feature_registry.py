@@ -143,8 +143,22 @@ PHASE7_FEATURES_REMOVED: List[str] = [
 #   Proxy derived from xg_avg_5 difference collapses to q75=0 on synthetic training data,
 #   making ATE estimates non-discriminative. Permanent DATA_GAP until real StatsBomb
 #   event-level shots corpus confirms ATE >= 0.02 (see guardrail 12 in Sprint 4 brief).
+#
+# StatsBomb coverage audit (2026-09-04) — PATH B:
+#   scripts/audit_statsbomb_coverage.py measured 23.58% crosswalk intersection between
+#   the StatsBomb Open Data match corpus and the 3,440 unique Understat matchups
+#   (below the 85% threshold). Full per-league breakdown in
+#   reports/evaluation/statsbomb-coverage-audit-2026.json.
+#   home_pressing_intensity (ATE=0.146) and progressive_carry_diff — formally relegated
+#   to ALWAYS_DATA_GAP. The slots are retained in CANONICAL_FEATURES_68 for artifact
+#   compatibility; the values are permanently the registry defaults (0.55 and 0.0).
+#   ENABLE_STATSBOMB_ENRICHMENT must remain False; re-evaluate if StatsBomb publishes
+#   event data covering ≥85% of the Understat corpus date range.
 PHASE7_FEATURES_ALWAYS_DATA_GAP: List[str] = [
     "shot_quality_diff",
+    # Formally relegated 2026-09-04 per StatsBomb coverage audit (23.58% < 85%):
+    "home_pressing_intensity",
+    "progressive_carry_diff",
     # Restored as slots for artifact compatibility (see PHASE7_FEATURES_10) and
     # listed here so they are never computed live — the vector position exists,
     # the value is always the registry default.
@@ -183,6 +197,22 @@ CANONICAL_FEATURES_68: List[str] = [
 ]
 
 APEX_FEATURES_68: List[str] = [*APEX_FEATURES_58, *PHASE7_FEATURES_10]
+
+# Gate 7 candidate schema — apex_v4 (2026-09-04).
+# StatsBomb coverage audit (PATH B) formally relegated home_pressing_intensity and
+# progressive_carry_diff to ALWAYS_DATA_GAP, eliminating them as constant-value
+# noise in training. APEX_FEATURES_66 is APEX_FEATURES_68 with those two slots
+# dropped entirely, so the model receives 66 real inputs rather than 68 (66 + 2
+# constants that carry no information variance).
+#
+# H2H, venue, and market-interaction families populated in PR #149 are retained in
+# full — they constitute 13 of the 58 base features and are DATA_FED in production.
+#
+# Width: 66 = 68 − 2 event-data gap features.
+APEX_FEATURES_66: List[str] = [
+    f for f in APEX_FEATURES_68
+    if f not in ("home_pressing_intensity", "progressive_carry_diff")
+]
 
 # Deprecated alias — holds 68, not 65. The 2026-06-10 rename to _65 described a
 # vector the serving artifacts could not accept; see PHASE7_FEATURES_10. Retained
@@ -479,6 +509,14 @@ FEATURE_SCHEMA_VERSIONS: Dict[str, List[str]] = {
     # an apex generation. A clean apex_v3_68 result on this axis alone is not
     # this gate clearing; it structurally cannot, from this key alone.
     "apex_v3_68": APEX_FEATURES_68,
+    # Gate 7 candidate — StatsBomb coverage audit PATH B (2026-09-04).
+    # 66-wide: APEX_FEATURES_68 minus home_pressing_intensity and
+    # progressive_carry_diff (both relegated to ALWAYS_DATA_GAP after 23.58%
+    # crosswalk coverage against the Understat corpus).  H2H, venue, and
+    # market-interaction slots (PR #149, DATA_FED) are fully retained.
+    # Only valid for apex_v4_* artifacts; must not be assigned to any existing
+    # 68-wide artifact.
+    "apex_v4_66": APEX_FEATURES_66,
 }
 
 
@@ -1113,6 +1151,12 @@ _DEFAULT_VALUE_SOURCES: Dict[str, Dict[str, float]] = {
     # prior home matches) falls back to; the registry default is still the
     # honest answer for those rows, on both the training and serving side.
     "apex_v3_68": DEFAULT_FEATURE_VALUES_68,
+    # apex_v4_66 drops home_pressing_intensity and progressive_carry_diff from
+    # the input vector. Its defaults are the same 68-wide dict filtered down to
+    # 66 entries at use-time by _schema_features(); wiring the same source keeps
+    # cold-start behaviour consistent and satisfies
+    # test_default_value_sources_cover_every_registered_schema.
+    "apex_v4_66": DEFAULT_FEATURE_VALUES_68,
 }
 
 # Named subgroups to check membership against, most specific first. Every

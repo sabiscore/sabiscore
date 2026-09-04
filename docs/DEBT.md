@@ -1030,6 +1030,51 @@ file.
 
 ---
 
+### Finding 9 — StatsBomb coverage audit PATH B; `apex_v4_66` trained and evaluated against Gate 7 (2026-09-04)
+
+**StatsBomb Open Data coverage audit** (`scripts/audit_statsbomb_coverage.py`,
+report: `reports/evaluation/statsbomb-coverage-audit-2026.json`):
+
+- Identity crosswalk intersection: **811 / 3,440 unique Understat matchup
+  pairs = 23.58%** (threshold 85%).
+- **PATH B triggered.** `home_pressing_intensity` and `progressive_carry_diff`
+  formally relegated to `PHASE7_FEATURES_ALWAYS_DATA_GAP` in
+  `feature_registry.py`.
+- `CERTIFICATION_POLICY_VERSION` bumped `1.1.0` → `1.1.1`
+  (documentation-only; no gate threshold changed, APEX §23).
+- `ENABLE_STATSBOMB_ENRICHMENT` must remain `False` until StatsBomb publishes
+  domestic-league event data covering ≥ 85% of the Understat corpus.
+
+**`apex_v4_66` schema and evaluation:**
+
+Width 66 = `APEX_FEATURES_68` − 2 relegated event-data features.  The 13
+h2h / venue / market-interaction features from PR #149 are fully retained.
+
+| League | Δ RPS (cand − incumb) | Beats market? |
+|---|---|---|
+| BUNDESLIGA | +0.0103 (incumbent better) | ✗ |
+| EPL | +0.0013 (incumbent better) | **✓** (cand 0.2049 vs mkt 0.2054) |
+| EREDIVISIE | −0.0058 (candidate better) | ✗ |
+| LA_LIGA | −0.0046 (candidate better) | ✗ |
+| LIGUE_1 | −0.0007 (candidate better) | ✗ |
+| SERIE_A | −0.0045 (candidate better) | ✗ |
+
+Gates: `valid_probability_simplex` PASS · `input_responsiveness` PASS ·
+`coherent_price_perturbation` PASS · `primary_metric_improvement` PASS ·
+`serving_feature_availability` FAIL · `no_league_regression` FAIL (4/6) ·
+`market_baseline` FAIL (1/6).
+
+`promotion_permitted: false`.
+
+**Gate 7 milestone (directive criterion — at least one league):** ✓ EPL
+candidate RPS (0.2049) < market RPS (0.2054).  This is the first candidate
+generation to beat the market baseline in any league.  Full Gate 7 (all
+leagues) remains open.
+
+Full evaluation: `reports/evaluation/apex-v4-candidate-evaluation.md`.
+
+---
+
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
 
 **Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.
@@ -1854,11 +1899,17 @@ same as authority to make it.
 
 ---
 
-## 48. Every trained artifact, including the served generation, has never seen real Elo — `elo_difference` is a constant 0.0 across the entire training corpus
+## 48. The *served* generation has never seen real Elo — candidates have since M2 wiring (2026-08-30)
 
-**Tier:** `NEXT` — a real, measured, positive out-of-sample signal (M2
-evaluation, not yet wired into the training pipeline any model actually
-ships from). Filed 2026-08-30, M2 Family A session.
+**Correction 2026-09-04:** The original headline ("every trained artifact") is now false.
+Candidates evaluated after M2 Family A (PR wiring ~2026-08-30) are trained with real
+chronological Elo: `feature_availability_matrix.json` for `v8_dense68` classifies
+`elo_difference`, `elo_home_trend_5`, and `elo_momentum_cross` as
+`ALIGNED_OBSERVED_SIGNAL`. It remains true only of the **served** generation
+(`v5_phase7-20260808`), which was trained before the M2 wiring landed.
+
+**Tier:** `PARTIAL` — real Elo wired into candidate training; served generation unchanged.
+Filed 2026-08-30, M2 Family A session. Corrected 2026-09-04.
 
 Measured directly, not inferred: loaded the full real corpus (12,765
 matches) through `train_on_real_matches.build_dataset()` and read the
@@ -4926,7 +4977,7 @@ below (steps 1–6, dashboard-only) has evidently been completed — the stray
 service is gone, not merely suspended. Not re-diagnosed further; this closes
 the item on direct evidence rather than inference from a stale log.
 
-**Tier:** `FIX-NOW` / P0 — it crash-looped on every push to master.
+**Tier:** `RESOLVED 2026-08-23` — live-verified: only two services exist on Render, neither is the stray root-builder. (Original tier: FIX-NOW / P0 — it crash-looped on every push to master.)
 **Found:** 2026-08-12, from an operator-supplied Render deploy log for commit
 `5de6228`.
 
@@ -5772,8 +5823,11 @@ were completed by WP-18, as the 2026-08-07 closure note records.
 
 **Tier:** `NEXT` → settlement loop **shipped 2026-08-05**; interactive capture fix
 **DEPLOYED / VERIFIED 2026-08-14** on Apex v3.
-Entry kept (annotate, don't remove, matching item 1's precedent) because production
-is still DATA-FED at zero, a residual limitation and a related risk (item 5) remain.
+Entry kept (annotate, don't remove, matching item 1's precedent). **Correction 2026-09-04:**
+"DATA-FED at zero" was stale at assessment — production has **37 settled predictions**,
+a live three-fold walk-forward RPS series (mean 0.250), and a CLV series (n=17, mean −3.15%)
+that independently confirms `market_baseline` fails across all measured leagues.
+A residual limitation and a related risk (item 5) remain.
 **Owner:** unassigned.
 **Updated:** 2026-08-05 — WP-10.4 shipped. New `services/settlement_service.py`
 composes `sync_settled_results()` (new, `fixture_sync_service.py`) →
@@ -6267,11 +6321,13 @@ revisit alongside item 2/5's own settled-data gates.
 
 ## 9. Portfolio-exposure haircut curve and aggregate-cap multiplier are placeholders, not calibrated values
 
-**Tier:** `NEXT` — trigger: ≥1 fully-settled same-league/same-matchday round
-exists (Eredivisie's opening weekend, 2026-08-07 onward, is the earliest
-candidate). Not sooner.
+**Tier:** `NEXT` — trigger met (2026-09-04, 37 settled predictions). Calibration script
+ready at `scripts/calibrate_portfolio_exposure.py`. Data volume still too thin for a
+statistically reliable estimate: target ≥10 same-league/same-matchday groups of n≥2.
+Run `--apply` once that volume exists.
 **Owner:** unassigned.
 **Found:** 2026-08-06, implementing WP-17 (`docs/adr/0005-portfolio-exposure-policy.md`).
+**Updated:** 2026-09-04 — trigger clause cleared; calibration script written.
 
 `backend/src/core/portfolio_exposure.py`'s `HAIRCUT_PER_ADDITIONAL_FIXTURE` (0.10),
 `HAIRCUT_FLOOR_MULTIPLIER` (0.50), and `AGGREGATE_CAP_MULTIPLIER` (3.0) are reasoned
