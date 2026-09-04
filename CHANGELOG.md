@@ -5,6 +5,59 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Remove five live fabrications from the calibration view; add the Evidence Passport (2026-09-04)
+
+`docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` Phase 5. The calibration endpoint and
+reliability chart the directive asked for turned out to already exist (PR #127,
+mounted on `/performance`) — and to be rendering fabricated numbers. Phase 5's
+item 2 was therefore not a build but a deletion. `docs/DEBT.md` item 60 has the
+full finding.
+
+### Fixed
+
+- `apps/web/src/components/CalibrationCurveChart.tsx` — removed five
+  fabrications that rendered in production: a hardcoded +/-3% "95% CI" error bar
+  on every point (captioned as Kunsch (1989) block bootstrap, which it was not);
+  five hardcoded metric fallbacks (ECE `0.018` against a real 0.1402 — 8x better
+  than reality); an invented season list driving a control the endpoint never
+  parsed; `count: 0` bins plotted as measured zeros; and an "Overall Ensemble"
+  tab that silently rendered home-win data. Absent metrics now render an
+  em-dash, unfilled bins are filtered out, "Overall" is a real count-weighted
+  pool of the three class curves, and the only confidence intervals displayed
+  are the backend's genuine aggregate bootstrap ones, labelled as aggregate.
+- Three raw backend enums were leaking onto `/match/[id]` via
+  `DataFreshnessSection` — `UNAVAILABLE`/`FETCH_FAILED`, `DATA_GAP`, and
+  category slugs like `fixtures_results`. That section is deleted; the Evidence
+  Passport absorbs its role and routes every status through the existing
+  fail-closed `evidence-state.ts` mapper.
+
+### Added
+
+- `apps/web/src/lib/evidence-passport.ts` + `components/evidence-passport.tsx` —
+  per-family provenance, freshness, and resolution status on `/match/[id]`,
+  always visible. Unlike `EvidenceStatusCard` (which returns `null` once staking
+  is permitted — a deliberate "why no bet" contract, left untouched), a gapped
+  family renders as gapped and a resolved one as resolved, never omitted. It
+  composes data the platform already produces — `field_availability` /
+  `unavailable_reasons`, `groupEvidenceGaps()`, and the sources-freshness
+  registry — and introduces no new family taxonomy.
+- `backend/src/api/endpoints/performance.py` — `minimum_sample_size` and
+  `meets_sample_floor` on the calibration response so the client never hardcodes
+  the floor; `null` (not `0.0`) for an unfilled bin; and a 6h cache using the
+  `cache.get`/`cache.set` pattern `full_analysis.py` already uses, since the
+  block bootstrap is the expensive part and the data moves on settlement
+  cadence. Cache writes fail open.
+- Test coverage for all of the above: `test_model_performance_calibration.py`,
+  `CalibrationCurveChart.test.tsx`, `evidence-passport.test.ts`, plus Evidence
+  Passport cases in `full-analysis-dashboard.test.tsx` including a regression
+  guard that no raw backend token reaches the DOM.
+
+### Verified
+
+ruff clean; mypy 768/784 (ceiling untouched); 1227 backend unit tests pass;
+335 frontend tests across 55 files pass; `tsc --noEmit` and ESLint clean;
+`NODE_ENV=production` build succeeds; prohibited-copy scan clean.
+
 ## Unreleased - Apply the Understat match_stats backfill against production; measure real xG serving coverage (2026-09-04)
 
 Executes the `--apply` path built in the prior session (`docs/DEBT.md` item 56)

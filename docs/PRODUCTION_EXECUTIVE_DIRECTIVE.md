@@ -249,6 +249,29 @@ Only after Phases 1–3 have produced something true to display.
 - **Accessibility:** WCAG 2.2 AA contrast, ≥24 px targets, visible focus,
   `prefers-reduced-motion` respected. Verify at 360 / 768 / 1280 px.
 
+> ✅ **Phase 5 executed 2026-09-04 — with one correction to this section's
+> own premise.** The calibration/reliability view item 2 asks for **already
+> existed**: `GET /api/v1/model-performance/calibration` and
+> `CalibrationCurveChart.tsx` shipped in PR #127 and have been mounted on
+> `/performance` since. CLAUDE.md's WP-16 entry claiming a reliability-diagram
+> UI was "deliberately deferred" predates that PR and was never updated — do
+> not trust it. The real work was **deletion, not construction**: the shipped
+> chart rendered five fabricated values, including a hardcoded ±3% error bar
+> captioned as a Künsch block bootstrap and an ECE fallback of `0.018`
+> against a live 0.1402. Full record: `docs/DEBT.md` item 60.
+>
+> Delivered: the five fabrications removed, a 6h cache and
+> `meets_sample_floor`/`minimum_sample_size` added to the endpoint, the
+> Evidence Passport built on `/match/[id]` (always visible —
+> `EvidenceStatusCard` self-suppresses once staking is permitted, so it could
+> not be extended into one), three raw backend enums removed from that page,
+> and the a11y items above applied to the calibration control (`role="group"`
+> + `aria-pressed`, `min-h-9`, visible focus ring, `prefers-reduced-motion`
+> gating on chart animation). The prohibited-copy scan was already clean and
+> remains so; APEX §11 model provenance was already routed through
+> `lib/model-identity.ts` on both target routes and was not the leak — the
+> leak was evidence-source enums.
+
 ---
 
 ## 6. Verification — commands that exist

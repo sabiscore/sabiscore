@@ -1,5 +1,78 @@
 # SabiScore Debt Ledger
 
+## 60. The calibration view shipped with five live fabrications — RESOLVED 2026-09-04
+
+`GET /api/v1/model-performance/calibration` and `CalibrationCurveChart.tsx`
+shipped in PR #127 and have been mounted on `/performance` ever since.
+CLAUDE.md's own WP-16 ground-truth entry ("a reliability-diagram UI is
+deliberately deferred, no real settled data exists yet to render one
+against") was written before that PR and never updated — so a Phase 5 pass
+that trusted the log would have rebuilt a surface that already existed.
+
+Worse than stale: **the shipped chart rendered fabricated numbers to users.**
+Found by reading the component against a live payload, field by field.
+
+1. **Every error bar was a hardcoded ±3%.** `ci_lower`/`ci_upper` are never
+   present per-bin on the wire, so `Math.max(0, y - 0.03)` /
+   `Math.min(1, y + 0.03)` always won. The tooltip labelled it `95% CI:` and
+   the header captioned it "Künsch (1989) block bootstrap confidence
+   intervals" — a real methodology cited for a number computed no such way.
+   The backend *does* compute real Künsch bootstrap CIs
+   (`performance.py` → `block_bootstrap_ci`) but only at the aggregate metric
+   level, and the chart never read them.
+2. **Five metric tiles had hardcoded fallbacks** — ECE `0.018`, Brier total
+   `0.178`, reliability `0.006`, resolution `0.078`, uncertainty `0.250`.
+   Live values at the time: 0.1402 / 0.1997 / 0.0344 / 0.0342 / 0.1970. The
+   fabricated ECE was **8x better than reality** and was what rendered,
+   because the real field is nested under `brier_decomposition`, not the
+   `brier_score` object the component looked for first.
+3. **A dead season filter.** `walk_forward_seasons` is not in the response,
+   so the dropdown always offered two invented seasons
+   (`["2023-2024", "2024-2025"]`) and sent `season=` — a parameter the
+   endpoint does not parse. Selecting one changed nothing.
+4. **Empty bins plotted as measured zeros.** The endpoint emitted
+   `empirical_frequency: 0.0` and a computed midpoint for `count: 0` bins;
+   the chart had no `count > 0` filter. At the then-current n=36 that put 4-5
+   fabricated points per curve on screen.
+5. **The default "Overall Ensemble" tab silently showed home-win data.**
+   `binned_probabilities` is never on the wire, so the fallback chain always
+   resolved to `curves.home_win` under an "overall" label.
+
+**This is the fourth instance of one defect class** — a neutral or invented
+value rendered as a measurement (vΩ.24 neutral-default Elo, vΩ.28 RL reward
+components, the vΩ.31 `edge_quality_score` sweep, now this). The three prior
+sweeps all hunted values that were *wrong*; these were *absent*, replaced by
+a plausible constant at the render boundary. **A zero-fabrication scan that
+greps for suspicious values will not find this shape — the tell is a `??` or
+`||` fallback to a numeric literal in a display path.**
+
+**Fixed:** backend emits `null` (not `0.0`/a midpoint) for an unfilled bin,
+and adds `minimum_sample_size`/`meets_sample_floor` so the client never
+hardcodes the floor itself; the endpoint is now cached 6h
+(`_CALIBRATION_CACHE_TTL_SECONDS`, the `cache.get`/`cache.set` pattern
+`full_analysis.py` already uses) since the block bootstrap is the expensive
+part and the data moves on settlement cadence. Frontend drops all five
+fabrications: absent metrics render an em-dash, unfilled bins are filtered
+out, the season control is deleted, "Overall" is a real count-weighted pool
+of the three class curves, and the only confidence intervals shown are the
+real aggregate bootstrap ones, labelled as aggregate.
+
+⚠️ **`serving_feature_availability`-style floor semantics differ between two
+identically-named constants.** `MIN_RECORDS_FOR_DECOMPOSITION = 10` now
+exists in both `model_registry.py` (gating `walk_forward_validate`'s pooled
+decomposition over *test folds*) and `performance.py` (gating this
+endpoint's decomposition over *all settled records*). Same name, same value,
+deliberately independent — they answer different questions over different
+populations. Do not "unify" them without deciding which population the UI
+means; the two will report different numbers for the same fixture set.
+
+**Live settled-prediction count at the time of this work: 36** (CLAUDE.md's
+"11" was 8 days stale). CLV has also crossed its own 10-record floor
+(n=15, mean -3.1pp), so `/performance`'s CLV tile now renders a real
+negative mean rather than its progress-toward-floor copy.
+
+---
+
 ## 57. The tracked Understat corpus contains 1,826 duplicated matches, and 2021/22 is missing entirely
 
 **Tier:** `RESOLVED` for the duplication (deduplicated at load, 2026-09-03).

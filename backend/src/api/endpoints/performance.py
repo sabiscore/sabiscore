@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from functools import lru_cache
+import json
+import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -16,6 +18,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from ...core.cache import cache
 from ...db.session import get_async_session
 from ...models.active_generation import (
     ActiveGenerationError,
@@ -37,8 +40,18 @@ from ...core.database import Match, Team
 from ...db.models import MatchPredictionLog
 from ...monitoring.metrics import metrics_collector
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["performance"])
 _VALUE_SCAN_DB_DEADLINE_SECONDS = 2.5
+# Diagnostic layer floor for this endpoint's binning (not a promotion gate —
+# RPS keeps that role): binning below ~10 pooled records is not meaningful
+# even when the DB query itself succeeded. Single source of truth for this
+# endpoint's own floor — independent of model_registry.py's identically-valued
+# local constant, which gates a different response (walk_forward_validate's
+# pooled brier_decomposition for /model-performance).
+MIN_RECORDS_FOR_DECOMPOSITION = 10
+_CALIBRATION_CACHE_TTL_SECONDS = 21600  # 6 hours
 
 
 class ValueBetScanFixture(BaseModel):
@@ -465,8 +478,11 @@ def _compute_calibration_metrics(
                 p_mean = round(float(probs[mask].mean()), 4)
                 emp_freq = round(float(binary[mask].mean()), 4)
             else:
-                p_mean = round(float((lo + hi) / 2.0), 4)
-                emp_freq = 0.0
+                # An empty bin has no observation to report. A computed
+                # midpoint/0.0 placeholder is indistinguishable on the wire
+                # from a genuinely-observed value — fail closed to null.
+                p_mean = None
+                emp_freq = None
 
             curves[cls_name].append({
                 "bin_index": b_idx,
@@ -498,6 +514,8 @@ def _compute_calibration_metrics(
         "model_version": model_version,
         "n_bins": n_bins,
         "sample_size": n_samples,
+        "minimum_sample_size": MIN_RECORDS_FOR_DECOMPOSITION,
+        "meets_sample_floor": n_samples >= MIN_RECORDS_FOR_DECOMPOSITION,
         "ece": ece_data,
         "brier_decomposition": brier_decomp,
         "curves": curves,
@@ -520,8 +538,20 @@ async def model_performance_calibration(
 ) -> Dict[str, Any] | JSONResponse:
     """Expose binned probability calibration curves, Murphy Brier score decomposition,
     Multiclass ECE, and Künsch block bootstrap confidence intervals for public trust transparency.
+
+    Cached 6h: the block bootstrap over all settled records is the expensive
+    part, and the underlying data changes on settlement cadence, not per-request.
     """
     model_version = active_model_version()
+    cache_key = f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
+    cached = cache.get(cache_key) if cache else None
+    if cached:
+        try:
+            metrics_collector.increment("calibration.cache_hit")
+            return json.loads(cached) if isinstance(cached, str) else cached
+        except Exception:
+            pass
+
     started_at = None
     if window is not None:
         started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
@@ -546,10 +576,18 @@ async def model_performance_calibration(
             },
         )
 
-    return _compute_calibration_metrics(
+    result = _compute_calibration_metrics(
         records=records,
         n_bins=n_bins,
         league=league,
         model_version=model_version,
     )
+
+    if cache:
+        try:
+            cache.set(cache_key, json.dumps(result), ttl=_CALIBRATION_CACHE_TTL_SECONDS)
+        except Exception as exc:
+            logger.debug("Calibration cache write failed for %s: %s", cache_key, exc)
+
+    return result
 
