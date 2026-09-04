@@ -1459,6 +1459,30 @@ Owner: unassigned. Found 2026-08-31, building the M2 certification milestone
 > APEX §23 forbids, and the gate failing in the *wrong direction* (see below)
 > is evidence about the signal, not about the threshold.
 
+> 📌 **Tracking entry (2026-09-04, post-#150).** The durable in-suite tracker
+> for this item is the pair of `xfail`s in
+> `backend/tests/unit/test_uncertainty_contract.py`:
+> `TestRealCorpusValidation::test_error_association` and
+> `TestRobustness::test_error_association_direction_is_consistent_across_leagues`.
+> They are the only two non-passing results in an otherwise green backend suite
+> (1248 passed / 4 skipped / 2 xfailed at `4fd8a97`), and they are `xfail`
+> rather than skipped or deleted **on purpose**: each carries the measured
+> reversal in its own reason string, so every run reports the gap's size and
+> direction instead of hiding it. Current measurement — the highest-epistemic
+> quartile scores *better* (lower RPS) than the lowest in every scored league,
+> which is the reverse of what the gate requires: overall gap −0.0217;
+> BUNDESLIGA −0.0448, EPL −0.0217, LA_LIGA −0.0025, LIGUE_1 −0.0288,
+> SERIE_A −0.0098.
+>
+> ⚠️ **Re-specifying `error_association` per aleatoric stratum is FORBIDDEN**
+> (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` §1, closed questions; Hypothesis 1
+> below). It is a post-hoc threshold change under APEX §23, and on the recorded
+> evidence it would not cleanly pass anyway — 2 of 3 strata remain
+> wrong-signed. These two tests flipping to `XPASS` is the only acceptable way
+> for them to go green: it must be earned by a generation that generalizes
+> better, never by editing the assertion, the stratification, or the member
+> basis.
+
 `src/models/ensemble_uncertainty.py` implements the ADR's `ensemble_dispersion`
 method (BALD decomposition over the shipped `random_forest`'s 300 bootstrap
 trees) and it is real, working code — not a stub. Scored against the real
