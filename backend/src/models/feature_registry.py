@@ -517,6 +517,10 @@ FEATURE_SCHEMA_VERSIONS: Dict[str, List[str]] = {
     # Only valid for apex_v4_* artifacts; must not be assigned to any existing
     # 68-wide artifact.
     "apex_v4_66": APEX_FEATURES_66,
+    # Gate 7 Phase 4 HPO candidate (2026-09-04): same 66-wide feature contract as
+    # apex_v4_66; differs only in model hyperparameters (Optuna TPE Bayesian
+    # optimisation, --tune flag). Writes *_v10_gate7_hpo.pkl artifacts.
+    "apex_v5_66": APEX_FEATURES_66,
 }
 
 
@@ -1157,6 +1161,9 @@ _DEFAULT_VALUE_SOURCES: Dict[str, Dict[str, float]] = {
     # cold-start behaviour consistent and satisfies
     # test_default_value_sources_cover_every_registered_schema.
     "apex_v4_66": DEFAULT_FEATURE_VALUES_68,
+    # apex_v5_66 is the HPO-tuned candidate over the same 66-wide contract;
+    # same default source, same cold-start behaviour.
+    "apex_v5_66": DEFAULT_FEATURE_VALUES_68,
 }
 
 # Named subgroups to check membership against, most specific first. Every

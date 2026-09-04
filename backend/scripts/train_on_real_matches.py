@@ -185,6 +185,10 @@ _SCHEMAS: Dict[str, str] = {
     # PATH B, 23.58% < 85% threshold). H2H, venue, market-interaction (PR #149)
     # fully retained. Writes *_v9_gate7.pkl artifacts.
     "apex_v4_66": "v9_gate7",
+    # Phase 4 HPO candidate (2026-09-04): same 66-wide contract as apex_v4_66;
+    # hyperparameters tuned via Optuna TPE Bayesian optimisation (--tune flag).
+    # Writes *_v10_gate7_hpo.pkl artifacts.
+    "apex_v5_66": "v10_gate7_hpo",
 }
 _DEFAULT_SCHEMA = "apex_v1_68"
 
@@ -206,7 +210,7 @@ def _schema_features(schema: str) -> List[str]:
         return APEX_FEATURES_89
     if schema == "apex_v2_71":
         return APEX_FEATURES_71
-    if schema == "apex_v4_66":
+    if schema in ("apex_v4_66", "apex_v5_66"):
         return APEX_FEATURES_66
     raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
 

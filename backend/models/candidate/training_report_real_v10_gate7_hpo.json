@@ -1,0 +1,368 @@
+{
+  "BUNDESLIGA": {
+    "accuracy": 0.5382059800664452,
+    "rps": 0.1938967471368719,
+    "brier": 0.5730884306689938,
+    "log_loss": 0.9688794538794424,
+    "calibration_error": 0.06718420185772231,
+    "n": 301,
+    "stacked": {
+      "accuracy": 0.5282392026578073,
+      "rps": 0.19677033144920594,
+      "brier": 0.5764235932813623,
+      "log_loss": 0.9715949152449118,
+      "calibration_error": 0.07232306132504054,
+      "n": 301
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 400,
+        "max_depth": 4,
+        "min_samples_leaf": 33
+      },
+      "xgboost": {
+        "n_estimators": 200,
+        "max_depth": 3,
+        "learning_rate": 0.011392544213167119,
+        "subsample": 0.9299311219552664,
+        "colsample_bytree": 0.7045089289201256,
+        "reg_lambda": 2.5073108639958166
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 3,
+        "learning_rate": 0.012087766153788104,
+        "subsample": 0.7054032232374146,
+        "colsample_bytree": 0.8650487961067957,
+        "reg_lambda": 14.44426221410791
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 1455,
+    "calibration_n": 296,
+    "evaluation_n": 301,
+    "responsive_features": 37,
+    "baseline_accuracy_home": 0.43853820598006643,
+    "baseline_rps_trainprior": 0.2317386552251736,
+    "baseline_rps_market": 0.19083929061889648,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-27",
+      "end": "2024-05-18"
+    },
+    "calibration_window": {
+      "start": "2024-08-23",
+      "end": "2025-05-17"
+    },
+    "evaluation_window": {
+      "start": "2025-08-22",
+      "end": "2026-05-16"
+    }
+  },
+  "EPL": {
+    "accuracy": 0.49866666666666665,
+    "rps": 0.20496493720255649,
+    "brier": 0.6099487194552509,
+    "log_loss": 1.018508184402516,
+    "calibration_error": 0.05271433058958042,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.49333333333333335,
+      "rps": 0.20490137561853153,
+      "brier": 0.6087003467626924,
+      "log_loss": 1.0138391232702009,
+      "calibration_error": 0.06349753377858926,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 500,
+        "max_depth": 10,
+        "min_samples_leaf": 40
+      },
+      "xgboost": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.019376960962778546,
+        "subsample": 0.7723497028617295,
+        "colsample_bytree": 0.6021847921678046,
+        "reg_lambda": 0.8020103512761069
+      },
+      "lightgbm": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.01836656312251054,
+        "subsample": 0.7820757186891552,
+        "colsample_bytree": 0.9178299664912868,
+        "reg_lambda": 19.334252231805436
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 1821,
+    "calibration_n": 375,
+    "evaluation_n": 375,
+    "responsive_features": 49,
+    "baseline_accuracy_home": 0.424,
+    "baseline_rps_trainprior": 0.22849150417621494,
+    "baseline_rps_market": 0.2053660899400711,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-05-19"
+    },
+    "calibration_window": {
+      "start": "2024-08-16",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  },
+  "LA_LIGA": {
+    "accuracy": 0.5386666666666666,
+    "rps": 0.1949137780725454,
+    "brier": 0.5706929988476407,
+    "log_loss": 0.9648687401681904,
+    "calibration_error": 0.033298056475248916,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.552,
+      "rps": 0.19640063980022576,
+      "brier": 0.5743511077826442,
+      "log_loss": 0.9712421848583983,
+      "calibration_error": 0.04478397696312264,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 400,
+        "max_depth": 4,
+        "min_samples_leaf": 34
+      },
+      "xgboost": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.018188574331625747,
+        "subsample": 0.7946528397366107,
+        "colsample_bytree": 0.674528255413022,
+        "reg_lambda": 5.3815220324633835
+      },
+      "lightgbm": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.01819900788716483,
+        "subsample": 0.8361639567604636,
+        "colsample_bytree": 0.8271741852268205,
+        "reg_lambda": 11.167394007275886
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 1817,
+    "calibration_n": 380,
+    "evaluation_n": 375,
+    "responsive_features": 49,
+    "baseline_accuracy_home": 0.48533333333333334,
+    "baseline_rps_trainprior": 0.22345809865387004,
+    "baseline_rps_market": 0.19628490507602692,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-24",
+      "end": "2024-05-26"
+    },
+    "calibration_window": {
+      "start": "2024-08-15",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  },
+  "LIGUE_1": {
+    "accuracy": 0.521594684385382,
+    "rps": 0.1986448068210402,
+    "brier": 0.5831028144766126,
+    "log_loss": 0.9805851296196681,
+    "calibration_error": 0.03007922757012464,
+    "n": 301,
+    "stacked": {
+      "accuracy": 0.5116279069767442,
+      "rps": 0.2034376230838547,
+      "brier": 0.593092552143752,
+      "log_loss": 0.997463643082568,
+      "calibration_error": 0.046428667570235824,
+      "n": 301
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 350,
+        "max_depth": 5,
+        "min_samples_leaf": 37
+      },
+      "xgboost": {
+        "n_estimators": 100,
+        "max_depth": 3,
+        "learning_rate": 0.032768930490023315,
+        "subsample": 0.9158471023212942,
+        "colsample_bytree": 0.7113214525574154,
+        "reg_lambda": 6.936761200887611
+      },
+      "lightgbm": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "learning_rate": 0.010845169910312313,
+        "subsample": 0.7235081004626598,
+        "colsample_bytree": 0.820318360098486,
+        "reg_lambda": 19.62630218273175
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 1641,
+    "calibration_n": 306,
+    "evaluation_n": 301,
+    "responsive_features": 43,
+    "baseline_accuracy_home": 0.4584717607973422,
+    "baseline_rps_trainprior": 0.22926811378159884,
+    "baseline_rps_market": 0.19912628829479218,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-05-19"
+    },
+    "calibration_window": {
+      "start": "2024-08-16",
+      "end": "2025-05-17"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-17"
+    }
+  },
+  "SERIE_A": {
+    "accuracy": 0.528,
+    "rps": 0.19942367404277914,
+    "brier": 0.5902287057227932,
+    "log_loss": 0.9911121253166919,
+    "calibration_error": 0.049868362556455575,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.5333333333333333,
+      "rps": 0.19938401581510137,
+      "brier": 0.588392907624659,
+      "log_loss": 0.9907994869771631,
+      "calibration_error": 0.04286928121446174,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 400,
+        "max_depth": 4,
+        "min_samples_leaf": 34
+      },
+      "xgboost": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.019100087664938373,
+        "subsample": 0.7357888628439009,
+        "colsample_bytree": 0.6407093129745185,
+        "reg_lambda": 0.7896455005999351
+      },
+      "lightgbm": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.015152205809925387,
+        "subsample": 0.6969138561500394,
+        "colsample_bytree": 0.9516497071040343,
+        "reg_lambda": 13.318414771683232
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 1803,
+    "calibration_n": 375,
+    "evaluation_n": 375,
+    "responsive_features": 47,
+    "baseline_accuracy_home": 0.392,
+    "baseline_rps_trainprior": 0.2332832744095393,
+    "baseline_rps_market": 0.19714131951332092,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-28",
+      "end": "2024-06-02"
+    },
+    "calibration_window": {
+      "start": "2024-08-17",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-23",
+      "end": "2026-05-24"
+    }
+  },
+  "POOLED": {
+    "accuracy": 0.5309511826874685,
+    "rps": 0.1980232345741088,
+    "brier": 0.5846831719341474,
+    "log_loss": 0.9827634304709355,
+    "calibration_error": 0.01966325160756283,
+    "n": 1987,
+    "stacked": {
+      "accuracy": 0.5314544539506794,
+      "rps": 0.19808951602694483,
+      "brier": 0.584491016778028,
+      "log_loss": 0.9819852648306504,
+      "calibration_error": 0.026067517119070956,
+      "n": 1987
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 350,
+        "max_depth": 4,
+        "min_samples_leaf": 25
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 3,
+        "learning_rate": 0.015992756048760888,
+        "subsample": 0.6904922100231766,
+        "colsample_bytree": 0.7222378209693997,
+        "reg_lambda": 1.2371509737705781
+      },
+      "lightgbm": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "learning_rate": 0.010483379268509152,
+        "subsample": 0.7408608985925486,
+        "colsample_bytree": 0.8640293654485197,
+        "reg_lambda": 19.275775617445426
+      }
+    },
+    "hyperparameter_source": "optuna_tpe_rps_30trials",
+    "train_n": 8537,
+    "calibration_n": 1732,
+    "evaluation_n": 1987,
+    "responsive_features": 50,
+    "baseline_accuracy_home": 0.4393558127830901,
+    "baseline_rps_trainprior": 0.22896537429419572,
+    "baseline_rps_market": 0.19784937798976898,
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-06-02"
+    },
+    "calibration_window": {
+      "start": "2024-08-15",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  }
+}

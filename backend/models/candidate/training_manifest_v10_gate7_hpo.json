@@ -1,0 +1,610 @@
+{
+  "dataset": {
+    "auxiliary": {},
+    "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "file_count": 36,
+    "files": [
+      {
+        "bytes": 147798,
+        "name": "fd_D1_1920.csv",
+        "sha256": "774e8be9ffe8af9aa55ce0dd777038eadb27fdd9de7e9756c8faa3e753674dc7"
+      },
+      {
+        "bytes": 147778,
+        "name": "fd_D1_2021.csv",
+        "sha256": "6bbd7d907379db2676cd76938c111ce953538781a8c5ce0514400dcc6c27fa38"
+      },
+      {
+        "bytes": 147808,
+        "name": "fd_D1_2122.csv",
+        "sha256": "cc4e233cd1529a85e9903f48e6e27e2cf4f24034f90af409a55130df345f121c"
+      },
+      {
+        "bytes": 147615,
+        "name": "fd_D1_2223.csv",
+        "sha256": "6926944279a4653f8f6b79c6fb21d591cf542f2ad1d55c95dcbb7ec3ccc39800"
+      },
+      {
+        "bytes": 144336,
+        "name": "fd_D1_2324.csv",
+        "sha256": "7d579ee93406ae2f3076677512d8a795acbcd3c693488df24e88d59cc3259eb4"
+      },
+      {
+        "bytes": 173558,
+        "name": "fd_D1_2425.csv",
+        "sha256": "4ba269c44ee9be7d4439cb2edc260de1f65f6dc26d2615ac7a2b584856c1830d"
+      },
+      {
+        "bytes": 159944,
+        "name": "fd_D1_2526.csv",
+        "sha256": "618301a4b39918225a8ccc57f0f839d675e1abd92fa3a3ccd9a67acd7c79dd7f"
+      },
+      {
+        "bytes": 183674,
+        "name": "fd_E0_1920.csv",
+        "sha256": "798b609490fb7587cf35168efd77b7071ebbaf1adb422a7164da0b49e5e2e930"
+      },
+      {
+        "bytes": 183566,
+        "name": "fd_E0_2021.csv",
+        "sha256": "b9b335faede849403cb33e70cb2cb6f0053ff5798cbc6e6f3c1af41709642d8b"
+      },
+      {
+        "bytes": 183669,
+        "name": "fd_E0_2122.csv",
+        "sha256": "9a737b6062d3424a2414ba9efcca84555dc087f3b9bb26fea59d5efb6781cc92"
+      },
+      {
+        "bytes": 184013,
+        "name": "fd_E0_2223.csv",
+        "sha256": "9f35dd0d812f5d897c291c5b5fa1960fd136df55c0dc2855864ef64b1dc942ce"
+      },
+      {
+        "bytes": 180299,
+        "name": "fd_E0_2324.csv",
+        "sha256": "4765b34253899846b8b78a145b4d120a32afd6414a472ba0fc66c8697839c4ee"
+      },
+      {
+        "bytes": 205154,
+        "name": "fd_E0_2425.csv",
+        "sha256": "bd4463e23aa53c89bd9409fe7613a42b2abdccfcc568429edb58cf3fc79be29b"
+      },
+      {
+        "bytes": 203438,
+        "name": "fd_E0_2526.csv",
+        "sha256": "3e3a8352f9ada6789c508d6ca184424421fed56a30400904a4a327c583407e62"
+      },
+      {
+        "bytes": 132036,
+        "name": "fd_F1_1920.csv",
+        "sha256": "e8f7dfa45a1693abb774ec40b43cf3c87d13cadd8758af05c3956b394d53e5e8"
+      },
+      {
+        "bytes": 179670,
+        "name": "fd_F1_2021.csv",
+        "sha256": "26befb43282bdcbc99c86360d24f9511e804c8ef9b5711b693c4867a14775835"
+      },
+      {
+        "bytes": 180023,
+        "name": "fd_F1_2122.csv",
+        "sha256": "b04de45df16345c652f3490b3524a5a5e4029b344fb0f326ac308946c3511933"
+      },
+      {
+        "bytes": 180256,
+        "name": "fd_F1_2223.csv",
+        "sha256": "ca0f275e0663e55afdcf4c129601ce9f55da9030a65e1f5c30d8a93c5b8ac379"
+      },
+      {
+        "bytes": 141867,
+        "name": "fd_F1_2324.csv",
+        "sha256": "153bd4bcbebe7b4817323983676f0174011b2bc280ebac6f1bde1a9327c4d5b0"
+      },
+      {
+        "bytes": 162183,
+        "name": "fd_F1_2425.csv",
+        "sha256": "53d08ac85e42531519dec492161b921a3c3a094dd0d04ca9f0c21d6bf183d217"
+      },
+      {
+        "bytes": 158471,
+        "name": "fd_F1_2526.csv",
+        "sha256": "898b7ddcd373cfe955ae353b1a98cf7f1c8757ca10b69d53039f4e098e88f192"
+      },
+      {
+        "bytes": 179737,
+        "name": "fd_I1_1920.csv",
+        "sha256": "9a0338acee8fea4869d2a3f56ad879294d8641d83f7c8ae7e371a4ba29be7774"
+      },
+      {
+        "bytes": 180072,
+        "name": "fd_I1_2021.csv",
+        "sha256": "abf9101d95b1d5f7542ff1016b730e65ceb243f05ea5a9191bef8435683c6756"
+      },
+      {
+        "bytes": 180435,
+        "name": "fd_I1_2122.csv",
+        "sha256": "93da09d3b865e69eb7260df0e02f1d0c999ed5172a1da441371a4ed70fe2710b"
+      },
+      {
+        "bytes": 180508,
+        "name": "fd_I1_2223.csv",
+        "sha256": "b496d0e97375fdb6c2c98ad1f5dbfa05749ccba64f566a041483851724bcb9cf"
+      },
+      {
+        "bytes": 175852,
+        "name": "fd_I1_2324.csv",
+        "sha256": "d7e030f1aa619e3ba7f5e528ae86cbb074d6d988b72a79c35f892d07da32cd1c"
+      },
+      {
+        "bytes": 200918,
+        "name": "fd_I1_2425.csv",
+        "sha256": "4951126181ea6d36f0d9483491c69cc4c1ffcf12e292e014239f345c053daec0"
+      },
+      {
+        "bytes": 196217,
+        "name": "fd_I1_2526.csv",
+        "sha256": "709ae279617d16af226312bcceac941e71241745ddaf950bdac2b83afad4fcbb"
+      },
+      {
+        "bytes": 158364,
+        "name": "fd_N1_2526.csv",
+        "sha256": "dfb092a866e0df4b4c8fde7778d47f41a4307f5c5ac5a6f55d2276e45c80e604"
+      },
+      {
+        "bytes": 180747,
+        "name": "fd_SP1_1920.csv",
+        "sha256": "5d004f84825073adb15c30d4cafbf73e063ecd48224177fc63374aa20f4d1367"
+      },
+      {
+        "bytes": 180860,
+        "name": "fd_SP1_2021.csv",
+        "sha256": "f219f178f8253b01dce92a640be9f7cf5738d592ee9c078196db44c34352a29d"
+      },
+      {
+        "bytes": 181073,
+        "name": "fd_SP1_2122.csv",
+        "sha256": "7cc9972d3880b262c9ae4792c98c351eb149c1e0ad1b2ea10571e3d619911ba4"
+      },
+      {
+        "bytes": 181358,
+        "name": "fd_SP1_2223.csv",
+        "sha256": "235f7aa5f7913d29cb053a2c37312d6970faad289424376b6c5c68374c1c8d5d"
+      },
+      {
+        "bytes": 177195,
+        "name": "fd_SP1_2324.csv",
+        "sha256": "932c8af1c8e54f25e513306cb971b110712e52e0173d47b178b4efb0369cc81e"
+      },
+      {
+        "bytes": 202443,
+        "name": "fd_SP1_2425.csv",
+        "sha256": "61635430d290e42fc37f6bafde0d25c3d1b54bbde65dcea787f62f697dd86cda"
+      },
+      {
+        "bytes": 197653,
+        "name": "fd_SP1_2526.csv",
+        "sha256": "4ca2e285f3ee0702f6bc55fcaa4f5a15cb3aef6220735a1d15398131e21d63f5"
+      }
+    ],
+    "pattern": "fd_*.csv",
+    "source_dir": "C:/Users/UBEC-DC-ANAMBRA/Documents/sabiscore/backend/data/cache",
+    "total_bytes": 6280588
+  },
+  "environment": {
+    "implementation": "CPython",
+    "libraries": {
+      "joblib": "1.5.3",
+      "lightgbm": "4.6.0",
+      "numpy": "2.5.0",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.8.0",
+      "scipy": "1.18.0",
+      "xgboost": "3.3.0"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.6"
+  },
+  "features": {
+    "feature_contract_sha256": "2f80df948bb52e0a1f746271573c3b448fd6be23f322b2c988cf6d3a98076288",
+    "feature_count": 66,
+    "feature_schema_version": "apex_v5_66",
+    "order_sha256": "70db95261756e17180c5cac8449c29424e7344c4cc956b56e7cfb56863db05b4"
+  },
+  "generated_at": "2026-09-04T23:38:54.223599+00:00",
+  "git": {
+    "commit": "71cf2cdfe52600ecc1341af8b599e06f2786cf91",
+    "dirty": true
+  },
+  "labels": {
+    "contract": {
+      "encoding": {
+        "0": "home_win",
+        "1": "draw",
+        "2": "away_win"
+      },
+      "generated_from": "final full-time score of a completed match",
+      "missing_label_handling": "a match without a parsed full-time score never becomes a row; it is dropped at parse time rather than imputed",
+      "rule": "0 if home_goals > away_goals else 1 if home_goals == away_goals else 2",
+      "source": "scripts/train_on_real_matches.py:build_dataset()",
+      "task": "3-way 1X2 match outcome"
+    },
+    "sha256": "7a17dd8a4c2afb453ff05103dfbefa3d7018e4dd601c462ed54970dedf96a9ff"
+  },
+  "leagues": {
+    "BUNDESLIGA": {
+      "accuracy": 0.5382059800664452,
+      "baseline_accuracy_home": 0.43853820598006643,
+      "baseline_rps_market": 0.19083929061889648,
+      "baseline_rps_trainprior": 0.2317386552251736,
+      "brier": 0.5730884306689938,
+      "calibration_error": 0.06718420185772231,
+      "calibration_n": 296,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-17",
+        "start": "2024-08-23"
+      },
+      "evaluation_n": 301,
+      "evaluation_window": {
+        "end": "2026-05-16",
+        "start": "2025-08-22"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.8650487961067957,
+          "learning_rate": 0.012087766153788104,
+          "max_depth": 3,
+          "n_estimators": 250,
+          "reg_lambda": 14.44426221410791,
+          "subsample": 0.7054032232374146
+        },
+        "random_forest": {
+          "max_depth": 4,
+          "min_samples_leaf": 33,
+          "n_estimators": 400
+        },
+        "xgboost": {
+          "colsample_bytree": 0.7045089289201256,
+          "learning_rate": 0.011392544213167119,
+          "max_depth": 3,
+          "n_estimators": 200,
+          "reg_lambda": 2.5073108639958166,
+          "subsample": 0.9299311219552664
+        }
+      },
+      "log_loss": 0.9688794538794424,
+      "n": 301,
+      "responsive_features": 37,
+      "rps": 0.1938967471368719,
+      "stacked": {
+        "accuracy": 0.5282392026578073,
+        "brier": 0.5764235932813623,
+        "calibration_error": 0.07232306132504054,
+        "log_loss": 0.9715949152449118,
+        "n": 301,
+        "rps": 0.19677033144920594
+      },
+      "train_n": 1455,
+      "training_window": {
+        "end": "2024-05-18",
+        "start": "2019-09-27"
+      }
+    },
+    "EPL": {
+      "accuracy": 0.49866666666666665,
+      "baseline_accuracy_home": 0.424,
+      "baseline_rps_market": 0.2053660899400711,
+      "baseline_rps_trainprior": 0.22849150417621494,
+      "brier": 0.6099487194552509,
+      "calibration_error": 0.05271433058958042,
+      "calibration_n": 375,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-16"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.9178299664912868,
+          "learning_rate": 0.01836656312251054,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 19.334252231805436,
+          "subsample": 0.7820757186891552
+        },
+        "random_forest": {
+          "max_depth": 10,
+          "min_samples_leaf": 40,
+          "n_estimators": 500
+        },
+        "xgboost": {
+          "colsample_bytree": 0.6021847921678046,
+          "learning_rate": 0.019376960962778546,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 0.8020103512761069,
+          "subsample": 0.7723497028617295
+        }
+      },
+      "log_loss": 1.018508184402516,
+      "n": 375,
+      "responsive_features": 49,
+      "rps": 0.20496493720255649,
+      "stacked": {
+        "accuracy": 0.49333333333333335,
+        "brier": 0.6087003467626924,
+        "calibration_error": 0.06349753377858926,
+        "log_loss": 1.0138391232702009,
+        "n": 375,
+        "rps": 0.20490137561853153
+      },
+      "train_n": 1821,
+      "training_window": {
+        "end": "2024-05-19",
+        "start": "2019-09-20"
+      }
+    },
+    "LA_LIGA": {
+      "accuracy": 0.5386666666666666,
+      "baseline_accuracy_home": 0.48533333333333334,
+      "baseline_rps_market": 0.19628490507602692,
+      "baseline_rps_trainprior": 0.22345809865387004,
+      "brier": 0.5706929988476407,
+      "calibration_error": 0.033298056475248916,
+      "calibration_n": 380,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-15"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.8271741852268205,
+          "learning_rate": 0.01819900788716483,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 11.167394007275886,
+          "subsample": 0.8361639567604636
+        },
+        "random_forest": {
+          "max_depth": 4,
+          "min_samples_leaf": 34,
+          "n_estimators": 400
+        },
+        "xgboost": {
+          "colsample_bytree": 0.674528255413022,
+          "learning_rate": 0.018188574331625747,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 5.3815220324633835,
+          "subsample": 0.7946528397366107
+        }
+      },
+      "log_loss": 0.9648687401681904,
+      "n": 375,
+      "responsive_features": 49,
+      "rps": 0.1949137780725454,
+      "stacked": {
+        "accuracy": 0.552,
+        "brier": 0.5743511077826442,
+        "calibration_error": 0.04478397696312264,
+        "log_loss": 0.9712421848583983,
+        "n": 375,
+        "rps": 0.19640063980022576
+      },
+      "train_n": 1817,
+      "training_window": {
+        "end": "2024-05-26",
+        "start": "2019-09-24"
+      }
+    },
+    "LIGUE_1": {
+      "accuracy": 0.521594684385382,
+      "baseline_accuracy_home": 0.4584717607973422,
+      "baseline_rps_market": 0.19912628829479218,
+      "baseline_rps_trainprior": 0.22926811378159884,
+      "brier": 0.5831028144766126,
+      "calibration_error": 0.03007922757012464,
+      "calibration_n": 306,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-17",
+        "start": "2024-08-16"
+      },
+      "evaluation_n": 301,
+      "evaluation_window": {
+        "end": "2026-05-17",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.820318360098486,
+          "learning_rate": 0.010845169910312313,
+          "max_depth": 3,
+          "n_estimators": 300,
+          "reg_lambda": 19.62630218273175,
+          "subsample": 0.7235081004626598
+        },
+        "random_forest": {
+          "max_depth": 5,
+          "min_samples_leaf": 37,
+          "n_estimators": 350
+        },
+        "xgboost": {
+          "colsample_bytree": 0.7113214525574154,
+          "learning_rate": 0.032768930490023315,
+          "max_depth": 3,
+          "n_estimators": 100,
+          "reg_lambda": 6.936761200887611,
+          "subsample": 0.9158471023212942
+        }
+      },
+      "log_loss": 0.9805851296196681,
+      "n": 301,
+      "responsive_features": 43,
+      "rps": 0.1986448068210402,
+      "stacked": {
+        "accuracy": 0.5116279069767442,
+        "brier": 0.593092552143752,
+        "calibration_error": 0.046428667570235824,
+        "log_loss": 0.997463643082568,
+        "n": 301,
+        "rps": 0.2034376230838547
+      },
+      "train_n": 1641,
+      "training_window": {
+        "end": "2024-05-19",
+        "start": "2019-09-20"
+      }
+    },
+    "POOLED": {
+      "accuracy": 0.5309511826874685,
+      "baseline_accuracy_home": 0.4393558127830901,
+      "baseline_rps_market": 0.19784937798976898,
+      "baseline_rps_trainprior": 0.22896537429419572,
+      "brier": 0.5846831719341474,
+      "calibration_error": 0.01966325160756283,
+      "calibration_n": 1732,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-15"
+      },
+      "evaluation_n": 1987,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.8640293654485197,
+          "learning_rate": 0.010483379268509152,
+          "max_depth": 3,
+          "n_estimators": 300,
+          "reg_lambda": 19.275775617445426,
+          "subsample": 0.7408608985925486
+        },
+        "random_forest": {
+          "max_depth": 4,
+          "min_samples_leaf": 25,
+          "n_estimators": 350
+        },
+        "xgboost": {
+          "colsample_bytree": 0.7222378209693997,
+          "learning_rate": 0.015992756048760888,
+          "max_depth": 3,
+          "n_estimators": 250,
+          "reg_lambda": 1.2371509737705781,
+          "subsample": 0.6904922100231766
+        }
+      },
+      "log_loss": 0.9827634304709355,
+      "n": 1987,
+      "responsive_features": 50,
+      "rps": 0.1980232345741088,
+      "stacked": {
+        "accuracy": 0.5314544539506794,
+        "brier": 0.584491016778028,
+        "calibration_error": 0.026067517119070956,
+        "log_loss": 0.9819852648306504,
+        "n": 1987,
+        "rps": 0.19808951602694483
+      },
+      "train_n": 8537,
+      "training_window": {
+        "end": "2024-06-02",
+        "start": "2019-09-20"
+      }
+    },
+    "SERIE_A": {
+      "accuracy": 0.528,
+      "baseline_accuracy_home": 0.392,
+      "baseline_rps_market": 0.19714131951332092,
+      "baseline_rps_trainprior": 0.2332832744095393,
+      "brier": 0.5902287057227932,
+      "calibration_error": 0.049868362556455575,
+      "calibration_n": 375,
+      "calibration_season": "2425",
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-17"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-23"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "optuna_tpe_rps_30trials",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.9516497071040343,
+          "learning_rate": 0.015152205809925387,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 13.318414771683232,
+          "subsample": 0.6969138561500394
+        },
+        "random_forest": {
+          "max_depth": 4,
+          "min_samples_leaf": 34,
+          "n_estimators": 400
+        },
+        "xgboost": {
+          "colsample_bytree": 0.6407093129745185,
+          "learning_rate": 0.019100087664938373,
+          "max_depth": 3,
+          "n_estimators": 150,
+          "reg_lambda": 0.7896455005999351,
+          "subsample": 0.7357888628439009
+        }
+      },
+      "log_loss": 0.9911121253166919,
+      "n": 375,
+      "responsive_features": 47,
+      "rps": 0.19942367404277914,
+      "stacked": {
+        "accuracy": 0.5333333333333333,
+        "brier": 0.588392907624659,
+        "calibration_error": 0.04286928121446174,
+        "log_loss": 0.9907994869771631,
+        "n": 375,
+        "rps": 0.19938401581510137
+      },
+      "train_n": 1803,
+      "training_window": {
+        "end": "2024-06-02",
+        "start": "2019-09-28"
+      }
+    }
+  },
+  "reproducibility_sha256": "9bb36cd5b9d895c1fa01f32c3e2aeed24c57b85e46a5ef612d69692bbd79fd5f",
+  "schema": "sabiscore_training_manifest_v1",
+  "training_config": {
+    "artifact_suffix": "v10_gate7_hpo",
+    "calibration": "latest pre-holdout season, disjoint from core training rows",
+    "holdout_season": "2526",
+    "seed": 42,
+    "split": "chronological; holdout is the most recent season, never random",
+    "tune_trials": 30
+  }
+}

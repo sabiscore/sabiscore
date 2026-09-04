@@ -1073,6 +1073,38 @@ leagues) remains open.
 
 Full evaluation: `reports/evaluation/apex-v4-candidate-evaluation.md`.
 
+### Finding 10 — Phase 4 Step 2: Bayesian HPO (`apex_v5_66`); 30-trial Optuna TPE; regressed `no_league_regression` 4/6 → 3/6 (2026-09-05)
+
+**Phase 4 Step 2** applied constrained Bayesian HPO (Optuna TPE, 30
+trials / learner / league, `TimeSeriesSplit(n_splits=3)`, `MedianPruner`)
+to the `apex_v4_66` feature contract.  Schema key: `apex_v5_66`; artifact
+suffix: `v10_gate7_hpo`.
+
+Per-league comparison vs `v5_phase7` on 2526 holdout:
+
+| League | Incumbent RPS | Candidate RPS | Δ RPS | Candidate wins | Beats market |
+|---|---|---|---|---|---|
+| BUNDESLIGA | 0.1900 | 0.1968 | +0.0068 | ✗ | ✗ (mkt 0.1908) |
+| EPL | 0.2036 | 0.2049 | +0.0013 | ✗ | ✓ (mkt 0.2054) |
+| EREDIVISIE | 0.2048 | 0.1988 | −0.0059 | ✓ | ✗ (mkt 0.1978) |
+| LA_LIGA | 0.2018 | 0.1964 | −0.0054 | ✓ | ✗ (mkt 0.1963) |
+| LIGUE_1 | 0.2032 | 0.2034 | +0.0003 | ✗ | ✗ (mkt 0.1991) |
+| SERIE_A | 0.2051 | 0.1994 | −0.0058 | ✓ | ✗ (mkt 0.1971) |
+
+Gates: `valid_probability_simplex` PASS · `input_responsiveness` PASS ·
+`coherent_price_perturbation` PASS · `primary_metric_improvement` PASS ·
+`serving_feature_availability` FAIL · `no_league_regression` FAIL (3/6) ·
+`market_baseline` FAIL (1/6).
+
+`promotion_permitted: false`.
+
+**HPO regression:** LIGUE_1 flipped from candidate-better (−0.0007 in v4)
+to incumbent-better (+0.0003 in v5) — 30-trial TPE overfit to
+`TimeSeriesSplit` CV folds for that league.  Mean RPS improvement
++0.00066 → +0.00146, but `no_league_regression` 4/6 → 3/6.
+
+Full evaluation: `reports/evaluation/apex-v5-candidate-evaluation.md`.
+
 ---
 
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
