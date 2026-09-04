@@ -460,6 +460,25 @@ FEATURE_SCHEMA_VERSIONS: Dict[str, List[str]] = {
     # declares it, and none should until a candidate on this contract clears
     # every gate on its own evidence.
     "apex_v2_71": APEX_FEATURES_71,
+    # Same 68-column contract as apex_v1_68 — h2h/venue/market-interaction (13
+    # of APEX_FEATURES_68's slots) go from training-constant to
+    # training-computed under this key. docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md
+    # §2/§5 Phase 2; docs/DEBT.md item 56. The key exists purely so this
+    # training run writes its own models/candidate/*_v8_dense68* artifacts
+    # rather than overwriting the checked-in apex_v1_68 baseline Phase 3
+    # compares against — the CONTRACT is unchanged (same object, not a copy,
+    # matching CANONICAL_FEATURES_65's precedent above), only which of its
+    # slots training actually varies.
+    #
+    # ⚠️ Does NOT touch serving_feature_availability's OTHER failure mode: the
+    # checked-in models/candidate/feature_availability_matrix.json records
+    # serving_schema_misaligned_slots: 11 for apex_v1_68 today, entirely
+    # independent of h2h/venue and unaffected by anything registered here —
+    # it is the Apex market block (positions 20-30) mismatching the currently
+    # active generation's legacy serving contract, fixed only by activating
+    # an apex generation. A clean apex_v3_68 result on this axis alone is not
+    # this gate clearing; it structurally cannot, from this key alone.
+    "apex_v3_68": APEX_FEATURES_68,
 }
 
 
@@ -902,6 +921,145 @@ def derive_apex_market_features(
     }
 
 
+# ── h2h / home-venue / market-interaction family (docs/DEBT.md item 56,
+#    PRODUCTION_EXECUTIVE_DIRECTIVE.md §2/§5 Phase 2) ────────────────────────
+# These 13 names are already CANONICAL_FEATURES_58 slots (lines 42-50, 58-63)
+# and have been computed at serving time since before this file existed —
+# UpcomingMatchFeatureProjector._get_h2h_stats() / _get_home_venue_stats() /
+# its post-market interaction block. `train_on_real_matches.build_dataset()`
+# has always left them at their registry default, so no tree in any trained
+# ensemble has ever split on them: a column that is constant across every
+# training row carries zero information gain, the same argument DEBT 56
+# Finding 1 makes about the four ALWAYS_DATA_GAP slots. Populating them in
+# training is this file's answer to that half of the train/serve parity bar;
+# the walk-forward accumulation itself lives in train_on_real_matches.py's
+# TeamHistory, mirroring the xG family's split between "formula lives here,
+# state lives with the caller" (see PHASE9_FEATURES_XG above).
+#
+# `data/transformers.py:407-474` is NOT the parity reference for this family
+# — read directly, it's a second pipeline that re-derives these fields from
+# already-engineered keys through a materially different formula (a clamp on
+# h2h_matches, home_venue_loss_rate assigned from the AWAY team's away win
+# rate). The functions below are transcribed from the real, live serving
+# path — _get_h2h_stats/_get_home_venue_stats/the interaction block in
+# upcoming_match_feature_service.py — verified by reading that code directly,
+# the same discipline _serving_source()'s docstring already commits to.
+#
+# `total_goals_expected` is deliberately NOT here. It has zero call sites in
+# the serving projector; its only formula anywhere (data/transformers.py:402,
+# the wrong pipeline above) is `xg_differential + 2.60`, and xg_differential
+# is not a training column under this schema. Computing it in training would
+# give training a value serving can never reproduce — a train/serve break in
+# the opposite direction from what this section exists to fix. It stays
+# defaulted; PRODUCTION_EXECUTIVE_DIRECTIVE.md §5 Phase 2's "16 → 2" is
+# corrected here to 16 → 3 (the 2 event-data slots plus this one).
+H2H_WINDOW = 10
+HOME_VENUE_WINDOW = 20
+
+H2H_FEATURES: Tuple[str, ...] = (
+    "h2h_home_wins", "h2h_away_wins", "h2h_draws", "h2h_matches", "h2h_dominance",
+)
+HOME_VENUE_FEATURES: Tuple[str, ...] = (
+    "home_venue_win_rate", "home_venue_draw_rate", "home_venue_loss_rate",
+    "home_advantage_strength",
+)
+MARKET_INTERACTION_FEATURES: Tuple[str, ...] = (
+    "form_market_agreement_home", "form_market_disagreement",
+    "venue_market_combo", "h2h_market_agreement",
+)
+
+
+def derive_h2h_features(
+    meetings: Sequence[Tuple[int, int]]
+) -> Optional[Dict[str, float]]:
+    """Last-H2H_WINDOW head-to-head meetings, scored from one side's perspective.
+
+    ``meetings`` is (goals_for, goals_against) for the perspective side,
+    most-recent-first, already filtered to strictly before kickoff and capped
+    at H2H_WINDOW — the caller owns the leak boundary and the perspective
+    flip, exactly as _get_h2h_stats() does before its own identical loop.
+    None on an empty history: a pair that has never met is a genuine data
+    gap, never a fabricated 0.0.
+    """
+    if not meetings:
+        return None
+    home_wins = away_wins = draws = 0
+    for gf, ga in meetings:
+        if gf > ga:
+            home_wins += 1
+        elif gf < ga:
+            away_wins += 1
+        else:
+            draws += 1
+    total = len(meetings)
+    return {
+        "h2h_home_wins": float(home_wins),
+        "h2h_away_wins": float(away_wins),
+        "h2h_draws": float(draws),
+        "h2h_matches": float(total),
+        "h2h_dominance": (home_wins - away_wins) / total,
+    }
+
+
+def derive_home_venue_features(
+    results: Sequence[Tuple[int, int]]
+) -> Optional[Dict[str, float]]:
+    """Home-venue record from the last HOME_VENUE_WINDOW matches a team hosted.
+
+    ``results`` is (home_goals, away_goals) for matches this team hosted,
+    most-recent-first, already filtered to strictly before kickoff and capped
+    at HOME_VENUE_WINDOW — mirrors _get_home_venue_stats()'s query exactly,
+    losses by subtraction as that function does. None on an empty history —
+    no prior hosted matches in scope is a data gap, not a neutral 0.50.
+    """
+    if not results:
+        return None
+    total = len(results)
+    wins = sum(1 for hg, ag in results if hg > ag)
+    draws = sum(1 for hg, ag in results if hg == ag)
+    losses = total - wins - draws
+    return {
+        "home_venue_win_rate": wins / total,
+        "home_venue_draw_rate": draws / total,
+        "home_venue_loss_rate": losses / total,
+        "home_advantage_strength": (wins - losses) / total,
+    }
+
+
+def derive_market_interaction_features(
+    *,
+    market_prob_home: float,
+    home_form_last5_home: Optional[float] = None,
+    home_venue_win_rate: Optional[float] = None,
+    h2h_dominance: Optional[float] = None,
+) -> Dict[str, float]:
+    """Cross-signal features — transcribed from the post-market interaction
+    block in upcoming_match_feature_service.py (~372-388), read directly.
+
+    Each key is independently gated on its own input, mirroring serving
+    exactly: h2h_market_agreement needs h2h_dominance, venue_market_combo
+    needs home_venue_win_rate, and the two form-interaction keys need
+    home_form_last5_home. A caller with only some of the three resolved gets
+    only the corresponding subset back — never a value mixing a real signal
+    with a registry default.
+
+    ``home_form_last5_home`` is the ALREADY-multiplied value
+    (derive_last5_form_features()'s output, home_form_5 * 3.0), not the raw
+    rate — matching exactly what serving reads back out of its own
+    features_dict rather than recomputing from the source stat.
+    """
+    out: Dict[str, float] = {}
+    if h2h_dominance is not None:
+        out["h2h_market_agreement"] = h2h_dominance * market_prob_home
+    if home_venue_win_rate is not None:
+        out["venue_market_combo"] = home_venue_win_rate * market_prob_home
+    if home_form_last5_home is not None:
+        form_norm = home_form_last5_home / 3.0
+        out["form_market_agreement_home"] = form_norm * market_prob_home
+        out["form_market_disagreement"] = abs(form_norm - market_prob_home)
+    return out
+
+
 # ── Machine-readable feature contract (docs/DEBT.md item 36) ────────────────
 # Three prior artifacts described this contract in three incompatible shapes:
 # this module's own name-only lists, backend/models/candidate/
@@ -948,6 +1106,13 @@ _DEFAULT_VALUE_SOURCES: Dict[str, Dict[str, float]] = {
     # of missing wiring, which is exactly the distinction
     # test_default_value_sources_cover_every_registered_schema exists to keep.
     "apex_v2_71": DEFAULT_FEATURE_VALUES_68,
+    # Same 68-wide source as apex_v1_68 — required by
+    # test_default_value_sources_cover_every_registered_schema. Populating
+    # h2h/venue/interaction slots from real training data (see the section
+    # below) does not change what a COLD-START row (no prior meetings, no
+    # prior home matches) falls back to; the registry default is still the
+    # honest answer for those rows, on both the training and serving side.
+    "apex_v3_68": DEFAULT_FEATURE_VALUES_68,
 }
 
 # Named subgroups to check membership against, most specific first. Every
