@@ -24,13 +24,15 @@ MOCK_MODE=false
 ENABLE_LEGACY_INFERENCE=false
 SCRAPER_ALLOW_INSECURE_FALLBACK=false
 ALLOW_SQLITE_FALLBACK=false
+# Legacy alias of the line above -- ONE setting, not two. The canonical
+# name is listed first in AliasChoices and wins if both are set.
 SABISCORE_ALLOW_INSECURE_FALLBACK=false
 PROVIDER_LIVE_TESTS=false
 ```
 
 Database tables are created by Alembic only. App import/startup does not call `Base.metadata.create_all()` or `Base.metadata.drop_all()`.
 
-SQLite fallback is permitted only for isolated tests or an explicit local development opt-in with `SABISCORE_ALLOW_INSECURE_FALLBACK=true` and a non-production `APP_ENV`. Production rejects SQLite fallback.
+SQLite fallback is permitted only for isolated tests or an explicit local development opt-in with `ALLOW_SQLITE_FALLBACK=true` (legacy alias: `SABISCORE_ALLOW_INSECURE_FALLBACK`) and a non-production `APP_ENV`. Production rejects SQLite fallback.
 
 ## Environment Matrix
 

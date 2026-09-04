@@ -112,7 +112,8 @@ def _init_engine() -> Engine:
     if _sync_url.startswith("sqlite"):
         if not _sqlite_fallback_allowed():
             raise RuntimeError(
-                "SQLite database URLs require SABISCORE_ALLOW_INSECURE_FALLBACK=true "
+                "SQLite database URLs require ALLOW_SQLITE_FALLBACK=true "
+                "(legacy alias: SABISCORE_ALLOW_INSECURE_FALLBACK) "
                 "and APP_ENV must not be production"
             )
         # SQLite-specific configuration
