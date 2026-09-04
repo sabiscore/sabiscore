@@ -35,6 +35,8 @@ from ..models.active_generation import ActiveGenerationError, active_feature_sch
 from ..models.feature_registry import (
     APEX_MARKET_FEATURES_14,
     CANONICAL_FEATURES_58,
+    H2H_FEATURES,
+    HOME_VENUE_FEATURES,
     PHASE7_FEATURES_7,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
     PHASE8_FEATURES_BERRAR,
@@ -55,9 +57,12 @@ from ..models.feature_registry import (
     derive_apex_market_features,
     derive_combination_features,
     derive_goals_gd_features,
+    derive_h2h_features,
+    derive_home_venue_features,
     derive_last5_form_features,
     derive_league_features,
     derive_market_features,
+    derive_market_interaction_features,
     derive_temporal_features,
     is_apex_schema,
 )
@@ -146,13 +151,12 @@ _AWAY_REMAP_FEATURES = frozenset({
     "away_gd_recent",
 })
 
-_H2H_FEATURES = frozenset({
-    "h2h_home_wins", "h2h_away_wins", "h2h_draws", "h2h_matches", "h2h_dominance",
-})
-_VENUE_FEATURES = frozenset({
-    "home_venue_win_rate", "home_venue_draw_rate", "home_venue_loss_rate",
-    "home_advantage_strength",
-})
+# Same names as models/feature_registry.py's H2H_FEATURES/HOME_VENUE_FEATURES
+# — frozenset here purely for the membership-check use sites below, not a
+# second copy of the list (docs/DEBT.md item 56: the arithmetic itself now
+# lives in derive_h2h_features()/derive_home_venue_features(), not here).
+_H2H_FEATURES = frozenset(H2H_FEATURES)
+_VENUE_FEATURES = frozenset(HOME_VENUE_FEATURES)
 
 
 class UpcomingMatchFeatureProjector:
@@ -369,23 +373,27 @@ class UpcomingMatchFeatureProjector:
         # these 14 keys — they fall through to data_gaps below, same honest-gap
         # treatment Elo/StatsBomb already get.
 
-        # Cross-signal features — same formulas as data/transformers.py:424-429
-        # (train/serve parity). Only computed when both inputs are genuinely
-        # resolved, never mixing a real value with a registry default.
+        # Cross-signal features —
+        # models/feature_registry.py:derive_market_interaction_features()
+        # (docs/DEBT.md item 56; train/serve parity). Only computed when both
+        # inputs are genuinely resolved, never mixing a real value with a
+        # registry default — each of the three inputs below is independently
+        # gated on its own resolution, matching the helper's own contract.
         _market_resolved = "market_prob_home" in derived_resolved
         if _market_resolved:
             mph = features_dict["market_prob_home"]
-            if h2h_stats:
-                features_dict["h2h_market_agreement"] = h2h_stats["h2h_dominance"] * mph
-                derived_resolved.add("h2h_market_agreement")
-            if venue_stats:
-                features_dict["venue_market_combo"] = venue_stats["home_venue_win_rate"] * mph
-                derived_resolved.add("venue_market_combo")
-            if home_stats:
-                form_norm = features_dict.get("home_form_last5_home", 1.5) / 3.0
-                features_dict["form_market_agreement_home"] = form_norm * mph
-                features_dict["form_market_disagreement"] = abs(form_norm - mph)
-                derived_resolved.update(("form_market_agreement_home", "form_market_disagreement"))
+            interactions = derive_market_interaction_features(
+                market_prob_home=mph,
+                home_form_last5_home=(
+                    features_dict.get("home_form_last5_home") if home_stats else None
+                ),
+                home_venue_win_rate=(
+                    venue_stats["home_venue_win_rate"] if venue_stats else None
+                ),
+                h2h_dominance=h2h_stats["h2h_dominance"] if h2h_stats else None,
+            )
+            features_dict.update(interactions)
+            derived_resolved.update(interactions)
 
         features_array = np.array(
             [features_dict.get(f, self.defaults.get(f, 0.0)) for f in self.canonical_features],
@@ -977,29 +985,16 @@ class UpcomingMatchFeatureProjector:
         )
         result = await db.execute(query)
         meetings = result.scalars().all()
-        if not meetings:
-            return None
-        total = len(meetings)
-        home_wins = away_wins = draws = total_goals = 0
-        for m in meetings:
-            if m.home_team_id == home_team_id:
-                gf, ga = (m.home_score or 0), (m.away_score or 0)
-            else:
-                gf, ga = (m.away_score or 0), (m.home_score or 0)
-            total_goals += gf + ga
-            if gf > ga:
-                home_wins += 1
-            elif gf < ga:
-                away_wins += 1
-            else:
-                draws += 1
-        return {
-            "h2h_home_wins": float(home_wins),
-            "h2h_away_wins": float(away_wins),
-            "h2h_draws": float(draws),
-            "h2h_matches": float(total),
-            "h2h_dominance": (home_wins - away_wins) / total,
-        }
+        # Perspective flip only — the arithmetic itself is
+        # models/feature_registry.py:derive_h2h_features() (docs/DEBT.md item
+        # 56), so training's walk-forward accumulator computes the identical
+        # values from the identical formula.
+        perspective = [
+            (m.home_score or 0, m.away_score or 0) if m.home_team_id == home_team_id
+            else (m.away_score or 0, m.home_score or 0)
+            for m in meetings
+        ]
+        return derive_h2h_features(perspective)
 
     async def _get_home_venue_stats(
         self,
@@ -1023,18 +1018,12 @@ class UpcomingMatchFeatureProjector:
         )
         result = await db.execute(query)
         home_matches = result.scalars().all()
-        if not home_matches:
-            return None
-        total = len(home_matches)
-        wins = sum(1 for m in home_matches if (m.home_score or 0) > (m.away_score or 0))
-        draws = sum(1 for m in home_matches if (m.home_score or 0) == (m.away_score or 0))
-        losses = total - wins - draws
-        return {
-            "home_venue_win_rate": wins / total,
-            "home_venue_draw_rate": draws / total,
-            "home_venue_loss_rate": losses / total,
-            "home_advantage_strength": (wins - losses) / total,
-        }
+        # Arithmetic lives in
+        # models/feature_registry.py:derive_home_venue_features() (docs/DEBT.md
+        # item 56) — training's walk-forward accumulator computes the
+        # identical values from the identical formula.
+        results = [(m.home_score or 0, m.away_score or 0) for m in home_matches]
+        return derive_home_venue_features(results)
 
     async def _get_team_results_sequence(
         self,
