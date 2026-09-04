@@ -5,6 +5,41 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Apply the Understat match_stats backfill against production; measure real xG serving coverage (2026-09-04)
+
+Executes the `--apply` path built in the prior session (`docs/DEBT.md` item 56)
+against production for the first time, and answers the question
+`docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` Phase 1 named as decisive: does xG
+have a serving future at all. No code changed — this is a recorded production
+operation plus a diagnostic measurement.
+
+### Executed
+
+- `match_stats` backfilled: **19,960 rows inserted** (2 rows per fixture ×
+  9,980 ready fixtures), manifest `df9e7aa49a201e0434c52f92451c1baadff199a65a9264a8ca377a8c52304ac4`,
+  authorization `operator-authorized-2026-09-04-debt56-directive-phase1`. 653
+  corpus rows stay `MATCH_UNRESOLVED` (fixture couldn't resolve to a canonical
+  `match_id`). Supersedes the stale "11,694 rows" figure carried in
+  `docs/DEBT.md` item 56 and the directive drafts it superseded — corpus
+  deduplication (#144) moved both the manifest digest and the real ready-row
+  count; 9,980 is the first accurate measurement of it.
+  - Idempotency re-verified immediately after: re-running `--apply` with the
+    same manifest reports `inserted_rows: 0`, `already_present_rows: 19,960`,
+    `reversals_total: 0` — the refuse-to-overwrite guarantee holds.
+  - `reversals_total: 19,960` from the real apply is retained with the
+    authorization record for undo.
+- Measured `upcoming_match_feature_service.project_xg_rolling_features`
+  (still zero production call sites — training-side parity only, via
+  `xg_replay.py`) against all 89 currently-scheduled fixtures: **57 (64%) now
+  return real features**, versus uniform `None` before this backfill.
+  Coverage by league: EPL 14/18, LA_LIGA 11/16, BUNDESLIGA 16/17, SERIE_A
+  10/10, LIGUE_1 6/8, **EREDIVISIE 0/9, UCL 0/11** — the last two are zero
+  because the Understat corpus has no rows for either competition, not a code
+  defect.
+
+Not done: wiring `project_xg_rolling_features` into a registered candidate
+feature schema is Phase 2/3 of the directive, not started here.
+
 ## Unreleased - Carry real xG into training, evaluate and reject the apex_v2_71 candidate, and keep the infrastructure (2026-09-03)
 
 The `apex_v2_71` candidate is **rejected**. The scaffolding built to evaluate it
