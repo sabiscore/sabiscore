@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   EdgeDeltaBar,
   EloContextCard,
@@ -10,6 +12,7 @@ import {
   RLCard,
   UncertaintyCard,
 } from "./full-analysis-dashboard";
+import { EvidencePassport } from "./evidence-passport";
 
 describe("NarrativeBlock accessibility", () => {
   it("supports keyboard-operable disclosure with a valid controlled region", () => {
@@ -291,5 +294,137 @@ describe("EdgeDeltaBar uses the backend's de-vigged edge", () => {
     const card = render(<OddsEdgeCard edge={oddsEdge} />).container.textContent ?? "";
     expect(delta).toContain("10.7");
     expect(card).toContain("10.7");
+  });
+});
+
+describe("EvidencePassport (Phase 5 §5)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderWithClient(ui: ReactElement) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  }
+
+  // Same shape EvidenceStatusCard suppresses on (presentation.stakePermitted
+  // === true, via mapFullAnalysisPresentation) — the passport must stay
+  // visible on exactly the path where the "why no bet" card renders nothing.
+  const stakePermittedData = {
+    match_id: "test-fixture",
+    verdict: "ACTIONABLE",
+    prediction_status: "AVAILABLE",
+    prediction_source: "CERTIFIED_MODEL",
+    probabilities_available: true,
+    is_reduced_evidence_baseline: false,
+    top_outcome_probability: 0.55,
+    // probabilities_available: true makes mapFullAnalysisPresentation
+    // dereference data.ensemble.* (full-analysis-contract.ts:527) — the
+    // sibling `blocked` fixture above omits it only because its
+    // probabilities_available: false short-circuits that branch.
+    ensemble: {
+      home_win_prob: 0.55,
+      draw_prob: 0.25,
+      away_win_prob: 0.2,
+      prediction: "home_win",
+      probabilities_available: true,
+      league: "EPL",
+      top_outcome_probability: 0.55,
+      certification_state: "CERTIFIED",
+    },
+    effective_kelly_cap: 0.04,
+    stake_permitted: true,
+    partial_intelligence: false,
+    narrative: "Model and market evidence are aligned.",
+    freshness_tag: "LIVE",
+    generated_at: "2026-09-04T12:00:00Z",
+    odds_edge: { market: "home_win", market_odds: 2.1, model_prob: 0.55, edge: 0.05, kelly_stake: 0.02 },
+    rl_recommendation: { abstain: false, stake_fraction: 0.02, reason: null, reward_components: {} },
+    evidence_quality: {
+      critical_gaps: [],
+      advisory_gaps: ["market_prob_home"],
+      conflicts: [],
+      critical_gap_count: 0,
+      advisory_gap_count: 1,
+      conflict_count: 0,
+      total_gap_count: 1,
+    },
+    field_availability: {
+      fixture: true,
+      prediction: true,
+      market: true,
+      uncertainty: true,
+      elo: true,
+    },
+    unavailable_reasons: {},
+  } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
+
+  it("stays visible when EvidenceStatusCard renders nothing (stakePermitted path)", () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "AVAILABLE", sources: [] }),
+    } as unknown as Response);
+
+    const statusCard = render(<EvidenceStatusCard data={stakePermittedData} />);
+    expect(statusCard.container).toBeEmptyDOMElement();
+
+    const passport = renderWithClient(<EvidencePassport data={stakePermittedData} />);
+    expect(passport.container).not.toBeEmptyDOMElement();
+    expect(screen.getByText("Fixture Identity")).toBeInTheDocument();
+    expect(screen.getByText("Model Prediction")).toBeInTheDocument();
+    expect(screen.getByText("Team Strength (Elo)")).toBeInTheDocument();
+    // A resolved family can still carry advisory gaps — the market row's chip
+    // reads "Resolved · 1" from this fixture's one advisory gap, which is
+    // the honest rendering, so match the status prefix rather than exact text.
+    expect(screen.getAllByText(/^Resolved/).length).toBe(5);
+    expect(screen.queryByText(/^Gapped/)).toBeNull();
+  });
+
+  // Regression guard for the three raw-enum leaks the old DataFreshnessSection
+  // rendered directly in JSX: {data.status} (route envelope), {src.freshness_status}
+  // (title attr, keys a color map), and {src.category}. The mocked API response
+  // below deliberately carries all five prohibited raw tokens somewhere in its
+  // payload; none may reach the rendered DOM text.
+  const gappedData = {
+    ...stakePermittedData,
+    field_availability: {
+      fixture: true,
+      prediction: true,
+      market: false,
+      uncertainty: false,
+      elo: true,
+    },
+    unavailable_reasons: {
+      market: "Coherent single-bookmaker 1X2 snapshot unavailable",
+      uncertainty: "Certified ensemble-dispersion uncertainty unavailable",
+    },
+  } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
+
+  it("never renders a raw backend token from the sources/freshness response", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "FETCH_FAILED",
+        sources: [
+          { name: "odds-market-features", category: "betting_market", freshness_status: "DATA_GAP", enabled: true },
+          { name: "football-data.org", category: "fixtures_results", freshness_status: "STALE", enabled: true },
+        ],
+      }),
+    } as unknown as Response);
+
+    const { container } = renderWithClient(<EvidencePassport data={gappedData} />);
+
+    // Wait for the sources/freshness query to resolve and the market row's
+    // provenance sub-line (the one family with an honest category mapping) to render.
+    await waitFor(() => {
+      expect(container.textContent ?? "").toContain("Betting Market");
+    });
+
+    await waitFor(() => {
+      const text = container.textContent ?? "";
+      for (const raw of ["DATA_GAP", "fixtures_results", "UNAVAILABLE", "FETCH_FAILED", "UNKNOWN"]) {
+        expect(text).not.toContain(raw);
+      }
+    });
   });
 });

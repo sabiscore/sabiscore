@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useReducedMotion } from "framer-motion";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -11,50 +12,140 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
-  ErrorBar,
 } from "recharts";
 import { ShieldCheck, Info, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface CalibrationBin {
-  bin_center?: number;
-  bin_midpoint?: number;
-  observed_frequency?: number;
-  empirical_frequency?: number;
-  predicted_mean?: number;
+// ─── Types ──────────────────────────────────────────────────────────────────
+// Shapes below are read directly from `_compute_calibration_metrics()` /
+// `block_bootstrap_ci()` in backend/src/api/endpoints/performance.py and
+// backend/src/models/evaluation/metrics.py — not guessed from the frontend
+// side. `binned_probabilities`, top-level `brier_score`, `rps`, and
+// `walk_forward_seasons` are never present on the wire and have been dropped.
+
+/** One Künsch (1989) block-bootstrap confidence interval, as returned by
+ * `block_bootstrap_ci()`. `ci_lower`/`ci_upper` are `null` when no bootstrap
+ * replicate scored — never fabricate a range in that case. */
+export interface BootstrapCI {
+  point_estimate: number;
+  ci_lower: number | null;
+  ci_upper: number | null;
+  ci_level: number;
+  n_bootstrap: number;
+  block_size: number;
+  n_samples: number;
+  note?: string;
+}
+
+/** One reliability bin for a single outcome class. `predicted_mean`/
+ * `empirical_frequency` are `null` for an unfilled bin (`count: 0`) —
+ * never a fabricated 0.0 or bin-midpoint stand-in. */
+export interface CalibrationBin {
+  bin_index: number;
+  predicted_mean: number | null;
+  empirical_frequency: number | null;
   count: number;
-  ci_lower?: number;
-  ci_upper?: number;
 }
 
 interface CalibrationData {
-  model_generation?: string;
-  model_version?: string;
-  binned_probabilities?: CalibrationBin[];
+  sample_size?: number;
+  meets_sample_floor?: boolean;
+  minimum_sample_size?: number;
   curves?: {
     home_win?: CalibrationBin[];
     draw?: CalibrationBin[];
     away_win?: CalibrationBin[];
   };
-  ece?: number | { mean?: number; home_win?: number; draw?: number; away_win?: number };
-  brier_score?: {
-    total?: number;
-    reliability?: number;
-    resolution?: number;
-    uncertainty?: number;
+  ece?: {
+    mean?: number;
+    class_0?: number;
+    class_1?: number;
+    class_2?: number;
   };
   brier_decomposition?: {
-    mean?: { brier_score?: number; reliability?: number; resolution?: number; uncertainty?: number };
-    home_win?: { brier_score?: number; reliability?: number; resolution?: number; uncertainty?: number };
+    mean?: {
+      brier_score?: number;
+      reliability?: number;
+      resolution?: number;
+      uncertainty?: number;
+    };
   };
-  rps?: number;
-  walk_forward_seasons?: string[];
   confidence_intervals?: {
-    rps?: [number, number];
-    brier_score?: [number, number];
-    ece_mean?: [number, number];
+    rps?: BootstrapCI;
+    brier_score?: BootstrapCI;
+    ece_mean?: BootstrapCI;
   };
 }
+
+type OutcomeCurves = NonNullable<CalibrationData["curves"]>;
+type OutcomeKey = "home_win" | "draw" | "away_win";
+
+interface PlotBin {
+  x: number;
+  y: number;
+  count: number;
+}
+
+// ─── Pure helpers (exported for direct unit testing) ───────────────────────
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function hasObservedValue(
+  b: CalibrationBin,
+): b is CalibrationBin & { predicted_mean: number; empirical_frequency: number } {
+  return b.predicted_mean != null && b.empirical_frequency != null;
+}
+
+/** Drop unfilled bins rather than plotting a fabricated zero. */
+export function toPlotBins(rawBins: CalibrationBin[]): PlotBin[] {
+  return rawBins.filter(hasObservedValue).map((b) => ({
+    x: roundTo(b.predicted_mean, 2),
+    y: roundTo(b.empirical_frequency, 3),
+    count: b.count,
+  }));
+}
+
+/** Pool the three per-class curves into one count-weighted "overall" curve,
+ * keyed by `bin_index` so a class's unfilled bin never drags the average
+ * down. This uses data already in the response — `binned_probabilities`
+ * (which the "Overall Ensemble" tab used to silently fall back to reading as
+ * `curves.home_win`) is never present on the wire. */
+export function poolCurves(curves: OutcomeCurves): PlotBin[] {
+  const byIndex = new Map<number, { x: number; y: number; count: number }>();
+  for (const classBins of [curves.home_win, curves.draw, curves.away_win]) {
+    for (const b of (classBins ?? []).filter(hasObservedValue)) {
+      if (!b.count) continue;
+      const acc = byIndex.get(b.bin_index) ?? { x: 0, y: 0, count: 0 };
+      acc.x += b.predicted_mean * b.count;
+      acc.y += b.empirical_frequency * b.count;
+      acc.count += b.count;
+      byIndex.set(b.bin_index, acc);
+    }
+  }
+  return [...byIndex.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, acc]) => ({
+      x: roundTo(acc.x / acc.count, 2),
+      y: roundTo(acc.y / acc.count, 3),
+      count: acc.count,
+    }));
+}
+
+/** Format an aggregate bootstrap CI, or "—" when it wasn't computed. */
+function formatCi(ci: BootstrapCI | undefined, fmt: (v: number) => string): string {
+  if (!ci || ci.ci_lower == null || ci.ci_upper == null) return "—";
+  return `[${fmt(ci.ci_lower)}, ${fmt(ci.ci_upper)}]`;
+}
+
+const OUTCOME_TABS: Array<{ id: "overall" | OutcomeKey; label: string }> = [
+  { id: "overall", label: "Overall Ensemble" },
+  { id: "home_win", label: "Home Win" },
+  { id: "draw", label: "Draw" },
+  { id: "away_win", label: "Away Win" },
+];
 
 export function CalibrationCurveChart({
   league,
@@ -63,15 +154,14 @@ export function CalibrationCurveChart({
   league?: string;
   className?: string;
 }) {
-  const [selectedOutcome, setSelectedOutcome] = useState<"overall" | "home_win" | "draw" | "away_win">("overall");
-  const [selectedSeason, setSelectedSeason] = useState<string>("");
+  const [selectedOutcome, setSelectedOutcome] = useState<"overall" | OutcomeKey>("overall");
+  const prefersReducedMotion = useReducedMotion();
 
   const { data, isLoading, error, refetch } = useQuery<CalibrationData>({
-    queryKey: ["calibration-curve", league, selectedSeason],
+    queryKey: ["calibration-curve", league],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (league) params.append("league", league);
-      if (selectedSeason) params.append("season", selectedSeason);
       const res = await fetch(`/api/model-performance/calibration?${params.toString()}`, {
         cache: "no-store",
       });
@@ -84,73 +174,21 @@ export function CalibrationCurveChart({
     retry: 1,
   });
 
-  // Extract bins from either binned_probabilities or curves[selectedOutcome]
-  let bins: Array<{
-    x: number;
-    y: number;
-    count: number;
-    errorUpper?: number;
-    errorLower?: number;
-    ci_lower?: number;
-    ci_upper?: number;
-  }> = [];
+  const curves = data?.curves;
+  const bins: PlotBin[] = curves
+    ? selectedOutcome === "overall"
+      ? poolCurves(curves)
+      : toPlotBins(curves[selectedOutcome] ?? [])
+    : [];
 
-  if (data) {
-    let rawBins: CalibrationBin[] = [];
-    if (selectedOutcome === "overall" && data.binned_probabilities) {
-      rawBins = data.binned_probabilities;
-    } else if (data.curves && data.curves[selectedOutcome === "overall" ? "home_win" : selectedOutcome]) {
-      rawBins = data.curves[selectedOutcome === "overall" ? "home_win" : selectedOutcome] || [];
-    } else if (data.binned_probabilities) {
-      rawBins = data.binned_probabilities;
-    }
-
-    bins = rawBins.map((b) => {
-      const x = b.bin_center ?? b.bin_midpoint ?? b.predicted_mean ?? 0;
-      const y = b.observed_frequency ?? b.empirical_frequency ?? 0;
-      const ci_lower = b.ci_lower !== undefined ? b.ci_lower : Math.max(0, y - 0.03);
-      const ci_upper = b.ci_upper !== undefined ? b.ci_upper : Math.min(1, y + 0.03);
-      return {
-        x: Math.round(x * 100) / 100,
-        y: Math.round(y * 1000) / 1000,
-        count: b.count,
-        ci_lower: Math.round(ci_lower * 1000) / 1000,
-        ci_upper: Math.round(ci_upper * 1000) / 1000,
-        errorLower: Math.max(0, y - ci_lower),
-        errorUpper: Math.max(0, ci_upper - y),
-      };
-    });
-  }
-
-  // Extract metrics
-  const eceValue =
-    typeof data?.ece === "number"
-      ? data.ece
-      : typeof data?.ece?.mean === "number"
-      ? data.ece.mean
-      : 0.018;
-
-  const brierTotal =
-    data?.brier_score?.total ??
-    data?.brier_decomposition?.mean?.brier_score ??
-    0.178;
-
-  const brierRel =
-    data?.brier_score?.reliability ??
-    data?.brier_decomposition?.mean?.reliability ??
-    0.006;
-
-  const brierRes =
-    data?.brier_score?.resolution ??
-    data?.brier_decomposition?.mean?.resolution ??
-    0.078;
-
-  const brierUnc =
-    data?.brier_score?.uncertainty ??
-    data?.brier_decomposition?.mean?.uncertainty ??
-    0.250;
-
-  const seasons = data?.walk_forward_seasons || ["2023-2024", "2024-2025"];
+  // Extract metrics — no hardcoded fallback. An absent field renders "—", never
+  // a plausible-looking number nobody measured.
+  const eceValue = data?.ece?.mean ?? null;
+  const brierMean = data?.brier_decomposition?.mean;
+  const brierTotal = brierMean?.brier_score ?? null;
+  const brierRel = brierMean?.reliability ?? null;
+  const brierRes = brierMean?.resolution ?? null;
+  const brierUnc = brierMean?.uncertainty ?? null;
 
   return (
     <div
@@ -173,54 +211,31 @@ export function CalibrationCurveChart({
             </h2>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Empirical vs. predicted probabilities with Künsch (1989) block bootstrap confidence intervals.
+            Empirical vs. predicted probabilities, binned per outcome class.
           </p>
         </div>
 
-        {/* Season filter */}
-        <div className="flex items-center gap-2">
-          {seasons.length > 0 && (
-            <select
-              aria-label="Filter walk-forward validation season"
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(e.target.value)}
-              className="rounded-lg border border-white/10 bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            >
-              <option value="">All Validation Seasons</option>
-              {seasons.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-slate-800 text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            aria-label="Refresh calibration data"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-slate-800 text-slate-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          aria-label="Refresh calibration data"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+        </button>
       </div>
 
       {/* Outcome Selector Tabs */}
-      <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Select outcome class">
-        {[
-          { id: "overall", label: "Overall Ensemble" },
-          { id: "home_win", label: "Home Win" },
-          { id: "draw", label: "Draw" },
-          { id: "away_win", label: "Away Win" },
-        ].map((tab) => (
+      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Select outcome class">
+        {OUTCOME_TABS.map((tab) => (
           <button
             key={tab.id}
-            role="tab"
-            aria-selected={selectedOutcome === tab.id}
-            onClick={() => setSelectedOutcome(tab.id as typeof selectedOutcome)}
+            type="button"
+            aria-pressed={selectedOutcome === tab.id}
+            onClick={() => setSelectedOutcome(tab.id)}
             className={cn(
-              "rounded-lg px-3 py-1 text-xs font-semibold transition",
+              "min-h-9 rounded-lg px-3 py-1 text-xs font-semibold transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
               selectedOutcome === tab.id
                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                 : "bg-white/[0.03] text-slate-400 border border-white/[0.05] hover:bg-white/[0.06] hover:text-slate-200"
@@ -231,13 +246,24 @@ export function CalibrationCurveChart({
         ))}
       </div>
 
+      {data && data.meets_sample_floor === false ? (
+        <div className="mt-5 flex h-72 flex-col items-center justify-center rounded-xl bg-slate-800/40 p-4 text-center">
+          <Info className="h-6 w-6 text-amber-400 mb-2" />
+          <p className="text-sm font-semibold text-slate-200">Not enough settled predictions yet</p>
+          <p className="mt-1 text-xs text-slate-400 max-w-md">
+            Calibration requires at least {data.minimum_sample_size ?? "more"} settled predictions to compute
+            a meaningful decomposition — currently {data.sample_size ?? 0}.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* Chart Section */}
       <div className="mt-5">
         {isLoading ? (
           <div className="flex h-72 items-center justify-center rounded-xl bg-slate-800/40">
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />
-              <span>Calculating reliability diagram and bootstrap CIs...</span>
+              <span>Calculating reliability diagram...</span>
             </div>
           </div>
         ) : error ? (
@@ -295,7 +321,7 @@ export function CalibrationCurveChart({
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const d = payload[0].payload;
+                      const d = payload[0].payload as PlotBin;
                       return (
                         <div className="rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur text-xs">
                           <p className="font-bold text-emerald-400">
@@ -303,9 +329,6 @@ export function CalibrationCurveChart({
                           </p>
                           <p className="mt-1 text-slate-200">
                             Observed: <span className="font-semibold text-white">{(d.y * 100).toFixed(1)}%</span>
-                          </p>
-                          <p className="text-slate-400">
-                            95% CI: [{(d.ci_lower * 100).toFixed(1)}% – {(d.ci_upper * 100).toFixed(1)}%]
                           </p>
                         </div>
                       );
@@ -328,7 +351,7 @@ export function CalibrationCurveChart({
                     fontSize: 10,
                   }}
                 />
-                {/* Actual Reliability Curve with Error Bars */}
+                {/* Actual Reliability Curve */}
                 <Line
                   type="monotone"
                   dataKey="y"
@@ -337,15 +360,8 @@ export function CalibrationCurveChart({
                   dot={{ r: 4, fill: "#10b981", stroke: "#07110f", strokeWidth: 1.5 }}
                   activeDot={{ r: 6, fill: "#34d399" }}
                   name="Observed Frequency"
-                >
-                  <ErrorBar
-                    dataKey="errorUpper"
-                    direction="y"
-                    width={4}
-                    stroke="#34d399"
-                    strokeWidth={1.5}
-                  />
-                </Line>
+                  isAnimationActive={!prefersReducedMotion}
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -359,7 +375,7 @@ export function CalibrationCurveChart({
             Multiclass ECE
           </p>
           <p className="mt-1 text-xl font-bold text-emerald-400 tabular-nums">
-            {(eceValue * 100).toFixed(2)}%
+            {eceValue !== null ? `${(eceValue * 100).toFixed(2)}%` : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Expected Calibration Error (≤ 3% goal)</p>
         </div>
@@ -369,7 +385,7 @@ export function CalibrationCurveChart({
             Brier Total
           </p>
           <p className="mt-1 text-xl font-bold text-white tabular-nums">
-            {brierTotal.toFixed(3)}
+            {brierTotal !== null ? brierTotal.toFixed(3) : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Rel - Res + Unc (lower is better)</p>
         </div>
@@ -379,7 +395,7 @@ export function CalibrationCurveChart({
             Reliability (REL)
           </p>
           <p className="mt-1 text-xl font-bold text-emerald-400 tabular-nums">
-            {brierRel.toFixed(4)}
+            {brierRel !== null ? brierRel.toFixed(4) : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Calibration error (0.0 is perfect)</p>
         </div>
@@ -389,7 +405,7 @@ export function CalibrationCurveChart({
             Resolution (RES)
           </p>
           <p className="mt-1 text-xl font-bold text-sky-400 tabular-nums">
-            {brierRes.toFixed(4)}
+            {brierRes !== null ? brierRes.toFixed(4) : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Discrimination (higher is better)</p>
         </div>
@@ -399,11 +415,36 @@ export function CalibrationCurveChart({
             Uncertainty (UNC)
           </p>
           <p className="mt-1 text-xl font-bold text-amber-400 tabular-nums">
-            {brierUnc.toFixed(4)}
+            {brierUnc !== null ? brierUnc.toFixed(4) : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Inherent event entropy</p>
         </div>
       </div>
+
+      {/* Aggregate Künsch (1989) block-bootstrap confidence intervals — the only
+          real CIs this endpoint computes; there is no per-bin CI on the wire. */}
+      {(data?.confidence_intervals?.rps?.n_bootstrap !== 0 ||
+        data?.confidence_intervals?.brier_score?.n_bootstrap !== 0 ||
+        data?.confidence_intervals?.ece_mean?.n_bootstrap !== 0) && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+          {data?.confidence_intervals?.rps?.n_bootstrap !== 0 && (
+            <span>RPS 95% CI: {formatCi(data?.confidence_intervals?.rps, (v) => v.toFixed(3))}</span>
+          )}
+          {data?.confidence_intervals?.brier_score?.n_bootstrap !== 0 && (
+            <span>
+              Brier 95% CI: {formatCi(data?.confidence_intervals?.brier_score, (v) => v.toFixed(3))}
+            </span>
+          )}
+          {data?.confidence_intervals?.ece_mean?.n_bootstrap !== 0 && (
+            <span>
+              ECE 95% CI:{" "}
+              {formatCi(data?.confidence_intervals?.ece_mean, (v) => `${(v * 100).toFixed(2)}%`)}
+            </span>
+          )}
+        </div>
+      )}
+      </>
+      )}
     </div>
   );
 }

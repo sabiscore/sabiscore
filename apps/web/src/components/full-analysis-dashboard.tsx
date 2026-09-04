@@ -22,6 +22,7 @@ import {
 } from "@/lib/full-analysis-contract";
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
+import { EvidencePassport } from "@/components/evidence-passport";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { mapEvidenceFreshness } from "@/lib/freshness";
@@ -1065,87 +1066,6 @@ export function EdgeDeltaBar({ oddsEdge }: { oddsEdge: FullMatchOddsEdge }) {
   );
 }
 
-// ─── Data freshness section (Phase 3) ────────────────────────────────────────
-
-interface SourceFreshnessItem {
-  name: string;
-  category: string;
-  freshness_status: "LIVE" | "RECENT" | "STALE" | "DATA_GAP";
-  enabled: boolean;
-}
-
-interface SourceFreshnessResponse {
-  status: "AVAILABLE" | "UNAVAILABLE" | "FETCH_FAILED" | "UNKNOWN";
-  sources: SourceFreshnessItem[];
-}
-
-function DataFreshnessSection() {
-  const { data } = useQuery<SourceFreshnessResponse>({
-    queryKey: ["sourcesFreshness"],
-    queryFn: async () => {
-      const res = await fetch("/api/sources/freshness", { cache: "no-store" });
-      const payload = await res.json().catch(() => null) as SourceFreshnessResponse | null;
-      if (!payload || !Array.isArray(payload.sources)) {
-        return { status: "UNKNOWN", sources: [] };
-      }
-      return payload;
-    },
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  if (!data) return null;
-  if (data.status !== "AVAILABLE") {
-    return (
-      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs text-slate-400">
-        Source freshness: <span className="font-semibold text-amber-300">{data.status}</span>
-      </div>
-    );
-  }
-  if (data.sources.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs text-slate-400">
-        Source freshness: <span className="font-semibold">UNKNOWN</span>
-      </div>
-    );
-  }
-
-  const dotColor: Record<string, string> = {
-    LIVE: "#22c55e",
-    RECENT: "#f59e0b",
-    STALE: "#ef4444",
-    DATA_GAP: "#475569",
-  };
-
-  return (
-    <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Source Freshness</p>
-      <div className="flex flex-wrap gap-4">
-        {data.sources.slice(0, 6).map((src) => (
-          <div
-            key={src.name}
-            className="flex items-center gap-1.5"
-            title={`${src.name}: ${src.freshness_status}`}
-          >
-            <span
-              className="h-2 w-2 rounded-full flex-shrink-0"
-              style={{ backgroundColor: dotColor[src.freshness_status] ?? "#475569" }}
-              aria-hidden
-            />
-            <span className="text-[10px] text-slate-400">{src.category}</span>
-          </div>
-        ))}
-        <div className="ml-auto flex items-center gap-2.5 text-[9px] text-slate-300">
-          <span><span className="text-emerald-500">●</span> Live</span>
-          <span><span className="text-amber-500">●</span> Recent</span>
-          <span><span className="text-rose-500">●</span> Stale</span>
-          <span><span className="text-slate-400">●</span> Gap</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Evidence Status Card (WP-E): structured "why no prediction" summary ─────
 // Shown when stake is not permitted so users understand what's missing and
 // what would help, rather than seeing grey dashes with no explanation.
@@ -1577,6 +1497,9 @@ function FullAnalysisDashboardInner({
       {/* ── WP-E: Evidence status card (why no prediction, structured breakdown) ── */}
       <EvidenceStatusCard data={data} />
 
+      {/* ── Evidence Passport (Phase 5): always-visible per-family provenance/freshness/status ── */}
+      <EvidencePassport data={data} />
+
       {/* ── CLV Evidence Panel (Sprint 4 Slice A) ── */}
       {data.actionability && presentation.stakePermitted && (
         <ActionabilityEvidencePanel actionability={data.actionability} />
@@ -1634,9 +1557,6 @@ function FullAnalysisDashboardInner({
       {data.phase9_candidate_features && (
         <Phase9ShadowStrip features={data.phase9_candidate_features} shadowOnly={data.phase9_shadow_only ?? true} />
       )}
-
-      {/* ── Source freshness (Phase 3) ── */}
-      <DataFreshnessSection />
 
       {/* ── Footer ── */}
       <p className="text-[11px] text-slate-400 text-right tabular-nums">
