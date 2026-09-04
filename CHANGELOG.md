@@ -5,6 +5,70 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Populate h2h/venue/market-interaction features at training time; evaluate and reject the apex_v3_68 candidate (2026-09-04)
+
+`PRODUCTION_EXECUTIVE_DIRECTIVE.md` Phase 2/3. The `apex_v3_68` candidate is
+**rejected**. The train/serve parity infrastructure built to evaluate it is
+kept and is not candidate-specific.
+
+### Added
+
+- `backend/tests/unit/test_h2h_venue_parity.py` — pure-math correctness,
+  `TeamHistory`'s window discipline, live-serving query guarantees, and the
+  parity assertion itself: `TeamHistory`'s walk-forward accumulator and the
+  live `UpcomingMatchFeatureProjector`, fed identical match history, agree
+  exactly. Watched failing on an injected perspective-flip bug before being
+  trusted.
+- `backend/reports/evaluation/apex-v3-68-candidate-evaluation.{json,md}` —
+  the evaluation record. `docs/DEBT.md` item 56 Finding 8.
+
+### Changed
+
+- `backend/src/models/feature_registry.py` — three pure functions
+  (`derive_h2h_features`, `derive_home_venue_features`,
+  `derive_market_interaction_features`), transcribed from the live serving
+  projector. The directive's own cited parity reference
+  (`data/transformers.py:407-474`) is a second, divergent, and materially
+  wrong pipeline — read directly before implementing, not assumed. New
+  `apex_v3_68` schema key (same 68-column contract as `apex_v1_68`, same
+  object, not a copy).
+- `backend/src/services/upcoming_match_feature_service.py` —
+  `_get_h2h_stats`/`_get_home_venue_stats`/the market-interaction block now
+  delegate to the shared functions instead of carrying their own copy.
+  Behaviour-preserving: every existing test on this file passes unchanged.
+- `backend/scripts/train_on_real_matches.py` — `TeamHistory` gains two more
+  walk-forward accumulators (h2h, home-venue), unconditional across every
+  schema (matching the Elo precedent, 2026-08-30) — provably inert on any
+  artifact already trained, since a feature constant in a model's own
+  training set is never referenced by a split node. `_schema_version_for`
+  changes from content-matching a schema's column list to validating the
+  caller's declared key, since `apex_v3_68` and `apex_v1_68` now share a
+  column list by content.
+- `backend/src/models/promotion_evidence.py`,
+  `backend/scripts/generate_feature_availability_matrix.py` — an optional
+  `candidate_schema` parameter so the evidence file self-declares its actual
+  schema key instead of content-matching its way to the wrong one.
+- `docs/MODEL_CARD_APEX.md` — `apex_v3_68` added to "Candidates evaluated and
+  rejected".
+
+### Result
+
+`training_defaulted_slots` moved 16 → 3 (correcting the directive's own
+"16 → 2" claim: `total_goals_expected` has zero call sites in the real
+serving path and stays defaulted). `market_baseline` is unchanged at 0/6 —
+the candidate beats the market in no league, including the three it wins
+against the incumbent. `no_league_regression` is 3/6, a wash rather than a
+win, with the single largest movement (Bundesliga) a loss.
+`serving_feature_availability` was known to be unpassable by this candidate
+before training ran: `serving_schema_misaligned_slots` (11) is an
+independent, pre-existing gate this work does not touch. `promotion_permitted:
+false`.
+
+Verified: ruff clean, mypy 769/784 (ceiling untouched), row counts identical
+between `apex_v1_68` and `apex_v3_68` builds (12,256 total, matching the
+pre-registered per-league split), 212 tests passing across every file this
+change touches or could plausibly affect, zero existing test file edited.
+
 ## Unreleased - Carry real xG into training, evaluate and reject the apex_v2_71 candidate, and keep the infrastructure (2026-09-03)
 
 The `apex_v2_71` candidate is **rejected**. The scaffolding built to evaluate it

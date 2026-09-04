@@ -101,12 +101,27 @@ event-data (2)     home_pressing_intensity, progressive_carry_diff
 already committed.** Head-to-head records and home-venue records are ordinary
 walk-forward accumulations over the same corpus `TeamHistory` already walks.
 
-The asymmetry is the point: `data/transformers.py:407–474` **computes h2h and
-venue features at serving time today.** Training leaves them constant. A column
-that is constant in training is never split on, so the model provably cannot use
-14 features that serving is already paying to compute. This is not a marginal
-feature idea — it is signal the model has never once seen, on data already in
-the repository.
+The asymmetry is the point: h2h and venue features are **computed at serving
+time today.** Training leaves them constant. A column that is constant in
+training is never split on, so the model provably cannot use 14 features that
+serving is already paying to compute. This is not a marginal feature idea —
+it is signal the model has never once seen, on data already in the
+repository.
+
+> ❌ **Correction (2026-09-04, verified during Phase 2 implementation):** the
+> citation above named `data/transformers.py:407–474` as where this
+> computation lives. Read directly, that is
+> `FeatureTransformer._project_to_canonical_features` — a second, divergent
+> pipeline that re-derives these fields from already-engineered keys through
+> materially different (and wrong) formulas: a `max(1.0, …)` clamp on
+> `h2h_matches`, `home_venue_loss_rate` assigned from the *away* team's away
+> win rate. The real, live serving computation is
+> `services/upcoming_match_feature_service.py`'s `_get_h2h_stats()` /
+> `_get_home_venue_stats()` / its post-market interaction block — verified by
+> reading that code directly, and the file Phase 2's implementation mirrors.
+> Do not cite `transformers.py:407–474` as a parity reference for this family
+> again; it is documented as wrong, not fixed, in `docs/DEBT.md` item 56
+> Finding 8.
 
 `home_pressing_intensity` and `progressive_carry_diff` are **not** derivable from
 football-data or Understat (they need event-level data). They stay defaulted, and
@@ -198,8 +213,10 @@ avoid an earlier one.
 2. Compute the three interaction features from the now-real venue/form and the
    existing Apex market block.
 3. **Parity is the acceptance criterion, not the feature count.** Each new
-   training value must equal what `data/transformers.py` computes at serving for
-   the same fixture, asserted to float tolerance in a parity test — the pattern
+   training value must equal what live serving
+   (`services/upcoming_match_feature_service.py` — not `data/transformers.py`,
+   see the Phase 2 correction above) computes at serving for the same
+   fixture, asserted to float tolerance in a parity test — the pattern
    `tests/unit/test_xg_rolling_parity.py` already establishes.
 4. **Acceptance:** `training_defaulted_slots` drops 16 → 2 (the two event-data
    features), measured by regenerating the availability matrix. Report the RPS
@@ -207,6 +224,21 @@ avoid an earlier one.
 5. Train as a **new registered schema key**, never by widening a served list.
    `apex_v2_71` is the worked example of how to do this without breaking
    artifacts; its rejection does not invalidate its mechanics.
+
+> ✅ **Phases 2 and 3 executed and measured (2026-09-04).** Candidate
+> `apex_v3_68`, rejected — full record in
+> `backend/reports/evaluation/apex-v3-68-candidate-evaluation.{json,md}` and
+> `docs/DEBT.md` item 56 Finding 8. Two corrections to this section, made
+> during implementation and confirmed by the measured result: point 4's
+> "16 → 2" is **16 → 3** — `total_goals_expected` has zero call sites in the
+> real serving path (see the Phase 2 correction above) and stays defaulted
+> alongside the two event-data features, not folded in as a third derivable
+> one. And `serving_feature_availability` did **not** clear even with
+> `training_defaulted_slots` at 3: `serving_schema_misaligned_slots` (11, the
+> pre-existing apex-vs-legacy market-block divergence against the active
+> `phase7_68` generation — see Finding 7) is untouched by this work and keeps
+> the gate FAILing regardless. `market_baseline` remains 0/6 — unchanged from
+> every model measured before it, including `apex_v2_71`.
 
 ### Phase 3 — Candidate evaluation, honestly
 

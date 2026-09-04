@@ -1,0 +1,184 @@
+{
+  "candidate_feature_schema_version": "apex_v3_68",
+  "candidate_vs_incumbent": {
+    "BUNDESLIGA": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.1994,
+      "candidate_rps_improvement": -0.0094,
+      "incumbent_rps": 0.19,
+      "market_baseline_rps": 0.1908
+    },
+    "EPL": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.2054,
+      "candidate_rps_improvement": -0.0018,
+      "incumbent_rps": 0.2036,
+      "market_baseline_rps": 0.2054
+    },
+    "EREDIVISIE": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.1993,
+      "candidate_rps_improvement": 0.0054,
+      "incumbent_rps": 0.2048,
+      "market_baseline_rps": 0.1978
+    },
+    "LA_LIGA": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.1976,
+      "candidate_rps_improvement": 0.0043,
+      "incumbent_rps": 0.2018,
+      "market_baseline_rps": 0.1963
+    },
+    "LIGUE_1": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.2043,
+      "candidate_rps_improvement": -0.0011,
+      "incumbent_rps": 0.2032,
+      "market_baseline_rps": 0.1991
+    },
+    "SERIE_A": {
+      "candidate_beats_market_baseline": false,
+      "candidate_rps": 0.2008,
+      "candidate_rps_improvement": 0.0043,
+      "incumbent_rps": 0.2051,
+      "market_baseline_rps": 0.1971
+    }
+  },
+  "feature_evidence": {
+    "apex_v1_68_baseline_summary": {
+      "always_data_gap_slots": 4,
+      "features": 68,
+      "non_variable_training_slots": 20,
+      "serving_schema_misaligned_slots": 11,
+      "training_defaulted_slots": 16
+    },
+    "candidate_summary": {
+      "always_data_gap_slots": 4,
+      "features": 68,
+      "non_variable_training_slots": 7,
+      "serving_schema_misaligned_slots": 11,
+      "training_defaulted_slots": 3
+    },
+    "interpretation": "training_defaulted_slots moved 16 -> 3: the 13 h2h/venue/market-interaction slots this candidate populates are no longer constant across training rows. The 3 remaining are home_pressing_intensity and progressive_carry_diff (need event-level data SabiScore does not have) plus total_goals_expected, which has zero call sites in the live serving projector -- computing it in training would give training a value serving can never reproduce, the opposite direction of the parity break this candidate exists to fix. serving_schema_misaligned_slots is unchanged at 11 -- entirely independent of this candidate, the pre-existing apex-vs-legacy market-block divergence against a phase7_68 active generation. Because serving_feature_availability requires BOTH counts at zero, this candidate cannot pass that gate regardless of its RPS outcome; that was known and stated before training, not discovered after.",
+    "h2h_venue_coverage": {
+      "global_h2h_matches_at_default": 0.196,
+      "global_home_venue_win_rate_at_default": 0.092,
+      "eredivisie_h2h_matches_at_default": 0.412,
+      "other_five_leagues_h2h_matches_at_default_range": [0.185, 0.202],
+      "note": "Eredivisie's corpus is one football-data.co.uk season (no prior seasons committed), so roughly 2x more of its rows have no prior meeting between the pair than the other five leagues, which each have 6-7 seasons of history to draw h2h from. Not a defect -- an honest consequence of corpus depth, reported per PRODUCTION_EXECUTIVE_DIRECTIVE.md's own instruction not to bury it in a global percentage."
+    }
+  },
+  "generated_at": "2026-09-04T02:13:27+00:00",
+  "holdout_season": "2526",
+  "mean_rps_improvement": 0.000284,
+  "per_league_training": {
+    "BUNDESLIGA": {
+      "holdout_n": 301,
+      "market_baseline_rps": 0.1908,
+      "responsive_features": 43,
+      "responsive_features_incumbent": 35,
+      "stacked_rps": 0.1994,
+      "train_n": 1455
+    },
+    "EPL": {
+      "holdout_n": 375,
+      "market_baseline_rps": 0.2054,
+      "responsive_features": 50,
+      "responsive_features_incumbent": 38,
+      "stacked_rps": 0.2054,
+      "train_n": 1821
+    },
+    "EREDIVISIE": {
+      "holdout_n": 1987,
+      "market_baseline_rps": 0.1978,
+      "responsive_features": 55,
+      "responsive_features_incumbent": 45,
+      "stacked_rps": 0.1993,
+      "train_n": 8537,
+      "note": "pooled model (own history: 260 rows, no holdout) -- same as the incumbent's own Eredivisie treatment"
+    },
+    "LA_LIGA": {
+      "holdout_n": 375,
+      "market_baseline_rps": 0.1963,
+      "responsive_features": 51,
+      "responsive_features_incumbent": 38,
+      "stacked_rps": 0.1976,
+      "train_n": 1817
+    },
+    "LIGUE_1": {
+      "holdout_n": 301,
+      "market_baseline_rps": 0.1991,
+      "responsive_features": 47,
+      "responsive_features_incumbent": 37,
+      "stacked_rps": 0.2043,
+      "train_n": 1641
+    },
+    "SERIE_A": {
+      "holdout_n": 375,
+      "market_baseline_rps": 0.1971,
+      "responsive_features": 50,
+      "responsive_features_incumbent": 37,
+      "stacked_rps": 0.2008,
+      "train_n": 1803
+    }
+  },
+  "promotion_gates": {
+    "coherent_price_perturbation": {
+      "status": "PASS"
+    },
+    "input_responsiveness": {
+      "minimum_responsive_features": 43,
+      "status": "PASS"
+    },
+    "market_baseline": {
+      "leagues_beating_market": 0,
+      "status": "FAIL"
+    },
+    "no_league_regression": {
+      "league_wins": 3,
+      "leagues_compared": 6,
+      "status": "FAIL"
+    },
+    "primary_metric_improvement": {
+      "mean_rps_improvement": 0.000284,
+      "status": "PASS"
+    },
+    "serving_feature_availability": {
+      "status": "FAIL",
+      "summary": {
+        "always_data_gap_slots": 4,
+        "features": 68,
+        "non_variable_training_slots": 7,
+        "serving_schema_misaligned_slots": 11,
+        "training_defaulted_slots": 3
+      }
+    },
+    "valid_probability_simplex": {
+      "evidence": "evaluate() rejected no candidate holdout probability row",
+      "status": "PASS"
+    }
+  },
+  "promotion_permitted": false,
+  "schema": "sabiscore_candidate_evaluation_v1",
+  "training": {
+    "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "reproducibility_sha256": "97fcedacb40284fb6113ebf52633e6e30c5f957315c4f5f92a53830626d1549e",
+    "git_commit": "01f03c177f5b52be123091cc32c4d69b75f6ba46",
+    "git_dirty": true,
+    "leagues_without_any_corpus_coverage": [],
+    "rows": 12256,
+    "rows_by_league": {
+      "BUNDESLIGA": 2052,
+      "EPL": 2571,
+      "EREDIVISIE": 260,
+      "LA_LIGA": 2572,
+      "LIGUE_1": 2248,
+      "SERIE_A": 2553
+    },
+    "rows_dropped": 0,
+    "rows_identical_to_incumbent_build": true,
+    "note": "Unlike apex_v2_71 (which dropped 1,478 rows with no honest xG answer), this candidate drops no rows -- h2h/venue/interaction features degrade to their registry default on a cold start rather than excluding the row, matching exactly what serving does for the same fixture. rows_by_league is therefore identical between apex_v1_68 and apex_v3_68 by construction, verified directly before training: no mixing of 'added features' with 'changed row set' to separate here."
+  },
+  "verdict": "REJECTED",
+  "verdict_reason": "The 13 populated h2h/venue/market-interaction features are genuinely observed where history exists (training_defaulted_slots 16 -> 3) and the model demonstrably uses more of them (responsive_features up 8-13 per league over the incumbent). That did not translate into a real out-of-sample win: the candidate beats the market baseline in 0 of 6 leagues -- unchanged from every model measured before it -- and splits 3-3 against the incumbent itself, with the single largest movement (Bundesliga, -0.0094) a loss. promotion_permitted is false on three independent gates (serving_feature_availability, no_league_regression, market_baseline), not one."
+}

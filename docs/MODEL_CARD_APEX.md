@@ -48,6 +48,7 @@ measured uncertainty, coherent market evidence, and a permitted verdict.
 | candidate | date | verdict | decisive gate |
 |---|---|---|---|
 | `apex_v2_71` (Apex 68 + 3 rolling-xG features) | 2026-09-03 | **REJECTED** | `market_baseline` 0/5 |
+| `apex_v3_68` (Apex 68, h2h/venue/interaction now training-computed) | 2026-09-04 | **REJECTED** | `market_baseline` 0/6 |
 
 `apex_v2_71` appended the three features `measure_xg_feature_ate.py` classified
 `CAUSAL_DRIVER` (ATE 0.2485 / 0.2181 / 0.1832, all p < 1e-68). On an identical
@@ -61,6 +62,30 @@ pipeline is not the explanation.
 The causal screen filters noise; it is not a promotion criterion. Full evidence:
 `backend/reports/evaluation/apex-v2-71-candidate-evaluation.{json,md}`;
 reasoning in `docs/DEBT.md` item 58.
+
+`apex_v3_68` populated 13 of `APEX_FEATURES_68`'s slots (h2h, home-venue, and
+three market-interaction fields) that training had left at a constant
+registry default since before this contract existed, even though serving
+computes real values for them today — `training_defaulted_slots` moved 16 →
+3. Unlike `apex_v2_71` it drops no row, so `apex_v1_68` and `apex_v3_68` train
+on byte-identical row sets. The model measurably uses the new signal
+(responsive features up 8–13 per league), and the mean RPS delta is barely
+positive (+0.00028), but the result is a 3/6 win split against the incumbent
+with the single largest movement a loss (Bundesliga, −0.0094) — and it beats
+the market baseline in 0 of 6 leagues, unchanged from `apex_v2_71`.
+`serving_feature_availability` was known to be unpassable by this candidate
+before training ran: `serving_schema_misaligned_slots` (11, the pre-existing
+apex-vs-legacy market-block divergence) is untouched by anything this
+candidate does. Full evidence:
+`backend/reports/evaluation/apex-v3-68-candidate-evaluation.{json,md}`;
+reasoning in `docs/DEBT.md` item 56.
+
+**Two candidates, two different feature families, the same answer on the gate
+that matters.** `apex_v2_71` added a causally-validated signal and lost RPS;
+`apex_v3_68` added signal the model demonstrably uses and produced a
+statistical wash. Neither closed the gap to the market baseline in any
+league. The market-implied probability already prices in what a team's h2h
+and home-venue record predict, at least as well as this ensemble family does.
 
 ## Current evidence
 
