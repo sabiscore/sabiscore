@@ -40,8 +40,7 @@ throughout — this code path has never executed against real traffic. No
 prediction was ever affected. Caught in review before merge, not in
 production.
 
-**Follow-up (PR #154, 2026-09-05):** PR #153 merged (directly, by the repo
-owner — `master` carries no branch-protection rule) while its SonarCloud
+**Follow-up (PR #154, 2026-09-05):** PR #153 merged while its SonarCloud
 Quality Gate was still failing: 63.6% new-code coverage (required ≥80%) and a
 D Reliability Rating (`python:S5779` — `assert isinstance(...)` inside a
 `try/except Exception` in `scripts/audit_statsbomb_coverage.py`, which also

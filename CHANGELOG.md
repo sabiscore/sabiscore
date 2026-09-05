@@ -7,10 +7,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## Unreleased - Resolve the SonarCloud quality gate PR #153 merged without (2026-09-05)
 
-`master` carries no branch-protection rule, so PR #153 (below) was merged
-directly while its SonarCloud Quality Gate was still red. Fixed forward on a
-new branch/PR (#154) rather than force-pushing history. `docs/DEBT.md` item
-61 follow-up.
+`master`'s merge gate (a GitHub Ruleset) does not include SonarCloud among its
+required status checks, so PR #153 (below) was mergeable — and merged —
+while its SonarCloud Quality Gate was still red. Fixed forward on a new
+branch/PR (#154) rather than force-pushing history. `docs/DEBT.md` item 61
+follow-up.
 
 ### Fixed
 
