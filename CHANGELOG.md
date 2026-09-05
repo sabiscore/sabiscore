@@ -5,6 +5,31 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Resolve the SonarCloud quality gate PR #153 merged without (2026-09-05)
+
+`master` carries no branch-protection rule, so PR #153 (below) was merged
+directly while its SonarCloud Quality Gate was still red. Fixed forward on a
+new branch/PR (#154) rather than force-pushing history. `docs/DEBT.md` item
+61 follow-up.
+
+### Fixed
+
+- `scripts/audit_statsbomb_coverage.py` — `assert isinstance(...)` inside a
+  `try/except Exception` (a real `python:S5779` reliability bug: asserts are
+  stripped under `python -O`, and the `except` also silently catches
+  `AssertionError`) replaced with explicit
+  `if not isinstance(...): raise TypeError(...)`, both occurrences.
+- New-code coverage (63.6% -> passing, required >=80%): added
+  `tests/unit/test_statsbomb_enrichment_gating.py`, exercising the two
+  `home_pressing_intensity` call sites end-to-end — no test had previously
+  set `enable_statsbomb_enrichment=True`, which is exactly how the
+  PPDA-inversion bug below shipped unnoticed. Getting it green surfaced two
+  further test-authoring hazards (neither a production defect):
+  `result["features_dict"]` doesn't reliably carry the key (assert on
+  `result["features"][idx]` instead), and `settings.use_phase7_models`
+  defaults `False` in code with only a local `backend/.env` supplying `true`
+  — CI never sets it, so the test now pins it via `monkeypatch`.
+
 ## Unreleased - Phase 4 Step 2 HPO candidate rejected; gate StatsBomb enrichment behind a flag; fix a PPDA-inversion bug caught by review (2026-09-04/05)
 
 Phase 4 Step 2 (30-trial Optuna TPE Bayesian HPO on `apex_v4_66`) evaluated
