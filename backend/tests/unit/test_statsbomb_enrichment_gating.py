@@ -55,7 +55,14 @@ async def session():
 
 
 @pytest.fixture
-def projector() -> UpcomingMatchFeatureProjector:
+def projector(monkeypatch: pytest.MonkeyPatch) -> UpcomingMatchFeatureProjector:
+    # settings.use_phase7_models defaults to False (no USE_PHASE7_MODELS env
+    # var set in a bare test environment, e.g. CI) — under that default,
+    # active_canonical_features() returns the 58-wide schema, which predates
+    # Phase 7 and does not carry home_pressing_intensity at all. Pin True so
+    # this file exercises the actual production-served 68-wide generation,
+    # deterministically, regardless of ambient env state.
+    monkeypatch.setattr(settings, "use_phase7_models", True)
     p = UpcomingMatchFeatureProjector()
     p._use_phase8 = False
     # team-home has lower (better) PPDA than team-away => home presses harder.
