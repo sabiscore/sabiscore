@@ -116,7 +116,17 @@ async def test_db_match_id_path_home_pressing_advantage_is_correctly_signed(
 async def test_enrichment_disabled_leaves_registry_default(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Default (False) production behavior is unchanged by this fix."""
+    """Default (False) production behavior is unchanged by this fix.
+
+    When disabled, the two call sites never touch home_pressing_intensity —
+    whatever project_match_features() already put in features_dict (a
+    registry default) passes through untouched. Assert on the final
+    canonical features array rather than features_dict directly: the array
+    is always built via ``features_dict.get(name, self.defaults.get(name, 0.0))``
+    (see the array-assembly line in both methods), so it is the one value
+    guaranteed correct regardless of whether an upstream stage happens to
+    have pre-populated the dict key.
+    """
     monkeypatch.setattr(settings, "enable_statsbomb_enrichment", False)
     await _seed_teams(session)
 
@@ -125,6 +135,7 @@ async def test_enrichment_disabled_leaves_registry_default(
         match_date=datetime(2026, 8, 10, 15, 0),
     )
 
-    assert result["features_dict"]["home_pressing_intensity"] == pytest.approx(
-        projector.defaults.get("home_pressing_intensity", 0.55)
+    idx = projector.canonical_features.index("home_pressing_intensity")
+    assert result["features"][idx] == pytest.approx(
+        projector.defaults.get("home_pressing_intensity", 0.55), abs=1e-6
     )
