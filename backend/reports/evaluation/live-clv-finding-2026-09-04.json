@@ -1,0 +1,33 @@
+{
+  "report_type": "live_clv_finding",
+  "date": "2026-09-04",
+  "metric_contract_version": "1.0.0",
+  "finding": {
+    "n": 17,
+    "mean_clv": -0.0315,
+    "positive_rate": 0.529,
+    "verdict": "negative — model is behind market consensus"
+  },
+  "instruments": [
+    {
+      "name": "market_baseline_offline",
+      "method": "candidate RPS vs de-vigged market-implied RPS on held-out corpus",
+      "result": "0 of 6 leagues pass",
+      "candidates_evaluated": ["apex_v2_71", "apex_v3_68"]
+    },
+    {
+      "name": "live_clv",
+      "method": "model pre-kickoff prob vs market consensus at kickoff, joined on match_id",
+      "result": "mean_clv=-0.0315, n=17",
+      "measurement_date": "2026-09-03"
+    }
+  ],
+  "join_key": "match_id",
+  "join_tables": ["MatchPredictionLog", "MarketSnapshot(is_closing_line=True)"],
+  "clv_service": "backend/src/services/clv_service.py",
+  "notes": [
+    "n=17 is below the 50-record threshold for a stable estimate; sign is directional",
+    "closing_market_snapshot_id FK is permanently NULL; match_id join is the live path",
+    "CLV is not an RPS metric — do not compare to RPS thresholds"
+  ]
+}

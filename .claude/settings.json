@@ -7,7 +7,8 @@
     "NEXT_TELEMETRY_DISABLED": "1"
   },
   "attribution": {
-    "commit": "Co-authored-by: SCAR (Claude Code) <claude@anthropic.com>"
+    "commit": "Co-authored-by: SCAR (Claude Code) <claude@anthropic.com>",
+    "sessionUrl": false
   },
   "permissions": {
     "allow": [
@@ -28,9 +29,23 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm type-check:*)",
       "Bash(pnpm lint:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm --filter:*)",
       "Bash(npx tsc:*)",
       "Bash(npx prettier:*)",
       "Bash(node:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3.12 -m pytest:*)",
+      "Bash(.venv/bin/python -m pytest:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest:*)",
+      "Bash(python -c:*)",
+      "Bash(python3 -c:*)",
+      "Bash(python3.12 -c:*)",
+      "Bash(.venv/bin/python -c:*)",
+      "Bash(.venv/Scripts/python.exe -c:*)",
+      "Bash(.venv/bin/python scripts/:*)",
+      "Bash(.venv/Scripts/python.exe scripts/:*)",
       "Bash(make validate:*)",
       "Bash(make doctor:*)",
       "Bash(curl -s:*)",
@@ -40,41 +55,7 @@
       "Bash(jq:*)",
       "Bash(wc:*)",
       "Bash(grep:*)",
-      "Bash(python3 -c ' *)",
-      "Bash(sed -n '244,270p' backend/src/models/feature_registry.py)",
-      "Bash(sed -n '395,480p' backend/src/services/intelligence_synthesizer.py)",
-      "Bash(pnpm tsc *)",
-      "Bash(pnpm --filter web lint -- --quiet src/components/panel-warming-state.tsx src/components/full-analysis-dashboard.tsx src/components/phase8-analytics-panel.tsx src/app/api/full-analysis/\\\\[matchId\\\\]/route.ts src/app/api/phase8-features/\\\\[matchId\\\\]/route.ts src/lib/api.ts)",
-      "Bash(/home/scar/Documents/sabiscore/.venv/bin/python -m pytest tests/test_phase1_fixes.py::TestBUG003FeatureRegistry::test_feature_registry_has_58_features --override-ini=\"addopts=\" -q --tb=short)",
-      "Bash(/home/scar/Documents/sabiscore/.venv/bin/python -m pytest tests/unit/test_engine_core.py::test_engine_basic_flow --override-ini=\"addopts=\" -q --tb=short)",
-      "Bash(/home/scar/Documents/sabiscore/.venv/bin/python -m pytest tests/test_b13_no_synthetic_injection.py tests/test_phase8_features_endpoint.py --override-ini=\"addopts=\" -v --tb=short)",
-      "Bash(.venv/bin/python -c ' *)",
-      "Bash(.venv/bin/python scripts/retrain_with_expanded_features.py --help)",
-      "Bash(.venv/bin/python -m pytest backend/tests/ -q --tb=no --override-ini=\"addopts=\")",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_phase1_fixes.py::TestBUG001DrawCalibration::test_all_league_models_train_with_sample_weights backend/tests/test_phase1_fixes.py::TestPhase1Integration::test_calibration_workflow backend/tests/unit/test_engine_core.py::test_engine_basic_flow -q --tb=short --override-ini=\"addopts=\")",
-      "Bash(python -m pytest backend/tests/test_phase1_fixes.py backend/tests/unit/test_engine_core.py -x --tb=short -q)",
-      "Bash(python -m pytest backend/tests/test_prediction_pipeline.py -v)",
-      "Bash(pnpm --filter @sabiscore/web tsc --noEmit)",
-      "Bash(python -m pytest backend/tests/test_prediction_service_deprecation.py -v)",
-      "Bash(python3 -m pytest backend/tests/test_prediction_service_deprecation.py -v)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}; print\\('\\\\n'.join\\(k for k in deps if any\\(x in k for x in ['motion','fuse','recharts','canvas']\\)\\)\\)\")",
-      "Bash(python3 -m pytest backend/tests/test_prediction_service_deprecation.py -v --no-header)",
-      "Bash(python -c \"import scipy; print\\(scipy.__version__\\)\")",
-      "Bash(python -c \"import numpy; print\\('numpy', numpy.__version__\\)\")",
-      "Bash(python -c \"import sklearn; print\\('sklearn', sklearn.__version__\\)\")",
-      "Bash(.venv/bin/python -c \"import scipy; print\\('scipy', scipy.__version__\\); import numpy; print\\('numpy', numpy.__version__\\); import sklearn; print\\('sklearn', sklearn.__version__\\)\")",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_calibration.py -v --tb=short --no-header)",
-      "Bash(.venv/bin/python -c \"import shap; print\\('shap', shap.__version__\\)\")",
-      "Bash(python -m pytest backend/tests/test_phase_c_pipeline.py -v --tb=short)",
-      "Bash(python3 -m pytest backend/tests/test_phase_c_pipeline.py -v --tb=short)",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_phase_c_pipeline.py -v --tb=short)",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_phase_c_pipeline.py::TestComputeRps::test_perfect_prediction_returns_zero backend/tests/test_phase_c_pipeline.py::TestFamilyAblationResultSchema::test_has_leagues_below_threshold_field backend/tests/test_phase_c_pipeline.py::TestRootOrchestratorValidateReport::test_passes_complete_valid_report -v --tb=long --no-cov)",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_phase_c_pipeline.py -v --tb=short --no-cov)",
-      "Bash(.venv/bin/python -m pytest backend/tests/test_calibration.py --tb=short --no-cov -q)",
-      "Bash(python -c \"import opentelemetry; print\\(opentelemetry.__version__\\)\")",
-      "Bash(python3 -m pytest backend/tests/test_calibration.py -x -q)",
-      "Bash(python3 -m pytest backend/tests/test_phase_c_pipeline.py -x -q)",
-      "Bash(python3.12 -c \"import sys; print\\(sys.path\\)\")"
+      "Bash(sed -n:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -116,11 +97,15 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'cmd=\"$CLAUDE_TOOL_INPUT_COMMAND\"; if echo \"$cmd\" | grep -qiE \"(rm -rf|DROP TABLE|DELETE FROM|curl.*\\| bash|sudo)\"; then echo \"[SCAR GUARD] Dangerous command blocked: $cmd\" >&2; exit 2; fi'"
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-dangerous-command.cjs"
+            ],
+            "timeout": 10
           }
         ]
       }
@@ -131,7 +116,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'echo \"[NEXUS] File modified: $CLAUDE_TOOL_OUTPUT_PATH — run: make validate\" >&2'"
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/report-file-change.cjs"
+            ],
+            "timeout": 10
           }
         ]
       }
@@ -141,7 +130,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'echo \"[NEXUS] Session started. Suite v$(jq -r .suiteVersion registry.json 2>/dev/null || echo unknown) | $(jq -r \".skills | length\" registry.json 2>/dev/null || echo 0) skills active.\" >&2'"
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.cjs"
+            ],
+            "timeout": 10
           }
         ]
       }

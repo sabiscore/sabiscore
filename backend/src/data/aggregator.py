@@ -214,7 +214,11 @@ class DataAggregator:
                 
                 # Required by _add_advanced_team_features (tactical)
                 "possession_style": 0.50 + (home_elo - 1500) / 3000,
-                "pressing_intensity": 0.50 + (home_elo - 1500) / 2500,
+                # pressing_intensity was previously derived from Elo — a fabrication with
+                # no causal basis. Removed 2026-09-04 (crosswalk prerequisite 2).
+                # Serving reads the StatsBomb ppda_ratio via UpcomingMatchFeatureProjector
+                # when ENABLE_STATSBOMB_ENRICHMENT=true; otherwise the registry default (0.55)
+                # fills the slot and the feature is flagged DATA_GAP.
                 "first_half_goals_rate": 0.42 + (home_elo - 1500) / 5000,
                 "defensive_solidity": home_stats["defensive_strength"],
                 "setpiece_goals_rate": 0.22 + (home_elo - 1500) / 8000,
@@ -243,7 +247,7 @@ class DataAggregator:
                 
                 # Required by _add_advanced_team_features (tactical)
                 "possession_style": 0.48 + (away_elo - 1500) / 3000,
-                "pressing_intensity": 0.48 + (away_elo - 1500) / 2500,
+                # pressing_intensity fabrication removed — see home block above.
                 "first_half_goals_rate": 0.40 + (away_elo - 1500) / 5000,
                 "defensive_solidity": away_stats["defensive_strength"],
                 "setpiece_goals_rate": 0.20 + (away_elo - 1500) / 8000,

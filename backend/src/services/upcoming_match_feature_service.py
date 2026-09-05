@@ -534,14 +534,20 @@ class UpcomingMatchFeatureProjector:
         features_dict["elo_away_trend_5"] = float(elo.away_elo_trend_5)
         features_dict["elo_momentum_cross"] = float(elo.elo_momentum_cross)
 
-        features_dict["home_pressing_intensity"] = float(
-            sb_home.features.get("ppda_ratio", 1.0)
-            / max(sb_away.features.get("ppda_ratio", 1.0), 1e-6)
-        )
-        features_dict["progressive_carry_diff"] = float(
-            sb_home.features.get("progressive_carry_diff", 0.0)
-            - sb_away.features.get("progressive_carry_diff", 0.0)
-        )
+        if settings.enable_statsbomb_enrichment:
+            # ppda_ratio inversion: lower PPDA = higher pressing intensity; home/away ratio
+            # captures the relative pressing advantage.  Clamp denominator to avoid ÷0.
+            features_dict["home_pressing_intensity"] = float(
+                sb_home.features.get("ppda_ratio", 1.0)
+                / max(sb_away.features.get("ppda_ratio", 1.0), 1e-6)
+            )
+            features_dict["progressive_carry_diff"] = float(
+                sb_home.features.get("progressive_carry_diff", 0.0)
+                - sb_away.features.get("progressive_carry_diff", 0.0)
+            )
+        # When StatsBomb enrichment is disabled (default) or the cache is empty,
+        # leave these at the registry default; PHASE7_FEATURES_ALWAYS_DATA_GAP
+        # below ensures they are flagged as DATA_GAP in every analysis.
         # shot_quality_diff is PHASE7_FEATURES_ALWAYS_DATA_GAP — use registry default,
         # never compute from proxy; the injector will enforce DATA_GAP below.
         features_dict["shot_quality_diff"] = self.defaults.get("shot_quality_diff", 0.0)
@@ -669,14 +675,15 @@ class UpcomingMatchFeatureProjector:
         features_dict["elo_away_trend_5"] = float(elo.away_elo_trend_5)
         features_dict["elo_momentum_cross"] = float(elo.elo_momentum_cross)
 
-        features_dict["home_pressing_intensity"] = float(
-            sb_home.features.get("ppda_ratio", 1.0)
-            / max(sb_away.features.get("ppda_ratio", 1.0), 1e-6)
-        )
-        features_dict["progressive_carry_diff"] = float(
-            sb_home.features.get("progressive_carry_diff", 0.0)
-            - sb_away.features.get("progressive_carry_diff", 0.0)
-        )
+        if settings.enable_statsbomb_enrichment:
+            features_dict["home_pressing_intensity"] = float(
+                sb_home.features.get("ppda_ratio", 1.0)
+                / max(sb_away.features.get("ppda_ratio", 1.0), 1e-6)
+            )
+            features_dict["progressive_carry_diff"] = float(
+                sb_home.features.get("progressive_carry_diff", 0.0)
+                - sb_away.features.get("progressive_carry_diff", 0.0)
+            )
         features_dict["shot_quality_diff"] = self.defaults.get("shot_quality_diff", 0.0)
 
         phase8_gaps, phase8_freshness, phase8_sources = await self._inject_phase8_features(
