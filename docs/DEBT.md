@@ -1,5 +1,47 @@
 # SabiScore Debt Ledger
 
+## 61. Gated `home_pressing_intensity` inverted the PPDA sign — RESOLVED 2026-09-05
+
+**Found by:** GitHub Copilot's automated review of PR #153, before merge —
+the change had not yet reached `master`. **Tier:** `RESOLVED`.
+
+`UpcomingMatchFeatureProjector` computes `home_pressing_intensity` (gated
+behind `ENABLE_STATSBOMB_ENRICHMENT`, still `False` in production — see item
+below and the PATH B entries in items 38/49) as a ratio of the two sides'
+`ppda_ratio` values. `ppda_ratio` is raw PPDA (opponent passes allowed per own
+defensive action) — LOWER means MORE pressing, exactly as
+`scripts/populate_statsbomb_cache.py`'s own docstring states:
+`pressing_intensity ~= 1/ppda_ratio`. The shipped formula computed
+`home_ppda / away_ppda` — the *uninverted* ratio — so a home side that pressed
+harder (lower PPDA) than its opponent produced a value BELOW 1, the opposite
+of what "pressing intensity advantage" means. Both occurrences (in
+`build_live_feature_vector` and `build_live_feature_vector_from_matchup`)
+carried the identical bug, since one was copy-pasted from the other.
+
+**Fixed:** extracted the one-line formula into a module-level pure function,
+`_pressing_intensity_ratio(home_ppda_ratio, away_ppda_ratio)` returning
+`away_ppda / home_ppda` — both call sites now share it, removing the
+duplication that let the bug exist in two places at once. New
+`tests/unit/test_pressing_intensity_ratio.py` pins the direction (home
+pressing harder scores above 1, away pressing harder scores below 1, equal
+scores exactly 1, a degenerate zero PPDA does not raise) — the first test
+coverage this computation has ever had; no test previously exercised the
+`ENABLE_STATSBOMB_ENRICHMENT=true` branch at all.
+
+Copilot's review also flagged a stale comment in `aggregator.py`'s mock
+team-stats builder implying `pressing_intensity` was still required by
+`_add_advanced_team_features` after the Elo-derived fabrication was removed
+from it (item above / PATH B) — corrected to note the downstream
+`FeatureTransformer._project_to_canonical_features()` already tolerates the
+key's absence via its `_source_num()` fallback chain.
+
+**Impact:** `ENABLE_STATSBOMB_ENRICHMENT` has been `False` in production
+throughout — this code path has never executed against real traffic. No
+prediction was ever affected. Caught in review before merge, not in
+production.
+
+---
+
 ## 60. The calibration view shipped with five live fabrications — RESOLVED 2026-09-04
 
 `GET /api/v1/model-performance/calibration` and `CalibrationCurveChart.tsx`
@@ -1929,6 +1971,27 @@ own precedent was to record the one-line change for an authorized decision
 rather than take it unilaterally. Confidence that a fix is correct is not the
 same as authority to make it.
 
+**Correction 2026-09-05:** every "4" above is now "6" — the StatsBomb coverage
+audit PATH B (2026-09-04, `feature_registry.py`) formally relegated
+`home_pressing_intensity` and `progressive_carry_diff` into
+`PHASE7_FEATURES_ALWAYS_DATA_GAP` alongside the original 4, growing it to 6
+unique features. This is not a reopening of item 38 or this item —
+`always_data_gap_slots` is still fully inert in the gate's blockers, so the
+growth changes nothing about `promotion_permitted`. It **did** silently break CI: the first real CI
+run of the PR carrying the PATH B change caught two hardcoded `== 4`
+assertions in `test_promotion_gate_satisfiability.py` and
+`test_promotion_feature_evidence.py`, plus a stale checked-in
+`backend/models/candidate/feature_availability_matrix.json` (last regenerated
+under the 4-item list) that failed `validate_promotion_feature_evidence` at
+feature index 63 (`home_pressing_intensity`, now correctly `ALWAYS_DATA_GAP`
+but stored as if it weren't). All three fixed in the same change: the two
+hardcoded assertions now read `len(PHASE7_FEATURES_ALWAYS_DATA_GAP)`, and the
+matrix was regenerated via `scripts/generate_feature_availability_matrix.py`.
+⚠️ **The PATH B commit that changed the registry list did not run the full
+test suite before being committed** — only the model-training-specific tests
+it was written to satisfy. A registry-list change with this history of
+sibling counters (items 38, 49) needs the full suite, not a targeted subset.
+
 ---
 
 ## 48. The *served* generation has never seen real Elo — candidates have since M2 wiring (2026-08-30)
@@ -3337,6 +3400,12 @@ and `market_baseline` (0/6 leagues) — both unrelated to this fix — plus 11
 `serving_schema_misaligned_slots` from item 37, which remains open. No
 candidate promotes as a result of this change; it only stops a *good*
 candidate from being blocked by an unfixable accounting term.
+
+**Correction 2026-09-05:** the declared-gap count of 4 cited throughout this
+item is now 6 (StatsBomb coverage audit PATH B, 2026-09-04) — see item 49's
+correction note of the same date for the full accounting and the CI breakage
+it caused. Unaffected here: `always_data_gap_slots` is still fully inert in
+`_expected_gate()`'s blockers regardless of the list's length.
 
 ---
 
