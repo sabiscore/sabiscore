@@ -88,6 +88,7 @@ if _FEATURE_SPEC is None or _FEATURE_SPEC.loader is None:
     raise RuntimeError("Unable to load the canonical feature registry")
 _FEATURE_REGISTRY = importlib.util.module_from_spec(_FEATURE_SPEC)
 _FEATURE_SPEC.loader.exec_module(_FEATURE_REGISTRY)
+APEX_FEATURES_66 = _FEATURE_REGISTRY.APEX_FEATURES_66
 APEX_FEATURES_68 = _FEATURE_REGISTRY.APEX_FEATURES_68
 APEX_FEATURES_71 = _FEATURE_REGISTRY.APEX_FEATURES_71
 APEX_FEATURES_89 = _FEATURE_REGISTRY.APEX_FEATURES_89
@@ -179,6 +180,15 @@ _SCHEMAS: Dict[str, str] = {
     # rather than overwriting the checked-in apex_v1_68 baseline Phase 3
     # compares against.
     "apex_v3_68": "v8_dense68",
+    # Gate 7 candidate (2026-09-04): 66-wide vector drops home_pressing_intensity
+    # and progressive_carry_diff (both ALWAYS_DATA_GAP per StatsBomb coverage audit
+    # PATH B, 23.58% < 85% threshold). H2H, venue, market-interaction (PR #149)
+    # fully retained. Writes *_v9_gate7.pkl artifacts.
+    "apex_v4_66": "v9_gate7",
+    # Phase 4 HPO candidate (2026-09-04): same 66-wide contract as apex_v4_66;
+    # hyperparameters tuned via Optuna TPE Bayesian optimisation (--tune flag).
+    # Writes *_v10_gate7_hpo.pkl artifacts.
+    "apex_v5_66": "v10_gate7_hpo",
 }
 _DEFAULT_SCHEMA = "apex_v1_68"
 
@@ -200,6 +210,8 @@ def _schema_features(schema: str) -> List[str]:
         return APEX_FEATURES_89
     if schema == "apex_v2_71":
         return APEX_FEATURES_71
+    if schema in ("apex_v4_66", "apex_v5_66"):
+        return APEX_FEATURES_66
     raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
 
 

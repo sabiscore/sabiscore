@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.models.feature_registry import APEX_FEATURES_68
+from src.models.feature_registry import APEX_FEATURES_68, PHASE7_FEATURES_ALWAYS_DATA_GAP
 from src.models.promotion_evidence import (
     build_promotion_feature_evidence,
     validate_promotion_feature_evidence,
@@ -41,7 +41,7 @@ def test_builds_mechanical_positional_feature_contract() -> None:
     assert [row["index"] for row in report["features"]] == list(range(68))
     assert [row["feature"] for row in report["features"]] == list(APEX_FEATURES_68)
     assert report["summary"]["serving_schema_misaligned_slots"] == 11
-    assert report["summary"]["always_data_gap_slots"] == 4
+    assert report["summary"]["always_data_gap_slots"] == len(PHASE7_FEATURES_ALWAYS_DATA_GAP)
     assert report["promotion_gate"] == "FAIL"
     assert validate_promotion_feature_evidence(report) is report
 
@@ -54,7 +54,7 @@ def test_checked_in_quarantined_candidate_report_remains_valid_and_failed() -> N
 
     assert validated["promotion_gate"] == "FAIL"
     assert validated["summary"]["serving_schema_misaligned_slots"] == 11
-    assert validated["summary"]["always_data_gap_slots"] == 4
+    assert validated["summary"]["always_data_gap_slots"] == len(PHASE7_FEATURES_ALWAYS_DATA_GAP)
 
 
 def test_forged_pass_is_rejected() -> None:

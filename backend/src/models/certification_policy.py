@@ -35,9 +35,18 @@ from typing import Any, Dict, Mapping
 #: certification manifest cites this together with POLICY_SHA256 so a report can
 #: always be traced to the exact bar it was judged against.
 #: 1.0.0 -> 1.1.0 (2026-08-22): docs/DEBT.md item 38, authorized — removed
-#: always_data_gap_slots from serving_feature_availability's threshold. See
-#: that gate's entry below for the full rationale.
-CERTIFICATION_POLICY_VERSION = "1.1.0"
+#:   always_data_gap_slots from serving_feature_availability's threshold. See
+#:   that gate's entry below for the full rationale.
+#: 1.1.0 -> 1.1.1 (2026-09-04): StatsBomb coverage audit PATH B authorization.
+#:   scripts/audit_statsbomb_coverage.py measured 23.58% identity crosswalk
+#:   between StatsBomb Open Data and the Understat corpus (85% threshold not met).
+#:   home_pressing_intensity and progressive_carry_diff are formally relegated to
+#:   PHASE7_FEATURES_ALWAYS_DATA_GAP in feature_registry.py. This is a
+#:   documentation-only change — thresholds are unchanged; the gate code already
+#:   treated these as always-gap (ENABLE_STATSBOMB_ENRICHMENT=False default).
+#:   ENABLE_STATSBOMB_ENRICHMENT must remain False; re-evaluate if StatsBomb
+#:   publishes event data covering ≥85% of the Understat corpus.
+CERTIFICATION_POLICY_VERSION = "1.1.1"
 
 #: Every gate `compare_candidate_vs_incumbent.py` emits, with the rule as
 #: applied and the code that applies it. `rule` is prose for a reviewer;

@@ -7,12 +7,14 @@ WHY THIS EXISTS
 ``always_data_gap_slots`` were all zero. ``compare_candidate_vs_incumbent.py``
 computes ``promotion_permitted = all(gate == "PASS")``.
 
-But all four ``PHASE7_FEATURES_ALWAYS_DATA_GAP`` features are present as slots
-in every 68-wide schema, deliberately and permanently: ``PHASE7_FEATURES_10``'s
-own comment records that removing the slots broke every artifact and produced
-``model_version="fallback"`` on every inference for two months. So
-``always_data_gap_slots`` was structurally 4, never 0, and the gate could never
-pass — a certification-threshold conflation, not a real quality bar.
+But every ``PHASE7_FEATURES_ALWAYS_DATA_GAP`` feature (4 at the time this was
+found, 6 as of the 2026-09-04 StatsBomb coverage audit PATH B) is present as a
+slot in every 68-wide schema, deliberately and permanently:
+``PHASE7_FEATURES_10``'s own comment records that removing the slots broke
+every artifact and produced ``model_version="fallback"`` on every inference
+for two months. So ``always_data_gap_slots`` was structurally nonzero, never
+0, and the gate could never pass — a certification-threshold conflation, not
+a real quality bar.
 
 ⚠️ **RESOLVED 2026-08-22, authorized.** ``always_data_gap_slots`` was removed
 from the gate's blockers (and from ``certification_policy.py``'s threshold in
@@ -34,17 +36,23 @@ from src.models.feature_registry import (
 from src.models.promotion_evidence import _expected_gate, _summary_from_features
 
 
-def test_every_68_schema_carries_all_four_permanent_data_gap_slots() -> None:
-    """The slots are deliberate and unremovable — that is the premise."""
-    assert len(PHASE7_FEATURES_ALWAYS_DATA_GAP) == 4
+def test_every_68_schema_carries_all_permanent_data_gap_slots() -> None:
+    """The slots are deliberate and unremovable — that is the premise.
+
+    Count grew 4 -> 6 on 2026-09-04 (StatsBomb coverage audit PATH B added
+    home_pressing_intensity and progressive_carry_diff); asserted via
+    ``len()`` rather than a literal so a future policy change to the list
+    doesn't silently desync this test again.
+    """
+    assert len(PHASE7_FEATURES_ALWAYS_DATA_GAP) == 6
     for schema in (CANONICAL_FEATURES_68, APEX_FEATURES_68):
         present = [f for f in PHASE7_FEATURES_ALWAYS_DATA_GAP if f in schema]
         assert present == list(PHASE7_FEATURES_ALWAYS_DATA_GAP)
 
 
 def test_promotion_gate_is_satisfiable_after_the_authorized_item_38_fix() -> None:
-    """A *perfect* candidate now passes even while carrying the 4 permanent
-    declared-gap slots — those stop being disqualifying (docs/DEBT.md item 38,
+    """A *perfect* candidate now passes even while carrying every permanent
+    declared-gap slot — those stop being disqualifying (docs/DEBT.md item 38,
     authorized 2026-08-22). Zero training defaults and zero misalignment are
     still required.
     """
@@ -122,9 +130,10 @@ def _row(feature: str, *, defaulted: bool) -> dict:
 
 
 def test_policy_gapped_slots_do_not_count_as_training_defaults() -> None:
-    """The item 49 defect: a candidate whose ONLY defaulted slots are the four
-    permanent policy gaps must read 0, not 4 — otherwise the counter can never
-    reach the 0 the gate requires, for any candidate however good.
+    """The item 49 defect: a candidate whose ONLY defaulted slots are the
+    permanent policy gaps must read 0, not the gap count — otherwise the
+    counter can never reach the 0 the gate requires, for any candidate
+    however good.
     """
     rows = [_row(f, defaulted=True) for f in PHASE7_FEATURES_ALWAYS_DATA_GAP]
     rows += [
@@ -138,7 +147,9 @@ def test_policy_gapped_slots_do_not_count_as_training_defaults() -> None:
         "policy-gapped slots are counting as training defaults again — this is "
         "the exact hard floor docs/DEBT.md item 49 removed"
     )
-    assert summary["always_data_gap_slots"] == 4, "the declared gaps must still surface"
+    assert summary["always_data_gap_slots"] == len(PHASE7_FEATURES_ALWAYS_DATA_GAP), (
+        "the declared gaps must still surface"
+    )
     assert _expected_gate(summary, training_rows=10_000) == "PASS"
 
 

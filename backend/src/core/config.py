@@ -364,6 +364,17 @@ class Settings(BaseSettings):
         default=20.0,
         alias="ELO_K_BASE",
     )
+    enable_statsbomb_enrichment: bool = Field(
+        default=False,
+        alias="ENABLE_STATSBOMB_ENRICHMENT",
+        description=(
+            "Enable StatsBomb Open Data enrichment for home_pressing_intensity and "
+            "progressive_carry_diff. Requires a populated statsbomb_cache_path parquet. "
+            "Safe default: False — features remain ALWAYS_DATA_GAP until the coverage "
+            "audit (crosswalk prerequisite 1) and parquet population (prerequisite 2) "
+            "are complete for the target league."
+        ),
+    )
     statsbomb_cache_path: Path = Field(
         default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "statsbomb_features_cache.parquet",
         alias="STATSBOMB_CACHE_PATH",

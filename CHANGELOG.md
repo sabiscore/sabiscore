@@ -5,6 +5,47 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Phase 4 Step 2 HPO candidate rejected; gate StatsBomb enrichment behind a flag; fix a PPDA-inversion bug caught by review (2026-09-04/05)
+
+Phase 4 Step 2 (30-trial Optuna TPE Bayesian HPO on `apex_v4_66`) evaluated
+and rejected as a promotable candidate — `docs/DEBT.md` Finding 10,
+`backend/reports/evaluation/apex-v5-candidate-evaluation.md`. Two
+zero-fabrication fixes and a CI regression found by the first full test run
+of the PR, plus a real semantic bug GitHub Copilot's automated review caught
+before merge. `docs/DEBT.md` item 61.
+
+### Fixed
+
+- `home_pressing_intensity` (gated behind the new `ENABLE_STATSBOMB_ENRICHMENT`
+  flag, default `False`) computed the raw `home_ppda/away_ppda` ratio,
+  contradicting `populate_statsbomb_cache.py`'s own documented semantics
+  (lower PPDA = more pressing, so the ratio must invert) — a home side
+  pressing harder than its opponent scored below 1, backwards. Extracted into
+  a shared, unit-tested `_pressing_intensity_ratio()` helper returning
+  `away_ppda/home_ppda`; the bug existed in two duplicated call sites, now
+  one. Never reached production (`ENABLE_STATSBOMB_ENRICHMENT` was `False`
+  throughout).
+- `DataAggregator`'s mock team-stats builder derived `pressing_intensity`
+  directly from Elo rating with no causal basis — deleted rather than gated,
+  since the downstream `FeatureTransformer` already tolerates its absence.
+- `PHASE7_FEATURES_ALWAYS_DATA_GAP` grew 4→6 (StatsBomb coverage audit PATH
+  B) without the full backend suite being run, silently breaking two
+  hardcoded `== 4` test assertions and staling the checked-in
+  `feature_availability_matrix.json` (regenerated).
+
+### Added
+
+- `backend/scripts/populate_statsbomb_cache.py` — StatsBomb Open Data → parquet
+  cache with an authoritative `--audit-only` coverage check against the
+  Elo-training corpus.
+- `backend/scripts/calibrate_portfolio_exposure.py` — measures real
+  same-league/matchday settlement correlation to replace
+  `portfolio_exposure.py`'s `DEFAULT_PENDING_CALIBRATION` constants once
+  enough data exists (`docs/DEBT.md` item 9).
+- `backend/reports/evaluation/aleatoric-stratification-finding-2026.md`,
+  `live-clv-finding-2026-09-04.{md,json}` — research findings; no gate
+  thresholds changed (Gate 50 `error_association` remains CRITICAL, APEX §23).
+
 ## Unreleased - Remove five live fabrications from the calibration view; add the Evidence Passport (2026-09-04)
 
 `docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` Phase 5. The calibration endpoint and

@@ -1,0 +1,41 @@
+{
+  "audit_date": "2026-09-04",
+  "statsbomb_total_matches": 1632,
+  "understat_played_matches": 3440,
+  "intersection_matches": 811,
+  "coverage_pct": 23.58,
+  "threshold_pct": 85.0,
+  "path": "B",
+  "per_league": {
+    "EPL": {
+      "sb_matches": 398,
+      "understat_matches": 688,
+      "intersection": 176,
+      "coverage_pct": 25.58
+    },
+    "LIGUE_1": {
+      "sb_matches": 394,
+      "understat_matches": 666,
+      "intersection": 139,
+      "coverage_pct": 20.87
+    },
+    "BUNDESLIGA": {
+      "sb_matches": 44,
+      "understat_matches": 574,
+      "intersection": 32,
+      "coverage_pct": 5.57
+    },
+    "LA_LIGA": {
+      "sb_matches": 422,
+      "understat_matches": 706,
+      "intersection": 284,
+      "coverage_pct": 40.23
+    },
+    "SERIE_A": {
+      "sb_matches": 380,
+      "understat_matches": 806,
+      "intersection": 180,
+      "coverage_pct": 22.33
+    }
+  }
+}

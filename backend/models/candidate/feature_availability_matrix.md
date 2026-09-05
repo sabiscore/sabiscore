@@ -5,9 +5,9 @@ Training rows: **12256**
 
 ## Mechanical blockers
 
-- Training-default-only slots: **20**
+- Training-default-only slots: **1**
 - Positional train/serve schema mismatches: **11**
-- Permanent serving data-gap slots: **4**
+- Permanent serving data-gap slots: **6**
 
 ## Candidate rows by league
 
@@ -18,4 +18,4 @@ Training rows: **12256**
 - LIGUE_1: 2248
 - SERIE_A: 2553
 
-This report is derived from the exact `build_dataset()` candidate matrices and the current positional `APEX_FEATURES_68` → active-serving-contract comparison (the schema live serving actually produces today). A FAIL is evidence, not an error to be thresholded away.
+This report is derived from the exact `build_dataset()` candidate matrices and a positional candidate-contract → active-serving-contract comparison (the schema live serving actually produces today). A FAIL is evidence, not an error to be thresholded away.

@@ -1713,8 +1713,8 @@
       "required_or_optional": "REQUIRED",
       "league_scope": "ALL",
       "feature_group": "PHASE7_FEATURES_10",
-      "always_data_gap": false,
-      "disposition": "ALIGNED_OBSERVED",
+      "always_data_gap": true,
+      "disposition": "DEFER_UNTIL_DATA_EXISTS",
       "training_source": "UNDECLARED",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
@@ -1740,8 +1740,8 @@
       "required_or_optional": "REQUIRED",
       "league_scope": "ALL",
       "feature_group": "PHASE7_FEATURES_10",
-      "always_data_gap": false,
-      "disposition": "ALIGNED_OBSERVED",
+      "always_data_gap": true,
+      "disposition": "DEFER_UNTIL_DATA_EXISTS",
       "training_source": "UNDECLARED",
       "serving_source": "UNDECLARED",
       "shadow_source": "UNDECLARED",
@@ -1840,5 +1840,5 @@
       "unit": "UNDECLARED"
     }
   ],
-  "feature_contract_sha256": "7681886093e33af49f1efcca2880e76d1fa66732fc26e2796f56a6c0ee6d6d13"
+  "feature_contract_sha256": "2f80df948bb52e0a1f746271573c3b448fd6be23f322b2c988cf6d3a98076288"
 }

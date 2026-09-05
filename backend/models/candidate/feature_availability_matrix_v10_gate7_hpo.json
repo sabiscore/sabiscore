@@ -10,15 +10,15 @@
     "LIGUE_1": 2248,
     "SERIE_A": 2553
   },
-  "candidate_feature_schema_version": "apex_v1_68",
-  "candidate_contract_hash": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338",
+  "candidate_feature_schema_version": "apex_v5_66",
+  "candidate_contract_hash": "70db95261756e17180c5cac8449c29424e7344c4cc956b56e7cfb56863db05b4",
   "serving_contract_hash": "6f290862052dbd22f22045366fb687bf462103460407e49327fcb8e00afd71aa",
   "summary": {
-    "features": 68,
+    "features": 66,
     "training_defaulted_slots": 1,
-    "non_variable_training_slots": 7,
-    "serving_schema_misaligned_slots": 11,
-    "always_data_gap_slots": 6
+    "non_variable_training_slots": 5,
+    "serving_schema_misaligned_slots": 14,
+    "always_data_gap_slots": 4
   },
   "promotion_gate": "FAIL",
   "features": [
@@ -1158,27 +1158,27 @@
     },
     {
       "index": 63,
-      "feature": "home_pressing_intensity",
+      "feature": "shot_quality_diff",
       "serving_feature": "home_pressing_intensity",
-      "classification": "ALWAYS_DATA_GAP",
+      "classification": "SCHEMA_MISMATCH",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
       "training_coverage": 0.0,
       "training_missingness": 1.0,
       "variable_in_training": false,
-      "training_stddev": 1.1102230246251565e-16,
-      "training_min": 0.55,
-      "training_max": 0.55,
+      "training_stddev": 0.0,
+      "training_min": 0.0,
+      "training_max": 0.0,
       "defaulted_training_slot": true,
       "always_data_gap": true,
-      "candidate_position_matches_current_serving_schema": true
+      "candidate_position_matches_current_serving_schema": false
     },
     {
       "index": 64,
-      "feature": "progressive_carry_diff",
+      "feature": "key_passes_under_pressure_diff",
       "serving_feature": "progressive_carry_diff",
-      "classification": "ALWAYS_DATA_GAP",
+      "classification": "SCHEMA_MISMATCH",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -1190,49 +1190,13 @@
       "training_max": 0.0,
       "defaulted_training_slot": true,
       "always_data_gap": true,
-      "candidate_position_matches_current_serving_schema": true
+      "candidate_position_matches_current_serving_schema": false
     },
     {
       "index": 65,
-      "feature": "shot_quality_diff",
-      "serving_feature": "shot_quality_diff",
-      "classification": "ALWAYS_DATA_GAP",
-      "training_source": "exact build_dataset() candidate matrix",
-      "serving_source": "active generation's positional serving contract",
-      "training_rows": 12256,
-      "training_coverage": 0.0,
-      "training_missingness": 1.0,
-      "variable_in_training": false,
-      "training_stddev": 0.0,
-      "training_min": 0.0,
-      "training_max": 0.0,
-      "defaulted_training_slot": true,
-      "always_data_gap": true,
-      "candidate_position_matches_current_serving_schema": true
-    },
-    {
-      "index": 66,
-      "feature": "key_passes_under_pressure_diff",
-      "serving_feature": "key_passes_under_pressure_diff",
-      "classification": "ALWAYS_DATA_GAP",
-      "training_source": "exact build_dataset() candidate matrix",
-      "serving_source": "active generation's positional serving contract",
-      "training_rows": 12256,
-      "training_coverage": 0.0,
-      "training_missingness": 1.0,
-      "variable_in_training": false,
-      "training_stddev": 0.0,
-      "training_min": 0.0,
-      "training_max": 0.0,
-      "defaulted_training_slot": true,
-      "always_data_gap": true,
-      "candidate_position_matches_current_serving_schema": true
-    },
-    {
-      "index": 67,
       "feature": "set_piece_xg_diff",
-      "serving_feature": "set_piece_xg_diff",
-      "classification": "ALWAYS_DATA_GAP",
+      "serving_feature": "shot_quality_diff",
+      "classification": "SCHEMA_MISMATCH",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -1244,7 +1208,7 @@
       "training_max": 0.0,
       "defaulted_training_slot": true,
       "always_data_gap": true,
-      "candidate_position_matches_current_serving_schema": true
+      "candidate_position_matches_current_serving_schema": false
     }
   ]
 }

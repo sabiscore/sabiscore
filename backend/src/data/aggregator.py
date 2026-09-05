@@ -212,9 +212,19 @@ class DataAggregator:
                 "xg_overperformance": 0.05 + (home_elo - 1500) / 5000,
                 "xg_consistency": home_stats["scoring_consistency"],
                 
-                # Required by _add_advanced_team_features (tactical)
+                # Required by _add_advanced_team_features (tactical), EXCEPT
+                # pressing_intensity: previously derived from Elo here — a
+                # fabrication with no causal basis. Removed 2026-09-04 (crosswalk
+                # prerequisite 2) and deliberately not replaced in this dict.
+                # FeatureTransformer._project_to_canonical_features() already
+                # tolerates its absence: home_stats.get("pressing_intensity")
+                # is only the first of three fallback sources it tries before
+                # the registry default (0.55), so omitting the key here just
+                # means canonical home_pressing_intensity resolves from
+                # `enhanced` (live StatsBomb serving) or the default — it never
+                # raises. See UpcomingMatchFeatureProjector for the live path,
+                # gated on ENABLE_STATSBOMB_ENRICHMENT.
                 "possession_style": 0.50 + (home_elo - 1500) / 3000,
-                "pressing_intensity": 0.50 + (home_elo - 1500) / 2500,
                 "first_half_goals_rate": 0.42 + (home_elo - 1500) / 5000,
                 "defensive_solidity": home_stats["defensive_strength"],
                 "setpiece_goals_rate": 0.22 + (home_elo - 1500) / 8000,
@@ -241,9 +251,9 @@ class DataAggregator:
                 "xg_overperformance": 0.05 + (away_elo - 1500) / 5000,
                 "xg_consistency": away_stats["scoring_consistency"],
                 
-                # Required by _add_advanced_team_features (tactical)
+                # Required by _add_advanced_team_features (tactical), except
+                # pressing_intensity — fabrication removed, see home block above.
                 "possession_style": 0.48 + (away_elo - 1500) / 3000,
-                "pressing_intensity": 0.48 + (away_elo - 1500) / 2500,
                 "first_half_goals_rate": 0.40 + (away_elo - 1500) / 5000,
                 "defensive_solidity": away_stats["defensive_strength"],
                 "setpiece_goals_rate": 0.20 + (away_elo - 1500) / 8000,

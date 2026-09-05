@@ -1,5 +1,47 @@
 # SabiScore Debt Ledger
 
+## 61. Gated `home_pressing_intensity` inverted the PPDA sign — RESOLVED 2026-09-05
+
+**Found by:** GitHub Copilot's automated review of PR #153, before merge —
+the change had not yet reached `master`. **Tier:** `RESOLVED`.
+
+`UpcomingMatchFeatureProjector` computes `home_pressing_intensity` (gated
+behind `ENABLE_STATSBOMB_ENRICHMENT`, still `False` in production — see item
+below and the PATH B entries in items 38/49) as a ratio of the two sides'
+`ppda_ratio` values. `ppda_ratio` is raw PPDA (opponent passes allowed per own
+defensive action) — LOWER means MORE pressing, exactly as
+`scripts/populate_statsbomb_cache.py`'s own docstring states:
+`pressing_intensity ~= 1/ppda_ratio`. The shipped formula computed
+`home_ppda / away_ppda` — the *uninverted* ratio — so a home side that pressed
+harder (lower PPDA) than its opponent produced a value BELOW 1, the opposite
+of what "pressing intensity advantage" means. Both occurrences (in
+`build_live_feature_vector` and `build_live_feature_vector_from_matchup`)
+carried the identical bug, since one was copy-pasted from the other.
+
+**Fixed:** extracted the one-line formula into a module-level pure function,
+`_pressing_intensity_ratio(home_ppda_ratio, away_ppda_ratio)` returning
+`away_ppda / home_ppda` — both call sites now share it, removing the
+duplication that let the bug exist in two places at once. New
+`tests/unit/test_pressing_intensity_ratio.py` pins the direction (home
+pressing harder scores above 1, away pressing harder scores below 1, equal
+scores exactly 1, a degenerate zero PPDA does not raise) — the first test
+coverage this computation has ever had; no test previously exercised the
+`ENABLE_STATSBOMB_ENRICHMENT=true` branch at all.
+
+Copilot's review also flagged a stale comment in `aggregator.py`'s mock
+team-stats builder implying `pressing_intensity` was still required by
+`_add_advanced_team_features` after the Elo-derived fabrication was removed
+from it (item above / PATH B) — corrected to note the downstream
+`FeatureTransformer._project_to_canonical_features()` already tolerates the
+key's absence via its `_source_num()` fallback chain.
+
+**Impact:** `ENABLE_STATSBOMB_ENRICHMENT` has been `False` in production
+throughout — this code path has never executed against real traffic. No
+prediction was ever affected. Caught in review before merge, not in
+production.
+
+---
+
 ## 60. The calibration view shipped with five live fabrications — RESOLVED 2026-09-04
 
 `GET /api/v1/model-performance/calibration` and `CalibrationCurveChart.tsx`
@@ -1030,6 +1072,83 @@ file.
 
 ---
 
+### Finding 9 — StatsBomb coverage audit PATH B; `apex_v4_66` trained and evaluated against Gate 7 (2026-09-04)
+
+**StatsBomb Open Data coverage audit** (`scripts/audit_statsbomb_coverage.py`,
+report: `reports/evaluation/statsbomb-coverage-audit-2026.json`):
+
+- Identity crosswalk intersection: **811 / 3,440 unique Understat matchup
+  pairs = 23.58%** (threshold 85%).
+- **PATH B triggered.** `home_pressing_intensity` and `progressive_carry_diff`
+  formally relegated to `PHASE7_FEATURES_ALWAYS_DATA_GAP` in
+  `feature_registry.py`.
+- `CERTIFICATION_POLICY_VERSION` bumped `1.1.0` → `1.1.1`
+  (documentation-only; no gate threshold changed, APEX §23).
+- `ENABLE_STATSBOMB_ENRICHMENT` must remain `False` until StatsBomb publishes
+  domestic-league event data covering ≥ 85% of the Understat corpus.
+
+**`apex_v4_66` schema and evaluation:**
+
+Width 66 = `APEX_FEATURES_68` − 2 relegated event-data features.  The 13
+h2h / venue / market-interaction features from PR #149 are fully retained.
+
+| League | Δ RPS (cand − incumb) | Beats market? |
+|---|---|---|
+| BUNDESLIGA | +0.0103 (incumbent better) | ✗ |
+| EPL | +0.0013 (incumbent better) | **✓** (cand 0.2049 vs mkt 0.2054) |
+| EREDIVISIE | −0.0058 (candidate better) | ✗ |
+| LA_LIGA | −0.0046 (candidate better) | ✗ |
+| LIGUE_1 | −0.0007 (candidate better) | ✗ |
+| SERIE_A | −0.0045 (candidate better) | ✗ |
+
+Gates: `valid_probability_simplex` PASS · `input_responsiveness` PASS ·
+`coherent_price_perturbation` PASS · `primary_metric_improvement` PASS ·
+`serving_feature_availability` FAIL · `no_league_regression` FAIL (4/6) ·
+`market_baseline` FAIL (1/6).
+
+`promotion_permitted: false`.
+
+**Gate 7 milestone (directive criterion — at least one league):** ✓ EPL
+candidate RPS (0.2049) < market RPS (0.2054).  This is the first candidate
+generation to beat the market baseline in any league.  Full Gate 7 (all
+leagues) remains open.
+
+Full evaluation: `reports/evaluation/apex-v4-candidate-evaluation.md`.
+
+### Finding 10 — Phase 4 Step 2: Bayesian HPO (`apex_v5_66`); 30-trial Optuna TPE; regressed `no_league_regression` 4/6 → 3/6 (2026-09-05)
+
+**Phase 4 Step 2** applied constrained Bayesian HPO (Optuna TPE, 30
+trials / learner / league, `TimeSeriesSplit(n_splits=3)`, `MedianPruner`)
+to the `apex_v4_66` feature contract.  Schema key: `apex_v5_66`; artifact
+suffix: `v10_gate7_hpo`.
+
+Per-league comparison vs `v5_phase7` on 2526 holdout:
+
+| League | Incumbent RPS | Candidate RPS | Δ RPS | Candidate wins | Beats market |
+|---|---|---|---|---|---|
+| BUNDESLIGA | 0.1900 | 0.1968 | +0.0068 | ✗ | ✗ (mkt 0.1908) |
+| EPL | 0.2036 | 0.2049 | +0.0013 | ✗ | ✓ (mkt 0.2054) |
+| EREDIVISIE | 0.2048 | 0.1988 | −0.0059 | ✓ | ✗ (mkt 0.1978) |
+| LA_LIGA | 0.2018 | 0.1964 | −0.0054 | ✓ | ✗ (mkt 0.1963) |
+| LIGUE_1 | 0.2032 | 0.2034 | +0.0003 | ✗ | ✗ (mkt 0.1991) |
+| SERIE_A | 0.2051 | 0.1994 | −0.0058 | ✓ | ✗ (mkt 0.1971) |
+
+Gates: `valid_probability_simplex` PASS · `input_responsiveness` PASS ·
+`coherent_price_perturbation` PASS · `primary_metric_improvement` PASS ·
+`serving_feature_availability` FAIL · `no_league_regression` FAIL (3/6) ·
+`market_baseline` FAIL (1/6).
+
+`promotion_permitted: false`.
+
+**HPO regression:** LIGUE_1 flipped from candidate-better (−0.0007 in v4)
+to incumbent-better (+0.0003 in v5) — 30-trial TPE overfit to
+`TimeSeriesSplit` CV folds for that league.  Mean RPS improvement
++0.00066 → +0.00146, but `no_league_regression` 4/6 → 3/6.
+
+Full evaluation: `reports/evaluation/apex-v5-candidate-evaluation.md`.
+
+---
+
 ## 55. Naive/aware datetime crash class swept across M10-M13 — RESOLVED 2026-09-03, two residuals opened
 
 **Tier:** `RESOLVED` (the found instances) + two new tracked residuals below.
@@ -1852,13 +1971,40 @@ own precedent was to record the one-line change for an authorized decision
 rather than take it unilaterally. Confidence that a fix is correct is not the
 same as authority to make it.
 
+**Correction 2026-09-05:** every "4" above is now "6" — the StatsBomb coverage
+audit PATH B (2026-09-04, `feature_registry.py`) formally relegated
+`home_pressing_intensity` and `progressive_carry_diff` into
+`PHASE7_FEATURES_ALWAYS_DATA_GAP` alongside the original 4, growing it to 6
+unique features. This is not a reopening of item 38 or this item —
+`always_data_gap_slots` is still fully inert in the gate's blockers, so the
+growth changes nothing about `promotion_permitted`. It **did** silently break CI: the first real CI
+run of the PR carrying the PATH B change caught two hardcoded `== 4`
+assertions in `test_promotion_gate_satisfiability.py` and
+`test_promotion_feature_evidence.py`, plus a stale checked-in
+`backend/models/candidate/feature_availability_matrix.json` (last regenerated
+under the 4-item list) that failed `validate_promotion_feature_evidence` at
+feature index 63 (`home_pressing_intensity`, now correctly `ALWAYS_DATA_GAP`
+but stored as if it weren't). All three fixed in the same change: the two
+hardcoded assertions now read `len(PHASE7_FEATURES_ALWAYS_DATA_GAP)`, and the
+matrix was regenerated via `scripts/generate_feature_availability_matrix.py`.
+⚠️ **The PATH B commit that changed the registry list did not run the full
+test suite before being committed** — only the model-training-specific tests
+it was written to satisfy. A registry-list change with this history of
+sibling counters (items 38, 49) needs the full suite, not a targeted subset.
+
 ---
 
-## 48. Every trained artifact, including the served generation, has never seen real Elo — `elo_difference` is a constant 0.0 across the entire training corpus
+## 48. The *served* generation has never seen real Elo — candidates have since M2 wiring (2026-08-30)
 
-**Tier:** `NEXT` — a real, measured, positive out-of-sample signal (M2
-evaluation, not yet wired into the training pipeline any model actually
-ships from). Filed 2026-08-30, M2 Family A session.
+**Correction 2026-09-04:** The original headline ("every trained artifact") is now false.
+Candidates evaluated after M2 Family A (PR wiring ~2026-08-30) are trained with real
+chronological Elo: `feature_availability_matrix.json` for `v8_dense68` classifies
+`elo_difference`, `elo_home_trend_5`, and `elo_momentum_cross` as
+`ALIGNED_OBSERVED_SIGNAL`. It remains true only of the **served** generation
+(`v5_phase7-20260808`), which was trained before the M2 wiring landed.
+
+**Tier:** `PARTIAL` — real Elo wired into candidate training; served generation unchanged.
+Filed 2026-08-30, M2 Family A session. Corrected 2026-09-04.
 
 Measured directly, not inferred: loaded the full real corpus (12,765
 matches) through `train_on_real_matches.build_dataset()` and read the
@@ -3254,6 +3400,12 @@ and `market_baseline` (0/6 leagues) — both unrelated to this fix — plus 11
 `serving_schema_misaligned_slots` from item 37, which remains open. No
 candidate promotes as a result of this change; it only stops a *good*
 candidate from being blocked by an unfixable accounting term.
+
+**Correction 2026-09-05:** the declared-gap count of 4 cited throughout this
+item is now 6 (StatsBomb coverage audit PATH B, 2026-09-04) — see item 49's
+correction note of the same date for the full accounting and the CI breakage
+it caused. Unaffected here: `always_data_gap_slots` is still fully inert in
+`_expected_gate()`'s blockers regardless of the list's length.
 
 ---
 
@@ -4926,7 +5078,7 @@ below (steps 1–6, dashboard-only) has evidently been completed — the stray
 service is gone, not merely suspended. Not re-diagnosed further; this closes
 the item on direct evidence rather than inference from a stale log.
 
-**Tier:** `FIX-NOW` / P0 — it crash-looped on every push to master.
+**Tier:** `RESOLVED 2026-08-23` — live-verified: only two services exist on Render, neither is the stray root-builder. (Original tier: FIX-NOW / P0 — it crash-looped on every push to master.)
 **Found:** 2026-08-12, from an operator-supplied Render deploy log for commit
 `5de6228`.
 
@@ -5772,8 +5924,11 @@ were completed by WP-18, as the 2026-08-07 closure note records.
 
 **Tier:** `NEXT` → settlement loop **shipped 2026-08-05**; interactive capture fix
 **DEPLOYED / VERIFIED 2026-08-14** on Apex v3.
-Entry kept (annotate, don't remove, matching item 1's precedent) because production
-is still DATA-FED at zero, a residual limitation and a related risk (item 5) remain.
+Entry kept (annotate, don't remove, matching item 1's precedent). **Correction 2026-09-04:**
+"DATA-FED at zero" was stale at assessment — production has **37 settled predictions**,
+a live three-fold walk-forward RPS series (mean 0.250), and a CLV series (n=17, mean −3.15%)
+that independently confirms `market_baseline` fails across all measured leagues.
+A residual limitation and a related risk (item 5) remain.
 **Owner:** unassigned.
 **Updated:** 2026-08-05 — WP-10.4 shipped. New `services/settlement_service.py`
 composes `sync_settled_results()` (new, `fixture_sync_service.py`) →
@@ -6267,11 +6422,13 @@ revisit alongside item 2/5's own settled-data gates.
 
 ## 9. Portfolio-exposure haircut curve and aggregate-cap multiplier are placeholders, not calibrated values
 
-**Tier:** `NEXT` — trigger: ≥1 fully-settled same-league/same-matchday round
-exists (Eredivisie's opening weekend, 2026-08-07 onward, is the earliest
-candidate). Not sooner.
+**Tier:** `NEXT` — trigger met (2026-09-04, 37 settled predictions). Calibration script
+ready at `scripts/calibrate_portfolio_exposure.py`. Data volume still too thin for a
+statistically reliable estimate: target ≥10 same-league/same-matchday groups of n≥2.
+Run `--apply` once that volume exists.
 **Owner:** unassigned.
 **Found:** 2026-08-06, implementing WP-17 (`docs/adr/0005-portfolio-exposure-policy.md`).
+**Updated:** 2026-09-04 — trigger clause cleared; calibration script written.
 
 `backend/src/core/portfolio_exposure.py`'s `HAIRCUT_PER_ADDITIONAL_FIXTURE` (0.10),
 `HAIRCUT_FLOOR_MULTIPLIER` (0.50), and `AGGREGATE_CAP_MULTIPLIER` (3.0) are reasoned
