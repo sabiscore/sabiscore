@@ -119,7 +119,10 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
     """
     log.info("Fetching StatsBomb competition manifest …")
     competitions = _fetch_json(_SB_COMPETITIONS_URL)
-    assert isinstance(competitions, list)
+    if not isinstance(competitions, list):
+        raise TypeError(
+            f"StatsBomb competitions manifest: expected a list, got {type(competitions).__name__}"
+        )
 
     rows: List[Tuple[str, str, str, str]] = []
 
@@ -137,7 +140,8 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
         url = f"{_SB_GITHUB_BASE}/matches/{cid}/{sid}.json"
         try:
             matches = _fetch_json(url)
-            assert isinstance(matches, list)
+            if not isinstance(matches, list):
+                raise TypeError(f"expected a list of matches, got {type(matches).__name__}")
         except Exception as exc:
             log.warning("Could not fetch %s %s: %s", league, season, exc)
             continue
