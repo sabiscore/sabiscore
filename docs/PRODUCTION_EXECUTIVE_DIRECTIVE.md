@@ -1,317 +1,314 @@
-# SabiScore — Production Executive Directive (v2, 2026-09-03)
+# SabiScore — Production Executive Directive (v3, 2026-09-06)
 
-Supersedes the "Production Implementation Plan" and "Recommendations" drafts.
-Every constant below was read out of the repository or a live endpoint on
-2026-09-03. Where a number cannot be known without a production query, this
-document says so rather than quoting a stale one.
-
-**Read this section before any other.** The failure mode of the previous three
-directives was not ambition; it was confidently wrong constants driving work
-that could not succeed.
+Supersedes v2 (2026-09-03). Every constant below was read out of the repository
+or a live endpoint on 2026-09-06, after PR #156 merged as `1115d1d`. v2's
+failure mode was "confidently wrong constants driving work that could not
+succeed" — three of v2's own headline numbers had already drifted by the time
+this was written (§0). This version adds a harder constraint v2 did not have:
+**a fourth independent measurement, from a different angle each time, that the
+market cannot currently be beaten by anything in this repository — including
+the market's own forecast against an intuitive accuracy bar.** Any directive
+that asks for "high-accuracy predictions" as a near-term deliverable is asking
+for something this repository has now measured four ways and not found. §2
+reframes the mission around what is actually achievable and valuable; §5–§7
+are the concrete plan under that reframing.
 
 ---
 
-## 0. Verified ground truth — do not restate from memory
+## 0. Verified ground truth — do not restate from memory, re-verify next time
 
-| Fact | Verified value | Source |
-|---|---|---|
-| Backend runtime | **Python 3.11.13** | `backend/runtime.txt` |
-| Frontend | Next.js 15.5.6, **React 18.3.1** (pinned) | `apps/web/package.json` |
-| Charting | Recharts 2.15.4 (already a dependency) | `apps/web/package.json` |
-| Head migration | `0013_push_devices` | Render deploy log |
-| Active generation | `v5_phase7-20260808` | `models/active_generation.json` |
-| Certification state | `UNVERIFIED` / `ACTIVE_FAIL_CLOSED` | same |
-| Served feature schema | `phase7_68` (68 columns) | same |
-| Feature contract SHA-256 | `7681886093e33af49f1efcca2880e76d1fa66732fc26e2796f56a6c0ee6d6d13` | `models/feature_contract.json` |
-| Certification policy | **v1.1.0**, SHA-256 `7e1e238456df14de182d957a0351485c63892c7980746d3a72488f248697d07a` | `certification_policy.policy_sha256()` |
-| Live staking state | `stake_permitted: false`, `manifest_valid: true`, `models_loaded: true` | `GET /api/v1/models/status` |
-| mypy ceiling | 784 (currently 768) | `scripts/check_mypy_ceiling.py` |
-| Understat corpus | **10,633 distinct** played matches (12,459 rows before dedup) | `src/data/understat_corpus.py` |
+| Fact | Verified value | Source | vs. v2 |
+|---|---|---|---|
+| Head commit | `1115d1d` (PR #156, squash-merged) | `git log` | — |
+| Deploy parity | Render `sha:1115d1d` `healthy`; Vercel `sha:1115d1d`, `backendSha` full match, `backendStatus:ok` | live probe, this session | confirmed in sync |
+| Active generation | `v5_phase7-20260808` | `models/active_generation.json` | unchanged |
+| Certification state | `UNVERIFIED` / `ACTIVE_FAIL_CLOSED` | same | unchanged |
+| Served feature schema | `phase7_68` (68 columns) | same | unchanged |
+| **Feature contract SHA-256** | `2f80df948bb52e0a1f746271573c3b448fd6be23f322b2c988cf6d3a98076288` | `models/feature_contract.json` | **v2 quoted a different hash — regenerated since (PR #149 changed a training-side attribution string; the file is content-hashed, so any attribution edit moves it)** |
+| **Certification policy** | **v1.1.1**, SHA-256 `f823648253fc2708fc676b5fe25da807d3393d25a62bf80a3085508f130908f8` | `certification_policy.policy_sha256()` | **v2 quoted v1.1.0 / a different hash — bumped since, PR #153 era** |
+| `serving_feature_availability` | FAIL — `training_defaulted_slots=16` (needs 0), `always_data_gap_slots` floor now **6** (was 4) | DEBT item 49 | **v2 didn't carry this number; verify fresh each time — it has moved twice since 2026-08-22** |
+| `market_baseline` | FAIL — **0 of 6 leagues**, both the best candidate and the serving incumbent, with 95% CI | DEBT item 62, this session | **new: v2 treated this as a point-comparison gate; it is now a bootstrapped, statistically confirmed 0/6** |
+| `MODEL_UNCERTAINTY_UNAVAILABLE` | CRITICAL, unconditional, on 100% of live requests | `full_analysis.py:_uncertainty_from_features` | unchanged; DEBT item 50 |
+| Live staking state | `stake_permitted: false` on every fixture, all 5 providers `enabled:true` | live census, this session | providers now fully enabled (v2-era blocker resolved) |
+| mypy ceiling | 784 (currently 769) | `scripts/check_mypy_ceiling.py` | unchanged |
+| Backend suite | 2284 passed, 17 skipped, 2 xfailed | this session, full run | +5 vs. v2's 2279 (new tests from this session) |
 
-### Constants the previous drafts got wrong — do not propagate
+### Constants v2 got wrong or let go stale — the exact failure mode this file exists to prevent
 
-- ❌ "Python 3.12" → it is **3.11.13**.
-- ❌ "React 19" → it is **18.3.1**, and `CLAUDE.md` forbids bumping it without a
-  planned upgrade.
-- ❌ "PostgreSQL 18" → unverified; do not assert a major version you have not read.
-- ❌ "feature contract SHA `b63a0517…`" → the real digest is `7681886093e33af4…`.
-- ❌ "policy v1.0.0 / `41cb7703…`" → policy is **v1.1.0** / `7e1e2384…`.
-- ❌ **"11,694 reviewed `match_stats` rows" / "23,388 rows expected"** → that count
-  came from the *pre-deduplication* manifest over 12,459 rows. The corpus is now
-  10,633 distinct matches, so the READY count is necessarily lower and **the
-  manifest SHA-256 has changed**. The number is unknown until a fresh review run
-  against production. Do not hardcode it, and do not assert a row-count
-  postcondition derived from it.
-- ❌ Invented promotion gates ("draw_recall_minimum", "≥15/68 responsiveness",
-  "6/6 leagues"). The real seven are listed in §3.
-- ❌ `from src.db.models import MatchStats` → it lives in `src.core.database`.
-- ❌ `MatchStats(updated_at=…)` → **there is no `updated_at` column** on that table.
+- ❌ Feature contract hash `7681886093e33af4…` → now `2f80df948bb52e0a1…`. **A content hash is not a fact you carry forward — it moves whenever a hashed field changes, and it changed twice between v2 and v3.**
+- ❌ Policy `v1.1.0` / `7e1e2384…` → now `v1.1.1` / `f8236482…`.
+- ❌ v2 treated `market_baseline` as answerable by a single RPS comparison. It is not — see §2. A 0.0005 RPS margin over 375 fixtures is statistically indistinguishable from zero (§2), and v2 had no way to know that because nobody had built the instrument yet.
+- ❌ "3 of 5 providers disabled, Render Blueprint sync outstanding" — resolved; all 5 are `enabled:true` in production today. Do not re-flag this.
+- ✅ Everything else in v2 §0 (runtime, React pin, `training_defaulted_slots` mechanism, dual-loader hazard) re-verified unchanged and still holds.
 
 ---
 
 ## 1. Closed questions — do not re-litigate without new evidence
 
-Each of these was measured, not argued. Re-opening one requires new measurement,
-not a new plan.
+Each row is a measurement, not an argument. v2's table carried five; this adds
+a sixth, and strengthens the framing on one v2 already had.
 
 | Question | Verdict | Evidence |
 |---|---|---|
-| Heterogeneous ensemble to clear Gate 50 | **REFUTED** — 3 seed blocks (1000, 7000, 4242). RF-only skill −0.0161/−0.0370/−0.0244 at N=3/5/10 | DEBT 59; `spike_independent_ensemble_uncertainty.py` |
-| Adding xG causal drivers (`apex_v2_71`) | **REJECTED** — mean RPS −0.00159 on identical rows, market_baseline 0/5 | DEBT 58; `reports/evaluation/apex-v2-71-candidate-evaluation.*` |
-| Populating the 4 `ALWAYS_DATA_GAP` slots | **INERT** — zero-variance columns; no tree splits on them | DEBT 56 Finding 1 |
-| Re-specifying `error_association` per aleatoric stratum | **FORBIDDEN** — post-hoc threshold change (APEX §23); also would not cleanly pass (2 of 3 strata still wrong-signed) | DEBT 50 Hypothesis 1 |
-| BullMQ / Celery / Node worker layer | **REJECTED** — competing scheduler; use FastAPI lifespan loops | DEBT 54 |
-| BNN / PyTorch staking path | **CLOSED** — ADR 0009 locks `UNCERTAINTY_METHOD = "ensemble_dispersion"` | DEBT 42/43 |
+| Heterogeneous ensemble to clear Gate 50 | **REFUTED** — 3 seed blocks. RF-only skill negative at every N tested | DEBT 59 |
+| Adding xG causal drivers (`apex_v2_71`) | **REJECTED** — mean RPS −0.00159, market_baseline 0/5 | DEBT 58 |
+| Populating the 4 (now 6) `ALWAYS_DATA_GAP` slots | **INERT** — zero-variance columns, no tree splits on them | DEBT 56 |
+| Populating h2h/venue/interaction slots (`apex_v3_68`) | **REJECTED** — 16→3 defaulted slots, genuinely used (35→43 responsive features), still 0/6 vs. market | DEBT item filed 2026-09-04, `apex-v3-68-candidate-evaluation.md` |
+| Re-specifying `error_association` per stratum | **FORBIDDEN** — post-hoc threshold change; also would not cleanly pass | DEBT 50 |
+| BullMQ / Celery / Node worker layer | **REJECTED** — competing scheduler; FastAPI lifespan loops are correct and sufficient at current load (§0: full-analysis measured 1–2.5s cold, not the "heavy ML inference" a queue would be justified by) | DEBT 54 |
+| BNN / PyTorch staking path | **CLOSED** — ADR 0009 locks `ensemble_dispersion` as the only authorised method | DEBT 42/43 |
+| **HPO + a league-stratified certification carve-out (`apex_v5_66`, EPL)** | **REJECTED — paired bootstrap CI, 0/6 leagues, both heads** | **DEBT 62, this session** |
 
-**Corollary that reframes the whole mission:** `uncertainty_policy.py` states the
-two gates are independent — *"clearing `MODEL_GENERATION_UNCERTIFIED` does not
-clear `MODEL_UNCERTAINTY_UNAVAILABLE`"* — and the converse holds. **Clearing
-Gate 50 would not enable staking.** Staking additionally requires
-`certification_state: CERTIFIED`, which requires `market_baseline`, which
-currently fails **0/5 for every model measured** — incumbent and both candidates.
-
-> **The single blocker is: no SabiScore model beats the de-vigged market-implied
-> RPS in any league.** Every plan that does not attack that is not a plan to
-> ship staking.
-
----
-
-## 2. The highest-value unexplored work — 16 defaulted training slots
-
-This is the finding the previous directives missed, and it is the best available
-attack on `market_baseline`.
-
-`serving_feature_availability` requires `training_defaulted_slots == 0`. It is
-currently **16** — and these are *not* the four policy-gapped slots (those are
-correctly excluded since DEBT 49). Measured directly from
-`models/candidate/feature_availability_matrix.json`:
-
-```
-h2h block (6)      h2h_home_wins, h2h_away_wins, h2h_draws, h2h_matches,
-                   h2h_dominance, h2h_market_agreement
-venue block (4)    home_venue_win_rate, home_venue_draw_rate,
-                   home_venue_loss_rate, home_advantage_strength
-interactions (3)   form_market_agreement_home, form_market_disagreement,
-                   venue_market_combo
-scalar (1)         total_goals_expected
-event-data (2)     home_pressing_intensity, progressive_carry_diff
-```
-
-**Fourteen of the sixteen are derivable from `data/cache/fd_*.csv`, which is
-already committed.** Head-to-head records and home-venue records are ordinary
-walk-forward accumulations over the same corpus `TeamHistory` already walks.
-
-The asymmetry is the point: h2h and venue features are **computed at serving
-time today.** Training leaves them constant. A column that is constant in
-training is never split on, so the model provably cannot use 14 features that
-serving is already paying to compute. This is not a marginal feature idea —
-it is signal the model has never once seen, on data already in the
-repository.
-
-> ❌ **Correction (2026-09-04, verified during Phase 2 implementation):** the
-> citation above named `data/transformers.py:407–474` as where this
-> computation lives. Read directly, that is
-> `FeatureTransformer._project_to_canonical_features` — a second, divergent
-> pipeline that re-derives these fields from already-engineered keys through
-> materially different (and wrong) formulas: a `max(1.0, …)` clamp on
-> `h2h_matches`, `home_venue_loss_rate` assigned from the *away* team's away
-> win rate. The real, live serving computation is
-> `services/upcoming_match_feature_service.py`'s `_get_h2h_stats()` /
-> `_get_home_venue_stats()` / its post-market interaction block — verified by
-> reading that code directly, and the file Phase 2's implementation mirrors.
-> Do not cite `transformers.py:407–474` as a parity reference for this family
-> again; it is documented as wrong, not fixed, in `docs/DEBT.md` item 56
-> Finding 8.
-
-`home_pressing_intensity` and `progressive_carry_diff` are **not** derivable from
-football-data or Understat (they need event-level data). They stay defaulted, and
-`serving_feature_availability` cannot reach 0 until they are either sourced or
-moved to the policy-gap list by an authorized decision. State that plainly; do
-not quietly reclassify them.
+**The corollary v2 stated is now measured, not inferred:** `uncertainty_policy.py`
+states clearing `MODEL_GENERATION_UNCERTIFIED` does not clear
+`MODEL_UNCERTAINTY_UNAVAILABLE`, and the converse holds. Both gates are
+independently, currently, unconditionally failing — one on a statistically
+confirmed 0/6 result, one on a real, reproducible-both-ways sign reversal
+(`error_association`, DEBT 50). **Clearing either would not enable staking.
+Clearing both is not currently possible by any means this repository has not
+already tried.**
 
 ---
 
-## 3. The seven real promotion gates
+## 2. The central finding, reframed — read this before writing any more model code
 
-Transcribed from `certification_policy.PROMOTION_GATES` (v1.1.0).
-`PROMOTION_REQUIRES_ALL_GATES = True`.
+v2 said: "the single blocker is: no SabiScore model beats the de-vigged
+market-implied RPS in any league." That was correct but incomplete, and its
+incompleteness is what licensed a plausible-sounding but wrong follow-up
+proposal (the EPL stratification directive this session rejected). The
+complete picture, assembled from four independent measurements across three
+different sessions:
 
-| Gate | Threshold |
-|---|---|
-| `valid_probability_simplex` | no candidate holdout row rejected by `evaluate()` |
-| `input_responsiveness` | `min_responsive_features_per_league: 1` |
-| `coherent_price_perturbation` | `directionally_coherent: True` |
-| `serving_feature_availability` | `training_defaulted_slots == 0`, `serving_schema_misaligned_slots == 0`, `min_training_rows ≥ 1` |
-| `primary_metric_improvement` | mean RPS improvement **strictly > 0** vs incumbent |
-| `no_league_regression` | candidate wins on RPS in **every** league compared |
-| `market_baseline` | candidate RPS < market-implied RPS in **every** league |
+1. **DEBT 58** — adding real, causally-validated xG features (ATE > 0.18,
+   p < 1e-68) made the model *worse* against the market in 4 of 5 leagues.
+2. **`apex_v3_68`** — adding real h2h and home-venue history (genuinely used:
+   responsive features rose 35→43 per league) produced a statistical wash
+   against the incumbent (3 wins, 3 losses) and 0/6 against the market.
+3. **DEBT 62 (this session)** — the single number that looked like an edge
+   anywhere in this whole program (`apex_v5_66`, EPL, +0.0005 RPS) is
+   **0.078σ of an unpaired standard error**, and a properly paired 95% CI on
+   the exact same data has a half-width **5.7x** the point estimate. It spans
+   zero. So does the incumbent's.
+4. **DEBT 43** — the de-vigged bookmaker market's own Brier score is 0.5787,
+   which fails the platform's own BNN certification gate (≤0.220) **by 2.6x**.
+   The market — priced by firms with structurally more capital, faster data,
+   and more staff than this project — is not "highly accurate" by that bar
+   either.
 
-Cite the policy hash, never this table, in a certification manifest.
+**Read together, these four say something more specific than "the model isn't
+good enough yet": football's 1X2 outcome, at the horizon and evidence this
+platform has, is close to its predictability ceiling once market information
+is available, and that ceiling is well short of what "high-accuracy
+predictions" connotes to a general audience.** This is not a defect to
+engineer away. It is very likely close to the actual shape of the domain —
+consistent with a large academic and industry literature on football
+outcome forecasting that this project's own four measurements now
+independently reproduce.
+
+**What this changes about the mission, concretely:**
+
+- **Do not promise "high accuracy" as a product claim.** APEX §11 and
+  CLAUDE.md's prohibited-copy list already forbid `guaranteed`/`sure bet`/
+  `lock`; this finding means the softer promise — "our model is highly
+  accurate" — is equally unsupportable and should be held to the same
+  standard. The honest, defensible, and (per APEX's own design intent)
+  differentiating claim is **calibration and transparency**: "here is exactly
+  how much we know, how we know it, and where the gaps are" — not
+  "trust our accuracy."
+- **Do not spend further engineering cycles on §1's closed feature-density
+  branch.** Three different feature families (xG, h2h/venue, and a fourth
+  covered by HPO) have now been tried and rejected by the same mechanism.
+  A fifth attempt in the same shape (find/engineer a feature, retrain,
+  compare RPS) should be expected, on priors, to fail the same way, and
+  should not be greenlit without a stated reason to expect a different
+  result than the last three.
+- **Two structurally different levers remain**, neither of them "more
+  features": (a) event-level data this platform does not have at all
+  (real StatsBomb shot-maps/PPDA at scale — `home_pressing_intensity` and
+  `progressive_carry_diff` remain the only two permanently-gapped slots,
+  DEBT 49/56, blocked on data acquisition, not modeling); (b) `error_association`
+  (DEBT 50) — a genuine open research question about whether ensemble
+  dispersion tracks real error on football data at all, not an engineering
+  gap. Neither is "try another feature and retrain."
+- **The product's value, if it is not "beats the market," is honest
+  intelligence infrastructure** — evidence provenance, calibration displayed
+  as a first-class citizen (not buried), a portfolio-exposure view, and a
+  UX that makes "why does this fixture have no bet" as informative and
+  well-designed as "why does this fixture have one." §6 is this section made
+  concrete.
 
 ---
 
-## 4. Non-negotiable constraints
+## 3. Non-negotiable constraints (carried forward from v2, re-affirmed)
 
 **Architecture.** FastAPI is the sole backend authority. PostgreSQL is durable
 truth; Alembic is the only schema authority. Redis is hot state. `apps/web` is
-presentation + BFF and computes no EV, stake, edge, or de-vigging. No second job
-queue. No second team-name normalizer beside `team_identity._identity_key` — the
-football-data ↔ Understat crosswalk in `features/xg_replay.py` is a *data table*
-consulted after that normalizer, and it must stay out of `_AUDITED_ALIASES`.
+presentation + BFF and computes no EV, stake, edge, or de-vigging. **No second
+job queue** — confirmed again this session against a live latency measurement
+(full-analysis: 2.5s cold, ~1s warm; a queue would add a second cold-start
+surface, not remove one). No second team-name normalizer beside
+`team_identity._identity_key`.
 
 **Zero fabrication.** Unobserved is `None`, never `0.0`, never a neutral prior
-presented as a measurement. `rolling_xg_mean` returning `None` below its
-minimum-periods floor is the reference implementation of this rule. A feature
-that training defaults must not be described as observed.
+presented as a measurement. A feature that training defaults must not be
+described as observed. This now extends explicitly to **product copy**: a
+"confidence" or "accuracy" claim is fabrication in the same sense a fake
+feature value is, if it is not backed by a number the platform can show its
+work for.
 
 **Train/serve parity is bidirectional.** Serving must not consume a feature
-training never varied (§2), and training must not consume a feature serving
-cannot reproduce (the `apex_v2_71` row-drop rule). Both directions are parity
-violations; only the second is currently tested.
+training never varied; training must not consume a feature serving cannot
+reproduce. Both directions are tested (`test_feature_vector_parity.py`).
 
-**Fail-closed.** Missing critical evidence degrades to `PARTIAL` /
-`RESEARCH_ONLY` with `stake_permitted=false`. A gate that blocks promotion is
-never relaxed to unblock it. "Uncertainty remains unavailable and fail-closed" is
-an acceptable terminal outcome; a manufactured PASS is not.
+**Fail-closed.** A gate that blocks promotion or staking is never relaxed to
+unblock it. "Uncertainty remains unavailable and fail-closed" and "no model
+currently beats the market" are acceptable terminal outcomes; a manufactured
+PASS, a stratified carve-out built to admit one flattering number, or a
+softened accuracy claim are not — this directive treats all three as the same
+category of violation after this session's evidence.
 
-**Memory.** 8 GB dev machines. Batch DB work (the backfill executor chunks at
-1,000). `maxTsServerMemory ≤ 3072`. The ML research venv is `.venv-ml`; do not
-pip-install training deps on Python 3.14.
+**Memory.** 8 GB dev machines. `maxTsServerMemory ≤ 3072`. ML research venv is
+`.venv-ml`; no training deps on Python 3.14.
+
+**Attribution.** `Co-authored-by: SCAR (Claude Code) <claude@anthropic.com>` on
+commits; the standard PR footer on pull requests.
+
+---
+
+## 4. The two remaining model-side gates, precisely
+
+### 4.1 `serving_feature_availability` — one bounded, authorization-gated fix
+
+`training_defaulted_slots` is 16 (needs 0); of those, 6 are the permanent,
+by-policy `PHASE7_FEATURES_ALWAYS_DATA_GAP` slots that can never be anything
+else (DEBT 49). The correction that measures *unexpectedly* defaulted slots
+instead of counting the permanent ones was scoped, implemented once already
+(2026-09-03) and even has its exact diff recorded in DEBT 49 — but it does not
+promote anything (16→ still nonzero; `serving_schema_misaligned_slots` is
+independently 11 from a separate deadlock, DEBT 37). **This is a measurement
+correction, not a threshold change**, by the same reasoning item 38 already
+used — but per APEX §23 it still needs an explicit authorization before
+landing, exactly as item 38 and item 49's prior pass both required. If you
+want this gate's number to be honest, authorize the one-liner in DEBT 49 and
+regenerate the availability matrix. It will not flip `promotion_permitted` to
+`true` on its own — `market_baseline` and the uncertainty gate are
+independent and both still fail.
+
+### 4.2 `error_association` — a real research question, not a backlog item
+
+DEBT 50. The highest-epistemic quartile scores *better* RPS than the lowest,
+in every league, on two independent member-selection designs. This is not
+something a sprint closes. Two honest paths, both requiring an explicit
+decision rather than more code:
+
+- **Accept it as a property of this domain and this uncertainty method**,
+  and stop treating staking-readiness as the platform's near-term target —
+  consistent with §2's reframing.
+- **Fund a genuine research effort** (a different uncertainty
+  quantification method entirely — not a threshold change on the current
+  one) with no assumption it succeeds. `ADR 0009` would need superseding,
+  not amending, since it names `ensemble_dispersion` as the *only* authorised
+  method.
+
+Nothing in §5–§7 depends on this resolving. Both are compatible with shipping
+a genuinely useful product now.
 
 ---
 
 ## 5. Execution order
 
-Sequenced by evidence value, not by visibility. Do not start a later phase to
-avoid an earlier one.
+Sequenced by what is bounded and authorization-ready versus what is open-ended
+research versus what is pure product value that does not wait on either.
 
-### Phase 1 — Make `match_stats` real (unblocks serving-side measurement)
+### Phase A — Close what is bounded (days, not weeks)
 
-1. Re-run the review; the dedup moved the digest:
-   `python scripts/review_understat_match_stats_backfill.py --full`
-2. Record the fresh `manifest_sha256`, `summary.ready_rows`, and the blocked
-   breakdown. **Report the real number; do not reuse 11,694.**
-3. Apply under authorization:
-   ```
-   python scripts/review_understat_match_stats_backfill.py --apply \
-     --manifest-sha256 <fresh> --authorization-id <change-id> \
-     --confirm APPLY_UNDERSTAT_MATCH_STATS
-   ```
-4. **Acceptance:** `inserted_rows == 2 × ready_rows`; re-running reports
-   `inserted_rows: 0` and `already_present_rows == 2 × ready_rows`; the printed
-   `reversals_total` is retained with the authorization record.
-5. Then measure what serving can now answer: sample upcoming fixtures and count
-   how many get a non-`None` `project_xg_rolling_features`. That number decides
-   whether xG has a serving future at all, and it is the measurement DEBT 58
-   named as the one that would separate its two candidate explanations.
+1. Get an explicit authorization decision on DEBT 49's one-line measurement
+   fix (§4.1). Land it or explicitly decline it — do not leave it as a
+   standing "authorized but not applied" note a third time.
+2. Resolve DEBT item 57 (Understat corpus: 1,826 duplicated matches, 2021/22
+   season missing) if any future feature work will read that corpus again.
+   Bounded data-hygiene, no modeling judgment required.
+3. Run the domestic fixture-identity SQL audit this session shipped
+   (`backend/scripts/sql/investigate_domestic_aliases_v3.sql`) against
+   production and resolve the 7 domestic identity failures it was built to
+   diagnose (of 22 total; 15 are UCL and correctly unresolved). This directly
+   reduces the live `REQUIRED_MODEL_INPUTS_UNAVAILABLE` rate, independent of
+   any certification question.
 
-### Phase 2 — Populate the 14 derivable defaulted slots (attacks `market_baseline`)
+### Phase B — The one open research question (§4.2)
 
-1. Extend `train_on_real_matches.build_dataset` with walk-forward h2h and
-   home-venue accumulators, updated strictly **after** each row is emitted —
-   the existing `TeamHistory` / `elo_replay` pattern, not a new one.
-2. Compute the three interaction features from the now-real venue/form and the
-   existing Apex market block.
-3. **Parity is the acceptance criterion, not the feature count.** Each new
-   training value must equal what live serving
-   (`services/upcoming_match_feature_service.py` — not `data/transformers.py`,
-   see the Phase 2 correction above) computes at serving for the same
-   fixture, asserted to float tolerance in a parity test — the pattern
-   `tests/unit/test_xg_rolling_parity.py` already establishes.
-4. **Acceptance:** `training_defaulted_slots` drops 16 → 2 (the two event-data
-   features), measured by regenerating the availability matrix. Report the RPS
-   delta per league against the incumbent whatever it is.
-5. Train as a **new registered schema key**, never by widening a served list.
-   `apex_v2_71` is the worked example of how to do this without breaking
-   artifacts; its rejection does not invalidate its mechanics.
+Get an explicit decision from whoever owns this platform: accept the current
+`error_association` result as a domain property (recommended, given four
+independent measurements now pointing the same direction), or commission a
+genuinely new uncertainty-method research effort with a stated budget and no
+guaranteed outcome. **Do not let this phase block Phase C** — it is
+independent of every product/UX improvement below.
 
-> ✅ **Phases 2 and 3 executed and measured (2026-09-04).** Candidate
-> `apex_v3_68`, rejected — full record in
-> `backend/reports/evaluation/apex-v3-68-candidate-evaluation.{json,md}` and
-> `docs/DEBT.md` item 56 Finding 8. Two corrections to this section, made
-> during implementation and confirmed by the measured result: point 4's
-> "16 → 2" is **16 → 3** — `total_goals_expected` has zero call sites in the
-> real serving path (see the Phase 2 correction above) and stays defaulted
-> alongside the two event-data features, not folded in as a third derivable
-> one. And `serving_feature_availability` did **not** clear even with
-> `training_defaulted_slots` at 3: `serving_schema_misaligned_slots` (11, the
-> pre-existing apex-vs-legacy market-block divergence against the active
-> `phase7_68` generation — see Finding 7) is untouched by this work and keeps
-> the gate FAILing regardless. `market_baseline` remains 0/6 — unchanged from
-> every model measured before it, including `apex_v2_71`.
+### Phase C — The product, reframed around §2
 
-### Phase 3 — Candidate evaluation, honestly
+This is the "fully operational, visually cohesive, world-class platform" the
+mission calls for, built on the honest premise §2 establishes: the value is
+transparency and calibration, not an accuracy claim the evidence does not
+support.
 
-- `python scripts/train_on_real_matches.py --schema <new-key>`
-- `python scripts/generate_feature_availability_matrix.py --schema <new-key> …`
-- `python scripts/compare_candidate_vs_incumbent.py --candidate-schema <new-key>`
-- Score both heads on the **identical** holdout rows before claiming any delta —
-  the `apex_v2_71` headline mixed "added features" with "dropped rows" until it
-  was separated.
-- Metric contract: multiclass Brier is **mean-over-samples of sum-over-classes**
-  (`reports/evaluation/metric-contract.json`).
-- **If `market_baseline` still fails, say so and stop.** Do not promote, do not
-  adjust a threshold, do not report a partial pass as progress.
+**C1. Make calibration a first-class, not buried, surface.**
+`/performance` already has the pieces (Murphy decomposition, walk-forward RPS,
+CLV) gated on real-data floors most of which are still below threshold. Where
+the floor is not yet crossed, the UI's job is to say so with the same design
+quality as when it is — a floor-not-met state is not an error state, it is
+real information ("11 settled predictions; 10 needed before a reliability
+curve is meaningful" reads as competent, not broken). Audit every stat tile
+against DEBT-documented neutral-defaults incidents (items 24/28/41 in the
+historical ledger) before shipping a new one — the recurring failure mode
+this platform has hit five times is rendering a registry default as if it
+were a measurement.
 
-### Phase 4 — Gate 50: measure and record only
+**C2. Finish the Evidence Passport pattern everywhere a verdict appears.**
+Per-family provenance, freshness, and resolution status, visible without a
+click, using the existing `describeEvidenceCode()` vocabulary. A gapped
+family renders as gapped, styled with the same care as a resolved one —
+this is the concrete expression of "transparency over accuracy" as a design
+principle, not a slogan.
 
-Permitted: measure aleatoric stratification, persist BALD dispersion as shadow
-telemetry, extend the ADR 0009 addendum with new evidence.
-**Forbidden:** re-specifying `error_association`, changing the member basis,
-changing `UNCERTAINTY_METHOD`, or shipping any of it into serving. Those need an
-authorized decision on recorded evidence, not an agent edit.
+**C3. Model-identity discipline stays enforced, not re-litigated.**
+`lib/model-identity.ts` (APEX §11) already maps internal generation strings to
+consumer-safe labels and fails closed on an unrecognised state. Any new
+surface showing model provenance routes through it — do not re-introduce a
+raw `v5_phase7`/`UNVERIFIED` string on a consumer page, the exact defect this
+session's history (item 41) already found and fixed once.
 
-### Phase 5 — Consumer UX, within honesty constraints
+**C4. Accessibility and performance as table stakes, not a phase.**
+WCAG 2.2 AA contrast, ≥24px targets, visible focus, `prefers-reduced-motion`
+respected — verify at 360/768/1280px on every new surface, per the standing
+convention this repo already follows (§5 of every prior directive said this;
+it has not changed).
 
-Only after Phases 1–3 have produced something true to display.
+**C5. SEO and growth, bounded by the truthfulness constraint.**
+`robots.ts`/`sitemap.ts` exist; extend them as new public routes ship.
+Metadata titles are guarded by `metadata-title-contract.test.ts` — extend
+coverage to any new route rather than hand-writing a title. No growth copy
+may use the accuracy framing §2 forbids; the differentiator in metadata and
+social copy is "evidence-first," "shows its work," "calibrated," never
+"accurate" or "wins."
 
-- **Evidence Passport** on `/match/[id]`: per-family provenance, freshness, and
-  resolution status. A gapped family renders as gapped — never omitted, never
-  filled.
-- **Calibration / reliability view** on `/performance`: Murphy decomposition
-  (reliability − resolution + uncertainty) with a sample-count floor. Below the
-  floor, render the floor message, not a chart of noise.
-  Backend: a cached endpoint (6 h TTL) computing from settled predictions only —
-  Recharts 2.15.4 is already a dependency; add nothing.
-- **APEX §11:** no raw identifiers on consumer surfaces. `UNVERIFIED` →
-  "Research Mode"; `v5_phase7` → "Generation 5". Route through
-  `lib/model-identity.ts`.
-- **Prohibited copy:** `lock`, `banker`, `guaranteed`, `sure bet`, `free money`,
-  `execute immediately`. No countdowns, streak badges, or bet-slip animation.
-- **Accessibility:** WCAG 2.2 AA contrast, ≥24 px targets, visible focus,
-  `prefers-reduced-motion` respected. Verify at 360 / 768 / 1280 px.
-
-> ✅ **Phase 5 executed 2026-09-04 — with one correction to this section's
-> own premise.** The calibration/reliability view item 2 asks for **already
-> existed**: `GET /api/v1/model-performance/calibration` and
-> `CalibrationCurveChart.tsx` shipped in PR #127 and have been mounted on
-> `/performance` since. CLAUDE.md's WP-16 entry claiming a reliability-diagram
-> UI was "deliberately deferred" predates that PR and was never updated — do
-> not trust it. The real work was **deletion, not construction**: the shipped
-> chart rendered five fabricated values, including a hardcoded ±3% error bar
-> captioned as a Künsch block bootstrap and an ECE fallback of `0.018`
-> against a live 0.1402. Full record: `docs/DEBT.md` item 60.
->
-> Delivered: the five fabrications removed, a 6h cache and
-> `meets_sample_floor`/`minimum_sample_size` added to the endpoint, the
-> Evidence Passport built on `/match/[id]` (always visible —
-> `EvidenceStatusCard` self-suppresses once staking is permitted, so it could
-> not be extended into one), three raw backend enums removed from that page,
-> and the a11y items above applied to the calibration control (`role="group"`
-> + `aria-pressed`, `min-h-9`, visible focus ring, `prefers-reduced-motion`
-> gating on chart animation). The prohibited-copy scan was already clean and
-> remains so; APEX §11 model provenance was already routed through
-> `lib/model-identity.ts` on both target routes and was not the leak — the
-> leak was evidence-source enums.
+**C6. Prohibited-copy list gains one more entry.**
+Given §2's finding, `CLAUDE.md`'s existing prohibited-terms list
+(`lock`, `banker`, `guaranteed`, `sure bet`, `free money`, `execute
+immediately`) should be extended to catch unqualified accuracy/edge framing
+on consumer surfaces — e.g. a repo-wide copy-contract test (the existing
+`copy-contract.test.ts`/`league-contract.test.ts` idiom) asserting no
+consumer-facing string claims "accurate," "wins," or "beats the odds" without
+an adjacent calibration caveat. This is a bounded, mechanical addition to an
+existing, working pattern — not new infrastructure.
 
 ---
 
-## 6. Verification — commands that exist
+## 6. Verification
 
 ```bash
 # backend/
-ruff check src/ scripts/
-python scripts/check_mypy_ceiling.py            # ceiling 784; never raise it
+ruff check src --select E4,E7,E9,F     # CI's actual scope — not scripts/, not tests/
+python scripts/check_mypy_ceiling.py    # ceiling 784; never raise it
 PYTHONPATH=. python -m pytest tests/unit -q
 PYTHONPATH=. python -m pytest tests/integration -q
 python scripts/verify_active_artifacts.py
@@ -325,8 +322,14 @@ pnpm build
 make verify        # no step may be bypassed with `|| true`
 ```
 
-Deployment parity: compare `GET /api/v1/models/status` `generation_hash` against
-`models/active_generation.json` after any artifact change.
+Deployment parity: compare `GET /health` `sha` (Render) against
+`GET /api/health` `sha`/`backendSha` (Vercel) and local `git rev-parse
+--short=7 HEAD` after any push — three-way match, not two.
+
+Any claim about a market-beating candidate must be accompanied by
+`scripts/bootstrap_market_edge_ci.py` output with the CI excluding zero,
+ideally under the reported Bonferroni column — a point-estimate RPS
+comparison alone is no longer sufficient evidence in this repository (§2).
 
 ---
 
@@ -334,16 +337,27 @@ Deployment parity: compare `GET /api/v1/models/status` `generation_hash` against
 
 A phase is done when **all** hold:
 
-1. Code merged with tests proportional to risk, CI green.
-2. A measured result recorded under `backend/reports/` — including a negative
-   one. `apex-v2-71-candidate-evaluation.md` is the reference format.
-3. Documentation updated: `CHANGELOG.md`, `docs/DEBT.md`, and the model card if
-   a candidate was evaluated.
-4. No gate threshold changed. No `active_generation.json` promotion without all
-   seven gates passing on their own evidence.
-5. Production state re-verified and reported, including when it is unchanged.
+1. Code merged with tests proportional to risk, CI green (all required checks,
+   not just the ones that happened to run — confirm via `gh pr checks`, and
+   re-verify after any post-open-PR commit, including ones you did not push
+   yourself: this session found a GitHub Copilot auto-fix agent had pushed
+   directly to an open PR branch mid-review).
+2. A measured result recorded under `backend/reports/` or `docs/DEBT.md` —
+   including, especially, a negative one.
+3. Documentation updated: `CHANGELOG.md`, `docs/DEBT.md`, and the model card
+   if a candidate was evaluated.
+4. No gate threshold changed. No `active_generation.json` promotion without
+   all seven `certification_policy` gates passing on their own evidence, and
+   no consumer-facing accuracy claim without a calibration number to back it.
+5. Production state re-verified and reported, including when unchanged —
+   three-way SHA parity (Render / Vercel / local HEAD), not assumed from a
+   prior session's report.
 
-**The platform is production-ready today in the only sense currently available:
-it fails closed correctly and says so honestly.** It is not staking-ready, and
-it will not be until a model beats the market. Any directive that promises
-otherwise is describing a different system.
+**The platform is production-ready today in the sense that matters: it fails
+closed correctly, and it can now say precisely how far from staking-ready it
+is, in numbers, four ways. It is not, and will not soon be, a high-accuracy
+prediction engine — the evidence for that ceiling is now as solid as anything
+else in this codebase. The version of "world-class" available to this
+platform right now is the most honest, best-calibrated, best-designed
+evidence-transparency product in its category — not the best predictor. Build
+that.**
