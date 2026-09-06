@@ -84,12 +84,13 @@ async def test_non_canonical_stored_league_is_normalized(
     assert result["league"] == "LA_LIGA"
 
 
-async def test_caller_league_is_kept_when_the_fixture_records_none(
+async def test_missing_fixture_league_fails_closed(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    """No fixture league is not a reason to lose the caller's — only to distrust it."""
+    """A fixture-id request must not silently fall back to a caller-supplied league."""
     await _seed(session, None)
-    result = await projector.build_live_feature_vector(
-        match_id="fd-558256", league="SERIE_A", db=session
-    )
-    assert result["league"] == "SERIE_A"
+
+    with pytest.raises(ValueError, match="missing league_id"):
+        await projector.build_live_feature_vector(
+            match_id="fd-558256", league="SERIE_A", db=session
+        )
