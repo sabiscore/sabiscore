@@ -251,7 +251,15 @@ mission calls for, built on the honest premise §2 establishes: the value is
 transparency and calibration, not an accuracy claim the evidence does not
 support.
 
-**C1. Make calibration a first-class, not buried, surface.**
+**Implementation checkpoint — PR #157 (2026-09-06).** The first bounded
+frontend increment of Phase C is complete. It changed presentation and
+consumer-copy enforcement only: no backend response contract, calibration
+calculation, certification state, promotion rule, verdict gate, Kelly rule, or
+staking permission changed. The active generation remains `UNVERIFIED` /
+`ACTIVE_FAIL_CLOSED`.
+
+**C1. Make calibration a first-class, not buried, surface — first increment
+complete.**
 `/performance` already has the pieces (Murphy decomposition, walk-forward RPS,
 CLV) gated on real-data floors most of which are still below threshold. Where
 the floor is not yet crossed, the UI's job is to say so with the same design
@@ -263,12 +271,29 @@ historical ledger) before shipping a new one — the recurring failure mode
 this platform has hit five times is rendering a registry default as if it
 were a measurement.
 
-**C2. Finish the Evidence Passport pattern everywhere a verdict appears.**
+PR #157 now distinguishes a legitimate sample-floor state from malformed
+contracts and infrastructure failures, carries the selected evaluation window
+through the request, states the serving-generation and settled-record scope,
+and exposes plotted observations in a keyboard-readable table. It retries only
+retryable infrastructure failures and removes the unsupported ECE target.
+Future additions remain subject to the neutral-default audit above.
+
+**C2. Finish the Evidence Passport pattern everywhere a verdict appears —
+audited fixture surfaces complete.**
 Per-family provenance, freshness, and resolution status, visible without a
 click, using the existing `describeEvidenceCode()` vocabulary. A gapped
 family renders as gapped, styled with the same care as a resolved one —
 this is the concrete expression of "transparency over accuracy" as a design
 principle, not a slogan.
+
+PR #157 completes this contract for the two audited fixture-specific verdict
+surfaces: full analysis and betting intelligence. Both use the shared human
+evidence vocabulary and age labels without merging their distinct wire
+contracts. Result-backed analytical sharing now derives probabilities,
+verdict, model maturity, stake permission, and gap counts from a successfully
+parsed full-analysis response; fixture-header sharing remains URL-only.
+Reduced-evidence output exposes no analytical share action. Static verdict
+education and team-form taxonomy remain outside this fixture-evidence rule.
 
 **C3. Model-identity discipline stays enforced, not re-litigated.**
 `lib/model-identity.ts` (APEX §11) already maps internal generation strings to
@@ -291,15 +316,16 @@ may use the accuracy framing §2 forbids; the differentiator in metadata and
 social copy is "evidence-first," "shows its work," "calibrated," never
 "accurate" or "wins."
 
-**C6. Prohibited-copy list gains one more entry.**
+**C6. Prohibited-copy list gains one more entry — complete.**
 Given §2's finding, `CLAUDE.md`'s existing prohibited-terms list
 (`lock`, `banker`, `guaranteed`, `sure bet`, `free money`, `execute
-immediately`) should be extended to catch unqualified accuracy/edge framing
-on consumer surfaces — e.g. a repo-wide copy-contract test (the existing
-`copy-contract.test.ts`/`league-contract.test.ts` idiom) asserting no
-consumer-facing string claims "accurate," "wins," or "beats the odds" without
-an adjacent calibration caveat. This is a bounded, mechanical addition to an
-existing, working pattern — not new infrastructure.
+immediately`) is now supplemented by aligned Vitest and CI phrase guards for
+unsupported outcome claims such as "highly accurate predictions," "winning
+picks," and "beats the odds/market." The guard is intentionally contextual:
+measured or walk-forward accuracy, historical match wins, and backend-owned
+edge metrics remain valid analytical language. Public documentation now also
+describes the active artifacts as hash-verified research artifacts with model
+certification still pending.
 
 ---
 
@@ -342,10 +368,12 @@ A phase is done when **all** hold:
    re-verify after any post-open-PR commit, including ones you did not push
    yourself: this session found a GitHub Copilot auto-fix agent had pushed
    directly to an open PR branch mid-review).
-2. A measured result recorded under `backend/reports/` or `docs/DEBT.md` —
-   including, especially, a negative one.
-3. Documentation updated: `CHANGELOG.md`, `docs/DEBT.md`, and the model card
-   if a candidate was evaluated.
+2. Any new measured model result is recorded under `backend/reports/` or
+   `docs/DEBT.md` — including, especially, a negative one. Product-only work
+   does not manufacture a model finding merely to satisfy this checklist.
+3. Documentation updated: `CHANGELOG.md` and the relevant directive or
+   architecture document; `docs/DEBT.md` and the model card when a candidate,
+   durable defect, or model-state change was actually evaluated.
 4. No gate threshold changed. No `active_generation.json` promotion without
    all seven `certification_policy` gates passing on their own evidence, and
    no consumer-facing accuracy claim without a calibration number to back it.

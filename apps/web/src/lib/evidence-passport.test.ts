@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidencePassport } from "./evidence-passport";
+import { buildEvidencePassport, formatEvidenceAge } from "./evidence-passport";
 
 const baseInput = {
   fieldAvailability: {
@@ -113,5 +113,20 @@ describe("buildEvidencePassport", () => {
       sources: [],
     });
     expect(rows).toEqual([]);
+  });
+});
+
+describe("formatEvidenceAge", () => {
+  it("formats valid ages without exposing raw seconds", () => {
+    expect(formatEvidenceAge(30)).toBe("Less than a minute ago");
+    expect(formatEvidenceAge(90)).toBe("1m ago");
+    expect(formatEvidenceAge(3_660)).toBe("1h ago");
+    expect(formatEvidenceAge(172_800)).toBe("2d ago");
+  });
+
+  it("fails closed for missing or invalid ages", () => {
+    expect(formatEvidenceAge(null)).toBe("Unknown");
+    expect(formatEvidenceAge(-1)).toBe("Unknown");
+    expect(formatEvidenceAge(Number.NaN)).toBe("Unknown");
   });
 });

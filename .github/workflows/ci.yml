@@ -320,7 +320,14 @@ jobs:
             | grep -Pv ':\s*(import|//|\*)' \
             | grep -Piv '(?:not|no|never)\s+(?:\w+\s+)?(?:is\s+)?(?:a\s+)?guaranteed|as guaranteed' \
             || true)
-          all_hits="${hits}${guaranteed_hits}"
+          outcome_claim_hits=$(grep -rPin --include="*.tsx" --include="*.ts" \
+            --exclude="*.test.ts" --exclude="*.test.tsx" \
+            --exclude="*.spec.ts" --exclude="*.spec.tsx" \
+            -E '\b(maximi[sz]e (your )?betting edge|beat(s|ing)? (the market|the odds)|win more|winning picks?|highly accurate predictions?|profitable predictions?|guaranteed returns?)\b' \
+            apps/web/src/ 2>/dev/null \
+            | grep -Pv ':\s*(import|//|\*)' \
+            || true)
+          all_hits="${hits}${guaranteed_hits}${outcome_claim_hits}"
           if [ -n "$all_hits" ]; then
             printf '%s\n' "$all_hits"
             echo "ERROR: Prohibited gambling copy found — see matches above"

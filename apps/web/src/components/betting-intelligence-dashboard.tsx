@@ -36,6 +36,7 @@ import {
 import { describeEvidenceCode, groupEvidenceGaps } from "@/lib/full-analysis-contract";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { evidenceStateFor } from "@/lib/evidence-state";
+import { formatEvidenceAge } from "@/lib/evidence-passport";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
@@ -654,8 +655,8 @@ export function BettingIntelligenceDashboard() {
                       <div className="bi-metric"><span>Market</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.market).tone}`}>{evidenceStateFor(evidence.source_status.market).label}</strong></div>
                       <div className="bi-metric"><span>Team Metrics</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.team_metrics).tone}`}>{evidenceStateFor(evidence.source_status.team_metrics).label}</strong></div>
                       <div className="bi-metric"><span>Availability</span><strong className={`bi-tone-${evidenceStateFor(evidence.source_status.availability).tone}`}>{evidenceStateFor(evidence.source_status.availability).label}</strong></div>
-                      <div className="bi-metric"><span>Model age</span><strong>{recordNumber(evidence.freshness, "model_features_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "model_features_seconds")}s`}</strong></div>
-                      <div className="bi-metric"><span>Market age</span><strong>{recordNumber(evidence.freshness, "market_seconds") == null ? "Unknown" : `${recordNumber(evidence.freshness, "market_seconds")}s`}</strong></div>
+                      <div className="bi-metric"><span>Model age</span><strong>{formatEvidenceAge(recordNumber(evidence.freshness, "model_features_seconds"))}</strong></div>
+                      <div className="bi-metric"><span>Market age</span><strong>{formatEvidenceAge(recordNumber(evidence.freshness, "market_seconds"))}</strong></div>
                       <div className="bi-metric"><span>Epistemic uncertainty</span><strong>{fmtPct(recordNumber(evidence.model ?? null, "epistemic_uncertainty"))}</strong></div>
                       <div className="bi-metric"><span>Aleatoric uncertainty</span><strong>{fmtPct(recordNumber(evidence.model ?? null, "aleatoric_uncertainty"))}</strong></div>
                     </div>
@@ -664,12 +665,12 @@ export function BettingIntelligenceDashboard() {
                         <details>
                           <summary className="bi-gap-summary">{evidence.data_gaps.length} fields pending — show all ▸</summary>
                           <ul className="bi-list gap">
-                            {evidence.data_gaps.map((gap) => <li key={gap}>{gap.replace(/_/g, " ")}</li>)}
+                            {evidence.data_gaps.map((gap) => <li key={gap}>{describeEvidenceCode(gap)}</li>)}
                           </ul>
                         </details>
                       ) : (
                         <ul className="bi-list gap">
-                          {evidence.data_gaps.map((gap) => <li key={gap}>{gap.replace(/_/g, " ")}</li>)}
+                          {evidence.data_gaps.map((gap) => <li key={gap}>{describeEvidenceCode(gap)}</li>)}
                         </ul>
                       )
                     )}
