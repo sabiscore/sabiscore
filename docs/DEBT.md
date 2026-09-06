@@ -40,6 +40,33 @@ throughout — this code path has never executed against real traffic. No
 prediction was ever affected. Caught in review before merge, not in
 production.
 
+**Follow-up (PR #154, 2026-09-05):** PR #153 merged while its SonarCloud
+Quality Gate was still failing: 63.6% new-code coverage (required ≥80%) and a
+D Reliability Rating (`python:S5779` — `assert isinstance(...)` inside a
+`try/except Exception` in `scripts/audit_statsbomb_coverage.py`, which also
+catches `AssertionError`; both occurrences replaced with explicit
+`if not isinstance(...): raise TypeError(...)`). The coverage gap was the two
+`home_pressing_intensity` call sites above: no test had ever set
+`enable_statsbomb_enrichment=True`, which is exactly how the inversion bug
+shipped unnoticed in the first place. New
+`tests/unit/test_statsbomb_enrichment_gating.py` drives both real async call
+sites end-to-end. ⚠️ **Getting that test green took two more iterations, both
+real findings, not flakiness:** (1) `result["features_dict"]` does not
+reliably carry `home_pressing_intensity` as a dict key — the array-assembly
+line (`features_dict.get(name, self.defaults.get(name, 0.0))`) is the only
+place a default is guaranteed, so the test now asserts on `result["features"]`
+by index, not the dict; (2) the test failed in CI but passed in every local
+run because `settings.use_phase7_models` **defaults to `False`** in code, and
+CI never sets `USE_PHASE7_MODELS` — a local, gitignored `backend/.env` was
+silently supplying `true` locally. Under the code default, the 58-wide
+pre-Phase-7 schema serves, which excludes `home_pressing_intensity` entirely.
+Fixed by pinning `monkeypatch.setattr(settings, "use_phase7_models", True)` in
+the test fixture; verified against the actual CI condition via
+`USE_PHASE7_MODELS=false pytest ...` locally before trusting it. Neither
+finding reflects a production defect — `USE_PHASE7_MODELS=true` in the real
+deployment, confirmed throughout this ledger — both are test-authoring
+hazards now fixed at the source.
+
 ---
 
 ## 60. The calibration view shipped with five live fabrications — RESOLVED 2026-09-04
