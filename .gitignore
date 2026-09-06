@@ -132,6 +132,10 @@ checkpoints/
 # Candidate binaries are local training outputs. Commit only their manifest and
 # reports until an atomic, certified generation is approved for promotion.
 backend/models/candidate/*.pkl
+# Per-match holdout probability dumps: a regenerable intermediate for the
+# paired market-edge bootstrap, same status as the .pkl above. The durable
+# record is reports/evaluation/market-edge-bootstrap-*.
+backend/models/candidate/per_match_*.npz
 !data/processed/
 !data/processed/*.csv
 data/processed/*.json
