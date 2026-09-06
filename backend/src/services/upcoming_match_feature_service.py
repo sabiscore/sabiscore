@@ -514,6 +514,18 @@ class UpcomingMatchFeatureProjector:
         if match is None:
             raise ValueError(f"Unknown match_id: {match_id}")
 
+        # The fixture row is the authority on its own competition; the caller's
+        # ``league`` is a query parameter that defaults to "EPL" two layers up
+        # (the endpoint's Query default and apps/web's `?? "EPL"`). Trusting it
+        # priced an Eredivisie fixture against the English board, resolved Elo
+        # and the model artifact for the wrong competition, and — the reason
+        # this is a staking defect rather than a cosmetic one — returned EPL's
+        # kelly_cap 0.04 in place of Eredivisie's 0.025 and UCL's 0.02.
+        # Only the matchup-string path, which has no fixture row to consult,
+        # legitimately depends on the parameter.
+        if match.league_id:
+            league = canonical_league_id(str(match.league_id))
+
         home_team = await self._get_team_name(match.home_team_id, db)
         away_team = await self._get_team_name(match.away_team_id, db)
         match_date = pd.Timestamp(match.match_date).to_pydatetime()
