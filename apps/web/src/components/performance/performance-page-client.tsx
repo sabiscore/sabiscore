@@ -344,6 +344,7 @@ export function PerformancePageClient() {
 
       <CalibrationCurveChart
         league={canonicalLeagueId(selectedLeague) ?? ""}
+        window={selectedWindow}
       />
 
       <ValueBetScanner days={7} />

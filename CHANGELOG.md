@@ -5,6 +5,44 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Evidence-transparency frontend completion (2026-09-06)
+
+PR #157 implements the first bounded product increment from
+`docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` Phase C. This is a frontend and CI
+copy-contract change only: no backend analytical contract, model artifact,
+certification or promotion rule, verdict gate, Kelly rule, or staking
+permission changed. The active generation remains `UNVERIFIED` /
+`ACTIVE_FAIL_CLOSED`.
+
+### Changed
+
+- `CalibrationCurveChart` now distinguishes a legitimate sample-floor state
+  from malformed responses and infrastructure failures, retries only
+  retryable failures, carries the selected evaluation window through the
+  request, states the serving-generation and settled-record scope, and exposes
+  plotted observations in a keyboard-readable table. The unsupported ECE
+  target was removed.
+- Betting-intelligence evidence presentation now uses the shared human-readable
+  age and gap vocabulary instead of raw seconds or canonical gap codes, while
+  retaining its distinct wire contract from the full-analysis Evidence
+  Passport.
+- Sharing is fail-closed through a discriminated fixture/analysis contract.
+  Header sharing remains fixture-only; result-backed analytical sharing uses
+  parsed backend probabilities, verdict, model maturity, stake permission, and
+  evidence-gap counts. Reduced-evidence output has no analytical share action.
+- Public docs no longer describe the unverified active artifacts as certified.
+  The source-level copy contract and Linux CI scan now reject unsupported
+  outcome claims such as highly accurate predictions, winning picks, and
+  beating the odds or market, while preserving measured analytical language.
+
+### Verified
+
+- Web Vitest: 347/347 tests across 56 files.
+- ESLint and strict TypeScript checks pass.
+- Next.js production build succeeds for all 51 generated pages.
+- Playwright desktop/mobile smoke: 4/4 tests pass.
+- No backend files changed in this increment.
+
 ## Unreleased - Resolve the SonarCloud quality gate PR #153 merged without (2026-09-05)
 
 `master`'s merge gate (a GitHub Ruleset) does not include SonarCloud among its

@@ -4,6 +4,8 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   EdgeDeltaBar,
+  AnalysisShareAction,
+  buildAnalysisEvidenceSummary,
   EloContextCard,
   EnsembleCard,
   EvidenceStatusCard,
@@ -426,5 +428,80 @@ describe("EvidencePassport (Phase 5 §5)", () => {
         expect(text).not.toContain(raw);
       }
     });
+  });
+});
+
+describe("result-owned analysis sharing", () => {
+  const shareableData = {
+    match_id: "fd-share",
+    verdict: "NO_BET",
+    prediction_status: "AVAILABLE",
+    probabilities_available: true,
+    is_reduced_evidence_baseline: false,
+    partial_intelligence: false,
+    stake_permitted: false,
+    effective_kelly_cap: 0.04,
+    narrative: "No positive value at the current market.",
+    generated_at: "2026-09-05T12:00:00Z",
+    ensemble: {
+      home_win_prob: 0.45,
+      draw_prob: 0.3,
+      away_win_prob: 0.25,
+      prediction: "home_win",
+      probabilities_available: true,
+      certification_state: "UNVERIFIED",
+    },
+    rl_recommendation: { abstain: true, stake_fraction: 0, reason: "Risk gate abstained." },
+    evidence_quality: {
+      critical_gaps: [],
+      advisory_gaps: ["market_prob_home"],
+      conflicts: [],
+      critical_gap_count: 0,
+      advisory_gap_count: 1,
+      conflict_count: 0,
+      total_gap_count: 1,
+    },
+  } as unknown as Parameters<typeof AnalysisShareAction>[0]["data"];
+
+  it("shares only the parsed result's probabilities, verdict, maturity, and evidence summary", () => {
+    render(
+      <AnalysisShareAction
+        matchId="fd-share"
+        league="EPL"
+        homeTeam="Arsenal"
+        awayTeam="Chelsea"
+        data={shareableData}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /share current analysis/i }));
+
+    expect(screen.getByRole("dialog", { name: /share match analysis/i })).toBeInTheDocument();
+    expect(screen.getByText("45%")).toBeInTheDocument();
+    expect(screen.getByText(/Research mode · Informational only/i)).toBeInTheDocument();
+    expect(buildAnalysisEvidenceSummary(shareableData)).toBe(
+      "Forecast available; 0 critical gaps, 1 advisory gap, 0 conflicts.",
+    );
+  });
+
+  it("does not offer analytical sharing when official probabilities are unavailable", () => {
+    const unavailable = {
+      ...shareableData,
+      prediction_status: "REDUCED_EVIDENCE_BASELINE",
+      probabilities_available: false,
+      is_reduced_evidence_baseline: true,
+    } as typeof shareableData;
+
+    const { container } = render(
+      <AnalysisShareAction
+        matchId="fd-share"
+        league="EPL"
+        homeTeam="Arsenal"
+        awayTeam="Chelsea"
+        data={unavailable}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
   });
 });

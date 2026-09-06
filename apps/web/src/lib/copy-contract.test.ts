@@ -11,6 +11,8 @@ const EIGHTH_KELLY = /⅛|\b1\/8\b|one-eighth|eighth[- ]kelly/i;
 // market edge (@/lib/edge-quality) — this exact phrase + celebratory framing
 // previously shipped on BigMatchesCarousel's top-ranked card (match-selector.tsx).
 const TOP_EDGE_TODAY = /top edge today/i;
+const UNSUPPORTED_OUTCOME_CLAIMS =
+  /\b(maximi[sz]e (?:your )?betting edge|beat(?:s|ing)? (?:the market|the odds)|win more|winning picks?|highly accurate predictions?|profitable predictions?|guaranteed returns?)\b/i;
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -39,5 +41,9 @@ describe("public copy contract", () => {
 
   it("never labels the top edge_quality_score fixture as a celebratory market edge", () => {
     expect(matchingFiles(TOP_EDGE_TODAY)).toEqual([]);
+  });
+
+  it("contains no unsupported outcome-oriented promotional claims", () => {
+    expect(matchingFiles(UNSUPPORTED_OUTCOME_CLAIMS)).toEqual([]);
   });
 });

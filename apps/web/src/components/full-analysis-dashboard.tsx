@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useCallback } from "react";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, Share2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { EvidencePassport } from "@/components/evidence-passport";
+import { MatchShareModal } from "@/components/MatchShareModal";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { mapEvidenceFreshness } from "@/lib/freshness";
@@ -70,6 +71,62 @@ function parseTeams(matchId: string): [string, string] {
   const idx = matchId.indexOf(" vs ");
   if (idx === -1) return [matchId.trim(), ""];
   return [matchId.slice(0, idx).trim(), matchId.slice(idx + 4).trim()];
+}
+
+export function buildAnalysisEvidenceSummary(data: FullMatchAnalysisResponse): string {
+  const { critical_gap_count: critical, advisory_gap_count: advisory, conflict_count: conflicts } =
+    data.evidence_quality;
+  const plural = (count: number, singular: string) => `${count} ${singular}${count === 1 ? "" : "s"}`;
+  return `Forecast available; ${plural(critical, "critical gap")}, ${plural(advisory, "advisory gap")}, ${plural(conflicts, "conflict")}.`;
+}
+
+export function AnalysisShareAction({
+  matchId,
+  league,
+  homeTeam,
+  awayTeam,
+  data,
+}: {
+  matchId: string;
+  league: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  data: FullMatchAnalysisResponse;
+}) {
+  const [open, setOpen] = useState(false);
+  const presentation = mapFullAnalysisPresentation(data);
+  const [parsedHome, parsedAway] = parseTeams(matchId);
+  const home = (homeTeam ?? parsedHome).trim();
+  const away = (awayTeam ?? parsedAway).trim();
+
+  if (!presentation.displayedProbabilities || !home || !away) return null;
+
+  return (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-3 text-xs font-semibold text-slate-300 transition-colors hover:border-emerald-500/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+      >
+        <Share2 className="h-4 w-4" aria-hidden="true" />
+        Share current analysis
+      </button>
+      <MatchShareModal
+        open={open}
+        onOpenChange={setOpen}
+        mode="analysis"
+        matchId={matchId}
+        homeTeam={home}
+        awayTeam={away}
+        league={league}
+        probabilities={presentation.displayedProbabilities}
+        verdict={data.verdict}
+        evidenceSummary={buildAnalysisEvidenceSummary(data)}
+        stakePermitted={presentation.stakePermitted}
+        certificationState={data.ensemble.certification_state}
+      />
+    </div>
+  );
 }
 
 // Deterministic hype copy — template table, never LLM-generated at render time
@@ -1490,6 +1547,14 @@ function FullAnalysisDashboardInner({
         league={league}
         homeTeam={homeTeam}
         awayTeam={awayTeam}
+      />
+
+      <AnalysisShareAction
+        matchId={matchId}
+        league={league}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        data={data}
       />
 
       {presentation.stakePermitted && <ActionabilityStrip data={data} />}
