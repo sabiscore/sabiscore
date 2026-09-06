@@ -133,6 +133,7 @@ async def test_db_match_id_path_with_valid_teams_is_verified(
             id="match-1",
             home_team_id="team-home",
             away_team_id="team-away",
+            league_id="EPL",
             match_date=datetime(2026, 8, 10, 15, 0),
             status="scheduled",
         )

@@ -514,6 +514,16 @@ class UpcomingMatchFeatureProjector:
         if match is None:
             raise ValueError(f"Unknown match_id: {match_id}")
 
+        # The fixture row is the authority on its own competition. If it does not
+        # carry a league_id, fail closed instead of trusting a caller-supplied
+        # fallback that can silently default to the wrong competition.
+        if not match.league_id:
+            raise ValueError(
+                f"Fixture {match_id} is missing league_id; cannot infer a safe competition."
+            )
+
+        league = canonical_league_id(str(match.league_id))
+
         home_team = await self._get_team_name(match.home_team_id, db)
         away_team = await self._get_team_name(match.away_team_id, db)
         match_date = pd.Timestamp(match.match_date).to_pydatetime()

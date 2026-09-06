@@ -1,0 +1,117 @@
+{
+  "candidate_schema": "apex_v5_66",
+  "holdout_season": "2526",
+  "head": "incumbent",
+  "metric": "mean_rps_incumbent_minus_market",
+  "lower_is_better": true,
+  "n_bootstrap": 10000,
+  "block_size": 10,
+  "rng_seed": 42,
+  "family_size": 6,
+  "leagues": {
+    "BUNDESLIGA": {
+      "n": 301,
+      "incumbent_rps": 0.189962,
+      "market_rps": 0.190839,
+      "paired_difference": -0.0009,
+      "ci_95": {
+        "lower": -0.0092,
+        "upper": 0.0067
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.012,
+        "upper": 0.0095
+      },
+      "excludes_zero": false,
+      "verdict": "indistinguishable"
+    },
+    "EPL": {
+      "n": 375,
+      "incumbent_rps": 0.20361,
+      "market_rps": 0.205366,
+      "paired_difference": -0.0018,
+      "ci_95": {
+        "lower": -0.0127,
+        "upper": 0.0105
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.0168,
+        "upper": 0.0149
+      },
+      "excludes_zero": false,
+      "verdict": "indistinguishable"
+    },
+    "EREDIVISIE": {
+      "n": 260,
+      "incumbent_rps": 0.204771,
+      "market_rps": 0.196923,
+      "paired_difference": 0.0078,
+      "ci_95": {
+        "lower": -0.006,
+        "upper": 0.0212
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.0114,
+        "upper": 0.0254
+      },
+      "excludes_zero": false,
+      "verdict": "indistinguishable"
+    },
+    "LA_LIGA": {
+      "n": 375,
+      "incumbent_rps": 0.201803,
+      "market_rps": 0.196285,
+      "paired_difference": 0.0055,
+      "ci_95": {
+        "lower": -0.0011,
+        "upper": 0.0129
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.0034,
+        "upper": 0.0155
+      },
+      "excludes_zero": false,
+      "verdict": "indistinguishable"
+    },
+    "LIGUE_1": {
+      "n": 301,
+      "incumbent_rps": 0.20318,
+      "market_rps": 0.199126,
+      "paired_difference": 0.0041,
+      "ci_95": {
+        "lower": -0.0063,
+        "upper": 0.0152
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.0101,
+        "upper": 0.019
+      },
+      "excludes_zero": false,
+      "verdict": "indistinguishable"
+    },
+    "SERIE_A": {
+      "n": 375,
+      "incumbent_rps": 0.205149,
+      "market_rps": 0.197141,
+      "paired_difference": 0.008,
+      "ci_95": {
+        "lower": 0.0005,
+        "upper": 0.0167
+      },
+      "ci_bonferroni": {
+        "level": 0.9917,
+        "lower": -0.0022,
+        "upper": 0.0193
+      },
+      "excludes_zero": true,
+      "verdict": "market beats incumbent"
+    }
+  },
+  "leagues_beating_market_with_ci_excluding_zero": [],
+  "market_baseline_gate_supported_by_ci": false
+}

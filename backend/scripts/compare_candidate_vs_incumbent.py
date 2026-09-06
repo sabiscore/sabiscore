@@ -115,6 +115,17 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--per-match-output",
+        type=Path,
+        default=None,
+        help=(
+            "Persist per-match holdout probabilities (candidate, incumbent, "
+            "de-vigged market) plus labels to this .npz. Nothing else in the "
+            "repository stores them, which is why block_bootstrap_ci has never "
+            "been run on a candidate-vs-market difference."
+        ),
+    )
+    parser.add_argument(
         "--availability-report",
         type=Path,
         default=None,
@@ -161,6 +172,7 @@ def main() -> int:
     logger.info("-" * len(header))
 
     verdicts = {}
+    per_match: dict[str, np.ndarray] = {}
     report: dict[str, Any] = {
         "holdout_season": HOLDOUT_SEASON,
         "candidate_schema": args.candidate_schema,
@@ -184,6 +196,7 @@ def main() -> int:
 
         row = {}
         candidate_bundle = None
+        league_probs: dict[str, np.ndarray] = {}
         for label, directory, suffix in (
             ("incumbent", incumbent_dir, "v5_phase7"),
             ("candidate", candidate_dir, candidate_suffix),
@@ -196,7 +209,9 @@ def main() -> int:
             if label == "candidate":
                 candidate_bundle = bundle
             X = incumbent_X if label == "incumbent" else candidate_X
-            metrics = evaluate(y, _predict(bundle, X))
+            probabilities = _predict(bundle, X)
+            league_probs[label] = probabilities
+            metrics = evaluate(y, probabilities)
             row[label] = metrics
             logger.info(
                 "%-12s %-10s %7.4f %8.4f %8.4f %8.4f",
@@ -244,6 +259,23 @@ def main() -> int:
                 -delta,
                 "CANDIDATE BETTER" if delta > 0 else "incumbent better",
             )
+            if args.per_match_output is not None:
+                # The de-vigged market probabilities are columns of the
+                # candidate's OWN holdout matrix, not a separate source. This
+                # is the same slice train_on_real_matches uses for
+                # `baseline_rps_market` (X_test[:, market_columns]), so the
+                # rows are paired with the model probabilities by construction
+                # -- same fixtures, same order, no join, no re-derivation.
+                market_columns = [
+                    candidate_features.index(name)
+                    for name in ("market_prob_home", "market_prob_draw", "market_prob_away")
+                ]
+                per_match[f"{league}__y"] = y
+                per_match[f"{league}__candidate"] = league_probs["candidate"]
+                per_match[f"{league}__incumbent"] = league_probs["incumbent"]
+                per_match[f"{league}__market"] = candidate_X[:, market_columns].astype(
+                    np.float64
+                )
         logger.info("")
 
     if verdicts:
@@ -309,6 +341,22 @@ def main() -> int:
             gate["status"] == "PASS" for gate in report["gates"].values()
         )
     args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    if args.per_match_output is not None:
+        if not per_match:
+            logger.error("no league produced both heads; nothing to persist")
+            return 1
+        args.per_match_output.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            args.per_match_output,
+            candidate_schema=np.asarray(args.candidate_schema),
+            holdout_season=np.asarray(HOLDOUT_SEASON),
+            **per_match,
+        )
+        logger.info(
+            "per-match holdout probabilities -> %s (%d leagues)",
+            args.per_match_output,
+            len(per_match) // 4,
+        )
     return 0
 
 
