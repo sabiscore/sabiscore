@@ -1,5 +1,86 @@
 # SabiScore Debt Ledger
 
+## 62. A league-stratified staking carve-out was proposed and rejected on a paired bootstrap CI — the "EPL edge" was 0.078σ of an unpaired SE, and 0/6 leagues clear it either way (2026-09-06, PR #156)
+
+**Tier:** `ACCEPTED` — measured, documented, not revisited without new evidence.
+Directly relevant to items 43/50/58/59: this is the fourth independent
+measurement landing on the same conclusion (the market cannot currently be
+beaten by anything in this repository), from yet another angle.
+
+A directive proposed amending `certification_policy.py` so `no_league_regression`
+and `market_baseline` could pass per-league instead of across all six, citing
+`apex_v5_66`'s EPL holdout: candidate RPS 0.2049 vs. de-vigged market 0.2054 —
+a 0.0005 margin over 375 fixtures. `PROMOTION_GATES["market_baseline"]` is a
+point comparison with no notion of sampling error, so before touching the
+policy this was tested properly.
+
+**Built:** `compare_candidate_vs_incumbent.py --per-match-output` persists
+per-match labels plus candidate/incumbent/de-vigged-market probabilities to a
+gitignored `.npz` — nothing in the repository had done this before, which is
+why `block_bootstrap_ci` (present since M0) had never been run on a
+candidate-vs-market difference. `scripts/bootstrap_market_edge_ci.py` runs the
+**paired** block-bootstrap: both heads stacked into one `(n, 6)` array so a
+single set of resampled block indices applies to both, preserving pairing
+under resampling (measured ~34x narrower than an unpaired equivalent on a
+correlated pair — an unpaired test could not have resolved a 0.0005 effect at
+all).
+
+**Result, 10,000 replicates, block size 10, RPS lower-is-better:**
+
+| league | candidate | market | diff | 95% CI | verdict |
+|---|---:|---:|---:|---|---|
+| BUNDESLIGA | 0.1968 | 0.1908 | +0.0059 | [+0.0004, +0.0106] | market beats candidate |
+| **EPL** | 0.2049 | 0.2054 | **−0.0005** | **[−0.0029, +0.0028]** | **indistinguishable** |
+| EREDIVISIE | 0.1988 | 0.1969 | +0.0019 | [−0.0009, +0.0049] | indistinguishable |
+| LA_LIGA | 0.1964 | 0.1963 | +0.0001 | [−0.0038, +0.0034] | indistinguishable |
+| LIGUE_1 | 0.2034 | 0.1991 | +0.0043 | [−0.0014, +0.0095] | indistinguishable |
+| SERIE_A | 0.1994 | 0.1971 | +0.0022 | [−0.0010, +0.0056] | indistinguishable |
+
+**0 of 6 leagues have a CI excluding zero in the candidate's favour.** The
+same run scored the serving incumbent `v5_phase7` against the market too
+(free — same persisted arrays): **0 of 6** there as well, with SERIE_A
+significantly worse. The EPL interval's half-width is 5.7x the point
+estimate the proposal was built on. The one interval that does exclude zero
+runs the other way (Bundesliga, candidate significantly worse than market).
+
+Two structural reasons beyond the interval: the EPL margin was selected as
+best-of-six *after* observing all six — under the null that the model merely
+equals the market, ~3/6 would be expected to come out ahead by chance, so
+1/6 is evidence *against* the model, not for it. And in EPL specifically,
+`apex_v5_66` scores 0.2049 against the incumbent's own 0.2036 — 0.0013
+*worse* than what already serves, roughly 3x the claimed market edge.
+
+**Reads on item 43 as independent corroboration.** Item 43 measured the
+de-vigged market's own Brier score (0.5787, sum-over-classes) failing a
+0.220 gate by 2.6x — i.e. even the market itself is far from "highly
+accurate" by an intuitive bar. This item adds: nothing in this repository
+beats that market either. Two different metrics (Brier, RPS), two different
+questions (is football forecastable at all vs. can we out-forecast the
+consensus), same direction of answer.
+
+**No gate threshold changed. No candidate promoted.**
+`promotion_permitted`/`stake_permitted` unaffected (both already `false` on
+independent grounds — items 49/50). Full writeup, validation steps (RPS-
+implementation cross-check, published-figure reproduction, pairing-guard
+watched-failing-first), and reproduction commands:
+`backend/reports/evaluation/market-edge-bootstrap-2026-09-06.md`.
+
+**Incidental, recorded so it is not rediscovered as a bug:** Eredivisie has
+no own entry in `training_report_real_v10_gate7_hpo.json`, so the existing
+gate compares it against the `POOLED` all-league market baseline (0.197849)
+rather than its own (0.196923) — a consequence of Eredivisie using the pooled
+model (one season of corpus), not a new defect. Does not change any verdict
+above; the paired bootstrap computes Eredivisie's own market RPS from its own
+260 rows independently of the gate's pooled figure.
+
+**The instrument (`scripts/bootstrap_market_edge_ci.py`) is reusable** and is
+the standard any future market-beating claim should be held to: a paired 95%
+CI excluding zero, ideally under a Bonferroni correction for the number of
+leagues tested. A point estimate alone is not evidence at the margins this
+project has measured so far.
+
+---
+
 ## 61. Gated `home_pressing_intensity` inverted the PPDA sign — RESOLVED 2026-09-05
 
 **Found by:** GitHub Copilot's automated review of PR #153, before merge —
