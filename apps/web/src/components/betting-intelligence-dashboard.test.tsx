@@ -146,7 +146,7 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
       fixture,
       model: null,
       market: null,
-      freshness: {},
+      freshness: { model_features_seconds: 3_660 },
       source_status: {
         model: "CONFLICTING",
         market: "VERIFIED",
@@ -168,6 +168,9 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
       expect(
         screen.getByText(/Source conflict detected\. The engine will fail closed until the conflict is resolved\./i),
       ).toBeInTheDocument();
+      expect(screen.getByText("Provider Conflict")).toBeInTheDocument();
+      expect(screen.queryByText("provider_conflict")).not.toBeInTheDocument();
+      expect(screen.getByText("1h ago")).toBeInTheDocument();
     });
   });
 

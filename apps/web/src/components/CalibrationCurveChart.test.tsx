@@ -84,13 +84,23 @@ function mockCalibration(body: unknown, status = 200) {
 }
 
 describe("CalibrationCurveChart", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class ResizeObserver {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("renders — for absent metrics, never the previous hardcoded fallback numbers", async () => {
     // No `ece`, `brier_decomposition`, or `curves` — the shape a fresh
     // deployment with no walk-forward history yet would actually return.
-    mockCalibration({ sample_size: 12 });
+    mockCalibration({ status: "OK", sample_size: 12 });
 
     renderWithClient();
 
@@ -106,7 +116,7 @@ describe("CalibrationCurveChart", () => {
   });
 
   it("renders a floor message instead of the chart/tiles below the sample floor", async () => {
-    mockCalibration({ meets_sample_floor: false, minimum_sample_size: 30, sample_size: 7 });
+    mockCalibration({ status: "OK", meets_sample_floor: false, minimum_sample_size: 30, sample_size: 7 });
 
     renderWithClient();
 
@@ -121,8 +131,38 @@ describe("CalibrationCurveChart", () => {
     expect(screen.queryByText("Awaiting settled match prediction records.")).not.toBeInTheDocument();
   });
 
+  it("treats the backend sample-floor response as evidence accumulation, not an outage", async () => {
+    mockCalibration(
+      {
+        status: "METRICS_UNAVAILABLE",
+        reason: "insufficient_settled_predictions",
+        sample_size: 0,
+      },
+      503,
+    );
+
+    renderWithClient();
+
+    expect(await screen.findByText(/not enough settled predictions yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/configured settlement floor/i)).toBeInTheDocument();
+    expect(screen.queryByText(/service unavailable/i)).not.toBeInTheDocument();
+  });
+
+  it("fails closed when a successful response does not match the calibration contract", async () => {
+    mockCalibration({ unexpected: true });
+    renderWithClient();
+    expect(await screen.findByText(/response could not be verified/i)).toBeInTheDocument();
+  });
+
+  it("labels an unavailable calibration service as infrastructure failure", async () => {
+    mockCalibration({ detail: "bad gateway" }, 502);
+    renderWithClient();
+    expect(await screen.findByText(/service unavailable/i, {}, { timeout: 3_000 })).toBeInTheDocument();
+  });
+
   it("does not label zero-replicate intervals as 95% confidence intervals", async () => {
     mockCalibration({
+      status: "OK",
       sample_size: 12,
       curves: { home_win: [], draw: [], away_win: [] },
       confidence_intervals: {
@@ -139,7 +179,7 @@ describe("CalibrationCurveChart", () => {
   });
 
   it("uses aria-pressed outcome tabs (not the incomplete tablist pattern) and responds to clicks", async () => {
-    mockCalibration({ sample_size: 5 });
+    mockCalibration({ status: "OK", sample_size: 5 });
 
     renderWithClient();
     await screen.findByText("Awaiting settled match prediction records.");
@@ -155,5 +195,27 @@ describe("CalibrationCurveChart", () => {
 
     expect(homeTab).toHaveAttribute("aria-pressed", "true");
     expect(overallTab).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("provides a keyboard-readable table and honest calibration scope", async () => {
+    mockCalibration({
+      status: "OK",
+      sample_size: 18,
+      league: "EPL",
+      generated_at: "2026-09-05T12:00:00Z",
+      curves: {
+        home_win: [{ bin_index: 1, predicted_mean: 0.4, empirical_frequency: 0.5, count: 6 }],
+        draw: [],
+        away_win: [],
+      },
+    });
+
+    renderWithClient();
+
+    expect(await screen.findByText(/1 observed probability bins from 18 settled predictions/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("View calibration observations"));
+    expect(screen.getByRole("table", { name: /calibration observations for overall ensemble/i })).toBeInTheDocument();
+    expect(screen.getByText("Current serving generation")).toBeInTheDocument();
+    expect(screen.queryByText(/≤ 3% goal/i)).not.toBeInTheDocument();
   });
 });

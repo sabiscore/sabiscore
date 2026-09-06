@@ -79,6 +79,7 @@ export function MatchHeaderActions({
       <MatchShareModal
         open={shareModalOpen}
         onOpenChange={setShareModalOpen}
+        mode="fixture"
         matchId={matchId}
         homeTeam={homeTeam}
         awayTeam={awayTeam}

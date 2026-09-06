@@ -48,9 +48,14 @@ export interface CalibrationBin {
 }
 
 interface CalibrationData {
+  status: "OK" | "METRICS_UNAVAILABLE";
+  reason?: string;
   sample_size?: number;
   meets_sample_floor?: boolean;
   minimum_sample_size?: number;
+  league?: string | null;
+  model_version?: string;
+  generated_at?: string;
   curves?: {
     home_win?: CalibrationBin[];
     draw?: CalibrationBin[];
@@ -84,6 +89,14 @@ interface PlotBin {
   x: number;
   y: number;
   count: number;
+}
+
+type CalibrationErrorKind = "service_unavailable" | "invalid_response";
+
+class CalibrationLoadError extends Error {
+  constructor(readonly kind: CalibrationErrorKind) {
+    super(kind);
+  }
 }
 
 // ─── Pure helpers (exported for direct unit testing) ───────────────────────
@@ -140,6 +153,52 @@ function formatCi(ci: BootstrapCI | undefined, fmt: (v: number) => string): stri
   return `[${fmt(ci.ci_lower)}, ${fmt(ci.ci_upper)}]`;
 }
 
+function isCalibrationData(value: unknown): value is CalibrationData {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Partial<CalibrationData>;
+  if (candidate.status !== "OK" && candidate.status !== "METRICS_UNAVAILABLE") return false;
+  if (
+    candidate.sample_size !== undefined &&
+    (!Number.isFinite(candidate.sample_size) || candidate.sample_size < 0)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+async function fetchCalibrationData(league?: string, window?: number): Promise<CalibrationData> {
+  const params = new URLSearchParams();
+  if (league) params.set("league", league);
+  if (window) params.set("window", String(window));
+
+  let response: Response;
+  try {
+    response = await fetch(`/api/model-performance/calibration?${params.toString()}`, {
+      cache: "no-store",
+    });
+  } catch {
+    throw new CalibrationLoadError("service_unavailable");
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new CalibrationLoadError(response.ok ? "invalid_response" : "service_unavailable");
+  }
+
+  if (
+    isCalibrationData(body) &&
+    body.status === "METRICS_UNAVAILABLE" &&
+    body.reason === "insufficient_settled_predictions"
+  ) {
+    return body;
+  }
+  if (!response.ok) throw new CalibrationLoadError("service_unavailable");
+  if (!isCalibrationData(body)) throw new CalibrationLoadError("invalid_response");
+  return body;
+}
+
 const OUTCOME_TABS: Array<{ id: "overall" | OutcomeKey; label: string }> = [
   { id: "overall", label: "Overall Ensemble" },
   { id: "home_win", label: "Home Win" },
@@ -149,29 +208,22 @@ const OUTCOME_TABS: Array<{ id: "overall" | OutcomeKey; label: string }> = [
 
 export function CalibrationCurveChart({
   league,
+  window,
   className,
 }: {
   league?: string;
+  window?: number;
   className?: string;
 }) {
   const [selectedOutcome, setSelectedOutcome] = useState<"overall" | OutcomeKey>("overall");
   const prefersReducedMotion = useReducedMotion();
 
-  const { data, isLoading, error, refetch } = useQuery<CalibrationData>({
-    queryKey: ["calibration-curve", league],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (league) params.append("league", league);
-      const res = await fetch(`/api/model-performance/calibration?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to fetch calibration curve data");
-      }
-      return res.json();
-    },
+  const { data, isLoading, error, refetch } = useQuery<CalibrationData, CalibrationLoadError>({
+    queryKey: ["calibration-curve", league, window],
+    queryFn: () => fetchCalibrationData(league, window),
     staleTime: 5 * 60 * 1000,
-    retry: 1,
+    retry: (failureCount, loadError) =>
+      loadError.kind === "service_unavailable" && failureCount < 1,
   });
 
   const curves = data?.curves;
@@ -189,6 +241,11 @@ export function CalibrationCurveChart({
   const brierRel = brierMean?.reliability ?? null;
   const brierRes = brierMean?.resolution ?? null;
   const brierUnc = brierMean?.uncertainty ?? null;
+  const selectedOutcomeLabel = OUTCOME_TABS.find((tab) => tab.id === selectedOutcome)?.label ?? "Selected outcome";
+  const belowSampleFloor =
+    data?.meets_sample_floor === false || data?.reason === "insufficient_settled_predictions";
+  const generatedAt = data?.generated_at ? new Date(data.generated_at) : null;
+  const hasValidGeneratedAt = generatedAt != null && !Number.isNaN(generatedAt.getTime());
 
   return (
     <div
@@ -246,13 +303,14 @@ export function CalibrationCurveChart({
         ))}
       </div>
 
-      {data && data.meets_sample_floor === false ? (
+      {data && belowSampleFloor ? (
         <div className="mt-5 flex h-72 flex-col items-center justify-center rounded-xl bg-slate-800/40 p-4 text-center">
           <Info className="h-6 w-6 text-amber-400 mb-2" />
           <p className="text-sm font-semibold text-slate-200">Not enough settled predictions yet</p>
           <p className="mt-1 text-xs text-slate-400 max-w-md">
-            Calibration requires at least {data.minimum_sample_size ?? "more"} settled predictions to compute
-            a meaningful decomposition — currently {data.sample_size ?? 0}.
+            {data.minimum_sample_size != null
+              ? `Calibration requires at least ${data.minimum_sample_size} settled predictions to compute a meaningful decomposition — currently ${data.sample_size ?? 0}.`
+              : `Calibration begins after the configured settlement floor is reached — currently ${data.sample_size ?? 0} settled predictions.`}
           </p>
         </div>
       ) : (
@@ -267,11 +325,17 @@ export function CalibrationCurveChart({
             </div>
           </div>
         ) : error ? (
-          <div className="flex h-72 flex-col items-center justify-center rounded-xl bg-slate-800/40 p-4 text-center">
+          <div className="flex h-72 flex-col items-center justify-center rounded-xl bg-slate-800/40 p-4 text-center" role="alert">
             <Info className="h-6 w-6 text-amber-400 mb-2" />
-            <p className="text-sm font-semibold text-slate-200">Calibration metrics currently settling</p>
+            <p className="text-sm font-semibold text-slate-200">
+              {error.kind === "invalid_response"
+                ? "Calibration response could not be verified"
+                : "Calibration service unavailable"}
+            </p>
             <p className="mt-1 text-xs text-slate-400 max-w-md">
-              Walk-forward verification requires a continuous series of settled fixtures to compute empirical bins.
+              {error.kind === "invalid_response"
+                ? "The response did not match the expected calibration contract, so no metrics are shown."
+                : "The performance service could not be reached. Existing calibration gates remain unchanged."}
             </p>
           </div>
         ) : bins.length === 0 ? (
@@ -279,7 +343,12 @@ export function CalibrationCurveChart({
             Awaiting settled match prediction records.
           </div>
         ) : (
-          <div className="h-72 w-full">
+          <div
+            className="h-72 w-full"
+            role="img"
+            aria-label={`${selectedOutcomeLabel} reliability diagram with ${bins.length} observed bins`}
+            aria-describedby="calibration-chart-summary"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={bins}
@@ -368,6 +437,55 @@ export function CalibrationCurveChart({
         )}
       </div>
 
+      {bins.length > 0 && (
+        <div className="mt-4 border-t border-white/[0.08] pt-4">
+          <p id="calibration-chart-summary" className="text-xs text-slate-400">
+            {selectedOutcomeLabel}: {bins.length} observed probability bins
+            {data?.sample_size != null ? ` from ${data.sample_size} settled predictions` : ""}. Empty bins are omitted.
+          </p>
+          <details className="mt-2 rounded-lg border border-white/[0.08] bg-white/[0.02]">
+            <summary className="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+              View calibration observations
+            </summary>
+            <div className="overflow-x-auto border-t border-white/[0.08]">
+              <table className="w-full min-w-[28rem] text-left text-xs">
+                <caption className="sr-only">Calibration observations for {selectedOutcomeLabel}</caption>
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium" scope="col">Forecasted probability</th>
+                    <th className="px-3 py-2 font-medium" scope="col">Observed frequency</th>
+                    <th className="px-3 py-2 font-medium" scope="col">Observations</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.05] text-slate-200">
+                  {bins.map((bin) => (
+                    <tr key={`${selectedOutcome}-${bin.x}-${bin.y}`}>
+                      <td className="px-3 py-2 tabular-nums">{(bin.x * 100).toFixed(1)}%</td>
+                      <td className="px-3 py-2 tabular-nums">{(bin.y * 100).toFixed(1)}%</td>
+                      <td className="px-3 py-2 tabular-nums">{bin.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {data?.status === "OK" && (
+        <dl className="mt-4 grid gap-2 border-t border-white/[0.08] pt-4 text-xs sm:grid-cols-4">
+          <div><dt className="text-slate-500">League scope</dt><dd className="mt-0.5 text-slate-300">{data.league ?? "All leagues"}</dd></div>
+          <div><dt className="text-slate-500">Record window</dt><dd className="mt-0.5 text-slate-300">{window ? `Last ${window} days` : "All settled records"}</dd></div>
+          <div><dt className="text-slate-500">Model scope</dt><dd className="mt-0.5 text-slate-300">Current serving generation</dd></div>
+          <div>
+            <dt className="text-slate-500">Generated</dt>
+            <dd className="mt-0.5 text-slate-300">
+              {hasValidGeneratedAt ? <time dateTime={data.generated_at}>{generatedAt.toLocaleString()}</time> : "Unknown"}
+            </dd>
+          </div>
+        </dl>
+      )}
+
       {/* Murphy Brier Decomposition & ECE Metric Cards */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5 border-t border-white/[0.08] pt-4">
         <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
@@ -377,7 +495,7 @@ export function CalibrationCurveChart({
           <p className="mt-1 text-xl font-bold text-emerald-400 tabular-nums">
             {eceValue !== null ? `${(eceValue * 100).toFixed(2)}%` : "—"}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-500">Expected Calibration Error (≤ 3% goal)</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">Expected Calibration Error (lower is better)</p>
         </div>
 
         <div className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">

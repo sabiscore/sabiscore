@@ -98,6 +98,14 @@ function freshnessDescriptor(token: string): EvidenceStateDescriptor {
   return FRESHNESS_TOKEN_OVERRIDES[String(token).toUpperCase()] ?? evidenceStateFor(token);
 }
 
+export function formatEvidenceAge(seconds: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "Unknown";
+  if (seconds < 60) return "Less than a minute ago";
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h ago`;
+  return `${Math.floor(seconds / 86_400)}d ago`;
+}
+
 export function buildEvidencePassport(input: {
   fieldAvailability: Record<string, boolean>;
   unavailableReasons: Record<string, string>;
