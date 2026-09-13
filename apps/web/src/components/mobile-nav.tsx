@@ -1,24 +1,30 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import Link from "next/link";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   BarChart3,
   BookOpen,
   CalendarClock,
+  Code,
+  LayoutDashboard,
   Menu,
+  ShieldCheck,
   Sparkles,
   Trophy,
   X,
 } from "lucide-react";
 import { SabiScoreBrand } from "@/components/brand/sabiscore-brand";
 
-const NAV_LINKS = [
+const WORKSPACE_LINKS = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },
   { label: "Matches", href: "/match", icon: CalendarClock },
   { label: "Performance", href: "/performance", icon: BarChart3 },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Developers", href: "/developer", icon: Code },
   { label: "Docs", href: "/docs", icon: BookOpen },
-];
+] as const;
 
 const LEAGUES = [
   { label: "Premier League", code: "EPL" },
@@ -28,94 +34,140 @@ const LEAGUES = [
   { label: "Ligue 1", code: "LIGUE_1" },
   { label: "Eredivisie", code: "EREDIVISIE" },
   { label: "Champions League", code: "UCL" },
-];
+] as const;
 
 export const MobileNav = memo(function MobileNav() {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const handle = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [open]);
-
   return (
-    <div className="lg:hidden">
-      <button
-        type="button"
-        aria-label="Open navigation"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-        className="grid h-10 w-10 place-items-center rounded-md text-slate-300 hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-      >
-        <Menu className="h-5 w-5" aria-hidden="true" />
-      </button>
+    <Dialog.Root>
+      <Dialog.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Open navigation"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:ring-offset-2 focus:ring-offset-[var(--brand-nav)] lg:hidden"
+        >
+          <Menu className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </Dialog.Trigger>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <nav
-            className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[var(--brand-elevated)] shadow-2xl"
-            aria-label="Mobile navigation"
-          >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-              <SabiScoreBrand />
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/75 backdrop-blur-sm" />
+
+        <Dialog.Content
+          className="fixed inset-y-0 left-0 z-[70] flex h-dvh max-h-dvh w-[min(18rem,calc(100vw-1rem))] flex-col overflow-hidden border-r border-white/10 bg-[var(--brand-elevated)] shadow-2xl shadow-black/40 focus:outline-none"
+          aria-describedby="mobile-navigation-description"
+        >
+          <div className="flex min-h-[4rem] shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+            <Dialog.Close asChild>
+              <Link
+                href="/"
+                aria-label="SabiScore home"
+                className="min-w-0 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              >
+                <SabiScoreBrand />
+              </Link>
+            </Dialog.Close>
+
+            <Dialog.Close asChild>
               <button
                 type="button"
                 aria-label="Close navigation"
-                onClick={() => setOpen(false)}
-                className="grid h-9 w-9 place-items-center rounded-md text-slate-400 hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-3 py-4">
-              <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            </Dialog.Close>
+          </div>
+
+          <Dialog.Title className="sr-only">SabiScore navigation</Dialog.Title>
+
+          <Dialog.Description
+            id="mobile-navigation-description"
+            className="sr-only"
+          >
+            Navigate between SabiScore workspace areas and supported football
+            leagues.
+          </Dialog.Description>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-width:thin]">
+            <nav aria-label="Mobile workspace navigation">
+              <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
                 Workspace
               </p>
-              <div className="mt-3 space-y-1">
-                {NAV_LINKS.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  >
-                    <item.icon className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                    {item.label}
-                  </Link>
-                ))}
+
+              <div className="mt-2 space-y-0.5">
+                {WORKSPACE_LINKS.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <Dialog.Close key={item.href} asChild>
+                      <Link
+                        href={item.href}
+                        className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      >
+                        <Icon
+                          className="h-4 w-4 shrink-0 text-emerald-300"
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </Link>
+                    </Dialog.Close>
+                  );
+                })}
               </div>
-              <p className="mt-6 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            </nav>
+
+            <nav className="mt-5" aria-label="Mobile league navigation">
+              <p className="px-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
                 Leagues
               </p>
-              <div className="mt-3 space-y-1">
+
+              <div className="mt-2 space-y-0.5">
                 {LEAGUES.map((league) => (
-                  <Link
-                    key={league.code}
-                    href={`/intelligence?league=${encodeURIComponent(league.code)}`}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center justify-between rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-emerald-300" aria-hidden="true" />
-                      {league.label}
-                    </span>
-                    <span className="text-[11px] font-semibold text-slate-500">{league.code}</span>
-                  </Link>
+                  <Dialog.Close key={league.code} asChild>
+                    <Link
+                      href={`/intelligence?league=${encodeURIComponent(league.code)}`}
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Trophy
+                          className="h-4 w-4 shrink-0 text-emerald-300"
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">{league.label}</span>
+                      </span>
+
+                      <span className="shrink-0 text-[11px] font-semibold text-slate-300">
+                        {league.code}
+                      </span>
+                    </Link>
+                  </Dialog.Close>
                 ))}
               </div>
-            </div>
-          </nav>
-        </>
-      )}
-    </div>
+            </nav>
+
+            <section
+              className="mt-6 rounded-md border border-white/10 bg-white/[0.03] p-3"
+              aria-labelledby="mobile-backend-authority"
+            >
+              <div
+                id="mobile-backend-authority"
+                className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400"
+              >
+                <ShieldCheck
+                  className="h-4 w-4 shrink-0 text-emerald-300"
+                  aria-hidden="true"
+                />
+                Backend authority
+              </div>
+
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Providers, model inference, EV, Kelly sizing, and decisions
+                stay server-side.
+              </p>
+            </section>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 });
