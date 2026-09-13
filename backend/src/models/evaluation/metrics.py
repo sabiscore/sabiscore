@@ -91,6 +91,29 @@ def ranked_probability_score(y_true_outcome: int, probs: list[float]) -> float:
     return sum((p - t) ** 2 for p, t in zip(cumprobs, cumtrue)) / 2.0
 
 
+def ranked_probability_score_rowwise(y_true: np.ndarray, y_proba: np.ndarray) -> np.ndarray:
+    """Vectorised ``ranked_probability_score``, one value per row.
+
+    Same formula, not a second convention: cumulative predicted mass vs.
+    cumulative one-hot truth, summed-squared-error over 2. Exists because
+    ``block_bootstrap_ci`` calls its metric function once per replicate —
+    10,000 replicates over a pooled sample large enough to matter turns a
+    per-row Python list comprehension (``performance.py``'s pre-existing
+    ``rps_metric`` pattern) into tens of millions of interpreted calls. A
+    three-digit number of real settled predictions today never reaches that
+    cost, but nothing should depend on staying there by accident.
+
+    Correctness is pinned by a test asserting this equals
+    ``ranked_probability_score`` row-by-row over random data, not argued here.
+    """
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba, dtype=np.float64)
+    n_classes = y_proba.shape[1]
+    cumprobs = np.cumsum(y_proba, axis=1)
+    cumtrue = (y_true[:, None] <= np.arange(n_classes)[None, :]).astype(np.float64)
+    return np.sum((cumprobs - cumtrue) ** 2, axis=1) / 2.0
+
+
 def brier_score_decomposition(
     y_true: np.ndarray,
     y_proba: np.ndarray,

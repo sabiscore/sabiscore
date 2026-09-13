@@ -323,6 +323,7 @@ class ModelRegistry:
         self,
         records: List[Dict[str, Any]],
         n_splits: int = 5,
+        n_bootstrap: int = 10_000,
     ) -> Dict[str, Any]:
         """Temporal walk-forward RPS validation.
 
@@ -332,6 +333,12 @@ class ModelRegistry:
                 [p_home, p_draw, p_away]). Must be sorted chronologically or
                 this method will sort them.
             n_splits: Number of temporal folds (train+test windows).
+            n_bootstrap: Block-bootstrap replicates for ``rps_ci`` (directive
+                v7.3 P6). Settled-prediction volume is small (tens to low
+                hundreds of rows for the foreseeable future — see
+                ``docs/DEBT.md`` item 88), so 10,000 replicates over a pooled
+                sample this size costs milliseconds; there is no case for
+                trading that precision away.
 
         Returns:
             Dict with per-fold and aggregate RPS, plus validation metadata.
@@ -339,7 +346,13 @@ class ModelRegistry:
             ``n_splits * 2`` records are available.
         """
         try:
-            from .evaluation.metrics import brier_score_decomposition, ranked_probability_score
+            from .evaluation.metrics import (
+                block_bootstrap_ci,
+                brier_score_decomposition,
+                expected_calibration_error,
+                ranked_probability_score,
+                ranked_probability_score_rowwise,
+            )
         except ImportError:
             logger.warning("ranked_probability_score not available; walk-forward skipped")
             return {"skipped": True, "reason": "metrics module unavailable"}
@@ -442,20 +455,42 @@ class ModelRegistry:
 
         # Diagnostic layer, not a promotion gate (RPS keeps that role): needs its
         # own floor, since binning below ~10 pooled records is not meaningful even
-        # when enough records existed to form RPS folds.
+        # when enough records existed to form RPS folds. ECE shares the same
+        # binning convention as brier_decomposition (both gated identically so
+        # a reader never has to ask why one ran and the other didn't), and the
+        # RPS bootstrap CI is gated here too rather than relying solely on
+        # block_bootstrap_ci's own internal floor — no sense spending 10,000
+        # replicates on a sample too thin for the result to mean anything.
         MIN_RECORDS_FOR_DECOMPOSITION = 10
         if len(pooled_outcomes) >= MIN_RECORDS_FOR_DECOMPOSITION:
-            brier_decomposition = brier_score_decomposition(
-                np.array(pooled_outcomes), np.array(pooled_probs)
-            )
+            pooled_y = np.array(pooled_outcomes)
+            pooled_p = np.array(pooled_probs)
+            brier_decomposition = brier_score_decomposition(pooled_y, pooled_p)
+            ece = expected_calibration_error(pooled_y, pooled_p)
+
+            def _rps_metric(yt: np.ndarray, yp: np.ndarray) -> float:
+                # (y_true, y_proba) -> float, block_bootstrap_ci's contract.
+                # Vectorised (ranked_probability_score_rowwise), not a
+                # per-row Python loop: this runs once per bootstrap replicate,
+                # and 10,000 replicates over a pooled sample large enough to
+                # matter turns an O(n) interpreted loop into tens of millions
+                # of calls — directive v7.3 P6's memory/performance-safety
+                # concern is real here, just not where the request named it
+                # (chunking a corpus that fits in 11MB was not; this was).
+                return float(ranked_probability_score_rowwise(yt, yp).mean())
+
+            rps_ci = block_bootstrap_ci(pooled_y, pooled_p, _rps_metric, n_bootstrap=n_bootstrap)
         else:
-            brier_decomposition = {
+            _skip_reason: Dict[str, Any] = {
                 "skipped": True,
                 "reason": (
                     f"need >= {MIN_RECORDS_FOR_DECOMPOSITION} pooled validated records, "
                     f"got {len(pooled_outcomes)}"
                 ),
             }
+            brier_decomposition = dict(_skip_reason)
+            ece = dict(_skip_reason)
+            rps_ci = dict(_skip_reason)
 
         return {
             "skipped": False,
@@ -463,11 +498,13 @@ class ModelRegistry:
             "total_records": n,
             "rps_overall": sum(all_rps) / len(all_rps),
             "rps_std": float(pd.Series(all_rps).std()) if len(all_rps) > 1 else 0.0,
+            "rps_ci": rps_ci,
             # Mean of fold means, matching rps_overall's convention rather than
             # introducing a second aggregation rule in the same payload.
             "accuracy_overall": sum(all_accuracy) / len(all_accuracy),
             "brier_overall": sum(all_brier) / len(all_brier),
             "brier_decomposition": brier_decomposition,
+            "ece": ece,
             "folds": fold_results,
             "validated_at": datetime.now(timezone.utc).isoformat(),
         }

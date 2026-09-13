@@ -13,6 +13,7 @@ from src.models.evaluation.metrics import (
     block_bootstrap_ci,
     log_loss_multiclass,
     ranked_probability_score,
+    ranked_probability_score_rowwise,
     brier_score_decomposition,
 )
 
@@ -138,3 +139,36 @@ class TestBrierConvention:
         assert result["mean"]["brier_score"] < 1.0
         # n_samples must be preserved
         assert result["n_samples"] == 4
+
+
+class TestRankedProbabilityScoreRowwise:
+    """Directive v7.3 P6: a vectorised RPS, added because block_bootstrap_ci
+    calls its metric function once per replicate and a per-row Python loop
+    over a large pooled sample times 10,000 replicates is slow enough to
+    matter (model_registry.walk_forward_validate's own _rps_metric). Same
+    formula as ranked_probability_score — this only has to prove it, not
+    argue it."""
+
+    def test_matches_the_scalar_function_row_by_row(self):
+        rng = np.random.default_rng(7)
+        y_true = rng.integers(0, 3, size=200)
+        raw = rng.random((200, 3))
+        y_proba = raw / raw.sum(axis=1, keepdims=True)
+
+        vectorised = ranked_probability_score_rowwise(y_true, y_proba)
+        scalar = np.array(
+            [ranked_probability_score(int(y_true[i]), y_proba[i].tolist()) for i in range(200)]
+        )
+        np.testing.assert_allclose(vectorised, scalar, atol=1e-12)
+
+    def test_perfect_prediction_is_zero(self):
+        y_true = np.array([0, 1, 2])
+        y_proba = np.eye(3)
+        np.testing.assert_allclose(
+            ranked_probability_score_rowwise(y_true, y_proba), [0.0, 0.0, 0.0]
+        )
+
+    def test_worst_prediction_is_one(self):
+        y_true = np.array([2])
+        y_proba = np.array([[1.0, 0.0, 0.0]])
+        np.testing.assert_allclose(ranked_probability_score_rowwise(y_true, y_proba), [1.0])

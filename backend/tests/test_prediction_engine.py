@@ -26,6 +26,19 @@ Coverage:
   PE-23 _ensemble_predict_dict fails closed when no model returns valid 3-class proba
   PE-24 calibration_applied=False and overlay_applied=False by default
   PE-25 v6 bundle inference path (models_dict) returns a valid 3-class simplex
+
+Directive v7.3 P5 ("serve-time calibration" -- FIT -> SERIALIZED -> REGISTERED
+-> LOADED -> CALLED): a dict artifact's saved `meta_model` was deserialized by
+`_wrap_artifact` but never read by `_run_inference`, which always averaged the
+base learners directly -- the trained, calibrated stacking head existed
+offline and was never applied at inference. PE-26..PE-29 pin the fix.
+  PE-26 stacked meta-model output is returned (not the base-learner average)
+        when bundle.meta_model is present; calibration_method/applied reflect it
+  PE-27 meta-features are grouped per-model (home,draw,away), matching
+        scripts/train_on_real_matches.py::_build_meta_features exactly
+  PE-28 a meta-model that raises degrades to equal-weight averaging, not the
+        harsher flat fallback
+  PE-29 an unrecognised meta-model class reports "stacked_unknown", not a crash
 """
 from __future__ import annotations
 
@@ -51,6 +64,7 @@ def _make_v5_bundle(proba=(0.50, 0.25, 0.25), n_features=58) -> _ArtifactBundle:
         calibrator=None,
         overlay=None,
         feature_columns=None,
+        meta_model=None,
         model_version="v5_phase7",
         generation="v5_phase7-test",
         feature_schema_version=f"phase7_{n_features}",
@@ -64,8 +78,14 @@ def _make_v6_bundle(
     calibrator=None,
     overlay=None,
     feature_columns=None,
+    meta_model=None,
 ) -> _ArtifactBundle:
-    """v6-style bundle: dict of named base learners."""
+    """v6-style bundle: dict of named base learners.
+
+    ``meta_model=None`` by default reproduces every existing caller's intent
+    exactly (equal-weight base-learner averaging) — pass a mock to exercise
+    the stacked meta-model path instead.
+    """
     model = MagicMock()
     model.n_features_in_ = n_features
     model.predict_proba = MagicMock(return_value=np.array([list(proba)]))
@@ -75,6 +95,7 @@ def _make_v6_bundle(
         calibrator=calibrator,
         overlay=overlay,
         feature_columns=feature_columns,
+        meta_model=meta_model,
         model_version="v6_phase8",
         generation="v6_phase8-test",
         feature_schema_version=f"phase8_{n_features}",
@@ -302,6 +323,7 @@ def test_binary_model_handled_correctly():
         calibrator=None,
         overlay=None,
         feature_columns=None,
+        meta_model=None,
     )
     result = engine._run_inference(bundle, FEATURES_58, "EPL")
     assert result.draw == 0.0
@@ -505,3 +527,104 @@ def test_v6_bundle_inference_returns_valid_proba():
     assert result.overlay_applied is False
     total = result.home_win + result.draw + result.away_win
     assert abs(total - 1.0) < 1e-5
+
+
+# ── PE-26 ─────────────────────────────────────────────────────────────────────
+
+def _two_learner_bundle(meta_model):
+    """rf and xgb deliberately disagree, so "the meta-model's own answer" and
+    "the equal-weight average of the two" are numerically distinguishable —
+    the test below can tell which one the engine actually returned."""
+    rf = MagicMock()
+    rf.n_features_in_ = 58
+    rf.predict_proba = MagicMock(return_value=np.array([[0.90, 0.05, 0.05]]))
+    xgb = MagicMock()
+    xgb.n_features_in_ = 58
+    xgb.predict_proba = MagicMock(return_value=np.array([[0.10, 0.05, 0.85]]))
+    return _ArtifactBundle(
+        direct_model=None,
+        models_dict={"rf": rf, "xgb": xgb},
+        calibrator=None,
+        overlay=None,
+        feature_columns=None,
+        meta_model=meta_model,
+        model_version="v5_phase7",
+    )
+
+
+def test_stacked_meta_model_output_is_returned_not_the_base_learner_average():
+    """PE-26: when a meta_model is present, its output ships — not the
+    rf/xgb average (which would be 0.50/0.05/0.45, not the mocked 0.2/0.3/0.5).
+    """
+
+    class IsotonicMetaModel:  # name matters: exercises the real label map
+        def predict_proba(self, X):
+            assert X.shape == (1, 6)
+            return np.array([[0.20, 0.30, 0.50]])
+
+    bundle = _two_learner_bundle(IsotonicMetaModel())
+    result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
+
+    assert abs(result.home_win - 0.20) < 1e-4
+    assert abs(result.draw - 0.30) < 1e-4
+    assert abs(result.away_win - 0.50) < 1e-4
+    assert result.calibration_applied is True
+    assert result.calibration_method == "isotonic"
+
+
+# ── PE-27 ─────────────────────────────────────────────────────────────────────
+
+def test_meta_features_are_grouped_per_model_not_per_class():
+    """PE-27: column order is rf_home,rf_draw,rf_away,xgb_home,xgb_draw,xgb_away
+    — per-model grouping, matching train_on_real_matches.py::_build_meta_features
+    exactly. A class-major layout (all three models' home probs, then all three
+    draw probs, ...) would silently feed the meta-model transposed garbage."""
+    models_dict = {
+        "rf": MagicMock(predict_proba=MagicMock(return_value=np.array([[0.9, 0.05, 0.05]]))),
+        "xgb": MagicMock(predict_proba=MagicMock(return_value=np.array([[0.1, 0.05, 0.85]]))),
+    }
+    features = PredictionEngine._build_meta_features(models_dict, np.zeros((1, 58)))
+    np.testing.assert_array_almost_equal(
+        features, np.array([[0.9, 0.05, 0.05, 0.1, 0.05, 0.85]])
+    )
+
+
+# ── PE-28 ─────────────────────────────────────────────────────────────────────
+
+def test_stacked_prediction_failure_falls_back_to_average_not_flat_fallback():
+    """PE-28: a meta-model that raises degrades to the equal-weight average —
+    real, live base-learner evidence — rather than PredictionEngine's harsher
+    flat 0.333/0.333/0.334 diagnostic fallback."""
+
+    class BrokenMetaModel:
+        def predict_proba(self, X):
+            raise ValueError("shape mismatch")
+
+    bundle = _two_learner_bundle(BrokenMetaModel())
+    result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
+
+    assert result.model_version != "fallback"
+    assert result.calibration_applied is False
+    assert result.calibration_method == "raw"
+    # rf/xgb average: (0.90+0.10)/2, (0.05+0.05)/2, (0.05+0.85)/2
+    assert abs(result.home_win - 0.50) < 1e-4
+    assert abs(result.draw - 0.05) < 1e-4
+    assert abs(result.away_win - 0.45) < 1e-4
+
+
+# ── PE-29 ─────────────────────────────────────────────────────────────────────
+
+def test_unrecognised_meta_model_class_reports_stacked_unknown():
+    """PE-29: an unmapped meta-model class still ships (fail-open for a
+    harmless reporting label, not the prediction itself) as "stacked_unknown",
+    never a crash and never a silently wrong method name."""
+
+    class SomeFutureCalibrator:
+        def predict_proba(self, X):
+            return np.array([[0.34, 0.33, 0.33]])
+
+    bundle = _two_learner_bundle(SomeFutureCalibrator())
+    result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
+
+    assert result.calibration_applied is True
+    assert result.calibration_method == "stacked_unknown"

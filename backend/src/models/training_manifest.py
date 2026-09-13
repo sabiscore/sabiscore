@@ -30,6 +30,25 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+from src.models.certification_policy import policy_sha256
+
+#: This file lives at backend/src/models/, so parents[2] is backend/ — the same
+#: depth convention test_training_leakage_contract.py's BACKEND_ROOT uses.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+_METRIC_CONTRACT_PATH = _BACKEND_ROOT / "reports" / "evaluation" / "metric-contract.json"
+
+#: Architecture summary for the trained artifact (directive v7.3 P4's
+#: "model_family"), recorded as a contract so a change to the base learners or
+#: meta-model is a visible, hashed manifest change rather than an undocumented
+#: swap.
+MODEL_FAMILY: Dict[str, Any] = {
+    "architecture": "stacking_ensemble",
+    "base_learners": ["random_forest", "xgboost", "lightgbm"],
+    "meta_model": "logistic_regression",
+    "calibration_candidates": ["temperature", "vector", "beta", "isotonic"],
+    "source": "scripts/train_on_real_matches.py",
+}
+
 #: The label rule, transcribed from ``train_on_real_matches.build_dataset``:
 #: ``0 if hg > ag else 1 if hg == ag else 2``. Recorded as a contract so a
 #: relabelling is a visible, hashed change rather than a silent one.
@@ -96,6 +115,19 @@ def _stable_digest(obj: Any) -> str:
 def label_contract_sha256() -> str:
     """Digest of the label contract, for citation in a manifest."""
     return _stable_digest(LABEL_CONTRACT)
+
+
+def metric_contract_sha256(path: Path = _METRIC_CONTRACT_PATH) -> Optional[str]:
+    """Digest of the frozen metric contract, for citation in a manifest.
+
+    None (never a fabricated digest) when the contract file is absent or
+    unreadable — the same "absent is a real, reportable state" convention
+    ``environment_fingerprint()`` already uses for a missing library.
+    """
+    try:
+        return _sha256_bytes(Path(path).read_bytes())
+    except OSError:
+        return None
 
 
 def dataset_fingerprint(cache_dir: Path, pattern: str = "fd_*.csv") -> Dict[str, Any]:
@@ -196,6 +228,8 @@ def build_training_manifest(
     leagues: Mapping[str, Mapping[str, Any]],
     artifact_suffix: str,
     auxiliary_datasets: Optional[Mapping[str, Dict[str, Any]]] = None,
+    generation_id: Optional[str] = None,
+    artifact_hashes: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """Assemble the full reproducibility record for one training run.
 
@@ -210,15 +244,35 @@ def build_training_manifest(
     manifest would assert reproducibility while silently omitting a third of the
     inputs. It is folded into ``reproducibility_sha256`` like any other dataset
     field, so changing that corpus changes the digest.
+
+    ``generation_id`` and ``artifact_hashes`` are post-hoc, assigned only once a
+    run is promoted into ``models/active_generation.json`` — a run being built
+    for candidate evaluation has neither yet. Both stay ``None`` (never a
+    fabricated placeholder) until a caller that actually knows them supplies
+    them, and neither participates in ``reproducibility_sha256``: a later
+    promotion decision must not retroactively change the digest of what was
+    already fit.
     """
     feature_names = list(feature_names)
     manifest: Dict[str, Any] = {
         "schema": "sabiscore_training_manifest_v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "model_family": MODEL_FAMILY,
         "git": {"commit": git_commit(), "dirty": git_is_dirty()},
         "dataset": {
             **dataset_fingerprint(cache_dir),
             "auxiliary": {name: dict(fp) for name, fp in (auxiliary_datasets or {}).items()},
+        },
+        "provider_versions": {
+            "mode": "offline_corpus",
+            "note": (
+                "Training reads cached football-data.co.uk CSV snapshots (see "
+                "dataset.dataset_sha256 for exact corpus identity); there is no "
+                "live provider API call at training time, so no API version "
+                "string applies. The dataset content hash is a stronger "
+                "per-exact-corpus identity than a provider version number "
+                "would be."
+            ),
         },
         "labels": {"contract": LABEL_CONTRACT, "sha256": label_contract_sha256()},
         "features": {
@@ -237,14 +291,29 @@ def build_training_manifest(
         },
         "environment": environment_fingerprint(),
         "leagues": dict(leagues),
+        "certification_policy_sha256": policy_sha256(),
+        "metric_contract_sha256": metric_contract_sha256(),
+        "generation_id": generation_id,
+        "artifact_hashes": dict(artifact_hashes) if artifact_hashes else None,
     }
-    # Self-digest excludes volatile fields so two runs of identical inputs
-    # produce the same reproducibility_sha256 even though timestamps differ.
+    # Self-digest excludes volatile/derived/post-hoc fields so two runs of
+    # identical training inputs produce the same reproducibility_sha256 even
+    # though timestamps, experiment_id, generation_id and artifact_hashes
+    # differ (the last two may not even be known yet at build time).
     reproducible_view = {
         key: manifest[key]
         for key in ("dataset", "labels", "features", "training_config", "environment")
     }
     manifest["reproducibility_sha256"] = _stable_digest(reproducible_view)
+    # Derived from the content digest rather than a random/counter id, so the
+    # same inputs always yield the same experiment_id (and a changed input
+    # always yields a different one) without a second source of truth to
+    # keep in sync. Placed after the fields it's derived from, not folded
+    # into reproducible_view itself (it would be circular).
+    manifest["experiment_id"] = (
+        f"{artifact_suffix}-{manifest['generated_at'][:10].replace('-', '')}"
+        f"-{manifest['reproducibility_sha256'][:10]}"
+    )
     return manifest
 
 
@@ -293,6 +362,7 @@ def write_training_manifest(
 
 __all__ = [
     "LABEL_CONTRACT",
+    "MODEL_FAMILY",
     "REPRODUCIBILITY_PREDICTION_TOLERANCE",
     "build_training_manifest",
     "dataset_fingerprint",
@@ -300,5 +370,6 @@ __all__ = [
     "git_commit",
     "git_is_dirty",
     "label_contract_sha256",
+    "metric_contract_sha256",
     "write_training_manifest",
 ]

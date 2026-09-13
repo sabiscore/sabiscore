@@ -153,9 +153,11 @@ def test_walk_forward_validate_skips_invalid_records_without_changing_shape(tmp_
         "total_records",
         "rps_overall",
         "rps_std",
+        "rps_ci",
         "accuracy_overall",
         "brier_overall",
         "brier_decomposition",
+        "ece",
         "folds",
         "validated_at",
     }
@@ -172,6 +174,10 @@ def test_walk_forward_validate_skips_invalid_records_without_changing_shape(tmp_
     # comfortably above the 10-record decomposition floor.
     assert result["brier_decomposition"].get("skipped") is not True
     assert "mean" in result["brier_decomposition"]
+    assert result["ece"].get("skipped") is not True
+    assert "mean" in result["ece"]
+    assert result["rps_ci"].get("skipped") is not True
+    assert result["rps_ci"]["ci_lower"] <= result["rps_ci"]["point_estimate"] <= result["rps_ci"]["ci_upper"]
 
 
 def test_walk_forward_validate_skips_brier_decomposition_below_pooled_floor(tmp_path) -> None:
@@ -183,7 +189,44 @@ def test_walk_forward_validate_skips_brier_decomposition_below_pooled_floor(tmp_
 
     assert result["skipped"] is False
     assert result["brier_decomposition"]["skipped"] is True
+    # ECE and the RPS bootstrap CI share the exact same pooled-record floor as
+    # brier_decomposition (directive v7.3 P6) — below it, all three skip
+    # identically rather than two running on a sample too thin to bin.
+    assert result["ece"]["skipped"] is True
+    assert result["rps_ci"]["skipped"] is True
     assert "brier_overall" in result
+
+
+def test_walk_forward_validate_computes_ece_and_rps_bootstrap_ci_above_the_floor(tmp_path) -> None:
+    """Directive v7.3 P6: ECE and a block-bootstrap RPS CI, wired alongside
+    the existing Brier decomposition — same pooled sample, same floor.
+
+    60 records (50 pooled, at the default n_splits=5) rather than 20: block_bootstrap_ci's
+    own 10-row block_size needs several full blocks to resample meaningfully —
+    below that it degrades to a "note"-flagged zero-width point estimate
+    (block_bootstrap_ci's own documented behaviour, exercised directly by
+    test_metrics_m0.py; not re-tested here), which a smaller fixture hit.
+    """
+    registry = ModelRegistry(registry_path=str(tmp_path))
+    result = registry.walk_forward_validate(_synthetic_records(60), n_splits=5)
+
+    assert result["ece"].get("skipped") is not True
+    assert 0.0 <= result["ece"]["mean"] <= 1.0
+
+    ci = result["rps_ci"]
+    assert "note" not in ci
+    assert ci["n_bootstrap"] == 10_000
+    assert ci["ci_lower"] <= ci["point_estimate"] <= ci["ci_upper"]
+    assert 0.0 <= ci["point_estimate"] <= 1.0
+
+
+def test_walk_forward_validate_n_bootstrap_is_configurable(tmp_path) -> None:
+    """The default is 10,000 (directive v7.3 P6's explicit request); callers
+    who need fewer replicates for speed can still ask for them."""
+    registry = ModelRegistry(registry_path=str(tmp_path))
+    result = registry.walk_forward_validate(_synthetic_records(60), n_splits=5, n_bootstrap=500)
+
+    assert result["rps_ci"]["n_bootstrap"] == 500
 
 
 def test_walk_forward_validate_reports_no_valid_folds_for_invalid_records(tmp_path) -> None:

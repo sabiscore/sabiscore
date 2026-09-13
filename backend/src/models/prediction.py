@@ -104,6 +104,32 @@ _SUFFIXES = [
     "_model",
 ]
 
+# ── Stacking meta-model calibration labels ──────────────────────────────────
+#
+# Directive v7.3 P5 ("Serve-time calibration"): a calibrator that exists
+# offline but is not applied at inference is not production-calibrated.
+# `scripts/train_on_real_matches.py::_select_calibrator` always wraps the
+# fitted softmax head in one of these `src/core/meta_model.py` classes before
+# it is pickled — the artifact's `meta_model` key IS the calibrated model, not
+# a separate object. Keyed on the class NAME (a plain string) rather than an
+# import, so this module carries no dependency on `core.meta_model` — pickle
+# already resolved the real class by its own stored import path when the
+# artifact was loaded; this dict only has to name it for reporting.
+_META_MODEL_CALIBRATION_LABELS: Dict[str, str] = {
+    # The uncalibrated head. _select_calibrator's OWN baseline is always
+    # TemperatureScaledMetaModel (never bare), so seeing this in a live bundle
+    # means either an artifact trained before calibrator selection existed
+    # (the active v5_phase7 generation, shipped 2026-08-08, predates
+    # docs/DEBT.md item 64's 2026-09-09 fix) or calibration explicitly
+    # disabled — verified live, not assumed: still honestly reported as
+    # uncalibrated either way, never silently upgraded to "temperature".
+    "SoftmaxMetaModel": "none",
+    "TemperatureScaledMetaModel": "temperature",
+    "VectorScaledMetaModel": "vector",
+    "BetaCalibratedMetaModel": "beta",
+    "IsotonicMetaModel": "isotonic",
+}
+
 
 # ── Result type ────────────────────────────────────────────────────────────────
 
@@ -153,6 +179,7 @@ class _ArtifactBundle:
     calibrator: Optional[Any]
     overlay: Optional[Any]
     feature_columns: Optional[List[str]]
+    meta_model: Optional[Any]
     model_version: str = "unknown"
     generation: Optional[str] = None
     feature_schema_version: Optional[str] = None
@@ -332,6 +359,7 @@ class PredictionEngine:
                 calibrator=raw.get("calibrator"),
                 overlay=raw.get("bivariate_poisson_overlay"),
                 feature_columns=raw.get("feature_columns"),
+                meta_model=raw.get("meta_model"),
                 **(provenance or {}),
             )
         if callable(getattr(raw, "predict_proba", None)):
@@ -341,6 +369,7 @@ class PredictionEngine:
                 calibrator=None,
                 overlay=None,
                 feature_columns=None,
+                meta_model=None,
                 **(provenance or {}),
             )
         return None
@@ -403,9 +432,40 @@ class PredictionEngine:
         X = features.reshape(1, -1)
 
         # ── Raw ensemble prediction ────────────────────────────────────────
+        # Decided here, not guessed at the end: "none"/False is the honest
+        # default for every path that doesn't run the trained meta-model,
+        # overwritten only on a genuine stacked hit below.
+        calibration_method = "none"
+        calibration_applied = False
         try:
             if is_dict_artifact:
-                proba = self._ensemble_predict_dict(bundle.models_dict, X)
+                models_dict = bundle.models_dict
+                assert models_dict is not None  # guaranteed by is_dict_artifact
+                if bundle.meta_model is not None:
+                    try:
+                        proba = self._stacked_predict(models_dict, bundle.meta_model, X)
+                        calibration_method = _META_MODEL_CALIBRATION_LABELS.get(
+                            type(bundle.meta_model).__name__, "stacked_unknown"
+                        )
+                        calibration_applied = True
+                    except Exception as exc:
+                        # The artifact HAS a trained meta-model but running it
+                        # failed (shape mismatch, corrupt pickle field, a
+                        # dependency the calibrator needs but this runtime
+                        # lacks). Degrade to equal-weight averaging rather than
+                        # the harsher flat fallback below — a valid-but-
+                        # uncalibrated simplex from the real base learners on
+                        # real live evidence beats discarding that evidence.
+                        logger.warning(
+                            "PredictionEngine: stacked meta-model prediction failed "
+                            "for %s (falling back to equal-weight base-learner "
+                            "average): %s",
+                            league,
+                            redact_text(exc),
+                        )
+                        proba = self._ensemble_predict_dict(models_dict, X)
+                else:
+                    proba = self._ensemble_predict_dict(models_dict, X)
             else:
                 raw = bundle.direct_model.predict_proba(X)[0]
                 if len(raw) == 2:
@@ -430,8 +490,6 @@ class PredictionEngine:
             return self._fallback_result(input_dim=expected_dim)
 
         model_version = bundle.model_version
-        calibration_method = "none"
-        calibration_applied = False
         overlay_applied = False
 
         # ── Phase D+G: apply FittedCalibrator with OTel span ──────────────
@@ -557,7 +615,13 @@ class PredictionEngine:
 
     @staticmethod
     def _ensemble_predict_dict(models_dict: Dict[str, Any], X: np.ndarray) -> np.ndarray:
-        """Equal-weight average of all base learner class probabilities. Returns (1, 3)."""
+        """Equal-weight average of all base learner class probabilities. Returns (1, 3).
+
+        This is the no-meta-model fallback — a plain average of the base
+        learners, never stacked or calibrated. Used only when an artifact's
+        ``meta_model`` is absent or fails to run; see ``_stacked_predict`` for
+        the path that actually reproduces what training measured.
+        """
         all_probs: List[np.ndarray] = []
         for m in models_dict.values():
             try:
@@ -569,6 +633,49 @@ class PredictionEngine:
         if not all_probs:
             raise ValueError("no base learner returned a valid probability simplex")
         return np.mean(all_probs, axis=0)
+
+    @staticmethod
+    def _build_meta_features(models_dict: Dict[str, Any], X: np.ndarray) -> np.ndarray:
+        """Build the stacking meta-feature vector the trained meta-model expects.
+
+        Columns are grouped ``{name}_prob_home, {name}_prob_draw,
+        {name}_prob_away`` per base learner, in ``models_dict``'s own
+        iteration order (insertion order — preserved through pickling, never
+        re-sorted here). This must match two existing, independently-written
+        reproductions of the same layout exactly, or every served prediction
+        is silently wrong in a way the meta-model has no way to detect:
+        ``scripts/train_on_real_matches.py::_build_meta_features`` (what the
+        meta-model was actually trained and calibrated against) and
+        ``SabiScoreEnsemble._create_meta_features`` (the legacy ensemble class
+        that convention was itself copied from).
+        """
+        columns: List[np.ndarray] = []
+        for _, model in models_dict.items():
+            probs = np.asarray(model.predict_proba(X), dtype=np.float64)
+            columns.append(probs[:, 0:1])
+            columns.append(probs[:, 1:2])
+            columns.append(probs[:, 2:3])
+        return np.hstack(columns)
+
+    @staticmethod
+    def _stacked_predict(models_dict: Dict[str, Any], meta_model: Any, X: np.ndarray) -> np.ndarray:
+        """Run the trained stacking meta-model: base learners, then the fitted
+        (and, per ``_select_calibrator``, calibrated) meta-model over their
+        combined output.
+
+        This is what training and every offline evaluation report
+        (``reports/certification/temporal-evaluation.json``,
+        ``scripts/compare_candidate_vs_incumbent.py``) actually measured.
+        Skipping straight to ``_ensemble_predict_dict``'s equal-weight average
+        serves a different, unevaluated, uncalibrated model instead — the
+        exact "calibrator exists offline but is not applied at inference"
+        failure directive v7.3 P5 names.
+        """
+        meta_features = PredictionEngine._build_meta_features(models_dict, X)
+        proba = np.asarray(meta_model.predict_proba(meta_features), dtype=np.float64)
+        if proba.ndim == 1:
+            proba = proba.reshape(1, -1)
+        return proba
 
     @staticmethod
     def _fallback_result(input_dim: int) -> PredictionResult:
@@ -652,9 +759,11 @@ class PredictionEngine:
         """Prime request-path cache from a model already validated at startup.
 
         The active v5 generation is loaded eagerly through ``SabiScoreEnsemble``
-        during FastAPI startup. Reusing its base learners here avoids deserializing
-        the same large artifact again on the first request while preserving the
-        PredictionEngine's equal-weight base-learner semantics and manifest
+        during FastAPI startup. Reusing its base learners (AND its fitted
+        ``meta_model`` — see directive v7.3 P5, "serve-time calibration": a
+        calibrator that exists offline but isn't applied at inference isn't
+        production-calibrated) here avoids deserializing the same large
+        artifact again on the first request while preserving manifest
         provenance.
 
         Future generations may carry calibrators/overlays that the startup wrapper
@@ -699,10 +808,13 @@ class PredictionEngine:
         models_dict = getattr(model, "models", None)
         if not isinstance(model, dict) and isinstance(models_dict, dict) and models_dict:
             raw = {
-                # Copy only lightweight containers. Estimator objects remain shared
-                # with the strict startup model, eliminating a second deserialization.
+                # Copy only lightweight containers/references. Estimator
+                # objects (including meta_model) remain shared with the
+                # strict startup model, eliminating a second
+                # deserialization — not a second copy of a trained object.
                 "models": dict(models_dict),
                 "feature_columns": list(getattr(model, "feature_columns", []) or []),
+                "meta_model": getattr(model, "meta_model", None),
             }
 
         bundle = cls._wrap_artifact(raw, slug, "<startup>", provenance=provenance)
@@ -714,6 +826,7 @@ class PredictionEngine:
                 calibrator=None,
                 overlay=None,
                 feature_columns=None,
+                meta_model=None,
                 **(provenance or {}),
             )
             if bundle.direct_model is None:

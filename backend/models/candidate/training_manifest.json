@@ -1,4 +1,6 @@
 {
+  "artifact_hashes": null,
+  "certification_policy_sha256": "f823648253fc2708fc676b5fe25da807d3393d25a62bf80a3085508f130908f8",
   "dataset": {
     "auxiliary": {},
     "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
@@ -203,15 +205,17 @@
     "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.14.6"
   },
+  "experiment_id": "v5_phase7-20260913-46c5d2fd44",
   "features": {
     "feature_contract_sha256": "2f80df948bb52e0a1f746271573c3b448fd6be23f322b2c988cf6d3a98076288",
     "feature_count": 68,
     "feature_schema_version": "apex_v1_68",
     "order_sha256": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338"
   },
-  "generated_at": "2026-09-09T21:32:34.702190+00:00",
+  "generated_at": "2026-09-13T00:42:21.755043+00:00",
+  "generation_id": null,
   "git": {
-    "commit": "ec0fc22620d68c8eeace7cc68b46344a3a52dc73",
+    "commit": "037bbb38d3d0de14b30f03a7621228974679978a",
     "dirty": true
   },
   "labels": {
@@ -908,6 +912,27 @@
         "start": "2019-09-28"
       }
     }
+  },
+  "metric_contract_sha256": "7316be7c237fd02a7f35ad73d30b5f744b2cbc24d6b61b66615ea2f5a2c61c73",
+  "model_family": {
+    "architecture": "stacking_ensemble",
+    "base_learners": [
+      "random_forest",
+      "xgboost",
+      "lightgbm"
+    ],
+    "calibration_candidates": [
+      "temperature",
+      "vector",
+      "beta",
+      "isotonic"
+    ],
+    "meta_model": "logistic_regression",
+    "source": "scripts/train_on_real_matches.py"
+  },
+  "provider_versions": {
+    "mode": "offline_corpus",
+    "note": "Training reads cached football-data.co.uk CSV snapshots (see dataset.dataset_sha256 for exact corpus identity); there is no live provider API call at training time, so no API version string applies. The dataset content hash is a stronger per-exact-corpus identity than a provider version number would be."
   },
   "reproducibility_sha256": "46c5d2fd44638d537ae461eda11d97dfe2be35a15cd33b48c3c9d79539e416fb",
   "schema": "sabiscore_training_manifest_v1",

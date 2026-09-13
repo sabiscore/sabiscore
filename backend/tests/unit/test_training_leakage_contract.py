@@ -372,3 +372,113 @@ def test_reproducibility_digest_ignores_wall_clock():
     b = build_training_manifest(**kwargs)
     assert a["generated_at"] != b["generated_at"] or True  # timestamps may tie
     assert a["reproducibility_sha256"] == b["reproducibility_sha256"]
+
+
+# ── Directive v7.3 P4: per-experiment record completeness ─────────────────────
+#
+# A manifest that is merely reproducible is not yet a certification-grade
+# experiment record (Production Execution & Certification Directive v7.3, §18
+# P4): it must also cite the policy and metric contract it will be judged
+# against, name its own architecture, and carry an id that survives being
+# copied out of its generated_at timestamp. The module docstring already
+# promised certification-policy and metric-contract citation by hash before
+# the code here delivered it — these tests pin the delivery, not just the
+# promise.
+
+
+def _manifest_kwargs(**overrides: object) -> dict:
+    base = dict(
+        cache_dir=BACKEND_ROOT / "data" / "cache",
+        feature_schema_version="apex_v1_68",
+        feature_names=list(train_mod.APEX_FEATURES_68),
+        feature_contract_sha256="deadbeef",
+        holdout_season="2425",
+        seed=42,
+        tune_trials=0,
+        leagues={},
+        artifact_suffix="v5_phase7",
+    )
+    base.update(overrides)
+    return base
+
+
+def test_manifest_cites_certification_policy_and_metric_contract_by_hash():
+    """The two hashes the module docstring promises must actually be present."""
+    from src.models.certification_policy import policy_sha256
+    from src.models.training_manifest import build_training_manifest, metric_contract_sha256
+
+    manifest = build_training_manifest(**_manifest_kwargs())
+
+    assert manifest["certification_policy_sha256"] == policy_sha256()
+    # The real contract file ships in this repo, so the digest must resolve —
+    # None here would mean the citation silently failed, not that it's unowed.
+    assert manifest["metric_contract_sha256"] == metric_contract_sha256()
+    assert manifest["metric_contract_sha256"] is not None
+
+
+def test_manifest_records_model_family():
+    """The trained architecture is a named contract, not an implicit fact."""
+    from src.models.training_manifest import MODEL_FAMILY, build_training_manifest
+
+    manifest = build_training_manifest(**_manifest_kwargs())
+
+    assert manifest["model_family"] == MODEL_FAMILY
+    assert manifest["model_family"]["meta_model"] == "logistic_regression"
+    assert set(manifest["model_family"]["base_learners"]) == {
+        "random_forest",
+        "xgboost",
+        "lightgbm",
+    }
+
+
+def test_provider_versions_documents_offline_corpus_mode():
+    """Absence of a live provider call is a stated fact, not an omitted key."""
+    from src.models.training_manifest import build_training_manifest
+
+    manifest = build_training_manifest(**_manifest_kwargs())
+
+    assert manifest["provider_versions"]["mode"] == "offline_corpus"
+    assert "dataset_sha256" in manifest["provider_versions"]["note"]
+
+
+def test_experiment_id_is_deterministic_and_content_sensitive():
+    """Same inputs -> same id; a changed input -> a different id.
+
+    Mirrors test_reproducibility_digest_covers_every_input_field's logic: an id
+    derived from content that doesn't actually move when the content changes
+    is worse than no id.
+    """
+    from src.models.training_manifest import build_training_manifest
+
+    a = build_training_manifest(**_manifest_kwargs())
+    b = build_training_manifest(**_manifest_kwargs())
+    assert a["experiment_id"] == b["experiment_id"]
+    assert a["experiment_id"].startswith("v5_phase7-")
+    assert a["reproducibility_sha256"][:10] in a["experiment_id"]
+
+    c = build_training_manifest(**_manifest_kwargs(seed=43))
+    assert c["experiment_id"] != a["experiment_id"]
+
+
+def test_generation_id_and_artifact_hashes_default_to_none_and_never_fabricate():
+    """Post-hoc promotion fields stay honestly absent until a caller knows them.
+
+    And, once supplied, they must not move the reproducibility digest: a later
+    promotion decision cannot retroactively change what "the same training run"
+    means.
+    """
+    from src.models.training_manifest import build_training_manifest
+
+    bare = build_training_manifest(**_manifest_kwargs())
+    assert bare["generation_id"] is None
+    assert bare["artifact_hashes"] is None
+
+    promoted = build_training_manifest(
+        **_manifest_kwargs(
+            generation_id="v5_phase7-20260909",
+            artifact_hashes={"epl": "abc123"},
+        )
+    )
+    assert promoted["generation_id"] == "v5_phase7-20260909"
+    assert promoted["artifact_hashes"] == {"epl": "abc123"}
+    assert promoted["reproducibility_sha256"] == bare["reproducibility_sha256"]

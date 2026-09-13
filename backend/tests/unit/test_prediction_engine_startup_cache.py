@@ -25,9 +25,10 @@ class _Learner:
 
 
 class _StartupEnsemble:
-    def __init__(self) -> None:
+    def __init__(self, meta_model=None) -> None:
         self.models = {"rf": _Learner()}
         self.feature_columns = ["elo_home", "elo_away"]
+        self.meta_model = meta_model
 
 
 def _generation(version: str = "v5_phase7") -> dict:
@@ -100,6 +101,41 @@ def test_startup_primed_bundle_preserves_prediction_semantics() -> None:
     assert result.manifest_sha256 == "manifest-sha"
     assert result.artifact_sha256 == "artifact-sha"
     assert result.certification_state == "UNVERIFIED"
+
+    PredictionEngine.clear_cache()
+
+
+def test_startup_priming_preserves_the_meta_model_for_calibrated_serving() -> None:
+    """Directive v7.3 P5: startup priming copied ``models``/``feature_columns``
+    out of the already-loaded SabiScoreEnsemble but dropped ``meta_model`` —
+    the trained, calibrated stacking head would exist in memory, right there
+    on the startup object, and still never reach a live prediction. This pins
+    that the primed bundle carries it through."""
+    PredictionEngine.clear_cache()
+
+    class _MetaModel:
+        def predict_proba(self, X: np.ndarray) -> np.ndarray:
+            assert X.shape == (1, 3)  # one learner -> 3 meta-feature columns
+            return np.array([[0.70, 0.10, 0.20]])
+
+    meta_model = _MetaModel()
+    startup_model = _StartupEnsemble(meta_model=meta_model)
+    assert PredictionEngine.prime_cache("EPL", startup_model, generation=_generation())
+
+    bundle = asyncio.run(PredictionEngine()._load_model("EPL"))
+    assert bundle is not None
+    assert bundle.meta_model is meta_model
+
+    result = asyncio.run(
+        PredictionEngine().predict(
+            features=np.array([1500.0, 1500.0], dtype=np.float32),
+            league="EPL",
+        )
+    )
+    assert result.home_win == 0.70
+    assert result.draw == 0.10
+    assert result.away_win == 0.20
+    assert result.calibration_applied is True
 
     PredictionEngine.clear_cache()
 
