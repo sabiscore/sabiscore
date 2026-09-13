@@ -57,6 +57,9 @@ export class PublicHttpClient {
         terminalError = new Error(
           `crawl_failed url=${new URL(request.url).origin} attempts=${request.retryCount + 1} reason=${error?.name ?? "Error"}`
         );
+        // Structured attempt count for callers building DLQ/manifest records —
+        // the message above is for humans, this is for machines (P10 DLQ enrichment).
+        terminalError.attempts = request.retryCount + 1;
       },
     };
     const configuration = new Configuration({ persistStorage: false });

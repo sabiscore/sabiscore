@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Next.js ISR Revalidation API
- * 
- * Allows backend to trigger on-demand revalidation when match data updates.
- * Called by WebSocket layer when goals/odds change requiring fresh renders.
- * 
+ *
+ * Allows the backend to trigger on-demand revalidation when match data
+ * updates. Called by backend/src/api/websocket.py's trigger_isr_revalidation()
+ * on a goal event (NOT apps/ws, a standalone stub removed 2026-09-13 — see
+ * docs/adr/0006-remove-apps-ws.md). That caller is currently a no-op in
+ * production: NEXT_URL/REVALIDATE_SECRET are unset in render.yaml, so its own
+ * fail-closed guard skips the HTTP call every time (see docs/DEBT.md).
+ *
  * Usage: POST /api/revalidate with { secret, path }
  */
 export async function POST(request: NextRequest) {

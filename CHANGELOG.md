@@ -5,6 +5,45 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Directive v7.3 P9-P11: betting-safety re-verified, scraper DLQ enrichment, apps/ws removed (2026-09-13)
+
+### Verified (no change needed)
+
+- P9 Betting Safety: no `EXECUTE_BET` symbol anywhere in `backend/src`, UCL
+  hard-capped below `HIGH_CONVICTION` in both `betting_intelligence.py` and
+  `core_engine.py` (dual-engine rule), `stake_permitted=False` gating intact.
+- P10 idempotency, retry (crawlee capped backoff+jitter), and OG-04's
+  scraper-activation gate — confirmed genuine defense-in-depth (two
+  independent operator-only switches).
+
+### Fixed / Added
+
+- `apps/scraper`: manifest `errors[]` entries now carry
+  `failure.attempt_count`/`first_attempt_at`/`last_attempt_at` for
+  acquisition failures (P10 DLQ observability). `summarizeResults()` moved
+  from `cli.mjs` into `storage.mjs` for testability. 3 new tests
+  (`storage.test.mjs`, 23/23 passing).
+- **Removed `apps/ws`** (OG-02, operator-approved) — a WebSocket echo stub,
+  never deployed (absent from `render.yaml`), never consumed (no client in
+  `apps/web`), and redundant with the real, more complete real-time layer
+  already mounted in the canonical backend (`backend/src/api/websocket.py`).
+  See `docs/adr/0010-remove-apps-ws.md`. Also removed: `pnpm-workspace.yaml`'s
+  `apps/ws` entry, `docker-compose.prod.yml`'s `ws:` service block,
+  `turbo.json`'s unused `NEXT_PUBLIC_WS_URL`.
+
+### Found (not fixed — recorded as debt)
+
+- `docs/DEBT.md` item 93: `apps/scraper/src/safety.mjs`'s `CircuitBreaker`/
+  `RateLimiter` have zero callers anywhere — resolves a named "genuinely
+  unconfirmed lead" from `PRODUCTION_EXECUTIVE_DIRECTIVE.md` §15.3.7.
+- `docs/DEBT.md` item 94: investigating the `apps/ws` removal surfaced that
+  `backend/src/api/websocket.py`'s real-time layer — wired, mounted,
+  deployed — is dormant end-to-end: no producer publishes to the Redis
+  channel it subscribes to, no frontend consumer connects to it, and its
+  `trigger_isr_revalidation()` callback is unconditionally inert in
+  production (`NEXT_URL`/`REVALIDATE_SECRET` unset in `render.yaml`).
+  Turning it on is a product decision, not an infrastructure fix.
+
 ## Unreleased - Production telemetry audit: Sentry is not instrumented (2026-09-09)
 
 Documentation only. No code, dependency, config, or serving path changed.

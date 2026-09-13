@@ -1,5 +1,170 @@
 # SabiScore Debt Ledger
 
+## 95. `backend/src/connectors/{base,betfair,opta,pinnacle,statsbomb_open,understat_source,football_data_org}.py` have zero live importers — a second, mostly-dead connector tree
+
+**Tier:** `LATER` — code hygiene, not a defect; nothing live is affected.
+**Owner:** unassigned. **Found:** 2026-09-13, while verifying P12's "provider
+gateway uses one lifespan `httpx.AsyncClient`, never per-request" invariant —
+`connectors/base.py`'s `BaseConnector.__init__` constructs `self._client =
+httpx.AsyncClient(...)` per instance, which would matter if anything live
+instantiated it.
+
+A repo-wide import search (`src` + `scripts`) found only two live importers
+out of nine files in this tree: `connectors/source_registry.py` (imported by
+`api/main.py:303` for a v4-registry summary) and `connectors/odds_market.py`
+(imported by `services/market_intel.py` and `features/
+phase9_xg_market_features.py` — pure dataclass/math, no network client, no
+relation to `base.py`). The other seven — `base.py`, `betfair.py`, `opta.py`,
+`pinnacle.py`, `statsbomb_open.py`, `understat_source.py`,
+`football_data_org.py` — have **zero importers anywhere**. Since nothing
+live ever constructs a `BaseConnector` subclass, `base.py`'s per-instance
+client cannot violate the single-lifespan-client rule in practice — the rule
+holds for the path that actually runs requests (`providers/base.py`'s
+`_get_json`, which correctly prefers an injected `self._http_client` and
+falls back to a scoped `async with httpx.AsyncClient(...)` only when none was
+injected).
+
+This looks like an earlier or parallel provider-integration attempt
+(`connectors/`) that the live gateway (`providers/`) superseded, plus at
+least one genuinely separate concern: the very recent Understat/StatsBomb
+backfill work (`docs/DEBT.md`'s own PR #140/#153 entries in `CLAUDE.md`,
+2026-09-03/04) reads live from `soccerdata` directly in standalone
+`backend/scripts/` tooling, not through `connectors/understat_source.py` or
+`connectors/statsbomb_open.py` — so those two specifically may be an earlier,
+now-superseded draft of the same integration, not merely unrelated dead code.
+Not confirmed further this session; not in scope for the P12 check that
+surfaced it.
+
+**Blast radius:** none — dead code, zero live callers.
+**Trigger to revisit:** before any Pinnacle/Betfair/Opta integration is
+actually planned (confirm whether to resume this tree or start clean), or as
+part of a general dead-code sweep alongside the already-known `apps/api/`
+and `frontend/` legacy surfaces (both still on disk, both confirmed absent
+from CI/Docker/workspace config — see `docs/adr/0010-remove-apps-ws.md`).
+**Cost:** low if deleted (no live callers to break); a full audit to confirm
+`statsbomb_open.py`/`understat_source.py` are truly superseded (not just
+unreferenced from `src`) is a small follow-up, not done here.
+**Priority:** low.
+
+## 94. `backend/src/api/websocket.py`'s real-time layer is wired and deployed but dormant end-to-end — no producer, and its ISR-revalidation callback is unconditionally inert in production
+
+**Tier:** `LATER` — a product decision (does SabiScore want live push?) is the
+actual blocker, not an engineering task. **Owner:** unassigned. **Found:**
+2026-09-13, while investigating the `apps/ws` OG-02 build-vs-remove decision
+(`docs/adr/0010-remove-apps-ws.md`) — this module is what made removing
+`apps/ws` unambiguous (it already does the real thing, more completely), but
+investigating it surfaced that it is itself not doing anything live either.
+
+`backend/src/api/websocket.py` is mounted in the canonical backend
+(`app.include_router(ws_router, ...)` in `main.py:520`) and exposes
+`/ws/edge/{match_id}` with a real `ConnectionManager`, Redis-pub/sub
+subscription for match events, polling loops for xG (`CacheKeys.xg_chain`)
+and odds, and an `EdgeDetector`-driven alert broadcast. Two independent gaps
+mean none of it currently does anything in production:
+
+1. **No producer.** A repo-wide search for anything that publishes to the
+   `match_events:{match_id}` Redis channel this module subscribes to returns
+   nothing — only `websocket.py` itself references that channel name. A
+   client connecting to `/ws/edge/{match_id}` gets one `{"type":"connected"}`
+   acknowledgment and then silence; `stream_match_events`/`stream_xg_updates`/
+   `stream_odds_updates` poll or listen for data that nothing ever writes.
+2. **No consumer.** A repo-wide search of `apps/web/src` for `new
+   WebSocket(`, `ws://`, or `wss://` found zero matches — nothing in the
+   frontend ever opens a connection to this endpoint.
+3. **The one side-effect that doesn't need a client is also inert.**
+   `trigger_isr_revalidation()` — meant to fire on a goal event regardless of
+   whether anyone is connected — reads `settings.next_url` (`NEXT_URL`,
+   defaults to `http://localhost:3000`) and `settings.revalidate_secret`
+   (`REVALIDATE_SECRET`, defaults to `None`). Neither is set in `render.yaml`.
+   Its own guard (`if not revalidate_secret: logger.warning(...); return`) is
+   deliberately fail-closed and is tested
+   (`backend/tests/unit/test_isr_revalidation.py`) — but the *happy path*
+   (an actual POST to `apps/web`'s `/api/revalidate`) has no test and, per (1),
+   would never fire today even with the secret configured, because nothing
+   publishes the goal event that would trigger it.
+
+**Why not fixed now:** this isn't a bug to patch — it's real, tested,
+deployed infrastructure waiting for a producer that was never built. Wiring
+one means deciding *what* publishes to `match_events:{match_id}` (a live
+score-ingestion poller? a provider webhook? re-using `fixture_sync_service`'s
+cadence?) and confirming the product actually wants sub-second live push
+(everything else in this codebase — full-analysis, upcoming matches,
+performance — is deliberately request/response + React Query polling, per
+the entire history in `CLAUDE.md`). That's a scope decision for an operator,
+not a "smallest safe diff."
+
+**Trigger to revisit:** a product decision to ship live in-match updates
+(goals/odds/edge alerts) on the match page. At that point: (a) set
+`NEXT_URL`/`REVALIDATE_SECRET` in `render.yaml`, (b) build whatever publishes
+to `match_events:{match_id}`, (c) add a frontend WebSocket client, (d) add a
+regression test for `trigger_isr_revalidation()`'s happy path (currently only
+the no-op path is tested).
+**Blast radius:** none today — dormant code has no live effect either way.
+**Cost:** a real, multi-part feature (producer + config + frontend client),
+not a quick fix.
+**Priority:** low until the product decision is made.
+
+## 93. Scraper's `CircuitBreaker`/`RateLimiter`/`isAllowedByRobots` are exported and partly tested but have zero callers — directive §15.3.7 forensic lead CONFIRMED, no action taken
+
+**Tier:** `LATER` — confirmed dead code, but nothing is broken and no operator
+decision is forced by this finding. **Owner:** unassigned. **Found:**
+2026-09-13, during a directive v7.3 P1/P10 review resolving a named
+"genuinely unconfirmed lead" from `PRODUCTION_EXECUTIVE_DIRECTIVE.md` §15.3.7
+("the scraper resilience/circuit-breaker manager may be exported but never
+called at runtime"). That lead is now **CONFIRMED TRUE**, not hypothetical.
+
+`apps/scraper/src/safety.mjs` exports `RateLimiter`, `CircuitBreaker`,
+`isAllowedByRobots`, and `parseRobotsAllow`. A repo-wide grep for any import of
+`./safety` (or `../safety`) inside `apps/scraper/src` returns zero matches.
+The only file that references the module at all is
+`apps/scraper/tests/parsers.test.mjs`, which imports `parseRobotsAllow`
+directly and separately does `import * as safety` only to assert a negative
+(`'rotateUserAgent' in safety === false`) — `CircuitBreaker` and `RateLimiter`
+have **no test coverage and no callers anywhere**, live or test.
+
+The actual live HTTP path (`PublicHttpClient` in `http.mjs`, a thin wrapper
+around crawlee's `HttpCrawler`) never imports `safety.mjs` either. It gets
+functionally equivalent coverage from crawlee's own config instead:
+`maxRequestRetries` and a custom `errorHandler` (capped exponential backoff,
+250ms·2^retryCount up to 2s, plus jitter) cover retry; `maxRequestsPerMinute`
+and `sameDomainDelaySecs` cover rate limiting; `respectRobotsTxtFile: true`
+covers robots enforcement; `retryOnBlocked: false` fails fast on a blocked
+response instead of continuing to hammer it. None of this is a true
+**cross-run** circuit breaker (each cron invocation is a fresh container/process,
+so an in-memory `CircuitBreaker` instance would not persist between the
+twice-weekly scheduled runs even if it were wired in) — but nothing today
+demonstrates that gap causing harm: the source list is one well-behaved CSV
+host, `maxRetries: 2` bounds each run's own damage, and production execution
+is still independently gated off by item 18's two-flag defense-in-depth.
+
+**Classification (directive §15.2):** `NOT_JUSTIFIED` to wire in as-is. Wiring
+an in-memory `CircuitBreaker` per crawler run would protect against a failure
+mode (repeated within-run retries against an already-failing host) that
+`maxRequestRetries`+`retryOnBlocked:false` already bound; wiring a *meaningful*
+cross-run breaker needs a persistence decision (where does breaker state live
+between separate container invocations?) that nothing here currently asks for.
+Not classified `NEEDS_REPLACEMENT` — nothing is broken.
+
+**Options recorded, neither executed:** (a) delete `CircuitBreaker`/
+`RateLimiter`/`isAllowedByRobots` as confirmed dead code (keep
+`parseRobotsAllow`, which is tested and cheap to keep even unused), since
+crawlee already supersedes their function on the only live path; (b) wire a
+real cross-run breaker, keyed per `source.id` and persisted somewhere the CLI
+can read between scheduled runs, if/when a second or third scraped source is
+added and a genuinely-dead source could otherwise be retried every cron tick
+indefinitely. Neither was applied this session — this is a documentation-only
+finding, matching the surgical-change policy (§39): no evidence of harm, no
+unrequested deletion or rewrite.
+
+**Blast radius:** none — the dead code has no live-path effect either way.
+**Trigger to revisit:** before OG-05 (scraper cadence increase) or before a
+second scraped source is added to `source-registry.json`, whichever comes
+first — that is when a cross-run breaker's value proposition stops being
+hypothetical.
+**Cost:** near-zero either way (~70 lines to delete, or a small wiring change
+plus a persistence decision if built instead).
+**Priority:** low.
+
 ## 92. A calibration-method tooltip fabricated "isotonic" on a type-impossible null — FIXED 2026-09-13
 
 **Tier:** `RESOLVED`. **Found:** 2026-09-13, during a directive v7.3 P8
@@ -7732,7 +7897,59 @@ done and tested. `--apply`, done and verified.
 
 ---
 
-## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **key rotation now confirmed working, 2026-08-17**
+## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **REGRESSED 2026-09-13: live production again reports HTTP 401**
+
+**⚠️ Status correction, 2026-09-13 (directive v7.3 P16 deployment-integrity
+check):** the 2026-08-17 "RESOLVED" verdict below is **contradicted by fresh
+live evidence** and must not be treated as current truth (§1.2's own
+historical-fact rule — a provider-behavior claim is always a revalidation
+target). Querying the live production health surface today
+(`https://web-oversabis-projects.vercel.app/api/health`, backend
+`sha:471a9ac`) returned:
+
+```
+"The Odds API": "UNAVAILABLE (authentication error, HTTP 401)"
+```
+
+This is the identical symptom the original 2026-08-13/14 incident named, a
+full month after it was independently confirmed fixed with real evidence
+(cache hits, real `market_snapshots` rows, `clv_capture.outcome: "ok"`).
+**Not diagnosed further this session** — reading it required only a health
+probe, no database or Render-console access, and root-causing it needs one
+of: the key expired/was revoked at the-odds-api.com, a subscription/billing
+lapse on that account, or a Render env var reverted/was never actually
+updated after the 2026-08-17 rotation. All three are **operator-console-only
+actions** (rotate the key at the-odds-api.com, confirm the Render env var,
+or renew billing) — no code in this repository can fix an external
+provider's authentication rejection. The request/auth code itself was
+already confirmed correct in the original 2026-08-14 finding (no truncation,
+no mis-naming, `AliasChoices` accepts both key env var names) and nothing
+in this repo's provider code has changed since.
+
+**Consequence, confirmed live in the same probe:** `market.lifecycle` odds
+matching (PR #106, 2026-08-29) and CLV capture (ADR-0004/WP-15) both
+correctly degrade — they have no live odds board to work with when the
+provider is unauthenticated — so **fixtures without another odds source are
+currently falling back to `COHERENT_1X2_MARKET_UNAVAILABLE`** exactly as
+designed for a genuinely offline provider (fail-closed, not fabricated).
+This is the correct behavior for an authentication failure; it does not
+need a code change, only the operator action above.
+**Also observed in the same probe, unrelated:** `football_data_org` reports
+`DEGRADED (6,351 observations, 3 remaining quota)` — free-tier quota
+pressure, not an authentication failure; self-resolves on the provider's
+quota reset cadence and needs no action unless it recurs persistently.
+
+**Trigger to close again:** an operator confirms the key/subscription is
+valid at the-odds-api.com and the Render env var matches, then a repeat of
+this same health probe reads `VERIFIED`/`CONFIGURED_UNVERIFIED` instead of
+`UNAVAILABLE`.
+
+---
+
+**Everything below this line is the 2026-08-17 finding, kept verbatim as the
+historical record per this ledger's append-only convention — it is why the
+tier below still says "RESOLVED" even though the correction above supersedes
+it as of 2026-09-13.**
 
 **Tier:** log leak = `FIXED`. Key validity = `RESOLVED` — confirmed via live
 production evidence, not just an operator report. CLV capture (item 6) is
@@ -8040,6 +8257,28 @@ Code readiness exists; operational approval and secrets enablement do not.
 **Release impact:** none for current API runtime while disabled.
 **Risk if prematurely enabled:** unapproved source ingestion and uncontrolled
 artifact retention/cost.
+
+**Re-verified 2026-09-13** (directive v7.3 P10 review) against the live files,
+not just re-read: this gate is **defense-in-depth, not a single flag**. Two
+independent checks must both be flipped by an operator before any HTTP request
+leaves the container: (1) `run-production-worker.sh` reads
+`SCRAPER_PRODUCTION_ENABLED` and no-ops with a structured
+`{"status":"SKIPPED",...}` (exit 0) when it isn't `"true"` — confirmed live in
+the script, not assumed from the env var name; (2)
+`FootballDataAdapter._enforceSourcePolicy()` separately requires
+`source-registry.json`'s `footballData.productionActivation === "approved"`
+(currently `"operator_approval_required"`) before it will fetch anything, even
+if the worker-level flag were ever flipped in isolation. The worker script also
+fails closed with a structured `exit 78` when `SABISCORE_ARTIFACT_BUCKET` or
+`DATABASE_URL` is unset, and on success hands the freshly-written manifest to
+`python -m src.cli ingest manifest ... --commit` — this is live confirmation of
+the "apps/scraper → S3 → Python reconciliation" topology named in
+`PRODUCTION_EXECUTIVE_DIRECTIVE.md` §15.3.3, not merely a historical claim.
+`render.yaml`'s cron schedule (`0 3 * * 1,4`) and `source-registry.json`'s
+`cadence` field agree — no drift between the two declarations. No code
+changed; this paragraph only upgrades the entry from a 2026-08-10 read to a
+line-by-line re-verification. See item 93 for a related, previously-unresolved
+question this same review closed out.
 
 ## 14. Apex candidate artifacts are quarantined and not certified
 

@@ -104,37 +104,6 @@ services:
       - "prometheus.port=8000"
       - "prometheus.path=/metrics"
 
-  # WebSocket Server (4 replicas for live updates)
-  ws:
-    build:
-      context: ./apps/ws
-      dockerfile: Dockerfile
-      target: production
-    image: sabiscore-ws:latest
-    deploy:
-      replicas: 4
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-    environment:
-      - REDIS_URL=redis://redis:6379/1
-      - WS_PORT=8001
-    ports:
-      - "8001:8001"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - sabiscore-network
-
   # Redis Cache (3 replicas with sentinel for HA)
   redis:
     image: redis:7-alpine
