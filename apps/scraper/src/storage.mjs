@@ -269,3 +269,33 @@ export async function probeImmutableStorage(dependencies = {}) {
 export async function readFixture(path) {
   return readFile(path, "utf8");
 }
+
+// Shapes per-league scrape() results into the summary fields writeManifest()
+// spreads into a run record. Pure/no I/O — lives here (not cli.mjs) so it can
+// be unit-tested without triggering the CLI's top-level command dispatch.
+export function summarizeResults(results) {
+  const rawFiles = [];
+  const processedFiles = [];
+  const payloadHashes = {};
+  let recordCount = 0;
+  const errors = [];
+
+  for (const result of results) {
+    if (result.artifacts?.raw) rawFiles.push(result.artifacts.raw);
+    if (result.artifacts?.fixtures) processedFiles.push(result.artifacts.fixtures);
+    if (result.artifacts?.team_form) processedFiles.push(result.artifacts.team_form);
+    Object.assign(payloadHashes, result.payload_hashes ?? {});
+    recordCount += Number(result.fixtures ?? result.rows ?? 0);
+    if (result.skipped) {
+      errors.push({
+        league: result.league,
+        reason: result.reason,
+        // P10 DLQ enrichment: only acquisition failures carry attempt/timing
+        // detail (policy skips like "unsupported_league" have neither).
+        ...(result.failure ? { failure: result.failure } : {}),
+      });
+    }
+  }
+
+  return { rawFiles, processedFiles, payloadHashes, recordCount, errors };
+}

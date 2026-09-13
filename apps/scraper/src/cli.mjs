@@ -11,29 +11,11 @@ import {
   probeImmutableStorage,
   readFixture,
   storageFailureReport,
+  summarizeResults,
   writeManifest,
 } from "./storage.mjs";
 
 const command = process.argv[2] ?? "validate";
-
-function summarizeResults(results) {
-  const rawFiles = [];
-  const processedFiles = [];
-  const payloadHashes = {};
-  let recordCount = 0;
-  const errors = [];
-
-  for (const result of results) {
-    if (result.artifacts?.raw) rawFiles.push(result.artifacts.raw);
-    if (result.artifacts?.fixtures) processedFiles.push(result.artifacts.fixtures);
-    if (result.artifacts?.team_form) processedFiles.push(result.artifacts.team_form);
-    Object.assign(payloadHashes, result.payload_hashes ?? {});
-    recordCount += Number(result.fixtures ?? result.rows ?? 0);
-    if (result.skipped) errors.push({ league: result.league, reason: result.reason });
-  }
-
-  return { rawFiles, processedFiles, payloadHashes, recordCount, errors };
-}
 
 async function scrape({ adapterKind = "fixtures" } = {}) {
   await ensureStorage();
@@ -68,6 +50,7 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
       results.push({ league, skipped: true, reason: `${adapterKind}_adapter_disabled`, zero_paid_api: true });
       continue;
     }
+    const firstAttemptAt = new Date().toISOString();
     try {
       results.push(await adapter.scrapeLeague({
         league, leagueCode, seasonCode, fixtureText, runId, acquiredAt
@@ -85,6 +68,12 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
         failure: {
           type: error instanceof Error ? error.name : "Error",
           retryable: false,
+          // P10 DLQ enrichment: attempt_count comes from http.mjs's
+          // failedRequestHandler when the failure was an HTTP crawl (absent —
+          // defaults to 1 — for a non-HTTP failure, e.g. a parser/schema error).
+          attempt_count: Number(error?.attempts ?? 1),
+          first_attempt_at: firstAttemptAt,
+          last_attempt_at: new Date().toISOString(),
         },
       });
     }

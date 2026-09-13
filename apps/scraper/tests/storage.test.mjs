@@ -7,6 +7,7 @@ import {
   probeImmutableStorage,
   putS3Object,
   storageFailureReport,
+  summarizeResults,
   writeManifest,
   writeRaw,
 } from "../src/storage.mjs";
@@ -175,3 +176,60 @@ test("fixed-context storage probe verifies deduplication, checksum, and conflict
     assert.equal(client.objects.size, 1);
   },
 ));
+
+test("summarizeResults carries DLQ attempt/timing detail for acquisition failures", () => {
+  const summary = summarizeResults([
+    {
+      league: "EPL",
+      skipped: true,
+      reason: "acquisition_failed",
+      failure: {
+        type: "Error",
+        retryable: false,
+        attempt_count: 3,
+        first_attempt_at: "2026-09-13T03:00:00.000Z",
+        last_attempt_at: "2026-09-13T03:00:05.000Z",
+      },
+    },
+  ]);
+  assert.equal(summary.errors.length, 1);
+  assert.deepEqual(summary.errors[0], {
+    league: "EPL",
+    reason: "acquisition_failed",
+    failure: {
+      type: "Error",
+      retryable: false,
+      attempt_count: 3,
+      first_attempt_at: "2026-09-13T03:00:00.000Z",
+      last_attempt_at: "2026-09-13T03:00:05.000Z",
+    },
+  });
+});
+
+test("summarizeResults omits the failure key for policy skips (no attempt was made)", () => {
+  const summary = summarizeResults([
+    { league: "UCL", skipped: true, reason: "unsupported_league" },
+  ]);
+  assert.deepEqual(summary.errors, [{ league: "UCL", reason: "unsupported_league" }]);
+  assert.equal("failure" in summary.errors[0], false);
+});
+
+test("summarizeResults aggregates artifacts, hashes, and record counts from successes", () => {
+  const summary = summarizeResults([
+    {
+      fixtures: 10,
+      artifacts: { raw: "raw/a.csv", fixtures: "processed/a.json", team_form: "processed/a-form.json" },
+      payload_hashes: { "raw/a.csv": "hash-a" },
+    },
+    {
+      rows: 5,
+      artifacts: { raw: "raw/b.csv" },
+      payload_hashes: { "raw/b.csv": "hash-b" },
+    },
+  ]);
+  assert.deepEqual(summary.rawFiles, ["raw/a.csv", "raw/b.csv"]);
+  assert.deepEqual(summary.processedFiles, ["processed/a.json", "processed/a-form.json"]);
+  assert.deepEqual(summary.payloadHashes, { "raw/a.csv": "hash-a", "raw/b.csv": "hash-b" });
+  assert.equal(summary.recordCount, 15);
+  assert.deepEqual(summary.errors, []);
+});

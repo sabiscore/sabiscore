@@ -3,7 +3,6 @@
   "globalDependencies": ["**/.env.*local"],
   "globalEnv": [
     "NEXT_PUBLIC_API_URL",
-    "NEXT_PUBLIC_WS_URL",
     "NEXT_PUBLIC_CURRENCY",
     "NEXT_PUBLIC_CURRENCY_SYMBOL",
     "NEXT_PUBLIC_BASE_BANKROLL",

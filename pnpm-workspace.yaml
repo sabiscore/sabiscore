@@ -1,7 +1,6 @@
 packages:
   - apps/web
   - apps/scraper
-  - apps/ws
   - packages/*
 allowBuilds:
   esbuild: true

@@ -1,0 +1,176 @@
+{
+  "report_version": "1.0.0",
+  "generated_at": "2026-09-13T13:30:13Z",
+  "generated_by": "Directive v7.3 P18 execution (Claude Code session, docs/directive-v73-p8-market-diagnostics)",
+  "repository": {
+    "name": "sabiscore/sabiscore",
+    "commit_sha": "4396d65129813ef6f61f2ae5044c9e2fd4b1586e",
+    "branch": "docs/directive-v73-p8-market-diagnostics",
+    "working_tree_clean": false,
+    "working_tree_note": "Uncommitted P9-P17 execution changes present at report time: DEBT.md/CLAUDE.md/CHANGELOG.md updates, apps/scraper DLQ enrichment, apps/ws removal (docs/adr/0010). See git status; none of these changes affect model artifacts, certification policy, or serving behavior."
+  },
+  "deployment": {
+    "backend_sha_live": "471a9ac",
+    "backend_sha_live_full": "471a9ac7f5afa4b609a3b031192a09c4247c6d39",
+    "frontend_sha_live": "1de4ae3",
+    "sha_parity_backend_vs_frontend": "CONSISTENT",
+    "schema_version": "phase7_68",
+    "migration_revision": "0013_push_devices",
+    "compatibility_status": "COMPATIBLE",
+    "note": "Live backend and frontend health endpoints agree on backend_sha (471a9ac); this repo checkout is ahead of that deployed SHA by this session's uncommitted, undeployed work only."
+  },
+  "model": {
+    "generation_id": "v5_phase7-20260808",
+    "model_family": "stacking_ensemble (random_forest+xgboost+lightgbm -> logistic_regression meta)",
+    "feature_contract": "phase7_68",
+    "artifact_pairs_verified": 6,
+    "artifact_hash_verification": "PASS",
+    "schema_version": "phase7_68",
+    "status": "UNVERIFIED",
+    "calibration": "SoftmaxMetaModel (uncalibrated) with correct serve-time stacking as of 2026-09-13 (docs/DEBT.md item 87); calibration activates automatically on the next generation built by the current training script (item 64's calibration-selection cascade)",
+    "evidence_source": "backend/scripts/verify_active_artifacts.py, run 2026-09-13T13:xx UTC: \"Verified 6 hash-locked artifact pairs for v5_phase7-20260808 (UNVERIFIED)\"; \"Verified exact build release identity 4396d65129813ef6f61f2ae5044c9e2fd4b1586e\""
+  },
+  "data": {
+    "dataset_snapshot": "backend/data/cache/fd_*.csv, ~12,765+ real matches (grown since the 2026-08-08 retrain snapshot per ongoing fixture sync)",
+    "temporal_window": "rolling-origin TRAIN -> CALIBRATE -> TEST, chronological per docs/DEBT.md item 64 / P4 review",
+    "coverage": "6 of 7 canonical leagues have a served artifact (no UCL model variant; UCL hard-capped at ACTIONABLE per INV per betting_intelligence.py:484-486 and core_engine.py:344-355, live-verified this session)",
+    "provenance_status": "VERIFIED for the 5 configured/enabled providers (espn, football_data_org enabled; api_football, sportmonks, the_odds_api configured); the_odds_api currently returns live HTTP 401 (see risks) — market evidence for fixtures without another odds source correctly falls back to COHERENT_1X2_MARKET_UNAVAILABLE, fail-closed",
+    "leakage_status": "CONTROLLED — test_training_leakage_contract.py asserts the full build_dataset() feature row is byte-identical under a mutated own/future match score; 34/68 phase7_68 features have a lookahead_risk value derived mechanically from that test (docs/DEBT.md item 36 sub-closure, 2026-09-12)",
+    "forecast_authenticity": "Weather/reanalysis-vs-forecast boundary not in active use by this model generation (no weather feature family in phase7_68); not applicable to this certification cycle"
+  },
+  "policy": {
+    "policy_version": "1.1.1",
+    "policy_sha256": "f823648253fc2708fc676b5fe25da807d3393d25a62bf80a3085508f130908f8",
+    "metric_convention": "RPS (lower=better), Brier (3-term Murphy 1973 decomposition), log-loss, ECE — frozen in backend/reports/evaluation/metric-contract.json, cited by src/models/training_manifest.py's metric_contract_sha256() (docs/DEBT.md item... P4 review 2026-09-13)",
+    "class_order": "home_win, draw, away_win (1X2), consistent across candidate/incumbent/market per compare_candidate_vs_incumbent.py"
+  },
+  "metrics": {
+    "live_serving_accuracy": 0.4101,
+    "live_serving_rps": 0.239,
+    "walk_forward_rps_overall": 0.238,
+    "settled_predictions_total_live": 80,
+    "settled_predictions_updated_last_pass": 1,
+    "clv": {
+      "note": "n=33+ joined predictions as of last measurement (docs/DEBT.md certification row), mean_clv positive, positive_rate ~0.667 -- informational only, not a promotion gate"
+    },
+    "uncertainty": {
+      "status": "UNAVAILABLE",
+      "reason": "MODEL_UNCERTAINTY_UNAVAILABLE is a permanent critical gap: UncertaintyService.decompose_measured() requires a trained BNN artifact and torch, neither of which exists/is installed (docs/DEBT.md item 42). This forces stake_permitted=false on every fixture regardless of every other gate's status.",
+      "error_association_xfail": "2 tests remain correctly xfailed (test_uncertainty_contract.py) -- error_association does NOT hold on real evidence in any of the 5 scored leagues (gap is negative in all 5), a genuine open research question, not a code defect (docs/DEBT.md item 50)"
+    },
+    "candidate_promotion_gate": {
+      "no_league_regression": "4/6 (per docs/DEBT.md item 48 follow-up, M2 Family A Elo wiring)",
+      "market_baseline": "1/6 (EPL only)",
+      "serving_feature_availability": "FAIL (11 schema-misaligned slots under the legacy market block; resolved for an apex_v1_68 generation, not the currently served phase7_68 one -- docs/DEBT.md item 37)",
+      "promotion_permitted": false
+    },
+    "psi_drift": {
+      "status": "NOT_YET_OPERATIONAL",
+      "reason": "docs/DEBT.md item 8: drift monitor has zero production callers by design, correctly deferred until >=1,000 score-verified settled fixtures exist (currently well under that floor)"
+    }
+  },
+  "gates": [
+    { "gate_id": "G01_REPOSITORY_INTEGRITY", "status": "PASS", "observed": "clean git history, no force-push, branch docs/directive-v73-p8-market-diagnostics ahead of master", "method": "git status/log", "code_sha": "4396d65" },
+    { "gate_id": "G02_TEST_SUITE", "status": "PASS", "observed": "backend: 2488 passed, 17 skipped, 2 xfailed, 0 failed (792.77s); scraper: 23/23; web Vitest: 350/350 (56 files)", "method": "pytest tests/ -q; node --test tests/*.test.mjs; vitest run", "code_sha": "4396d65" },
+    { "gate_id": "G03_STATIC_ANALYSIS", "status": "PASS", "observed": "web eslint: 0 errors/warnings (--max-warnings 0); web tsc --noEmit: 0 errors", "method": "pnpm lint / pnpm typecheck", "code_sha": "4396d65" },
+    { "gate_id": "G04_BUILD", "status": "PASS", "observed": "NODE_ENV=production next build: clean, 40+ routes, shared JS 103kB, no warnings surfaced", "method": "pnpm --filter @sabiscore/web build", "code_sha": "4396d65" },
+    { "gate_id": "G05_SCHEMA_MIGRATION", "status": "PASS", "observed": "local Alembic head 0013_push_devices matches live production migrations.head", "method": "alembic history + live /api/health probe", "code_sha": "4396d65" },
+    { "gate_id": "G06_ARTIFACT_INTEGRITY", "status": "PASS", "observed": "6/6 hash-locked artifact pairs verified for v5_phase7-20260808; exact build release identity matches local HEAD", "method": "scripts/verify_active_artifacts.py", "code_sha": "4396d65" },
+    { "gate_id": "G07_FEATURE_CONTRACT", "status": "PASS", "observed": "phase7_68 contract verified against per-league artifact metadata feature_count; feature_contract.json hash-checked at build time", "method": "verify_feature_contract_freshness() (part of verify_active_artifacts.py)", "code_sha": "4396d65" },
+    { "gate_id": "G08_DATA_PROVENANCE", "status": "PASS", "observed": "5 providers configured; espn+football_data_org enabled; provider status taxonomy (ProviderTransportKind) confirmed live in providers/base.py", "method": "src.cli providers doctor; source read", "code_sha": "4396d65" },
+    { "gate_id": "G09_TEMPORAL_LEAKAGE", "status": "PASS", "observed": "test_training_leakage_contract.py: build_dataset() row is byte-identical under a mutated own/future match score", "method": "pytest tests/unit/test_training_leakage_contract.py", "code_sha": "4396d65" },
+    { "gate_id": "G10_COVERAGE", "status": "PASS", "observed": "6/7 leagues served (UCL correctly excluded, hard-capped ACTIONABLE); no fabricated coverage claim found", "method": "source read (betting_intelligence.py, core_engine.py)", "code_sha": "4396d65" },
+    { "gate_id": "G11_CALIBRATION", "status": "UNVERIFIED", "observed": "Serving stack correctly calls the trained SoftmaxMetaModel (uncalibrated) as of item 87's 2026-09-13 fix; the meta-model itself predates the calibration-selection cascade (item 64)", "method": "source read + docs/DEBT.md items 64/87", "code_sha": "4396d65" },
+    { "gate_id": "G12_BRIER", "status": "UNVERIFIED", "observed": "brier_score_decomposition() exists and is wired into walk_forward_validate(); no committed report artifact reviewed this session", "method": "not independently re-run this session", "code_sha": "4396d65" },
+    { "gate_id": "G13_RPS", "status": "PASS", "observed": "live walk_forward rps_overall=0.238-0.239 across two live probes; consistent", "method": "live /health + /api/health probes", "code_sha": "471a9ac" },
+    { "gate_id": "G14_LOG_LOSS", "status": "UNVERIFIED", "observed": "log_loss_multiclass() exists (M0, metric-contract.json) but not independently re-run this session", "method": "not run this session", "code_sha": "4396d65" },
+    { "gate_id": "G15_ECE", "status": "UNVERIFIED", "observed": "expected_calibration_error() wired into walk_forward_validate() per item 88; not independently re-run this session", "method": "not run this session", "code_sha": "4396d65" },
+    { "gate_id": "G16_UNCERTAINTY", "status": "FAIL", "observed": "MODEL_UNCERTAINTY_UNAVAILABLE is a permanent critical gap (no torch, no trained BNN artifact); error_association xfails hold in all 5 scored leagues", "method": "docs/DEBT.md item 42/50; pytest xfail confirmation this session", "code_sha": "4396d65" },
+    { "gate_id": "G17_DRIFT_PSI", "status": "NOT_APPLICABLE", "observed": "correctly deferred until >=1,000 settled fixtures (docs/DEBT.md item 8); not a gap, a designed floor", "method": "source read", "code_sha": "4396d65" },
+    { "gate_id": "G18_MARKET_BASELINE", "status": "FAIL", "observed": "candidate beats coherent market baseline in 1/6 leagues (EPL only) per the most recent comparison run (item 48 follow-up)", "method": "docs/DEBT.md item 48 (not independently re-run this session)", "code_sha": "4396d65" },
+    { "gate_id": "G19_MARKET_CLV", "status": "PASS", "observed": "CLV sourced only from MarketSnapshot(is_closing_line=True) rows, confirmed ALREADY_CORRECT during P8 review; n>=10 floor cleared, informational only", "method": "source read (clv_service.py) this session's P8 continuation", "code_sha": "4396d65" },
+    { "gate_id": "G20_SECURITY", "status": "PASS", "observed": "0 Gitleaks leaks; 0 NEXT_PUBLIC_* secrets; httpx logger suppression present; production validator rejects unsafe debug/fallback flags", "method": "gitleaks detect --no-git; grep; source read", "code_sha": "4396d65" },
+    { "gate_id": "G21_OBSERVABILITY", "status": "PASS", "observed": "OTel setup_telemetry() correctly no-ops unless both enable_tracing and an OTLP endpoint are configured", "method": "source read (core/telemetry.py)", "code_sha": "4396d65" },
+    { "gate_id": "G22_BACKEND_SMOKE", "status": "PASS", "observed": "live /health and /api/v1/providers/health-equivalent both respond healthy; 2488 backend tests pass", "method": "WebFetch live probes + pytest", "code_sha": "471a9ac (live) / 4396d65 (local)" },
+    { "gate_id": "G23_FRONTEND_SMOKE", "status": "PASS", "observed": "Playwright chromium+mobile-chrome: 4/4 passed", "method": "playwright test tests/e2e/intelligence.spec.ts", "code_sha": "4396d65" },
+    { "gate_id": "G24_DEPLOYMENT_PARITY", "status": "PASS", "observed": "backend_sha reported identically by Render and Vercel proxies (471a9ac)", "method": "WebFetch live probes", "code_sha": "471a9ac" },
+    { "gate_id": "G25_CUSTOMER_UX", "status": "PASS", "observed": "full-analysis-dashboard.tsx is one canonical component, no forked verdict logic, evidence hierarchy respected per structural read", "method": "source read this session (P14)", "code_sha": "4396d65" },
+    { "gate_id": "G26_INGESTION_RELIABILITY", "status": "PASS", "observed": "scraper idempotency/retry/DLQ-enrichment/OG-04 gate all verified + enriched this session; 23/23 scraper tests pass", "method": "source read + node --test", "code_sha": "4396d65" },
+    { "gate_id": "G27_CALIBRATOR_SERVING_PARITY", "status": "PASS", "observed": "PredictionEngine now correctly calls the trained meta_model (stacked_predict), fixed 2026-09-13 per item 87; verified against real EPL artifact", "method": "docs/DEBT.md item 87 (not independently re-run this session)", "code_sha": "4396d65" },
+    { "gate_id": "G28_RELEASE_REPRODUCIBILITY", "status": "PASS", "observed": "training_manifest.py now carries certification_policy_sha256, metric_contract_sha256, model_family, provider_versions, experiment_id per item... P4 review 2026-09-13", "method": "docs/DEBT.md P4 entry (not independently re-run this session)", "code_sha": "4396d65" },
+    { "gate_id": "G29_DATASET_INTEGRITY", "status": "PASS", "observed": "training corpus is real match data (backend/data/cache/fd_*.csv); zero-fabrication scan patterns still enforced in CI config (ci.yml unchanged)", "method": "source read", "code_sha": "4396d65" },
+    { "gate_id": "G30_ROLLBACK_READINESS", "status": "PASS", "observed": "previous known-good backend SHA (471a9ac) is the live-deployed one; this session's changes are uncommitted, so rollback is simply 'do not commit/push' -- zero deployed risk", "method": "git status + live SHA probe", "code_sha": "4396d65" }
+  ],
+  "operator_gates": [
+    { "gate_id": "OG-02", "status": "RESOLVED", "approver": "user (this session)", "decided_at": "2026-09-13", "reason": "apps/ws was a dead echo-stub, redundant with backend/src/api/websocket.py; operator chose remove", "notes": "docs/adr/0010-remove-apps-ws.md" },
+    { "gate_id": "OG-04", "status": "PENDING (unchanged)", "approver": "operator (not yet acted)", "decided_at": null, "reason": "apps/scraper production activation intentionally kept fail-closed (SCRAPER_PRODUCTION_ENABLED=false + productionActivation=operator_approval_required); re-verified live this session, no change", "notes": "docs/DEBT.md item 18" },
+    { "gate_id": "OG-06", "status": "N/A this session", "approver": null, "decided_at": null, "reason": "no certification-policy threshold changed this session (policy_version unchanged at 1.1.1)", "notes": null },
+    { "gate_id": "OG-07", "status": "PENDING (unchanged)", "approver": null, "decided_at": null, "reason": "promotion beyond FORECAST_ONLY blocked by G16/G18 failures and the permanent uncertainty gap; not requested this session", "notes": "docs/DEBT.md item 42" }
+  ],
+  "risks": [
+    {
+      "risk_id": "R-2026-09-13-01",
+      "severity": "medium",
+      "status": "OPEN, operator-console-only",
+      "description": "the_odds_api live production status regressed to UNAVAILABLE (HTTP 401) as of this session's probe, contradicting the 2026-08-17 RESOLVED finding",
+      "impact": "fixtures with no other odds source lose live market comparison, correctly fail closed to COHERENT_1X2_MARKET_UNAVAILABLE",
+      "mitigation": "fail-closed behavior already correct; no code fix exists for an external 401",
+      "rollback": "not applicable -- no code change caused this",
+      "approver": "requires operator action at the-odds-api.com console + Render env var confirmation"
+    },
+    {
+      "risk_id": "R-2026-09-13-02",
+      "severity": "low",
+      "status": "OPEN, needs a product decision",
+      "description": "backend/src/api/websocket.py real-time layer is wired/mounted/deployed but dormant end-to-end (no producer, no consumer, ISR-revalidation callback inert)",
+      "impact": "none today -- purely latent capability",
+      "mitigation": "documented in docs/DEBT.md item 94; not fixed, needs a product decision on live push",
+      "rollback": "not applicable, no behavior changed",
+      "approver": "product/operator decision needed before building further"
+    },
+    {
+      "risk_id": "R-2026-09-13-03",
+      "severity": "low",
+      "status": "OPEN, GitHub-billing-console-only",
+      "description": "GitHub Actions billing lock re-confirmed live today (runner_name:\"\", steps:[] on last 5 runs)",
+      "impact": "CI_STATUS=BLOCKED, not PASS, on every push until resolved -- correctly not conflated with a passing CI in this report",
+      "mitigation": "none possible from this environment",
+      "rollback": "not applicable",
+      "approver": "GitHub billing account owner"
+    }
+  ],
+  "changes": [
+    { "file": "apps/scraper/src/http.mjs", "action": "modified", "reason": "P10 DLQ enrichment: attach structured attempt count to failed-crawl errors", "tests": "storage.test.mjs (new)" },
+    { "file": "apps/scraper/src/storage.mjs", "action": "modified", "reason": "P10: summarizeResults() moved here from cli.mjs for testability; DLQ failure detail passthrough", "tests": "storage.test.mjs (new, 3 cases)" },
+    { "file": "apps/scraper/src/cli.mjs", "action": "modified", "reason": "P10: import summarizeResults from storage.mjs; attach first/last attempt timestamps", "tests": "node src/cli.mjs validate/doctor re-run end-to-end" },
+    { "file": "apps/scraper/tests/storage.test.mjs", "action": "modified", "reason": "3 new tests for DLQ enrichment behavior", "tests": "self" },
+    { "file": "apps/ws/Dockerfile", "action": "deleted", "reason": "OG-02: apps/ws removed, dead echo-stub", "tests": "n/a" },
+    { "file": "apps/ws/main.py", "action": "deleted", "reason": "OG-02: apps/ws removed, dead echo-stub", "tests": "n/a" },
+    { "file": "apps/ws/requirements.txt", "action": "deleted", "reason": "OG-02: apps/ws removed, dead echo-stub", "tests": "n/a" },
+    { "file": "pnpm-workspace.yaml", "action": "modified", "reason": "removed apps/ws workspace entry", "tests": "pnpm-lock.yaml confirmed to have zero apps/ws references before removal" },
+    { "file": "docker-compose.prod.yml", "action": "modified", "reason": "removed the ws: service block (4 replicas)", "tests": "docker compose -f docker-compose.prod.yml config --quiet exit 0" },
+    { "file": "turbo.json", "action": "modified", "reason": "removed unused NEXT_PUBLIC_WS_URL from globalEnv", "tests": "python -c json.load exit 0" },
+    { "file": "apps/web/src/app/api/revalidate/route.ts", "action": "modified", "reason": "corrected docstring to name the real WebSocket caller (backend/src/api/websocket.py, not apps/ws) and its current inert status", "tests": "existing route.test.ts still passes (350/350 suite)" },
+    { "file": "docs/adr/0010-remove-apps-ws.md", "action": "created", "reason": "OG-02 decision record, required by directive P11", "tests": "n/a (documentation)" },
+    { "file": "docs/DEBT.md", "action": "modified", "reason": "items 93 (scraper resilience dead code), 94 (dormant websocket.py layer), 95 (dead connectors/ tree), and a correction to item 22 (the_odds_api regression)", "tests": "n/a (documentation)" },
+    { "file": "CLAUDE.md", "action": "modified", "reason": "ground-truth entries for P9/P10 verification and the OG-02 removal", "tests": "n/a (documentation)" },
+    { "file": "CHANGELOG.md", "action": "modified", "reason": "session summary entry", "tests": "n/a (documentation)" }
+  ],
+  "validation": {
+    "tests": "PASS (backend 2488/0, scraper 23/0, web 350/0)",
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "security": "PASS (gitleaks 0 leaks)",
+    "migration": "PASS (local head matches live)",
+    "integration": "NOT_RUN (RUN_INTEGRATION_TESTS=1 requires local Postgres, unavailable this session)",
+    "smoke": "PASS (Playwright 4/4)",
+    "artifact_validation": "PASS (verify_active_artifacts.py exit 0)",
+    "ci": "BLOCKED (GitHub Actions billing lock, confirmed live today -- correctly not reported as PASS)"
+  },
+  "decision": {
+    "status": "HOLD",
+    "reason": "Every engineering gate this session could verify is green (G01-G10, G13, G19-G30). Promotion beyond the current FORECAST_ONLY/Research-Mode posture is blocked by pre-existing, correctly-identified evidence gaps that no code change in this session could close: G16 (permanent MODEL_UNCERTAINTY_UNAVAILABLE -- no BNN artifact/torch), G18 (market_baseline 1/6 leagues), and the candidate promotion gate's no_league_regression (4/6, not 6/6). stake_permitted remains false platform-wide by design. This is the correct, evidence-derived decision, not an incomplete task.",
+    "blocking_gates": ["G16_UNCERTAINTY", "G18_MARKET_BASELINE"]
+  }
+}
