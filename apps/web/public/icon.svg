@@ -1,7 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <rect width="48" height="48" rx="10" fill="#06140F"/>
-  <rect x="1" y="1" width="46" height="46" rx="9" stroke="#3CE4AA" stroke-opacity="0.18"/>
-  <path d="M10.5 13.5H29.2C33.6 13.5 37 16.2 37 19.8C37 23.4 33.8 25.7 29.4 25.7H18.6C14.2 25.7 11 28.1 11 31.8C11 35.6 14.3 38.5 18.9 38.5H34.4" stroke="#3CE4AA" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="38.4" cy="38.5" r="3.4" fill="#29CFF3"/>
-  <circle cx="10.5" cy="13.5" r="2.2" fill="#3CE4AA" fill-opacity="0.52"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">SabiScore</title>
+  <desc id="desc">SabiSignal: observed data flowing through inference to a forecast output.</desc>
+  <defs>
+    <radialGradient id="obsidianBase" cx="0%" cy="0%" r="140%">
+      <stop offset="0%" stop-color="#0A1F15"/>
+      <stop offset="52%" stop-color="#030A07"/>
+      <stop offset="100%" stop-color="#010302"/>
+    </radialGradient>
+    <linearGradient id="signalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F5938"/>
+      <stop offset="58%" stop-color="#2BDC97"/>
+      <stop offset="100%" stop-color="#C4FF4D"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Obsidian field; the supplied grid was removed because it aliases badly at favicon sizes. -->
+  <rect width="512" height="512" rx="112" fill="url(#obsidianBase)"/>
+  <rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="#1A4D33" stroke-width="2" opacity="0.72"/>
+  <rect x="12" y="12" width="488" height="488" rx="100" fill="none" stroke="#0F5938" stroke-width="1" opacity="0.32"/>
+
+  <!-- Baseline rail creates the same depth as the supplied master SVG without visual noise. -->
+  <path
+    d="M160 96H336A80 80 0 0 1 336 256H176A80 80 0 0 0 176 416H352"
+    fill="none"
+    stroke="#06140D"
+    stroke-width="50"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Predictive signal. -->
+  <path
+    d="M160 96H336A80 80 0 0 1 336 256H176A80 80 0 0 0 176 416H352"
+    fill="none"
+    stroke="url(#signalGradient)"
+    stroke-width="25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#neonGlow)"
+  />
+
+  <!-- Crisp optical fiber. -->
+  <path
+    d="M160 96H336A80 80 0 0 1 336 256H176A80 80 0 0 0 176 416H352"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.78"
+  />
+
+  <!-- Observation origin. -->
+  <circle cx="160" cy="96" r="16" fill="#030A07" stroke="#2BDC97" stroke-width="5"/>
+  <circle cx="160" cy="96" r="6" fill="#2BDC97"/>
+
+  <!-- Forecast output. -->
+  <circle cx="352" cy="416" r="22" fill="#C4FF4D" opacity="0.22" filter="url(#neonGlow)"/>
+  <circle cx="352" cy="416" r="16" fill="#C4FF4D"/>
+  <circle cx="352" cy="416" r="7" fill="#FFFFFF" opacity="0.94"/>
 </svg>
