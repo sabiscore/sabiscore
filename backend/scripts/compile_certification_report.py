@@ -42,7 +42,7 @@ def evaluate_g11(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_g15(a: dict[str, Any]) -> dict[str, Any]:
-    value = abs(float((((a.get("metrics") or {}).get("brier") or {})["decomposition_error"]))
+    value = abs(float((((a.get("metrics") or {}).get("brier") or {})["decomposition_error"])))
     threshold = EVIDENCE_POLICY["G15"]["murphy_decomposition_abs_error_max"]
     return {"status": "PASS" if value <= threshold else "FAIL", "value": value, "threshold": threshold, "criterion": "Murphy decomposition residual <= 1e-6"}
 
@@ -119,7 +119,6 @@ def main() -> int:
                 failures.append(f"core evidence commit mismatch: {core_commit} != {next(iter(commits))}")
             for name, gate in (core.get("gates") or {}).items():
                 if name in REQUIRED:
-                    # Never allow a stale core file to overwrite the freshly computed evidence gate.
                     continue
                 if isinstance(gate, dict):
                     results[name] = gate
