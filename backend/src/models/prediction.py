@@ -224,7 +224,7 @@ class PredictionEngine:
             Live feature vector. Its width must exactly match the active artifact
             schema; the engine never pads or truncates live evidence.
         league:
-            League name (e.g. ``"EPL"`, ``"Premier League"`).
+            League name (e.g. ``"EPL"``, ``"Premier League"``).
         match_id:
             Optional identifier used for prediction-level Redis cache.
         """
@@ -349,6 +349,7 @@ class PredictionEngine:
             if not isinstance(models_dict, dict) or not models_dict:
                 logger.warning("PredictionEngine: artifact %s has empty 'models' dict", path)
                 return None
+            # Verify at least one base learner is callable
             if not any(callable(getattr(m, "predict_proba", None)) for m in models_dict.values()):
                 logger.warning("PredictionEngine: no callable predict_proba in 'models' dict at %s", path)
                 return None
@@ -389,6 +390,7 @@ class PredictionEngine:
 
         is_dict_artifact = bundle.models_dict is not None
 
+        # ── Determine expected feature width ───────────────────────────────
         if is_dict_artifact:
             expected_dim = self._expected_dim_from_bundle(bundle, len(features))
         else:
@@ -402,8 +404,17 @@ class PredictionEngine:
             if expected_dim is None:
                 expected_dim = len(features)
 
+        # ── Align feature vector ───────────────────────────────────────────
         actual_dim = len(features)
         if actual_dim < expected_dim:
+            # A narrower vector than the model expects means real feature slots
+            # would be zero-filled — fabricating signal the model was trained to
+            # receive. Width mismatch in either direction fails closed; schema
+            # adaptation belongs in an explicit, versioned projection layer.
+            # same _fallback_result() this function already uses for "no bundle" /
+            # "inference raised" — model_version="fallback" is the established,
+            # already-checked signal (full_analysis.py, upcoming_match_service.py)
+            # that a result is diagnostic-only, not a real prediction.
             logger.error(
                 "PredictionEngine: SCHEMA_MISMATCH — %d features supplied, %s model expects %d; "
                 "refusing to zero-pad the missing %d values into a live prediction",
@@ -429,7 +440,7 @@ class PredictionEngine:
         try:
             if is_dict_artifact:
                 models_dict = bundle.models_dict
-                assert models_dict is not None
+                assert models_dict is not None  # guaranteed by is_dict_artifact
                 if bundle.meta_model is not None:
                     try:
                         proba = self._stacked_predict(models_dict, bundle.meta_model, X)
@@ -438,6 +449,13 @@ class PredictionEngine:
                         )
                         calibration_applied = calibration_method != "none"
                     except Exception as exc:
+                        # The artifact HAS a trained meta-model but running it
+                        # failed (shape mismatch, corrupt pickle field, a
+                        # dependency the calibrator needs but this runtime
+                        # lacks). Degrade to equal-weight averaging rather than
+                        # the harsher flat fallback below — a valid-but-
+                        # uncalibrated simplex from the real base learners on
+                        # real live evidence beats discarding that evidence.
                         logger.warning(
                             "PredictionEngine: stacked meta-model prediction failed "
                             "for %s (falling back to equal-weight base-learner "
@@ -474,6 +492,7 @@ class PredictionEngine:
         model_version = bundle.model_version
         overlay_applied = False
 
+        # ── Phase D+G: apply FittedCalibrator with OTel span ──────────────
         if _CAL_AVAILABLE and bundle.calibrator is not None:
             _span_ctx = (
                 _tracer.start_as_current_span("sabiscore.calibrator.apply")
@@ -514,6 +533,7 @@ class PredictionEngine:
         elif is_dict_artifact and not _CAL_AVAILABLE:
             logger.debug("PredictionEngine: calibration skipped — calibration module unavailable")
 
+        # ── Phase D+G: apply BivariatePoissonDrawOverlay with OTel span ───
         if bundle.overlay is not None:
             _span_ctx = (
                 _tracer.start_as_current_span("sabiscore.overlay.bivariate_poisson")
@@ -690,6 +710,10 @@ class PredictionEngine:
         Parameters match the legacy ``PredictionService.calculate_value_bets``
         signature so callers can swap imports without changing call sites.
         Per B-contract: ``clv_pct`` is null whenever ``closing_odds`` is absent.
+        ``league`` (optional, backward-compatible) caps the raw Kelly fraction at
+        the per-league policy cap — previously unbounded here, unlike every
+        other Kelly computation in this codebase (insights/engine.py,
+        betting_intelligence.py, core_engine.py all clamp).
         """
         cap = _kelly_cap_for_league(league)
         bets = []
@@ -732,7 +756,23 @@ class PredictionEngine:
         *,
         generation: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Prime request-path cache from a model already validated at startup."""
+        """Prime request-path cache from a model already validated at startup.
+
+        The active v5 generation is loaded eagerly through ``SabiScoreEnsemble``
+        during FastAPI startup. Reusing its base learners (AND its fitted
+        ``meta_model`` — see directive v7.3 P5, "serve-time calibration": a
+        calibrator that exists offline but isn't applied at inference isn't
+        production-calibrated) here avoids deserializing the same large
+        artifact again on the first request while preserving manifest
+        provenance.
+
+        Future generations may carry calibrators/overlays that the startup wrapper
+        does not retain. When a generation descriptor is supplied, startup priming
+        is therefore intentionally limited to ``v5_phase7``; every other generation
+        falls back to the canonical raw-artifact loader rather than dropping payload.
+        Calls without ``generation`` retain the legacy generic priming behavior used
+        by tests and offline tooling.
+        """
         slug = _LEAGUE_SLUG.get(league, league.lower().replace(" ", "_"))
         provenance: Optional[Dict[str, Any]] = None
 
@@ -768,6 +808,10 @@ class PredictionEngine:
         models_dict = getattr(model, "models", None)
         if not isinstance(model, dict) and isinstance(models_dict, dict) and models_dict:
             raw = {
+                # Copy only lightweight containers/references. Estimator
+                # objects (including meta_model) remain shared with the
+                # strict startup model, eliminating a second
+                # deserialization — not a second copy of a trained object.
                 "models": dict(models_dict),
                 "feature_columns": list(getattr(model, "feature_columns", []) or []),
                 "meta_model": getattr(model, "meta_model", None),
@@ -775,6 +819,7 @@ class PredictionEngine:
 
         bundle = cls._wrap_artifact(raw, slug, "<startup>", provenance=provenance)
         if bundle is None:
+            # Legacy path: treat as direct model if wrap fails.
             bundle = _ArtifactBundle(
                 direct_model=model if callable(getattr(model, "predict_proba", None)) else None,
                 models_dict=None,
