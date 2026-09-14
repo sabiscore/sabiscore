@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Sequence
-
 import numpy as np
 import pandas as pd
 
@@ -41,7 +38,7 @@ class PointInTimeTargetEncoder:
         output_col: str | None = None,
     ) -> pd.DataFrame:
         self._validate(df, category_col, target_col, date_col)
-        out = df.copy()
+        out = df.copy().reset_index(drop=True)
         dates = pd.to_datetime(out[date_col], errors="raise")
         target = pd.to_numeric(out[target_col], errors="coerce")
         if target.isna().any():
@@ -54,7 +51,6 @@ class PointInTimeTargetEncoder:
         self.global_count = 0
         self.category_stats.clear()
 
-        # Work by date to make "point in time" strict even for same-day matches.
         for _, positions in dates.iloc[order].groupby(dates.iloc[order]).groups.items():
             positions = np.asarray(positions, dtype=np.int64)
             for position in positions:
@@ -75,7 +71,6 @@ class PointInTimeTargetEncoder:
                     value = np.nan
                 encoded[position] = np.float32(value) if np.isfinite(value) else np.nan
 
-            # Update state only after every row on this date has been encoded.
             for position in positions:
                 category = out.iloc[position][category_col]
                 key = (category_col, category)
@@ -98,10 +93,7 @@ class PointInTimeTargetEncoder:
         output_col: str,
         prior_global_mean: float | None = None,
     ) -> pd.DataFrame:
-        """Encode prediction rows from a previously learned historical state.
-
-        No target values from the prediction frame are accepted or consumed.
-        """
+        """Encode prediction rows from a previously learned historical state."""
         if not self.fitted:
             raise RuntimeError("Encoder must be fit before transform")
         if category_col not in df.columns:
