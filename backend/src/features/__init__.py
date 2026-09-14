@@ -10,6 +10,8 @@ from .form import weighted_form_features
 from .draw_recalibration import DrawRecalibrator
 from .market import market_movement_features
 from .match_context import match_importance_score
+from .target_encoding import PointInTimeTargetEncoder
+from .xg_elo import XGEloUpdater
 
 __all__ = [
     "PiRatingSystem",
@@ -20,4 +22,6 @@ __all__ = [
     "DrawRecalibrator",
     "market_movement_features",
     "match_importance_score",
+    "PointInTimeTargetEncoder",
+    "XGEloUpdater",
 ]
