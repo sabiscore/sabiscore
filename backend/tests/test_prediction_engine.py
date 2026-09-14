@@ -31,14 +31,16 @@ Directive v7.3 P5 ("serve-time calibration" -- FIT -> SERIALIZED -> REGISTERED
 -> LOADED -> CALLED): a dict artifact's saved `meta_model` was deserialized by
 `_wrap_artifact` but never read by `_run_inference`, which always averaged the
 base learners directly -- the trained, calibrated stacking head existed
-offline and was never applied at inference. PE-26..PE-29 pin the fix.
+offline and was never applied at inference. PE-26..PE-30 pin the fix.
   PE-26 stacked meta-model output is returned (not the base-learner average)
         when bundle.meta_model is present; calibration_method/applied reflect it
   PE-27 meta-features are grouped per-model (home,draw,away), matching
         scripts/train_on_real_matches.py::_build_meta_features exactly
   PE-28 a meta-model that raises degrades to equal-weight averaging, not the
         harsher flat fallback
-  PE-29 an unrecognised meta-model class reports "stacked_unknown", not a crash
+  PE-29 an unrecognised meta-model class fails closed for calibration provenance
+  PE-30 recognised calibrated meta-model classes report calibration state
+        accurately; bare SoftmaxMetaModel and unknown classes remain uncalibrated
 """
 from __future__ import annotations
 
@@ -135,7 +137,6 @@ def test_to_dict_has_all_keys():
     assert expected_keys == set(d.keys())
     assert isinstance(d["home_win"], float)
     assert isinstance(d["model_dim"], int)
-    # Phase D fields must be present
     assert "calibration_applied" in d
     assert "overlay_applied" in d
 
@@ -282,7 +283,6 @@ def test_prime_and_clear_cache():
     assert "epl" in PredictionEngine._model_cache
     stored = PredictionEngine._model_cache["epl"]
     assert isinstance(stored, _ArtifactBundle)
-    # The mock model should be reachable via the bundle
     assert stored.direct_model is mock_model or (
         stored.models_dict is not None and mock_model in stored.models_dict.values()
     )
@@ -476,7 +476,7 @@ def test_ensemble_predict_dict_averages_models():
 def test_ensemble_predict_dict_fails_closed_when_no_valid_proba():
     """PE-23: no valid base learner output is never repaired or fabricated."""
     m = MagicMock()
-    m.predict_proba = MagicMock(return_value=np.array([[0.5, 0.5]]))  # only 2 classes
+    m.predict_proba = MagicMock(return_value=np.array([[0.5, 0.5]]))
 
     with pytest.raises(ValueError, match="no base learner"):
         PredictionEngine._ensemble_predict_dict({"m": m}, FEATURES_58.reshape(1, -1))
@@ -557,7 +557,7 @@ def test_stacked_meta_model_output_is_returned_not_the_base_learner_average():
     rf/xgb average (which would be 0.50/0.05/0.45, not the mocked 0.2/0.3/0.5).
     """
 
-    class IsotonicMetaModel:  # name matters: exercises the real label map
+    class IsotonicMetaModel:
         def predict_proba(self, X):
             assert X.shape == (1, 6)
             return np.array([[0.20, 0.30, 0.50]])
@@ -606,7 +606,6 @@ def test_stacked_prediction_failure_falls_back_to_average_not_flat_fallback():
     assert result.model_version != "fallback"
     assert result.calibration_applied is False
     assert result.calibration_method == "raw"
-    # rf/xgb average: (0.90+0.10)/2, (0.05+0.05)/2, (0.05+0.85)/2
     assert abs(result.home_win - 0.50) < 1e-4
     assert abs(result.draw - 0.05) < 1e-4
     assert abs(result.away_win - 0.45) < 1e-4
@@ -614,10 +613,9 @@ def test_stacked_prediction_failure_falls_back_to_average_not_flat_fallback():
 
 # ── PE-29 ─────────────────────────────────────────────────────────────────────
 
-def test_unrecognised_meta_model_class_reports_stacked_unknown():
-    """PE-29: an unmapped meta-model class still ships (fail-open for a
-    harmless reporting label, not the prediction itself) as "stacked_unknown",
-    never a crash and never a silently wrong method name."""
+def test_unrecognised_meta_model_class_fails_closed_for_calibration():
+    """PE-29: an unmapped meta-model remains usable for prediction but is not
+    reported as calibrated until its class has an explicit calibration label."""
 
     class SomeFutureCalibrator:
         def predict_proba(self, X):
@@ -626,5 +624,60 @@ def test_unrecognised_meta_model_class_reports_stacked_unknown():
     bundle = _two_learner_bundle(SomeFutureCalibrator())
     result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
 
-    assert result.calibration_applied is True
-    assert result.calibration_method == "stacked_unknown"
+    assert result.calibration_applied is False
+    assert result.calibration_method == "raw"
+
+
+# ── PE-30 ─────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    ("meta_model_name", "expected_applied", "expected_method"),
+    [
+        ("SoftmaxMetaModel", False, "raw"),
+        ("TemperatureScaledMetaModel", True, "temperature"),
+        ("VectorScaledMetaModel", True, "vector"),
+        ("BetaCalibratedMetaModel", True, "beta"),
+        ("IsotonicMetaModel", True, "isotonic"),
+    ],
+)
+def test_calibration_state_matches_meta_model_type(
+    meta_model_name,
+    expected_applied,
+    expected_method,
+):
+    """PE-30: calibration provenance matches the actual meta-model class.
+
+    A successful meta-model prediction is not, by itself, evidence that
+    calibration was applied. Bare SoftmaxMetaModel is an uncalibrated head and
+    must remain explicitly uncalibrated; recognised calibration wrappers are
+    reported as applied.
+    """
+
+    class MetaModel:
+        def predict_proba(self, X):
+            return np.array([[0.20, 0.30, 0.50]])
+
+    MetaModel.__name__ = meta_model_name
+    bundle = _two_learner_bundle(MetaModel())
+    result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
+
+    assert result.calibration_applied is expected_applied
+    assert result.calibration_method == expected_method
+
+
+def test_unknown_meta_model_is_not_reported_as_calibrated():
+    """PE-30: unknown future meta-models fail closed for calibration provenance.
+
+    They may still provide a valid stacked prediction, but the serving contract
+    must not claim calibration until that class has an explicit label.
+    """
+
+    class SomeFutureMetaModel:
+        def predict_proba(self, X):
+            return np.array([[0.34, 0.33, 0.33]])
+
+    bundle = _two_learner_bundle(SomeFutureMetaModel())
+    result = PredictionEngine()._run_inference(bundle, FEATURES_58, "EPL")
+
+    assert result.calibration_applied is False
+    assert result.calibration_method == "raw"

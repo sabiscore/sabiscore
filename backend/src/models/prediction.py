@@ -432,9 +432,9 @@ class PredictionEngine:
         X = features.reshape(1, -1)
 
         # ── Raw ensemble prediction ────────────────────────────────────────
-        # Decided here, not guessed at the end: "none"/False is the honest
-        # default for every path that doesn't run the trained meta-model,
-        # overwritten only on a genuine stacked hit below.
+        # Calibration provenance is fail-closed: a successful stacked prediction
+        # is not itself evidence that calibration was applied. Only an explicitly
+        # recognised calibrated meta-model may set calibration_applied=True.
         calibration_method = "none"
         calibration_applied = False
         try:
@@ -445,9 +445,9 @@ class PredictionEngine:
                     try:
                         proba = self._stacked_predict(models_dict, bundle.meta_model, X)
                         calibration_method = _META_MODEL_CALIBRATION_LABELS.get(
-                            type(bundle.meta_model).__name__, "stacked_unknown"
+                            type(bundle.meta_model).__name__, "none"
                         )
-                        calibration_applied = True
+                        calibration_applied = calibration_method != "none"
                     except Exception as exc:
                         # The artifact HAS a trained meta-model but running it
                         # failed (shape mismatch, corrupt pickle field, a
