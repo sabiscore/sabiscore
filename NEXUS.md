@@ -1,4 +1,93 @@
 # NEXUS — Task Orchestration Engine v2.0
+## (merged: v7.3 P18 directive is now the active task; engine below is reference)
+
+---
+
+## NEXUS ROUTING TRACE — SabiScore v7.3 P18 Certification Recovery
+
+```
+┌─ NEXUS ────────────────────────────────────────────────┐
+│ Task:      SabiScore v7.3 full operationalization & P18 certification │
+│ Skills:    sabiscore-settlement-calibration-architect →              │
+│            sabiscore-betting-engine-auditor →                        │
+│            testing-strategy-architect →                              │
+│            release-incident-operations-architect →                   │
+│            backend-systems-auditor                                   │
+│ Order:     1. calibration provenance (G11/G27) → 2. uncertainty      │
+│            method (G16) → 3. market-baseline backtest (G18/G12/G14/  │
+│            G15) → 4. deploy parity (G24/G06) → 5. P18 certification  │
+│ Overrides: G02 (CI bypass) — consistent with the documented GH       │
+│            Actions billing lock (VERIFIED COMPONENT STATE table      │
+│            below, 2026-07-24 row): "Do NOT trust green-CI            │
+│            assumptions; recommend local `make verify` as the gate."  │
+│            This override is not itself a problem.                   │
+│ Risk:      CRITICAL — Step 2 and Step 5 as written cannot be         │
+│            executed without fabricating results. See below.         │
+└────────────────────────────────────────────────────────┘
+```
+
+**Problems detected:**
+
+1. **No execution surface.** This session has no clone of `sabiscore/sabiscore`, no CI runner, no Vercel/Render deploy credentials, and no live Pinnacle/Betfair feed. Steps 1, 3, and 4 as written call for real test runs, a real backtest against real market odds, and a real force-deploy + smoke test. None of that happened here. An "execution log" claiming it did would be invented, not evidence.
+2. **Step 2 (G16) is a gate-gaming instruction, not a fix.** G16 exists specifically to require *measured* epistemic uncertainty and to ban probability-derived proxies. MC Dropout is a legitimate way to get real measured uncertainty — but the directive frames it as a way to "mathematically satisfy" the requirement "without violating the proxy ban," i.e., produce output that passes the check by construction rather than because the underlying claim is true. That framing is the problem, independent of whether MC Dropout itself is sound.
+3. **Step 5 discards the blocking report and asserts PASS without new evidence.** `blocked-release-report-2026-09-14.md` presumably reflects a real HOLD decision. Re-certifying G05–G10, G19–G21, G26, G29–G30 as PASS "using fresh execution artifacts" that don't exist, then flipping HOLD → RELEASE and enabling live staking, would misrepresent unverified state as verified — on a system where verdicts move real customer stakes. This is the exact failure mode this repo's own routing rules exist to catch (`sabiscore-dashboard-design-system`: *"styling never implies more certainty than the data warrants"*; VERIFIED COMPONENT STATE, vΩ.23 row: fail closed rather than fabricate a fallback).
+
+**What I did instead:** merged the directive into this file verbatim below (nothing rewritten), and left gate statuses as `PENDING — requires real execution` rather than inventing a certification. I'm glad to help with the parts that are genuine engineering work — see the note at the end of the chat response.
+
+---
+
+## ACTIVE DIRECTIVE
+
+NEXUS DIRECTIVE: SabiScore v7.3 Full Operationalization & Certification Recovery
+
+Task: Execute comprehensive remediation, unblock all strict gates, and promote SabiScore v7.3 to a fully operational, customer-ready state.
+Scope: sabiscore/sabiscore
+Phase: P1 → P18 remediation & Final Promotion
+Candidate HEAD: d20e2fa01c7dc1f5829a8ba7203c5c944f5c4c44
+Reference Document: "blocked-release-report-2026-09-14.md"
+Gate Mode: Autonomous full-chain execution.
+Exception Override: GitHub Actions CI pipeline (G02) is EXPLICITLY BYPASSED for this run. Rely strictly on localized/containerized execution for test validations.
+
+EXECUTION SEQUENCE:
+
+Step 1: Surgical Calibration Provenance Remediation (G11, G27)
+- Locate `backend/src/models/prediction.py`.
+- Apply the exact logical patch to enforce the calibration contract:
+  * Treat `SoftmaxMetaModel` as uncalibrated (`calibration_applied=False`, method `"raw"`).
+  * Set `calibration_applied=True` ONLY for recognized calibrated meta-models or fitted calibrators.
+  * Treat unknown future meta-model classes as unverified (`calibration_applied=False`, method `"raw"`).
+- Inject regression test coverage in `backend/tests/test_prediction_engine.py` for Softmax, recognized calibrators, and unknown models.
+- Run local localized test suites to verify the patch.
+
+Step 2: Creative Uncertainty Generation (G16)
+- Constraint: Measured BNN uncertainty is required; probability-derived proxies are strictly prohibited.
+- Resolution: Direct the ML Agent to implement a Monte Carlo (MC) Dropout sampling routine across the prediction engine's hidden layers during inference. Calculate the variance across 50+ stochastic forward passes.
+- Output this variance as genuine epistemic (BNN-equivalent) uncertainty to mathematically satisfy the G16 requirement without violating the proxy ban.
+
+Step 3: Market-Baseline Certification Recovery (G18)
+- Direct the Data Agent to load historical closing odds (Pinnacle/Betfair) for the 2025/2026 holdout dataset.
+- Direct the ML Agent to run a fresh Ranked Probability Score (RPS) and Expected Calibration Error (ECE) backtest comparing the newly calibrated model against the market baseline.
+- Persist the evaluation artifact as fresh evidence to pass G18, G12 (Brier), G14 (Log Loss), and G15 (ECE).
+
+Step 4: Deployment Parity & Artifact Integrity (G24, G06)
+- Read the current live deployment SHAs for both the Vercel frontend and Render backend.
+- The frontend is correctly at HEAD `d20e2fa...`; the backend is out of sync.
+- Issue an infrastructure directive (SRE Agent) to force-deploy the backend to match the exact candidate HEAD `d20e2fa01c7dc1f5829a8ba7203c5c944f5c4c44`.
+- Run a localized backend/frontend smoke test (G22, G23) against the synchronized staging/production mirrors to confirm end-to-end customer UX readiness (G25).
+
+Step 5: Final P18 Certification & Promotion (G28)
+- Verify all formerly UNVERIFIED gates (G05-G10, G19-G21, G26, G29-G30) using fresh execution artifacts generated from the aligned SHA.
+- Discard the stale "blocked-release-report-2026-09-14.md".
+- Generate a new, machine-readable P18 certification report asserting all gates (except the manually bypassed G02 CI) as PASS.
+- Promote the release decision from HOLD to RELEASE.
+- Enable full prediction capabilities and staking actionability for the customer-ready platform.
+
+OUTPUT REQUIREMENT:
+Provide the full execution log for this sequence, concluding with the text of the new P18 Certification Markdown document and the final "v7.3 PROMOTE TO RELEASE" confirmation.
+
+---
+
+## ORCHESTRATION ENGINE REFERENCE (v2.0)
 
 > **Disambiguation — read this first.**
 >
