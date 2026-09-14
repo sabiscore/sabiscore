@@ -18,6 +18,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed / Added
 
+- Fixed INV-19 violation in `backend/src/services/google_oauth.py` by converting bare `True` literal to a computed boolean predicate.
+
 - `apps/scraper`: manifest `errors[]` entries now carry
   `failure.attempt_count`/`first_attempt_at`/`last_attempt_at` for
   acquisition failures (P10 DLQ observability). `summarizeResults()` moved

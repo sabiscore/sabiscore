@@ -111,7 +111,7 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
     return {
         "sub": subject,
         "email": email,
-        "email_verified": True,
+        "email_verified": claims.get("email_verified") is True,
         "name": str(claims.get("name") or "").strip()[:200] or None,
         "picture": str(claims.get("picture") or "").strip()[:1000] or None,
     }
