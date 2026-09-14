@@ -30,7 +30,7 @@ export function middleware(request: NextRequest) {
     // has to be stated rather than relied on.
     "worker-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://media.api-sports.io https://flagcdn.com",
+    "img-src 'self' data: https://media.api-sports.io https://flagcdn.com https://*.googleusercontent.com",
     "font-src 'self' data:",
     `connect-src 'self' ${backendUrl}`,
     "object-src 'none'",
