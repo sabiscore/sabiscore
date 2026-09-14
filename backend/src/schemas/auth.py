@@ -27,4 +27,12 @@ class LoginResponse(Token):
     user: UserResponse
 
 
-__all__ = ["LoginRequest", "LoginResponse"]
+class GoogleOAuthRequest(BaseModel):
+    """Server-to-server Google OIDC assertion submitted by the Next.js callback."""
+
+    id_token: str = Field(..., min_length=100, max_length=8192)
+    nonce: str = Field(..., min_length=16, max_length=256)
+    remember_me: bool = Field(default=True)
+
+
+__all__ = ["LoginRequest", "LoginResponse", "GoogleOAuthRequest"]

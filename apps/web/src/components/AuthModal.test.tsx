@@ -1,26 +1,67 @@
 import React from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AuthModal } from "./AuthModal";
 import { AuthProvider } from "@/lib/auth-context";
 
+function renderAuth(defaultMode: "login" | "register" = "login") {
+  return render(
+    <AuthProvider>
+      <AuthModal open={true} onOpenChange={vi.fn()} defaultMode={defaultMode} />
+    </AuthProvider>,
+  );
+}
+
 describe("AuthModal Component", () => {
-  it("renders sign in modal and switches to register tab", () => {
-    render(
-      <AuthProvider>
-        <AuthModal open={true} onOpenChange={() => {}} defaultMode="login" />
-      </AuthProvider>
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders sign in with Google and email/password authentication", () => {
+    renderAuth();
+
+    expect(screen.getByText("Welcome back")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Continue with Google/i })).toBeDefined();
+    expect(screen.getByLabelText("Email address")).toBeDefined();
+    expect(screen.getByLabelText("Password")).toBeDefined();
+    expect(screen.getByText("Keep me signed in on this device")).toBeDefined();
+  });
+
+  it("switches to registration and exposes account creation fields", () => {
+    renderAuth();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Register" }));
+
+    expect(screen.getByText("Create your SabiScore account")).toBeDefined();
+    expect(screen.getByLabelText("Analyst username")).toBeDefined();
+    expect(screen.getByLabelText("Display name (optional)")).toBeDefined();
+    expect(screen.getByLabelText("Confirm password")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Sign up with Google/i })).toBeDefined();
+  });
+
+  it("rejects mismatched registration passwords before making a request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 200 }),
     );
 
-    expect(screen.getByText("Sign In to SabiScore")).toBeDefined();
-    expect(screen.getByLabelText("Email Address")).toBeDefined();
-    expect(screen.getByLabelText("Password")).toBeDefined();
+    renderAuth("register");
 
-    // Switch to Register
-    const registerTab = screen.getByRole("button", { name: "Register" });
-    fireEvent.click(registerTab);
+    fireEvent.change(screen.getByLabelText("Analyst username"), {
+      target: { value: "analyst_2026" },
+    });
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "analyst@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm password"), {
+      target: { value: "password456" },
+    });
 
-    expect(screen.getByText("Create Free Analyst Account")).toBeDefined();
-    expect(screen.getByLabelText("Username")).toBeDefined();
+    fireEvent.submit(screen.getByRole("button", { name: /Create Free Account/i }).closest("form")!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Passwords do not match.");
+    expect(fetchSpy).not.toHaveBeenCalledWith("/api/auth/register", expect.anything());
   });
 });

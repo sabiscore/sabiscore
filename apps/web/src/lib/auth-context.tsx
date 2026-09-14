@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { analytics } from "@/lib/analytics";
 
 export interface UserProfile {
@@ -8,6 +8,8 @@ export interface UserProfile {
   email: string;
   username?: string;
   full_name?: string;
+  avatar_url?: string;
+  email_verified?: boolean;
   is_active: boolean;
 }
 
@@ -32,6 +34,11 @@ export interface UserPreferences {
   default_league?: string;
 }
 
+interface AuthResult {
+  success: boolean;
+  error?: string;
+}
+
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
@@ -39,8 +46,9 @@ interface AuthContextType {
   favorites: UserFavorite[];
   savedMatches: SavedMatch[];
   preferences: UserPreferences | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
+  register: (username: string, email: string, password: string, fullName?: string) => Promise<AuthResult>;
+  startGoogleSignIn: (nextPath?: string) => void;
   logout: () => Promise<void>;
   toggleFavorite: (entityType: string, entityId: string) => Promise<boolean>;
   isFavorite: (entityId: string) => boolean;
@@ -53,9 +61,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function getErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  const data = payload as { detail?: unknown; message?: unknown; error?: unknown };
+  if (typeof data.detail === "string") return data.detail;
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error === "string") return data.error;
+  return fallback;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<UserFavorite[]>([]);
   const [savedMatches, setSavedMatches] = useState<SavedMatch[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences | null>({
@@ -66,10 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserData = useCallback(async () => {
     try {
-      // 1. Fetch current profile
       const meRes = await fetch("/api/auth/me", { cache: "no-store" });
       if (meRes.ok) {
-        const userData = await meRes.json();
+        const userData = (await meRes.json()) as UserProfile;
         setUser(userData);
       } else {
         setUser(null);
@@ -79,29 +95,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // 2. Fetch favorites (supports anonymous session as well)
       const favRes = await fetch("/api/users/favorites", { cache: "no-store" });
       if (favRes.ok) {
         const favData = await favRes.json();
         setFavorites(Array.isArray(favData) ? favData : favData.favorites || []);
       }
     } catch {
-      // Ignore transient errors
+      // Anonymous state is allowed to fail closed when the backend is unavailable.
     }
 
     try {
-      // 3. Fetch saved matches (supports anonymous session as well)
       const smRes = await fetch("/api/users/saved-matches", { cache: "no-store" });
       if (smRes.ok) {
         const smData = await smRes.json();
         setSavedMatches(Array.isArray(smData) ? smData : smData.saved_matches || []);
       }
     } catch {
-      // Ignore transient errors
+      // Anonymous state is allowed to fail closed when the backend is unavailable.
     }
 
     try {
-      // 4. Fetch preferences
       const prefRes = await fetch("/api/users/preferences", { cache: "no-store" });
       if (prefRes.ok) {
         const prefData = await prefRes.json();
@@ -114,157 +127,192 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch {
-      // Ignore transient errors
+      // Preferences are non-critical to authentication state.
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadUserData();
+    void loadUserData();
   }, [loadUserData]);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+  const login = useCallback(
+    async (email: string, password: string, rememberMe = false): Promise<AuthResult> => {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, remember_me: rememberMe }),
+        });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return { success: false, error: err.detail || "Invalid email or password." };
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          return {
+            success: false,
+            error: getErrorMessage(payload, "Invalid email or password."),
+          };
+        }
+
+        await loadUserData();
+        analytics.track("dashboard_viewed", { source: "login" });
+        return { success: true };
+      } catch {
+        return { success: false, error: "Unable to reach the authentication service." };
       }
+    },
+    [loadUserData],
+  );
 
-      await loadUserData();
-      analytics.track("dashboard_viewed", { source: "login" });
-      return { success: true };
-    } catch {
-      return { success: false, error: "Network error during login." };
-    }
-  };
+  const register = useCallback(
+    async (
+      username: string,
+      email: string,
+      password: string,
+      fullName?: string,
+    ): Promise<AuthResult> => {
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username,
+            email,
+            password,
+            full_name: fullName?.trim() || username,
+          }),
+        });
 
-  const register = async (
-    username: string,
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
-      });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          return {
+            success: false,
+            error: getErrorMessage(payload, "Registration failed. Please try again."),
+          };
+        }
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return { success: false, error: err.detail || "Registration failed." };
+        return await login(email, password, true);
+      } catch {
+        return { success: false, error: "Unable to reach the authentication service." };
       }
+    },
+    [login],
+  );
 
-      // Automatically log in with credentials
-      return await login(email, password);
-    } catch {
-      return { success: false, error: "Network error during registration." };
-    }
-  };
+  const startGoogleSignIn = useCallback((nextPath = "/dashboard") => {
+    if (typeof window === "undefined") return;
 
-  const logout = async () => {
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const destination = nextPath === "/dashboard" && currentPath !== "/" ? currentPath : nextPath;
+    const safeDestination = destination.startsWith("/") && !destination.startsWith("//")
+      ? destination
+      : "/dashboard";
+
+    window.location.assign(
+      `/api/auth/google/start?next=${encodeURIComponent(safeDestination)}`,
+    );
+  }, []);
+
+  const logout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {
-      // Ignore error on logout
+      // Local state is cleared even if the backend is temporarily unreachable.
     }
     setUser(null);
     await loadUserData();
-  };
+  }, [loadUserData]);
 
   const toggleFavorite = async (entityType: string, entityId: string): Promise<boolean> => {
     const existing = favorites.find(
-      (f) => f.entity_id?.toLowerCase() === entityId.toLowerCase()
+      (favorite) => favorite.entity_id?.toLowerCase() === entityId.toLowerCase(),
     );
 
     if (existing) {
-      // Remove
       try {
-        const delRes = await fetch(`/api/users/favorites/${encodeURIComponent(existing.id || entityId)}`, {
+        const response = await fetch(`/api/users/favorites/${encodeURIComponent(existing.id || entityId)}`, {
           method: "DELETE",
         });
-        if (delRes.ok) {
-          setFavorites((prev) => prev.filter((f) => f.id !== existing.id && f.entity_id !== entityId));
+        if (response.ok) {
+          setFavorites((previous) => previous.filter((favorite) => favorite.id !== existing.id && favorite.entity_id !== entityId));
           analytics.track("favorite_toggled", { entity_type: entityType, entity_id: entityId, action: "removed" });
           return true;
         }
-      } catch {}
-      return false;
-    } else {
-      // Add
-      try {
-        const addRes = await fetch("/api/users/favorites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entity_type: entityType, entity_id: entityId }),
-        });
-        if (addRes.ok) {
-          const newFav = await addRes.json();
-          setFavorites((prev) => [...prev, newFav]);
-          analytics.track("favorite_toggled", { entity_type: entityType, entity_id: entityId, action: "added" });
-          return true;
-        }
-      } catch {}
+      } catch {
+        // Fall through to a failed mutation result.
+      }
       return false;
     }
+
+    try {
+      const response = await fetch("/api/users/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity_type: entityType, entity_id: entityId }),
+      });
+      if (response.ok) {
+        const newFavorite = await response.json();
+        setFavorites((previous) => [...previous, newFavorite]);
+        analytics.track("favorite_toggled", { entity_type: entityType, entity_id: entityId, action: "added" });
+        return true;
+      }
+    } catch {
+      // Fall through to a failed mutation result.
+    }
+    return false;
   };
 
-  const isFavorite = (entityId: string): boolean => {
-    return favorites.some((f) => f.entity_id?.toLowerCase() === entityId?.toLowerCase());
-  };
+  const isFavorite = (entityId: string): boolean =>
+    favorites.some((favorite) => favorite.entity_id?.toLowerCase() === entityId?.toLowerCase());
 
   const saveMatch = async (matchId: string, targetOutcome?: string, notes?: string): Promise<boolean> => {
     try {
-      const res = await fetch("/api/users/saved-matches", {
+      const response = await fetch("/api/users/saved-matches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ match_id: matchId, target_outcome: targetOutcome, notes }),
       });
-      if (res.ok) {
-        const newMatch = await res.json();
-        setSavedMatches((prev) => [...prev.filter((m) => m.match_id !== matchId), newMatch]);
+      if (response.ok) {
+        const newMatch = await response.json();
+        setSavedMatches((previous) => [...previous.filter((match) => match.match_id !== matchId), newMatch]);
         analytics.track("saved_match_toggled", { match_id: matchId, action: "saved" });
         return true;
       }
-    } catch {}
+    } catch {
+      // Fall through to a failed mutation result.
+    }
     return false;
   };
 
   const removeSavedMatch = async (matchId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/users/saved-matches/${encodeURIComponent(matchId)}`, {
+      const response = await fetch(`/api/users/saved-matches/${encodeURIComponent(matchId)}`, {
         method: "DELETE",
       });
-      if (res.ok) {
-        setSavedMatches((prev) => prev.filter((m) => m.match_id !== matchId && m.id !== matchId));
+      if (response.ok) {
+        setSavedMatches((previous) => previous.filter((match) => match.match_id !== matchId && match.id !== matchId));
         analytics.track("saved_match_toggled", { match_id: matchId, action: "removed" });
         return true;
       }
-    } catch {}
+    } catch {
+      // Fall through to a failed mutation result.
+    }
     return false;
   };
 
-  const isMatchSaved = (matchId: string): boolean => {
-    return savedMatches.some((m) => m.match_id?.toLowerCase() === matchId?.toLowerCase());
-  };
+  const isMatchSaved = (matchId: string): boolean =>
+    savedMatches.some((match) => match.match_id?.toLowerCase() === matchId?.toLowerCase());
 
   const updatePreferences = async (newPrefs: Partial<UserPreferences>): Promise<boolean> => {
     try {
       const merged = { ...preferences, ...newPrefs };
-      const res = await fetch("/api/users/preferences", {
+      const response = await fetch("/api/users/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(merged),
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (response.ok) {
+        const data = await response.json();
         setPreferences({
           odds_format: data.odds_format || merged.odds_format || "DECIMAL",
           timezone: data.timezone || merged.timezone || "Africa/Lagos",
@@ -273,7 +321,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         analytics.track("preferences_updated", { odds_format: data.odds_format, timezone: data.timezone });
         return true;
       }
-    } catch {}
+    } catch {
+      // Fall through to a failed mutation result.
+    }
     return false;
   };
 
@@ -288,6 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         preferences,
         login,
         register,
+        startGoogleSignIn,
         logout,
         toggleFavorite,
         isFavorite,
