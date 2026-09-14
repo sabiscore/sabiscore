@@ -5,18 +5,20 @@ import os
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Tuple
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn.impute import SimpleImputer
 
 from .ensemble import SabiScoreEnsemble
+from .pipeline import ChronologicalFeaturePipeline, TargetEncodingSpec
 from ..data.transformers import FeatureTransformer
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class ModelTrainer:
-    """Handles model training pipeline"""
+    """Handles model training with leakage-safe chronological features."""
 
     def __init__(self):
         self.transformer = FeatureTransformer(allow_legacy_defaults=True)
@@ -26,75 +28,55 @@ class ModelTrainer:
         self.data_path.mkdir(parents=True, exist_ok=True)
 
     def train_league_models(self, leagues: List[str] = None) -> Dict[str, Any]:
-        """Train models for specified leagues"""
         if leagues is None:
             leagues = ['EPL', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1']
-
         results: Dict[str, Any] = {}
-
         for league in tqdm(leagues, desc="Training league models"):
             try:
-                logger.info(f"Training model for {league}")
-                result = self._train_single_league_model(league)
-                results[league] = result
-                logger.info(f"Successfully trained {league} model")
-
-            except Exception as e:
-                logger.error(f"Failed to train {league} model: {e}")
-                results[league] = {'error': str(e)}
-
+                logger.info("Training model for %s", league)
+                results[league] = self._train_single_league_model(league)
+            except Exception as exc:
+                logger.error("Failed to train %s: %s", league, exc)
+                results[league] = {'error': str(exc)}
         return results
 
     def _train_single_league_model(self, league: str) -> Dict[str, Any]:
-        """Train model for a single league"""
-        try:
-            training_data = self._load_training_data(league)
-            if training_data.empty:
-                raise ValueError(f"No training data available for {league}")
+        training_data = self._load_training_data(league)
+        if training_data.empty:
+            raise ValueError(f"No training data available for {league}")
 
-            X, y = self._prepare_training_data(training_data)
+        X, y = self._prepare_training_data(training_data)
+        ensemble = SabiScoreEnsemble()
+        ensemble.feature_columns = list(X.columns)
+        ensemble.build_ensemble(X, y)
 
-            ensemble = SabiScoreEnsemble()
-            ensemble.feature_columns = list(X.columns)
-            ensemble.build_ensemble(X, y)
-
-            dataset_signature = self._compute_dataset_signature(training_data)
-            model_filename = f"{self._slugify_league(league)}_ensemble"
-            ensemble.model_metadata.update(
-                {
-                    "league": league,
-                    "dataset_signature": dataset_signature,
-                    "training_samples": len(X),
-                }
-            )
-
-            ensemble.save_model(self.models_path, model_filename)
-            self._update_league_metadata(model_filename, ensemble.model_metadata)
-
-            return {
-                "model_path": os.path.join(self.models_path, f"{model_filename}.pkl"),
-                "accuracy": ensemble.model_metadata.get("accuracy", 0),
-                "brier_score": ensemble.model_metadata.get("brier_score", 0),
-                "log_loss": ensemble.model_metadata.get("log_loss", 0),
-                "feature_count": len(ensemble.feature_columns),
-                "training_samples": len(X),
-                "trained_at": ensemble.model_metadata.get("trained_at"),
-                "dataset_signature": dataset_signature,
-            }
-
-        except Exception as e:
-            logger.error(f"Training failed for {league}: {e}")
-            raise
+        dataset_signature = self._compute_dataset_signature(training_data)
+        model_filename = f"{self._slugify_league(league)}_ensemble"
+        ensemble.model_metadata.update({
+            "league": league,
+            "dataset_signature": dataset_signature,
+            "training_samples": len(X),
+        })
+        ensemble.save_model(self.models_path, model_filename)
+        self._update_league_metadata(model_filename, ensemble.model_metadata)
+        return {
+            "model_path": os.path.join(self.models_path, f"{model_filename}.pkl"),
+            "accuracy": ensemble.model_metadata.get("accuracy", 0),
+            "brier_score": ensemble.model_metadata.get("brier_score", 0),
+            "log_loss": ensemble.model_metadata.get("log_loss", 0),
+            "feature_count": len(ensemble.feature_columns),
+            "training_samples": len(X),
+            "trained_at": ensemble.model_metadata.get("trained_at"),
+            "dataset_signature": dataset_signature,
+        }
 
     def _load_training_data(self, league: str) -> pd.DataFrame:
-        """Load training data for a league from processed datasets."""
         league_slug = self._slugify_league(league)
         candidates = [
             self.data_path / f"{league_slug}_training.parquet",
             self.data_path / f"{league_slug}_training.feather",
             self.data_path / f"{league_slug}_training.csv",
         ]
-
         for path in candidates:
             if path.exists():
                 logger.info("Loading training data from %s", path)
@@ -104,62 +86,67 @@ class ModelTrainer:
                     df = pd.read_feather(path)
                 else:
                     df = pd.read_csv(path)
-
+                if "result" not in df.columns:
+                    raise ValueError("Training data must contain result")
                 df = df.dropna(subset=["result"]).reset_index(drop=True)
                 logger.info("Loaded %s samples with %s columns for %s", len(df), len(df.columns), league)
                 return df
-
         raise FileNotFoundError(
             f"No processed dataset found for league '{league}'. Expected one of: "
             + ", ".join(str(path.name) for path in candidates)
         )
 
+    @staticmethod
+    def _add_encoding_targets(data: pd.DataFrame) -> list[TargetEncodingSpec]:
+        """Create target columns without exposing them as model features."""
+        result = data["result"].astype(str)
+        data["__home_win_flag"] = result.isin(["H", "W", "home_win"]).astype(np.float32)
+        data["__away_win_flag"] = result.isin(["A", "L", "away_win"]).astype(np.float32)
+
+        specs = [
+            TargetEncodingSpec("home_team", "__home_win_flag", "home_team_home_win_encoded"),
+            TargetEncodingSpec("away_team", "__away_win_flag", "away_team_away_win_encoded"),
+            TargetEncodingSpec("away_team", "__home_win_flag", "away_team_opponent_home_win_encoded"),
+        ]
+        if "home_manager" in data.columns:
+            specs.append(TargetEncodingSpec("home_manager", "__home_win_flag", "home_manager_home_win_encoded"))
+        return specs
+
     def _prepare_training_data(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Prepare features and target for training"""
-        # Separate features and target (exclude non-feature columns)
-        exclude_cols = ['result', 'match_id', 'match_date']
-        feature_cols = [col for col in data.columns if col not in exclude_cols]
-        X = data[feature_cols].copy()
-        y = data['result'].copy()
+        """Engineer chronological features before model fitting."""
+        data = data.copy()
+        encoding_specs = self._add_encoding_targets(data)
+        engineered = ChronologicalFeaturePipeline(target_encodings=encoding_specs).transform(data)
 
-        # Handle NaN values in features using median imputation
-        if X.isnull().any().any():
-            nan_count = X.isnull().sum().sum()
-            logger.warning(f"Found {nan_count} NaN values in features, applying median imputation")
-            
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
-            X = pd.DataFrame(X_imputed, columns=X.columns, index=X.index)
-            
-            logger.info("Imputation complete - all NaN values filled")
-
-        # Normalize target encoding to numerical classes 0,1,2 regardless of source format
-        target_mapping = {
-            'home_win': 0,
-            'draw': 1,
-            'away_win': 2,
-            0: 0,
-            1: 1,
-            2: 2
+        exclude_cols = {
+            'result', 'match_id', 'match_date', 'date', 'season',
+            '__home_win_flag', '__away_win_flag',
+            'home_goals', 'away_goals', 'league', 'home_team', 'away_team', 'id'
         }
-        y = y.map(target_mapping)
+        feature_cols = [col for col in engineered.columns if col not in exclude_cols]
+        feature_cols = [col for col in feature_cols if engineered[col].notna().any()]
+        if not feature_cols:
+            raise ValueError("Chronological feature pipeline produced no usable features")
 
+        X = engineered[feature_cols].copy()
+        # Model-side NaN handling remains explicit; no zero-fill of unavailable
+        # evidence occurs during feature construction.
+        numeric = X.select_dtypes(include=[np.number]).columns
+        X[numeric] = X[numeric].astype(np.float32)
+        y = engineered['result'].map({
+            'home_win': 0, 'draw': 1, 'away_win': 2,
+            'H': 0, 'D': 1, 'A': 2,
+            'W': 0, 'L': 2,
+            0: 0, 1: 1, 2: 2,
+        })
         if y.isnull().any():
             raise ValueError("Encountered unknown result labels while preparing training data")
-
-        y = y.astype(int)
-        # Convert to DataFrame for compatibility
-        y = pd.DataFrame(y, columns=['result'])
-
-        logger.info(f"Prepared {len(X)} samples with {len(feature_cols)} features")
-        return X, y
+        return X, y.astype(np.int64).to_frame(name="result")
 
     def _compute_dataset_signature(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Generate a signature of the dataset for drift detection."""
         buffer = df.to_csv(index=False).encode("utf-8")
-        digest = hashlib.sha256(buffer).hexdigest()
         return {
-            "checksum": digest,
+            "checksum": hashlib.sha256(buffer).hexdigest(),
             "rows": int(len(df)),
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -169,7 +156,6 @@ class ModelTrainer:
         global_meta = self._load_global_metadata()
         global_meta.setdefault("models", {})[league_key] = metadata
         global_meta["last_updated"] = datetime.now(timezone.utc).isoformat()
-
         metadata_file = self.models_path / "models_metadata.json"
         with metadata_file.open("w", encoding="utf-8") as fh:
             json.dump(global_meta, fh, indent=2)
@@ -188,35 +174,22 @@ class ModelTrainer:
         return league.lower().replace(" ", "_").replace("-", "_")
 
     def update_model_metadata(self) -> None:
-        """Update model metadata file"""
         try:
-            metadata = {
-                'last_updated': datetime.now(timezone.utc).isoformat(),
-                'models': {}
-            }
-
-            # Check for existing models
+            metadata = {'last_updated': datetime.now(timezone.utc).isoformat(), 'models': {}}
             if os.path.exists(self.models_path):
                 for file in os.listdir(self.models_path):
                     if file.endswith('_metadata.json'):
                         league = file.replace('_metadata.json', '').replace('_ensemble', '').title()
                         metadata_path = os.path.join(self.models_path, file)
-                        with open(metadata_path, 'r') as f:
-                            model_meta = json.load(f)
-                        metadata['models'][league] = model_meta
-
-            # Save global metadata
-            metadata_file = os.path.join(self.models_path, 'models_metadata.json')
-            with open(metadata_file, 'w') as f:
+                        with open(metadata_path, 'r', encoding='utf-8') as f:
+                            metadata['models'][league] = json.load(f)
+            with open(os.path.join(self.models_path, 'models_metadata.json'), 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2)
+        except Exception as exc:
+            logger.error("Failed to update metadata: %s", exc)
 
-            logger.info("Model metadata updated")
-
-        except Exception as e:
-            logger.error(f"Failed to update metadata: {e}")
 
 def train_league_models(leagues: List[str] = None) -> Dict[str, Any]:
-    """Convenience function to train league models"""
     trainer = ModelTrainer()
     results = trainer.train_league_models(leagues)
     trainer.update_model_metadata()
