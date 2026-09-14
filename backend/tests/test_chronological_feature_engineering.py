@@ -195,7 +195,18 @@ def test_pipeline_has_no_future_date_leakage() -> None:
 
 
 def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() -> None:
-    frame = pd.DataFrame(
+    history = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2024-12-31", "2024-12-31"]),
+            "season": [2024, 2024],
+            "home_team": ["A", "B"],
+            "away_team": ["B", "A"],
+            "home_xg": [1.0, 1.0],
+            "away_xg": [1.0, 1.0],
+            "home_win": [0.0, 1.0],
+        }
+    )
+    current = pd.DataFrame(
         {
             "date": pd.to_datetime(["2025-01-01", "2025-01-01", "2025-01-02"]),
             "season": [2025, 2025, 2025],
@@ -206,20 +217,16 @@ def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() 
             "home_win": [1.0, 0.0, 1.0],
         }
     )
+    frame = pd.concat([history, current], ignore_index=True)
 
-    # There is no prior season in this fixture set, so transition priors would
-    # fail closed. Disable that stage by giving all teams sufficient history.
-    history = frame.assign(season=2024)
-    combined = pd.concat([history, frame], ignore_index=True)
-    pipeline = ChronologicalFeaturePipeline(
+    result = ChronologicalFeaturePipeline(
         target_encodings=(TargetEncodingSpec("home_team", "home_win"),)
-    )
-    result = pipeline.transform(combined)
+    ).transform(frame)
 
     current_day = result[result["date"] == pd.Timestamp("2025-01-01")]
-    assert current_day["home_win_home_team_encoded"].isna().all()
+    assert current_day["home_win_home_team_encoded"].tolist() == pytest.approx([0.0, 1.0])
     next_day = result[result["date"] == pd.Timestamp("2025-01-02")]
-    assert next_day["home_win_home_team_encoded"].iloc[0] == pytest.approx(1.0)
+    assert next_day["home_win_home_team_encoded"].iloc[0] == pytest.approx(0.5)
 
 
 def test_pipeline_memory_peak_stays_below_four_gb() -> None:
