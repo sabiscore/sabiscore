@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """G18 candidate-vs-market RPS evidence harness.
 
-The evaluation is deliberately downstream of the repository's historical data
-pipeline: football-data/soccerdata match rows provide results/odds and the
-candidate forecast artifact provides pre-match probabilities. Understat/xG is
-part of the feature-generation lineage when present, but is never substituted
-for bookmaker odds. The input may carry ``source_pipeline`` metadata; the
-compiler requires explicit provenance rather than inferring it.
+The evaluation is downstream of the repository's historical data pipeline:
+football-data/soccerdata match rows provide results/odds and the candidate
+forecast artifact provides pre-match probabilities. Understat/xG remains
+feature-generation provenance when present; it is never substituted for
+bookmaker odds. Complete coherent 1X2 prices are de-vigged proportionally.
 
-The bootstrap is paired, circular moving-block, exactly 10,000 replicates per
+The paired circular moving-block bootstrap is exactly 10,000 replicates per
 reported scope, processed in small batches with float32 arrays and explicit GC.
 """
 from __future__ import annotations
@@ -48,20 +47,18 @@ def file_sha256(path: Path) -> str:
 
 
 def parse_date(value: str) -> datetime | None:
-    value = value.strip()
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%d/%m/%Y", "%d/%m/%y"):
         try:
-            return datetime.strptime(value[:19], fmt).replace(tzinfo=UTC)
+            return datetime.strptime(value.strip()[:19], fmt).replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
 
 
 def rps(y: np.ndarray, p: np.ndarray) -> np.ndarray:
-    cdf = np.cumsum(p.astype(np.float32), axis=1)[:, :2]
     truth = np.zeros_like(p, dtype=np.float32)
     truth[np.arange(len(y)), y] = 1.0
-    return np.mean((cdf - np.cumsum(truth, axis=1)[:, :2]) ** 2, axis=1, dtype=np.float32)
+    return np.mean((np.cumsum(p.astype(np.float32), axis=1)[:, :2] - np.cumsum(truth, axis=1)[:, :2]) ** 2, axis=1, dtype=np.float32)
 
 
 def devig(odds: tuple[float, float, float]) -> np.ndarray:
@@ -84,9 +81,7 @@ def market_probs(row: dict[str, Any]) -> tuple[np.ndarray, str] | None:
         odds = tuple(float(row.get(k, "")) for k in ("home_odds", "draw_odds", "away_odds"))
     except (TypeError, ValueError):
         return None
-    if all(math.isfinite(x) and x > 1.0 for x in odds):
-        return devig(odds), str(row.get("bookmaker") or "unknown")
-    return None
+    return (devig(odds), str(row.get("bookmaker") or "unknown")) if all(math.isfinite(x) and x > 1.0 for x in odds) else None
 
 
 def iter_rows(path: Path) -> Iterable[dict[str, Any]]:
@@ -103,10 +98,11 @@ def iter_rows(path: Path) -> Iterable[dict[str, Any]]:
         yield from csv.DictReader(f)
 
 
-def load(path: Path, start: datetime, end: datetime) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+def load(path: Path, start: datetime, end: datetime) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     candidates: list[tuple[float, float, float]] = []
     markets: list[tuple[float, float, float]] = []
     truths: list[int] = []
+    dates: list[datetime] = []
     leagues: list[str] = []
     books: dict[str, int] = {}
     skipped = 0
@@ -124,49 +120,49 @@ def load(path: Path, start: datetime, end: datetime) -> tuple[np.ndarray, np.nda
             skipped += 1
             continue
         market = market_probs(raw)
-        outcome = {"H": 0, "D": 1, "A": 2}.get(str(raw.get("result") or raw.get("FTR") or "").upper())
+        outcome = {"H": 0, "D": 1, "A": 2}.get(str(raw.get("result") or raw.get("FTR") or "").strip().upper())
         if market is None or outcome is None:
             skipped += 1
             continue
         candidates.append(tuple(p.tolist()))
         markets.append(tuple(market[0].tolist()))
         truths.append(outcome)
+        dates.append(date)
         leagues.append(str(raw.get("league") or raw.get("League") or "UNKNOWN"))
         books[market[1]] = books.get(market[1], 0) + 1
     if len(truths) < 50:
         raise RuntimeError(f"G18 requires >=50 complete holdout rows; found {len(truths)}")
-    order = np.argsort(np.asarray([parse_date(str(x)) or start for x in []], dtype=object)) if False else np.arange(len(truths), dtype=np.int32)
-    return np.asarray(candidates, dtype=np.float32)[order], np.asarray(markets, dtype=np.float32)[order], np.asarray(truths, dtype=np.int8)[order], {"n": len(truths), "skipped": skipped, "leagues": sorted(set(leagues)), "league_rows": {k: leagues.count(k) for k in sorted(set(leagues))}, "bookmakers": books}
+    order = np.argsort(np.asarray(dates, dtype="datetime64[ns]"))
+    meta = {"n": len(truths), "skipped": skipped, "leagues": sorted(set(leagues)), "league_rows": {k: leagues.count(k) for k in sorted(set(leagues))}, "bookmakers": books}
+    return np.asarray(candidates, dtype=np.float32)[order], np.asarray(markets, dtype=np.float32)[order], np.asarray(truths, dtype=np.int8)[order], np.asarray(leagues, dtype=object)[order], meta
 
 
 def bootstrap(delta: np.ndarray, reps: int, block: int, batch: int, seed: int) -> tuple[float, float]:
     n = len(delta)
-    if not 1 <= block <= n:
-        raise ValueError("block length must be in [1,n]")
-    rng = np.random.default_rng(seed)
+    block = min(block, n)
     n_blocks = int(math.ceil(n / block))
+    rng = np.random.default_rng(seed)
     boot = np.empty(reps, dtype=np.float32)
-    all_starts = np.arange(n, dtype=np.int32)
+    offsets = np.arange(block, dtype=np.int32)
     for lo in range(0, reps, batch):
         count = min(batch, reps - lo)
-        chosen = rng.integers(0, n, size=(count, n_blocks), dtype=np.int32)
+        starts = rng.integers(0, n, size=(count, n_blocks), dtype=np.int32)
         sums = np.zeros(count, dtype=np.float64)
-        offsets = np.arange(block, dtype=np.int32)
         for j in range(n_blocks):
-            idx = (chosen[:, j, None] + offsets[None, :]) % n
+            idx = (starts[:, j, None] + offsets[None, :]) % n
             sums += delta[idx].sum(axis=1, dtype=np.float64)
         boot[lo:lo + count] = (sums / float(n_blocks * block)).astype(np.float32)
-        del chosen, idx, sums
+        del starts, idx, sums
         gc.collect()
     return tuple(float(x) for x in np.percentile(boot, [2.5, 97.5]))
 
 
 def evaluate_scope(y: np.ndarray, candidate: np.ndarray, market: np.ndarray, *, reps: int, block: int, batch: int, seed: int) -> dict[str, Any]:
-    cand_rps = rps(y, candidate)
+    candidate_rps = rps(y, candidate)
     market_rps = rps(y, market)
-    delta = (cand_rps - market_rps).astype(np.float32, copy=False)
-    low, high = bootstrap(delta, reps, min(block, len(delta)), batch, seed)
-    return {"n": int(len(y)), "candidate_rps": float(cand_rps.mean()), "market_rps": float(market_rps.mean()), "difference_candidate_minus_market": float(delta.mean()), "block_bootstrap_ci_95": [low, high], "bootstrap_replicates": reps, "block_length": min(block, len(delta)), "seed": seed}
+    delta = (candidate_rps - market_rps).astype(np.float32, copy=False)
+    low, high = bootstrap(delta, reps, block, batch, seed)
+    return {"n": int(len(y)), "candidate_rps": float(candidate_rps.mean()), "market_rps": float(market_rps.mean()), "difference_candidate_minus_market": float(delta.mean()), "block_bootstrap_ci_95": [low, high], "bootstrap_replicates": reps, "block_length": min(block, len(delta)), "seed": seed}
 
 
 def main() -> int:
@@ -187,27 +183,19 @@ def main() -> int:
     try:
         if start is None or end is None or start >= end:
             raise ValueError("invalid holdout interval")
-        candidate, market, y, meta = load(args.input, start, end)
+        candidate, market, y, leagues, meta = load(args.input, start, end)
         pooled = evaluate_scope(y, candidate, market, reps=10_000, block=args.block_length, batch=args.batch_size, seed=args.seed)
         by_league: dict[str, Any] = {}
-        raw_leagues = list(iter_rows(args.input)) if args.input.suffix.lower() not in {".parquet", ".pq"} else []
-        if raw_leagues:
-            # Re-read only the already-small CSV stream to build league masks; no second probability matrix is retained.
-            leagues = []
-            for row in raw_leagues:
-                date = parse_date(str(row.get("date") or row.get("Date") or ""))
-                if date is not None and start <= date < end and row.get("league"):
-                    leagues.append(str(row["league"]))
-            if len(leagues) == len(y):
-                for league in sorted(set(leagues)):
-                    mask = np.asarray([x == league for x in leagues], dtype=bool)
-                    if int(mask.sum()) < 50:
-                        by_league[league] = {"status": "INSUFFICIENT_EVIDENCE", "n": int(mask.sum())}
-                    else:
-                        by_league[league] = evaluate_scope(y[mask], candidate[mask], market[mask], reps=10_000, block=args.block_length, batch=args.batch_size, seed=args.seed)
-                    gc.collect()
-        league_pass = bool(by_league) and all(v.get("block_bootstrap_ci_95", [1])[1] < 0.0 for v in by_league.values() if v.get("status") != "INSUFFICIENT_EVIDENCE") and all(v.get("status") != "INSUFFICIENT_EVIDENCE" for v in by_league.values())
-        result = {"report_version": "v7.3-harness-2", "generated_at": generated, "repository": {"name": "sabiscore/sabiscore", "commit_sha": git_sha()}, "deployment": {"compatibility_status": "NOT_EVALUATED"}, "model": {"status": "EVALUATION_ONLY"}, "data": {"dataset_snapshot": str(args.input), "snapshot_sha256": file_sha256(args.input), "temporal_window": [args.holdout_start, args.holdout_end], "coverage": meta, "provenance_status": "INPUT_ARTIFACT_REQUIRED", "forecast_authenticity": "REQUIRES_PREMATCH_FORECAST_ARTIFACT"}, "policy": {"metric_convention": "3-class RPS; lower is better; proportional de-vig"}, "metrics": {"rps": {"pooled": pooled, "by_league": by_league}}, "gates": {"G18": {"status": "PASS" if pooled["block_bootstrap_ci_95"][1] < 0 and (not by_league or league_pass) else "FAIL", "criterion": "candidate RPS improvement CI upper bound < 0; every reported league must also pass", "evidence_rows": int(len(y))}}, "operator_gates": {}, "risks": ["Market odds are only valid evidence when the snapshot is timestamped before evaluation_at and represents a complete coherent 1X2 book.", "Understat/xG is feature provenance, not a substitute for market odds."], "changes": [], "validation": {"executed": True, "memory_strategy": "float32 + batched bootstrap + explicit gc", "bootstrap_replicates_per_scope": 10000}, "decision": "PASS" if pooled["block_bootstrap_ci_95"][1] < 0 and (not by_league or league_pass) else "FAIL"}
+        for league in sorted(set(leagues.tolist())):
+            mask = leagues == league
+            if int(mask.sum()) < 50:
+                by_league[league] = {"status": "INSUFFICIENT_EVIDENCE", "n": int(mask.sum())}
+            else:
+                by_league[league] = evaluate_scope(y[mask], candidate[mask], market[mask], reps=10_000, block=args.block_length, batch=args.batch_size, seed=args.seed)
+            gc.collect()
+        league_pass = bool(by_league) and all(v.get("block_bootstrap_ci_95", [1.0, 1.0])[1] < 0.0 for v in by_league.values())
+        passed = pooled["block_bootstrap_ci_95"][1] < 0.0 and league_pass
+        result = {"report_version": "v7.3-harness-2", "generated_at": generated, "repository": {"name": "sabiscore/sabiscore", "commit_sha": git_sha()}, "deployment": {"compatibility_status": "NOT_EVALUATED"}, "model": {"status": "EVALUATION_ONLY"}, "data": {"dataset_snapshot": str(args.input), "snapshot_sha256": file_sha256(args.input), "temporal_window": [args.holdout_start, args.holdout_end], "coverage": meta, "provenance_status": "INPUT_ARTIFACT_REQUIRED", "forecast_authenticity": "REQUIRES_PREMATCH_FORECAST_ARTIFACT"}, "policy": {"metric_convention": "3-class RPS; lower is better; proportional de-vig"}, "metrics": {"rps": {"pooled": pooled, "by_league": by_league}}, "gates": {"G18": {"status": "PASS" if passed else "FAIL", "criterion": "candidate RPS improvement CI upper bound < 0; every reported league passes", "evidence_rows": int(len(y))}}, "operator_gates": {}, "risks": ["Market evidence is valid only when the coherent 1X2 snapshot predates evaluation_at.", "Understat/xG is feature provenance, not a substitute for market odds."], "changes": [], "validation": {"executed": True, "memory_strategy": "float32 + batched bootstrap + explicit gc", "bootstrap_replicates_per_scope": 10000}, "decision": "PASS" if passed else "FAIL"}
     except Exception as exc:
         result = {"report_version": "v7.3-harness-2", "generated_at": generated, "repository": {"name": "sabiscore/sabiscore", "commit_sha": git_sha()}, "gates": {"G18": {"status": "BLOCKED", "errors": [str(exc)]}}, "decision": "BLOCKED"}
     out = args.output or REPO_ROOT / "artifacts/certification" / f"g18_bootstrap_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
