@@ -123,10 +123,9 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     """
     one_hot = np.zeros_like(probs, dtype=np.float32)
     one_hot[np.arange(len(y)), y] = 1.0
-    binned_probs = probs.copy()
-    for idx in bins:
-        binned_probs[idx] = probs[idx].mean(axis=0, dtype=np.float64)
-    brier = float(np.mean(np.sum((binned_probs - one_hot) ** 2, axis=1), dtype=np.float64))
+    # Standard multiclass Brier score on the original (un-binned) forecasts.
+    # BS = mean_i sum_k (p_i,k - o_i,k)^2
+    brier = float(np.mean(np.sum((probs.astype(np.float64) - one_hot.astype(np.float64)) ** 2, axis=1)))
     climatology = one_hot.mean(axis=0, dtype=np.float64)
     # UNC = sum_k [ c_k * (1 - c_k) ]
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
@@ -143,11 +142,14 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
         reliability += w * float(np.sum((p_bar - o_bar) ** 2))
         # RES term: sum_k (ō_b,k - c_k)^2
         resolution += w * float(np.sum((o_bar - climatology) ** 2))
-        # Within-bin variance term for non-unique forecasts in bins
+        # Within-bin variance: captures spread of individual forecasts around p̄_b
+        # Required because BS uses raw p_{i,k}, not the bin-mean p̄_b,k.
+        # Identity: BS = REL - RES + UNC + WBV (holds exactly for any partition)
         var = np.sum((probs[idx] - p_bar) ** 2, axis=1).mean(dtype=np.float64)
         cov = np.sum((probs[idx] - p_bar) * (one_hot[idx] - o_bar), axis=1).mean(dtype=np.float64)
         within_bin_variance += w * float(var - 2 * cov)
-    # Extended identity for continuous forecasts: BS = REL - RES + UNC + within_bin_variance
+    # Extended Murphy identity: BS = REL - RES + UNC + WBV
+    # Holds exactly for any partition of samples into bins.
     reconstructed = reliability - resolution + uncertainty + within_bin_variance
     return {
         "brier": brier,
