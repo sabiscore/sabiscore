@@ -117,14 +117,18 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
     reliability = 0.0
     resolution = 0.0
+    within_bin_variance = 0.0
+    within_bin_covariance = 0.0
     for idx in bins:
         w = len(idx) / len(y)
         p_bar = probs[idx].mean(axis=0, dtype=np.float64)
         o_bar = one_hot[idx].mean(axis=0, dtype=np.float64)
         reliability += w * float(np.sum((p_bar - o_bar) ** 2))
         resolution += w * float(np.sum((o_bar - climatology) ** 2))
-    reconstructed = reliability - resolution + uncertainty
-    return {"brier": brier, "reliability": float(reliability), "resolution": float(resolution), "uncertainty": uncertainty, "reconstructed_brier": float(reconstructed), "decomposition_error": float(brier - reconstructed)}
+        within_bin_variance += w * float(np.mean(np.sum((probs[idx] - p_bar) ** 2, axis=1), dtype=np.float64))
+        within_bin_covariance += w * float(np.mean(np.sum((probs[idx] - p_bar) * (one_hot[idx] - o_bar), axis=1), dtype=np.float64))
+    reconstructed = reliability - resolution + uncertainty + within_bin_variance - 2 * within_bin_covariance
+    return {"brier": brier, "reliability": float(reliability), "resolution": float(resolution), "uncertainty": uncertainty, "within_bin_variance": float(within_bin_variance), "within_bin_covariance": float(within_bin_covariance), "reconstructed_brier": float(reconstructed), "decomposition_error": float(brier - reconstructed)}
 
 
 def main() -> int:

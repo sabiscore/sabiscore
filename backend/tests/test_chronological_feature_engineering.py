@@ -16,7 +16,7 @@ from src.models.pipeline import ChronologicalFeaturePipeline, TargetEncodingSpec
 
 
 def _sample_frame(n: int = 2000) -> pd.DataFrame:
-    dates = pd.date_range("2020-01-01", periods=n, freq="D")
+    dates = pd.date_range("2020-01-01", periods=n, freq="D", unit="s")
     teams = np.array(["A", "B", "C", "D"], dtype=object)
     return pd.DataFrame(
         {

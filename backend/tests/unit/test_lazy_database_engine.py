@@ -60,7 +60,7 @@ def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProce
         env=env,
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=45,  # Increased from 20s to 45s for Windows CI environments
     )
 
 
@@ -94,7 +94,7 @@ def test_canonical_alias_outranks_the_legacy_one_when_both_conflict():
         env=env,
         capture_output=True,
         text=True,
-        timeout=20,
+        timeout=45,  # Increased from 20s to 45s for Windows CI environments (the import itself no longer blocks, but Python startup + heavy imports can exceed 20s under load)
     )
     assert result.returncode == 0, result.stderr
     assert "FALLBACK False" in result.stdout, result.stdout

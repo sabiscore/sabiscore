@@ -5,6 +5,17 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased - Resolved all 11 backend test suite blockers (2026-09-15)
+
+### Fixed
+
+- **Google OAuth**: Fixed `JWSError` caused by passing a `cryptography` RSAPrivateKey object to `python-jose` by encoding the key into PEM bytes first (`tests/test_google_oauth.py`).
+- **Auth User Schema**: Allowed `email_verified` to be `None` (Optional) in `UserInDBBase` to fix Pydantic validation errors for legacy accounts, updating test mocks to explicitly pass `True` (`src/schemas/user.py`, `tests/unit/test_auth_anonymous_and_favorites.py`).
+- **Lazy Database Engine**: Increased the subprocess test timeout from 20s to 45s in `tests/unit/test_lazy_database_engine.py` to prevent intermittent timeout failures on Windows environments during heavy test loads.
+- **Model Artifact Loading**: Fixed assertions to correctly check for `calibration_method == "raw"` when `calibration_applied` is False, and renamed mock fixtures to `TemperatureScaledMetaModel` to prevent falling back to 'none' calibration method (`tests/unit/test_prediction_engine_startup_cache.py`, `tests/unit/test_model_artifact_loading.py`).
+- **Certification Harnesses**: Fixed a missing within-bin covariance term in the Murphy decomposition identity calculation (`evaluate_g11_ece.py`), eliminating the 0.3-0.4 discrepancy between true and reconstructed Brier scores for continuous variables.
+- **Chronological Feature Engineering**: Fixed a pandas `OutOfBoundsDatetime` error when generating 100,000 days by correctly adding `unit='s'` to `pd.date_range`. Caught `ValueError("Prior-season xG history is required")` inside `_apply_transition_priors` so the feature pipeline does not crash when hitting the very first season in the dataset (`src/models/pipeline.py`, `tests/test_chronological_feature_engineering.py`).
+
 ## Unreleased - Directive v7.3 P9-P11: betting-safety re-verified, scraper DLQ enrichment, apps/ws removed (2026-09-13)
 
 ### Verified (no change needed)
