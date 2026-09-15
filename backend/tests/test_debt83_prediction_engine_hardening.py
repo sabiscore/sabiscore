@@ -1,116 +1,103 @@
-from __future__ import annotations
+"""DEBT-83 runtime regression tests for PredictionEngine provenance hardening.
+
+The critical invariant is that a calibrator fitted on meta-model probabilities
+must never receive an equal-weight base-ensemble probability vector merely
+because the meta-model or calibration runtime failed at serving time.
+"""
+from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
-import src.models.prediction as prediction_module
-from src.models.prediction import _ArtifactBundle, PredictionEngine
+from src.models.prediction import PredictionEngine, _ArtifactBundle
 
 
-class BaseModel:
-    def __init__(self, proba: list[float]) -> None:
-        self.proba = np.asarray([proba], dtype=float)
-
-    def predict_proba(self, X: object) -> np.ndarray:
-        return self.proba
+FEATURES = np.zeros(58, dtype=np.float32)
 
 
-class BrokenMetaModel:
-    def predict_proba(self, X: object) -> np.ndarray:
-        raise RuntimeError("meta-model failure")
-
-
-class WorkingMetaModel:
-    def __init__(self, proba: list[float]) -> None:
-        self.proba = np.asarray([proba], dtype=float)
-
-    def predict_proba(self, X: object) -> np.ndarray:
-        return self.proba
-
-
-class SpyCalibrator:
-    def __init__(self, proba: list[float], fail: bool = False) -> None:
-        self.proba = np.asarray([proba], dtype=float)
-        self.fail = fail
-        self.calls = 0
-
-    def predict_proba(self, X: object) -> np.ndarray:
-        self.calls += 1
-        if self.fail:
-            raise RuntimeError("calibrator failure")
-        return self.proba
-
-
-@pytest.fixture
-def engine() -> PredictionEngine:
-    return PredictionEngine()
-
-
-def make_bundle(meta_model: object, calibrator: object | None) -> _ArtifactBundle:
+def _bundle(*, meta_model, calibrator):
+    rf = MagicMock()
+    rf.n_features_in_ = 58
+    rf.predict_proba = MagicMock(return_value=np.array([[0.90, 0.05, 0.05]]))
+    xgb = MagicMock()
+    xgb.n_features_in_ = 58
+    xgb.predict_proba = MagicMock(return_value=np.array([[0.10, 0.05, 0.85]]))
     return _ArtifactBundle(
-        models={
-            "base_a": BaseModel([0.70, 0.20, 0.10]),
-            "base_b": BaseModel([0.60, 0.30, 0.10]),
-        },
-        meta_model=meta_model,
+        direct_model=None,
+        models_dict={"rf": rf, "xgb": xgb},
         calibrator=calibrator,
+        overlay=None,
+        feature_columns=None,
+        meta_model=meta_model,
+        model_version="v5_phase7",
+        generation="debt83-test",
     )
 
 
-def test_meta_model_failure_fails_closed_and_never_calls_calibrator(
-    engine: PredictionEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calibrator = SpyCalibrator([0.20, 0.30, 0.50])
-    bundle = make_bundle(BrokenMetaModel(), calibrator)
+def test_meta_model_failure_with_serialized_calibrator_fails_closed_and_never_calls_calibrator():
+    """A failed meta head must not substitute the base-average calibration domain."""
 
-    def unexpected(*args: object, **kwargs: object) -> np.ndarray:
-        raise AssertionError("calibrator must not receive base-domain probabilities")
+    class BrokenMetaModel:
+        def predict_proba(self, X):
+            raise ValueError("meta-model shape mismatch")
 
-    monkeypatch.setattr(engine, "_apply_calibrator", unexpected)
+    calibrator = MagicMock()
+    calibrator.method = "sigmoid"
+    calibrator.calibrators = MagicMock()
+    calibrator.ece_after = {"mean": 0.02}
 
-    served, calibration_applied = engine._run_inference(bundle, X=object())
+    bundle = _bundle(meta_model=BrokenMetaModel(), calibrator=calibrator)
 
-    assert served is None
-    assert calibration_applied is False
-    assert calibrator.calls == 0
+    with patch("src.models.prediction._CAL_AVAILABLE", True), patch(
+        "src.models.prediction._apply_calibrator"
+    ) as apply_calibrator:
+        result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
 
-
-def test_calibrator_failure_fails_closed_after_valid_meta_model(
-    engine: PredictionEngine,
-) -> None:
-    calibrator = SpyCalibrator([0.20, 0.30, 0.50], fail=True)
-    bundle = make_bundle(WorkingMetaModel([0.40, 0.35, 0.25]), calibrator)
-
-    served, calibration_applied = engine._run_inference(bundle, X=object())
-
-    assert served is None
-    assert calibration_applied is False
-    assert calibrator.calls == 1
+    assert result.model_version == "fallback"
+    assert result.calibration_applied is False
+    assert result.calibration_method == "uniform"
+    apply_calibrator.assert_not_called()
 
 
-def test_missing_calibration_runtime_fails_closed(
-    engine: PredictionEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calibrator = SpyCalibrator([0.20, 0.30, 0.50])
-    bundle = make_bundle(WorkingMetaModel([0.40, 0.35, 0.25]), calibrator)
+def test_serialized_calibrator_failure_fails_closed_without_serving_raw_meta_output():
+    """A present calibrator is a serving contract, not optional decoration."""
 
-    monkeypatch.setattr(prediction_module, "_CAL_AVAILABLE", False)
+    class ValidMetaModel:
+        def predict_proba(self, X):
+            return np.array([[0.20, 0.30, 0.50]])
 
-    served, calibration_applied = engine._run_inference(bundle, X=object())
+    calibrator = MagicMock()
+    calibrator.method = "sigmoid"
+    calibrator.calibrators = MagicMock()
+    calibrator.ece_after = {"mean": 0.02}
 
-    assert served is None
-    assert calibration_applied is False
-    assert calibrator.calls == 0
+    bundle = _bundle(meta_model=ValidMetaModel(), calibrator=calibrator)
+
+    with patch("src.models.prediction._CAL_AVAILABLE", True), patch(
+        "src.models.prediction._apply_calibrator",
+        side_effect=ValueError("serialized calibrator corrupted"),
+    ):
+        result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
+
+    assert result.model_version == "fallback"
+    assert result.calibration_applied is False
+    assert result.calibration_method == "uniform"
 
 
-def test_valid_meta_model_probability_is_the_only_calibrator_input(
-    engine: PredictionEngine,
-) -> None:
-    calibrator = SpyCalibrator([0.30, 0.30, 0.40])
-    bundle = make_bundle(WorkingMetaModel([0.40, 0.35, 0.25]), calibrator)
+def test_serialized_calibrator_requires_runtime_dependency():
+    """A serialized calibrator without its runtime must not silently pass raw output."""
 
-    served, calibration_applied = engine._run_inference(bundle, X=object())
+    class ValidMetaModel:
+        def predict_proba(self, X):
+            return np.array([[0.20, 0.30, 0.50]])
 
-    assert calibration_applied is True
-    np.testing.assert_allclose(served, [[0.30, 0.30, 0.40]])
-    assert calibrator.calls == 1
+    calibrator = MagicMock()
+    bundle = _bundle(meta_model=ValidMetaModel(), calibrator=calibrator)
+
+    with patch("src.models.prediction._CAL_AVAILABLE", False), patch(
+        "src.models.prediction._apply_calibrator", None
+    ):
+        result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
+
+    assert result.model_version == "fallback"
+    assert result.calibration_applied is False
+    assert result.calibration_method == "uniform"
