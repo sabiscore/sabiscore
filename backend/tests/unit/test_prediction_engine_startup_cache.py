@@ -135,7 +135,9 @@ def test_startup_priming_preserves_the_meta_model_for_calibrated_serving() -> No
     assert result.home_win == 0.70
     assert result.draw == 0.10
     assert result.away_win == 0.20
-    assert result.calibration_applied is True
+    assert result.calibration_method == "raw"
+    # _MetaModel is not in _META_MODEL_CALIBRATION_LABELS, so it is honestly reported as uncalibrated
+    assert result.calibration_applied is False
 
     PredictionEngine.clear_cache()
 

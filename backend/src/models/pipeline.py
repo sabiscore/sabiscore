@@ -69,7 +69,12 @@ class ChronologicalFeaturePipeline:
         seasons = sorted(df["season"].dropna().unique())
         for season in seasons:
             # The helper computes the league prior from season < target season.
-            season_frame, promoted = self.transition_discount.apply(df, season)
+            try:
+                season_frame, promoted = self.transition_discount.apply(df, season)
+            except ValueError as e:
+                if "Prior-season xG history is required" in str(e):
+                    continue
+                raise
             if not promoted:
                 continue
             mask = df["season"].eq(season)

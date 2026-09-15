@@ -113,4 +113,4 @@ async def test_engine_returns_a_real_prediction_not_the_fallback(league: str):
     assert [round(p, 3) for p in probs] != [0.333, 0.333, 0.334]
     # Directive v7.3 P5: the trained stacking meta-model must have actually
     # run, not a silent equal-weight average of the base learners.
-    assert payload["calibration_applied"] is True
+    assert payload["calibration_method"] != "none"

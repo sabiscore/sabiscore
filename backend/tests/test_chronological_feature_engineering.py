@@ -16,7 +16,7 @@ from src.models.pipeline import ChronologicalFeaturePipeline, TargetEncodingSpec
 
 
 def _sample_frame(n: int = 2000) -> pd.DataFrame:
-    dates = pd.date_range("2020-01-01", periods=n, freq="D")
+    dates = pd.date_range("2020-01-01", periods=n, freq="H")
     teams = np.array(["A", "B", "C", "D"], dtype=object)
     return pd.DataFrame(
         {
@@ -191,8 +191,7 @@ def test_pipeline_has_no_future_date_leakage() -> None:
     # Every generated feature is attached to a row at or after its source date.
     assert result["date"].min() == frame["date"].min()
     assert result["date"].max() == frame["date"].max()
-    assert result["home_win_home_team_encoded"].dtype == np.float32
-
+    assert result["home_team_home_win_encoded"].dtype == np.float32
 
 def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() -> None:
     history = pd.DataFrame(
@@ -224,9 +223,9 @@ def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() 
     ).transform(frame)
 
     current_day = result[result["date"] == pd.Timestamp("2025-01-01")]
-    assert current_day["home_win_home_team_encoded"].tolist() == pytest.approx([0.0, 1.0])
+    assert current_day["home_team_home_win_encoded"].tolist() == pytest.approx([0.0, 1.0])
     next_day = result[result["date"] == pd.Timestamp("2025-01-02")]
-    assert next_day["home_win_home_team_encoded"].iloc[0] == pytest.approx(0.5)
+    assert next_day["home_team_home_win_encoded"].iloc[0] == pytest.approx(0.5)
 
 
 def test_pipeline_memory_peak_stays_below_four_gb() -> None:

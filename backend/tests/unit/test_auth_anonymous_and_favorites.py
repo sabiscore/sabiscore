@@ -156,6 +156,7 @@ async def test_auth_cookie_login_sets_httponly_cookie() -> None:
                 hashed_password=get_password_hash("password123"),
                 is_active=True,
                 is_superuser=False,
+                email_verified=True,
             )
 
             with patch("src.api.endpoints.auth._get_user_by_email", new=AsyncMock(return_value=mock_user)):

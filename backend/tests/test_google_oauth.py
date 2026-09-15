@@ -45,6 +45,13 @@ async def test_google_id_token_verifies_signature_audience_issuer_and_nonce(
     }
     client_id = "google-client-id.apps.googleusercontent.com"
     nonce = "test-nonce-123456789"
+    from cryptography.hazmat.primitives import serialization
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
     now = datetime.now(timezone.utc)
     token = jwt.encode(
         {
@@ -58,7 +65,7 @@ async def test_google_id_token_verifies_signature_audience_issuer_and_nonce(
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(minutes=5)).timestamp()),
         },
-        private_key,
+        private_pem,
         algorithm="RS256",
         headers={"kid": kid},
     )
