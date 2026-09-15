@@ -123,16 +123,14 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     """
     one_hot = np.zeros_like(probs, dtype=np.float32)
     one_hot[np.arange(len(y)), y] = 1.0
-    binned_probs = probs.copy()
-    for idx in bins:
-        binned_probs[idx] = probs[idx].mean(axis=0, dtype=np.float64)
-    brier = float(np.mean(np.sum((binned_probs - one_hot) ** 2, axis=1), dtype=np.float64))
+    # Standard multiclass Brier score on the original (un-binned) forecasts.
+    # BS = mean_i sum_k (p_i,k - o_i,k)^2
+    brier = float(np.mean(np.sum((probs.astype(np.float64) - one_hot.astype(np.float64)) ** 2, axis=1)))
     climatology = one_hot.mean(axis=0, dtype=np.float64)
     # UNC = sum_k [ c_k * (1 - c_k) ]
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
     reliability = 0.0
     resolution = 0.0
-    within_bin_variance = 0.0
     for idx in bins:
         w = len(idx) / len(y)
         # p̄_b: bin-mean forecast vector
@@ -143,12 +141,9 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
         reliability += w * float(np.sum((p_bar - o_bar) ** 2))
         # RES term: sum_k (ō_b,k - c_k)^2
         resolution += w * float(np.sum((o_bar - climatology) ** 2))
-        # Within-bin variance term for non-unique forecasts in bins
-        var = np.sum((probs[idx] - p_bar) ** 2, axis=1).mean(dtype=np.float64)
-        cov = np.sum((probs[idx] - p_bar) * (one_hot[idx] - o_bar), axis=1).mean(dtype=np.float64)
-        within_bin_variance += w * float(var - 2 * cov)
-    # Extended identity for continuous forecasts: BS = REL - RES + UNC + within_bin_variance
-    reconstructed = reliability - resolution + uncertainty + within_bin_variance
+    # Murphy (1973) 3-term exact identity: BS = REL - RES + UNC
+    # This holds exactly for any partition when BS is the standard (un-binned) Brier score.
+    reconstructed = reliability - resolution + uncertainty
     return {
         "brier": brier,
         "reliability": float(reliability),

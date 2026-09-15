@@ -5,6 +5,15 @@ Last reviewed: 2026-09-15
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
+## v7.4 Production Hardening Audit, 2026-09-15
+
+- **Frontend Build**: `pnpm typecheck` passes with **zero TypeScript errors**. `pnpm build` completes successfully across all routes (`/intelligence`, `/dashboard`, `/match/[id]`, `/team/[slug]`, API proxy routes, etc.). Middleware chunk is 34.7 kB. No `'unsafe-eval'` in CSP. Verified on current HEAD.
+- **Redis / Cache Architecture**: `backend/src/core/cache.py` implements a 3-tier cache (Redis Labs T1 → Upstash T2 → in-memory T3) with: explicit TTLs via `setex`, circuit breaker per tier with 30–60 s cooldown, `_max_memory_entries=1000` FIFO eviction, `production_ready()` gate that returns `False` when T1 is configured but unavailable, and metrics snapshots per tier. No fabricated fallback data paths. Verified against HEAD.
+- **FastAPI Error Handling**: `ErrorHandlingMiddleware` provides a global JSON safety net for all unhandled exceptions (`{"detail": "Internal server error", "error_code": "INTERNAL_ERROR", "request_id": ..., "timestamp": ...}`). All prediction endpoints (`predictions.py`) have explicit typed catches: `asyncio.TimeoutError → 503`, `FileNotFoundError → 404`, `DataUnavailableError → 503`, `ValueError → 422`, `MemoryError → 507`. Rate-limit returns structured `{"detail": "Too many requests", "error_code": "RATE_LIMIT_EXCEEDED"}`. No bare 500 stack traces exposed.
+- **Calibration Labels Extended**: `_META_MODEL_CALIBRATION_LABELS` in `prediction.py` now includes `CalibratedClassifierCV → "isotonic"` and `LogisticRegression → "platt"` in addition to the existing named calibrators, ensuring real production artifacts are correctly identified.
+- **Backend Test Suite**: `2512 passed, 17 skipped, 2 xfailed` on current HEAD (verified by background task-166 in session d4d15b00).
+- **PR #200** (`fix/v7.3-p18-certification-recovery`): Opened and awaiting review. All conflict resolution merged to branch.
+
 ## v7.3 P18 Certification Recovery & Fixes, 2026-09-15
 
 - **Calibration Contract (G11, G27)**: `PredictionEngine` now treats `SoftmaxMetaModel` and unknown meta-models as uncalibrated (`calibration_applied=False`, method `"raw"`), enforcing the strict calibration contract. Tests in `test_model_artifact_loading.py` and `test_prediction_engine_startup_cache.py` have been aligned with this new `calibration_method` expectation.
@@ -12,6 +21,7 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
 - **Chronological Pipeline**: Handled cold-start prior-season data correctly in `pipeline.py`, avoiding uncaught `ValueError` for the earliest seasons. Corrected tests to expect `home_team_home_win_encoded` instead of typos, and lowered the sample frequency in the peak memory tests to avoid pandas `OutOfBoundsDatetime` errors.
 - **Authentication**: `test_google_oauth.py` mock JWT encoding correctly passes serialized PEM data to `python-jose`, fixing a `Unable to parse an RSA_JWK` error. Fixed Pydantic validation in `test_auth_anonymous_and_favorites.py` by adding `email_verified=True` to the mock user response.
 - **Validation**: All 9 previously failing backend tests are now passing locally. Run `make verify` or `pytest backend/tests/` to see complete test success.
+
 
 ## M2 Family A (Elo) wired into training and retrained, 2026-08-30
 

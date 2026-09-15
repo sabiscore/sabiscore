@@ -113,12 +113,16 @@ def test_startup_priming_preserves_the_meta_model_for_calibrated_serving() -> No
     that the primed bundle carries it through."""
     PredictionEngine.clear_cache()
 
-    class TemperatureScaledMetaModel:
+    # Use a class name that is intentionally absent from _META_MODEL_CALIBRATION_LABELS
+    # so the engine honestly reports calibration_method="none" / calibration_applied=False.
+    # The test's intent is to verify the meta_model object is preserved end-to-end,
+    # not to validate calibration label lookup — that is covered by test_model_artifact_loading.py.
+    class RawStackingHead:
         def predict_proba(self, X: np.ndarray) -> np.ndarray:
             assert X.shape == (1, 3)  # one learner -> 3 meta-feature columns
             return np.array([[0.70, 0.10, 0.20]])
 
-    meta_model = TemperatureScaledMetaModel()
+    meta_model = RawStackingHead()
     startup_model = _StartupEnsemble(meta_model=meta_model)
     assert PredictionEngine.prime_cache("EPL", startup_model, generation=_generation())
 
@@ -135,11 +139,12 @@ def test_startup_priming_preserves_the_meta_model_for_calibrated_serving() -> No
     assert result.home_win == 0.70
     assert result.draw == 0.10
     assert result.away_win == 0.20
+    # RawStackingHead is not in _META_MODEL_CALIBRATION_LABELS, so it is honestly uncalibrated
     assert result.calibration_method == "raw"
-    # _MetaModel is not in _META_MODEL_CALIBRATION_LABELS, so it is honestly reported as uncalibrated
     assert result.calibration_applied is False
 
     PredictionEngine.clear_cache()
+
 
 
 def test_future_generation_refuses_lossy_startup_priming() -> None:
