@@ -2,7 +2,7 @@
 
 ## 95. `backend/src/connectors/{base,betfair,opta,pinnacle,statsbomb_open,understat_source,football_data_org}.py` have zero live importers — a second, mostly-dead connector tree
 
-**Tier:** `LATER` — code hygiene, not a defect; nothing live is affected.
+**Tier:** `RESOLVED` — Dead code removed on 2026-09-15.
 **Owner:** unassigned. **Found:** 2026-09-13, while verifying P12's "provider
 gateway uses one lifespan `httpx.AsyncClient`, never per-request" invariant —
 `connectors/base.py`'s `BaseConnector.__init__` constructs `self._client =
@@ -106,8 +106,8 @@ not a quick fix.
 
 ## 93. Scraper's `CircuitBreaker`/`RateLimiter`/`isAllowedByRobots` are exported and partly tested but have zero callers — directive §15.3.7 forensic lead CONFIRMED, no action taken
 
-**Tier:** `LATER` — confirmed dead code, but nothing is broken and no operator
-decision is forced by this finding. **Owner:** unassigned. **Found:**
+**Tier:** `RESOLVED` — Dead code removed on 2026-09-15.
+**Owner:** unassigned. **Found:**
 2026-09-13, during a directive v7.3 P1/P10 review resolving a named
 "genuinely unconfirmed lead" from `PRODUCTION_EXECUTIVE_DIRECTIVE.md` §15.3.7
 ("the scraper resilience/circuit-breaker manager may be exported but never
@@ -529,7 +529,7 @@ closing this item). **Priority:** low, non-blocking.
 
 ## 85. Production Vercel alias `web-lac-theta-42.vercel.app` returns platform-level `DEPLOYMENT_NOT_FOUND` despite correct alias assignment — 2026-09-12
 
-**Tier:** `NEXT`.
+**Tier:** `RESOLVED` — updated canonical aliases across the codebase (2026-09-15).
 **Owner:** unassigned.
 **Found:** 2026-09-12, during a Directive v7.3 P0 Ground Truth capture.
 
