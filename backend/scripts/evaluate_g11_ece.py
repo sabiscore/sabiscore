@@ -123,7 +123,10 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     """
     one_hot = np.zeros_like(probs, dtype=np.float32)
     one_hot[np.arange(len(y)), y] = 1.0
-    brier = float(np.mean(np.sum((probs - one_hot) ** 2, axis=1), dtype=np.float64))
+    binned_probs = probs.copy()
+    for idx in bins:
+        binned_probs[idx] = probs[idx].mean(axis=0, dtype=np.float64)
+    brier = float(np.mean(np.sum((binned_probs - one_hot) ** 2, axis=1), dtype=np.float64))
     climatology = one_hot.mean(axis=0, dtype=np.float64)
     # UNC = sum_k [ c_k * (1 - c_k) ]
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
