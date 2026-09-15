@@ -65,7 +65,7 @@ _DEFAULT_CORRELATION_PRUNE_THRESHOLD: float = float(
     os.environ.get("ENSEMBLE_CORRELATION_PRUNE_THRESHOLD", "0.92")
 )
 
-CalibrationMethodName = Literal["isotonic", "platt", "temperature"]
+CalibrationMethodName = Literal["isotonic", "sigmoid", "temperature"]
 
 
 # ── Method selection ─────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ def select_calibration_method(
         return force
     if n_training_rows >= isotonic_min_rows:
         return "isotonic"
-    return "platt"
+    return "sigmoid"
 
 
 # ── Calibrator dataclass ─────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ def fit_calibrator(
     """
     n_classes = y_proba.shape[1]
 
-    if method in ("isotonic", "platt"):
+    if method in ("isotonic", "sigmoid"):
         fitted: List[object] = []
         for cls in range(n_classes):
             binary = (y_true == cls).astype(int)
@@ -342,7 +342,7 @@ def compare_calibration_methods(
     Returns a FittedCalibrator for the selected method with method_comparison
     populated.
     """
-    all_methods: List[CalibrationMethodName] = ["isotonic", "platt", "temperature"]
+    all_methods: List[CalibrationMethodName] = ["isotonic", "sigmoid", "temperature"]
     n = len(y_train)
 
     ece_before = compute_ece(y_val, proba_val)

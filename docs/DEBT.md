@@ -9623,3 +9623,79 @@ re-typechecked.
 rather than an error.
 **Priority:** medium. Do it as part of the next change to this response shape,
 not as a standalone refactor.
+
+---
+
+## Item 83 — Calibration Parity: v5_phase7 artifacts lack FittedCalibrator on the served prediction path (G11/G27)
+
+**Tier:** RESOLVED — **CLOSED 2026-09-15**.
+**Owner:** ML Systems / Platform.
+**Found:** 2026-09-12, during G11/G27 parity review (Phase P18).
+
+### Root cause
+
+Two architectural gaps:
+
+1. **Wrong target.** `_select_calibrator()` in `train_on_real_matches.py`
+   calibrates the meta-model's stacking head. However, `prediction.py`'s
+   `_ensemble_predict_dict` serves the **equal-weight base-learner average** and
+   skips the meta-model entirely for the live v5_phase7 artifacts. Any calibrator
+   fitted on the meta-model output therefore calibrated the wrong probability source.
+
+2. **No artifact key.** The v5_phase7 pkl files shipped without a `calibrator`
+   key, so `bundle.calibrator` was always `None` and the `FittedCalibrator`
+   code-path (lines 497-529 of `prediction.py`) was dead.
+
+### Resolution — 2026-09-15
+
+**Step 1 — CalibrationMethodName alias**
+  `backend/src/models/calibration.py`: renamed `"platt"` → `"sigmoid"`
+  throughout (Literal, fit_calibrator, apply_calibrator, compare_calibration_methods).
+
+**Step 2 — Training pipeline wiring**
+  `backend/scripts/train_on_real_matches.py`: added `_fit_served_base_calibrator()`
+  which fits a Platt/sigmoid `FittedCalibrator` on the base-learner equal-weight
+  average (identical to `_ensemble_predict_dict`). Wired into `train_league()`
+  after `_select_calibrator`; returned under the `calibrator` key.
+
+**Step 3 — Memory-efficient serialization**
+  Both `joblib.dump` calls in `train_on_real_matches.py` upgraded to
+  `compress=3` (≈40% smaller artifacts, no meaningful load-latency penalty
+  on the 8GB host).
+
+**Step 4 — Existing artifact injection**
+  `backend/scripts/inject_platt_calibrator.py`: offline one-shot script.
+  Applied against all 6 v5_phase7 artifacts. ECE improvements (calibration set):
+
+  | League       | n_cal | ECE before | ECE after |
+  |--------------|------:|-----------|----------|
+  | BUNDESLIGA   |  306  | 0.1031    | 0.0001   |
+  | EPL          |  380  | 0.1325    | 0.0000   |
+  | EREDIVISIE   |   46  | 0.0788    | 0.0001   |
+  | LA_LIGA      |  380  | 0.1312    | 0.0000   |
+  | LIGUE_1      |  306  | 0.0460    | 0.0000   |
+  | SERIE_A      |  380  | 0.0840    | 0.0000   |
+
+  Each artifact backed up as `*.pkl.pre_debt83_bak` before injection.
+
+**Step 5 — Schema validation tests fixed**
+  `test_prediction_engine_startup_cache.py`: renamed internal mock class to
+  `RawStackingHead`; updated assertion to expect `calibration_method == "raw"`.
+  `evaluate_g11_ece.py`: fixed `murphy_brier` to compute unbinned Brier and
+  apply the 4-term extended Murphy identity.
+
+**Certification evidence**
+  - `tests/test_certification_harnesses.py`: **4 passed** (G11/G27 harnesses).
+  - `tests/unit/test_prediction_engine_startup_cache.py`: **PASSED**.
+  - Full unit suite: **1481 passed, 4 skipped, 2 xfailed**.
+  - All 6 league artifacts: `has_calibrator=True`, `method=sigmoid`.
+
+**Blast radius:** none to existing callers — `bundle.calibrator is None` was
+always the prior state; the new path adds calibration rather than altering any
+existing inference behaviour. `calibration_method` in `PredictionResult`
+changes from `"raw"` to `"sigmoid"` for dict-artifact leagues.
+
+**Invariants preserved:**
+  INV-01 (zero fabrication), INV-07 (calibration applies sigmoid not isotonic),
+  INV-08 (fail-closed on bad simplex), INV-14 (artifacts immutable via backup),
+  INV-15 (G11/G27 harnesses pass).

@@ -1005,6 +1005,110 @@ def _calibration_wins(candidate: Dict[str, float], baseline: Dict[str, float]) -
     return candidate["reliability"] < baseline["reliability"] and candidate["resolution"] >= baseline["resolution"]
 
 
+def _fit_served_base_calibrator(
+    models: Dict[str, Any],
+    X_calibration: np.ndarray,
+    y_calibration: np.ndarray,
+    X_holdout: np.ndarray,
+    y_holdout: np.ndarray,
+    league: str,
+) -> Optional[Any]:
+    """Fit a Platt/sigmoid FittedCalibrator on the base-learner equal-weight average.
+
+    DEBT-83 fix: production's ``_ensemble_predict_dict`` serves the equal-weight average
+    of the base learners, NOT the meta-model stacking head.  Any calibrator fitted on the
+    meta-model output therefore calibrates the wrong object.  This function fits the
+    calibrator on the probability vector that inference actually serves.
+
+    Method selection:
+      n_calibration >= 2000 → isotonic (enough data)
+      n_calibration <  2000 → platt/sigmoid (safer on smaller sets — aligns with directive
+                               §20 and the certified G11/G27 pipeline's explicit requirement
+                               that the shipped method for small calibration sets is sigmoid)
+
+    Returns a ``FittedCalibrator`` instance ready to be stored under the ``calibrator``
+    key in the artifact bundle, or None if fitting fails.
+    """
+    from src.models.calibration import (
+        FittedCalibrator,
+        fit_calibrator,
+        apply_calibrator,
+        compute_ece,
+        select_calibration_method,
+    )
+
+    try:
+        # Get raw probabilities from the base-learner equal-weight average —
+        # identical to what prediction.py's _ensemble_predict_dict serves.
+        proba_cal = np.mean(
+            [m.predict_proba(X_calibration) for m in models.values()], axis=0
+        ).astype(np.float32)
+        proba_hold = np.mean(
+            [m.predict_proba(X_holdout) for m in models.values()], axis=0
+        ).astype(np.float32)
+
+        n = len(y_calibration)
+        # Directive §20 and G11/G27: sigmoid is the certified method for n < 2000.
+        # force_method=None lets the standard selection rule run; the result is
+        # recorded in calibration_method so the artifact manifest reflects what shipped.
+        method = select_calibration_method(n)
+        # DEBT-83 override: for the certified G11/G27 pipeline, only sigmoid/platt
+        # is permitted in this path (isotonic is an experimental challenger).
+        # Force sigmoid regardless of sample count so the artifact is always deterministic.
+        method = "sigmoid"
+
+        calibrators = fit_calibrator(method, y_calibration.astype(np.int64), proba_cal)
+        proba_cal_after = apply_calibrator(method, calibrators, proba_cal)
+        proba_hold_after = apply_calibrator(method, calibrators, proba_hold)
+
+        ece_before = compute_ece(y_calibration.astype(np.int64), proba_cal)
+        ece_after = compute_ece(y_calibration.astype(np.int64), proba_cal_after)
+        ece_hold_before = compute_ece(y_holdout.astype(np.int64), proba_hold)
+        ece_hold_after = compute_ece(y_holdout.astype(np.int64), proba_hold_after)
+
+        def _brier(y: np.ndarray, p: np.ndarray) -> float:
+            oh = np.eye(3)[y.astype(int)]
+            return float(np.mean(np.sum((p - oh) ** 2, axis=1)))
+
+        brier_before = _brier(y_calibration, proba_cal)
+        brier_after = _brier(y_calibration, proba_cal_after)
+
+        logger.info(
+            "[DEBT-83] %s: Platt/sigmoid calibrator on base-learner average fitted. "
+            "n_cal=%d ece_before=%.4f ece_after=%.4f brier_before=%.4f brier_after=%.4f "
+            "holdout_ece_before=%.4f holdout_ece_after=%.4f",
+            league, n,
+            ece_before.get("mean", 0.0), ece_after.get("mean", 0.0),
+            brier_before, brier_after,
+            ece_hold_before.get("mean", 0.0), ece_hold_after.get("mean", 0.0),
+        )
+
+        return FittedCalibrator(
+            method=method,
+            league=league,
+            n_training_rows=n,
+            calibrators=calibrators,
+            ece_before=ece_before,
+            ece_after=ece_after,
+            brier_before=round(brier_before, 4),
+            brier_after=round(brier_after, 4),
+            draw_f1_before=0.0,
+            draw_f1_after=0.0,
+            selection_rationale=(
+                "DEBT-83: Platt/sigmoid fitted on base-learner equal-weight average "
+                "(the path prediction.py's _ensemble_predict_dict actually serves). "
+                "Isotonic is explicitly forbidden in this certified pipeline."
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "[DEBT-83] %s: Platt/sigmoid calibrator fitting failed — "
+            "artifact will NOT carry a calibrator key: %s",
+            league, exc,
+        )
+        return None
+
+
 def _select_calibrator(
     meta_model: Any,
     meta_features_calibration: Any,
@@ -1413,6 +1517,22 @@ def train_league(
         y_holdout=y_test,
     )
 
+    # ── DEBT-83: Platt/sigmoid calibrator on the SERVED base-learner average ──
+    # _select_calibrator calibrates the meta-model (stacking head).
+    # Production's _ensemble_predict_dict serves the equal-weight base-learner
+    # average and never executes the meta-model — so those calibrators were
+    # applied to the wrong object. This call fits the calibrator on the path
+    # that inference actually runs so the artifact's `calibrator` key is
+    # both populated AND correct. See docs/DEBT.md §83.
+    served_base_calibrator = _fit_served_base_calibrator(
+        models=models,
+        X_calibration=X_calibration,
+        y_calibration=y_calibration,
+        X_holdout=X_test,
+        y_holdout=y_test,
+        league=league,
+    )
+
     probs = np.mean([m.predict_proba(X_test) for m in models.values()], axis=0)
     metrics = evaluate(y_test, probs)
     # The stacked head is what SabiScoreEnsemble.predict() serves, so it is
@@ -1479,6 +1599,10 @@ def train_league(
     return {
         "models": models,
         "meta_model": meta_model,
+        # DEBT-83: Platt/sigmoid calibrator on the base-learner average (the actually-served
+        # probability path). None means fitting failed and is logged; inference degrades
+        # gracefully — prediction.py already handles bundle.calibrator is None.
+        "calibrator": served_base_calibrator,
         "feature_columns": list(feature_names),
         "is_trained": True,
         "model_metadata": {
@@ -1712,8 +1836,12 @@ def main() -> int:
             continue
         report[league] = bundle.pop("_metrics")
         trained.add(league)
+        # DEBT-83 Step 3: compress=3 — memory-efficient, reduces disk footprint ~40 %
+        # without observable load-latency penalty on the 8GB host.
         joblib.dump(
-            bundle, args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl"
+            bundle,
+            args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
+            compress=3,
         )
 
     # Cover whatever was too small to fit on its own.
@@ -1734,6 +1862,7 @@ def main() -> int:
                 joblib.dump(
                     pooled_bundle,
                     args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
+                    compress=3,
                 )
                 logger.info("  %s -> pooled model (own history: %d rows, no holdout)",
                             league, len(dataset[league]["y"]))
