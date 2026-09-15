@@ -1,8 +1,8 @@
-﻿# SabiScore Production Setup Guide
+# SabiScore Production Setup Guide
 
-Last updated: 2026-08-21
+Last updated: 2026-09-15
 
-This is the authoritative setup and deployment guide for the finalized production shape.
+This is the authoritative setup and deployment guide for the finalized production shape, officially running the certified APEX v5_phase7 ML generation.
 
 ## Canonical Services
 

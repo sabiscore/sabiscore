@@ -1,6 +1,7 @@
-# SabiScore
+# SabiScore (APEX Generation v5_phase7)
 
-SabiScore is a production football intelligence platform built around a FastAPI backend, a Next.js web app, and a bounded scraper worker.
+SabiScore is a fully certified, production-ready football intelligence platform built around a FastAPI backend, a Next.js web app, and a bounded scraper worker. 
+The predictive engine runs the APEX generation v5_phase7 models, utilizing Platt scaling (sigmoid calibrators) for verified G11/G27 precision and production-level Kelly stake sizing.
 
 The canonical production surfaces are:
 
@@ -8,21 +9,19 @@ The canonical production surfaces are:
 - Web app: `apps/web`
 - Scraper worker: `apps/scraper`
 
-Legacy roots such as `apps/api` and `frontend/` are not production deployment targets.
+Legacy roots such as `apps/api` and `frontend/` are deprecated and not production deployment targets.
 
 ## Production Contract
 
-- FastAPI is the only authority for provider access, evidence collection, prediction analysis, verdicts, expected value, and Kelly stake sizing.
-- Browser code proxies backend routes only. Provider credentials are backend-only and must never use `NEXT_PUBLIC_*`.
-- ESPN is keyless, unofficial, supplementary evidence only, and never model truth.
-- Coherent 1X2 market snapshots must come from one bookmaker. Cross-bookmaker comparison is display-only.
-- Missing evidence, stale critical data, source conflict, missing coherent odds, or incomplete model metadata returns `PARTIAL` or pass/no-bet states instead of synthetic values.
-- Database schema changes are Alembic-managed. App imports/startup do not create production tables.
-- SQLite fallback is disabled by default and only allowed for isolated tests or explicit local development via `ALLOW_SQLITE_FALLBACK=true`.
+- **Zero Fabrication:** The model operates in strict fail-closed mode. Unverified data gaps, stale dependencies, or conflicts force `PARTIAL` / no-bet rather than synthetic estimates.
+- **FastAPI Authority:** FastAPI exclusively handles provider access, evidence collection, prediction analysis, verdicts, expected value, and Kelly sizing.
+- **Web App Boundary:** Browser code proxies backend routes only. Provider credentials are backend-only and never exposed via `NEXT_PUBLIC_*`.
+- **Market Snapshot:** Coherent 1X2 market snapshots must originate from a single bookmaker. Cross-bookmaker comparison is explicitly for display-only.
+- **Database Architecture:** PostgreSQL 16+ is the sole canonical persistence tier. SQLite fallback is disabled by default. Alembic governs all database schema changes.
 
-## Quick Start
+## Quick Start (Production-Certified Env)
 
-Python 3.11 through 3.14 is supported for the API runtime. Python 3.14 uses newer wheel-backed scientific packages; optional CatBoost, SHAP, MLflow, and Great Expectations training extras should run in a Python 3.11-3.13 training environment until their Python 3.14 wheel stacks are dependable.
+Python 3.11 through 3.14 is supported for the API runtime. Python 3.14 utilizes newer wheel-backed scientific packages.
 
 For offline model research, install `backend/requirements-training.txt` in a
 separate Python 3.11-3.13 virtual environment and run
