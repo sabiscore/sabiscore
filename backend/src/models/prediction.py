@@ -128,6 +128,7 @@ _META_MODEL_CALIBRATION_LABELS: Dict[str, str] = {
     "VectorScaledMetaModel": "vector",
     "BetaCalibratedMetaModel": "beta",
     "IsotonicMetaModel": "isotonic",
+    "CalibratedClassifierCV": "isotonic",
     "LogisticRegression": "platt",
 }
 

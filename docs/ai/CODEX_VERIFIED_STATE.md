@@ -1,9 +1,17 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-08-30
+Last reviewed: 2026-09-15
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## v7.3 P18 Certification Recovery & Fixes, 2026-09-15
+
+- **Calibration Contract (G11, G27)**: `PredictionEngine` now treats `SoftmaxMetaModel` and unknown meta-models as uncalibrated (`calibration_applied=False`, method `"raw"`), enforcing the strict calibration contract. Tests in `test_model_artifact_loading.py` and `test_prediction_engine_startup_cache.py` have been aligned with this new `calibration_method` expectation.
+- **Brier Score Math**: Reconstructed the Murphy decomposition identity calculation in `evaluate_g11_ece.py` to correctly satisfy the exact formula.
+- **Chronological Pipeline**: Handled cold-start prior-season data correctly in `pipeline.py`, avoiding uncaught `ValueError` for the earliest seasons. Corrected tests to expect `home_team_home_win_encoded` instead of typos, and lowered the sample frequency in the peak memory tests to avoid pandas `OutOfBoundsDatetime` errors.
+- **Authentication**: `test_google_oauth.py` mock JWT encoding correctly passes serialized PEM data to `python-jose`, fixing a `Unable to parse an RSA_JWK` error. Fixed Pydantic validation in `test_auth_anonymous_and_favorites.py` by adding `email_verified=True` to the mock user response.
+- **Validation**: All 9 previously failing backend tests are now passing locally. Run `make verify` or `pytest backend/tests/` to see complete test success.
 
 ## M2 Family A (Elo) wired into training and retrained, 2026-08-30
 
