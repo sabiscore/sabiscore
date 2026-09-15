@@ -129,6 +129,7 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
     reliability = 0.0
     resolution = 0.0
+    within_bin_variance = 0.0
     for idx in bins:
         w = len(idx) / len(y)
         # p̄_b: bin-mean forecast vector
@@ -139,13 +140,18 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
         reliability += w * float(np.sum((p_bar - o_bar) ** 2))
         # RES term: sum_k (ō_b,k - c_k)^2
         resolution += w * float(np.sum((o_bar - climatology) ** 2))
-    # Standard 3-term identity: BS = REL - RES + UNC (always exact for any partition)
-    reconstructed = reliability - resolution + uncertainty
+        # Within-bin variance term for non-unique forecasts in bins
+        var = np.sum((probs[idx] - p_bar) ** 2, axis=1).mean(dtype=np.float64)
+        cov = np.sum((probs[idx] - p_bar) * (one_hot[idx] - o_bar), axis=1).mean(dtype=np.float64)
+        within_bin_variance += w * float(var - 2 * cov)
+    # Extended identity for continuous forecasts: BS = REL - RES + UNC + within_bin_variance
+    reconstructed = reliability - resolution + uncertainty + within_bin_variance
     return {
         "brier": brier,
         "reliability": float(reliability),
         "resolution": float(resolution),
         "uncertainty": uncertainty,
+        "within_bin_variance": float(within_bin_variance),
         "reconstructed_brier": float(reconstructed),
         "decomposition_error": float(brier - reconstructed),
     }
