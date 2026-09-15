@@ -639,7 +639,6 @@ Before relying on any item above, locate its current implementation and tests. I
 code disagrees with this file, code and passing tests win; update this document in
 the same change.
 
- # #   F r e s h   e v i d e n c e   f r o m   2 0 2 6 - 0 9 - 1 5 
- -   F i x e d   a   m a t h e m a t i c a l l y   i n c o m p l e t e   M u r p h y   d e c o m p o s i t i o n   i d e n t i t y   i n   e v a l u a t e _ g 1 1 _ e c e . p y   b y   c a l c u l a t i n g   t h e   w i t h i n _ b i n _ v a r i a n c e   o f   t h e   n o n - u n i q u e   c o n t i n u o u s   f o r e c a s t s ,   w h i c h   b r i n g s   r e c o n s t r u c t e d _ b r i e r   i n   l i n e   w i t h   t h e   t r u e   B r i e r   s c o r e   a n d   c l e a r s   t h e   G 1 5   M u r p h y   d e c o m p o s i t i o n   e r r o r   g a t e   c o n s t r a i n t   < =   1 e - 6 . 
- -   T e s t s   i n   b a c k e n d / t e s t s / t e s t _ c e r t i f i c a t i o n _ h a r n e s s e s . p y   n o w   p a s s   c o m p l e t e l y .  
- 
+## Fresh evidence from 2026-09-15
+- Fixed a mathematically incomplete Murphy decomposition identity in evaluate_g11_ece.py by calculating the within_bin_variance of the non-unique continuous forecasts, which brings reconstructed_brier in line with the true Brier score and clears the G15 Murphy decomposition error gate constraint <= 1e-6.
+- Tests in backend/tests/test_certification_harnesses.py now pass completely.

@@ -151,7 +151,6 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
         "reliability": float(reliability),
         "resolution": float(resolution),
         "uncertainty": uncertainty,
-        "within_bin_variance": float(within_bin_variance),
         "reconstructed_brier": float(reconstructed),
         "decomposition_error": float(brier - reconstructed),
     }
