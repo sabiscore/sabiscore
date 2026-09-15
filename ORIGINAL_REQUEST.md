@@ -168,3 +168,42 @@ SabiScore must provide real data, traceable evidence, reproducible models, train
 
 ### 28. FINAL AUTONOMOUS EXECUTION COMMAND
 Inspect the repository. Establish the baseline. Produce audit artifacts. Select one highest-priority milestone. Implement, test, verify, commit, record evidence, reassess. Build the intelligence substrate first, expose what evidence supports, and make the product excellent.
+
+## 2026-09-15T05:44:40Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Launched
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: Multi-Agent Engineering Council (Large-scale team)
+
+Finalize the production readiness of SabiScore (FastAPI, Next.js, PostgreSQL, Redis) by resolving data pipeline latency, enforcing full-stack type safety, and hardening resilient error handling across the stack.
+
+Working directory: ~/sabiscore
+
+Integrity mode: demo
+
+## Requirements
+
+### R1. Backend & Data Pipeline
+Optimize the FastAPI layer and PostgreSQL schema synchronization. Implement robust Redis caching strategies to minimize data pipeline latency and ensure zero-downtime handling during ML inference integration.
+
+### R2. Frontend & UX
+Audit and enforce strict TypeScript type safety across the Next.js client. Ensure the frontend remains responsive, visually cohesive, and seamlessly consumes the predictive APIs.
+
+### R3. Platform & Release
+Update all relevant project documentation (README.md, CHANGELOG.md, API docs, system architecture diagrams) and log any technical debt.
+
+### R4. Version Control
+Stage, commit, and push all changes using strict conventional commit standards with clear, contextual messages. Prepare a Pull Request to the master branch.
+
+## Acceptance Criteria
+
+### Backend Verification
+- [ ] `pytest backend/tests/` passes completely with no new regressions.
+- [ ] Backend optimizations respect local 8GB RAM constraints (no heavy load-testing required locally).
+
+### Frontend Verification
+- [ ] `pnpm type-check` in the `apps/web` directory passes with zero TypeScript errors.
+- [ ] `pnpm build` completes successfully.
+

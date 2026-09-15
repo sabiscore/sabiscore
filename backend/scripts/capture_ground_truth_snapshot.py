@@ -56,7 +56,7 @@ BACKEND_PERFORMANCE = "https://sabiscore-api-bav1.onrender.com/api/v1/model-perf
 BACKEND_CALIBRATION = (
     "https://sabiscore-api-bav1.onrender.com/api/v1/model-performance/calibration"
 )
-WEB_HEALTH = "https://web-lac-theta-42.vercel.app/api/health"
+WEB_HEALTH = "https://web-oversabis-projects.vercel.app/api/health"
 
 PROBE_TIMEOUT_S = 90.0  # a cold Render free-tier dyno legitimately takes ~60s
 
