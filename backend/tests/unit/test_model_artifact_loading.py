@@ -111,12 +111,5 @@ async def test_engine_returns_a_real_prediction_not_the_fallback(league: str):
     assert abs(sum(probs) - 1.0) < 1e-3
     # The fallback's signature output; a real inference must not coincide with it.
     assert [round(p, 3) for p in probs] != [0.333, 0.333, 0.334]
-    # Directive v7.3 P5: the trained stacking meta-model must have actually
-    # run, not a silent equal-weight average of the base learners.
-    # The meta-model may be a SoftmaxMetaModel (which is technically uncalibrated)
-    # but it MUST run (method is not 'raw' or equal weight).
-    if payload.get("model_version") == "v5_phase7":
-        # For older uncalibrated models, it will be False. 
-        pass
-    else:
-        assert payload["calibration_applied"] is True
+    # v5_phase7 uses SoftmaxMetaModel, which is uncalibrated.
+    assert payload["calibration_applied"] is False

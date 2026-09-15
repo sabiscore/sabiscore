@@ -21,7 +21,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Fixed `JWKError` in `backend/tests/test_google_oauth.py` by explicitly serializing the mock RSA key to PEM format before encoding.
 - Fixed `ValidationError` in `backend/tests/unit/test_auth_anonymous_and_favorites.py` by providing `email_verified=True` to the mocked `UserAccount`.
 - Fixed model caching in `backend/src/models/prediction.py` to ensure the `meta_model` is copied into the startup cache, addressing Directive v7.3 P5.
-- Updated `_META_MODEL_CALIBRATION_LABELS` in `prediction.py` to recognize `LogisticRegression` ("platt") and `_MetaModel` ("mock"), ensuring tests evaluating older artifacts correctly assert they are calibrated.
+- Fixed `test_prediction_engine_startup_cache.py` by mapping the mock meta-model to `BetaCalibratedMetaModel` instead of modifying production logic.
+- Adjusted assertions in `test_model_artifact_loading.py` to correctly reflect that legacy `v5_phase7` artifacts are uncalibrated (`SoftmaxMetaModel`).
 - Fixed `murphy_brier` calculation in `backend/scripts/evaluate_g11_ece.py` to use binned probabilities, strictly satisfying the Murphy decomposition identity.
 - Handled `ValueError` in `backend/src/models/pipeline.py` to gracefully skip applying league transition priors for the earliest season where prior xG history is unavailable.
 - Fixed typos in `backend/tests/test_chronological_feature_engineering.py` (incorrect column name assertions and `OutOfBoundsDatetime` due to excessive period frequency).
