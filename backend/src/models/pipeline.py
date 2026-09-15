@@ -73,7 +73,6 @@ class ChronologicalFeaturePipeline:
                 season_frame, promoted = self.transition_discount.apply(df, season)
             except ValueError as exc:
                 if "Prior-season xG history is required" in str(exc):
-                    logger.debug("Skipping transition priors for season %s: no prior history", season)
                     continue
                 raise
             if not promoted:

@@ -52,7 +52,7 @@ class UserInDBBase(BaseModel):
     username: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
-    email_verified: bool = False
+    email_verified: Optional[bool] = False
     is_active: bool = True
     is_superuser: bool = False
     created_at: Optional[datetime] = None
