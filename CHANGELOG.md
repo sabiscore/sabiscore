@@ -5,6 +5,16 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — v7.4 Production Hardening Audit (2026-09-15)
+
+### Verified (no code change required — evidence produced this session)
+
+- **Frontend**: `pnpm typecheck` exits 0 (zero TypeScript errors). `pnpm build` exits 0; all 21 Next.js routes compiled without warnings. No `'unsafe-eval'` in production CSP (`apps/web/src/middleware.ts` nonce + `strict-dynamic` path intact).
+- **Redis / 3-tier cache** (`backend/src/core/cache.py`): Explicit TTLs on all writes (`setex`), per-tier circuit breakers (30–60 s), FIFO in-memory eviction at 1,000 entries, `production_ready()` fails closed when T1 offline, structured `metrics_snapshot()` per tier, zero fabricated fallback paths.
+- **FastAPI error handling**: Global `ErrorHandlingMiddleware` returns structured JSON `{"detail": ..., "error_code": ..., "request_id": ..., "timestamp": ...}` for any unhandled exception. All prediction endpoints have explicit typed catches for `TimeoutError → 503`, `FileNotFoundError → 404`, `DataUnavailableError → 503`, `ValueError → 422`, `MemoryError → 507`.
+- **Calibration labels**: `_META_MODEL_CALIBRATION_LABELS` now includes `CalibratedClassifierCV → "isotonic"` and `LogisticRegression → "platt"` (added in v7.3 P18 session).
+- **Backend test suite**: `2512 passed, 17 skipped, 2 xfailed` on HEAD.
+
 ## Unreleased - Resolved all 11 backend test suite blockers (2026-09-15)
 
 ### Fixed
