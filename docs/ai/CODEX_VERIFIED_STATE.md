@@ -638,3 +638,7 @@ deployment SHAs, and a rollback rehearsal are proven.
 Before relying on any item above, locate its current implementation and tests. If
 code disagrees with this file, code and passing tests win; update this document in
 the same change.
+
+## Fresh evidence from 2026-09-15
+- Fixed a mathematically incomplete Murphy decomposition identity in evaluate_g11_ece.py by calculating the within_bin_variance of the non-unique continuous forecasts, which brings reconstructed_brier in line with the true Brier score and clears the G15 Murphy decomposition error gate constraint <= 1e-6.
+- Tests in backend/tests/test_certification_harnesses.py now pass completely.
