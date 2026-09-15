@@ -131,6 +131,7 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
     uncertainty = float(np.sum(climatology * (1.0 - climatology)))
     reliability = 0.0
     resolution = 0.0
+    within_bin_variance = 0.0
     for idx in bins:
         w = len(idx) / len(y)
         # p̄_b: bin-mean forecast vector
@@ -141,9 +142,15 @@ def murphy_brier(probs: np.ndarray, y: np.ndarray, bins: list[np.ndarray]) -> di
         reliability += w * float(np.sum((p_bar - o_bar) ** 2))
         # RES term: sum_k (ō_b,k - c_k)^2
         resolution += w * float(np.sum((o_bar - climatology) ** 2))
-    # Murphy (1973) 3-term exact identity: BS = REL - RES + UNC
-    # This holds exactly for any partition when BS is the standard (un-binned) Brier score.
-    reconstructed = reliability - resolution + uncertainty
+        # Within-bin variance: captures spread of individual forecasts around p̄_b
+        # Required because BS uses raw p_{i,k}, not the bin-mean p̄_b,k.
+        # Identity: BS = REL - RES + UNC + WBV (holds exactly for any partition)
+        var = np.sum((probs[idx] - p_bar) ** 2, axis=1).mean(dtype=np.float64)
+        cov = np.sum((probs[idx] - p_bar) * (one_hot[idx] - o_bar), axis=1).mean(dtype=np.float64)
+        within_bin_variance += w * float(var - 2 * cov)
+    # Extended Murphy identity: BS = REL - RES + UNC + WBV
+    # Holds exactly for any partition of samples into bins.
+    reconstructed = reliability - resolution + uncertainty + within_bin_variance
     return {
         "brier": brier,
         "reliability": float(reliability),
