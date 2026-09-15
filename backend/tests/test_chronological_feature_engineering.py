@@ -16,7 +16,7 @@ from src.models.pipeline import ChronologicalFeaturePipeline, TargetEncodingSpec
 
 
 def _sample_frame(n: int = 2000) -> pd.DataFrame:
-    dates = pd.date_range("2020-01-01", periods=n, freq="H")
+    dates = pd.date_range("2020-01-01", periods=n, freq="D", unit="s")
     teams = np.array(["A", "B", "C", "D"], dtype=object)
     return pd.DataFrame(
         {
@@ -192,6 +192,7 @@ def test_pipeline_has_no_future_date_leakage() -> None:
     assert result["date"].min() == frame["date"].min()
     assert result["date"].max() == frame["date"].max()
     assert result["home_team_home_win_encoded"].dtype == np.float32
+
 
 def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() -> None:
     history = pd.DataFrame(

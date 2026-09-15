@@ -71,8 +71,8 @@ class ChronologicalFeaturePipeline:
             # The helper computes the league prior from season < target season.
             try:
                 season_frame, promoted = self.transition_discount.apply(df, season)
-            except ValueError as e:
-                if "Prior-season xG history is required" in str(e):
+            except ValueError as exc:
+                if "Prior-season xG history is required" in str(exc):
                     continue
                 raise
             if not promoted:
