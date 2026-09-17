@@ -1,5 +1,92 @@
 # SabiScore Debt Ledger
 
+## 100. G-gate thresholds relocated into the hashed certification policy (OG-06 executed)
+
+**Tier:** `RESOLVED` — 2026-09-17. **Owner:** unassigned.
+**Authorization:** OG-06, granted explicitly in the Directive v5 task brief.
+
+The thresholds deciding whether a *release* certifies — `G11`'s
+`adaptive_confidence_ece_max = 0.03`, `G15`'s Murphy residual bound, `G16`'s
+nominal levels, `G18`'s bootstrap configuration, `G24`'s SHA-parity
+requirement — lived in a plain `EVIDENCE_POLICY` dict inside
+`scripts/compile_certification_report.py`. That dict was unversioned and
+unhashed, so editing a number flipped a gate's pass/fail outcome while every
+recorded policy digest stayed byte-identical. Directive §20's "phantom
+threshold" classification names exactly this: a number that decides a gate
+while belonging to no policy.
+
+They now live in `RELEASE_GATES` inside `src/models/certification_policy.py`,
+folded into the payload `policy_sha256()` covers, alongside
+`REQUIRED_RELEASE_GATES`. Policy version `1.1.1` → `1.2.0`. The compiler loads
+them by path (not as a package import — importing `src.models` opens a database
+connection, and the compiler must run in a bare build environment, the same
+constraint `verify_active_artifacts.py` documents) and now cites the policy's
+*own* digest rather than re-hashing the subset it read.
+
+**Tamper verification, measured end to end:**
+
+```
+ece_max 0.03  ->  policy_sha256 4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664
+ece_max 0.04  ->  policy_sha256 47cd8688bbc6f28dc777fa23b7747a1b6165971a29608a2f1625886bf6fd9da4
+reverted      ->  4e050ad0... (baseline restored)
+```
+
+While tampered, the compiler independently reported `G11 ece_max: 0.04` and
+cited the diverged digest — so a manipulated threshold is both *used* and
+*visible*, which is the property that makes the digest worth citing.
+
+Pinned by two tests in `tests/unit/test_certification_policy.py`, both watched
+failing against the pre-fix arrangement (`KeyError: 'release_gates'`): one
+asserts every declared release gate is inside the hashed payload, the other
+asserts the compiler carries no second copy of the numbers.
+
+⚠️ **PROMOTION_GATES and RELEASE_GATES answer different questions** — may this
+*candidate generation* be promoted, versus does this *release* certify. They
+share one digest deliberately: a report citing `policy_sha256()` is citing the
+complete contract it was judged under, not half of it.
+
+## 99. **`scripts/ci_local_enforcer.sh` is MANDATORY before every commit** until the GitHub Actions billing lock is administratively resolved
+
+**Tier:** `NOW` — a standing procedural requirement, not a defect.
+**Owner:** every contributor. **Opened:** 2026-09-17.
+
+> **⚠️ MANDATORY INTERIM PROTOCOL.** While the GitHub Actions billing lock
+> (item 16) holds, **no commit may be pushed without a clean, zero-exit run of
+> `./scripts/ci_local_enforcer.sh`.** No workflow currently reaches step 1 —
+> every run fails with `runner_name: ""` and `steps: 0` — so *nothing* is
+> gating merges. This script is the only enforcement that exists. It is not
+> optional, and a skipped gate in its summary is not a pass.
+
+The script mirrors `.github/workflows/ci.yml` rather than inventing its own
+checks, so a clean run means what a green CI run would have meant: ruff over
+`src/` **and** `scripts/`, the mypy 784 ceiling, `--strict` registry
+validation, artifact-lineage verification (the gate Render runs in its
+buildCommand), the full backend suite, then web lint/typecheck/test/build,
+scraper validate/test, and the responsible-gambling copy scan. `set -euo
+pipefail` aborts on the first failure.
+
+Gates that genuinely cannot run locally — Alembic without a live PostgreSQL,
+Gitleaks when not installed — are reported as `SKIPPED` with a reason, counted
+separately, and re-stated in the summary. **A skip is never printed as a
+pass.** Silence is not success; that conflation is what let items 96–98 reach
+`master`.
+
+**It earned its place on the first run.** Linting `backend/scripts/` — which
+CI never did, since its ruff step covers `src` only — surfaced `F821 Undefined
+name 'Path'` in `scripts/validate_deployment.py`. That script is the **G24
+gate**, one of the five `REQUIRED` gates in
+`compile_certification_report.py`, and it referenced `Path` without importing
+`pathlib`. Line 131 sits on the main path, *after* all network validation, at
+the moment it writes its artifact — so G24 would do the whole job and then
+raise `NameError` instead of producing the evidence certification requires.
+Fixed by adding the import; the enforcer is now the standing guard for that
+class.
+
+⚠️ **This item closes when the billing lock does, and not before.** Delete the
+mandate only once a real workflow run has been observed reaching step 1 with a
+non-empty `runner_name` — not when someone believes the billing issue was
+settled. Items 96–98 are what "believed to be fine" costs.
+
 ## 98. PR #205 renamed the calibration method literal `"platt"` → `"sigmoid"` without updating its own test file — 8 failures, invisible behind item 97's collection abort
 
 **Tier:** `RESOLVED` — test literals updated 2026-09-16.
