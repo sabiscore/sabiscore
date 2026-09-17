@@ -124,13 +124,13 @@ def test_abbreviations_are_not_folded_together() -> None:
 
 
 def test_no_resolution_is_unknown_not_a_guess() -> None:
-    verdict, reason = classify("Atalanta", [])
+    verdict, reason, confirmed = classify("Atalanta", [])
     assert verdict == UNKNOWN
     assert reason == "no_geocoding_match_within_league_country"
 
 
 def test_name_confirmed_single_place_is_verified() -> None:
-    verdict, reason = classify("Leverkusen", [_point("Leverkusen", 51.03, 6.98)])
+    verdict, reason, confirmed = classify("Leverkusen", [_point("Leverkusen", 51.03, 6.98)])
     assert verdict == VERIFIED
     assert reason == "place_name_appears_in_club_name"
 
@@ -141,7 +141,7 @@ def test_two_confirmed_places_far_apart_go_to_review() -> None:
     Both are named in the club, so neither can be dismissed as noise; the
     disagreement is real and belongs to a human.
     """
-    verdict, reason = classify(
+    verdict, reason, confirmed = classify(
         "Bayern Munich",
         [_point("Bayern", 47.80, 12.53), _point("Munich", 48.14, 11.58)],
     )
@@ -156,16 +156,19 @@ def test_unconfirmed_noise_does_not_veto_a_confirmed_place() -> None:
     so the centroid is noise from a generic token rather than an ambiguity, and
     must not downgrade a club that did resolve.
     """
-    verdict, _ = classify(
+    verdict, _, confirmed = classify(
         "Newcastle United",
         [_point("Newcastle", 54.97, -1.61, "GB"), _point("United Kingdom", 54.76, -2.70, "GB")],
     )
     assert verdict == VERIFIED
+    # The confirmed evidence is Newcastle alone -- the UK centroid never earns
+    # trust just because it happened not to veto the verdict (DEBT 101).
+    assert [g.name for g in confirmed] == ["Newcastle"]
 
 
 def test_when_nothing_is_confirmed_everything_counts_and_review_wins() -> None:
     """The fail-closed direction: an unconfirmed resolution is never VERIFIED."""
-    verdict, reason = classify(
+    verdict, reason, confirmed = classify(
         "Man United",
         [_point("United Kingdom", 54.76, -2.70, "GB")],
     )
@@ -176,5 +179,32 @@ def test_when_nothing_is_confirmed_everything_counts_and_review_wins() -> None:
 def test_verified_never_arises_from_an_unnamed_place() -> None:
     """The whole basis of VERIFIED is the club naming the place. Nothing else."""
     for name in ("Bergamo", "Amsterdam", "Turin"):
-        verdict, _ = classify("Atalanta", [_point(name, 45.7, 9.67, "IT")])
+        verdict, _, confirmed = classify("Atalanta", [_point(name, 45.7, 9.67, "IT")])
         assert verdict == REQUIRES_REVIEW
+
+
+# --- DEBT 101: the confirmed subset must be the evidence VERIFIED rests on ---
+
+
+def test_verified_returns_exactly_the_confirmed_candidates() -> None:
+    """VERIFIED must never come back with an empty or unconfirmed evidence set."""
+    verdict, _, confirmed = classify("Leverkusen", [_point("Leverkusen", 51.03, 6.98)])
+    assert verdict == VERIFIED
+    assert [g.name for g in confirmed] == ["Leverkusen"]
+
+
+def test_non_verified_verdicts_return_no_confirmed_evidence() -> None:
+    """REQUIRES_REVIEW and UNKNOWN both mean 'nothing to trust yet'."""
+    _, _, confirmed_unknown = classify("Atalanta", [])
+    assert confirmed_unknown == ()
+
+    _, _, confirmed_review = classify(
+        "Man United", [_point("United Kingdom", 54.76, -2.70, "GB")]
+    )
+    assert confirmed_review == ()
+
+    _, _, confirmed_split = classify(
+        "Bayern Munich",
+        [_point("Bayern", 47.80, 12.53), _point("Munich", 48.14, 11.58)],
+    )
+    assert confirmed_split == ()
