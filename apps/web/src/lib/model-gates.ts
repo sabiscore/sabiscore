@@ -18,9 +18,6 @@
  *  The actual promotion gate is relative — see certification_policy.py. */
 export const RPS_DISPLAY_FLOOR = 0.21;
 
-/** @deprecated Use RPS_DISPLAY_FLOOR. Kept to avoid import churn during migration. */
-export const RPS_PROMOTION_GATE = RPS_DISPLAY_FLOOR;
-
 /** Uniform choice across a 3-outcome market — a property of the problem, not a
  *  measurement. The backend emits this alongside real series data; this constant
  *  exists only as the fallback when it has not answered yet. */

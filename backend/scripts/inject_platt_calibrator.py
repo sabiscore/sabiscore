@@ -13,6 +13,18 @@ SoftmaxMetaModel and then calibrated its output.
 The script is intentionally fail-closed.  It refuses to inject a calibrator
 when the served head cannot be reproduced, returns an invalid simplex, or the
 chronological calibration/holdout split is too small.
+
+Acceptance is evidence-gated (directive §19 — "do not force a calibrator into
+production").  A calibrator is serialized only when it improves ECE *and* does
+not degrade Brier on the held-out window it never saw; one that fails is not
+written, and one already present in the artifact is removed, because declining
+a calibrator has to change the artifact or nothing happens.  The persisted
+``ece_before``/``ece_after``/``brier_before``/``brier_after`` are therefore
+always holdout-measured; the fitted-on-rows figures are kept beside them under
+``method_comparison`` as explicitly labelled diagnostics, never as evidence.
+
+Pass ``--force`` to re-fit an artifact that already carries a calibrator;
+without it such artifacts are skipped, which is how stale ones persist.
 """
 from __future__ import annotations
 
@@ -197,13 +209,24 @@ def _fit_platt(
     calibration_end: date,
     holdout_start: date,
     holdout_end: date,
-) -> Optional[Any]:
+) -> Tuple[Optional[Any], str]:
+    """Fit a Platt calibrator and accept it only on held-out evidence.
+
+    Returns ``(calibrator, outcome)`` where outcome is ``accepted``,
+    ``declined`` (fit succeeded but the holdout says it does not help), or
+    ``error``.
+    """
     from src.models.calibration import FittedCalibrator, apply_calibrator, compute_ece, fit_calibrator
 
     try:
         proba_cal, serving_head, serving_domain = _served_probabilities(bundle, X_cal)
-        proba_hold, hold_head, _ = _served_probabilities(bundle, X_hold)
-        if hold_head != serving_domain and serving_head == "meta_model":
+        proba_hold, hold_head, hold_domain = _served_probabilities(bundle, X_hold)
+        # Invariant assertion: the serving head is a property of the bundle, so it
+        # must be identical across both calls.  Compare head-to-head and
+        # domain-to-domain; an earlier revision compared hold_head against
+        # serving_domain ("meta_model" vs "SoftmaxMetaModel"), which raised
+        # unconditionally for every meta-model artifact.
+        if (hold_head, hold_domain) != (serving_head, serving_domain):
             raise ValueError("serving head changed between calibration and holdout")
 
         method = "sigmoid"
@@ -214,24 +237,53 @@ def _fit_platt(
         if not _valid_probability_matrix(proba_cal_after) or not _valid_probability_matrix(proba_hold_after):
             raise ValueError("calibrator returned an invalid probability simplex")
 
-        ece_before = compute_ece(y_cal, proba_cal)
-        ece_after = compute_ece(y_cal, proba_cal_after)
-        ece_hbefore = compute_ece(y_hold, proba_hold)
-        ece_hafter = compute_ece(y_hold, proba_hold_after)
-
         def _brier(yy: np.ndarray, pp: np.ndarray) -> float:
             oh = np.eye(3)[yy.astype(int)]
             return float(np.mean(np.sum((pp - oh) ** 2, axis=1)))
 
-        bb = _brier(y_cal, proba_cal)
-        ba = _brier(y_cal, proba_cal_after)
+        # In-sample (the calibrator's own fit rows).  Scoring a calibrator on the
+        # rows it was fitted on is optimistic by construction — it drives ECE to
+        # ~0 regardless of whether calibration generalises — so these are kept
+        # strictly as diagnostics under method_comparison, never as headline
+        # evidence.  These rows are additionally inside the base learners' own
+        # training window, so they are doubly optimistic.
+        ece_insample_before = compute_ece(y_cal, proba_cal)
+        ece_insample_after = compute_ece(y_cal, proba_cal_after)
+        brier_insample_before = _brier(y_cal, proba_cal)
+        brier_insample_after = _brier(y_cal, proba_cal_after)
+
+        # Held-out: rows the calibrator never saw, and the base learners'
+        # declared holdout season.  This is the reportable evidence, matching
+        # calibration.py's own `ece_after = compute_ece(y_val, proba_cal)`
+        # convention for FittedCalibrator's headline fields.
+        ece_before = compute_ece(y_hold, proba_hold)
+        ece_after = compute_ece(y_hold, proba_hold_after)
+        brier_before = _brier(y_hold, proba_hold)
+        brier_after = _brier(y_hold, proba_hold_after)
+
         logger.info(
-            "[DEBT-83] %-12s head=%s method=%s n_cal=%d ece %.4f→%.4f "
-            "brier %.4f→%.4f hold_ece %.4f→%.4f",
-            league, serving_domain, method, len(y_cal),
-            ece_before["mean"], ece_after["mean"], bb, ba,
-            ece_hbefore["mean"], ece_hafter["mean"],
+            "[DEBT-83] %-12s head=%s method=%s n_cal=%d n_hold=%d "
+            "holdout ece %.4f→%.4f brier %.4f→%.4f "
+            "(in-sample diagnostic ece %.4f→%.4f)",
+            league, serving_domain, method, len(y_cal), len(y_hold),
+            ece_before["mean"], ece_after["mean"], brier_before, brier_after,
+            ece_insample_before["mean"], ece_insample_after["mean"],
         )
+
+        # Directive §19: "Do not force a calibrator into production."  Acceptance
+        # rests on rows the calibrator never saw — ECE is the calibration
+        # criterion, and Brier (a proper scoring rule) must not degrade.  A
+        # calibrator that fails this is not serialized; the artifact keeps
+        # serving its raw head, which prediction.py already reports honestly as
+        # calibration_applied=False.
+        if not (ece_after["mean"] < ece_before["mean"] and brier_after <= brier_before):
+            logger.warning(
+                "[DEBT-83] %-12s calibrator DECLINED on holdout evidence: "
+                "ece %.4f→%.4f brier %.4f→%.4f — leaving %s uncalibrated",
+                league, ece_before["mean"], ece_after["mean"],
+                brier_before, brier_after, serving_domain,
+            )
+            return None, "declined"
 
         return FittedCalibrator(
             method=method,
@@ -240,8 +292,8 @@ def _fit_platt(
             calibrators=calibrators,
             ece_before=ece_before,
             ece_after=ece_after,
-            brier_before=round(bb, 4),
-            brier_after=round(ba, 4),
+            brier_before=round(brier_before, 4),
+            brier_after=round(brier_after, 4),
             draw_f1_before=0.0,
             draw_f1_after=0.0,
             selection_rationale=(
@@ -249,7 +301,10 @@ def _fit_platt(
                 f"on the exact {serving_head} output ({serving_domain}), then "
                 "serialized under artifact['calibrator']. The inference engine "
                 "must apply this calibrator to that same probability domain. "
-                "Chronological calibration/holdout separation is preserved."
+                "Headline ece_before/ece_after and brier_before/brier_after are "
+                f"measured on the held-out {holdout_start.isoformat()}…"
+                f"{holdout_end.isoformat()} window, which the calibrator never "
+                "saw; in-sample figures are diagnostics under method_comparison."
             ),
             method_comparison={
                 "selected": "sigmoid",
@@ -261,16 +316,33 @@ def _fit_platt(
                 "holdout_rows": int(len(y_hold)),
                 "calibration_period": [calibration_start.isoformat(), calibration_end.isoformat()],
                 "holdout_period": [holdout_start.isoformat(), holdout_end.isoformat()],
-                "holdout_ece_before": ece_hbefore,
-                "holdout_ece_after": ece_hafter,
+                "evidence_basis": "holdout",
+                "holdout_ece_before": ece_before,
+                "holdout_ece_after": ece_after,
+                "holdout_brier_before": round(brier_before, 4),
+                "holdout_brier_after": round(brier_after, 4),
+                "insample_diagnostic_note": (
+                    "Fitted-on rows; optimistic by construction and inside the "
+                    "base learners' training window. Not certification evidence."
+                ),
+                "insample_ece_before": ece_insample_before,
+                "insample_ece_after": ece_insample_after,
+                "insample_brier_before": round(brier_insample_before, 4),
+                "insample_brier_after": round(brier_insample_after, 4),
             },
-        )
+        ), "accepted"
     except Exception as exc:
         logger.warning("[DEBT-83] %-12s calibrator fit failed: %s", league, exc)
-        return None
+        return None, "error"
 
 
-def inject(artifact_path: Path, cache_dir: Path, holdout_season: str, dry_run: bool = False) -> bool:
+def inject(
+    artifact_path: Path,
+    cache_dir: Path,
+    holdout_season: str,
+    dry_run: bool = False,
+    force: bool = False,
+) -> bool:
     import joblib
 
     slug = artifact_path.stem.split("_ensemble_")[0]
@@ -284,9 +356,16 @@ def inject(artifact_path: Path, cache_dir: Path, holdout_season: str, dry_run: b
     if not isinstance(bundle, dict) or "models" not in bundle:
         logger.warning("%s is not a dict-artifact — skipping", artifact_path.name)
         return False
-    if bundle.get("calibrator") is not None:
-        logger.info("%s already has calibrator — skipping", artifact_path.name)
-        return False
+    had_calibrator = bundle.get("calibrator") is not None
+    if had_calibrator:
+        if not force:
+            logger.info(
+                "%s already has calibrator — skipping (pass --force to re-fit)",
+                artifact_path.name,
+            )
+            return False
+        logger.info("%s already has calibrator — re-fitting (--force)", artifact_path.name)
+        bundle["calibrator"] = None
 
     feature_columns: List[str] = list(bundle.get("feature_columns") or [])
     if not feature_columns:
@@ -317,7 +396,7 @@ def inject(artifact_path: Path, cache_dir: Path, holdout_season: str, dry_run: b
     del X
     gc.collect()
 
-    calibrator = _fit_platt(
+    calibrator, outcome = _fit_platt(
         bundle,
         X_cal,
         y_cal,
@@ -332,7 +411,29 @@ def inject(artifact_path: Path, cache_dir: Path, holdout_season: str, dry_run: b
     del X_cal, X_hold, y_cal, y_hold
     gc.collect()
     if calibrator is None:
-        return False
+        if outcome != "declined" or not had_calibrator:
+            # An error, or nothing to undo: leave the artifact byte-identical.
+            return False
+        # A previously-injected calibrator that the holdout now rejects must be
+        # actively removed, otherwise declining it changes nothing on disk.
+        bundle["calibrator"] = None
+        metadata = bundle.setdefault("model_metadata", {})
+        metadata.pop("calibration_input_domain", None)
+        metadata.pop("calibration_serving_head", None)
+        metadata.update(
+            {
+                "calibration_method": None,
+                "calibration_applied_at_serving": False,
+                "debt83_status": "CALIBRATOR_DECLINED_ON_HOLDOUT_EVIDENCE",
+                "debt83_resolved_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        if dry_run:
+            logger.info("[DRY RUN] would strip declined calibrator from %s", artifact_path.name)
+            return True
+        joblib.dump(bundle, artifact_path, compress=3)
+        logger.info("%s: removed calibrator declined by holdout evidence", artifact_path.name)
+        return True
 
     bundle["calibrator"] = calibrator
     metadata = bundle.setdefault("model_metadata", {})
@@ -366,6 +467,11 @@ def main() -> int:
     ap.add_argument("--cache-dir", type=Path, default=Path("data/cache"))
     ap.add_argument("--holdout-season", default="2024-2025")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-fit and overwrite an existing calibrator (required for reproducible re-runs).",
+    )
     args = ap.parse_args()
 
     models_dir = args.models_dir.resolve()
@@ -388,7 +494,13 @@ def main() -> int:
 
     ok = 0
     for path in pkls:
-        if inject(path, cache_dir, args.holdout_season, dry_run=args.dry_run):
+        if inject(
+            path,
+            cache_dir,
+            args.holdout_season,
+            dry_run=args.dry_run,
+            force=args.force,
+        ):
             ok += 1
         gc.collect()
     logger.info("DEBT-83: %d/%d artifacts processed successfully", ok, len(pkls))

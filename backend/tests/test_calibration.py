@@ -2,7 +2,7 @@
 
 Coverage:
   - select_calibration_method: sample-count routing
-  - fit_calibrator / apply_calibrator: isotonic, platt, temperature — output shape + normalisation
+  - fit_calibrator / apply_calibrator: isotonic, sigmoid (Platt), temperature — output shape + normalisation
   - compute_ece: perfect calibration, uniform priors
   - _compute_brier_multiclass: known-value assertion
   - run_league_calibration: FittedCalibrator fields + brier tracking
@@ -81,10 +81,10 @@ class TestSelectCalibrationMethod:
         assert select_calibration_method(2001) == "isotonic"
 
     def test_platt_below_threshold(self):
-        assert select_calibration_method(1999) == "platt"
+        assert select_calibration_method(1999) == "sigmoid"
 
     def test_platt_small_corpus(self):
-        assert select_calibration_method(50) == "platt"
+        assert select_calibration_method(50) == "sigmoid"
 
     def test_force_overrides_sample_count(self):
         assert select_calibration_method(5000, force="temperature") == "temperature"
@@ -92,7 +92,7 @@ class TestSelectCalibrationMethod:
 
     def test_custom_threshold(self):
         assert select_calibration_method(500, isotonic_min_rows=500) == "isotonic"
-        assert select_calibration_method(499, isotonic_min_rows=500) == "platt"
+        assert select_calibration_method(499, isotonic_min_rows=500) == "sigmoid"
 
 
 # ── compute_ece ───────────────────────────────────────────────────────────────
@@ -155,21 +155,21 @@ class TestComputeBrierMulticlass:
 # ── fit_calibrator / apply_calibrator ────────────────────────────────────────
 
 class TestFitApplyCalibrator:
-    @pytest.mark.parametrize("method", ["isotonic", "platt", "temperature"])
+    @pytest.mark.parametrize("method", ["isotonic", "sigmoid", "temperature"])
     def test_output_shape(self, method):
         y, p = _make_data(200)
         cal = fit_calibrator(method, y, p)
         out = apply_calibrator(method, cal, p)
         assert out.shape == p.shape
 
-    @pytest.mark.parametrize("method", ["isotonic", "platt", "temperature"])
+    @pytest.mark.parametrize("method", ["isotonic", "sigmoid", "temperature"])
     def test_rows_sum_to_one(self, method):
         y, p = _make_data(200)
         cal = fit_calibrator(method, y, p)
         out = apply_calibrator(method, cal, p)
         np.testing.assert_allclose(out.sum(axis=1), np.ones(len(y)), atol=1e-6)
 
-    @pytest.mark.parametrize("method", ["isotonic", "platt", "temperature"])
+    @pytest.mark.parametrize("method", ["isotonic", "sigmoid", "temperature"])
     def test_probabilities_non_negative(self, method):
         y, p = _make_data(200)
         cal = fit_calibrator(method, y, p)
@@ -214,7 +214,7 @@ class TestRunLeagueCalibration:
     def test_selects_platt_for_small_corpus(self):
         y, p = _make_data(300)
         fc = run_league_calibration("eredivisie", y[:100], p[:100], y[100:], p[100:])
-        assert fc.method == "platt"
+        assert fc.method == "sigmoid"
 
     def test_selects_isotonic_for_large_corpus(self):
         y, p = _make_data(3000, seed=7)
@@ -247,7 +247,7 @@ class TestCompareCalibrationMethods:
         y, p = _make_data(300)
         fc = compare_calibration_methods("epl", y[:200], p[:200], y[200:], p[200:])
         assert fc.method_comparison is not None
-        assert set(fc.method_comparison.keys()) == {"isotonic", "platt", "temperature"}
+        assert set(fc.method_comparison.keys()) == {"isotonic", "sigmoid", "temperature"}
 
     def test_comparison_table_has_expected_keys(self):
         y, p = _make_data(300)
@@ -259,7 +259,7 @@ class TestCompareCalibrationMethods:
     def test_selected_method_is_valid(self):
         y, p = _make_data(300)
         fc = compare_calibration_methods("epl", y[:200], p[:200], y[200:], p[200:])
-        assert fc.method in ("isotonic", "platt", "temperature")
+        assert fc.method in ("isotonic", "sigmoid", "temperature")
 
     def test_brier_tracking_in_compare(self):
         y, p = _make_data(300)
@@ -271,7 +271,7 @@ class TestCompareCalibrationMethods:
         y, p = _make_data(3000, seed=5)
         fc = compare_calibration_methods("epl", y[:2500], p[:2500], y[2500:], p[2500:])
         # With large corpus the default candidate is isotonic; selected must be valid.
-        assert fc.method in ("isotonic", "platt", "temperature")
+        assert fc.method in ("isotonic", "sigmoid", "temperature")
         assert "default_candidate=isotonic" in fc.selection_rationale
 
 

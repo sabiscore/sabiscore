@@ -5,6 +5,76 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — v7.5 Calibration Evidence Integrity + Suite Restoration (2026-09-16)
+
+### Fixed
+
+- **Calibration evidence was measured in-sample** (`backend/scripts/inject_platt_calibrator.py`,
+  DEBT 96): the injector fitted each calibrator on `(y_cal, proba_cal)` and then scored it on
+  those same rows, so every shipped artifact reported `ece_after == 0.0000`. It *did* compute the
+  real holdout ECE and then dropped it from the persisted headline fields. This also contradicted
+  the codebase's own convention (`calibration.py:281` scores on `y_val`), and the calibration
+  season sits inside the base learners' training window, making the figures doubly optimistic.
+  Headline `ece_before`/`ece_after`/`brier_before`/`brier_after` are now holdout-measured; the
+  in-sample values are retained under `method_comparison` as explicitly labelled diagnostics.
+- **The hardened injector could never run** (DEBT 96): the serving-head stability guard added in
+  #209/#210 compared the holdout's *head* (`"meta_model"`) against the calibration run's *domain*
+  (`"SoftmaxMetaModel"`). `_served_probabilities` returns `(proba, head, domain)`, so those are
+  never equal and the guard raised for every meta-model artifact — all six. Measured: 0/6 fitted
+  before the fix, 6/6 after. It now compares head-to-head and domain-to-domain.
+- **Calibration is evidence-gated, per directive §19** ("do not force a calibrator into
+  production"): a calibrator is serialized only when holdout ECE improves *and* holdout Brier does
+  not degrade, and one previously injected that fails is actively removed. On honest holdout
+  measurement Platt calibration **degrades four of six leagues**, pushing EPL and Eredivisie from
+  inside the G11 band (≤ 0.03) to outside it. Bundesliga (ECE 0.0534 → 0.0436) and Ligue 1
+  (0.1015 → 0.0501) keep a calibrator; EPL, La Liga, Serie A and Eredivisie now serve raw
+  `SoftmaxMetaModel` output, reported honestly as `calibration_applied: false`. All six artifacts
+  regenerated and `active_generation.json` hashes updated (INV-14).
+- **`--force` flag** added to the injector so re-runs are reproducible (INV-15). Without it the
+  script skipped any artifact that already carried a calibrator, which is why stale ones survived
+  three consecutive PRs.
+- **Backend suite could not collect** (DEBT 97): #208's dead-code removal deleted
+  `src/connectors/{base,betfair,opta,pinnacle,statsbomb_open,understat_source,football_data_org}.py`
+  but left four test modules importing them. Four collection errors abort the entire run, so the
+  suite had produced no result at all on `master` since that merge. Orphaned modules removed.
+- **Renamed calibration literal broke 8 tests** (DEBT 98): #205 changed `"platt"` → `"sigmoid"`
+  throughout `src/models/calibration.py` without updating `tests/test_calibration.py`.
+- **Deprecated `RPS_PROMOTION_GATE` alias removed** (`apps/web/src/lib/model-gates.ts`, directive
+  §15.3.2): zero code consumers repo-wide; the migration it guarded is complete. `RPS_DISPLAY_FLOOR`
+  remains the single display-only constant, correctly not a certification gate.
+
+### Corrected
+
+- The preceding entry's "Backend test suite: `2512 passed, 17 skipped, 2 xfailed` on HEAD" did not
+  describe `master`: it predates #208, after which the suite could not collect at all. Current
+  measured state on this branch is **2491 passed, 17 skipped, 2 xfailed, 0 failed**. The two xfails
+  are the pre-existing `error_association` research question (DEBT 50), not regressions.
+
+### Verified (evidence produced this session, no change required)
+
+- **Hot-path latency is not a blocker.** `apps/web` hardcodes `include_predictions=false`, so the
+  public fixture panel takes a cache-keyed, TTL'd, metered path backed by a single joined query —
+  the per-fixture sequential enrichment loop is not on it. The endpoint applies differentiated
+  `asyncio.timeout` deadlines (5 s without predictions, 18 s with).
+- **Full-stack type safety.** `pnpm typecheck`, `pnpm lint` and 352 Vitest tests pass. The
+  `ModelPerformanceResponse` interface was audited field-by-field against both backend response
+  branches; its `error`/`reason` fields are legitimately emitted by the Next.js proxy layer.
+- **Resilient error handling.** The hot path carries a dedicated `TimeoutError` branch with its own
+  metric, structured fail-closed fallbacks, and Pydantic `model_validate` on the response — the
+  guard that catches the schema-drift class behind the 2026-08-12 empty-panel incident.
+
+### Known blockers (operator-gated, unchanged by this work)
+
+- **GitHub Actions billing lock has recurred** (DEBT 16): every run fails before step 1
+  (`runner_name: ""`, `steps: 0`), including scheduled keep-alive. No CI gate has executed on
+  recent merges — which is precisely why DEBT 97 and 98 went unnoticed. INV-17: CI blocked is not
+  CI pass.
+- **G-gate thresholds sit outside the hashed policy** (directive §20): `EVIDENCE_POLICY` in
+  `scripts/compile_certification_report.py` owns `G11: adaptive_confidence_ece_max = 0.03` and its
+  siblings, while the frozen, versioned, hashed `certification_policy.py` governs only promotion
+  gates and evidence floors. Changing a G threshold today moves no policy hash and trips no
+  change control. Recorded, not actioned — relocating it is an OG-06 decision.
+
 ## Unreleased — v7.4 Production Hardening Audit (2026-09-15)
 
 ### Verified (no code change required — evidence produced this session)

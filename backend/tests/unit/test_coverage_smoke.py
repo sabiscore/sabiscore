@@ -5,9 +5,6 @@ import sys
 
 # Import a broad set of modules to execute module-level code paths
 import src.api.websocket as _ws  # noqa: F401
-import src.connectors.pinnacle as _pinn  # noqa: F401
-import src.connectors.opta as _opta  # noqa: F401
-import src.connectors.betfair as _betfair  # noqa: F401
 import src.core.redis as _redis  # noqa: F401
 import src.models.explainer as _explainer  # noqa: F401
 import src.models.ensemble as _ensemble  # noqa: F401
