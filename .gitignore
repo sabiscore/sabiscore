@@ -293,3 +293,7 @@ backend/.devin/
 # soccerdata FBref reader drops a chromedriver lock here (see docs/DEBT.md item 77)
 downloaded_files/
 backend/models/candidate_clean2526/
+
+# Local rollback copies written by backend/scripts/inject_platt_calibrator.py.
+# The artifacts themselves are git-tracked, so git is the real backup.
+*.pre_debt83_bak
