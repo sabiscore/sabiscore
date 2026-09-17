@@ -10,8 +10,7 @@
  * No `|| true` permitted anywhere this script is invoked.
  */
 
-import { readFileSync } from "node:fs";
-import { globSync } from "glob";
+import { readFileSync, globSync, statSync } from "node:fs";
 
 const TARGET_GLOB = "apps/web/src/**/*.{ts,tsx}";
 const EXCLUDE_GLOB = "apps/web/src/**/*.{test,spec}.{ts,tsx}";
@@ -111,9 +110,26 @@ function scanFile(path) {
   return violations;
 }
 
+/**
+ * Files matching `pattern`, directories excluded.
+ *
+ * Uses Node's built-in `fs.globSync` (stable since v22) rather than the `glob`
+ * package, which this repository never declared as a dependency anywhere — so
+ * `node scripts/copy-scan.mjs`, the exact command CI runs, failed with
+ * ERR_MODULE_NOT_FOUND. That went unnoticed because no workflow has reached
+ * step 1 since the Actions billing lock engaged (docs/DEBT.md items 16, 99).
+ *
+ * `fs.globSync` has no `nodir` option, hence the explicit file filter. Both
+ * call sites use this helper, so path separators stay consistent between the
+ * exclusion set and the scan list.
+ */
+function globFiles(pattern) {
+  return globSync(pattern).filter((entry) => statSync(entry).isFile());
+}
+
 function main() {
-  const excluded = new Set(globSync(EXCLUDE_GLOB, { nodir: true }));
-  const files = globSync(TARGET_GLOB, { nodir: true }).filter((f) => !excluded.has(f));
+  const excluded = new Set(globFiles(EXCLUDE_GLOB));
+  const files = globFiles(TARGET_GLOB).filter((f) => !excluded.has(f));
   const allViolations = files.flatMap(scanFile);
 
   if (allViolations.length === 0) {

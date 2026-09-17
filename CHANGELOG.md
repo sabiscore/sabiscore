@@ -5,6 +5,73 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Local CI Enforcement + G-Gate Cryptographic Enclosure (2026-09-17)
+
+### Added
+
+- **`scripts/ci_local_enforcer.sh`** — mandatory local gate while the GitHub Actions billing lock
+  holds (DEBT 99). Mirrors `.github/workflows/ci.yml` rather than inventing checks: ruff over
+  `src/` **and** `scripts/`, the mypy 784 ceiling, `--strict` registry validation, artifact-lineage
+  verification, the full backend suite, then web lint/typecheck/test/build, scraper validate/test,
+  and the copy scan. `set -euo pipefail` aborts on first failure. Gates that cannot run locally are
+  reported as `SKIPPED` with a reason and re-stated in the summary — **a skip is never printed as a
+  pass**, which is the conflation that let DEBT 96–98 reach `master`.
+- **`RELEASE_GATES` + `REQUIRED_RELEASE_GATES`** in `src/models/certification_policy.py`, covered by
+  `policy_sha256()`. Policy version `1.1.1` → `1.2.0`.
+
+### Fixed
+
+- **The G24 gate script crashed before writing its artifact.** `scripts/validate_deployment.py`
+  referenced `Path` without importing `pathlib` — `F821`. Line 131 sits on the main path *after*
+  all network validation, so G24 would complete its work and then raise `NameError` instead of
+  producing the evidence `compile_certification_report.py` lists as REQUIRED. Found by the
+  enforcer's first run: CI's ruff step covers `src` only, so `backend/scripts/` had never been
+  linted.
+- **G-gate thresholds were outside the hashed policy (OG-06, DEBT 100).** `G11`'s
+  `adaptive_confidence_ece_max = 0.03` and its siblings lived in an unhashed `EVIDENCE_POLICY` dict
+  in `compile_certification_report.py`, so editing a number flipped a gate outcome while every
+  recorded policy digest stayed byte-identical — directive §20's "phantom threshold" exactly.
+  Relocated into the hashed payload; the compiler now loads them by path (never as a package
+  import, which would open a database connection in a bare build environment) and cites the
+  policy's *own* digest instead of re-hashing the subset it read.
+
+  Tamper-verified end to end: `ece_max 0.03 → 4e050ad0…`, `0.04 → 47cd8688…`, reverted to baseline.
+  While tampered the compiler independently reported `0.04` and cited the diverged digest, so a
+  manipulated threshold is both *used* and *visible*. Pinned by two tests, both watched failing
+  against the pre-fix arrangement.
+
+- **The enforcer's own Alembic gate could have migrated production.** Its first run executed
+  `alembic upgrade head` against whatever `DATABASE_URL` pointed at — in this environment, the
+  Render production instance. It was a no-op (production was already at `0014`, verified
+  unchanged via `/health/ready` afterwards), but "happened to be a no-op" is not a safety
+  property. The gate now parses the host and **refuses anything but a loopback address**, since a
+  pre-commit gate must never be able to migrate a remote database.
+
+### Verified (already complete — no rebuild performed)
+
+- **Portfolio F weather acquisition was already built and live-probed.**
+  `backend/scripts/ingest_openmeteo_weather.py` (394 lines) already uses the Historical Forecast
+  API, the T−2h cutoff, Polars, and the exact `weather_forecasts_f1.parquet` output path.
+  Dry-run re-verified end to end; the committed artifact reads back as **5,465 rows × 14 columns,
+  zero null temperatures, all six leagues, 7.70 MB RSS delta — 0.67% of the 8 GB ceiling**
+  (measured by RSS, not `tracemalloc`, which reads ~0 because Polars allocates outside Python's
+  allocator).
+- **Registry entry `F3` already holds the weather hypothesis** at `SOURCE_QUALIFIED` / `HOLD`, with
+  G1 measured at 42.81% against an 85% bar and G5 structurally satisfied.
+
+### Not done — and why
+
+- **No static stadium-coordinate mapping was authored.** `docs/DEBT.md` item 44 rejected
+  hand-entered coordinates outright: wrong ones produce *confidently wrong* weather, which is worse
+  than none. The existing script reads the geocoded, auditable manifest from
+  `qualify_venue_locations.py` and uses VERIFIED clubs only — the reason G1 is capped at 42.81%.
+  Authoring coordinates from recall would be an INV-01 fabrication.
+- **No `F1` registry entry was created for weather.** `F1` is already taken by "Contextual state
+  (rest, congestion, referee)" (`CLOSED`/`REJECT`), and the weather hypothesis is already `F3` —
+  a naming decision the registry records explicitly. `validate_experiment_registry.py` rejects
+  duplicate `experiment_id` (line 169), so adding `F1` would have **failed the enforcer's own
+  step 3**.
+
 ## Unreleased — v7.5 Calibration Evidence Integrity + Suite Restoration (2026-09-16)
 
 ### Fixed

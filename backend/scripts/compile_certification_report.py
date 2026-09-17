@@ -17,15 +17,41 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REQUIRED = ("G11", "G15", "G16", "G18", "G24")
-EVIDENCE_POLICY = {
-    "version": "v7.4-evidence-1",
-    "G11": {"adaptive_confidence_ece_max": 0.03},
-    "G15": {"murphy_decomposition_abs_error_max": 1e-6},
-    "G16": {"nominal_levels": [0.80, 0.90]},
-    "G18": {"bootstrap_replicates": 10000, "ci": 0.95},
-    "G24": {"require_exact_sha_parity": True},
-}
+def _load_release_gate_policy() -> tuple[tuple[str, ...], dict[str, Any], str]:
+    """Read the release-gate thresholds from the frozen certification policy.
+
+    These thresholds used to live here as a plain module dict. That meant the
+    numbers deciding whether a release certifies belonged to no policy: editing
+    `adaptive_confidence_ece_max` flipped gate outcomes while every recorded
+    policy hash stayed identical, so the change tripped no control (directive
+    §20, OG-06). They now live in `src/models/certification_policy.py`, inside
+    the payload `policy_sha256()` covers, so altering one necessarily moves the
+    digest.
+
+    Loaded by path rather than as a package import: importing `src.models` pulls
+    in the application chain, which opens a database connection, and this script
+    must run in a bare build environment. Same approach
+    `verify_active_artifacts.py` uses, and for the same reason.
+    """
+    import importlib.util
+
+    policy_path = REPO_ROOT / "backend" / "src" / "models" / "certification_policy.py"
+    spec = importlib.util.spec_from_file_location("_sabiscore_cert_policy", policy_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load certification policy from {policy_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    policy = module.certification_policy()
+    gates = dict(policy["release_gates"])
+    # The digest is over the WHOLE policy, so it also covers the promotion gates
+    # and evidence floors. That is deliberate: a report citing this hash is
+    # citing the complete certification contract it was judged under.
+    gates["version"] = policy["policy_version"]
+    return tuple(policy["required_release_gates"]), gates, module.policy_sha256(policy)
+
+
+REQUIRED, EVIDENCE_POLICY, _POLICY_SHA256 = _load_release_gate_policy()
 
 
 def canonical_sha(value: Any) -> str:
@@ -248,7 +274,9 @@ def main() -> int:
                 "policy_sha256": frozen_policy_sha,
                 "frozen_policy": frozen_policy,
                 "evidence_policy_version": EVIDENCE_POLICY["version"],
-                "evidence_policy_sha256": canonical_sha(EVIDENCE_POLICY),
+                # The frozen policy's own digest — not a re-hash of the subset
+                # read above, which would drift from the authority it cites.
+                "evidence_policy_sha256": _POLICY_SHA256,
             },
             "metrics": {name: artifacts[name].get("metrics", {}) for name in artifacts},
             "gates": results,
