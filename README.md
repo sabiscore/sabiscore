@@ -1,7 +1,21 @@
 # SabiScore (APEX Generation v5_phase7)
 
-SabiScore is a fully certified, production-ready football intelligence platform built around a FastAPI backend, a Next.js web app, and a bounded scraper worker. 
-The predictive engine runs the APEX generation v5_phase7 models, utilizing Platt scaling (sigmoid calibrators) for verified G11/G27 precision and production-level Kelly stake sizing.
+SabiScore is a football intelligence platform built around a FastAPI backend, a Next.js web app,
+and a bounded scraper worker. It currently runs in **Research Mode**: forecasts are served, and
+staking is fail-closed.
+
+The predictive engine runs APEX generation `v5_phase7`. That generation's manifest
+(`backend/models/active_generation.json`) declares `certification_state: UNVERIFIED` and
+`promotion_state: ACTIVE_FAIL_CLOSED`, so `stake_permitted` is `false` platform-wide and no Kelly
+stake is sized for a user. Certification gates G11/G27 are **measured, not passed** — see
+`docs/DEBT.md` for the open items and `backend/src/models/certification_policy.py` for the
+promotion gates themselves.
+
+Post-hoc calibration is applied **only where held-out evidence supports it**. On the current
+generation that is two of six leagues (Bundesliga, Ligue 1); the other four serve their raw
+meta-model output and report `calibration_applied: false`. Calibrators are accepted solely when
+holdout ECE improves and holdout Brier does not degrade — a calibrator is never forced into
+production because it looks good on the rows it was fitted on (`docs/DEBT.md` item 96).
 
 The canonical production surfaces are:
 

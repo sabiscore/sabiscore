@@ -1,5 +1,151 @@
 # SabiScore Debt Ledger
 
+## 98. PR #205 renamed the calibration method literal `"platt"` → `"sigmoid"` without updating its own test file — 8 failures, invisible behind item 97's collection abort
+
+**Tier:** `RESOLVED` — test literals updated 2026-09-16.
+**Owner:** unassigned. **Found:** 2026-09-16, on the first full-suite run that
+was able to collect after item 97 was fixed.
+
+`5cb4138` (#205) changed the method name in `src/models/calibration.py`
+throughout — the `CalibrationMethodName` literal, `select_calibration_method`'s
+return, `fit_calibrator`'s branch, and `compare_calibration_methods`' method
+list — aligning it with scikit-learn's own name for Platt scaling. It did not
+touch `tests/test_calibration.py`, which still asserted on `"platt"` in ten
+places, so eight tests failed on the renamed value.
+
+The technique is unchanged; only the literal moved. Fixed by updating the ten
+literals. Test *names* keep "platt" — `test_platt_below_threshold` still
+describes what it checks.
+
+⚠️ **Three defects, one cause.** Items 96, 97 and this one were all introduced
+by DEBT-83 PRs merged between 2026-09-14 and 2026-09-15, and all three were
+invisible for the same reason: the GitHub Actions billing lock (item 16) means
+no workflow reaches step 1, so nothing on `master` has been checked by CI for
+days. Item 97 then compounded it locally — a collection abort means even a
+developer running the suite by hand sees four import errors, not eight
+assertion failures, so the second defect hid behind the first. **When the lock
+is cleared, expect more of this: every merge since it engaged is unverified.**
+
+## 97. PR #208's dead-code removal left four test modules importing the deleted connectors — `pytest tests/` has been red on `master` ever since, hidden by the Actions billing lock
+
+**Tier:** `RESOLVED` — orphaned tests removed 2026-09-16.
+**Owner:** unassigned. **Found:** 2026-09-16, while trying to verify an
+unrelated calibration change and discovering the suite would not collect.
+
+PR #208 (DEBT 95) correctly deleted `src/connectors/{base,betfair,opta,
+pinnacle,statsbomb_open,understat_source,football_data_org}.py` but left
+behind the tests that import them:
+
+```
+ERROR tests/test_connectors/test_football_data_org.py   # src.connectors.football_data_org
+ERROR tests/test_connectors/test_statsbomb_open.py      # src.connectors.statsbomb_open
+ERROR tests/test_connectors/test_understat_source.py    # src.connectors.understat_source
+ERROR tests/unit/test_coverage_smoke.py                 # src.connectors.{pinnacle,opta,betfair}
+```
+
+Four collection errors abort the **entire** run before a single test executes
+— so the backend suite has produced no result at all on `master` since #208
+merged. The three connector test modules were deleted (their subject no
+longer exists); `test_coverage_smoke.py` kept its remaining assertions and
+lost only three import-only `# noqa: F401` coverage bumps.
+
+⚠️ **This is INV-17 in practice.** Nobody noticed because the GitHub Actions
+billing lock (item 16) means no workflow has reached step 1 for days —
+`runner_name:""`, `steps:0`. A red suite and a suite that never ran are
+indistinguishable from the outside, and the lock hides the first behind the
+second. While the lock persists, a local full-suite run is the only evidence
+that a merge did not break collection.
+
+## 96. The shipped calibrators' headline evidence was measured in-sample, and the hardened injector meant to replace them could never run
+
+**Tier:** `RESOLVED` — both defects fixed and all six artifacts regenerated on
+2026-09-16. Supersedes the "no artifact carries a calibrator" half of item 83.
+**Owner:** unassigned. **Found:** 2026-09-16, during a P0 ground-truth pass,
+by reading a shipped artifact rather than the documentation about it.
+
+**Symptom that started it:** every shipped calibrator reported
+`ece_after == 0.0000`. A perfectly calibrated model on 380 real rows does not
+happen; that number is a fingerprint, not a measurement.
+
+**Defect 1 — in-sample headline evidence.** `inject_platt_calibrator.py` fit
+the calibrator on `(y_cal, proba_cal)` and then scored it on the *same* rows:
+
+```python
+calibrators     = fit_calibrator(method, y_cal, proba_cal)
+proba_cal_after = apply_calibrator(method, calibrators, proba_cal)
+ece_after       = compute_ece(y_cal, proba_cal_after)   # fit and scored on identical rows
+```
+
+It *did* compute the real holdout ECE — and then dropped it from the headline
+fields. This also contradicts the codebase's own convention:
+`calibration.py:281` uses `compute_ece(y_val, proba_cal)`, out-of-sample.
+Worse, the calibration season (2023-24) sits *inside* the base learners'
+training window (their declared holdout is `2425`), so the persisted numbers
+were doubly optimistic.
+
+**Defect 2 — the hardened injector was dead on arrival.** PRs #209/#210 added
+a serving-head stability guard that compares two different fields:
+
+```python
+proba_cal,  serving_head, serving_domain = _served_probabilities(bundle, X_cal)
+proba_hold, hold_head,    _              = _served_probabilities(bundle, X_hold)
+if hold_head != serving_domain and serving_head == "meta_model":   # "meta_model" vs "SoftmaxMetaModel"
+```
+
+`_served_probabilities` returns `(proba, head, domain)`; for a meta-model
+artifact that is `("meta_model", "SoftmaxMetaModel")`. Comparing the holdout's
+*head* against the calibration run's *domain* is never equal, so the guard
+raised for **every** meta-model artifact — which is all six. Measured: the
+hardened script fit 0/6 before this fix and 6/6 after. The shipped artifacts
+still carried the *older* script's `selection_rationale` and
+`method_comparison: None` — which is how a script that could not run coexisted
+with artifacts that looked freshly calibrated. Now compares head-to-head and
+domain-to-domain.
+
+**What the honest numbers say — the finding that matters.** With headline
+evidence measured on the holdout, Platt calibration *degrades* calibration in
+four of six leagues:
+
+| League | holdout ECE | holdout Brier | in-sample claim |
+|---|---|---|---|
+| BUNDESLIGA | 0.0534 → **0.0436** | 0.6660 → 0.6636 | 0.0001 |
+| LIGUE_1 | 0.1015 → **0.0501** | 0.6674 → 0.6413 | 0.0000 |
+| EPL | 0.0199 → 0.0351 ✗ | 0.6548 → 0.6572 ✗ | 0.0000 |
+| LA_LIGA | 0.0136 → 0.0176 ✗ | 0.6477 → 0.6482 ✗ | 0.0000 |
+| SERIE_A | 0.0051 → 0.0210 ✗ | 0.6600 → 0.6615 ✗ | 0.0000 |
+| EREDIVISIE | 0.0264 → 0.0870 ✗ | 0.6632 → 0.6947 ✗ | 0.0001 |
+
+Only the two worst-calibrated leagues benefit. The four already inside the G11
+band (≤ 0.03) are pushed **out** of it by calibration — EPL and EREDIVISIE
+cross from pass to fail. Production had been applying these since 2026-09-15.
+
+**Fix.** Per directive §19 ("do not force a calibrator into production"), the
+injector is now evidence-gated: a calibrator is serialized only when holdout
+ECE improves *and* holdout Brier does not degrade. One that fails is not
+written, and one previously injected is actively removed — declining a
+calibrator has to change the artifact, or nothing happens. `prediction.py`
+already reports the uncalibrated state honestly (`calibration_method: "none"`,
+`calibration_applied: False`, #189), so no inference change was needed.
+Result: BUNDESLIGA and LIGUE_1 keep a calibrator; the other four serve their
+raw `SoftmaxMetaModel` output. `--force` added so re-runs are reproducible
+(INV-15) — without it the script skipped any artifact that already had a
+calibrator, which is why the stale ones survived three PRs.
+
+⚠️ **An in-sample metric does not look wrong, it looks excellent.** The
+signature is a value too good to be real — ECE of exactly zero, AUC of exactly
+one. Neither a gate nor a reviewer caught this; reading the artifact did. G11
+itself was never compromised: `evaluate_g11_ece.py` computes ECE independently
+from a dataset snapshot and the compiler reads that, not the artifact field.
+
+⚠️ **Three guards, each watched failing against its own pre-fix code** before
+being trusted. The headline-evidence test passed on reverted code at first
+try — its fixture used identical calibration and holdout splits, and a
+constant-output head's ECE depends only on the label distribution, so the two
+figures were numerically equal and no assertion could separate them. The
+splits now carry different base rates (6/10 vs 4/10 home), reproducing the
+0.0000-vs-0.1334 gap in miniature. **A fixture that cannot distinguish the two
+states is not a regression test, however green it is.**
+
 ## 95. `backend/src/connectors/{base,betfair,opta,pinnacle,statsbomb_open,understat_source,football_data_org}.py` have zero live importers — a second, mostly-dead connector tree
 
 **Tier:** `RESOLVED` — Dead code removed on 2026-09-15.
@@ -685,7 +831,12 @@ scoping the feature to it; (3) a source with archived forecasts predating 2022.
 
 ## 83. The inference path has no calibrator serialisation wiring — 2026-09-11
 
-**Tier:** `HOLD`. Blocks `E0b`'s only positive result from ever shipping.
+**Tier:** ~~`HOLD`~~ → **`RESOLVED` 2026-09-16, see item 96.** ⚠️ The text
+below ("No artifact this repository ships carries one") was true when
+written and is now stale: all six artifacts carry a serialized calibrator
+slot, and two carry an accepted `FittedCalibrator`. The remaining four are
+deliberately uncalibrated — holdout evidence rejected their calibrators —
+which is a measured decision, not missing wiring.
 
 **Numbering note:** commissioned as "item 82", which is taken (the
 baseline-remediation record from earlier the same day). Filed as 83.
