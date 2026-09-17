@@ -4,11 +4,11 @@
   "roster_size": 160,
   "weather_cell_km": 25.0,
   "counts": {
-    "VERIFIED": 116,
-    "REQUIRES_REVIEW": 17,
-    "UNKNOWN": 27
+    "VERIFIED": 115,
+    "UNKNOWN": 27,
+    "REQUIRES_REVIEW": 18
   },
-  "coverage_verified": 0.725,
+  "coverage_verified": 0.7188,
   "entries": [
     {
       "club": "AZ Alkmaar",
@@ -856,8 +856,8 @@
         "SP1"
       ],
       "country": "ES",
-      "verdict": "VERIFIED",
-      "reason": "place_name_appears_in_club_name",
+      "verdict": "REQUIRES_REVIEW",
+      "reason": "resolved_place_is_geographically_implausible_for_its_league",
       "candidates": [
         {
           "name": "Español",
@@ -868,7 +868,8 @@
       ],
       "queried": [
         "espanol"
-      ]
+      ],
+      "review_note": "Resolved to a place named 'Español' at 28.5N -16.33 — Tenerife, Canary Islands. The country filter passed (ES) and the name matched after diacritic folding, so classify() returned VERIFIED. RCD Espanyol plays in Barcelona, ~1,296 km away in a different climate zone; the nearest other VERIFIED Spanish club is that far from this coordinate, which is a 3x break above the largest legitimate isolation in the corpus (Cagliari, 431.7 km). Demoted rather than corrected: deriving the right coordinate needs a geocode this manifest cannot perform offline, and authoring one from recall is the invented reference data docs/DEBT.md item 44 rejected. Detected by scripts/validate_venue_manifest.py."
     },
     {
       "club": "Everton",
