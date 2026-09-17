@@ -118,20 +118,40 @@ def load_verified_venues() -> Dict[str, Tuple[float, float]]:
 
     Rule 5: a REQUIRES_REVIEW or UNKNOWN club yields no coordinate at all. It is
     never approximated from a neighbouring club, a league centroid, or memory.
+
+    DEBT 101: reads the candidate `classify()` actually confirmed, never
+    `candidates[0]`. Sheffield United was correct only by accident of geocoder
+    response order -- "Sheffield" (confirmed) happened to arrive before
+    "United Kingdom" (unconfirmed, from tokenising "united"). A reordered
+    upstream response would have silently swapped in the country centroid
+    while the manifest still said VERIFIED. A manifest generated before this
+    field existed has no `confirmed` key on any candidate; that case falls
+    back to `candidates[0]` with a logged warning naming the club, rather than
+    failing closed on every venue at once for a schema difference alone.
     """
     manifest = json.loads(_VENUE_MANIFEST.read_text(encoding="utf-8"))
     venues: Dict[str, Tuple[float, float]] = {}
+    stale_manifest_fallbacks: List[str] = []
     for entry in manifest["entries"]:
         if entry.get("verdict") != "VERIFIED":
             continue
         candidates = entry.get("candidates") or []
         if not candidates:
             continue
-        first = candidates[0]
-        lat, lon = first.get("latitude"), first.get("longitude")
+        chosen = next((c for c in candidates if c.get("confirmed") is True), None)
+        if chosen is None:
+            chosen = candidates[0]
+            stale_manifest_fallbacks.append(entry["club"])
+        lat, lon = chosen.get("latitude"), chosen.get("longitude")
         if lat is None or lon is None:
             continue
         venues[entry["club"]] = (float(lat), float(lon))
+    if stale_manifest_fallbacks:
+        logger.warning(
+            "%d VERIFIED club(s) have no 'confirmed' candidate marker -- "
+            "manifest predates DEBT 101; fell back to candidates[0]: %s",
+            len(stale_manifest_fallbacks), ", ".join(stale_manifest_fallbacks),
+        )
     logger.info(
         "Venue manifest: %d VERIFIED of %d clubs (%s)",
         len(venues), manifest["roster_size"], manifest["counts"],

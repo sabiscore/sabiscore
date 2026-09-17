@@ -87,3 +87,69 @@ def test_header_counts_must_describe_the_entries() -> None:
     manifest = _load()
     manifest["counts"] = {"VERIFIED": 9999}
     assert any("counts header" in f for f in _GATE.validate(manifest))
+
+
+# ── Generation-time demotion (DEBT 101's second follow-up) ──────────────────
+
+
+def _fresh_manifest_with_espanol_reproduction() -> dict:
+    """Rebuild the Espanol-shaped failure as a VERIFIED entry.
+
+    `demote_geographically_implausible()` is the generation-time counterpart
+    to `validate()`'s check 5 -- it must catch the identical shape before a
+    manifest is ever written, not just after.
+    """
+    manifest = _load()
+    spanish = [
+        e for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED" and e.get("country") == "ES" and e.get("candidates")
+    ]
+    assert len(spanish) >= 2, "fixture assumption: several VERIFIED Spanish clubs"
+    spanish[0] = dict(spanish[0])
+    spanish[0]["candidates"] = [dict(spanish[0]["candidates"][0])]
+    spanish[0]["candidates"][0]["latitude"] = 28.5
+    spanish[0]["candidates"][0]["longitude"] = -16.3333
+    # Replace the entry for that club in place.
+    for i, e in enumerate(manifest["entries"]):
+        if e.get("club") == spanish[0]["club"]:
+            manifest["entries"][i] = spanish[0]
+            break
+    return manifest, spanish[0]["club"]
+
+
+def test_demotion_catches_the_espanol_shape_before_it_is_written() -> None:
+    manifest, club = _fresh_manifest_with_espanol_reproduction()
+    out, demoted = _GATE.demote_geographically_implausible(manifest)
+
+    assert demoted == [club]
+    entry = next(e for e in out["entries"] if e["club"] == club)
+    assert entry["verdict"] == "REQUIRES_REVIEW"
+    assert "km" in entry["review_note"]
+
+    # And the demotion must make the manifest pass validate() -- the whole
+    # point is that the two never disagree.
+    assert _GATE.validate(out) == []
+
+
+def test_demotion_is_a_no_op_on_a_sound_manifest() -> None:
+    manifest = _load()
+    out, demoted = _GATE.demote_geographically_implausible(manifest)
+    assert demoted == []
+    assert out == manifest
+
+
+def test_demotion_recomputes_counts_and_coverage() -> None:
+    manifest, club = _fresh_manifest_with_espanol_reproduction()
+    before_verified = manifest["counts"]["VERIFIED"]
+    out, demoted = _GATE.demote_geographically_implausible(manifest)
+    assert out["counts"]["VERIFIED"] == before_verified - 1
+    assert out["coverage_verified"] < manifest["coverage_verified"]
+
+
+def test_demotion_never_mutates_the_input_manifest() -> None:
+    manifest, club = _fresh_manifest_with_espanol_reproduction()
+    import copy
+
+    before = copy.deepcopy(manifest)
+    _GATE.demote_geographically_implausible(manifest)
+    assert manifest == before

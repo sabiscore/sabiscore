@@ -166,14 +166,29 @@ def place_is_named_in_club(place_name: str, club_name: str) -> bool:
     return bool(place_tokens) and all(t in club_tokens for t in place_tokens)
 
 
-def classify(club_name: str, resolutions: Sequence[GeoPoint]) -> tuple[str, str]:
+def classify(
+    club_name: str, resolutions: Sequence[GeoPoint]
+) -> tuple[str, str, Sequence[GeoPoint]]:
     """Map a club's geocoding results onto the identity trust taxonomy.
 
-    Returns ``(verdict, reason)``. The taxonomy and the fail-closed default are
-    the same ones `providers/reconciliation.py` already uses for team identity.
+    Returns ``(verdict, reason, confirmed)`` where ``confirmed`` is the subset
+    of ``resolutions`` whose place name is named in the club -- the evidence a
+    VERIFIED verdict actually rests on. The taxonomy and the fail-closed
+    default are the same ones `providers/reconciliation.py` already uses for
+    team identity.
+
+    ``confirmed`` matters beyond this function: DEBT 101 recorded that the
+    manifest used to store every raw candidate with no record of which one
+    ``classify`` actually trusted, so `ingest_openmeteo_weather.py` fell back
+    to `candidates[0]` -- correct for Sheffield United only because the
+    geocoder happened to return "Sheffield" before "United Kingdom", not
+    because anything enforced it. A reordered upstream response would have
+    silently handed it the wrong centroid while the manifest still said
+    VERIFIED. Callers persist this subset so ingestion can read the coordinate
+    the verdict was actually earned on.
     """
     if not resolutions:
-        return UNKNOWN, "no_geocoding_match_within_league_country"
+        return UNKNOWN, "no_geocoding_match_within_league_country", ()
 
     # A generic token can drag in a place nobody asked about -- "united", from
     # "Newcastle United", resolves to the United Kingdom's own centroid. When
@@ -185,12 +200,12 @@ def classify(club_name: str, resolutions: Sequence[GeoPoint]) -> tuple[str, str]
     considered = confirmed or list(resolutions)
 
     if not within_one_cell([(g.latitude, g.longitude) for g in considered]):
-        return REQUIRES_REVIEW, "candidates_span_more_than_one_weather_cell"
+        return REQUIRES_REVIEW, "candidates_span_more_than_one_weather_cell", ()
 
     if confirmed:
-        return VERIFIED, "place_name_appears_in_club_name"
+        return VERIFIED, "place_name_appears_in_club_name", confirmed
 
-    return REQUIRES_REVIEW, "resolved_place_is_not_named_in_the_club_name"
+    return REQUIRES_REVIEW, "resolved_place_is_not_named_in_the_club_name", ()
 
 
 # --------------------------------------------------------------------------
@@ -279,7 +294,11 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
         found, attempted = await resolve_club(
             provider, club, country, pause_seconds=pause_seconds
         )
-        verdict, reason = classify(club, found)
+        verdict, reason, confirmed = classify(club, found)
+        # Frozen dataclass -> hashable -> identity-safe membership check.
+        # `confirmed` is filtered from this exact `found` list (see classify's
+        # docstring), never copied, so `in` here is comparing the same objects.
+        confirmed_set = set(confirmed)
         entries.append({
             "club": club,
             "divisions": divisions,
@@ -292,6 +311,9 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
                     "latitude": round(g.latitude, 4),
                     "longitude": round(g.longitude, 4),
                     "country_code": g.country_code,
+                    # The candidate classify() actually trusted -- see DEBT 101.
+                    # Ingestion must read this one, never assume candidates[0].
+                    "confirmed": g in confirmed_set,
                 }
                 for g in found
             ],
@@ -309,6 +331,30 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
         "coverage_verified": round(counts[VERIFIED] / len(roster), 4) if roster else 0.0,
         "entries": entries,
     }
+
+    # DEBT 101's second follow-up: classify() sees one club at a time and
+    # cannot itself apply the isolation rule, which needs the whole national
+    # cluster. Applied here, once, on every regeneration, so a from-scratch
+    # rerun cannot silently re-promote a club the way Espanol was VERIFIED --
+    # shared with the offline gate via validate_venue_manifest._isolated_clubs
+    # so the two cannot drift apart.
+    # Loaded by path, not by module name: this script's own directory is
+    # not reliably on sys.path (a direct `python qualify_venue_locations.py`
+    # run adds it automatically; being imported as `scripts.qualify_venue_
+    # locations` under pytest does not). The same pattern the tests for
+    # both scripts already use.
+    import importlib.util
+
+    _vvm_path = Path(__file__).resolve().parent / "validate_venue_manifest.py"
+    _vvm_spec = importlib.util.spec_from_file_location("_vvm_for_qualify", _vvm_path)
+    assert _vvm_spec is not None and _vvm_spec.loader is not None
+    _vvm = importlib.util.module_from_spec(_vvm_spec)
+    _vvm_spec.loader.exec_module(_vvm)
+
+    manifest, demoted = _vvm.demote_geographically_implausible(manifest)
+    if demoted:
+        print(f"demoted for geographic implausibility: {', '.join(demoted)}")
+        counts = manifest["counts"]
 
     print("\n--- Gate G1 ---")
     for verdict, count in counts.items():

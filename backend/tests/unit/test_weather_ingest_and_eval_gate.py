@@ -38,7 +38,9 @@ from ingest_openmeteo_weather import (  # noqa: E402
     _parse_time,
     build_rows,
     index_hourly,
+    load_verified_venues,
 )
+import ingest_openmeteo_weather  # noqa: E402
 
 
 class TestForecastArchiveCutoff:
@@ -145,3 +147,75 @@ class TestEvaluationGateTemporalGuard:
         }), encoding="utf-8")
         with pytest.raises(ValueError, match="artifact suffixes"):
             _load_incumbent_baseline(path)
+
+
+class TestLoadVerifiedVenuesConfirmedCandidate:
+    """DEBT 101: ingestion must read the candidate `classify()` confirmed.
+
+    Sheffield United was correct in production only by accident of geocoder
+    response order -- "Sheffield" (confirmed) happened to arrive before
+    "United Kingdom" (unconfirmed, the country centroid from tokenising
+    "united"). Reading `candidates[0]` unconditionally would silently swap in
+    the wrong coordinate the moment an upstream response reordered.
+    """
+
+    def _write_manifest(self, tmp_path: Path, entries: list[dict]) -> Path:
+        manifest = {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "corpus": str(tmp_path),
+            "roster_size": len(entries),
+            "weather_cell_km": 25.0,
+            "counts": {"VERIFIED": sum(1 for e in entries if e["verdict"] == "VERIFIED")},
+            "coverage_verified": 1.0,
+            "entries": entries,
+        }
+        path = tmp_path / "manifest.json"
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        return path
+
+    def test_picks_the_confirmed_candidate_not_the_first_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        entries = [{
+            "club": "Sheffield United",
+            "country": "GB",
+            "verdict": "VERIFIED",
+            "candidates": [
+                # Unconfirmed listed FIRST -- the exact reorder this guards against.
+                {"name": "United Kingdom", "latitude": 54.7584, "longitude": -2.6953,
+                 "country_code": "GB", "confirmed": False},
+                {"name": "Sheffield", "latitude": 53.383, "longitude": -1.4659,
+                 "country_code": "GB", "confirmed": True},
+            ],
+        }]
+        manifest_path = self._write_manifest(tmp_path, entries)
+        monkeypatch.setattr(ingest_openmeteo_weather, "_VENUE_MANIFEST", manifest_path)
+
+        venues = load_verified_venues()
+
+        assert venues["Sheffield United"] == (53.383, -1.4659)
+
+    def test_falls_back_to_first_candidate_when_manifest_predates_confirmed_field(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A manifest generated before DEBT 101 has no 'confirmed' key at all.
+
+        Must not fail closed on every venue for a schema difference alone --
+        falls back to the old candidates[0] behaviour, but says so.
+        """
+        entries = [{
+            "club": "Old Manifest FC",
+            "country": "GB",
+            "verdict": "VERIFIED",
+            "candidates": [
+                {"name": "Old Manifest", "latitude": 51.5, "longitude": -0.1, "country_code": "GB"},
+            ],
+        }]
+        manifest_path = self._write_manifest(tmp_path, entries)
+        monkeypatch.setattr(ingest_openmeteo_weather, "_VENUE_MANIFEST", manifest_path)
+
+        with caplog.at_level("WARNING"):
+            venues = load_verified_venues()
+
+        assert venues["Old Manifest FC"] == (51.5, -0.1)
+        assert any("Old Manifest FC" in r.message for r in caplog.records)

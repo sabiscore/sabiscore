@@ -5,6 +5,47 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Venue Confirmation Evidence + Generation-Time Isolation Gate (2026-09-18)
+
+### Fixed
+
+- **Closes both `NEXT` follow-ups DEBT 101 recorded a day earlier.** (1) `classify()` now returns
+  `(verdict, reason, confirmed)` -- the exact subset of geocoding resolutions it actually trusted,
+  not just the verdict. Every candidate persisted to the manifest carries a `"confirmed"` boolean.
+  `ingest_openmeteo_weather.py` reads that confirmed candidate explicitly; it no longer assumes
+  `candidates[0]`. Sheffield United's manifest entry now says explicitly what was previously true
+  only by luck of geocoder response order: "Sheffield" is `confirmed: true`, "United Kingdom" (the
+  country centroid from tokenising "united") is `confirmed: false`. Backfilled offline onto the
+  committed manifest -- `place_is_named_in_club` is pure, so no new geocoding request was needed.
+  A manifest predating this field falls back to `candidates[0]` with a logged warning naming the
+  club, rather than failing every venue at once over a schema difference.
+
+  (2) The isolation rule that catches an Espanol-shaped resolution error moved from
+  `validate()`-only into a shared `_isolated_clubs()` helper, called both by the offline CI gate and
+  a new `demote_geographically_implausible()` -- the generation-time counterpart.
+  `qualify_venue_locations.py` now calls it on every manifest it builds, before writing to disk, so
+  a from-scratch regeneration can no longer silently re-promote a club the isolation rule would
+  otherwise catch. Loaded by path (`importlib.util.spec_from_file_location`), not by module name,
+  since the script's own directory is not reliably on `sys.path` depending on how it is invoked.
+
+### Verified — not touched
+
+- **Both merged PRs (#213, #214) re-confirmed clean on fresh `master`** before any new work started:
+  ruff `src/`+`scripts/` 0, mypy 764 ≤ 784, artifact lineage verified, venue manifest sound, registry
+  `--strict` clean, backend suite 2505 passed / 0 failed, frontend typecheck clean. Production and
+  the Vercel alias both confirmed live at the exact merged SHA (`13b3ce1`), `status: healthy` /
+  `backendStatus: ok`, zero issues.
+- **The Actions billing lock is still active** (`runner_name: ""`, `steps: 0` on every run). DEBT 99
+  stays open; its closure condition -- an observed run reaching step 1 -- has not occurred.
+
+### Deliberately not actioned
+
+- `portfolio-f-weather-forecast-gates.json` still reports `venues_verified: 116`, stale by one club
+  since Espanol's demotion. Refreshing it means re-running `ingest_openmeteo_weather.py` against the
+  live Historical Forecast API for the whole corpus -- real quota against a free-tier external
+  service for a number whose direction and rough size (`115`, G1 falls slightly) are already known.
+  Not run without being asked to.
+
 ## Unreleased — Venue Integrity Gate + Migration Target Boundary (2026-09-17)
 
 ### Fixed
