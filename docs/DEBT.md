@@ -1,5 +1,134 @@
 # SabiScore Debt Ledger
 
+## 103. Portfolio F cannot reach Gate G1 by any amount of geocoding work — the binding constraint is the forecast archive, not venue coverage
+
+**Tier:** `RESEARCH` — a measured ceiling, not a defect. **Recorded:** 2026-09-17.
+
+A directive framed G1 at 42.81% as a geocoding blocker. It is not, and the
+arithmetic settles it before any work is spent:
+
+```
+corpus fixtures     12,765
+in forecast window   7,959  (62.35%)   <- archived forecasts can exist
+predate the archive  4,806  (37.65%)   <- no forecast was ever published
+matched today        5,465  (42.81%)
+
+ceiling with PERFECT geocoding = 7,959 / 12,765 = 62.35%   vs an 85% bar
+```
+
+Even if every one of the 160 corpus clubs resolved to a VERIFIED venue, G1
+tops out at **62.35%** — still a fail. Geocoding work is worth **+19.54
+percentage points** and cannot close the gap, because the Historical Forecast
+API's archive begins 2022-03-01 and three of the corpus's seven seasons precede
+it. Those forecasts do not exist to be fetched; filling them from ERA5
+reanalysis is the Rule 3 leak `ingest_openmeteo_weather.py` already refuses.
+
+⚠️ **Do not spend effort on venue coverage expecting G1 to pass.** The options
+are: lower the bar for this feature family with an explicit OG-06 decision,
+restrict F3's scope to the post-2022-03-01 window where G1 is 68.66%, or accept
+that F3 is serving-only (Gate G5 is structurally satisfied — the same endpoint
+family answers a 16-day forward forecast, so an upcoming fixture IS answerable
+at T-2h). The third is what the registry's `HOLD` already records.
+
+## 102. `alembic upgrade head` could migrate production from any shell that had DATABASE_URL exported
+
+**Tier:** `RESOLVED` — guard installed at the chokepoint 2026-09-17.
+
+It already happened: `scripts/ci_local_enforcer.sh`'s first run executed
+`alembic upgrade head` against the Render production instance purely because
+`DATABASE_URL` was exported in that shell. It was a no-op — production was
+already at `0014`, re-verified unchanged via `/health/ready` afterwards — but
+"happened to be a no-op" is not a safety property.
+
+The enforcer gained a loopback check the same day, which is defense in depth
+but not a boundary: it guards one caller. `alembic/env.py` guards the
+*operation*, and every route to it — a developer's shell, `make`, the
+enforcer, and Render's own `startCommand` — passes through that module.
+
+**The discriminator is `APP_ENV`, not the variable's name.** A directive
+proposed renaming production's variable to `PROD_DATABASE_URL`. That was
+rejected on evidence: `render.yaml:40` supplies `DATABASE_URL` and line 10's
+`startCommand` is `alembic upgrade head && uvicorn ...`, so the rename breaks
+deployment — while doing nothing to stop a developer who also has the renamed
+variable exported. Production already declares `APP_ENV=production`
+(`render.yaml:20`) and `core/config.py:179` defaults to `development`, so the
+environment already distinguishes itself. A remote target is permitted only
+from a declared deploy environment (`production`, `staging`); `development` and
+`test` are refused with the host named.
+
+Verified across the full matrix — production URL from `development`/`test`
+refused, from `production`/`staging` allowed, localhost and SQLite always
+allowed. Pinned by four tests in `tests/test_database_migration_hardening.py`,
+including one asserting **both** `run_migrations_offline` and
+`run_migrations_online` route through the guard: guarding only the online path
+would leave `--sql` mode open, and that test was watched failing on exactly
+that reversion.
+
+## 101. A VERIFIED stadium sat 1,296 km from its real location, and the classifier could not have noticed
+
+**Tier:** `RESOLVED` for the detector and the bad entry; `NEXT` for the two
+follow-ups below. **Found:** 2026-09-17, by building the integrity gate rather
+than by reading the manifest.
+
+`qualify_venue_locations.py` derives coordinates from a club's own name and
+geocodes them behind a country filter — deliberately, because item 44 rejected
+hand-entered coordinates: a wrong one produces *confidently wrong* weather,
+worse than none. But it verifies the resolved **name**, and nothing verified
+the resolved **place**.
+
+`Espanol` (RCD Espanyol, Barcelona) resolved to a place called **"Español" at
+28.5N -16.33 — Tenerife, in the Canary Islands.** The country code is `ES`, so
+the filter passed. The name matches after diacritic folding, so `classify()`
+returned `VERIFIED` on its own correct logic. `ingest_openmeteo_weather.py`
+reads VERIFIED clubs only, so subtropical Atlantic weather has been feeding a
+Barcelona fixture's T-2h features ever since — ~1,296 km from the real stadium,
+in a different climate zone.
+
+**Detection is fabrication-free.** A national league clusters geographically,
+so a VERIFIED club implausibly far from every other VERIFIED club *in its own
+league country* is a resolution error rather than a remote stadium. That is
+derived from the manifest; it consults no authored table of city coordinates or
+bounding boxes, which would reintroduce exactly the invented reference data
+item 44 rejected. Measured over the 116 VERIFIED clubs: nearest-neighbour
+distance has median 60.7 km, MAD 35.3 km, p99 431.7 km. The largest legitimate
+value is Cagliari at 431.7 km (Sardinia, an island club); Espanol sits at
+1,296 km — a 3x break above it. `_ISOLATION_KM = 750` sits in that empty gap
+and is labelled `DEFAULT_PENDING_CALIBRATION`, the convention
+`core/portfolio_exposure.py` already uses. **Widening it to silence a future
+failure is the wrong move — investigate the club first.**
+
+**The entry was demoted, not corrected.** `REQUIRES_REVIEW` with the reasoning
+recorded in the entry itself. Deriving the right coordinate needs a geocode the
+manifest cannot perform offline, and authoring Barcelona's from recall is the
+fabrication item 44 forbids. VERIFIED 116 -> 115, `coverage_verified` 0.725 ->
+0.7188.
+
+⚠️ **A correction worth keeping.** `Sheffield United` was flagged by a first
+draft of this check and is **not** a defect: it geocodes to both "Sheffield"
+and "United Kingdom" (the country centroid, from tokenising "united"), 172.7 km
+apart, but `place_is_named_in_club` requires *every* place token to appear in
+the club name — "kingdom" does not — so the classifier correctly excluded it
+before the spread test. The first draft measured all `candidates` instead of
+the confirmed subset the classifier acted on. **Check what the code actually
+considered before calling its output wrong.**
+
+**Two follow-ups, `NEXT`:**
+
+1. `ingest_openmeteo_weather.py:130` reads `candidates[0]`, discarding the
+   confirmed/unconfirmed distinction `classify()` drew. Sheffield United is
+   correct today only because the geocoder happened to return "Sheffield"
+   first; a reordered upstream response would silently hand it the UK centroid.
+   The manifest does not record *which* candidate was confirmed, so fixing this
+   properly means recording it at generation time.
+2. `qualify_venue_locations.py` cannot apply the isolation rule itself —
+   `classify()` sees one club at a time and the rule needs the national cluster.
+   It belongs as a post-pass over the assembled manifest, so a regeneration
+   reproduces the demotion instead of silently re-promoting Espanol.
+3. `portfolio-f-weather-forecast-gates.json` still reports `venues_verified:
+   116` and the G1 figures computed from it. Those are now stale by one club.
+   Re-running the ingestion refreshes them but spends live API quota; the
+   direction of the change is known and small (G1 falls slightly).
+
 ## 100. G-gate thresholds relocated into the hashed certification policy (OG-06 executed)
 
 **Tier:** `RESOLVED` — 2026-09-17. **Owner:** unassigned.
