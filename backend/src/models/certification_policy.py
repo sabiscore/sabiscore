@@ -46,7 +46,7 @@ from typing import Any, Dict, Mapping
 #:   treated these as always-gap (ENABLE_STATSBOMB_ENRICHMENT=False default).
 #:   ENABLE_STATSBOMB_ENRICHMENT must remain False; re-evaluate if StatsBomb
 #:   publishes event data covering ≥85% of the Understat corpus.
-CERTIFICATION_POLICY_VERSION = "1.1.1"
+CERTIFICATION_POLICY_VERSION = "1.2.0"
 
 #: Every gate `compare_candidate_vs_incumbent.py` emits, with the rule as
 #: applied and the code that applies it. `rule` is prose for a reviewer;
@@ -140,6 +140,58 @@ EVIDENCE_FLOORS: Dict[str, Dict[str, Any]] = {
 }
 
 
+# ── Release gates (G-numbered) ───────────────────────────────────────────────
+#
+# These thresholds decide whether a *release* is certified, as distinct from
+# PROMOTION_GATES above, which decide whether a candidate *generation* may be
+# promoted. Both now live inside this module for one reason: everything here is
+# covered by `policy_sha256()`, so a threshold cannot be altered without moving
+# the policy digest and tripping the change control that digest exists to
+# enforce (directive §20, OG-06).
+#
+# They previously lived as a plain `EVIDENCE_POLICY` dict inside
+# `scripts/compile_certification_report.py` — unhashed and unversioned, so
+# editing `adaptive_confidence_ece_max` changed the pass/fail outcome of a
+# certification run while leaving every recorded policy hash identical. That is
+# precisely the "phantom threshold" the directive's §20 classification exists
+# to prevent: a number that decides a gate while belonging to no policy.
+#
+# REQUIRED_RELEASE_GATES is the set every certification run must produce
+# evidence for. Adding to it is a policy change like any other.
+RELEASE_GATES: Dict[str, Dict[str, Any]] = {
+    "G11": {
+        "description": "Adaptive equal-mass confidence ECE on the certification corpus.",
+        "adaptive_confidence_ece_max": 0.03,
+    },
+    "G15": {
+        "description": (
+            "Murphy (1973) decomposition identity BS = REL - RES + UNC must hold "
+            "to float64 precision; a larger residual means the decomposition is "
+            "not describing the score it claims to."
+        ),
+        "murphy_decomposition_abs_error_max": 1e-6,
+    },
+    "G16": {
+        "description": "Nominal coverage levels at which interval calibration is evaluated.",
+        "nominal_levels": [0.80, 0.90],
+    },
+    "G18": {
+        "description": "Bootstrap configuration for interval estimates on release metrics.",
+        "bootstrap_replicates": 10000,
+        "ci": 0.95,
+    },
+    "G24": {
+        "description": (
+            "Deployment identity: the served commit must match the certified one "
+            "exactly. A near-match is a different build."
+        ),
+        "require_exact_sha_parity": True,
+    },
+}
+
+REQUIRED_RELEASE_GATES: tuple[str, ...] = ("G11", "G15", "G16", "G18", "G24")
+
+
 def certification_policy() -> Dict[str, Any]:
     """The full frozen policy, as one serialisable mapping.
 
@@ -155,6 +207,8 @@ def certification_policy() -> Dict[str, Any]:
             "promotion_requires_all_gates": PROMOTION_REQUIRES_ALL_GATES,
             "promotion_gates": PROMOTION_GATES,
             "evidence_floors": EVIDENCE_FLOORS,
+            "release_gates": RELEASE_GATES,
+            "required_release_gates": list(REQUIRED_RELEASE_GATES),
         }
     )
 
