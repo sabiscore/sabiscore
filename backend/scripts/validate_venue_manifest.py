@@ -72,9 +72,10 @@ _DEFAULT_MANIFEST = (
 #: treated as a resolution error rather than a remote stadium. See the module
 #: docstring for the measured distribution this sits inside.
 _ISOLATION_KM = 750.0
-_ISOLATION_POLICY_SOURCE = "DEFAULT_PENDING_CALIBRATION"
 
 _VERIFIED = "VERIFIED"
+_REQUIRES_REVIEW = "REQUIRES_REVIEW"
+_ISOLATION_POLICY_SOURCE = "DEFAULT_PENDING_CALIBRATION"
 
 
 def haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -104,6 +105,37 @@ def _primary_point(entry: dict[str, Any]) -> tuple[float, float] | None:
     if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
         return None
     return float(lat), float(lon)
+
+
+def _isolated_clubs(
+    verified_points: dict[str, list[tuple[str, tuple[float, float]]]],
+    isolation_km: float = _ISOLATION_KM,
+) -> dict[str, tuple[str, float]]:
+    """club -> (country, nearest VERIFIED neighbour's distance in km).
+
+    Only clubs whose nearest other VERIFIED club, within their own league
+    country, exceeds ``isolation_km``. A country with fewer than two VERIFIED
+    clubs is skipped -- nothing to compare against is not evidence of
+    correctness, so it is silently excluded rather than flagged either way.
+
+    Shared by `validate()` (the offline CI gate, item 5) and
+    `demote_geographically_implausible()` (the generation-time counterpart) so
+    the two can never drift apart -- see DEBT 101's second follow-up, which
+    named exactly that risk: a full manifest regeneration silently re-promoting
+    a club like Espanol because the isolation rule lived only in the gate that
+    checks a manifest after the fact, never in the code that writes one.
+    """
+    isolated: dict[str, tuple[str, float]] = {}
+    for country, items in verified_points.items():
+        if len(items) < 2:
+            continue
+        for club, point in items:
+            nearest = min(
+                haversine_km(point, other) for name, other in items if name != club
+            )
+            if nearest > isolation_km:
+                isolated[club] = (country, nearest)
+    return isolated
 
 
 def validate(manifest: dict[str, Any]) -> list[str]:
@@ -158,25 +190,75 @@ def validate(manifest: dict[str, Any]) -> list[str]:
         verified_points[str(country)].append((club, point))
 
     # 5. Geographic plausibility within each league country.
-    for country, items in sorted(verified_points.items()):
-        if len(items) < 2:
-            # Nothing to compare against; not evidence of correctness, so say so
-            # rather than pass silently.
-            continue
-        for club, point in items:
-            nearest = min(
-                haversine_km(point, other) for name, other in items if name != club
-            )
-            if nearest > _ISOLATION_KM:
-                failures.append(
-                    f"{club} ({country}): nearest VERIFIED club in its own league "
-                    f"country is {nearest:,.0f} km away, beyond the "
-                    f"{_ISOLATION_KM:,.0f} km plausibility bound. A national league "
-                    f"clusters geographically — this is a resolution error, not a "
-                    f"remote stadium. Investigate the club before widening the bound."
-                )
+    for club, (country, nearest) in sorted(_isolated_clubs(verified_points).items()):
+        failures.append(
+            f"{club} ({country}): nearest VERIFIED club in its own league "
+            f"country is {nearest:,.0f} km away, beyond the "
+            f"{_ISOLATION_KM:,.0f} km plausibility bound. A national league "
+            f"clusters geographically — this is a resolution error, not a "
+            f"remote stadium. Investigate the club before widening the bound."
+        )
 
     return failures
+
+
+def demote_geographically_implausible(
+    manifest: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Generation-time counterpart to `validate()`'s isolation check.
+
+    `qualify_venue_locations.py` calls this on the manifest it just built,
+    before writing it to disk, so a full regeneration cannot silently
+    re-promote a club the way Espanol was VERIFIED (DEBT 101): the isolation
+    rule is applied once, here, and shared with `validate()` via
+    `_isolated_clubs()`, so the gate that gates and the generator that
+    generates cannot drift apart.
+
+    Never invents a coordinate. A flagged entry is demoted to
+    REQUIRES_REVIEW with the measured distance recorded in ``review_note`` --
+    the same fail-closed direction `classify()` already takes for every other
+    kind of geocoding ambiguity. Returns a new manifest (the input is never
+    mutated) and the sorted list of demoted club names, which is empty when
+    nothing needed demoting.
+    """
+    out = json.loads(json.dumps(manifest))  # deep copy without a stdlib import
+    entries = out.get("entries") or []
+
+    verified_points: dict[str, list[tuple[str, tuple[float, float]]]] = defaultdict(list)
+    by_club: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        club = str(entry.get("club"))
+        by_club[club] = entry
+        if entry.get("verdict") != _VERIFIED:
+            continue
+        point = _primary_point(entry)
+        if point is not None:
+            verified_points[str(entry.get("country"))].append((club, point))
+
+    isolated = _isolated_clubs(verified_points)
+    for club, (country, nearest) in isolated.items():
+        entry = by_club[club]
+        entry["verdict"] = _REQUIRES_REVIEW
+        entry["reason"] = "resolved_place_is_geographically_implausible_for_its_league"
+        entry["review_note"] = (
+            f"Nearest other VERIFIED club in {country} is {nearest:,.0f} km away, "
+            f"beyond the {_ISOLATION_KM:,.0f} km plausibility bound "
+            f"({_ISOLATION_POLICY_SOURCE}). Demoted at generation time by "
+            f"demote_geographically_implausible() -- see docs/DEBT.md item 101."
+        )
+
+    if isolated:
+        counts: dict[str, int] = defaultdict(int)
+        for entry in entries:
+            counts[str(entry.get("verdict"))] += 1
+        out["counts"] = dict(counts)
+        roster_size = out.get("roster_size") or len(entries)
+        verified_count = counts.get(_VERIFIED, 0)
+        out["coverage_verified"] = (
+            round(verified_count / roster_size, 4) if roster_size else 0.0
+        )
+
+    return out, sorted(isolated)
 
 
 def main() -> int:
