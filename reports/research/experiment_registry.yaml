@@ -745,13 +745,18 @@ experiments:
       Pre-match weather forecasts (temperature/precipitation) provide
       non-redundant signal beyond the market and baseline Elo.
     migrated_retrospectively: false
-    state: SOURCE_QUALIFIED
+    state: INFORMATION_TEST
     decision: HOLD
     decision_detail: >-
       Registered as F3, not F1: F1 is taken (contextual state - rest,
       congestion, referee; CLOSED/REJECT) and F2 is this portfolio's own
-      venue-location prerequisite. Acquisition is BUILT and live-probed;
-      the hypothesis above is NOT yet tested - nothing has been modelled.
+      venue-location prerequisite. Acquisition is BUILT and live-probed.
+      2026-09-17: the hypothesis above HAS now been tested (state advanced
+      SOURCE_QUALIFIED -> INFORMATION_TEST) and it FAILED - see `result`.
+      Weather adds no measurable information beyond the market. HOLD is
+      retained rather than advanced to REJECT because a terminal §51 decision
+      was not authorized in the session that ran the test; REJECT is the
+      indicated call and needs an explicit decision.
       Two independent ceilings, neither the weather API's fault, cap corpus
       reach at ~42.8% before a single request: 31.1% of fixtures have no
       VERIFIED venue (F2's open operator review) and 26.1% predate the
@@ -785,29 +790,88 @@ experiments:
     dataset_version: "backend/data/cache/weather_forecasts_f1.parquet"
     feature_version: null
     representation_version: "not built - acquisition only, no feature derived"
-    model_version: null
-    parameters: null
-    seed: null
-    training_window: null
-    validation_windows: null
-    final_holdout: null
-    baseline_models: []
+    model_version: "not a production artifact - study-local fits only"
+    parameters: >-
+      Level 1 multinomial logistic (sklearn LogisticRegression, max_iter=2000,
+      defaults otherwise). Level 2 XGBoost with the repository's own shipped
+      baseline `_BASE_PARAMS[xgboost]` (n_estimators 250, max_depth 4,
+      learning_rate 0.05, subsample 0.85, colsample_bytree 0.85,
+      reg_lambda 2.0) - copied deliberately rather than tuned, so the arm stays
+      comparable to every candidate the promotion gate has scored. CatBoost was
+      requested but is UNAVAILABLE: pinned python_version < 3.14 in all three
+      requirements files with no wheel for the 3.14.6 interpreter, and it is
+      not a member of the served ensemble (random_forest + xgboost + lightgbm
+      -> logistic meta).
+    seed: 42
+    training_window: >-
+      Expanding window. Fold 1 trains on seasons 2021+2022, fold 2 on
+      2021-2023, fold 3 on 2021-2024. 2021 is partial (the forecast archive
+      opens 2022-03-01) and is never itself a test origin.
+    validation_windows: >-
+      Three walk-forward origins, test seasons 2023/24, 2024/25 and 2025/26
+      (n = 1,196 / 1,213 / 900). Each fold trains only on seasons strictly
+      preceding its test season; no shuffling.
+    final_holdout: >-
+      No untouched final holdout was reserved. The study is an information
+      test, not a promotion candidate, so no model selection was performed
+      against these folds that a holdout would need to protect.
+    baseline_models:
+      - "de-vigged Bet365 1X2 -> multinomial logistic"
+      - "de-vigged Bet365 1X2 -> XGBoost"
+      - "raw de-vigged Bet365 1X2, unmodeled (Rule 6 reference)"
     market_baseline: >-
-      not yet run - the §16 Stage 3 test (incumbent vs incumbent+weather, and
-      market vs market+weather) is the next step and is blocked on coverage
+      RUN 2026-09-17. Rule 7's bar is the de-vigged market itself: the baseline
+      arm sees [P(home), P(draw), P(away)] and the candidate sees the same plus
+      the T-2h forecast. The raw unmodeled market is scored alongside as the
+      Rule 6 reference - and it BEATS both fitted models on 2 of 3 folds
+      (test_2024 RPS 0.19690 raw vs 0.19741 logistic vs 0.20482 XGBoost), so
+      neither model earns its own existence on this feature set either.
     primary_metrics: [RPS]
-    secondary_metrics: []
-    bootstrap_method: null
-    statistical_test: null
-    multiple_testing_family: null
-    effect_size: null
-    confidence_interval: null
-    sample_size: null
+    secondary_metrics: [log_loss, ECE]
+    bootstrap_method: >-
+      paired block bootstrap on the per-fixture RPS difference
+      (candidate - baseline), non-overlapping blocks of 10 for temporal
+      dependence, via src/models/evaluation/metrics.block_bootstrap_ci
+    statistical_test: >-
+      95% CI on the paired mean RPS difference. The pre-declared bar is that
+      EVERY pooled fold interval must exclude zero in the candidate's favour.
+    multiple_testing_family: >-
+      6 pooled folds (2 learners x 3 origins) plus 32 per-league slices. At the
+      95% level ~1.6 of the 32 slices would exclude zero by chance; exactly 1
+      favourable and 1 unfavourable were observed, and they fall on the SAME
+      league and fold under different learners - noise, not a league effect.
+      No per-league slice was pre-registered.
+    effect_size: >-
+      Largest pooled RPS movement across all 6 folds is 0.00097 (XGBoost,
+      test_2023, in the WRONG direction). The best candidate-favouring movement
+      is -0.00038 (logistic, test_2025). Every effect sits in the 4th decimal.
+    confidence_interval: >-
+      All 6 pooled intervals straddle zero. Logistic: test_2023
+      [-0.0006, +0.0004], test_2024 [-0.0004, +0.0005], test_2025
+      [-0.0009, +0.0002]. XGBoost: test_2023 [-0.0023, +0.0042], test_2024
+      [-0.0025, +0.0022], test_2025 [-0.0022, +0.0026].
+    sample_size: >-
+      4,921 fixtures joined from 5,402 weather rows; the 481 dropped are
+      fixtures with no coherent Bet365 price, verified individually to be
+      present in the corpus under a matching key (not join failures).
     result: >-
-      Gate G1 FAIL (42.32% corpus / 67.87% in-window vs 85%). Gate G5
-      structurally satisfied but not yet measured. 5,402 rows written covering
-      seasons 2021/22-2025/26. Acquisition works; coverage does not clear.
-    robustness: null
+      DEGRADES_BASELINE (operator label). Precise reading: NO MEASURABLE
+      EFFECT - not one of the 6 pooled folds has a paired CI excluding zero in
+      EITHER direction, so the candidate is statistically indistinguishable
+      from the market-only baseline rather than measurably worse than it.
+      Log loss moves by <0.008 and ECE by <0.002 in both directions across
+      folds, so the null is not a sharpness/calibration trade being hidden by
+      RPS. Secondary finding: XGBoost is uniformly WORSE than the level-1
+      logistic model (RPS ~0.203 vs ~0.197, ECE 0.038-0.055 vs 0.018-0.031),
+      which is the §26 escalation ladder behaving as designed - 5 features over
+      ~2,400-4,000 rows does not support a boosted-tree arm. Acquisition gates
+      unchanged and still failing: G1 42.32% corpus / 67.87% in-window vs an
+      85% bar; G5 structurally satisfied, unmeasured.
+    robustness: >-
+      The null is stable across 2 learners, 3 temporal origins, 6 leagues and
+      both scoring families (RPS, log loss, ECE). It is not a single-split
+      artifact. Untested: whether weather interacts with a feature not in this
+      model (e.g. a stylistic team prior) rather than acting additively.
     failure_modes:
       - >-
         the Historical Forecast API silently returns ERA5 reanalysis before its
@@ -824,15 +888,22 @@ experiments:
     compute: "stdlib urllib + polars; one request per venue-window, not per fixture"
     peak_rss: UNDECLARED
     runtime: UNDECLARED
-    artifact_location: "reports/research/portfolio-f-weather-forecast-gates.json"
+    artifact_location: >-
+      reports/research/portfolio-f3-weather-incremental-value.json (Stage 3
+      test); reports/research/portfolio-f-weather-forecast-gates.json
+      (acquisition gates)
     provenance:
       - "docs/DEBT.md#44"
       - "docs/DEBT.md#84"
       - "reports/research/portfolio-f-weather-venue-location-qualification.md"
       - "reports/research/portfolio-f-venue-location-manifest.json"
       - "backend/scripts/ingest_openmeteo_weather.py"
+      - "backend/scripts/study_f3_weather_incremental_value.py"
     reviewer: UNDECLARED
-    certification_status: "not a candidate - acquisition only"
+    certification_status: >-
+      not a candidate. The information test is null, so there is nothing to
+      certify; promoting a feature with no measurable value would add serving
+      cost and a live Open-Meteo dependency for no accuracy.
 
   # =========================================================================
   - experiment_id: E6

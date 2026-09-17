@@ -30,6 +30,55 @@ that F3 is serving-only (Gate G5 is structurally satisfied — the same endpoint
 family answers a 16-day forward forecast, so an upcoming fixture IS answerable
 at T-2h). The third is what the registry's `HOLD` already records.
 
+### Update 2026-09-17 — the coverage question is now moot: the feature has no value
+
+**None of those three options is worth taking.** The §16 Stage 3 information
+test finally ran (`backend/scripts/study_f3_weather_incremental_value.py`,
+`reports/research/portfolio-f3-weather-incremental-value.json`), and weather
+adds **no measurable information beyond the market**:
+
+| arm | fold | RPS baseline | RPS candidate | 95% CI on the paired difference |
+|---|---|---|---|---|
+| logistic | test 2023 | 0.18706 | 0.18695 | [−0.0006, +0.0004] |
+| logistic | test 2024 | 0.19741 | 0.19748 | [−0.0004, +0.0005] |
+| logistic | test 2025 | 0.20061 | 0.20023 | [−0.0009, +0.0002] |
+| xgboost  | test 2023 | 0.20197 | 0.20294 | [−0.0023, +0.0042] |
+| xgboost  | test 2024 | 0.20482 | 0.20458 | [−0.0025, +0.0022] |
+| xgboost  | test 2025 | 0.20336 | 0.20353 | [−0.0022, +0.0026] |
+
+Every one of the six intervals straddles zero. Log loss moves by < 0.008 and
+ECE by < 0.002 in both directions, so this is not a sharpness-versus-calibration
+trade that RPS is hiding — it is a genuine null. **Spending effort to raise G1
+from 42.32% would buy more rows of a feature measured to be worth nothing.**
+
+⚠️ **The tempting cherry-pick, named so nobody quotes it later.** Of 32
+per-league slices, exactly **one** has a CI excluding zero favourably
+(BUNDESLIGA, test 2025, logistic, n=150) — and the *same league on the same
+fold* under XGBoost has a CI excluding zero in the **opposite** direction. At
+the 95% level ~1.6 of 32 slices would do this by chance. That is noise, not a
+Bundesliga weather effect, and no per-league slice was pre-registered.
+
+⚠️ **Secondary finding, and it is about the platform rather than about
+weather: the raw de-vigged market beats both fitted models on 2 of 3 folds**
+(test 2024: raw 0.19690 vs logistic 0.19741 vs XGBoost 0.20482). A model
+trained on the market's own probabilities does not reliably improve on them at
+this feature count. XGBoost is also uniformly worse than the level-1 logistic
+arm (RPS ~0.203 vs ~0.197, ECE 0.038–0.055 vs 0.018–0.031) — the directive's
+§26 escalation ladder behaving exactly as written: 5 features over ~2,400–4,000
+rows does not support a boosted-tree arm.
+
+**CatBoost was requested and not run.** It is pinned `python_version < "3.14"`
+in all three requirements files and has no wheel for this interpreter (3.14.6),
+so an arm could be written but never executed. It is also not a member of the
+served stacking ensemble (`random_forest + xgboost + lightgbm` → logistic
+meta), so its absence leaves no production path untested. Recorded as an
+explicit `UNAVAILABLE` arm in the report rather than silently skipped.
+
+The registry entry advances `SOURCE_QUALIFIED → INFORMATION_TEST` and keeps
+`HOLD`. **`REJECT` is the indicated §51 decision** and is deliberately not
+taken here — a terminal decision was not authorized in the session that ran the
+test.
+
 ## 102. `alembic upgrade head` could migrate production from any shell that had DATABASE_URL exported
 
 **Tier:** `RESOLVED` — guard installed at the chokepoint 2026-09-17.

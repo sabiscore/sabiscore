@@ -35,10 +35,16 @@ if str(_BACKEND_ROOT) not in sys.path:
 
 from src.models.evaluation.metrics import (  # noqa: E402
     block_bootstrap_ci,
+    expected_calibration_error,
+    log_loss_multiclass,
     ranked_probability_score,
 )
 
 FeatureFn = Callable[[dict[str, Any]], list[float]]
+# A fitter takes (X, y) and returns anything with `.predict_proba` and
+# `.classes_`. Defaults to the level-1 logistic model below; a study that
+# has already earned an escalation (directive §26) passes its own.
+FitFn = Callable[[Any, Any], Any]
 
 # Minimum rows before a slice is scored at all. Below this, a bootstrap CI is
 # not meaningfully estimable and reporting one would imply precision the
@@ -50,6 +56,66 @@ def devig(odds_home: float, odds_draw: float, odds_away: float) -> list[float]:
     """Normalize 1/odds implied probabilities to sum to 1 (remove overround)."""
     raw = np.array([1.0 / odds_home, 1.0 / odds_draw, 1.0 / odds_away])
     return (raw / raw.sum()).tolist()
+
+
+# The corpus ships in TWO column vocabularies and both are load-bearing:
+# seasons up to 2024/25 use `date`/`home_team`/`bet365_home`, while 2025/26
+# uses `Date`/`HomeTeam`/`B365H`. A reader that speaks only one silently sees
+# an empty season rather than an error — the same two-vocabulary shape this
+# repository has already paid for in league ids and team names.
+_CORPUS_COLUMNS = (
+    ("home", ("HomeTeam", "home_team")),
+    ("away", ("AwayTeam", "away_team")),
+    ("date", ("Date", "date")),
+    ("result", ("FTR", "result")),
+    ("odds_home", ("B365H", "bet365_home")),
+    ("odds_draw", ("B365D", "bet365_draw")),
+    ("odds_away", ("B365A", "bet365_away")),
+)
+
+# ranked_probability_score's own ordered 0/1/2 home/draw/away convention.
+OUTCOME_CODE = {"H": 0, "D": 1, "A": 2}
+
+
+def load_fixtures_with_market(path: Path) -> list[dict[str, Any]]:
+    """Corpus fixtures carrying a coherent de-vigged Bet365 1X2 price.
+
+    A row with an unparseable date, an unknown result, or any quoted price at
+    or below 1.0 is dropped rather than repaired — a price of 1.0 implies a
+    certainty no bookmaker offers and is corrupt input, not a long shot.
+    """
+    import pandas as pd
+
+    if not path.exists():
+        return []
+    frame = pd.read_csv(path, encoding="utf-8-sig", on_bad_lines="skip")
+    resolved: dict[str, str] = {}
+    for key, candidates in _CORPUS_COLUMNS:
+        match = next((c for c in candidates if c in frame.columns), None)
+        if match is None:
+            return []
+        resolved[key] = match
+
+    rows: list[dict[str, Any]] = []
+    for _, row in frame.iterrows():
+        parsed = pd.to_datetime(row[resolved["date"]], errors="coerce", dayfirst=False)
+        result = str(row[resolved["result"]]).strip().upper()
+        try:
+            odds = tuple(
+                float(row[resolved[k]]) for k in ("odds_home", "odds_draw", "odds_away")
+            )
+        except (TypeError, ValueError):
+            continue
+        if pd.isna(parsed) or result not in OUTCOME_CODE or min(odds) <= 1.0:
+            continue
+        rows.append({
+            "home_team": str(row[resolved["home"]]).strip(),
+            "away_team": str(row[resolved["away"]]).strip(),
+            "date": parsed.date(),
+            "outcome": OUTCOME_CODE[result],
+            "market_probs": devig(*odds),
+        })
+    return rows
 
 
 def mean_rps(y_true: np.ndarray, y_proba: np.ndarray) -> float:
@@ -126,6 +192,7 @@ def run_incremental_value_study(
     group_key: str | None = "league",
     raw_reference: FeatureFn | None = None,
     raw_reference_label: str = "rps_raw_reference",
+    fit_model: FitFn = fit_multinomial_logistic,
 ) -> dict[str, Any]:
     """Temporal-split incremental-value test, pooled and per group.
 
@@ -144,12 +211,8 @@ def run_incremental_value_study(
         }
 
     y_train = np.array([r[outcome_key] for r in train])
-    baseline_model = fit_multinomial_logistic(
-        np.array([baseline_features(r) for r in train]), y_train
-    )
-    candidate_model = fit_multinomial_logistic(
-        np.array([candidate_features(r) for r in train]), y_train
-    )
+    baseline_model = fit_model(np.array([baseline_features(r) for r in train]), y_train)
+    candidate_model = fit_model(np.array([candidate_features(r) for r in train]), y_train)
     # LogisticRegression.classes_ is sorted ascending, which already matches the
     # 0/1/2 home/draw/away encoding ranked_probability_score expects -- asserted
     # rather than assumed, because a silent reordering would corrupt every RPS
@@ -174,11 +237,19 @@ def run_incremental_value_study(
             "candidate_minus_baseline_bootstrap": paired_rps_diff_bootstrap(
                 y_true, proba_candidate, proba_baseline
             ),
+            # RPS decides; log loss and ECE describe HOW a model is better or
+            # worse. A candidate can cut log loss by growing sharper while
+            # getting less calibrated, and only the pair shows that.
+            "logloss_baseline_model": round(log_loss_multiclass(y_true, proba_baseline), 5),
+            "logloss_candidate_model": round(log_loss_multiclass(y_true, proba_candidate), 5),
+            "ece_baseline_model": expected_calibration_error(y_true, proba_baseline)["mean"],
+            "ece_candidate_model": expected_calibration_error(y_true, proba_candidate)["mean"],
         }
         if raw_reference is not None:
-            scored[raw_reference_label] = round(
-                mean_rps(y_true, np.array([raw_reference(r) for r in slice_rows])), 5
-            )
+            reference = np.array([raw_reference(r) for r in slice_rows])
+            scored[raw_reference_label] = round(mean_rps(y_true, reference), 5)
+            scored["logloss_raw_reference"] = round(log_loss_multiclass(y_true, reference), 5)
+            scored["ece_raw_reference"] = expected_calibration_error(y_true, reference)["mean"]
         return scored
 
     result: dict[str, Any] = {
