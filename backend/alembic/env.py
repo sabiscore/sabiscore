@@ -7,6 +7,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from urllib.parse import urlsplit
+
 from src.core.config import settings
 from src.core.database import Base
 from src.db import models as _db_models  # noqa: F401
@@ -18,6 +20,59 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+
+#: Environments that legitimately migrate a remote database. A deploy context
+#: declares itself; a developer's shell does not. `APP_ENV` defaults to
+#: "development" (core/config.py), so a local shell is structurally incapable of
+#: reaching production no matter what DATABASE_URL happens to hold.
+_DEPLOY_ENVIRONMENTS = frozenset({"production", "staging"})
+
+_LOCAL_HOSTS = frozenset({None, "", "localhost", "127.0.0.1", "::1"})
+
+
+def _guard_migration_target(url: str) -> str:
+    """Refuse to migrate a remote database from a non-deploy environment.
+
+    `alembic upgrade head` applies DDL. Every route to it — a developer's
+    shell, `make`, scripts/ci_local_enforcer.sh, and Render's own startCommand
+    — passes through this module, which makes it the one place a guard cannot
+    be bypassed by forgetting to add it somewhere.
+
+    This exists because it already happened: a local pre-commit gate ran
+    `alembic upgrade head` against the Render production instance purely
+    because DATABASE_URL was exported in that shell. It was a no-op (production
+    was already at head), but "happened to be a no-op" is not a safety
+    property.
+
+    The discriminator is deliberately `APP_ENV`, not the variable's *name*.
+    Renaming production's variable to PROD_DATABASE_URL would break Render's
+    startCommand — which supplies DATABASE_URL (render.yaml) — while doing
+    nothing to stop a developer who also has the renamed variable exported. The
+    operation needs the guard, not the spelling.
+    """
+    host = urlsplit(url).hostname
+    if host in _LOCAL_HOSTS:
+        return url
+
+    env = (settings.app_env or "").strip().lower()
+    if env in _DEPLOY_ENVIRONMENTS:
+        return url
+
+    raise RuntimeError(
+        "Refusing to run migrations against a remote database.\n"
+        f"  target host : {host}\n"
+        f"  APP_ENV     : {env or '(unset -> development)'}\n"
+        "\n"
+        "Migrations alter schema. Only a declared deploy environment "
+        f"({', '.join(sorted(_DEPLOY_ENVIRONMENTS))}) may target a non-local "
+        "database.\n"
+        "\n"
+        "If you meant to migrate a local database, point DATABASE_URL at "
+        "localhost.\n"
+        "If you are deploying, set APP_ENV explicitly in the deploy "
+        "environment (render.yaml already does)."
+    )
 
 
 def _sync_database_url(url: str) -> str:
@@ -34,7 +89,7 @@ def _sync_database_url(url: str) -> str:
 
 
 def run_migrations_offline() -> None:
-    url = _sync_database_url(settings.database_url)
+    url = _guard_migration_target(_sync_database_url(settings.database_url))
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -49,7 +104,9 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     section = config.get_section(config.config_ini_section, {})
-    section["sqlalchemy.url"] = _sync_database_url(settings.database_url)
+    section["sqlalchemy.url"] = _guard_migration_target(
+        _sync_database_url(settings.database_url)
+    )
 
     connectable = engine_from_config(
         section,

@@ -118,6 +118,14 @@ step "experiment registry (--strict)" \
 step "active artifact lineage (INV-14)" \
   bash -c "cd '$REPO_ROOT/backend' && PYTHONPATH=. '$PY' scripts/verify_active_artifacts.py"
 
+# Offline only — it reads the committed manifest and issues no geocoding
+# requests, so it is deterministic and safe on every commit. Re-geocoding in
+# CI would be rate-limited and flaky for no added assurance. It caught RCD
+# Espanyol resolved to Tenerife, ~1,296 km from its real stadium, feeding
+# subtropical weather into a Barcelona fixture's features.
+step "venue manifest integrity (DEBT 44)" \
+  bash -c "cd '$REPO_ROOT/backend' && PYTHONPATH=. '$PY' scripts/validate_venue_manifest.py"
+
 # ── 5. Backend tests ─────────────────────────────────────────────────────────
 # The whole suite. A collection error here aborts everything before a single
 # test runs, which is precisely the failure DEBT 97 recorded.

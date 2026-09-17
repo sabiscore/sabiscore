@@ -102,3 +102,94 @@ def test_sqlite_fallback_requires_explicit_opt_in_outside_tests(monkeypatch):
     assert settings.app_env == "development"
     assert settings.database_url.startswith("sqlite")
     assert settings.allow_sqlite_fallback is False
+
+
+# ── Migration target guard ───────────────────────────────────────────────────
+#
+# `alembic upgrade head` applies DDL, and every route to it — a developer's
+# shell, make, scripts/ci_local_enforcer.sh, Render's startCommand — passes
+# through alembic/env.py. That makes env.py the one place this guard cannot be
+# bypassed by forgetting to add it somewhere else.
+#
+# It exists because it already happened: a local pre-commit gate ran
+# `alembic upgrade head` against the Render production instance purely because
+# DATABASE_URL was exported in that shell. It was a no-op (production was
+# already at head), but "happened to be a no-op" is not a safety property.
+
+
+def _load_migration_guard():
+    """Extract env.py's guard without alembic's runtime context.
+
+    Importing alembic/env.py outright executes migrations against whatever
+    context is configured, which a test must never do.
+    """
+    from urllib.parse import urlsplit
+
+    from src.core.config import settings
+
+    source = (BACKEND / "alembic" / "env.py").read_text(encoding="utf-8")
+    start = source.index("_DEPLOY_ENVIRONMENTS")
+    end = source.index("def _sync_database_url")
+    namespace: dict = {"urlsplit": urlsplit, "settings": settings}
+    exec(compile(source[start:end], "env.py-guard", "exec"), namespace)  # noqa: S102
+    return namespace["_guard_migration_target"], settings
+
+
+_PROD_URL = (
+    "postgresql+psycopg://u:p@"
+    "dpg-da3p8qv10e5c738vls1g-a.oregon-postgres.render.com/sabiscore_db_v3"
+)
+_LOCAL_URL = "postgresql+psycopg://postgres@localhost:5432/sabiscore_verify"
+
+
+def _verdict(guard, settings, url: str, app_env: str) -> str:
+    original = settings.app_env
+    try:
+        settings.app_env = app_env
+        guard(url)
+        return "ALLOW"
+    except RuntimeError:
+        return "REFUSE"
+    finally:
+        settings.app_env = original
+
+
+def test_a_local_shell_cannot_migrate_a_remote_database() -> None:
+    """The incident, pinned. APP_ENV defaults to development."""
+    guard, settings = _load_migration_guard()
+    for env in ("development", "test", "", "DEVELOPMENT"):
+        assert _verdict(guard, settings, _PROD_URL, env) == "REFUSE", env
+
+
+def test_a_declared_deploy_environment_may_still_migrate() -> None:
+    """Render's startCommand runs `alembic upgrade head` with APP_ENV=production.
+
+    The guard must not break deployment — that would trade one outage for
+    another.
+    """
+    guard, settings = _load_migration_guard()
+    for env in ("production", "staging", "Production"):
+        assert _verdict(guard, settings, _PROD_URL, env) == "ALLOW", env
+
+
+def test_local_and_sqlite_targets_are_always_permitted() -> None:
+    guard, settings = _load_migration_guard()
+    for url in (
+        _LOCAL_URL,
+        "postgresql+psycopg://u:p@127.0.0.1:5432/db",
+        "sqlite:///./sabiscore.db",
+    ):
+        assert _verdict(guard, settings, url, "development") == "ALLOW", url
+
+
+def test_both_migration_paths_route_through_the_guard() -> None:
+    """Offline and online migrations must both be covered.
+
+    Guarding only `run_migrations_online` would leave `--sql` mode open, and
+    the two are easy to change independently.
+    """
+    source = (BACKEND / "alembic" / "env.py").read_text(encoding="utf-8")
+    offline = source.index("def run_migrations_offline")
+    online = source.index("def run_migrations_online")
+    assert "_guard_migration_target" in source[offline:online], "offline path unguarded"
+    assert "_guard_migration_target" in source[online:], "online path unguarded"

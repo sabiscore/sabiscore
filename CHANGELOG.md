@@ -5,6 +5,71 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Venue Integrity Gate + Migration Target Boundary (2026-09-17)
+
+### Fixed
+
+- **A VERIFIED stadium sat 1,296 km from its real location** (DEBT 101). `Espanol` (RCD Espanyol,
+  Barcelona) resolved to a place called "Español" at 28.5N -16.33 — Tenerife. The `ES` country
+  filter passed, the name matched after diacritic folding, and `classify()` returned `VERIFIED` on
+  its own correct logic; `ingest_openmeteo_weather.py` reads VERIFIED clubs only, so subtropical
+  Atlantic weather had been feeding a Barcelona fixture's T−2h features. The classifier verifies the
+  resolved **name**; nothing verified the resolved **place**.
+
+  Demoted to `REQUIRES_REVIEW` rather than corrected — deriving the right coordinate needs a geocode
+  the manifest cannot perform offline, and authoring Barcelona's from recall is the invented
+  reference data `docs/DEBT.md` item 44 forbids. VERIFIED 116 → 115.
+
+- **`alembic upgrade head` could migrate production from any shell with `DATABASE_URL` exported**
+  (DEBT 102). It already happened — the local enforcer's first run hit the Render production
+  instance. A guard now sits in `alembic/env.py`, the chokepoint every route passes through
+  (developer shell, `make`, the enforcer, Render's own `startCommand`). A remote target is permitted
+  only from a declared deploy environment; `development`/`test` are refused with the host named.
+
+### Added
+
+- **`backend/scripts/validate_venue_manifest.py`** — offline integrity gate for the venue manifest,
+  wired into `ci_local_enforcer.sh`. Checks header/entry agreement, coordinate range, country-filter
+  integrity, and geographic plausibility. It issues **no** geocoding requests, so it is
+  deterministic and safe on every commit; re-geocoding in CI would be rate-limited and flaky for no
+  added assurance.
+
+  The plausibility rule is fabrication-free: a national league clusters geographically, so a VERIFIED
+  club implausibly far from every other VERIFIED club *in its own league country* is a resolution
+  error. Measured over 116 VERIFIED clubs — median nearest-neighbour 60.7 km, MAD 35.3 km, p99
+  431.7 km, largest legitimate value Cagliari at 431.7 km (Sardinia). `_ISOLATION_KM = 750` sits in
+  the empty gap below Espanol's 1,296 km and is labelled `DEFAULT_PENDING_CALIBRATION`.
+
+### Corrected
+
+- **`Sheffield United` is not a defect.** A first draft of the plausibility check flagged it for
+  candidates 172.7 km apart ("Sheffield" and "United Kingdom", the latter from tokenising "united").
+  `place_is_named_in_club` requires *every* place token to appear in the club name — "kingdom" does
+  not — so the classifier had already excluded it. The draft measured all `candidates` instead of
+  the confirmed subset the classifier acted on.
+
+- **The `PROD_DATABASE_URL` rename was rejected on evidence.** `render.yaml:40` supplies
+  `DATABASE_URL` and line 10's `startCommand` is `alembic upgrade head && uvicorn ...`, so renaming
+  breaks deployment — while doing nothing to stop a developer who also has the renamed variable
+  exported. The operation needed the guard, not the spelling.
+
+- **CatBoost is not in the served ensemble.** `MODEL_FAMILY.base_learners` is
+  `random_forest + xgboost + lightgbm` with a logistic-regression meta-model.
+
+### Measured — not built
+
+- **Gate G1 cannot pass by any amount of geocoding work** (DEBT 103). 4,806 of 12,765 corpus
+  fixtures (37.65%) predate the forecast archive's 2022-03-01 start, so even *perfect* venue
+  coverage caps G1 at **62.35%** against an 85% bar. Geocoding is worth +19.54pp and cannot close
+  the gap; those forecasts were never published, and filling them from ERA5 reanalysis is the Rule 3
+  leak the ingestion script already refuses.
+
+- **F3 was not promoted to the feature store.** Its coverage gate fails, and promoting across a
+  failing gate would break the promotion ladder (INV-04) and the registry's own `HOLD`. The
+  experimental sample that *is* available was measured: ~4,065 labelled fixtures with weather
+  (5,465 minus ~1,400 in the in-progress 2025/26 season) across five leagues — enough to power a
+  with/without ablation, which does not yet exist and is the honest next step.
+
 ## Unreleased — Local CI Enforcement + G-Gate Cryptographic Enclosure (2026-09-17)
 
 ### Added
