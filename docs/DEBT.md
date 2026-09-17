@@ -112,22 +112,46 @@ before the spread test. The first draft measured all `candidates` instead of
 the confirmed subset the classifier acted on. **Check what the code actually
 considered before calling its output wrong.**
 
-**Two follow-ups, `NEXT`:**
+**Follow-ups 1 and 2 `RESOLVED` 2026-09-18; follow-up 3 remains `NEXT`,
+deliberately not actioned:**
 
-1. `ingest_openmeteo_weather.py:130` reads `candidates[0]`, discarding the
-   confirmed/unconfirmed distinction `classify()` drew. Sheffield United is
-   correct today only because the geocoder happened to return "Sheffield"
-   first; a reordered upstream response would silently hand it the UK centroid.
-   The manifest does not record *which* candidate was confirmed, so fixing this
-   properly means recording it at generation time.
-2. `qualify_venue_locations.py` cannot apply the isolation rule itself —
-   `classify()` sees one club at a time and the rule needs the national cluster.
-   It belongs as a post-pass over the assembled manifest, so a regeneration
-   reproduces the demotion instead of silently re-promoting Espanol.
-3. `portfolio-f-weather-forecast-gates.json` still reports `venues_verified:
-   116` and the G1 figures computed from it. Those are now stale by one club.
-   Re-running the ingestion refreshes them but spends live API quota; the
-   direction of the change is known and small (G1 falls slightly).
+1. **`RESOLVED`.** `classify()` now returns `(verdict, reason, confirmed)` --
+   the exact subset of resolutions it trusted, not just the verdict. Every
+   candidate written to the manifest carries a `"confirmed"` boolean.
+   `ingest_openmeteo_weather.py`'s `load_verified_venues()` reads the
+   confirmed candidate explicitly, never `candidates[0]`; a manifest that
+   predates this field (no candidate marked `confirmed`) falls back to
+   `candidates[0]` with a logged warning naming the club, rather than failing
+   every venue at once over a schema difference. The committed manifest was
+   backfilled offline -- `place_is_named_in_club` is pure and needs no new
+   geocoding request -- so Sheffield United's manifest entry now says
+   explicitly what was previously true only by luck: `Sheffield` is
+   `confirmed: true`, `United Kingdom` is `confirmed: false`.
+
+2. **`RESOLVED`.** The isolation rule moved from `validate()`-only into a
+   shared `_isolated_clubs()` helper in `validate_venue_manifest.py`, called
+   both by `validate()` (the offline CI gate) and a new
+   `demote_geographically_implausible()` (the generation-time counterpart).
+   `qualify_venue_locations.py`'s `run()` calls it on every manifest it builds,
+   before writing to disk -- loaded by path (`importlib.util
+   .spec_from_file_location`), not by module name, since the script's own
+   directory is not reliably on `sys.path` depending on how it was invoked.
+   A from-scratch regeneration can no longer silently re-promote a club the
+   way Espanol was VERIFIED: the same function that catches it in CI catches
+   it at generation time, so the two cannot drift apart. Verified against a
+   reconstructed Espanol-shaped entry, watched failing against a stubbed
+   no-op first.
+
+3. **`NEXT`, deliberately not actioned this session.**
+   `portfolio-f-weather-forecast-gates.json` still reports `venues_verified:
+   116` and G1 figures computed against it -- stale by one club since
+   Espanol's demotion. Refreshing it means re-running
+   `ingest_openmeteo_weather.py` against the live Historical Forecast API for
+   every fixture in the corpus, which spends real quota against a free-tier
+   external service for a number whose direction and rough size are already
+   known (`venues_verified: 115`, G1 falls slightly). Not run without being
+   asked to -- the same restraint this codebase already applies to live
+   provider probes.
 
 ## 100. G-gate thresholds relocated into the hashed certification policy (OG-06 executed)
 
