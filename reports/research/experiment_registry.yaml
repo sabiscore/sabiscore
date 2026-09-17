@@ -766,13 +766,17 @@ experiments:
     source_version: "probed 2026-09-11; archive boundary measured between 2022-01-01 and 2022-03-01"
     source_license_class: L0
     source_coverage: >-
-      G1 42.81% of the 12,765-match corpus (5,465 fixtures) against an 85% bar.
+      Refreshed 2026-09-17 over 115 VERIFIED venues (was 116; RCD Espanyol
+      demoted by the item-101 isolation gate, its coordinate 1,296 km wrong).
+      G1 42.32% of the 12,765-match corpus (5,402 fixtures) against an 85% bar.
       Within the window where an archived forecast can exist at all (7,959
-      fixtures from 2022-03-01) G1 is 68.66%. Gaps: VENUE_NOT_VERIFIED 3,966
-      (31.1%), NO_ARCHIVED_FORECAST 3,334 (26.1%). ZERO fetch failures and ZERO
-      missing forecast hours across 106 venue requests - every eligible fixture
+      fixtures from 2022-03-01) G1 is 67.87%. Gaps: VENUE_NOT_VERIFIED 4,061
+      (31.8%), NO_ARCHIVED_FORECAST 3,302 (25.9%). ZERO fetch failures and ZERO
+      missing forecast hours across 105 venue requests - every eligible fixture
       resolved, so the ceiling is entirely venue coverage plus archive start,
-      not source reliability.
+      not source reliability. The prior run (2026-09-11, 106 venues) read
+      42.81% / 68.66% over 5,465 rows; coverage fell because a wrong venue was
+      removed, which is the correct direction.
     historical_window: >-
       Archived forecasts usable from 2022-03-01 (conservative side of the
       measured boundary). Corpus seasons 1920/2021/2122-first-half fall before
@@ -800,8 +804,8 @@ experiments:
     confidence_interval: null
     sample_size: null
     result: >-
-      Gate G1 FAIL (42.81% corpus / 68.66% in-window vs 85%). Gate G5
-      structurally satisfied but not yet measured. 5,465 rows written covering
+      Gate G1 FAIL (42.32% corpus / 67.87% in-window vs 85%). Gate G5
+      structurally satisfied but not yet measured. 5,402 rows written covering
       seasons 2021/22-2025/26. Acquisition works; coverage does not clear.
     robustness: null
     failure_modes:

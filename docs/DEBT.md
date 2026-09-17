@@ -11,7 +11,7 @@ arithmetic settles it before any work is spent:
 corpus fixtures     12,765
 in forecast window   7,959  (62.35%)   <- archived forecasts can exist
 predate the archive  4,806  (37.65%)   <- no forecast was ever published
-matched today        5,465  (42.81%)
+matched today        5,402  (42.32%)
 
 ceiling with PERFECT geocoding = 7,959 / 12,765 = 62.35%   vs an 85% bar
 ```
@@ -25,7 +25,7 @@ reanalysis is the Rule 3 leak `ingest_openmeteo_weather.py` already refuses.
 
 ⚠️ **Do not spend effort on venue coverage expecting G1 to pass.** The options
 are: lower the bar for this feature family with an explicit OG-06 decision,
-restrict F3's scope to the post-2022-03-01 window where G1 is 68.66%, or accept
+restrict F3's scope to the post-2022-03-01 window where G1 is 67.87%, or accept
 that F3 is serving-only (Gate G5 is structurally satisfied — the same endpoint
 family answers a 16-day forward forecast, so an upcoming fixture IS answerable
 at T-2h). The third is what the registry's `HOLD` already records.
@@ -1024,24 +1024,30 @@ and counted, still pending item 44's bounded operator review.
 
 | gap | fixtures | share of corpus |
 |---|---|---|
-| `VENUE_NOT_VERIFIED` | 3,966 | 31.1% |
-| `NO_ARCHIVED_FORECAST` | 3,334 | 26.1% |
+| `VENUE_NOT_VERIFIED` | 4,061 | 31.8% |
+| `NO_ARCHIVED_FORECAST` | 3,302 | 25.9% |
 
-leaving at most 5,465 of 12,765 reachable before a single request is made.
+leaving at most 5,402 of 12,765 reachable before a single request is made.
 
-**Measured, full run (106 venue requests, 5,465 rows written):**
+**Measured, full run (105 venue requests, 5,402 rows written), refreshed 2026-09-17**
+**after the Espanol demotion (item 101):**
 
 | gate | value | bar |
 |---|---|---|
-| G1, whole corpus | **42.81%** | 85% |
-| G1, within the forecast window (7,959 fixtures) | **68.66%** | 85% |
+| G1, whole corpus | **42.32%** | 85% |
+| G1, within the forecast window (7,959 fixtures) | **67.87%** | 85% |
+
+The first full run (2026-09-11, 106 venue requests) read 42.81% / 68.66% over
+5,465 rows. Coverage went **down** because demoting RCD Espanyol removed a
+venue whose coordinate was 1,296 km wrong — losing 63 fixtures of confidently
+wrong weather is the correct direction, not a regression.
 
 Gate G1 **FAILS** either way. The report records it twice on purpose: the
 second number says whether the *source* is viable, as distinct from the corpus
 being older than the archive.
 
 ⚠️ **Zero fetch failures and zero missing forecast hours.** Every one of the
-5,465 eligible fixtures resolved to a real T-2h forecast. The ceiling is
+5,402 eligible fixtures resolved to a real T-2h forecast. The ceiling is
 entirely venue coverage plus archive start — **the source itself is completely
 reliable inside its window**, which is why this is a coverage finding and not a
 quality one. Coverage spans seasons 2021/22–2025/26.

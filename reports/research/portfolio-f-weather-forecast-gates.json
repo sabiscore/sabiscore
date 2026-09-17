@@ -1,6 +1,6 @@
 {
   "experiment_id": "F3",
-  "generated_at": "2026-09-11T13:29:07.501827+01:00",
+  "generated_at": "2026-09-17T23:14:36.498864+01:00",
   "source": "Open-Meteo Historical Forecast API",
   "source_license_class": "L0",
   "endpoint": "https://historical-forecast-api.open-meteo.com/v1/forecast",
@@ -9,17 +9,17 @@
   "cutoff_hours_pre_kickoff": 2,
   "corpus_fixtures": 12765,
   "fixtures_in_forecast_window": 7959,
-  "matched_fixtures": 5465,
+  "matched_fixtures": 5402,
   "gates": {
-    "G1_whole_corpus_pct": 42.81,
-    "G1_within_forecast_window_pct": 68.66,
+    "G1_whole_corpus_pct": 42.32,
+    "G1_within_forecast_window_pct": 67.87,
     "threshold_pct": 85.0,
     "G5_prediction_time_availability": "STRUCTURALLY SATISFIED \u2014 the same endpoint family serves a 16-day forward forecast, so an upcoming fixture is answerable at the same T-2h cutoff. Not yet measured against live fixtures; that requires a prospective probe."
   },
   "gaps": {
-    "VENUE_NOT_VERIFIED": 3966,
-    "NO_ARCHIVED_FORECAST": 3334
+    "VENUE_NOT_VERIFIED": 4061,
+    "NO_ARCHIVED_FORECAST": 3302
   },
-  "venues_verified": 116,
+  "venues_verified": 115,
   "dry_run": false
 }
