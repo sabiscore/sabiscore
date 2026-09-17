@@ -1,5 +1,46 @@
 # SabiScore Debt Ledger
 
+## 104. `master` has no required-status-check rule — red CI has never actually blocked a merge
+
+**Tier:** `NOW` — an unguarded merge gate. **Recorded:** 2026-09-17.
+**Owner:** operator (repository settings, not code).
+
+Found while writing `scripts/verify_remote_ci.sh`, which needed to know which
+checks to assert on. Queried directly rather than assumed:
+
+```
+$ gh api repos/sabiscore/sabiscore/rules/branches/master
+deletion, non_fast_forward, required_linear_history, pull_request
+```
+
+The `master` ruleset (id 20939497, enforcement `active`) contains **four**
+rules. `pull_request` requires 1 approving review. There is **no
+`required_status_checks` rule**, and it is the only ruleset on the repository.
+
+**Consequence: GitHub has never blocked a merge on a red or absent CI run.**
+The only thing standing between a failing suite and `master` is a human
+approving the PR. This is independent of the billing lock (item 16) and will
+outlive it — clearing the lock turns the workflows back on but does not make
+them gate anything.
+
+⚠️ **This partly explains items 96–98 reaching `master` unnoticed.** The
+existing narrative attributes that to the billing lock alone, which is
+incomplete: even with runners working, nothing would have stopped those merges.
+Item 99 built the local enforcer as the answer to the lock; the answer to
+*this* is a ruleset change no script can make.
+
+**Remediation (operator, one action):** add a `required_status_checks` rule to
+ruleset 20939497 naming the jobs the repository already treats as its gate —
+the `CI - Canonical Platform` jobs, `Secret Scan`, `Block large files` and
+`Validate Model Artifacts`. Do this *after* the billing lock clears, or every
+PR becomes unmergeable.
+
+⚠️ A prior session's note recorded master as requiring "6 named status checks +
+1 approving review". That is **stale** — whether the rule was removed or the
+note was wrong at the time cannot be determined from here. Re-derive this from
+`gh api repos/<owner>/<repo>/rules/branches/master` rather than trusting any
+written record of it, including this one.
+
 ## 103. Portfolio F cannot reach Gate G1 by any amount of geocoding work — the binding constraint is the forecast archive, not venue coverage
 
 **Tier:** `RESEARCH` — a measured ceiling, not a defect. **Recorded:** 2026-09-17.
@@ -288,6 +329,25 @@ class.
 mandate only once a real workflow run has been observed reaching step 1 with a
 non-empty `runner_name` — not when someone believes the billing issue was
 settled. Items 96–98 are what "believed to be fine" costs.
+
+**That observation is now automated: `scripts/verify_remote_ci.sh`.** It reads
+`runner_name` and the executed-step count from
+`GET /actions/runs/{id}/jobs` — the only endpoint that exposes them — because
+`gh run list --json status,conclusion` reports a locked job and a genuinely
+failing job identically, as `conclusion: "failure"`, and carries no
+`runner_name` field at all. Exit 2 means the lock still holds; exit 0 means a
+runner booted *and* the required workflows passed; exit 1 means the lock
+cleared but the suite is genuinely red, which still closes this item.
+
+Verified against real runs in both directions before being trusted: `ea3cb7e`
+(today) reports all 11 jobs `NEVER STARTED - runner_name empty, 0 steps` and
+exits 2, while `221a05a` (2026-09-07, when the lock was briefly clear) reports
+10 jobs on real runners with 5–18 executed steps each and exits 0. That commit
+also carries later, locked `Keep-alive ping` jobs, so the mixed case — some
+jobs booted, some not — is exercised too.
+
+⚠️ Closing this item lifts the local-enforcement mandate but does **not** make
+CI gate anything: see item 104, `master` has no required-status-check rule.
 
 ## 98. PR #205 renamed the calibration method literal `"platt"` → `"sigmoid"` without updating its own test file — 8 failures, invisible behind item 97's collection abort
 
