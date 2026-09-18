@@ -5,6 +5,43 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Data Intelligence Directive v6 committed (2026-09-18)
+
+### Added
+
+- **`docs/DATA_INTELLIGENCE_DIRECTIVE.md` (v6)** — the research directive that governs every entry in
+  `reports/research/experiment_registry.yaml` **had never been committed**. It existed only in chat
+  transcripts while defining the registry schema, the experiment state machine and the four §51
+  decisions. See `docs/DEBT.md` item 105.
+
+  v6 preserves **every v5 section number** (0–53) and appends §54–§57. `§51` alone is cited 45 times
+  across scripts, registry entries and the debt ledger, so renumbering would have inflicted the same
+  broken-cross-reference defect this change exists to fix. Verified mechanically: all 54 v5 sections
+  present, and every `§N` cited anywhere in the repo resolves.
+
+  New material, each rule citing the measured failure that produced it rather than a preference:
+  **Rule 11** verify the brief's own premises · **Rule 12** a null is not a negative ·
+  **Rule 13** name the cherry-pick · **Rule 14** an unsatisfiable gate is a defect in the gate ·
+  **Rule 15** verify the enforcement mechanism, not just the gate · **§0.1** precedence against the
+  Production Execution Directive v7.4 and `DID §N` / `APEX §N` citation discipline ·
+  **§15.7** run the cheap information test before buying coverage · **§26.1** the escalation
+  ladder's first measured anchor · **§36.1** environment reality check for named tools ·
+  **§40 R7.1** enforcement verification · **§51.1** decision authority ·
+  **§54** recorded empirical findings · **§55** operational verification ·
+  **§56** duplication policy for research code · **§57** maintenance rules.
+
+  **§16 Stage 3 change:** the raw unmodeled de-vigged market reference is now **mandatory**, not
+  optional — it is the line that caught the market outscoring both fitted models.
+
+### Fixed
+
+- **`reports/research/experiment_registry.yaml` cross-references.** `schema_reference` read
+  `PRODUCTION_EXECUTIVE_DIRECTIVE.md §38`; that file is the Execution & Certification Directive
+  v7.4, whose §38 is "Documentation Discipline" and which has no §51 (it ends at §46). All three
+  references (schema, state machine, decision framework) now name
+  `docs/DATA_INTELLIGENCE_DIRECTIVE.md` explicitly. `directive_version` v5 → v6,
+  `registry_version` 1.0.0 → 1.1.0. Registry still validates `--strict`, 15 experiments, 0 warnings.
+
 ## Unreleased — F3 Weather Refresh, Stage 3 Walk-Forward, Remote CI Verifier (2026-09-18)
 
 ### Added

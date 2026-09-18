@@ -1,7 +1,11 @@
 # SabiScore Experiment Registry
 #
-# Directive: PRODUCTION_EXECUTIVE_DIRECTIVE.md §38 (registry schema),
+# Directive: docs/DATA_INTELLIGENCE_DIRECTIVE.md §38 (registry schema),
 #            §39 (state machine), §51 (decision framework).
+#
+# Bare "§N" below means the Data Intelligence Directive (DID). The separate
+# Production Execution & Certification Directive v7.4 is cited as "APEX §N".
+# See DID §0.1 -- the two documents both have a §23 and they are different rules.
 #
 # §47 Action 9: "No research result exists unless it is reproducible from the
 # registry." This file is the machine-readable index of every registered
@@ -30,10 +34,18 @@
 # pre-registered and their field coverage is therefore partial by construction.
 # ---------------------------------------------------------------------------
 
-registry_version: "1.0.0"
-directive_version: "v5"
+registry_version: "1.1.0"
+directive_version: "v6"
 created: "2026-09-10"
-schema_reference: "PRODUCTION_EXECUTIVE_DIRECTIVE.md §38"
+# CORRECTED 2026-09-18: this previously read "PRODUCTION_EXECUTIVE_DIRECTIVE.md
+# §38". That filename resolves to the Production Execution & Certification
+# Directive v7.4, whose §38 is "Documentation Discipline" and which has no §51
+# at all (it ends at §46) -- so every §38/§39/§51 citation below pointed at the
+# wrong document and a section that does not exist. The research directive that
+# actually defines this schema was never committed; it is now at the path below.
+schema_reference: "docs/DATA_INTELLIGENCE_DIRECTIVE.md §38"
+state_machine_reference: "docs/DATA_INTELLIGENCE_DIRECTIVE.md §39"
+decision_framework_reference: "docs/DATA_INTELLIGENCE_DIRECTIVE.md §51"
 
 # §39 state machine, in order. An experiment's `state` must be one of these.
 states:
