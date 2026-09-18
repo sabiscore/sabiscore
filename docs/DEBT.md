@@ -1,5 +1,50 @@
 # SabiScore Debt Ledger
 
+## 105. The research directive governing 15 experiments existed only in chat transcripts, and the registry cited it at a section that does not exist
+
+**Tier:** `RESOLVED` — directive committed and cross-reference repointed 2026-09-18.
+
+`reports/research/experiment_registry.yaml` declared:
+
+```yaml
+directive_version: "v5"
+schema_reference: "PRODUCTION_EXECUTIVE_DIRECTIVE.md §38"
+```
+
+Both halves were wrong, and neither was checkable by any gate.
+
+`docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md` is the **Production Execution &
+Certification Directive v7.4** — a different document. Its §38 is
+"Documentation Discipline", its §39 is "Surgical Change Policy", and **it has no
+§51 at all** (it ends at §46). The registry's `§38` (registry schema), `§39`
+(state machine) and `§51` (decision framework) citations therefore all resolved
+to the wrong document, and one of them to nothing.
+
+**The Data Intelligence Directive v5 was never committed to this repository.**
+It governed every experiment in the registry, defined the `UNDECLARED` honesty
+contract, the state machine, and the four §51 decisions — from a chat
+transcript. `validate_experiment_registry.py --strict` passes 15 experiments
+"against §38" without ever reading a §38.
+
+⚠️ **Why it went unnoticed for eight days:** `schema_reference` is inert
+metadata. The validator checks required *fields*, `state` against the state
+list, `decision` against the decision list, and provenance paths — but never
+that the document it names exists or contains the cited section. A citation
+nothing resolves is indistinguishable from a correct one.
+
+**Fixed:** the directive is committed at `docs/DATA_INTELLIGENCE_DIRECTIVE.md`
+as v6, and the registry now points at it with all three references named
+separately. v6 preserves every v5 section number — §51 alone is cited 45 times
+across scripts, registry entries and this ledger, so renumbering would have
+inflicted the same class of defect it was written to correct.
+
+⚠️ **Citation ambiguity is the residual risk, and v6 §0.1 addresses it going
+forward:** both directives have a §23, a §38 and a §2, and a bare `§23` does not
+say which. New citations use `DID §N` / `APEX §N`. Existing bare citations in
+research records were deliberately NOT rewritten — a large low-value diff across
+otherwise-correct records — so **a bare `§N` in a file predating 2026-09-18 must
+be read in context, not assumed.**
+
 ## 104. `master` has no required-status-check rule — red CI has never actually blocked a merge
 
 **Tier:** `NOW` — an unguarded merge gate. **Recorded:** 2026-09-17.
