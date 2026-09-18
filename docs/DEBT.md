@@ -1,5 +1,46 @@
 # SabiScore Debt Ledger
 
+## 104. `master` has no required-status-check rule — red CI has never actually blocked a merge
+
+**Tier:** `NOW` — an unguarded merge gate. **Recorded:** 2026-09-17.
+**Owner:** operator (repository settings, not code).
+
+Found while writing `scripts/verify_remote_ci.sh`, which needed to know which
+checks to assert on. Queried directly rather than assumed:
+
+```
+$ gh api repos/sabiscore/sabiscore/rules/branches/master
+deletion, non_fast_forward, required_linear_history, pull_request
+```
+
+The `master` ruleset (id 20939497, enforcement `active`) contains **four**
+rules. `pull_request` requires 1 approving review. There is **no
+`required_status_checks` rule**, and it is the only ruleset on the repository.
+
+**Consequence: GitHub has never blocked a merge on a red or absent CI run.**
+The only thing standing between a failing suite and `master` is a human
+approving the PR. This is independent of the billing lock (item 16) and will
+outlive it — clearing the lock turns the workflows back on but does not make
+them gate anything.
+
+⚠️ **This partly explains items 96–98 reaching `master` unnoticed.** The
+existing narrative attributes that to the billing lock alone, which is
+incomplete: even with runners working, nothing would have stopped those merges.
+Item 99 built the local enforcer as the answer to the lock; the answer to
+*this* is a ruleset change no script can make.
+
+**Remediation (operator, one action):** add a `required_status_checks` rule to
+ruleset 20939497 naming the jobs the repository already treats as its gate —
+the `CI - Canonical Platform` jobs, `Secret Scan`, `Block large files` and
+`Validate Model Artifacts`. Do this *after* the billing lock clears, or every
+PR becomes unmergeable.
+
+⚠️ A prior session's note recorded master as requiring "6 named status checks +
+1 approving review". That is **stale** — whether the rule was removed or the
+note was wrong at the time cannot be determined from here. Re-derive this from
+`gh api repos/<owner>/<repo>/rules/branches/master` rather than trusting any
+written record of it, including this one.
+
 ## 103. Portfolio F cannot reach Gate G1 by any amount of geocoding work — the binding constraint is the forecast archive, not venue coverage
 
 **Tier:** `RESEARCH` — a measured ceiling, not a defect. **Recorded:** 2026-09-17.
@@ -11,7 +52,7 @@ arithmetic settles it before any work is spent:
 corpus fixtures     12,765
 in forecast window   7,959  (62.35%)   <- archived forecasts can exist
 predate the archive  4,806  (37.65%)   <- no forecast was ever published
-matched today        5,465  (42.81%)
+matched today        5,402  (42.32%)
 
 ceiling with PERFECT geocoding = 7,959 / 12,765 = 62.35%   vs an 85% bar
 ```
@@ -25,10 +66,59 @@ reanalysis is the Rule 3 leak `ingest_openmeteo_weather.py` already refuses.
 
 ⚠️ **Do not spend effort on venue coverage expecting G1 to pass.** The options
 are: lower the bar for this feature family with an explicit OG-06 decision,
-restrict F3's scope to the post-2022-03-01 window where G1 is 68.66%, or accept
+restrict F3's scope to the post-2022-03-01 window where G1 is 67.87%, or accept
 that F3 is serving-only (Gate G5 is structurally satisfied — the same endpoint
 family answers a 16-day forward forecast, so an upcoming fixture IS answerable
 at T-2h). The third is what the registry's `HOLD` already records.
+
+### Update 2026-09-17 — the coverage question is now moot: the feature has no value
+
+**None of those three options is worth taking.** The §16 Stage 3 information
+test finally ran (`backend/scripts/study_f3_weather_incremental_value.py`,
+`reports/research/portfolio-f3-weather-incremental-value.json`), and weather
+adds **no measurable information beyond the market**:
+
+| arm | fold | RPS baseline | RPS candidate | 95% CI on the paired difference |
+|---|---|---|---|---|
+| logistic | test 2023 | 0.18706 | 0.18695 | [−0.0006, +0.0004] |
+| logistic | test 2024 | 0.19741 | 0.19748 | [−0.0004, +0.0005] |
+| logistic | test 2025 | 0.20061 | 0.20023 | [−0.0009, +0.0002] |
+| xgboost  | test 2023 | 0.20197 | 0.20294 | [−0.0023, +0.0042] |
+| xgboost  | test 2024 | 0.20482 | 0.20458 | [−0.0025, +0.0022] |
+| xgboost  | test 2025 | 0.20336 | 0.20353 | [−0.0022, +0.0026] |
+
+Every one of the six intervals straddles zero. Log loss moves by < 0.008 and
+ECE by < 0.002 in both directions, so this is not a sharpness-versus-calibration
+trade that RPS is hiding — it is a genuine null. **Spending effort to raise G1
+from 42.32% would buy more rows of a feature measured to be worth nothing.**
+
+⚠️ **The tempting cherry-pick, named so nobody quotes it later.** Of 32
+per-league slices, exactly **one** has a CI excluding zero favourably
+(BUNDESLIGA, test 2025, logistic, n=150) — and the *same league on the same
+fold* under XGBoost has a CI excluding zero in the **opposite** direction. At
+the 95% level ~1.6 of 32 slices would do this by chance. That is noise, not a
+Bundesliga weather effect, and no per-league slice was pre-registered.
+
+⚠️ **Secondary finding, and it is about the platform rather than about
+weather: the raw de-vigged market beats both fitted models on 2 of 3 folds**
+(test 2024: raw 0.19690 vs logistic 0.19741 vs XGBoost 0.20482). A model
+trained on the market's own probabilities does not reliably improve on them at
+this feature count. XGBoost is also uniformly worse than the level-1 logistic
+arm (RPS ~0.203 vs ~0.197, ECE 0.038–0.055 vs 0.018–0.031) — the directive's
+§26 escalation ladder behaving exactly as written: 5 features over ~2,400–4,000
+rows does not support a boosted-tree arm.
+
+**CatBoost was requested and not run.** It is pinned `python_version < "3.14"`
+in all three requirements files and has no wheel for this interpreter (3.14.6),
+so an arm could be written but never executed. It is also not a member of the
+served stacking ensemble (`random_forest + xgboost + lightgbm` → logistic
+meta), so its absence leaves no production path untested. Recorded as an
+explicit `UNAVAILABLE` arm in the report rather than silently skipped.
+
+The registry entry advances `SOURCE_QUALIFIED → INFORMATION_TEST` and keeps
+`HOLD`. **`REJECT` is the indicated §51 decision** and is deliberately not
+taken here — a terminal decision was not authorized in the session that ran the
+test.
 
 ## 102. `alembic upgrade head` could migrate production from any shell that had DATABASE_URL exported
 
@@ -239,6 +329,25 @@ class.
 mandate only once a real workflow run has been observed reaching step 1 with a
 non-empty `runner_name` — not when someone believes the billing issue was
 settled. Items 96–98 are what "believed to be fine" costs.
+
+**That observation is now automated: `scripts/verify_remote_ci.sh`.** It reads
+`runner_name` and the executed-step count from
+`GET /actions/runs/{id}/jobs` — the only endpoint that exposes them — because
+`gh run list --json status,conclusion` reports a locked job and a genuinely
+failing job identically, as `conclusion: "failure"`, and carries no
+`runner_name` field at all. Exit 2 means the lock still holds; exit 0 means a
+runner booted *and* the required workflows passed; exit 1 means the lock
+cleared but the suite is genuinely red, which still closes this item.
+
+Verified against real runs in both directions before being trusted: `ea3cb7e`
+(today) reports all 11 jobs `NEVER STARTED - runner_name empty, 0 steps` and
+exits 2, while `221a05a` (2026-09-07, when the lock was briefly clear) reports
+10 jobs on real runners with 5–18 executed steps each and exits 0. That commit
+also carries later, locked `Keep-alive ping` jobs, so the mixed case — some
+jobs booted, some not — is exercised too.
+
+⚠️ Closing this item lifts the local-enforcement mandate but does **not** make
+CI gate anything: see item 104, `master` has no required-status-check rule.
 
 ## 98. PR #205 renamed the calibration method literal `"platt"` → `"sigmoid"` without updating its own test file — 8 failures, invisible behind item 97's collection abort
 
@@ -1024,24 +1133,30 @@ and counted, still pending item 44's bounded operator review.
 
 | gap | fixtures | share of corpus |
 |---|---|---|
-| `VENUE_NOT_VERIFIED` | 3,966 | 31.1% |
-| `NO_ARCHIVED_FORECAST` | 3,334 | 26.1% |
+| `VENUE_NOT_VERIFIED` | 4,061 | 31.8% |
+| `NO_ARCHIVED_FORECAST` | 3,302 | 25.9% |
 
-leaving at most 5,465 of 12,765 reachable before a single request is made.
+leaving at most 5,402 of 12,765 reachable before a single request is made.
 
-**Measured, full run (106 venue requests, 5,465 rows written):**
+**Measured, full run (105 venue requests, 5,402 rows written), refreshed 2026-09-17**
+**after the Espanol demotion (item 101):**
 
 | gate | value | bar |
 |---|---|---|
-| G1, whole corpus | **42.81%** | 85% |
-| G1, within the forecast window (7,959 fixtures) | **68.66%** | 85% |
+| G1, whole corpus | **42.32%** | 85% |
+| G1, within the forecast window (7,959 fixtures) | **67.87%** | 85% |
+
+The first full run (2026-09-11, 106 venue requests) read 42.81% / 68.66% over
+5,465 rows. Coverage went **down** because demoting RCD Espanyol removed a
+venue whose coordinate was 1,296 km wrong — losing 63 fixtures of confidently
+wrong weather is the correct direction, not a regression.
 
 Gate G1 **FAILS** either way. The report records it twice on purpose: the
 second number says whether the *source* is viable, as distinct from the corpus
 being older than the archive.
 
 ⚠️ **Zero fetch failures and zero missing forecast hours.** Every one of the
-5,465 eligible fixtures resolved to a real T-2h forecast. The ceiling is
+5,402 eligible fixtures resolved to a real T-2h forecast. The ceiling is
 entirely venue coverage plus archive start — **the source itself is completely
 reliable inside its window**, which is why this is a coverage finding and not a
 quality one. Coverage spans seasons 2021/22–2025/26.

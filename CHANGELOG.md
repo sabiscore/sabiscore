@@ -5,6 +5,96 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — F3 Weather Refresh, Stage 3 Walk-Forward, Remote CI Verifier (2026-09-18)
+
+### Added
+
+- **`backend/scripts/study_f3_weather_incremental_value.py`** — the §16 Stage 3 information test
+  the F3 registry entry has listed as `market_baseline: "not yet run"` since 2026-09-11.
+  Expanding-window walk-forward over three origins (test 2023/24, 2024/25, 2025/26), two learners,
+  4,921 fixtures joined to a coherent de-vigged Bet365 price. Baseline sees the market; candidate
+  sees the market plus temperature and precipitation at T−2h. Paired block-bootstrap CI on the
+  per-fixture RPS difference, with the promotion bar declared before the numbers were read.
+
+  **Result: `DEGRADES_BASELINE` (operator label); precisely, NO MEASURABLE EFFECT.** All six pooled
+  CIs straddle zero, every point estimate sits in the 4th decimal of RPS, and log loss (< 0.008) and
+  ECE (< 0.002) move in both directions across folds — so RPS is not concealing a
+  sharpness-versus-calibration trade. The null is stable across 2 learners, 3 origins, 6 leagues and
+  3 metric families. Report: `reports/research/portfolio-f3-weather-incremental-value.json`.
+
+  ⚠️ **The cherry-pick is named so nobody quotes it later.** Of 32 per-league slices exactly one has
+  a CI excluding zero favourably (BUNDESLIGA, test 2025, logistic) — and the *same league on the same
+  fold* under XGBoost is significant in the opposite direction. ~1.6 of 32 would clear the bar by
+  chance. No per-league slice was pre-registered.
+
+  ⚠️ **CatBoost was requested and is not run.** Pinned `python_version < "3.14"` in all three
+  requirements files with no wheel for this interpreter (3.14.6), and not a member of the served
+  ensemble (`random_forest + xgboost + lightgbm` → logistic meta), so no production path is left
+  untested. Recorded as an explicit `UNAVAILABLE` arm rather than silently skipped.
+
+- **`scripts/verify_remote_ci.sh`** — the closure test DEBT 99 specifies for itself. Asserts at JOB
+  level, because `gh run list --json status,conclusion` reports a job that never started identically
+  to one that ran and failed (both `conclusion: "failure"`) and carries no `runner_name` field at
+  all. Only `GET /actions/runs/{id}/jobs` exposes `runner_name` and the executed-step count. Reports
+  two verdicts separately — RUNNER BOOTED (closes item 99 even if the suite then failed) and
+  CI PASSED (gates a merge). Verified in both directions against real runs before being trusted:
+  `ea3cb7e` → 11 jobs at `runner_name: ""` / 0 steps, exit 2; `221a05a` (2026-09-07, lock briefly
+  clear) → 10 jobs on real runners with 5–18 steps each, exit 0.
+
+### Changed
+
+- **Weather forecast gates refreshed against the live Open-Meteo Historical Forecast API** with
+  operator authorization to spend free-tier quota. 105 venue requests, zero fetch failures, zero
+  missing forecast hours. Coverage goes **down**, which is correct: item 101 demoted RCD Espanyol,
+  whose coordinate sat 1,296 km from Barcelona.
+
+  | | before | after |
+  |---|---|---|
+  | `venues_verified` | 116 | 115 |
+  | `matched_fixtures` | 5,465 | 5,402 |
+  | G1 whole corpus | 42.81% | 42.32% |
+  | G1 within forecast window | 68.66% | 67.87% |
+
+  Gate G1 still **FAILS** the 85% bar and cannot pass by geocoding work — 4,806 of 12,765 fixtures
+  predate the 2022-03-01 archive, capping perfect geocoding at 62.35% (item 103). The Stage 3 null
+  above makes that ceiling moot rather than urgent.
+
+- **`backend/scripts/_incremental_value_harness.py`** gains a pluggable fitter (`fit_model`,
+  defaulting to the existing level-1 logistic), log-loss and ECE alongside RPS in every scored
+  slice, and `load_fixtures_with_market()` — the canonical dual-vocabulary corpus reader. The
+  2025/26 files renamed every column (`Date`/`HomeTeam`/`B365H` vs `date`/`home_team`/`bet365_home`)
+  and six scripts carry their own copy of that reader; this adds the shared one and uses it rather
+  than refactoring five working research scripts unprompted. All six consumers re-verified importing
+  and passing.
+
+- **F3 registry entry advances `SOURCE_QUALIFIED` → `INFORMATION_TEST`**, with `seed`,
+  `training_window`, `validation_windows`, `bootstrap_method`, `statistical_test`,
+  `multiple_testing_family`, `effect_size`, `confidence_interval` and `sample_size` recorded properly
+  rather than left `UNDECLARED`. `decision` stays `HOLD`: **`REJECT` is the indicated §51 call** and
+  is deliberately not taken, because a terminal decision was not authorized in this session.
+
+### Found — operator action required
+
+- **DEBT 104 (new): `master` has no required-status-check rule.** Ruleset `20939497` (active, the
+  only one on the repo) contains exactly four rules — `deletion`, `non_fast_forward`,
+  `required_linear_history`, and `pull_request` with 1 approving review. There is **no
+  `required_status_checks`**, so GitHub has never blocked a merge on red or absent CI. This is
+  independent of the billing lock and outlives it; clearing the lock turns the workflows back on but
+  does not make them gate anything. It also partly explains items 96–98 reaching `master` — even
+  with runners working, nothing would have stopped those merges.
+
+- **The Actions billing lock remains active**, re-confirmed this session across all 11 jobs on
+  `ea3cb7e`. DEBT 99 stays open and `ci_local_enforcer.sh` remains mandatory.
+
+### Secondary findings — about the platform, not the weather
+
+- **The raw de-vigged market beats both fitted models on 2 of 3 folds** (test 2024: raw 0.19690 vs
+  logistic 0.19741 vs XGBoost 0.20482). A model trained on the market's own probabilities does not
+  reliably improve on them at this feature count.
+- **XGBoost is uniformly worse than the level-1 logistic arm** (RPS ~0.203 vs ~0.197, ECE
+  0.038–0.055 vs 0.018–0.031) — the directive's §26 escalation ladder behaving exactly as written:
+  5 features over ~2,400–4,000 rows does not support a boosted-tree arm.
+
 ## Unreleased — Venue Confirmation Evidence + Generation-Time Isolation Gate (2026-09-18)
 
 ### Fixed
