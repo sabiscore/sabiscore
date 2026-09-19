@@ -11,7 +11,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from ..core.database import Base, UserAccount
@@ -21,7 +29,17 @@ class UserIdentity(Base):
     __tablename__ = "user_identities"
     __table_args__ = (
         Index("ix_user_identities_user_id", "user_id"),
-        Index("ix_user_identities_provider_subject", "provider", "provider_subject", unique=True),
+        # A UNIQUE CONSTRAINT, not a unique Index. PostgreSQL treats the two as
+        # different objects (a constraint owns a backing index, but alembic
+        # compares them separately), so declaring `Index(..., unique=True)`
+        # here made `alembic check` propose dropping migration 0014's
+        # constraint and adding an index in its place - on every commit.
+        # The name must match 0014 exactly.
+        UniqueConstraint(
+            "provider",
+            "provider_subject",
+            name="uq_user_identities_provider_subject",
+        ),
         {"extend_existing": True},
     )
 
