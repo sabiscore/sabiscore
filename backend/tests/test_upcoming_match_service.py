@@ -433,6 +433,83 @@ async def test_override_fails_closed_when_epistemic_cannot_be_measured():
     assert enriched["risk_guard"]["reason"] == "epistemic_uncertainty_unavailable"
 
 
+async def test_staking_authorization_is_resolved_once_per_request_not_per_fixture():
+    """⚠️ Performance guard with teeth, not a micro-optimisation.
+
+    `staking_authorization()` -> `load_active_generation()` re-reads and
+    SHA-256s every model artifact and metadata file on every call - measured at
+    ~12 MB across 12 files, 8.7 ms warm. The manifest cannot change mid-request,
+    so resolving it per fixture cost ~0.43 s and ~600 MB of disk reads on a
+    50-fixture response for an answer that is identical every time.
+
+    This pins the call COUNT, which is the only thing that can regress silently:
+    moving the call back inside the loop keeps every behavioural test green.
+    """
+    future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    mocked_prediction = MagicMock()
+    mocked_prediction.to_dict.return_value = {
+        "home_win": 0.60, "draw": 0.22, "away_win": 0.18,
+        "model_version": "v5_phase7", "confidence": 0.60,
+    }
+    fixture_count = 5
+    service = UpcomingMatchService(api_client=MagicMock())
+
+    with patch(
+        "src.services.upcoming_match_service.UpcomingMatchFeatureProjector"
+    ) as MockProjector, patch(
+        "src.services.upcoming_match_service.PredictionEngine"
+    ) as MockPredictionEngine, patch(
+        "src.services.upcoming_match_service.OddsService"
+    ) as MockOddsService, patch(
+        "src.services.upcoming_match_service.staking_authorization",
+        return_value=_UNCERTIFIED_AUTH,
+    ) as mock_auth, patch(
+        "src.services.upcoming_match_service.cache_manager"
+    ) as MockCache:
+        MockCache.get.return_value = None
+        MockProjector.return_value.build_live_feature_vector = AsyncMock(
+            return_value={
+                "features": np.zeros(68, dtype=np.float32),
+                "features_dict": {"home_goals_for_avg": 1.5},
+                "data_gaps": [],
+                "data_quality": {"is_synthetic": False},
+                "staleness_seconds": 120,
+            }
+        )
+        MockPredictionEngine.return_value.predict = AsyncMock(return_value=mocked_prediction)
+        MockOddsService.return_value.get_match_odds = AsyncMock(
+            return_value={"home_win": 2.4, "draw": 4.0, "away_win": 6.0, "source": "test"}
+        )
+        service.get_upcoming_matches = AsyncMock(return_value={
+            "matches": [
+                {
+                    "id": f"fixture-{i}",
+                    "home_team": f"Home {i}",
+                    "away_team": f"Away {i}",
+                    "league": "EPL",
+                    "match_date": future_date,
+                    "status": "scheduled",
+                    "source": "database",
+                }
+                for i in range(fixture_count)
+            ],
+            "source": "database",
+        })
+        response = await service.get_upcoming_matches_with_predictions(
+            db=MagicMock(name="db"), league="EPL", days_ahead=3,
+            limit=fixture_count, include_value_bets=True,
+        )
+
+    # All fixtures were genuinely processed - otherwise a call count of 1 would
+    # be trivially satisfied by the loop never running.
+    assert len(response["upcoming_matches"]) == fixture_count
+    assert mock_auth.call_count == 1, (
+        f"staking_authorization() ran {mock_auth.call_count}x for "
+        f"{fixture_count} fixtures; it is loop-invariant and each call "
+        f"re-hashes ~12 MB of model artifacts"
+    )
+
+
 async def test_cached_or_db_fixture_discovery_never_calls_provider_or_model():
     fake_api_client = MagicMock()
     fake_api_client.get_upcoming_matches = AsyncMock(

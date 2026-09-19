@@ -323,6 +323,21 @@ class UpcomingMatchService:
         prediction_engine = PredictionEngine()
         odds_service = self.odds_service
 
+        # Staking is permitted on exactly two bases: an earned CERTIFIED
+        # verdict, or a named operator's recorded override of the failing
+        # gates (ADR-0011). `staking_authorization()` is the single place that
+        # distinction is made; asking `active_generation_is_certified()` here
+        # would be wrong, because an override is explicitly NOT a
+        # certification.
+        #
+        # Resolved ONCE per request, not per fixture. `load_active_generation()`
+        # re-reads and SHA-256s every artifact + metadata file on every call
+        # (~12 MB across 12 files, measured at 8.7 ms warm), and the manifest
+        # cannot change mid-request - so calling it inside the loop cost
+        # ~0.43 s and ~600 MB of disk reads on a 50-fixture response for an
+        # answer that is identical every time.
+        stake_auth = staking_authorization()
+
         # Get base upcoming matches
         try:
             matches_response = await self.get_upcoming_matches(
@@ -396,13 +411,9 @@ class UpcomingMatchService:
                 if is_synthetic:
                     data_gaps.append("required_model_inputs_unavailable")
                 publishable = not is_fallback and not is_synthetic
-                # Staking is permitted on exactly two bases: an earned
-                # CERTIFIED verdict, or a named operator's recorded override of
-                # the failing gates (ADR 0011). `staking_authorization()` is the
-                # single place that distinction is made; asking
-                # `active_generation_is_certified()` here would be wrong,
-                # because an override is explicitly NOT a certification.
-                stake_auth = staking_authorization()
+                # `stake_auth` is resolved once per request above - it is
+                # loop-invariant, and re-resolving it here re-hashed every
+                # model artifact on every fixture.
                 stake_permitted = publishable and stake_auth.permitted
                 if publishable and not stake_permitted:
                     data_gaps.append("model_generation_uncertified")
