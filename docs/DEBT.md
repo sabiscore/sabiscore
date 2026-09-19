@@ -1,5 +1,124 @@
 # SabiScore Debt Ledger
 
+## 107. Two real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
+
+**Tier:** `RESOLVED` — both fixed and verified 2026-09-19.
+**Owner:** unassigned. **Found:** 2026-09-19, a from-scratch dependency
+install and full local verification pass (`ci_local_enforcer.sh`'s six
+`verify-core` steps plus the full `pytest tests` suite, both previously
+undocumented as having been run against a genuinely fresh clone this
+session).
+
+### Method note first, because it explains why these two and not others
+
+A bare `ruff check src/` in a fresh install reported **3884 errors** —
+flatly contradicting this ledger's own repeated "Ruff zero-issue backend"
+claims. Before reporting that as a regression, checked
+`.github/workflows/ci.yml` directly: the real gate is
+`ruff check src --select E4,E7,E9,F` (line 117), a narrow rule selection: a
+bare invocation applies ruff's full default rule set instead, which is not
+what the repository has ever promised to be clean against. Run correctly,
+ruff reports 0 issues — no regression, a wrong local command. Likewise 3 of
+the first 8 pytest failures (`test_lazy_database_engine.py`) turned out to
+require a `SECRET_KEY` env var this fresh sandbox never had set (those tests
+deliberately run a subprocess with `APP_ENV=production` to test fail-closed
+DB behaviour, and `Settings()` correctly refuses to start without one) —
+fixed by exporting one, not by touching source. Both are recorded here only
+as the method: verify the enforcement mechanism before reporting a finding
+(DID Rule 15), because a plausible-looking mass failure is usually the
+harness, not the code.
+
+### Defect 1 — `ingest_fbref_sources.py` used a polars keyword argument that doesn't exist in the pinned polars version
+
+`backend/scripts/ingest_fbref_sources.py:328` called
+`.rolling_mean(window_size=window, min_samples=1)`. The installed
+`polars==0.19.19` exactly matches `requirements.txt`'s own pin for
+`python_version < "3.14"` (this repo's production interpreter is 3.11.9 per
+`render.yaml`). `Expr.rolling_mean`'s real signature at that pinned version
+takes `min_periods`, not `min_samples`:
+
+```
+TypeError: Expr.rolling_mean() got an unexpected keyword argument 'min_samples'
+```
+
+Confirmed this is the only such call in the repository — every other rolling
+window in the codebase (pandas and polars alike, `feature_registry.py`,
+`ml_ultra/feature_engineering.py`, `causal_selector.py`) already uses
+`min_periods`, which is also what the doc comment at
+`feature_registry.py:651` describes for the identical concept. `min_samples`
+appears to be a later-polars API name the author had in mind (the
+`python_version >= "3.14"` pin is `polars>=1.35.0,<2.0.0`, a research-only
+interpreter per this repo's established convention) without checking it
+against the version this exact code path actually runs under. Fixed by
+using `min_periods=1`, matching the rest of the codebase.
+
+`tests/unit/test_fbref_ingest_temporal.py` (4 tests) failed on this before
+the fix and pass cleanly after — not a new test, an existing one nobody had
+run against the correctly-pinned environment recently enough to notice.
+FBref itself remains `REJECT`ed as a live data source (item 77); this is the
+shared temporal-rollup utility's own correctness, independent of that
+decision.
+
+**Blast radius:** `apps/scraper`/`backend/scripts/ingest_fbref_sources.py`
+has zero callers from the live serving path (confirmed — FBref is rejected
+at Gate R1). Fixing it is a pure correctness improvement to research
+tooling, not a production change.
+
+### Defect 2 — a regression-pin test's premise was numpy-version-specific, and a naive fix would have made it worse
+
+`tests/unit/test_insights_simulators.py::test_factorial_source_is_the_stdlib_not_the_removed_numpy_alias`
+asserted `not hasattr(np, "math")` as a stand-in for "the fix that replaced
+`np.math.factorial` with the stdlib `math.factorial` (item 73) is still in
+place." That premise was written against NumPy 2.5.0 (the Python 3.14
+research interpreter, where `np.math` really was removed) but
+`requirements.txt` pins `numpy==1.26.2` for `python_version < "3.14"` — the
+actually-served version — where `np.math` still exists, merely deprecated
+(warning, not removal). Under the pinned, production-matching version the
+assertion is false independent of whether the module's own fix is correct:
+backwards for a regression guard.
+
+⚠️ **The first fix attempt was itself wrong, and is recorded because it is
+an instructive near-miss.** Replacing the environment-fact assertion with
+`"np.math" not in inspect.getsource(simulators)` seemed like the obvious
+version-independent fix — and it immediately failed, because the *fix's own
+explanatory comment* in `simulators.py` contains the literal string
+`` `np.math.factorial` ``, so a substring check flags its own success as a
+failure. `monkeypatch.delattr(np, "math")` was tried next and also failed:
+NumPy exposes `math` through the module's `__getattr__` deprecation shim,
+not a real attribute, so there is nothing for `delattr` to remove.
+
+The version that survives both traps: parse
+`MatchSimulator._calculate_poisson_probs`'s own source with `ast` and walk
+for an `Attribute` node matching `np.math` specifically — comments are never
+part of an AST, so the false match from attempt one is structurally
+impossible, and nothing needs deleting from a live module. Watched failing
+correctly before trusting it: reverted `simulators.py`'s fix
+(`math.factorial` → `np.math.factorial`), confirmed the new test fails and
+names exactly that line, restored the real fix, confirmed green again.
+
+**Blast radius:** test-only; `src/insights/simulators.py` itself was not
+touched (reverted back to its pre-existing, already-correct state after the
+verification revert). `insights/simulators.py` still has no live caller in
+the serving path (per its own module docstring) — this closes a test-suite
+correctness gap, not a production one.
+
+### Evidence
+
+| Gate | Before | After |
+|---|---|---|
+| `ruff check src --select E4,E7,E9,F` | pass (was misread locally as 3884 errors under the wrong invocation) | pass |
+| `check_mypy_ceiling.py --ceiling 784` | 775 ≤ 784 | 775 ≤ 784 (untouched) |
+| `verify-core` steps 1–6 (pytest subset, OpenAPI, provider CLI, scraper tests ×2, py-compile, zero-fab scan) | all pass | all pass |
+| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | 0 failed, 2523 passed, 16 skipped, 2 xfailed |
+| `pnpm --filter @sabiscore/web lint` | pass | pass (untouched) |
+| `pnpm --filter @sabiscore/web typecheck` | pass | pass (untouched) |
+| `pnpm --filter @sabiscore/web test` (Vitest) | 352/352 | 352/352 (untouched) |
+| `NODE_ENV=production pnpm --filter @sabiscore/web build` | exit 0 | exit 0 (untouched) |
+
+The 2 xfails are item 50's already-tracked, intentionally-unresolved
+epistemic-uncertainty gap (`test_error_association` and its per-league
+robustness sibling) — unchanged, expected, not touched.
+
 ## 106. E0b's "no calibrator at all" premise went stale four days after it was written, and its result was never compared against what item 83 later shipped
 
 **Tier:** `RESEARCH` — a methodology gap, not a production defect. **Recorded:** 2026-09-19.
@@ -1109,7 +1228,7 @@ integration tests needing external resources, a deleted-module gate,
 catboost-unavailable-on-3.14, one deliberately-isolated test), 2 xfailed
 (the same item-50 `error_association` reversal, unchanged), 0 failed.**
 
-## 86. `models/candidate/training_manifest.json` declares `apex_v1_68` for the same `v5_phase7` artifact_suffix the served generation declares as `phase7_68` — flagged for confirmation, not yet classified as a defect
+## 86. `models/candidate/training_manifest.json` declares `apex_v1_68` for the same `v5_phase7` artifact_suffix the served generation declares as `phase7_68` — CONFIRMED 2026-09-19: by design, not a defect, currently harmless
 
 **Tier:** `NEXT` (documentation/confirmation only — no code change).
 **Owner:** unassigned.
@@ -1161,6 +1280,59 @@ the served generation.
 session's manifest refresh touch it. **Cost to resolve:** low (one naming
 decision plus a rename, or an explicit "working as designed" confirmation
 closing this item). **Priority:** low, non-blocking.
+
+### Confirmation, 2026-09-19
+
+Read `train_on_real_matches.py`'s own `_SCHEMAS` mapping directly rather than
+inferring from file contents. It is deliberate, not accidental, and precisely
+documented in the module itself:
+
+```python
+#: Every feature-schema version this script can train -> its artifact suffix,
+#: keyed exactly as `feature_registry.FEATURE_SCHEMA_VERSIONS` keys it. The
+#: suffix is part of the filename because `prediction.py._wrap_artifact` infers
+#: provenance from artifact shape: writing a differently-shaped model over a
+#: v5_phase7 filename would make the two disagree.
+_SCHEMAS: Dict[str, str] = {
+    "apex_v1_68": "v5_phase7",
+    ...
+}
+_DEFAULT_SCHEMA = "apex_v1_68"
+```
+
+So `train_on_real_matches.py` (default schema `apex_v1_68`) writes candidate
+output under the **same** `v5_phase7` artifact_suffix the served generation
+uses for its **different** `phase7_68` schema — the "sandbox-incumbent"
+reading in this item's original body was a plausible guess, not what's
+actually happening; this is a second, independent source of the collision.
+Confirmed harmless by checking the two things that would make it dangerous:
+
+1. **Output directory.** `--out-dir` defaults to `models/candidate/`
+   (`ap.add_argument("--out-dir", ..., default=_BACKEND_ROOT / "models" /
+   "candidate")`), never the served `backend/models/` root. `ls
+   backend/models/candidate/` confirms zero `*_v5_phase7*.pkl` binaries exist
+   there today — only `.json` reports.
+2. **Integrity backstop.** Even a hypothetical accidental write to the served
+   path is independently caught: `load_active_generation()` verifies every
+   artifact against its SHA-256 in `active_generation.json` before serving
+   it, so a schema-mismatched file at that path would fail closed at load
+   time regardless of this naming collision.
+
+**The suggested fix is not as cheap as originally estimated.** The comment
+above states the suffix is load-bearing for `_wrap_artifact`'s discovery
+order (`prediction.py`'s `_SUFFIXES` list tries `_ensemble_v6_phase8` before
+`_ensemble_v5_phase7`), and the same suffix threads through
+`training_report_real*.json` / `comparison_report_v5_phase7_*.json` naming
+across the candidate-comparison pipeline. A rename is a real, multi-file,
+research-pipeline change, not "one naming decision plus a rename" — deferred,
+not attempted here.
+
+**Closing disposition:** confirmed working-as-designed and currently inert.
+Downgraded from a documentation *question* to a documentation *fact*; kept
+open only as a named risk for whoever next touches
+`compare_candidate_vs_incumbent.py` or the `_SCHEMAS` table, per this item's
+own original warning about the two-vocabulary collision class. No code
+changed.
 
 ## 85. Production Vercel alias `web-lac-theta-42.vercel.app` returns platform-level `DEPLOYMENT_NOT_FOUND` despite correct alias assignment — 2026-09-12
 

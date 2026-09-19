@@ -14,7 +14,10 @@ would not pass either.
 """
 from __future__ import annotations
 
+import ast
+import inspect
 import math
+import textwrap
 
 import numpy as np
 import pytest
@@ -47,11 +50,45 @@ def test_poisson_probabilities_form_a_valid_distribution() -> None:
 
 
 def test_factorial_source_is_the_stdlib_not_the_removed_numpy_alias() -> None:
-    """Pins the actual defect: `np.math` no longer exists to fall back on."""
-    assert not hasattr(np, "math"), (
-        "NumPy re-exposed `np.math`; this test's premise (and the fix's "
-        "rationale) needs revisiting"
-    )
+    """Pins the actual defect: `_calculate_poisson_probs` must call
+    `math.factorial`, never `np.math.factorial`.
+
+    CORRECTED: the original assertion (`not hasattr(np, "math")`) tested a
+    fact about the installed NumPy library, not about this module's code.
+    The module docstring above was written against NumPy 2.5.0 in the
+    Python 3.14 research environment, where `np.math` genuinely no longer
+    exists -- but `requirements.txt` pins `numpy==1.26.2` for
+    `python_version < "3.14"`, which is what actually serves in production
+    (`render.yaml` `PYTHON_VERSION: 3.11.9`), and 1.26.2 still exposes
+    `np.math` (with a DeprecationWarning, not a removal). Under that pinned
+    version the original assertion was false regardless of whether this
+    module's fix was correct -- backwards for a regression guard.
+
+    A plain source-text check doesn't work either: the fix itself left an
+    explanatory comment containing the literal string "np.math", so
+    `"np.math" not in source` flags its own fix's comment as the violation
+    (watched failing on exactly that before this version was written).
+    `monkeypatch.delattr(np, "math")` doesn't work either -- NumPy exposes
+    `math` via the module's `__getattr__` deprecation shim, not a real
+    attribute, so there is nothing for `delattr` to remove.
+
+    An AST walk is precise where both of those aren't: comments are not
+    parsed into nodes at all, so this only sees real code, and it doesn't
+    depend on whatever the installed NumPy happens to still support.
+    """
+    source = textwrap.dedent(inspect.getsource(MatchSimulator._calculate_poisson_probs))
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr == "math"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "np"
+        ):
+            pytest.fail(
+                "_calculate_poisson_probs references np.math again -- use "
+                "the stdlib math module instead (docs/DEBT.md item 73)"
+            )
     assert math.factorial(5) == 120
 
 

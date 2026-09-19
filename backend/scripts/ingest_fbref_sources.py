@@ -325,7 +325,7 @@ def build_pre_match_rollups(
     aggregates = [
         pl.col(col)
         .shift(1)  # <- the cutoff; without it a match sees its own result; without it a match sees its own result
-        .rolling_mean(window_size=window, min_samples=1)
+        .rolling_mean(window_size=window, min_periods=1)
         .over(team_col)
         .alias(f"{col}_pre_match_mean_{window}")
         for col in value_cols
