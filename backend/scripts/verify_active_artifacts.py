@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,22 @@ def _load_module(name: str, path: Path):
     if spec is None or spec.loader is None:
         raise SystemExit(f"Unable to load {name}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Register before exec_module, as a normal import would. Without this the
+    # module is absent from sys.modules while its own top level runs, and
+    # anything that resolves annotations against its defining module breaks:
+    # `@dataclass` calls `dataclasses._is_type`, which does
+    # `sys.modules.get(cls.__module__).__dict__` and raises AttributeError on
+    # the None. That is a deploy-breaking failure this script alone reaches —
+    # it is the Render buildCommand gate, and it deliberately loads
+    # active_generation.py standalone so the build never pulls in the app
+    # import chain (which opens a DB connection at module scope). The app's
+    # own package import works fine, so no unit test covers this path.
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(name, None)
+        raise
     return module
 
 

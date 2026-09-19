@@ -854,6 +854,27 @@ export interface UpcomingMatch {
     adjusted_kelly_stake_pct: number;
     exceeds_aggregate_cap: boolean;
   } | null;
+  /**
+   * Why staking is (or is not) permitted for this fixture (ADR-0011).
+   *
+   * `is_override: true` means a named operator authorised staking over
+   * FAILING certification gates. When that is the case the disclosure is not
+   * optional decoration — a stake rendered without it is an uncertified
+   * recommendation wearing a certified face.
+   */
+  staking_authorization?: StakingAuthorization | null;
+}
+
+export interface StakingAuthorization {
+  permitted: boolean;
+  /** "CERTIFIED" | "OPERATOR_OVERRIDE" | "NONE" | "UNKNOWN" */
+  basis: string;
+  certification_state: string;
+  is_override: boolean;
+  authorizing_identity: string | null;
+  rationale: string | null;
+  authorized_at: string | null;
+  acknowledged_failures: string[];
 }
 
 export interface UpcomingMatchesResponse {

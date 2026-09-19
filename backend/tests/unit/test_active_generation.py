@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -207,3 +208,157 @@ def test_a_missing_contract_does_not_block_loading_the_generation(tmp_path: Path
     _write_generation(tmp_path, feature_contract=_OMIT)
 
     assert load_active_generation(tmp_path)["feature_schema_version"] == "phase7_68"
+
+
+# ── Operator override (ADR-0011) ─────────────────────────────────────────────
+#
+# The override exists so "ship despite failing gates" has an honest
+# representation. These tests pin the two properties that make it honest:
+# it must be attributable (no anonymous state flip), and it must never be
+# mistakable for a certification.
+
+
+def _valid_override() -> dict[str, object]:
+    return {
+        "authorizing_identity": "ops@example.com",
+        "rationale": "Accepting 0/6 market baseline for a limited beta.",
+        "authorized_at": "2026-09-19T00:00:00Z",
+        "acknowledged_failures": ["market_baseline", "error_association"],
+    }
+
+
+def _write_override_generation(root: Path, override: object = _OMIT) -> None:
+    _write_generation(root)
+    path = root / "active_generation.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["certification_state"] = "OPERATOR_OVERRIDE_UNCERTIFIED"
+    if override is not _OMIT:
+        manifest["operator_override"] = override
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_override_permits_staking_but_is_never_certified(tmp_path: Path) -> None:
+    """The whole point: staking on, certification claim still off."""
+    from src.models.active_generation import (
+        active_generation_is_certified,
+        staking_authorization,
+    )
+
+    _write_override_generation(tmp_path, _valid_override())
+
+    auth = staking_authorization(tmp_path)
+    assert auth.permitted is True
+    assert auth.basis == "OPERATOR_OVERRIDE"
+    assert auth.is_override is True
+    assert auth.certification_state == "OPERATOR_OVERRIDE_UNCERTIFIED"
+    # The load-bearing assertion. If this ever returns True, an override has
+    # laundered itself into a certification claim.
+    assert active_generation_is_certified(tmp_path) is False
+
+
+def test_override_carries_the_disclosure_to_its_consumers(tmp_path: Path) -> None:
+    from src.models.active_generation import staking_authorization
+
+    _write_override_generation(tmp_path, _valid_override())
+    payload = staking_authorization(tmp_path).as_dict()
+
+    assert payload["authorizing_identity"] == "ops@example.com"
+    assert "limited beta" in payload["rationale"]
+    assert payload["acknowledged_failures"] == ["market_baseline", "error_association"]
+
+
+def test_override_without_a_block_is_rejected(tmp_path: Path) -> None:
+    _write_override_generation(tmp_path, _OMIT)
+
+    with pytest.raises(ActiveGenerationError, match="no operator_override block"):
+        load_active_generation(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "field", ["authorizing_identity", "rationale", "authorized_at", "acknowledged_failures"]
+)
+def test_override_missing_any_required_field_is_rejected(tmp_path: Path, field: str) -> None:
+    """An override that does not say who, why, when, or what-was-overridden is
+    indistinguishable from one taken in ignorance."""
+    override = _valid_override()
+    del override[field]
+    _write_override_generation(tmp_path, override)
+
+    with pytest.raises(ActiveGenerationError, match="missing required field"):
+        load_active_generation(tmp_path)
+
+
+def test_override_with_empty_acknowledged_failures_is_rejected(tmp_path: Path) -> None:
+    override = _valid_override()
+    override["acknowledged_failures"] = []
+    _write_override_generation(tmp_path, override)
+
+    with pytest.raises(ActiveGenerationError, match="missing required field"):
+        load_active_generation(tmp_path)
+
+
+def test_override_with_blank_rationale_is_rejected(tmp_path: Path) -> None:
+    override = _valid_override()
+    override["rationale"] = "   "
+    _write_override_generation(tmp_path, override)
+
+    with pytest.raises(ActiveGenerationError, match="non-empty string"):
+        load_active_generation(tmp_path)
+
+
+def test_unknown_certification_state_still_fails_closed(tmp_path: Path) -> None:
+    """Adding a third valid state must not turn the allowlist into a passthrough."""
+    _write_generation(tmp_path)
+    path = tmp_path / "active_generation.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["certification_state"] = "DEFINITELY_CERTIFIED_TRUST_ME"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ActiveGenerationError, match="Unknown certification_state"):
+        load_active_generation(tmp_path)
+
+
+def test_unverified_generation_permits_no_staking(tmp_path: Path) -> None:
+    from src.models.active_generation import staking_authorization
+
+    _write_generation(tmp_path)
+    auth = staking_authorization(tmp_path)
+
+    assert auth.permitted is False
+    assert auth.basis == "NONE"
+    assert auth.is_override is False
+
+
+def test_build_gate_script_loads_this_module_standalone(tmp_path: Path) -> None:
+    """`scripts/verify_active_artifacts.py` is the Render buildCommand gate and
+    loads `active_generation.py` via `spec_from_file_location`, deliberately
+    avoiding the app import chain (which opens a DB connection at module
+    scope). That load path is NOT exercised by importing this module normally,
+    so a construct that works in the app can still break the deploy.
+
+    It happened: adding `@dataclass` here raised
+    ``AttributeError: 'NoneType' object has no attribute '__dict__'`` inside
+    `dataclasses._is_type`, because the module was absent from `sys.modules`
+    while its own top level ran. Every unit test still passed; only running the
+    gate script caught it.
+
+    Running the real script as a subprocess is the only honest coverage —
+    re-implementing its loader here would test the copy, not the gate.
+    """
+    import subprocess
+    import sys as _sys
+
+    backend_root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [_sys.executable, "scripts/verify_active_artifacts.py"],
+        cwd=backend_root,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env={**os.environ, "PYTHONPATH": "."},
+    )
+
+    assert result.returncode == 0, (
+        "the Render build gate failed to load active_generation.py standalone:\n"
+        f"{result.stdout}\n{result.stderr}"
+    )

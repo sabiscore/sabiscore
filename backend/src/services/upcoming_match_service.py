@@ -21,6 +21,7 @@ from ..data.loaders.football_data_api import FootballDataAPIClient
 from ..db.models import Match, Team
 from ..monitoring.metrics import metrics_collector
 from .upcoming_match_feature_service import UpcomingMatchFeatureProjector
+from ..models.active_generation import staking_authorization
 from ..models.prediction import PredictionEngine
 from .odds_service import OddsService
 
@@ -366,12 +367,21 @@ class UpcomingMatchService:
                 if is_synthetic:
                     data_gaps.append("required_model_inputs_unavailable")
                 publishable = not is_fallback and not is_synthetic
-                certification_state = str(
-                    predictions.get("certification_state") or "UNVERIFIED"
-                ).upper()
-                stake_permitted = publishable and certification_state == "CERTIFIED"
+                # Staking is permitted on exactly two bases: an earned
+                # CERTIFIED verdict, or a named operator's recorded override of
+                # the failing gates (ADR 0011). `staking_authorization()` is the
+                # single place that distinction is made; asking
+                # `active_generation_is_certified()` here would be wrong,
+                # because an override is explicitly NOT a certification.
+                stake_auth = staking_authorization()
+                stake_permitted = publishable and stake_auth.permitted
                 if publishable and not stake_permitted:
                     data_gaps.append("model_generation_uncertified")
+                if stake_permitted and stake_auth.is_override:
+                    # The disclosure rides with the stake to the surface that
+                    # renders it. A stake shown without it would be an
+                    # uncertified recommendation wearing a certified face.
+                    data_gaps.append("staking_under_operator_override")
 
                 # 3. Get odds
                 odds = await odds_service.get_match_odds(
@@ -398,6 +408,12 @@ class UpcomingMatchService:
                 match["best_value_bet"] = value_bets[0] if value_bets else None
                 match["data_quality"] = data_quality
                 match["data_gaps"] = sorted(set(data_gaps))
+                # Always present, not only when overriding: a reader must be
+                # able to tell "no override in force" from "override field was
+                # dropped somewhere in the response pipeline". Absence of a key
+                # is not a safety signal (docs/DEBT.md item 67's false-negative
+                # class).
+                match["staking_authorization"] = stake_auth.as_dict()
                 match["staleness_seconds"] = features_result.get("staleness_seconds")
                 match["staleness_available"] = features_result.get("staleness_seconds") is not None
                 match["source"] = str(match.get("source", source))
