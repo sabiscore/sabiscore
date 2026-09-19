@@ -145,3 +145,71 @@ def test_hashed_password_is_nullable_matching_migration_0014() -> None:
     from src.core.database import Base
 
     assert Base.metadata.tables["users"].columns["hashed_password"].nullable is True
+
+def _migration_unique_constraint_names() -> dict[str, str]:
+    """{constraint_name: migration file} for every named sa.UniqueConstraint."""
+    versions = BACKEND_ROOT / "alembic" / "versions"
+    found: dict[str, str] = {}
+    for path in sorted(versions.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name != "UniqueConstraint":
+                continue
+            for keyword in node.keywords:
+                if (
+                    keyword.arg == "name"
+                    and isinstance(keyword.value, ast.Constant)
+                    and isinstance(keyword.value.value, str)
+                ):
+                    found.setdefault(keyword.value.value, path.name)
+    return found
+
+
+def test_named_unique_constraints_in_migrations_exist_in_the_orm(
+    registered_tables: set[str],
+) -> None:
+    """A UNIQUE CONSTRAINT and a unique INDEX are different objects.
+
+    ⚠️ This is the defect the table-level scan above could NOT see, and it
+    surfaced only after that scan's fix landed - the classic "fixing the first
+    reveals the second" shape.
+
+    `social_auth_models` declared
+    `Index("ix_user_identities_provider_subject", ..., unique=True)` while
+    migration 0014 creates
+    `UniqueConstraint(..., name="uq_user_identities_provider_subject")`.
+    PostgreSQL backs a unique constraint with an index, but alembic compares
+    the two separately, so autogenerate proposed dropping the constraint and
+    adding an index in its place - a one-item diff that failed the gate just as
+    hard as the seven-item one.
+
+    Name-level rather than full shape comparison: verifying column sets and
+    deferrability faithfully needs a real database, which this environment does
+    not have (`docs/DEBT.md` item 45). A missing NAME is the failure mode that
+    actually occurred and is cheap to catch here; CI's `alembic check` remains
+    the authority on the rest.
+    """
+    from src.core.database import Base
+
+    declared = {
+        constraint.name
+        for table in Base.metadata.tables.values()
+        for constraint in table.constraints
+        if constraint.name and str(constraint.name).startswith("uq_")
+    }
+    missing = {
+        name: source
+        for name, source in _migration_unique_constraint_names().items()
+        if name not in declared
+    }
+    assert not missing, (
+        "These unique constraints are created by a migration but are absent "
+        "from Base.metadata, so `alembic check` will propose dropping them:\n"
+        + "\n".join(f"  {name}  <- {source}" for name, source in sorted(missing.items()))
+        + "\n\nFix: declare sa.UniqueConstraint(..., name=...) in the model's "
+        "__table_args__ - a unique Index is NOT the same object."
+    )
