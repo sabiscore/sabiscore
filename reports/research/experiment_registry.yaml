@@ -163,6 +163,30 @@ experiments:
       RESEARCH rather than HOLD because the measurement is no longer
       underpowered or blocked - it ran, on a clean split, with the interval §9
       requires.
+      ⚠️ CORRECTED 2026-09-19 (DID Rule 11 — this document's own §51.1 gap):
+      the "applies NO calibrator at all" premise above is now STALE, not
+      current. docs/DEBT.md item 83 (RESOLVED 2026-09-15, four days after this
+      entry) shipped a sigmoid/Platt FittedCalibrator into every v5_phase7
+      artifact including serie_a_ensemble_v5_phase7.pkl, via a THIRD wiring
+      path this entry did not name (`_fit_served_base_calibrator` in
+      train_on_real_matches.py + the offline `inject_platt_calibrator.py`
+      injector) — `run_league_calibration`/`compare_calibration_methods`
+      genuinely remain zero-caller, but that is no longer the blocker, because
+      production stopped routing through them. `baseline_models` above
+      ("uncalibrated served base-learner average") is therefore not what
+      SERIE_A currently serves. This does NOT mean vector scaling is now
+      redundant or beaten: item 83's sigmoid fit and this entry's vector-
+      scaling fit were measured on two different model generations with two
+      different calibration/holdout season splits (item 83: v5_phase7,
+      calibrate on 2324, holdout-evidence on 2425; this entry: v11_clean2526,
+      calibrate on 2425, holdout-evidence on 2526) and are therefore NOT
+      directly comparable — nobody has yet measured sigmoid vs. vector scaling
+      head-to-head on the same generation and the same split. Decision stays
+      RESEARCH; PROMOTE is not indicated by either study alone. Next step
+      (not executed here — production model-serving code, Class C blast
+      radius): re-fit both candidates on one held-out split of one generation
+      and compare with the same paired-CI protocol before any wiring change.
+      See docs/DEBT.md item 106.
     information_source: "none - no new external source"
     source_version: null
     source_license_class: null
@@ -211,9 +235,22 @@ experiments:
     failure_modes:
       - "vector scaling does not generalise; four of five leagues show no distinguishable effect"
       - >-
-        production readiness blocked independently: the request path applies no
-        calibrator, and the FittedCalibrator builders have zero callers
+        STALE as of 2026-09-19 (docs/DEBT.md item 106): "production readiness
+        blocked independently: the request path applies no calibrator, and the
+        FittedCalibrator builders have zero callers" was true 2026-09-11 but
+        not after docs/DEBT.md item 83 (2026-09-15) shipped a sigmoid
+        calibrator via a different, then-unbuilt wiring path. The named
+        functions (run_league_calibration, compare_calibration_methods) are
+        still zero-caller; that is simply no longer the reason SERIE_A vector
+        scaling isn't served.
       - "single holdout season, so §18 cross-fold robustness cannot be evaluated"
+      - >-
+        NEW 2026-09-19: this study's own baseline ("uncalibrated served
+        base-learner average") is not what production now serves for SERIE_A
+        (item 83's sigmoid calibrator is), and the two were fit on different
+        generations (v11_clean2526 vs v5_phase7) and different calibration/
+        holdout splits, so this result cannot be read as "vector scaling beats
+        what ships today" without a head-to-head re-measurement.
     compute: "numpy + polars + scipy; no GPU, well under the 8 GB ceiling"
     peak_rss: UNDECLARED
     runtime: UNDECLARED
@@ -227,6 +264,8 @@ experiments:
       - "docs/DEBT.md#79"
       - "docs/DEBT.md#81"
       - "docs/DEBT.md#82"
+      - "docs/DEBT.md#83"
+      - "docs/DEBT.md#106"
       - "backend/scripts/evaluate_e0_vector_scaling_multileague.py"
       - "backend/tests/unit/test_e0_temporal_integrity_and_harvest.py"
     reviewer: UNDECLARED
