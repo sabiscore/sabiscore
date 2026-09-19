@@ -53,6 +53,7 @@ under-protect the high end, and we have the real numbers for each.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
@@ -147,7 +148,7 @@ def evaluate_staking_risk(
             "epistemic_uncertainty_unparseable", league, None, threshold, match_id
         )
 
-    if value != value or value in (float("inf"), float("-inf")):  # NaN / inf
+    if not math.isfinite(value):  # NaN, +inf or -inf
         return _trip(
             "epistemic_uncertainty_non_finite", league, None, threshold, match_id
         )

@@ -73,6 +73,7 @@ def test_threshold_boundary_is_inclusive() -> None:
         (None, "epistemic_uncertainty_unavailable"),
         (float("nan"), "epistemic_uncertainty_non_finite"),
         (float("inf"), "epistemic_uncertainty_non_finite"),
+        (float("-inf"), "epistemic_uncertainty_non_finite"),
         ("not-a-number", "epistemic_uncertainty_unparseable"),
     ],
 )
