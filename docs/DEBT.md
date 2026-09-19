@@ -1,5 +1,100 @@
 # SabiScore Debt Ledger
 
+## 106. E0b's "no calibrator at all" premise went stale four days after it was written, and its result was never compared against what item 83 later shipped
+
+**Tier:** `RESEARCH` — a methodology gap, not a production defect. **Recorded:** 2026-09-19.
+**Owner:** ML Systems / Research (DID Portfolio A, experiment E0b).
+
+Executing DID §3 ("re-verify at the start of every working session, not merely
+every research cycle") and Rule 11 ("verify the brief's own premises before
+executing it") against the freshly-committed v6 directive surfaced this before
+any code was written on the strength of the stale premise.
+
+### What was claimed, and when
+
+`reports/research/experiment_registry.yaml` experiment `E0b` (state
+`STATISTICAL_REVIEW`, decision `RESEARCH`, measured 2026-09-11) found that
+vector scaling on the served base-learner average beats the **uncalibrated**
+average for SERIE_A with a Bonferroni-significant, holdout-confirmed RPS
+improvement (dRPS -0.00431, 99% CI [-0.00706, -0.00187]), and gave as its
+reason for not promoting: *"the request path applies NO calibrator at all...
+the two functions that build the FittedCalibrator serving would apply
+(`run_league_calibration`, `compare_calibration_methods`) have zero callers
+repo-wide."*
+
+### What is actually true as of this SHA
+
+Both halves are half right. `run_league_calibration`/`compare_calibration_methods`
+are still genuinely zero-caller (`grep -rn` confirms only `test_calibration.py`
+and the module's own docstring reference them) — but that stopped being the
+reason SERIE_A serves no calibrator, because **`docs/DEBT.md` item 83
+(RESOLVED 2026-09-15, four days after E0b was measured) shipped a sigmoid/Platt
+`FittedCalibrator` directly into every v5_phase7 artifact — including
+`serie_a_ensemble_v5_phase7.pkl`** — through a third wiring path E0b's entry
+does not name: `train_on_real_matches.py::_fit_served_base_calibrator()` plus
+the offline `backend/scripts/inject_platt_calibrator.py` injector. Confirmed by
+loading the shipped artifact directly rather than trusting either registry
+entry:
+
+```
+serie_a_ensemble_v5_phase7.pkl → calibrator is not None, method="sigmoid"
+```
+
+**E0b's own `baseline_models` field says `["uncalibrated served base-learner
+average"]`** — that baseline no longer describes what SERIE_A serves.
+
+### Why this is not simply "vector scaling wins, wire it in"
+
+The two results are not comparable, on two independent axes:
+
+| | item 83's sigmoid fit | E0b's vector-scaling fit |
+|---|---|---|
+| Model generation | `v5_phase7` (production-served; **trained including season 2526**, item 81) | `v11_clean2526` (research-only; season 2526 strictly held out) |
+| Calibration split | calibrate 2324 → holdout-evidence 2425 | calibrate 2425 → holdout-evidence 2526 |
+
+They were fit on different models scored on different seasons. Neither result
+says whether vector scaling would beat the sigmoid calibrator that is
+*actually* being served today, because nobody has fit both candidates on one
+generation with one held-out split and compared them with the paired protocol
+DID §18 requires. `train_on_real_matches.py`'s own code comment additionally
+overstated the reason isotonic (not vector scaling) is excluded from this
+path as a "certified G11/G27... requirement" — checked directly against
+`certification_policy.py`, G11 is an ECE ceiling (`adaptive_confidence_ece_max
+= 0.03`) and G27 (`G27_CALIBRATOR_SERVING_PARITY`) is about calibration-state
+*labeling* accuracy; neither gate names a permitted method. The real reason is
+E0's own held-out overfitting finding for isotonic specifically (item 64) —
+correctly excludes isotonic, says nothing about vector scaling.
+
+### What was and was not done
+
+**Done, this session, documentation-only:**
+- `reports/research/experiment_registry.yaml` E0b: `decision_detail`,
+  `failure_modes` and `provenance` corrected in place per Rule 11 (original
+  text retained, correction appended — same convention this ledger already
+  uses; nothing rewritten to look prescient).
+- `train_on_real_matches.py::_fit_served_base_calibrator()`: docstring and
+  inline comment corrected to cite the real reason (item 64's overfitting
+  finding) instead of a G11/G27 requirement that does not exist as stated.
+  **Behaviour unchanged** — `method` is still forced to `"sigmoid"`.
+
+**Not done, deliberately:** re-fitting sigmoid and vector scaling on one
+generation with one split and comparing them, and any resulting change to
+which calibrator SERIE_A serves. Both are Class C — they touch live
+model-serving code and, if vector scaling won, certification (G11/G27
+evidence would need regenerating against the new method). Neither is
+authorized by a documentation-correction pass. E0b's decision stays
+`RESEARCH`; this does not move it to `PROMOTE` or `HOLD`.
+
+**Next step, recorded for whoever picks this up:** extend
+`evaluate_e0_vector_scaling_multileague.py` (or a sibling) to fit both sigmoid
+and vector scaling on the same generation (either retrain `v5_phase7` cleanly
+per item 81's still-open fix path, or accept `v11_clean2526` as the comparison
+generation and note that is not what is served) with one calibration/holdout
+split, and report both under the existing paired block-bootstrap protocol
+before any wiring decision is made.
+
+---
+
 ## 105. The research directive governing 15 experiments existed only in chat transcripts, and the registry cited it at a section that does not exist
 
 **Tier:** `RESOLVED` — directive committed and cross-reference repointed 2026-09-18.

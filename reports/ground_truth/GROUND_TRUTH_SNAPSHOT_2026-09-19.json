@@ -1,0 +1,188 @@
+{
+  "snapshot_id": "GROUND_TRUTH_SNAPSHOT_2026-09-19",
+  "directive": "Production Executive Directive v5",
+  "gate": "R0",
+  "phase": "Phase 0 - Ground Truth",
+  "captured_at_utc": "2026-09-19T14:47:51Z",
+  "captured_by": "backend/scripts/capture_ground_truth_snapshot.py",
+  "immutability_note": "Frozen for the duration of the v5 experiment cycle. Every field is either measured at capture time or explicitly null with a note. No value is carried forward from a previous snapshot.",
+  "offline_mode": false,
+  "repository": {
+    "source": "git (local working copy)",
+    "head_sha": "b0c6bdd3f05c86573e0e72120d5039efce20d9d2",
+    "head_sha_short": "b0c6bdd",
+    "branch": "claude/improved-prompt-analysis-9owzec",
+    "origin_master_sha_short": "b0c6bdd",
+    "ahead_behind_origin_master": {
+      "ahead": 0,
+      "behind": 0
+    },
+    "working_tree_dirty": false,
+    "modified_tracked_files": 0,
+    "untracked_paths": [],
+    "last_commit_subject": "Feat/f3 weather refresh and walk forward (#217)"
+  },
+  "active_generation": {
+    "source": "backend/models/active_generation.json (hash-verified manifest)",
+    "generation": "v5_phase7-20260808",
+    "active_version": "v5_phase7",
+    "feature_schema_version": "phase7_68",
+    "feature_count": 68,
+    "feature_contract_sha256": null,
+    "served_head": "SoftmaxMetaModel",
+    "certification_state": "UNVERIFIED",
+    "certified_at": null,
+    "promotion_state": "ACTIVE_FAIL_CLOSED",
+    "artifact_count": 6,
+    "artifact_leagues": [
+      "bundesliga",
+      "epl",
+      "eredivisie",
+      "la_liga",
+      "ligue_1",
+      "serie_a"
+    ]
+  },
+  "certification_policy": {
+    "source": "backend/src/models/certification_policy.py (frozen, hashed)",
+    "policy_version": "1.2.0",
+    "policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
+    "gate_names": null
+  },
+  "candidate_under_evaluation": {
+    "source": "backend/models/candidate/comparison_report.json",
+    "candidate_schema": "apex_v1_68",
+    "holdout_season": "2526",
+    "promotion_permitted": false,
+    "gates": {
+      "valid_probability_simplex": {
+        "status": "PASS",
+        "evidence": "evaluate() rejected no candidate holdout probability row"
+      },
+      "input_responsiveness": {
+        "status": "PASS",
+        "minimum_responsive_features": 43
+      },
+      "coherent_price_perturbation": {
+        "status": "PASS"
+      },
+      "serving_feature_availability": {
+        "status": "FAIL",
+        "summary": {
+          "features": 68,
+          "training_defaulted_slots": 1,
+          "non_variable_training_slots": 7,
+          "serving_schema_misaligned_slots": 11,
+          "always_data_gap_slots": 6
+        }
+      },
+      "primary_metric_improvement": {
+        "status": "FAIL",
+        "mean_rps_improvement": -2.9306408688700714e-10
+      },
+      "no_league_regression": {
+        "status": "FAIL",
+        "league_wins": 3,
+        "leagues_compared": 6
+      },
+      "market_baseline": {
+        "status": "FAIL",
+        "leagues_beating_market": 0,
+        "quote": [
+          "opening_1x2_bet365_then_pinnacle"
+        ]
+      }
+    }
+  },
+  "deployment": {
+    "backend": {
+      "source": "GET https://sabiscore-api-bav1.onrender.com/health",
+      "probe_ok": false,
+      "probe_error": "ProxyError: 403 Forbidden",
+      "sha": null,
+      "status": null,
+      "uptime_seconds": null
+    },
+    "web": {
+      "source": "GET https://web-oversabis-projects.vercel.app/api/health",
+      "probe_ok": false,
+      "probe_error": "ProxyError: 403 Forbidden",
+      "sha": null,
+      "backend_sha_seen": null,
+      "backend_status": null
+    },
+    "parity_assessment": "NOT ASSESSED — one or more deployed SHAs unavailable this run"
+  },
+  "database": {
+    "source": "GET https://sabiscore-api-bav1.onrender.com/health/ready",
+    "probe_ok": false,
+    "probe_error": "ProxyError: 403 Forbidden",
+    "engine": "postgresql",
+    "connection_status": null,
+    "alembic_head_applied": null,
+    "alembic_head_expected_local": "0014_social_auth_identities",
+    "migration_drift": null,
+    "postgres_server_version": null,
+    "postgres_server_version_note": "Not exposed by /health/ready. Requires a direct DB connection, which this script deliberately does not open (docs/DEBT.md item 7).",
+    "elo_state": {
+      "rows": null,
+      "unique_teams": null,
+      "last_match_date": null
+    }
+  },
+  "runtime": {
+    "local_python": "3.11.15",
+    "local_python_role": "research/offline only",
+    "production_python": "3.11.9 (render.yaml PYTHON_VERSION)",
+    "production_python_note": "Read from configuration, not probed. /health does not expose the interpreter version.",
+    "runtime_requirement_lines": 78,
+    "training_requirement_lines": 20,
+    "dev_requirement_lines": 7,
+    "inference_latency_p95_ms": null,
+    "inference_latency_note": "Not measured. Requires a load probe against production, which spends free-tier capacity and is out of scope for a Gate R0 capture.",
+    "memory_ceiling_gb": 8,
+    "memory_ceiling_source": "directive §35 development target"
+  },
+  "providers": {
+    "source": "GET https://sabiscore-api-bav1.onrender.com/api/v1/providers/health",
+    "probe_ok": false,
+    "probe_error": "ProxyError: 403 Forbidden",
+    "total": null,
+    "enabled": null,
+    "configured": null,
+    "per_provider_status": null,
+    "live_verification_note": "CONFIGURED_UNVERIFIED means the flag is on and a key string is present. PROVIDER_LIVE_TESTS=false in production, so this is not evidence the upstream contract works."
+  },
+  "evidence": {
+    "settled_predictions": null,
+    "settled_predictions_source": "GET https://sabiscore-api-bav1.onrender.com/api/v1/model-performance",
+    "probe_ok": false,
+    "probe_error": "ProxyError: 403 Forbidden",
+    "model_version_scoping": null,
+    "walk_forward": null,
+    "calibration": {
+      "probe_ok": false,
+      "probe_error": "ProxyError: 403 Forbidden",
+      "sample_size": null,
+      "meets_sample_floor": null,
+      "ece_mean": null,
+      "ece_per_class": null,
+      "brier_decomposition_mean": null,
+      "brier_decomposition_convention": "mean over one-vs-rest per-class Brier; identity is Brier = Reliability - Resolution + Uncertainty"
+    },
+    "model_market_belief_differential": null
+  },
+  "gate_r0_assessment": {
+    "result": "PARTIAL",
+    "probes_attempted": 5,
+    "probes_succeeded": 0,
+    "failed_probes": [
+      "backend_health",
+      "model_performance",
+      "providers",
+      "readiness",
+      "web_health"
+    ],
+    "interpretation": "PASS means every §3 field this script can measure was measured. PARTIAL means one or more live probes failed and those fields are null -- it does not mean the system is unhealthy, and the null must not be replaced with a previous cycle's value."
+  }
+}

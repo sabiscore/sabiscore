@@ -1022,9 +1022,27 @@ def _fit_served_base_calibrator(
 
     Method selection:
       n_calibration >= 2000 → isotonic (enough data)
-      n_calibration <  2000 → platt/sigmoid (safer on smaller sets — aligns with directive
-                               §20 and the certified G11/G27 pipeline's explicit requirement
-                               that the shipped method for small calibration sets is sigmoid)
+      n_calibration <  2000 → platt/sigmoid (safer on smaller sets)
+
+    CORRECTED 2026-09-19 (docs/DEBT.md item 106; DID Rule 11): this docstring
+    and the inline comment below previously attributed the sigmoid-only
+    restriction to "the certified G11/G27 pipeline's explicit requirement".
+    Checked against certification_policy.py: G11 is an ECE ceiling
+    (adaptive_confidence_ece_max=0.03) and G27 (G27_CALIBRATOR_SERVING_PARITY,
+    PRODUCTION_EXECUTIVE_DIRECTIVE.md) is about calibration-state *labeling*
+    accuracy — neither names a permitted calibration method. The real origin
+    of "isotonic is forbidden here" is a separate, method-specific empirical
+    finding: item 64 / experiment E0 found isotonic regression won 4 of 4
+    in-sample comparisons and lost all 4 once scored on a genuine holdout
+    (overfits). That finding does not itself say anything about vector
+    scaling, which experiment E0b later found to beat the raw served average
+    for SERIE_A with a holdout-confirmed, Bonferroni-significant CI — but
+    E0b's result was never compared against this function's own sigmoid fit
+    (different model generation, different calibration/holdout split; see
+    experiment_registry.yaml E0b's 2026-09-19 correction). Behaviour is
+    UNCHANGED here — method stays forced to "sigmoid" pending that
+    head-to-head comparison, which is Class C (production model-serving) and
+    out of scope for a documentation correction.
 
     Returns a ``FittedCalibrator`` instance ready to be stored under the ``calibrator``
     key in the artifact bundle, or None if fitting fails.
@@ -1048,13 +1066,15 @@ def _fit_served_base_calibrator(
         ).astype(np.float32)
 
         n = len(y_calibration)
-        # Directive §20 and G11/G27: sigmoid is the certified method for n < 2000.
         # force_method=None lets the standard selection rule run; the result is
         # recorded in calibration_method so the artifact manifest reflects what shipped.
         method = select_calibration_method(n)
-        # DEBT-83 override: for the certified G11/G27 pipeline, only sigmoid/platt
-        # is permitted in this path (isotonic is an experimental challenger).
-        # Force sigmoid regardless of sample count so the artifact is always deterministic.
+        # DEBT-83 override: isotonic overfits on this path's calibration-set sizes
+        # (item 64 — 4/4 in-sample wins, 0/4 held-out wins) and vector scaling has
+        # not been measured against this specific fit/split (docs/DEBT.md item 106).
+        # Force sigmoid regardless of sample count so the artifact is always
+        # deterministic. This is a research-evidence choice, not a certification
+        # requirement — see the corrected docstring above.
         method = "sigmoid"
 
         calibrators = fit_calibrator(method, y_calibration.astype(np.int64), proba_cal)
