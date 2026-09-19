@@ -1,5 +1,174 @@
 # SabiScore Debt Ledger
 
+## 108. Staking is live on an uncertified generation under a disclosed operator override, with a measured circuit breaker in front of it
+
+**Tier:** `ACCEPTED-RISK` — deliberate, operator-authorized, fully reversible.
+**Owner:** operator (`Principal Architect - System-01`).
+**Activated:** 2026-09-19. **ADR:** `docs/adr/0011-operator-override-uncertified-staking.md`.
+**Relates to:** items 14, 25, 42, 50.
+
+### What is now true in production
+
+`backend/models/active_generation.json` declares
+`certification_state: OPERATOR_OVERRIDE_UNCERTIFIED`. `staking_authorization()`
+returns `permitted=True, basis="OPERATOR_OVERRIDE"`, so
+`GET /upcoming/matches` will publish Kelly stake sizes for fixtures that clear
+the evidence gates — from a generation that did **not** clear certification.
+
+The operator's recorded rationale is staging/production integration for UX and
+load testing, with the ML generalization failures explicitly accepted for this
+phase. Their acknowledged failures, in their own words: *"0/6 market baseline
+beat"* and *"Inverted epistemic-uncertainty signal (negative correlation with
+accuracy)"*.
+
+### What did NOT change, verified against the live loader rather than assumed
+
+| | |
+|---|---|
+| `active_generation_is_certified()` | `False` |
+| `promotion_state` | `ACTIVE_FAIL_CLOSED` |
+| `certified_at` | `null` |
+| `certification_policy.py` | untouched; hash still `4e050ad0…f664`, v1.2.0 |
+| `error_association` xfails | both still `xfail`, still printing the live measurement |
+| Promotion gates | still FAIL on `market_baseline`, `no_league_regression`, `primary_metric_improvement`, `serving_feature_availability` |
+
+⚠️ **This is the distinction the whole mechanism exists to preserve.** An
+override permits staking; it does not confer certification, and no code path
+conflates the two. Every caller asking *"is this certified?"* is still told no.
+Only callers asking the different question — *"may this publish a stake?"* —
+get a yes, and they get the basis (`OPERATOR_OVERRIDE`) with it.
+
+⚠️ **Do not "clean this up" by flipping `certification_state` to `CERTIFIED`
+once the metrics improve.** Certification is earned through
+`compare_candidate_vs_incumbent.py` producing hash-verified passing evidence,
+which `_verify_certification_claim` checks. Editing the state directly is the
+falsification class this ADR was written to make unnecessary.
+
+### Blast radius — exactly one surface
+
+`staking_authorization()` has exactly one production consumer:
+`services/upcoming_match_service.py` (`GET /upcoming/matches`). Every other
+staking-adjacent surface — `full_analysis.py`, `market_intel.py`,
+`advanced_insights_service.py`, `predictions.py`, `betting_intelligence.py`,
+`fixtures.py`, `core_engine.py`, `analytics.py`, `prediction.py` — still asks
+`active_generation_is_certified()`, which answers `False` under an override, so
+all of them are unchanged. `/full-analysis` is *additionally* blocked by the
+permanent `MODEL_UNCERTAINTY_UNAVAILABLE` critical gap (item 42) and this
+override does not touch that.
+
+⚠️ **Swapping an `active_generation_is_certified()` call for
+`staking_authorization().permitted` on any other surface silently widens a
+Class C authorization the operator never granted.** Amend ADR-0011 first.
+
+### The circuit breaker (`backend/src/services/risk_guard.py`)
+
+The inverted uncertainty signal is not diffuse — it is concentrated in the
+low-epistemic quartile, where the 300 bootstrap trees agree most, and that
+region is computable at serving time. Under an override only, a fixture whose
+epistemic uncertainty falls at or below its league's measured p25 is suppressed
+(`stake_permitted=False`, `staking_suppressed_by_risk_guard` in `data_gaps`,
+`risk_guard` block on the wire, structured `WARNING` with
+`event=override_circuit_breaker_tripped`).
+
+Measured on `v5_phase7-20260808`, each league's own artifact against its own
+chronological holdout — reproduce with
+`backend/scripts/measure_epistemic_danger_zone.py`:
+
+| league | n | p25 | hit inside | hit outside | delta |
+|---|---|---|---|---|---|
+| EPL | 375 | 0.0788 | 0.4362 | 0.5089 | −7.3pp |
+| BUNDESLIGA | 296 | 0.0879 | 0.3378 | 0.4910 | −15.3pp |
+| LIGUE_1 | 306 | 0.0859 | 0.4416 | 0.5066 | −6.5pp |
+| LA_LIGA | 380 | 0.0776 | 0.4632 | 0.4702 | −0.7pp (flat) |
+| SERIE_A | 375 | 0.0848 | 0.5106 | 0.4555 | **+5.5pp (reversed)** |
+
+⚠️ **The effect is not universal and these numbers must not be read as one
+finding with five confirmations.** It is strong in three leagues, absent in
+LA_LIGA, and runs the other way in SERIE_A. All five are suppressed anyway
+because a false positive costs a missed opportunity while a false negative
+costs a user's money — and this generation has no demonstrated edge to forgo
+(0/6 leagues beat the market). Unmeasured leagues (EREDIVISIE, pooled;
+UCL, no dedicated model) get the *most protective* measured threshold, never a
+pass-through.
+
+⚠️ **DIRECTION.** "High tree agreement" and "high epistemic uncertainty" are
+inverse quantities. The breaker tests `epistemic <= threshold`; writing `>=`
+would suppress the safest fixtures and stake the worst ones while looking
+entirely plausible in review. `test_risk_guard.py::test_breaker_is_not_inverted`
+pins both halves so an inversion fails two assertions at once rather than none.
+Verified by inverting the comparison and watching 6 tests go red before
+restoring it (DID Rule 15).
+
+⚠️ **`_epistemic_for_match` returns `None`, never a substitute**, when the
+measurement cannot be made — and the breaker treats `None` as a trip. A `0.0`
+or a league mean would be read as a real measurement, and `0.0` in particular
+sits on the dangerous side of every threshold.
+
+### Two disclosure surfaces contradicted the activation — found by the tests, fixed
+
+Activating the override immediately broke two tests, and both turned out to be
+naming real defects rather than stale expectations:
+
+**(1) `GET /api/v1/models/status` reported `stake_permitted: false` while the
+serving path was staking.** It computed the field as `cert == "CERTIFIED"` — a
+rule that was correct for exactly as long as certification was the only thing
+that could unblock staking. It now calls `staking_authorization()`, the same
+authority the serving path uses, and additionally reports `staking_basis` so a
+reader never has to infer earned-vs-overridden from the certification string.
+`validation_status` deliberately does **not** follow it: only `CERTIFIED` earns
+`"VALIDATED"`.
+
+⚠️ That endpoint reads the manifest twice at two different trust levels —
+`_load_manifest()` is a raw JSON read for the descriptive fields,
+`staking_authorization()` goes through the verifying loader. In production both
+read the same file and agree; if a manifest ever *claimed* an override with a
+malformed attribution block, the endpoint would correctly report the claimed
+state alongside `stake_permitted: false` (claimed, not honored). Tests must
+patch **both** or they silently read the live deployment.
+
+**(2) The web UI told users "staking blocked" on a system that was staking.**
+`promotionLabel("ACTIVE_FAIL_CLOSED")` hardcoded `"Serving forecasts · staking
+blocked"`, and the manifest keeps `ACTIVE_FAIL_CLOSED` under an override — so
+the sentence became false the moment the override activated, on a consumer
+surface. `promotion_state` alone can no longer describe serving behaviour; the
+function now takes the certification state as a second argument.
+`certificationLabel` also gained the override case ("Unvalidated · staking
+under operator override") — its fail-closed default, "Pending validation",
+would have *understated* what was happening rather than overstating it, which
+is the unusual direction for this failure class and the reason it needed a
+dedicated label rather than the safe fallback.
+
+### Three tests were reading a deployment decision, not a code path
+
+`test_uncertified_generation_exposes_forecast_but_never_value_or_stake`,
+`test_api.py::test_model_status` and
+`test_model_status_endpoint.py::test_returns_manifest_fields` all inherited
+whatever `active_generation.json` happened to declare, so a policy change
+surfaced as a code regression. All three now pin an explicit
+`StakingAuthorization` and assert the same contracts they always did; four new
+tests cover the override path (breaker trips inside the danger zone, stakes
+with disclosure outside it, fails closed when epistemic is unmeasurable, and
+status reported as staking-but-not-validated).
+
+⚠️ **A test that reads live state is not hermetic even when it passes.** These
+three passed for months precisely because the deployed state happened to match
+their literals.
+
+### What this does NOT resolve
+
+The breaker declines the one slice of this model we have measured to be worst.
+It does **not** fix the inversion (item 50 stays open as a research blocker),
+and it does **not** make the override safe — outside the low-epistemic quartile
+the accepted risks in ADR-0011 apply unchanged: stakes are being published from
+a model with no demonstrated edge over the prices it is betting against.
+
+### To deactivate
+
+Delete the `operator_override` block from
+`backend/models/active_generation.json` and set `certification_state` back to
+`"UNVERIFIED"`. Fail-closed behaviour resumes on the next process start. No
+migration, no persisted side effect.
+
 ## 107. Three real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
 
 **Tier:** `RESOLVED` — both fixed and verified 2026-09-19.
@@ -5259,7 +5428,16 @@ gains one case for the new list-subscriptions service method.
 
 ---
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3, 4 **and the calculation-bug hypothesis** ruled out), so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3, 4 **and the calculation-bug hypothesis** ruled out)
+
+> ⚠️ **Title corrected 2026-09-19.** This heading previously ended "so staking
+> stays blocked". That clause is no longer true: staking is live under the
+> disclosed operator override (item 108, ADR-0011). What remains true — and is
+> what this item is actually about — is that `error_association` still FAILS on
+> real evidence and the inversion is unexplained. The override bypassed the
+> gate; it did not move the metric. The circuit breaker in item 108 suppresses
+> the measured low-epistemic danger zone, which is a mitigation of this item's
+> consequence, not a resolution of its cause.
 
 > **STILL OPEN as a research blocker — 2026-09-19.** Two updates, neither of
 > which moves the metric:

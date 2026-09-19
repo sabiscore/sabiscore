@@ -22,7 +22,9 @@ from ..db.models import Match, Team
 from ..monitoring.metrics import metrics_collector
 from .upcoming_match_feature_service import UpcomingMatchFeatureProjector
 from ..models.active_generation import staking_authorization
+from ..models.ensemble_uncertainty import compute_ensemble_uncertainty
 from ..models.prediction import PredictionEngine
+from .risk_guard import evaluate_staking_risk
 from .odds_service import OddsService
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,33 @@ def _select_feature_vector(features_result: Dict[str, Any]) -> np.ndarray:
         list(features_result.get("features_dict", {}).values()),
         dtype=np.float32,
     )
+
+
+async def _epistemic_for_match(
+    league: str, features_result: Dict[str, Any]
+) -> Optional[float]:
+    """Ensemble-dispersion epistemic uncertainty for one fixture, or None.
+
+    Returns None — never a substitute value — when the measurement cannot be
+    made. `evaluate_staking_risk` treats None as a trip, so an unmeasurable
+    fixture is suppressed rather than staked. Any substitute here (0.0, a
+    league mean) would be read as a real measurement by the breaker and could
+    silently place the fixture on the safe side of the threshold.
+    """
+    features = features_result.get("features_dict")
+    if not isinstance(features, dict) or not features:
+        return None
+    try:
+        result = await compute_ensemble_uncertainty(league, features)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "epistemic uncertainty unavailable for risk guard: %s", exc,
+            extra={"event": "risk_guard_epistemic_unavailable", "league": league},
+        )
+        return None
+    if not result.available:
+        return None
+    return float(result.epistemic)
 
 
 def _is_fallback_prediction(predictions: Dict[str, Any]) -> bool:
@@ -377,11 +406,28 @@ class UpcomingMatchService:
                 stake_permitted = publishable and stake_auth.permitted
                 if publishable and not stake_permitted:
                     data_gaps.append("model_generation_uncertified")
+
+                # Circuit breaker (ADR-0011). Only runs under an override, and
+                # only after the override has already said "yes" — it can
+                # subtract permission, never add it.
+                risk_decision = None
                 if stake_permitted and stake_auth.is_override:
-                    # The disclosure rides with the stake to the surface that
-                    # renders it. A stake shown without it would be an
-                    # uncertified recommendation wearing a certified face.
-                    data_gaps.append("staking_under_operator_override")
+                    risk_decision = evaluate_staking_risk(
+                        league=match.get("league", ""),
+                        epistemic=await _epistemic_for_match(
+                            match.get("league", ""), features_result
+                        ),
+                        is_override=True,
+                        match_id=str(match_id),
+                    )
+                    if risk_decision.tripped:
+                        stake_permitted = False
+                        data_gaps.append("staking_suppressed_by_risk_guard")
+                    else:
+                        # The disclosure rides with the stake to the surface
+                        # that renders it. A stake shown without it would be an
+                        # uncertified recommendation wearing a certified face.
+                        data_gaps.append("staking_under_operator_override")
 
                 # 3. Get odds
                 odds = await odds_service.get_match_odds(
@@ -414,6 +460,8 @@ class UpcomingMatchService:
                 # is not a safety signal (docs/DEBT.md item 67's false-negative
                 # class).
                 match["staking_authorization"] = stake_auth.as_dict()
+                if risk_decision is not None and risk_decision.tripped:
+                    match["risk_guard"] = risk_decision.as_dict()
                 match["staleness_seconds"] = features_result.get("staleness_seconds")
                 match["staleness_available"] = features_result.get("staleness_seconds") is not None
                 match["source"] = str(match.get("source", source))

@@ -70,7 +70,23 @@ class TestAPIEndpoints:
             assert response.json()["detail"]["error_code"] == "INSUFFICIENT_EVIDENCE"
 
     def test_model_status(self):
-        """Test model status endpoint"""
+        """The status endpoint must report the manifest's real state, coherently.
+
+        This previously pinned the literals `certification_state == "UNVERIFIED"`
+        and `stake_permitted is False`, which made it a test of whatever state
+        the shipped manifest happened to declare rather than of the endpoint's
+        contract - and it broke the moment ADR-0011's operator override was
+        activated. The contract that actually matters is unchanged and is now
+        asserted directly: the endpoint reports the manifest verbatim, it never
+        reports an override as validation, and its `stake_permitted` cannot
+        disagree with the authorization the serving path uses.
+        """
+        from src.models.active_generation import (
+            ALLOWED_CERTIFICATION_STATES,
+            load_active_generation,
+            staking_authorization,
+        )
+
         response = client.get("/api/v1/models/status")
         assert response.status_code == 200
         data = response.json()
@@ -78,8 +94,25 @@ class TestAPIEndpoints:
         assert data["validation_status"] in {"VALIDATED", "UNVERIFIED"}
         assert data["manifest_valid"] is True
         assert len(data["generation_hash"]) == 64
-        assert data["certification_state"] == "UNVERIFIED"
-        assert data["stake_permitted"] is False
+
+        cert = data["certification_state"]
+        assert cert in ALLOWED_CERTIFICATION_STATES
+        assert cert == load_active_generation()["certification_state"], (
+            "the endpoint must not mask or prettify the manifest's state"
+        )
+
+        # An override permits staking; it is never validation (ADR-0011).
+        assert (data["validation_status"] == "VALIDATED") is (cert == "CERTIFIED")
+
+        # Coherence with the serving path. A status surface reporting
+        # `stake_permitted: false` while `/upcoming/matches` publishes stakes
+        # would be a green dashboard over a system doing something else.
+        expected = staking_authorization()
+        assert data["stake_permitted"] is expected.permitted
+        assert data["staking_basis"] == expected.basis
+        if cert != "CERTIFIED":
+            assert expected.basis != "CERTIFIED"
+
         if data["models"]:
             model = next(iter(data["models"].values()))
             assert len(model["artifact_sha256"]) == 64

@@ -39,7 +39,7 @@ export function ModelMetadataPanel() {
     },
     {
       label: "Availability",
-      value: promotionLabel(data?.promotion_state),
+      value: promotionLabel(data?.promotion_state, data?.certification_state),
     },
     {
       label: "Leagues covered",

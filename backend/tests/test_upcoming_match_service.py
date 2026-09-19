@@ -25,7 +25,26 @@ from src.services.upcoming_match_service import (
     _is_fallback_prediction,
     _select_feature_vector,
 )
+from src.models.active_generation import StakingAuthorization
+from src.models.ensemble_uncertainty import EnsembleUncertainty
 from src.models.prediction import PredictionEngine
+
+#: Explicit authorizations, so each test pins the code path it is about rather
+#: than inheriting whatever `backend/models/active_generation.json` currently
+#: declares. A test that reads a live deployment decision reports a change of
+#: policy as a code regression.
+_UNCERTIFIED_AUTH = StakingAuthorization(
+    permitted=False, basis="NONE", certification_state="UNVERIFIED"
+)
+_OVERRIDE_AUTH = StakingAuthorization(
+    permitted=True,
+    basis="OPERATOR_OVERRIDE",
+    certification_state="OPERATOR_OVERRIDE_UNCERTIFIED",
+    authorizing_identity="test-operator",
+    rationale="pinned by test",
+    authorized_at="2026-09-19T00:00:00Z",
+    acknowledged_failures=("market_baseline",),
+)
 
 
 def test_is_fallback_prediction_true_for_fallback_model_version():
@@ -209,7 +228,14 @@ async def test_get_upcoming_matches_with_predictions_uses_build_live_feature_vec
 
 
 async def test_uncertified_generation_exposes_forecast_but_never_value_or_stake():
-    """Research probabilities may remain visible while public betting action is fail-closed."""
+    """Research probabilities may remain visible while public betting action is fail-closed.
+
+    The authorization is pinned explicitly rather than inherited from the
+    shipped manifest. This test is about the UNVERIFIED code path, and it broke
+    the moment ADR-0011's operator override was activated in
+    `backend/models/active_generation.json` - not because the behaviour it
+    guards changed, but because the fixture was reading a deployment decision.
+    """
     future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
     fake_api_client = MagicMock()
     fake_db = MagicMock(name="db")
@@ -230,6 +256,9 @@ async def test_uncertified_generation_exposes_forecast_but_never_value_or_stake(
     ) as MockPredictionEngine, patch(
         "src.services.upcoming_match_service.OddsService"
     ) as MockOddsService, patch(
+        "src.services.upcoming_match_service.staking_authorization",
+        return_value=_UNCERTIFIED_AUTH,
+    ), patch(
         "src.services.upcoming_match_service.cache_manager"
     ) as MockCache:
         MockCache.get.return_value = None
@@ -270,6 +299,138 @@ async def test_uncertified_generation_exposes_forecast_but_never_value_or_stake(
     assert enriched["best_value_bet"] is None
     assert enriched["has_value"] is False
     assert "model_generation_uncertified" in enriched["data_gaps"]
+
+
+def _override_scenario():
+    """Fixture + prediction stub shared by the operator-override cases below."""
+    future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    mocked_prediction = MagicMock()
+    mocked_prediction.to_dict.return_value = {
+        "home_win": 0.60,
+        "draw": 0.22,
+        "away_win": 0.18,
+        "model_version": "v5_phase7",
+        "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+        "confidence": 0.60,
+    }
+    return future_date, mocked_prediction
+
+
+async def _run_override_case(epistemic_side_effect):
+    future_date, mocked_prediction = _override_scenario()
+    service = UpcomingMatchService(api_client=MagicMock())
+
+    with patch(
+        "src.services.upcoming_match_service.UpcomingMatchFeatureProjector"
+    ) as MockProjector, patch(
+        "src.services.upcoming_match_service.PredictionEngine"
+    ) as MockPredictionEngine, patch(
+        "src.services.upcoming_match_service.OddsService"
+    ) as MockOddsService, patch(
+        "src.services.upcoming_match_service.staking_authorization",
+        return_value=_OVERRIDE_AUTH,
+    ), patch(
+        "src.services.upcoming_match_service.compute_ensemble_uncertainty",
+        new=epistemic_side_effect,
+    ), patch(
+        "src.services.upcoming_match_service.cache_manager"
+    ) as MockCache:
+        MockCache.get.return_value = None
+        MockProjector.return_value.build_live_feature_vector = AsyncMock(
+            return_value={
+                "features": np.zeros(68, dtype=np.float32),
+                # A real feature row: without it `_epistemic_for_match` short-
+                # circuits to None and every case would trip for the same
+                # reason, making the two tests indistinguishable.
+                "features_dict": {"home_goals_for_avg": 1.5},
+                "data_gaps": [],
+                "data_quality": {"is_synthetic": False},
+                "staleness_seconds": 120,
+            }
+        )
+        MockPredictionEngine.return_value.predict = AsyncMock(return_value=mocked_prediction)
+        MockOddsService.return_value.get_match_odds = AsyncMock(
+            return_value={"home_win": 2.4, "draw": 4.0, "away_win": 6.0, "source": "test"}
+        )
+        service.get_upcoming_matches = AsyncMock(return_value={
+            "matches": [{
+                "id": "override-1",
+                "home_team": "Home FC",
+                "away_team": "Away FC",
+                "league": "EPL",
+                "match_date": future_date,
+                "status": "scheduled",
+                "source": "database",
+            }],
+            "source": "database",
+        })
+        response = await service.get_upcoming_matches_with_predictions(
+            db=MagicMock(name="db"), league="EPL", days_ahead=3, limit=5,
+            include_value_bets=True,
+        )
+    return response["upcoming_matches"][0]
+
+
+def _uncertainty(epistemic: float, available: bool = True):
+    async def _call(league, features):
+        return EnsembleUncertainty(
+            epistemic=epistemic,
+            aleatoric=0.4,
+            total=epistemic + 0.4,
+            credible_interval=(0.4, 0.8),
+            method="ensemble_dispersion",
+            model_count=300,
+            version="test",
+            available=available,
+        )
+    return _call
+
+
+async def test_override_suppresses_staking_inside_the_measured_danger_zone():
+    """ADR-0011 Amendment 1: low epistemic == trees agree == suppress.
+
+    The override permits staking in general; the breaker declines the one
+    region of the input space measured to be worst. EPL's boundary is 0.0788,
+    so 0.02 is deep inside it.
+    """
+    enriched = await _run_override_case(_uncertainty(0.02))
+
+    assert "staking_suppressed_by_risk_guard" in enriched["data_gaps"]
+    assert "staking_under_operator_override" not in enriched["data_gaps"]
+    assert enriched["value_bets"] == []
+    assert enriched["best_value_bet"] is None
+    assert enriched["has_value"] is False
+    assert enriched["risk_guard"]["tripped"] is True
+    assert enriched["risk_guard"]["reason"] == "epistemic_in_measured_danger_zone"
+    # The authorization is still disclosed even though the stake was declined -
+    # a reader must be able to tell "overridden but suppressed" from
+    # "never authorized".
+    assert enriched["staking_authorization"]["basis"] == "OPERATOR_OVERRIDE"
+
+
+async def test_override_outside_the_danger_zone_stakes_with_the_disclosure_attached():
+    """Outside the measured zone the override's stake proceeds - disclosed.
+
+    ⚠️ The disclosure gap is not decoration. A stake published without it is an
+    uncertified recommendation wearing a certified face.
+    """
+    enriched = await _run_override_case(_uncertainty(0.18))
+
+    assert "staking_suppressed_by_risk_guard" not in enriched["data_gaps"]
+    assert "staking_under_operator_override" in enriched["data_gaps"]
+    assert "model_generation_uncertified" not in enriched["data_gaps"]
+    assert "risk_guard" not in enriched
+    assert enriched["staking_authorization"]["basis"] == "OPERATOR_OVERRIDE"
+    assert enriched["staking_authorization"]["permitted"] is True
+
+
+async def test_override_fails_closed_when_epistemic_cannot_be_measured():
+    """"We could not measure the risk" is not "there is no risk"."""
+    enriched = await _run_override_case(_uncertainty(0.18, available=False))
+
+    assert "staking_suppressed_by_risk_guard" in enriched["data_gaps"]
+    assert enriched["has_value"] is False
+    assert enriched["risk_guard"]["reason"] == "epistemic_uncertainty_unavailable"
 
 
 async def test_cached_or_db_fixture_discovery_never_calls_provider_or_model():
