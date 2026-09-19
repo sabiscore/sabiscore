@@ -17,6 +17,7 @@ exercising the code.
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -45,7 +46,12 @@ _UNREACHABLE_DATABASE_URL = (
 # three subprocess tests died inside Settings() before ever reaching the lazy
 # engine. Assembled from a repeated character rather than written as a single
 # high-entropy literal so no secret scanner has to special-case it.
-_TEST_SECRET_KEY = "sabiscore-test-only-not-a-real-secret-" + "0" * 32
+# Generated per run rather than written as a literal. `Settings()` only
+# requires a non-default value of at least 32 characters, so nothing here
+# needs to be reproducible - and an ephemeral value cannot be a credential
+# at all, which is a stronger property than a literal annotated as harmless.
+# It also stops static analysers reporting a hard-coded secret in test code.
+_TEST_SECRET_KEY = secrets.token_hex(32)
 
 
 def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProcess:
