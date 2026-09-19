@@ -1,6 +1,6 @@
 # SabiScore Debt Ledger
 
-## 107. Two real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
+## 107. Three real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
 
 **Tier:** `RESOLVED` — both fixed and verified 2026-09-19.
 **Owner:** unassigned. **Found:** 2026-09-19, a from-scratch dependency
@@ -102,6 +102,63 @@ verification revert). `insights/simulators.py` still has no live caller in
 the serving path (per its own module docstring) — this closes a test-suite
 correctness gap, not a production one.
 
+### Defect 3 — `test_lazy_database_engine.py` pinned five env vars to be shell-independent, then depended on a sixth it didn't pin
+
+Added 2026-09-19, second pass. The three subprocess tests in this module each
+call a `_run()` helper whose own comment states the design contract:
+
+> Pinning both keeps these tests independent of that ordering and of the
+> developer/CI shell.
+
+It pins `APP_ENV`, `ALLOW_SQLITE_FALLBACK`, `SABISCORE_ALLOW_INSECURE_FALLBACK`,
+`DATABASE_URL` and `PYTHONPATH` — but pinning `APP_ENV=production` is precisely
+what makes `Settings()` enforce its production contract, which requires a
+non-default `SECRET_KEY` of at least 32 characters
+(`src/core/config.py:714-718`). `SECRET_KEY` was never pinned, so the
+subprocess inherited it from `**os.environ`. The test therefore passed or
+failed on whether the developer's shell or a local (gitignored) `backend/.env`
+happened to hold one — the exact dependency the helper was written to
+eliminate.
+
+In a clean clone all three died inside `Settings()` validation **before
+reaching the lazy-engine behaviour they exist to check**, with an error naming
+a secret rather than a database. Nothing in `tests/conftest.py` supplies one,
+and the other ~2,500 tests are unaffected because they run in-process where
+`app_env` defaults to `development` and the production-only branch never
+fires — so this module is the only place the gap is reachable.
+
+Fixed by pinning `SECRET_KEY` in the same dict literal as its five siblings,
+from a module constant assembled by repetition
+(`"sabiscore-test-only-not-a-real-secret-" + "0" * 32`) rather than written as
+one high-entropy literal, so no secret scanner needs to special-case it. It
+sits before `**extra_env`, so a caller can still override it.
+
+⚠️ **The real cost of this defect was not three red tests — it was a blind
+guard.** Because the failure happened at `Settings()`, these tests could not
+have detected an actual lazy-init regression in a clean clone; they would have
+been red for the wrong reason and the genuine defect would have hidden behind
+the environment error. The Rule 15 check below is what establishes that they
+now detect their real target.
+
+**Rule 15 verification.** Injected the exact regression this module exists to
+prevent — an eager `_engine = _init_engine()` at import scope in
+`src/core/database.py`, i.e. the pre-lazy behaviour ADR 0007 removed — and
+re-ran with no ambient `SECRET_KEY`:
+
+```
+4 failed, 11 passed
+FAILED test_importing_for_base_and_models_does_not_require_a_live_database
+FAILED test_first_real_use_still_fails_closed_on_unreachable_database
+FAILED test_session_local_call_also_triggers_the_same_fail_closed_path
+FAILED test_status_helpers_reflect_reality_after_a_successful_lazy_init
+        assert 'BEFORE:False' in 'BEFORE:True\n...'
+```
+
+The fourth failure is the most informative: `BEFORE:True` means the engine was
+already initialised before first use, which is the regression named precisely.
+`src/core/database.py` was then restored byte-identically (`git status` clean
+for that path) and the module returns 15/15 passed.
+
 ### Evidence
 
 | Gate | Before | After |
@@ -109,15 +166,35 @@ correctness gap, not a production one.
 | `ruff check src --select E4,E7,E9,F` | pass (was misread locally as 3884 errors under the wrong invocation) | pass |
 | `check_mypy_ceiling.py --ceiling 784` | 775 ≤ 784 | 775 ≤ 784 (untouched) |
 | `verify-core` steps 1–6 (pytest subset, OpenAPI, provider CLI, scraper tests ×2, py-compile, zero-fab scan) | all pass | all pass |
-| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | 0 failed, 2523 passed, 16 skipped, 2 xfailed |
+| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | **0 failed, 2523 passed**, 16 skipped, 2 xfailed |
+| `verify_active_artifacts.py` (Render buildCommand / validate-models gate) | 6 hash-locked pairs, `UNVERIFIED` | 6 hash-locked pairs, `UNVERIFIED` (unchanged) |
+| `validate_experiment_registry.py --strict` (DID §38) | 15 valid, 0 warnings | 15 valid, 0 warnings |
 | `pnpm --filter @sabiscore/web lint` | pass | pass (untouched) |
 | `pnpm --filter @sabiscore/web typecheck` | pass | pass (untouched) |
 | `pnpm --filter @sabiscore/web test` (Vitest) | 352/352 | 352/352 (untouched) |
 | `NODE_ENV=production pnpm --filter @sabiscore/web build` | exit 0 | exit 0 (untouched) |
 
+⚠️ **The "after" row for pytest was measured with `env -u SECRET_KEY`** — i.e.
+the clean-clone condition that produced defect 3 — so it is a genuine
+hermeticity result, not a pass bought by exporting a variable. All three
+defects were found only because the suite was run from a from-scratch
+dependency install rather than trusted from a prior session's green claim.
+
 The 2 xfails are item 50's already-tracked, intentionally-unresolved
 epistemic-uncertainty gap (`test_error_association` and its per-league
-robustness sibling) — unchanged, expected, not touched.
+robustness sibling) — unchanged, expected, not touched. They are the ML
+research blocker, not an engineering defect, and their reason strings carry
+the live measurement: overall gap **−0.0217** (lowest-epistemic bucket
+RPS 0.2345 vs highest-epistemic 0.2128, gate needs > 0), failing in the
+**wrong direction in all five scored leagues** (BUNDESLIGA −0.0448,
+EPL −0.0217, LA_LIGA −0.0025, LIGUE_1 −0.0288, SERIE_A −0.0098).
+
+**Governance surfaces confirmed untouched across all three fixes:**
+`certification_policy.py` still hashes to
+`4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664`
+(policy v1.2.0), and `active_generation.json` still reads
+`certification_state: "UNVERIFIED"` / `promotion_state: "ACTIVE_FAIL_CLOSED"`.
+`git status` reports both paths unmodified.
 
 ## 106. E0b's "no calibrator at all" premise went stale four days after it was written, and its result was never compared against what item 83 later shipped
 
