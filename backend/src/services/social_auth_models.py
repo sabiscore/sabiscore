@@ -14,7 +14,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import relationship
 
-from ..core.database import Base
+from ..core.database import Base, UserAccount
 
 
 class UserIdentity(Base):
@@ -58,3 +58,23 @@ def install_social_user_fields(user_account_model) -> None:
         index_name = "ix_users_username"
         if not any(index.name == index_name for index in table.indexes):
             Index(index_name, table.c.username, unique=True)
+
+
+# Install at import time, which is what this module's docstring has always
+# claimed ("augments the existing UserAccount mapper at import time").
+#
+# It was not true: `install_social_user_fields` had exactly one caller,
+# `api/endpoints/auth.py`, so the columns reached `Base.metadata` only when the
+# FastAPI auth router was imported. Alembic's `env.py` imports the model
+# modules and nothing else, so `alembic check` compared a database that HAD
+# these columns (migration 0014 created them) against metadata that did NOT,
+# and proposed dropping them - failing the schema-drift gate on every commit.
+#
+# Importing the whole auth endpoint from `env.py` would fix the symptom by
+# pulling FastAPI and the entire endpoint chain into every migration run. Doing
+# it here keeps the mapper definition and its installation in one module, which
+# is where a reader looks for it.
+#
+# Idempotent by construction: every field is guarded by `if name in table.c`,
+# so `auth.py`'s existing call remains harmless.
+install_social_user_fields(UserAccount)
