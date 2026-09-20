@@ -5,6 +5,62 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Schema-drift guard isolated; deleted ledger entry restored (2026-09-20)
+
+### Fixed
+
+- **The CI zero-fabrication scan could not fail.** All nine checks were written as `! grep …`, and
+  POSIX exempts a `!`-inverted command from `set -e`, so a positive match never aborted and the
+  step's exit code was only the last line's. Eight checks were inert from the day they were
+  written, and a real `datetime.utcnow` violation sat in `master` while the gate reported green.
+  The step now uses a `forbid` helper that records violations, reports all of them in one pass,
+  exits non-zero on a non-zero tally, and treats a `grep` that *cannot run* as a failure rather
+  than as clean. Measured on the identical seeded violation: old form exit 0, new form exit 1.
+  ⚠️ The first repair was also inert, differently — `out="$(grep …)"; rc=$?` aborted on a *clean*
+  grep under `set -e`; caught only by executing the script. See `docs/DEBT.md` item 111.
+
+- **`user_identities.created_at`** now uses `naive_utc_now()` from `src/utils/db_time.py` instead
+  of the deprecated stdlib naive-UTC call — the violation the repaired scan immediately caught.
+
+- **`docs/DEBT.md` item 108 was deleted from `master` by a squash merge** and is restored verbatim
+  (169 lines; the count matches the deletion exactly). PR #220 merged 24 minutes after PR #219 from
+  a branch cut before item 108 existed, so its copy of the file overwrote master's.
+  `git diff --stat 7afd725 08751be` is that deletion and nothing else — every code file the two PRs
+  shared was byte-identical, so nothing conflicted and nothing warned. The entry is the only ledger
+  record that staking is live on an *uncertified* generation under ADR-0011; production behaviour
+  was never affected, but the disclosure a future session reads before touching the staking path
+  was gone. See `docs/DEBT.md` item 110.
+
+- **`tests/unit/test_alembic_metadata_registration.py` was inert in CI from the commit that
+  introduced it.** It asserted against the process-global `Base.metadata`, which
+  `tests/unit/test_adversarial_m2_m3.py` populates first in a full-suite collection
+  ("adversarial" sorts before "alembic"). With the `env.py` import reverted, the guard alone gives
+  3 failed and the two-file run gives 16 passed. The metadata is now captured in a fresh
+  interpreter. See `docs/DEBT.md` item 109.
+
+- **`user_identities.provider` / `provider_subject` / `provider_email`** were unbounded `String`
+  against migration 0014's `VARCHAR(32)` / `(255)` / `(320)`. `alembic check` cannot report this —
+  its default comparator treats a metadata type with no length as *don't care* — so the gate passed
+  on real PostgreSQL while all three disagreed. Lengths now match, pinned by a general AST guard
+  over every `op.create_table` / `op.add_column`.
+
+### Added
+
+- **`backend/tests/unit/test_zero_fabrication_scan_enforces.py`** (5 tests) — bans `! <cmd>` from
+  the scan step, requires an explicit failing exit, covers `forbid`'s match and unrunnable-check
+  branches behaviourally in a temp dir, and **executes the real scan against the working tree on
+  every `pytest` run**, bringing the gate local instead of leaving it to CI alone.
+
+### Changed
+
+- **`docs/DATA_INTELLIGENCE_DIRECTIVE.md` → v6.1.** Rule 15 gains the two instances above and the
+  corollary they earned: *watching a guard fail once is not enough — it has to be watched failing
+  in the configuration CI runs*, and a guard sharing mutable process state with the suite must be
+  isolated before its failure is evidence of anything. No threshold, gate, experiment decision or
+  statistical requirement changed.
+
+---
+
 ## Unreleased — Data Intelligence Directive v6 committed (2026-09-18)
 
 ### Added

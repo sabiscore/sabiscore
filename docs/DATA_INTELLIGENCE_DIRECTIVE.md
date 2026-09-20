@@ -2,10 +2,27 @@
 
 ### Production Data Intelligence, Information Gain & Forecast Improvement Programme
 
-**Version:** 6.0 · **Supersedes:** v5 (2026-09-08) · **Date:** 2026-09-18
+**Version:** 6.1 · **Supersedes:** v5 (2026-09-08) · **Date:** 2026-09-20 (v6.0: 2026-09-18)
 **Repository:** `sabiscore/sabiscore` · **Status:** ACTIVE RESEARCH GOVERNANCE
 
 **Governing principle:** **New trustworthy information → measurable incremental information gain → statistically defensible out-of-sample improvement → production-grade intelligence**
+
+---
+
+## Changelog (v6.0 → v6.1, 2026-09-20)
+
+One rule strengthened, by the same standard the rest of this document holds itself to: an observed
+execution failure, not a review opinion.
+
+**Rule 15 gains two measured instances and one corollary.** A metadata-registration guard was
+watched failing — in the only configuration where it works — and merged to `master` inert; and
+`alembic check` was cited as passing for a class of drift its comparator cannot see. The corollary:
+*watching a guard fail once is not enough — it has to be watched failing in the configuration CI
+runs*, and a guard sharing mutable process state with the rest of the suite must be isolated before
+its failure is evidence of anything.
+
+Nothing else in v6.0 changed. No threshold, gate, experiment decision or statistical requirement is
+touched.
 
 ---
 
@@ -383,7 +400,7 @@ operator with the block explicitly on the record.
 A gate that is defined, tested and documented still enforces nothing if the mechanism that runs it
 is not live. Confirm the mechanism, not the definition.
 
-Two measured instances in this repository:
+Five measured instances in this repository:
 
 - **CI that never ran.** Under the GitHub Actions billing lock, every job reports
   `conclusion: "failure"` — identical to a genuine test failure. Only
@@ -394,9 +411,47 @@ Two measured instances in this repository:
   `non_fast_forward`, `required_linear_history` and a 1-approving-review `pull_request` rule —
   **no `required_status_checks`**. Red or absent CI has never blocked a merge here, independent of
   the billing lock and outliving it. (`docs/DEBT.md` item 104.)
+- **A guard that WAS watched failing — in the only configuration where it works.** *(added
+  2026-09-20.)* `tests/unit/test_alembic_metadata_registration.py` asserted against the
+  process-global `Base.metadata`. Reverting the `alembic/env.py` import and running that file alone
+  reddened 3 tests, and that reading was recorded in the PR as evidence. But
+  `tests/unit/test_adversarial_m2_m3.py` imports `src.api.main` → `auth.py` →
+  `social_auth_models`, and **"adversarial" sorts before "alembic"**, so in the full-suite
+  collection CI actually performs, the mapper is already registered before a single assertion in
+  the guard executes. The identical revert then gives **16 passed**. The guard was inert in CI from
+  the commit that introduced it, and shipped that way to `master` in PR #220. Fixed by capturing
+  the metadata in a fresh interpreter (`subprocess`, importing only `env.py`'s derived module set);
+  the same experiment then gives **3 failed**.
+- **A gate that could not fail at all.** *(added 2026-09-20.)* Every check in CI's
+  "Zero-fabrication scan" — nine of them, including the one forbidding a deprecated stdlib call
+  across `src` — was written as `! grep …`. POSIX exempts a command whose return value is inverted
+  with `!` from `set -e`, so a positive match did not abort and the step's exit code was only ever
+  the **last** line's. Eight checks were decorative from the day they were written, and a real
+  violation sat in `master` while the gate reported green. Reproduced under exactly what
+  `shell: bash` invokes: on the identical seeded violation the old form exits **0** and the
+  repaired form exits **1**. ⚠️ **The first repair was also inert, differently**:
+  `out="$(grep …)"; rc=$?` takes the substitution's status, so under `set -e` a *clean* grep aborted
+  the step — caught only by executing the script, not by reading it. (`docs/DEBT.md` item 111.)
+- **A gate that is structurally blind to a class of drift.** *(added 2026-09-20.)* `alembic check`
+  with `compare_type=True` cannot report an unbounded ORM `String` against a migration's
+  `VARCHAR(32)`: its default comparator reduces to
+  `t1.length is not None and t1.length != t2.length`, so a metadata type with no length reads as
+  *don't care*. The gate ran on real PostgreSQL 15 with migration 0014 applied and passed while
+  three `user_identities` columns genuinely disagreed. **A green gate is evidence only for the
+  classes it can see** — before citing one, read what it actually compares.
 
 > **A guard you have not watched fail is not a guard, and a gate you have not watched block is not
 > a gate.**
+>
+> **And watching it fail once is not enough — it has to be watched failing in the configuration CI
+> runs.** A guard that shares mutable process state with the rest of the suite (module-level
+> registries, import side effects, a global `metadata`) proves nothing when run alone. Isolate it
+> — a subprocess, a fresh interpreter — before its failure is evidence of anything.
+>
+> **And a gate written in shell must be executed, not read.** `set -e` does not mean what it looks
+> like it means around `!`, `||`, `&&` and command substitution; two consecutive attempts at the
+> same nine-line scan were silently non-enforcing for two different reasons. Seed a violation, run
+> the real script under the runner's own shell invocation, and watch it exit non-zero.
 
 ---
 

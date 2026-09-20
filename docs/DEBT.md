@@ -1,5 +1,441 @@
 # SabiScore Debt Ledger
 
+## 111. The CI zero-fabrication scan could not fail — eight of its nine checks were inert from the day they were written
+
+**Tier:** `RESOLVED` — fixed and verified 2026-09-20.
+**Owner:** unassigned. **Found:** 2026-09-20, from a Copilot review comment on
+PR #221 flagging a single `datetime.utcnow` occurrence. Verifying *why* a named
+CI gate had not already caught it is what exposed the real defect.
+
+### The reported symptom
+
+`src/services/social_auth_models.py:56` used `default=datetime.utcnow`, which
+`.github/workflows/ci.yml`'s "Zero-fabrication scan" explicitly forbids across
+all of `src` (only files named `database.py` are exempt). The line has been
+present since #185 on 2026-09-14 — including at `da8fa93` and at `79df258`,
+where `Backend Lint, Typecheck, Tests` reported **success**.
+
+⚠️ **A gate that names a violation and reports green is the finding.** The
+first question was not "how do I fix the line" but "why did the gate pass".
+
+### Root cause
+
+Every check in the step was written as `! grep ...`. POSIX exempts a command
+whose return value is inverted with `!` from `set -e`:
+
+> The shell does not exit if the command that fails is […] part of any command
+> executed in a `&&` or `||` list […] **or if the command's return value is
+> being inverted with `!`**.
+
+So a positive match did not abort the script; execution continued, and the
+step's exit code was whatever the **last** line returned
+(`NEXT_PUBLIC_KELLY_FRACTION`, which has always been clean). Eight of nine
+checks were decorative.
+
+Reproduced rather than inferred, under exactly what `shell: bash` invokes:
+
+```
+$ cat t.sh
+! grep -q "MATCH_ME" a.txt       # FINDS it -> ! inverts to exit 1
+echo "REACHED LINE 2"
+! grep -q "ABSENT" a.txt         # finds nothing -> ! inverts to exit 0
+$ bash --noprofile --norc -eo pipefail t.sh
+REACHED LINE 2
+$ echo $?
+0
+```
+
+And against the real seeded violation, old form vs. new:
+
+```
+old `! grep` form  -> exit 0     (violation ignored)
+current form       -> exit 1
+```
+
+### ⚠️ Confirmed live by this PR's own CI, not only by local reproduction
+
+PR #221's run at `9e21d1d` — the commit immediately before this fix — reported
+**`Backend Lint, Typecheck, Tests: success`** (job `106013116060`, completed
+2026-09-20T03:27:53Z) with the violation present in the tree, alongside 12 other
+green checks and a passing SonarCloud gate. The step named the symbol, the
+symbol was there, and the job was green. No stronger demonstration of an inert
+gate is available than the gate itself.
+
+### Scope, measured before changing anything
+
+Each of the nine checks was run individually against the tree. **Exactly one
+was violated** — the `datetime.utcnow` occurrence above. The other eight were
+genuinely clean, so repairing the gate could not turn CI red on unrelated
+pre-existing debt. That measurement is what made fixing the scan safe to do in
+the same PR as the line.
+
+### Fix
+
+1. `social_auth_models.py` uses `naive_utc_now()` from `src/utils/db_time.py`
+   — the shared helper whose own docstring says new service code should import
+   it rather than reinvent the two-line strip. `created_at` is a plain
+   `DateTime` column, so a naive value is the correct one.
+2. The scan replaces `! grep` with a `forbid` helper that **records** a
+   violation, so every check runs and all violations are reported in one pass,
+   then exits 1 on a non-zero tally.
+3. `forbid` distinguishes `grep` exit 1 (no match, clean) from exit ≥2 (grep
+   could not run). ⚠️ **An unrunnable check must never read as a passing one** —
+   that is how a typo'd path silently disables a check, the same class one
+   level down.
+
+### ⚠️ The first replacement was ALSO inert, in a different way
+
+`out="$(grep -rn "$@" 2>&1)"; rc=$?` takes the command substitution's exit
+status, so under `set -e` a **clean** grep (exit 1, no match) aborted the step
+before `rc=$?` ever ran — the scan failed on a clean tree. Now
+`out="$(...)" || rc=$?`, which `set -e` exempts as a `||` list.
+
+**This was caught only by executing the script, not by reading it.** The fix
+for an inert guard was one character away from being a differently inert guard.
+
+### Guard
+
+`backend/tests/unit/test_zero_fabrication_scan_enforces.py` (5 tests):
+
+- no `! <cmd>` may return to the step,
+- the script must test its own violation tally and exit non-zero,
+- `forbid` must fail on a match **and** on an unrunnable check (behavioural,
+  in a temp dir, isolated from this repo's contents),
+- **the real scan is executed against this tree on every `pytest` run** — which
+  brings the gate local instead of leaving it to CI alone.
+
+Each was watched failing on its own reverted regression: reinstating one
+`! grep` reddens the pattern test; reinstating `; rc=$?` reddens both
+behavioural tests; reinstating the banned call reddens the real-scan test.
+
+### ⚠️ A bare-token scan matches its own documentation
+
+The first version of the explanatory comment on the fixed line spelled the
+banned symbol, and the scan correctly flagged the comment. Resolved by
+rewording the comment rather than teaching the scan to skip comment lines —
+filtering comments would let a real violation hide behind a `#`. The repo has
+hit this before on the responsible-gambling copy scan; the two resolutions
+differ deliberately, because that scan polices *prose* and this one polices
+*symbols*.
+
+---
+
+## 110. A squash merge deleted the ledger entry for a live staking override, because the merged branch was cut before it existed
+
+**Tier:** `RESOLVED` — restored 2026-09-20, same day, in the follow-up branch.
+**Owner:** unassigned. **Found:** 2026-09-20, while adding a new item and
+discovering the item number it was supposed to follow did not exist.
+
+### What happened
+
+PR #219 (`7afd725`) added item 108 — the `ACCEPTED-RISK` record that staking is
+live on an uncertified generation under ADR-0011's operator override. PR #220
+(`08751be`) merged 24 minutes later. Its branch was cut from `da8fa93`, which
+predates #219, so its copy of `docs/DEBT.md` had no item 108; the squash merge
+wrote that copy over master's.
+
+```
+git diff --stat 7afd725 08751be
+ docs/DEBT.md | 169 -----------------------------------------------------------
+ 1 file changed, 169 deletions(-)
+```
+
+⚠️ **The deletion is the entire diff.** Every code file the two PRs shared was
+byte-identical (verified: `git diff aff197d HEAD` over the code paths was
+empty), so nothing conflicted and nothing warned. A file that only ever grows
+by append, edited by two branches at the same anchor, is exactly the shape that
+a squash merge silently truncates.
+
+### Why it matters more than an ordinary doc revert
+
+The deleted entry is the only ledger record that **staking is currently enabled
+on a generation that failed certification**. The ADR survived
+(`docs/adr/0011-operator-override-uncertified-staking.md`) and the code survived
+— `staking_authorization()` still returns `permitted=True` — so production
+behaviour was never affected. What vanished was the disclosure a future session
+reads *before* touching the staking path, and one dangling reference was the
+only trace: item 83's own text still cited "item 108, ADR-0011" for an item
+that no longer existed.
+
+### Fix
+
+Item 108 restored verbatim from `7afd725` (169 lines, count matches the
+deletion exactly; `diff` against the pre-revert file is empty apart from one
+separator newline).
+
+### Prevention — considered, not built
+
+A CI check that `docs/DEBT.md` never shrinks would catch this class, and is
+cheap. **Not added here**, deliberately: legitimate consolidation does shrink
+the ledger (items get merged and closed), so a naive line-count floor would
+fire on correct work and get disabled. The narrower, honest rule — *a removed
+`## <n>.` heading must be justified in the same commit* — is worth building
+when someone has a second instance to design against. Until then: when two open
+PRs both touch `docs/DEBT.md`, rebase the second on the first rather than
+trusting the merge.
+
+---
+
+## 109. The schema-drift guard shipped to `master` inert, and `alembic check` was cited for a class of drift it cannot see
+
+**Tier:** `RESOLVED` — both fixed 2026-09-20 in the follow-up branch.
+**Owner:** unassigned. **Found:** 2026-09-20, from GitHub Copilot's automated
+review of PR #220. Both findings were verified against the repository before
+being acted on; a third finding from the same reviewer was checked and refuted.
+
+### Defect 1 — the guard could not fail in the run CI performs
+
+`tests/unit/test_alembic_metadata_registration.py` (added by PR #220 to prevent
+the five-day schema-drift outage) replayed `alembic/env.py`'s import set into
+the **process-global** `Base.metadata` and asserted against it.
+
+`tests/unit/test_adversarial_m2_m3.py` imports `src.api.main` → `auth.py` →
+`social_auth_models`, and **"adversarial" sorts before "alembic"**, so in a
+full-suite collection the mapper is already registered before a single
+assertion in the guard executes.
+
+Measured, with the `env.py` import reverted:
+
+```
+pytest tests/unit/test_alembic_metadata_registration.py                    ->  3 failed, 2 passed
+pytest tests/unit/test_adversarial_m2_m3.py  <same file>                   -> 16 passed   <- wrong reason
+```
+
+⚠️ **The first reading is what PR #220's description cites as its Rule 15
+evidence.** The guard was watched failing in the only configuration where it
+works. It was inert in CI from the commit that introduced it, and merged that
+way.
+
+**Fix:** the metadata is captured in a fresh interpreter — `sys.executable -c`
+with `cwd=BACKEND_ROOT`, importing `src.core.database` plus exactly `env.py`'s
+derived module set and nothing else, emitting tables / per-column
+`{nullable, length, type}` / index names / `uq_*` constraint names as JSON.
+Every assertion reads that snapshot. The same experiment after the fix gives
+**3 failed, 14 passed**; restored, 6 passed.
+
+### Defect 2 — three ORM columns were unbounded against a bounded migration
+
+`user_identities.provider` / `provider_subject` / `provider_email` were
+declared `String` (no length) against migration 0014's `VARCHAR(32)` /
+`VARCHAR(255)` / `VARCHAR(320)`.
+
+⚠️ **`alembic check` does not and cannot report this.** Its default string
+comparator reduces to `t1.length is not None and t1.length != t2.length`, so a
+metadata type with no length reads as *don't care*. `compare_type=True` does
+not change it. The gate ran on real PostgreSQL 15 with 0014 applied and passed
+(`Backend Lint, Typecheck, Tests` → success on `79df258`) while the three
+columns genuinely disagreed.
+
+The cost is not a red gate — it is that the ORM declined to enforce a limit the
+database enforces, so an over-long `provider_subject` surfaces as a driver-level
+`DataError` at INSERT rather than a clean application-level rejection. Same
+shape as the `hashed_password` nullability PR #220 corrected one field over.
+
+**Fix:** lengths declared to match 0014, and pinned by a **general** guard
+rather than three literals. `test_migration_declared_string_lengths_match_the_orm`
+AST-walks every `op.create_table` / `op.add_column` in `alembic/versions/` for
+`sa.String(length=N)` and compares against the snapshot. It finds five such
+columns repo-wide, all from 0014; `users.username` and `users.avatar_url`
+already matched. Its docstring records that `alembic check` cannot catch this
+class, so no later reader assumes the gate covers it.
+
+### The third finding, refuted
+
+The same review reported, at High severity, that
+`tests/unit/test_model_status_endpoint.py:29` passes `is_override=True` to
+`StakingAuthorization`, which would raise `TypeError` at module import.
+`is_override` **is** a read-only `@property`, so the premise is right — but no
+fixture passes it. All twelve `is_override=` call sites repo-wide target
+`evaluate_staking_risk()` in `risk_guard.py:119`, an ordinary function
+parameter. The module imports and runs 9/9. Replied on the thread rather than
+changing code.
+
+### Rule 15 record
+
+Every guard here was watched failing before being trusted, in the configuration
+CI runs: the contaminated two-file run (16 passed → 3 failed after the fix),
+and a reverted `provider` length, which names the column and both sides:
+
+```
+E   user_identities.provider: migration says String(32), ORM says String(length=None)
+E       <- 0014_social_auth_identities.py
+```
+
+`docs/DATA_INTELLIGENCE_DIRECTIVE.md` Rule 15 gains both instances and the
+corollary they earned (v6.1).
+
+---
+
+## 108. Staking is live on an uncertified generation under a disclosed operator override, with a measured circuit breaker in front of it
+
+**Tier:** `ACCEPTED-RISK` — deliberate, operator-authorized, fully reversible.
+**Owner:** operator (`Principal Architect - System-01`).
+**Activated:** 2026-09-19. **ADR:** `docs/adr/0011-operator-override-uncertified-staking.md`.
+**Relates to:** items 14, 25, 42, 50.
+
+### What is now true in production
+
+`backend/models/active_generation.json` declares
+`certification_state: OPERATOR_OVERRIDE_UNCERTIFIED`. `staking_authorization()`
+returns `permitted=True, basis="OPERATOR_OVERRIDE"`, so
+`GET /upcoming/matches` will publish Kelly stake sizes for fixtures that clear
+the evidence gates — from a generation that did **not** clear certification.
+
+The operator's recorded rationale is staging/production integration for UX and
+load testing, with the ML generalization failures explicitly accepted for this
+phase. Their acknowledged failures, in their own words: *"0/6 market baseline
+beat"* and *"Inverted epistemic-uncertainty signal (negative correlation with
+accuracy)"*.
+
+### What did NOT change, verified against the live loader rather than assumed
+
+| | |
+|---|---|
+| `active_generation_is_certified()` | `False` |
+| `promotion_state` | `ACTIVE_FAIL_CLOSED` |
+| `certified_at` | `null` |
+| `certification_policy.py` | untouched; hash still `4e050ad0…f664`, v1.2.0 |
+| `error_association` xfails | both still `xfail`, still printing the live measurement |
+| Promotion gates | still FAIL on `market_baseline`, `no_league_regression`, `primary_metric_improvement`, `serving_feature_availability` |
+
+⚠️ **This is the distinction the whole mechanism exists to preserve.** An
+override permits staking; it does not confer certification, and no code path
+conflates the two. Every caller asking *"is this certified?"* is still told no.
+Only callers asking the different question — *"may this publish a stake?"* —
+get a yes, and they get the basis (`OPERATOR_OVERRIDE`) with it.
+
+⚠️ **Do not "clean this up" by flipping `certification_state` to `CERTIFIED`
+once the metrics improve.** Certification is earned through
+`compare_candidate_vs_incumbent.py` producing hash-verified passing evidence,
+which `_verify_certification_claim` checks. Editing the state directly is the
+falsification class this ADR was written to make unnecessary.
+
+### Blast radius — exactly one surface
+
+`staking_authorization()` has exactly one production consumer:
+`services/upcoming_match_service.py` (`GET /upcoming/matches`). Every other
+staking-adjacent surface — `full_analysis.py`, `market_intel.py`,
+`advanced_insights_service.py`, `predictions.py`, `betting_intelligence.py`,
+`fixtures.py`, `core_engine.py`, `analytics.py`, `prediction.py` — still asks
+`active_generation_is_certified()`, which answers `False` under an override, so
+all of them are unchanged. `/full-analysis` is *additionally* blocked by the
+permanent `MODEL_UNCERTAINTY_UNAVAILABLE` critical gap (item 42) and this
+override does not touch that.
+
+⚠️ **Swapping an `active_generation_is_certified()` call for
+`staking_authorization().permitted` on any other surface silently widens a
+Class C authorization the operator never granted.** Amend ADR-0011 first.
+
+### The circuit breaker (`backend/src/services/risk_guard.py`)
+
+The inverted uncertainty signal is not diffuse — it is concentrated in the
+low-epistemic quartile, where the 300 bootstrap trees agree most, and that
+region is computable at serving time. Under an override only, a fixture whose
+epistemic uncertainty falls at or below its league's measured p25 is suppressed
+(`stake_permitted=False`, `staking_suppressed_by_risk_guard` in `data_gaps`,
+`risk_guard` block on the wire, structured `WARNING` with
+`event=override_circuit_breaker_tripped`).
+
+Measured on `v5_phase7-20260808`, each league's own artifact against its own
+chronological holdout — reproduce with
+`backend/scripts/measure_epistemic_danger_zone.py`:
+
+| league | n | p25 | hit inside | hit outside | delta |
+|---|---|---|---|---|---|
+| EPL | 375 | 0.0788 | 0.4362 | 0.5089 | −7.3pp |
+| BUNDESLIGA | 296 | 0.0879 | 0.3378 | 0.4910 | −15.3pp |
+| LIGUE_1 | 306 | 0.0859 | 0.4416 | 0.5066 | −6.5pp |
+| LA_LIGA | 380 | 0.0776 | 0.4632 | 0.4702 | −0.7pp (flat) |
+| SERIE_A | 375 | 0.0848 | 0.5106 | 0.4555 | **+5.5pp (reversed)** |
+
+⚠️ **The effect is not universal and these numbers must not be read as one
+finding with five confirmations.** It is strong in three leagues, absent in
+LA_LIGA, and runs the other way in SERIE_A. All five are suppressed anyway
+because a false positive costs a missed opportunity while a false negative
+costs a user's money — and this generation has no demonstrated edge to forgo
+(0/6 leagues beat the market). Unmeasured leagues (EREDIVISIE, pooled;
+UCL, no dedicated model) get the *most protective* measured threshold, never a
+pass-through.
+
+⚠️ **DIRECTION.** "High tree agreement" and "high epistemic uncertainty" are
+inverse quantities. The breaker tests `epistemic <= threshold`; writing `>=`
+would suppress the safest fixtures and stake the worst ones while looking
+entirely plausible in review. `test_risk_guard.py::test_breaker_is_not_inverted`
+pins both halves so an inversion fails two assertions at once rather than none.
+Verified by inverting the comparison and watching 6 tests go red before
+restoring it (DID Rule 15).
+
+⚠️ **`_epistemic_for_match` returns `None`, never a substitute**, when the
+measurement cannot be made — and the breaker treats `None` as a trip. A `0.0`
+or a league mean would be read as a real measurement, and `0.0` in particular
+sits on the dangerous side of every threshold.
+
+### Two disclosure surfaces contradicted the activation — found by the tests, fixed
+
+Activating the override immediately broke two tests, and both turned out to be
+naming real defects rather than stale expectations:
+
+**(1) `GET /api/v1/models/status` reported `stake_permitted: false` while the
+serving path was staking.** It computed the field as `cert == "CERTIFIED"` — a
+rule that was correct for exactly as long as certification was the only thing
+that could unblock staking. It now calls `staking_authorization()`, the same
+authority the serving path uses, and additionally reports `staking_basis` so a
+reader never has to infer earned-vs-overridden from the certification string.
+`validation_status` deliberately does **not** follow it: only `CERTIFIED` earns
+`"VALIDATED"`.
+
+⚠️ That endpoint reads the manifest twice at two different trust levels —
+`_load_manifest()` is a raw JSON read for the descriptive fields,
+`staking_authorization()` goes through the verifying loader. In production both
+read the same file and agree; if a manifest ever *claimed* an override with a
+malformed attribution block, the endpoint would correctly report the claimed
+state alongside `stake_permitted: false` (claimed, not honored). Tests must
+patch **both** or they silently read the live deployment.
+
+**(2) The web UI told users "staking blocked" on a system that was staking.**
+`promotionLabel("ACTIVE_FAIL_CLOSED")` hardcoded `"Serving forecasts · staking
+blocked"`, and the manifest keeps `ACTIVE_FAIL_CLOSED` under an override — so
+the sentence became false the moment the override activated, on a consumer
+surface. `promotion_state` alone can no longer describe serving behaviour; the
+function now takes the certification state as a second argument.
+`certificationLabel` also gained the override case ("Unvalidated · staking
+under operator override") — its fail-closed default, "Pending validation",
+would have *understated* what was happening rather than overstating it, which
+is the unusual direction for this failure class and the reason it needed a
+dedicated label rather than the safe fallback.
+
+### Three tests were reading a deployment decision, not a code path
+
+`test_uncertified_generation_exposes_forecast_but_never_value_or_stake`,
+`test_api.py::test_model_status` and
+`test_model_status_endpoint.py::test_returns_manifest_fields` all inherited
+whatever `active_generation.json` happened to declare, so a policy change
+surfaced as a code regression. All three now pin an explicit
+`StakingAuthorization` and assert the same contracts they always did; four new
+tests cover the override path (breaker trips inside the danger zone, stakes
+with disclosure outside it, fails closed when epistemic is unmeasurable, and
+status reported as staking-but-not-validated).
+
+⚠️ **A test that reads live state is not hermetic even when it passes.** These
+three passed for months precisely because the deployed state happened to match
+their literals.
+
+### What this does NOT resolve
+
+The breaker declines the one slice of this model we have measured to be worst.
+It does **not** fix the inversion (item 50 stays open as a research blocker),
+and it does **not** make the override safe — outside the low-epistemic quartile
+the accepted risks in ADR-0011 apply unchanged: stakes are being published from
+a model with no demonstrated edge over the prices it is betting against.
+
+### To deactivate
+
+Delete the `operator_override` block from
+`backend/models/active_generation.json` and set `certification_state` back to
+`"UNVERIFIED"`. Fail-closed behaviour resumes on the next process start. No
+migration, no persisted side effect.
+
+
 ## 107. Three real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
 
 **Tier:** `RESOLVED` — both fixed and verified 2026-09-19.
@@ -166,13 +602,32 @@ for that path) and the module returns 15/15 passed.
 | `ruff check src --select E4,E7,E9,F` | pass (was misread locally as 3884 errors under the wrong invocation) | pass |
 | `check_mypy_ceiling.py --ceiling 784` | 775 ≤ 784 | 775 ≤ 784 (untouched) |
 | `verify-core` steps 1–6 (pytest subset, OpenAPI, provider CLI, scraper tests ×2, py-compile, zero-fab scan) | all pass | all pass |
-| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | **0 failed, 2523 passed**, 16 skipped, 2 xfailed |
+| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | **0 failed, 2523 passed**, 16 skipped, 2 xfailed | *(this row describes item 107's tree — see the reconciliation note below the table.)*
 | `verify_active_artifacts.py` (Render buildCommand / validate-models gate) | 6 hash-locked pairs, `UNVERIFIED` | 6 hash-locked pairs, `UNVERIFIED` (unchanged) |
 | `validate_experiment_registry.py --strict` (DID §38) | 15 valid, 0 warnings | 15 valid, 0 warnings |
 | `pnpm --filter @sabiscore/web lint` | pass | pass (untouched) |
 | `pnpm --filter @sabiscore/web typecheck` | pass | pass (untouched) |
 | `pnpm --filter @sabiscore/web test` (Vitest) | 352/352 | 352/352 (untouched) |
 | `NODE_ENV=production pnpm --filter @sabiscore/web build` | exit 0 | exit 0 (untouched) |
+
+> **Test-count reconciliation (added 2026-09-20).** An automated review flagged the
+> `2523` above as inconsistent with `2527` in PR #220's description. Both were accurate
+> when measured; neither describes `master`. They are per-tree, and nothing labelled
+> which tree:
+>
+> | Tree | Count |
+> |---|---|
+> | item 107's hermeticity fixes (this row) | 2523 |
+> | + the metadata guard's first 4 tests (`59ebc5f`, PR #220's description) | 2527 |
+> | + the unique-constraint test (`d11b6ab`) | 2528 |
+> | + the subprocess isolation and length test (item 109) | 2529 |
+> | `master` at `08751be`, which also carries PR #219's risk-guard/override tests | 2562 |
+> | `master` + item 109's length test — **the authoritative current figure** | **2563** |
+>
+> Measured under `env -u SECRET_KEY`: `2563 passed, 16 skipped, 2 xfailed, 0 failed`.
+> ⚠️ **A bare test count is not a fact about the repository — it is a fact about one
+> tree.** Record which commit produced it, or a later reader reads two honest numbers as
+> a contradiction, exactly as happened here.
 
 ⚠️ **The "after" row for pytest was measured with `env -u SECRET_KEY`** — i.e.
 the clean-clone condition that produced defect 3 — so it is a genuine
