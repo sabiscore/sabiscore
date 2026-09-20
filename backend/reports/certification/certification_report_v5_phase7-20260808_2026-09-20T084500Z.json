@@ -1,0 +1,198 @@
+{
+  "report_version": "1.0.0",
+  "generated_at": "2026-09-20T08:45:00Z",
+  "generated_by": "APEX v7.4 / DID v6.1 execution (Claude Code session, branch claude/executive-production-prompt-exap15) \u2014 P14/P15 frontend intelligence and explanation safety, P8.T3 OG-06 dossier, P18 certification report",
+  "supersedes": "certification_report_v5_phase7-20260808_2026-09-20T060000Z.json (same day, earlier session). Prior reports are retained unmodified per APEX \u00a732.3 \u2014 this is an additional dated report, not an overwrite.",
+  "decision": {
+    "certification_decision": "HOLD",
+    "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+    "promotion_permitted": false,
+    "rationale": "Four promotion gates remain FAIL. No threshold in certification_policy.py was edited (v1.2.0, policy_sha256 4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664 \u2014 unchanged and re-verified). No candidate was promoted. G11 is a measured FAIL on real evidence (ECE 0.0977 vs a 0.03 ceiling); G16 and G18 are FAIL and are escalated to the operator as OG-06 rather than being loosened.",
+    "certification_state_was_not_altered": "Explicitly confirmed. The mandate for this session forbade setting certification_state to CERTIFIED under any circumstance, and it was not touched. active_generation.json is byte-identical to its pre-session state."
+  },
+  "repository": {
+    "name": "sabiscore/sabiscore",
+    "branch": "claude/executive-production-prompt-exap15",
+    "base_commit_sha": "8e7afeebba78692d7d3f32e4b1ac9adc9195c511",
+    "origin_master_sha": "92bfb24280959c85b9d663a0b2c2d85da12014fa",
+    "changed_surfaces": [
+      "backend/src/api/endpoints/upcoming_matches.py (RiskGuardSchema \u2014 wire contract, DEBT 115)",
+      "backend/src/services/intelligence_synthesizer.py (mojibake in a user-facing narrative, DEBT 116)",
+      "backend/tests/unit/test_risk_guard_wire_contract.py (new)",
+      "backend/tests/unit/test_no_mojibake_in_source_literals.py (new)",
+      "apps/web/src/lib/api.ts, model-status.ts, full-analysis-contract.ts (types + copy + staking-disclosure predicate)",
+      "apps/web/src/components/upcoming-matches-panel.tsx, model-metadata-panel.tsx, full-analysis-dashboard.tsx (disclosure surfaces)",
+      "apps/web/src/lib/evidence-copy-contract.test.ts (guard was inert \u2014 DEBT 117)",
+      "docs/DEBT.md (items 115-119), docs/certification/og-06-dossier-2026-09-20.md (new)"
+    ],
+    "model_artifacts_touched": false,
+    "certification_policy_touched": false,
+    "active_generation_manifest_touched": false
+  },
+  "deployment": {
+    "backend_sha_live": "f9be07b",
+    "backend_sha_live_full": "f9be07b9a07ea2497f29c768b6b6cfa97d418524",
+    "frontend_sha_live": "92bfb24",
+    "frontend_sha_live_full": "92bfb24280959c85b9d663a0b2c2d85da12014fa",
+    "sha_parity": "EXPECTED_DIVERGENCE \u2014 the frontend alias serves origin/master (92bfb24); the backend serves f9be07b, one commit behind, because 92bfb24 was docs-only and render.yaml rootDir:backend correctly skipped that deploy. This branch's HEAD (8e7afee) and this session's changes are NOT deployed and are not claimed to be.",
+    "migration_revision": "0014_social_auth_identities",
+    "readiness": "All four backend checks ready (database, migrations, cache, models). Elo informational: 26,144 rows / 222 teams, last match 2026-09-19.",
+    "evidence_method": "mcp__Vercel__web_fetch_vercel_url against https://web-oversabis-projects.vercel.app \u2014 direct egress to the Render backend domain is blocked by this session's network proxy (execution prompt \u00a73.4), so the Vercel-proxied routes, which call the backend server-side, are the evidence source.",
+    "probed_at": "2026-09-20T08:29Z to 08:40Z"
+  },
+  "model": {
+    "generation_id": "v5_phase7-20260808",
+    "manifest_sha256": "7bb334b2ac8a37bb9b30abf871a09a16171b252a654e43a42d276861cec951c0",
+    "model_family": "stacking_ensemble (random_forest+xgboost+lightgbm -> softmax meta)",
+    "feature_contract": "phase7_68",
+    "served_head": "SoftmaxMetaModel",
+    "leagues_served": 6,
+    "artifacts_loaded": 12,
+    "promotion_state": "ACTIVE_FAIL_CLOSED",
+    "certified_at": null,
+    "active_generation_is_certified": false
+  },
+  "staking": {
+    "stake_permitted_upcoming_matches": true,
+    "staking_basis": "OPERATOR_OVERRIDE",
+    "authority": "docs/adr/0011-operator-override-uncertified-staking.md, docs/DEBT.md item 108, activated 2026-09-19",
+    "authorizing_identity": "Principal Architect - System-01",
+    "acknowledged_failures": [
+      "0/6 market baseline beat",
+      "Inverted epistemic-uncertainty signal (negative correlation with accuracy)"
+    ],
+    "stake_permitted_full_analysis": false,
+    "full_analysis_block_reason": "Independently blocked by the permanent MODEL_UNCERTAINTY_UNAVAILABLE critical gap (docs/DEBT.md item 42). Live-verified on fd-558591 (SERIE_A): 5 critical gaps, stake_permitted false, odds_edge null.",
+    "critical_note": "An override permits staking; it does not confer certification. Certifying the model would NOT by itself open /full-analysis staking \u2014 the two are separate locks on the same door.",
+    "blast_radius": "staking_authorization() has exactly ONE production consumer: services/upcoming_match_service.py. Re-verified by grep this session. Every other surface asks active_generation_is_certified() and is unchanged.",
+    "circuit_breaker": {
+      "module": "backend/src/services/risk_guard.py",
+      "scope": "override path only",
+      "direction": "trips on LOW epistemic uncertainty (high tree agreement) \u2014 the measured danger zone, not the safe one",
+      "unmeasurable_epistemic": "treated as a trip; never substituted with 0.0, which sits on the dangerous side of every threshold",
+      "thresholds_p25": {
+        "EPL": 0.0788,
+        "BUNDESLIGA": 0.0879,
+        "LIGUE_1": 0.0859,
+        "LA_LIGA": 0.0776,
+        "SERIE_A": 0.0848
+      },
+      "effect_is_not_universal": "SERIE_A reverses (+5.5pp) and LA_LIGA is flat (-0.7pp). These five are not one finding with five confirmations. All are suppressed regardless, because a false positive costs a missed opportunity and a false negative costs a user's money."
+    }
+  },
+  "gates": {
+    "G11_CALIBRATION": {
+      "status": "FAIL",
+      "measured": 0.0977,
+      "metric": "adaptive-confidence Expected Calibration Error",
+      "threshold": 0.03,
+      "sample": "87 real settled predictions across all 6 served leagues",
+      "evidence": "docs/DEBT.md item 113; backend/scripts/evaluate_g11_ece.py. First execution against real production data in repository history (2026-09-20).",
+      "corroboration_this_session": "Live /full-analysis on fd-558591 returns calibration_method: 'raw', calibration_applied: false \u2014 consistent with an uncalibrated served head and with the 33/33 production observation recorded in item 113.",
+      "note": "A FAIL here is a legitimate and valuable result \u2014 it is the calibration defect DID \u00a71.1 already suspected, now measured."
+    },
+    "G15_MURPHY_DECOMPOSITION": {
+      "status": "PASS",
+      "measured_decomposition_error": 0.0,
+      "note": "Holds to exact float precision."
+    },
+    "G16_UNCERTAINTY": {
+      "status": "FAIL",
+      "disposition": "ESCALATED_TO_OPERATOR (OG-06)",
+      "detail": "Ensemble dispersion is certified on 5 of 6 criteria. error_association fails: the highest-epistemic quartile scores BETTER than the lowest, across all 5 scoreable leagues. Four hypotheses ruled out including the calculation-bug hypothesis (PR #122) and in-bag contamination plus aleatoric confounding (PR #124). Cause genuinely unexplained (docs/DEBT.md item 50, open).",
+      "xfail_markers": "Both error_association xfails remain in place and continue to print the live measurement. Not suppressed, not modified.",
+      "mitigation_vs_resolution": "The ADR-0011 circuit breaker mitigates the CONSEQUENCE. It does not resolve the CAUSE. Presenting it as a fix would be a category error.",
+      "closed_paths": [
+        "Do not add torch; do not train a BNN (item 42 CLOSED/superseded)",
+        "Probability-derived epistemic uncertainty permanently rejected (ADR-0009): 1-max(p), entropy(p), 1-confidence, 1-sum(p^2)"
+      ]
+    },
+    "G17_DRIFT_PSI": {
+      "status": "NOT_APPLICABLE",
+      "reason": "Deferred until >=1000 settled fixtures (docs/DEBT.md item 8). Currently 87. A premature reference baseline would be a fabricated baseline. No periodic drift caller was wired."
+    },
+    "G18_MARKET_BASELINE": {
+      "status": "FAIL",
+      "disposition": "ESCALATED_TO_OPERATOR (OG-06) \u2014 possible DID Rule 14 candidate, NOT established as unsatisfiable",
+      "point_estimate": "1 of 6 leagues by point estimate (EPL, -0.0005)",
+      "paired_bootstrap_95ci": "0 of 6 leagues have a CI excluding zero in the candidate's favour. The serving incumbent also scores 0 of 6. The one interval that excludes zero (BUNDESLIGA) runs AGAINST the model.",
+      "evidence": "docs/DEBT.md item 62; backend/reports/evaluation/market-edge-bootstrap-2026-09-06.md (10,000 replicates, block size 10, paired)",
+      "structural_reason": "DID \u00a754.2: the raw de-vigged market outscored both fitted arms on 2 of 3 folds. Independently corroborated by item 43 from a different metric.",
+      "selection_effect": "EPL was chosen best-of-six AFTER observing all six. Under the null that the model equals the market, ~3/6 would lead by chance, so 1/6 is evidence against the model.",
+      "gate_not_loosened": "Explicitly. Changing {'leagues_beating_market': 'all'} after observing that it is what blocks promotion is precisely APEX \u00a723's prohibition."
+    }
+  },
+  "operator_gates": {
+    "OG-06": {
+      "status": "PREPARED \u2014 AWAITING DECISION",
+      "dossier": "docs/certification/og-06-dossier-2026-09-20.md",
+      "scope": "Risk acceptance for G16 and G18",
+      "prepared_recommendation_g18": "C (accept as serving-only under PROMOTE_RESEARCH_ONLY) now, with A (amend to a CI-based rule) as a follow-up adopted on statistical merit \u2014 noting today's candidate still fails A at 0/6, which is the cleanest way to establish that the amendment is not motivated by what it would let through.",
+      "prepared_recommendation_g16": "A (accept as a documented limitation of this generation), with B (fund hypothesis 5+) unscheduled. Option C (reclassify MODEL_UNCERTAINTY_UNAVAILABLE to advisory) is listed for completeness and actively argued against.",
+      "decision_not_self_approved": "The dossier's decision record is deliberately left blank. An unfilled decision is an honest one."
+    }
+  },
+  "frontend_disclosure": {
+    "mandate": "The UI must reflect 'Unvalidated \u00b7 staking under operator override', rendering stake_permitted=true exclusively via the operator override, not via earned certification.",
+    "platform_level_status": "LIVE AND CORRECT. certificationLabel() returns 'Unvalidated \u00b7 staking under operator override' and promotionLabel() returns 'Serving forecasts \u00b7 staking enabled by operator override' for OPERATOR_OVERRIDE_UNCERTIFIED. Both were already correct before this session.",
+    "substance_added_this_session": "The full staking_authorization block (authorizing identity, rationale, both acknowledged failures) was returned by /api/models/status but ModelStatus did not declare the field, so no consumer could read it. The already-written, already-tested, NEVER-MOUNTED StakingOverrideNotice export is now wired into ModelMetadataPanel behind a fail-closed normalizer that can only ever withhold the disclosure, never fabricate one.",
+    "per_fixture_status": "INERT IN PRODUCTION \u2014 see docs/DEBT.md item 118. apps/web/src/lib/api.ts:943 hardcodes include_predictions=false, so the fixtures panel receives staking_authorization: null and data_gaps: [] on every row. Measured live 2026-09-20T08:29Z across 5 fixtures. The disclosure path was made correct rather than activated: flipping that flag would widen a Class C authorization the operator never granted, and is OG-06 territory, not a UI change.",
+    "defects_fixed": [
+      "DEBT 115 \u2014 risk_guard silently dropped at response validation (Pydantic extra='ignore'), so the breaker's reason never reached any consumer",
+      "DEBT 116 \u2014 double-encoded UTF-8 in a user-facing betting narrative; no guard covered source literals",
+      "DEBT 117 \u2014 the evidence-copy contract test could not fail; verified by deleting a long-registered entry and watching all 23 tests stay green",
+      "DEBT 118 \u2014 platform-level override substance unreachable by any consumer",
+      "DEBT 119 \u2014 homepage hint asserted 'no stake is recommended' while stake_permitted was true; match dashboard could assert 'The certified model is available' on an uncertified generation",
+      "DEBT 120 \u2014 the MANDATORY local CI enforcer was committed non-executable, so its own documented ./ invocation failed with exit 126 on a fresh clone"
+    ]
+  },
+  "explanation_safety": {
+    "llm_in_explanation_path": false,
+    "finding": "There is no LLM anywhere in the explanation path. Narratives are deterministic templates: intelligence_synthesizer._compose_narrative() on the backend and a HYPE_COPY table on the frontend, whose own in-code comment reads 'never LLM-generated at render time'. Earlier grep hits for 'llm' were Fu(llM)atch false positives.",
+    "market_edge_fabrication_audit": "PASS. _compose_narrative cites only measured values \u2014 ensemble prediction and confidence, Elo difference (gated on a non-null context), causal drivers, Phase-8 market drift (appended only when live data is present), and the RL stake fraction. It never asserts an edge or EV. Live-verified: /full-analysis on fd-558591 returns odds_edge: null and actionability.clv_pct: null with no narrative edge claim.",
+    "certification_claim_fixed": "HYPE_COPY.HIGH_CONVICTION contained 'The certified model is available.', selected by a deterministic hash of match_id. Under the override that asserts earned certification. sabiInsightCopy now takes the certification state and substitutes rather than filters, so pool selection stays stable when a generation certifies. Latent (HIGH_CONVICTION is unreachable while item 42 forces PARTIAL) and fixed anyway."
+  },
+  "verification": {
+    "backend_tests": "2580 passed, 16 skipped, 2 xfailed, 0 failed (318s)",
+    "risk_guard_wire_contract": "3 passed; watched failing (3 failed) with the schema reverted",
+    "mojibake_source_guard": "6 passed; watched failing with the original corrupt bytes re-injected, naming intelligence_synthesizer.py:466",
+    "web_lint": "eslint --max-warnings 0 \u2014 exit 0",
+    "web_typecheck": "tsc --noEmit \u2014 exit 0",
+    "web_tests": "371 passed across 57 files (358 at prior session end)",
+    "rule_15_verifications": [
+      "mojibake guard: re-injected exact original bytes -> 1 failure naming the file and line -> restored -> green",
+      "evidence-copy guard: deleted ppda_ratio -> 1 failure; deleted both ADR-0011 entries -> 2 failures; restored -> green",
+      "panel gap filter: reverted to counting disclosures as evidence gaps -> 2 failures",
+      "panel tooltip: inverted the breaker's meaning to 'high model confidence' -> 1 failure",
+      "certification claim: reverted the substitution -> 2 failures",
+      "risk_guard schema: reverted the field -> 3 failures",
+      "enforcer exec bit: ./scripts/ci_local_enforcer.sh returned exit 126 'Permission denied' before the chmod, exit 0 after (DEBT 120)"
+    ],
+    "local_ci_enforcer": "./scripts/ci_local_enforcer.sh \u2014 exit 0, 14 gates passed, 2 correctly skipped (no local PostgreSQL for the alembic drift gate; gitleaks not on PATH). 7m17s.",
+    "mypy": "775 errors <= 784 ceiling. Measured identical (775) with this session's two backend source changes stashed, so zero mypy debt was added. Ceiling not raised.",
+    "certification_policy_hash_reverified": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664 \u2014 matches the frozen v1.2.0 value.",
+    "error_association_xfails": "Both present and still printing live measurements (EPL gap -0.0217; all 5 scoreable leagues negative: BUNDESLIGA -0.0448, EPL -0.0217, LA_LIGA -0.0025, LIGUE_1 -0.0288, SERIE_A -0.0098). Not suppressed."
+  },
+  "invariants_preserved": {
+    "INV-01_zero_fabrication": "No fabricated value introduced. The fail-closed normalizer can only withhold a disclosure, never invent one; the risk_guard schema carries null epistemic through rather than coercing it to 0.0.",
+    "INV-03_dual_engine": "Not applicable \u2014 no verdict gate, ranking, Kelly, or watchlist logic was touched in either engine. Verified by diff.",
+    "INV-06_debt_ledger_append_only": "Items 115-119 appended. No existing item deleted or renumbered.",
+    "APEX_11_no_raw_provenance_on_consumer_surfaces": "Preserved. All certification values continue to route through lib/model-identity.ts, which fails closed on an unknown enum.",
+    "APEX_23_no_post_hoc_gate_loosening": "Preserved. No threshold edited. Both blocking gates escalated to OG-06 instead.",
+    "mypy_ceiling": "784 \u2014 not raised."
+  },
+  "open_risks": [
+    "R-2026-09-20-03: The ADR-0011 per-fixture disclosure cannot render in production because the fixtures panel requests no predictions (DEBT 118). Platform-level disclosure is live and now carries substance; per-fixture disclosure is correct and inert. Resolution requires an operator decision, not code.",
+    "R-2026-09-20-04: DEBT 113's calibrator discrepancy remains unresolved. A fresh bundle load raises AttributeError on the serialized sigmoid calibrator for BUNDESLIGA/LIGUE_1 under correctly-pinned scikit-learn 1.3.2, while production reports calibration_method 'raw' with no fallback signature. This session's live /full-analysis probe (calibration_applied: false) is consistent with production never applying the calibrator, but does not explain the discrepancy. Recorded as open research, not diagnosed.",
+    "R-2026-09-20-05: G18 may be a DID Rule 14 gate defect. Not established \u2014 no proof exists that no feature set can beat the market. Escalated, not assumed.",
+    "R-2026-09-20-06: This session's changes are not deployed. The live frontend serves 92bfb24 and the backend f9be07b. No claim of live verification is made for anything changed here.",
+    "R-2026-09-20-07: mypy headroom against the 784 ceiling is now thin \u2014 775 local, and the measured Linux-CI delta (2026-09-04) is about +9, which would put CI at roughly the ceiling itself. This session added zero mypy errors (775 measured both with and without its changes), so the margin is entirely pre-existing debt. The ceiling must not be raised to accommodate new debt; the next change touching a typed surface should budget for it by reading the CI number, not the local one."
+  ],
+  "blockers": [
+    "G11 FAIL (measured, real) \u2014 calibration ECE 0.0977 vs 0.03",
+    "G16 FAIL (research-blocked) \u2014 awaiting OG-06",
+    "G18 FAIL (possibly unsatisfiable) \u2014 awaiting OG-06",
+    "serving_feature_availability FAIL \u2014 schema deadlock, docs/DEBT.md items 37/49"
+  ],
+  "next_phase": "OG-06 operator decision on docs/certification/og-06-dossier-2026-09-20.md. No further code work advances certification until that decision is made."
+}

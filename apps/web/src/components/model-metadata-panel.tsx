@@ -5,7 +5,8 @@ import { Info } from "lucide-react";
 import { PredictionMatrix } from "@/components/brand/prediction-matrix";
 import { Tooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { certificationLabel, generationLabel, promotionLabel } from "@/lib/model-identity";
-import { fetchModelStatus, MODEL_STATUS_QUERY_KEY } from "@/lib/model-status";
+import { fetchModelStatus, MODEL_STATUS_QUERY_KEY, normalizeStakingAuthorization } from "@/lib/model-status";
+import { StakingOverrideNotice } from "@/components/staking-override-notice";
 
 /**
  * Consumer surface (homepage hero rail). Per APEX §11 this panel carries
@@ -26,6 +27,9 @@ export function ModelMetadataPanel() {
   // active generation's league set changes.
   const declaredLeagues = Object.values(data?.models ?? {});
   const loadedLeagues = declaredLeagues.filter((model) => model.loaded).length;
+  // Non-null only when the backend itself reported is_override === true.
+  const stakingOverride = normalizeStakingAuthorization(data);
+  const overrideActive = stakingOverride !== null;
   const stats: { label: string; value: string; hint?: string }[] = [
     {
       label: "Model generation",
@@ -35,7 +39,15 @@ export function ModelMetadataPanel() {
     {
       label: "Validation",
       value: certificationLabel(data?.certification_state),
-      hint: "Research mode means forecasts are analytical output only — no stake is recommended until validation passes.",
+      // ⚠️ The hint has to follow the override, not describe the default.
+      // It read "no stake is recommended until validation passes" on every
+      // state, which stopped being true the moment ADR-0011 activated — the
+      // backend reports stake_permitted: true while this rail said stakes were
+      // withheld. A static reassurance that outlives the condition it
+      // describes is a false statement, not a stale one.
+      hint: overrideActive
+        ? "Validation has not passed. Stakes are published anyway under a named operator authorisation — treat them as research output."
+        : "Research mode means forecasts are analytical output only — no stake is recommended until validation passes.",
     },
     {
       label: "Availability",
@@ -48,8 +60,9 @@ export function ModelMetadataPanel() {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-live="polite">
-      {stats.map((stat) => {
+    <>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-live="polite">
+        {stats.map((stat) => {
         // Loading has no resolved value yet — rendering "Unknown" here would be
         // indistinguishable from a genuinely absent field once data arrives.
         const displayValue = isPending ? "Loading…" : isError ? "Unavailable" : stat.value;
@@ -82,7 +95,14 @@ export function ModelMetadataPanel() {
             )}
           </div>
         );
-      })}
-    </div>
+        })}
+      </div>
+      {/* The labels above name the state; this names what was actually
+          overridden — which gates failed, who accepted them, and why. A reader
+          deciding what to risk needs the second, and until now it existed only
+          in /health and this component's own unused export. Renders nothing
+          when no override is in force. */}
+      <StakingOverrideNotice auth={stakingOverride} className="mt-2" />
+    </>
   );
 }

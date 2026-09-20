@@ -10,6 +10,7 @@ import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
 import { StakingOverrideBadge } from "@/components/staking-override-notice";
+import { evidenceGapsOnly } from "@/lib/full-analysis-contract";
 import { canonicalLeagueId, leagueDisplayName } from "@/lib/league";
 import { mapEvidenceFreshness } from "@/lib/freshness";
 
@@ -206,6 +207,31 @@ function PanelSkeleton() {
 
 // ─── Match row ────────────────────────────────────────────────────────────────
 
+/**
+ * Explain a withheld stake without inverting what the measurement means.
+ *
+ * ⚠️ The breaker trips on LOW epistemic uncertainty. Low epistemic means the
+ * ensemble's trees agree with each other, and for this generation that is the
+ * range where accuracy was measured to be WORSE, not better (docs/DEBT.md
+ * item 50). Copy that presents the raw number as "confidence" would tell a
+ * reader the opposite of what the backend decided.
+ */
+function riskGuardTooltip(guard: UpcomingMatch["risk_guard"]): string {
+  if (!guard?.tripped) return "";
+  const parts = [
+    "No stake is shown for this fixture.",
+  ];
+  if (guard.reason === "epistemic_in_measured_danger_zone" && guard.epistemic != null && guard.threshold != null) {
+    parts.push(
+      `Its model-disagreement reading (${guard.epistemic.toFixed(4)}) sits at or below ${guard.threshold.toFixed(4)}, the range where this model's accuracy was measured to be worse in ${leagueDisplayName(guard.league)}.`,
+    );
+  } else {
+    parts.push("Model disagreement could not be measured for it, and an unmeasured risk is treated as a present one.");
+  }
+  parts.push("Forecasts above are unaffected.");
+  return parts.join(" ");
+}
+
 function MatchRow({ match }: { match: UpcomingMatch }) {
   // Route by the real canonical match_id when the API supplied one, so the
   // backend can verify fixture identity instead of falling back to the
@@ -218,7 +244,12 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
   const conf = match.predictions?.confidence ?? null;
   const edge = match.best_value_bet?.edge_pct ?? null;
   const freshness = freshnessLabel(match.staleness_seconds, match.staleness_available);
-  const hasDataGaps = Boolean(match.data_gaps && match.data_gaps.length > 0);
+  // Staking disclosures live in data_gaps but are not evidence gaps. Counting
+  // them would mark every fixture "Partial" while the override is active,
+  // because the backend appends one to every publishable fixture.
+  const hasDataGaps = evidenceGapsOnly(match.data_gaps).length > 0;
+  // The breaker withheld a stake this fixture would otherwise have carried.
+  const stakeWithheld = match.risk_guard?.tripped === true;
   const eqs = match.edge_quality_score ?? null;
   const clv = match.clv_pct ?? null;
   const stage = match.competition_stage ?? null;
@@ -227,12 +258,15 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
   const valueLabelPart = match.has_value ? " · value bet" : "";
   const freshnessAria = ` · ${freshness.label.toLowerCase()} data`;
   const partialAria = hasDataGaps ? " · partial intelligence" : "";
+  // A withheld stake is a safety decision, not decoration — it has to be
+  // audible, not merely visible.
+  const withheldAria = stakeWithheld ? " · stake withheld by risk guard" : "";
   // A screen-reader user must hear the override too — a visual-only
   // disclosure is not a disclosure for everyone.
   const overrideAria = match.staking_authorization?.is_override
     ? " · staking under operator override, not certified"
     : "";
-  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${leagueDisplayName(match.league)} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}${overrideAria}`;
+  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${leagueDisplayName(match.league)} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}${withheldAria}${overrideAria}`;
 
   // `min-w-0` on the Link below is load-bearing: the row is a grid item, and
   // grid items default to min-width:auto (their min-content), so at a 360px
@@ -269,6 +303,15 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
           {hasDataGaps && (
             <span className="inline-flex items-center rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
               Partial
+            </span>
+          )}
+          {stakeWithheld && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-300"
+              title={riskGuardTooltip(match.risk_guard)}
+            >
+              <span aria-hidden>⊘</span>
+              Stake withheld
             </span>
           )}
           {match.portfolio?.exceeds_aggregate_cap && (

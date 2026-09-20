@@ -89,15 +89,29 @@ hr
 printf '\n'
 
 # ── 1. Python lint ───────────────────────────────────────────────────────────
-# CI runs `ruff check src --select E4,E7,E9,F` from backend/. This is stricter:
-# the full rule set over src/ AND scripts/. scripts/ matters — linting it is
-# what surfaced the missing `pathlib` import that made the G24 gate script
-# (validate_deployment.py) raise NameError before it could write its artifact.
+# CI runs `ruff check src --select E4,E7,E9,F` from backend/. This step
+# extends the SAME selection to scripts/ too, which CI never lints — that
+# extension is what surfaced the missing `pathlib` import that made the G24
+# gate script (validate_deployment.py) raise NameError before it could write
+# its artifact (docs/DEBT.md item 99); F821 undefined-name is an `F` code, so
+# the CI-equivalent selection still catches that exact bug class.
+#
+# ⚠️  DELIBERATELY NOT a bare `ruff check` on either path (docs/DEBT.md item
+# 112). `requirements-dev.txt` pins no ruff version, and an unconfigured
+# `ruff check` resolves to whatever that release's own default rule set is —
+# empirically far broader than E4/E7/E9/F on the ruff release this repo last
+# verified against (3900 src findings, 751 scripts findings, overwhelmingly
+# pyupgrade/isort modernization debt this codebase was never cleaned against,
+# not the correctness class CI actually gates on). A bare invocation here
+# would make this "MANDATORY, zero-exit" gate permanently red on any fresh
+# install and would no longer mean what a green CI run means — exactly the
+# drift this script exists to prevent. Pin `--select` explicitly; never widen
+# it to "whatever ruff defaults to today".
 step "ruff — backend/src" \
-  bash -c "cd '$REPO_ROOT/backend' && '$PY' -m ruff check src/"
+  bash -c "cd '$REPO_ROOT/backend' && '$PY' -m ruff check src/ --select E4,E7,E9,F"
 
 step "ruff — backend/scripts" \
-  bash -c "cd '$REPO_ROOT/backend' && '$PY' -m ruff check scripts/"
+  bash -c "cd '$REPO_ROOT/backend' && '$PY' -m ruff check scripts/ --select E4,E7,E9,F"
 
 # ── 2. Type debt ceiling ─────────────────────────────────────────────────────
 # Never raise the ceiling to fit new debt — clear the errors your change added.

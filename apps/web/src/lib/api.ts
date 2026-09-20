@@ -863,6 +863,35 @@ export interface UpcomingMatch {
    * recommendation wearing a certified face.
    */
   staking_authorization?: StakingAuthorization | null;
+  /**
+   * Present only when the ADR-0011 circuit breaker actually suppressed a stake.
+   *
+   * Absence is meaningful and safe here (unlike `staking_authorization`),
+   * because the breaker can only ever subtract permission, never add it.
+   */
+  risk_guard?: RiskGuard | null;
+}
+
+/**
+ * Why the ADR-0011 circuit breaker withheld a stake on this fixture.
+ *
+ * Mirrors `backend/src/services/risk_guard.py` `RiskDecision.as_dict()`.
+ *
+ * ⚠️ DIRECTION: the breaker trips on LOW epistemic uncertainty. Low epistemic
+ * means the ensemble's trees agree, and that is the measured danger zone for
+ * this generation (docs/DEBT.md item 50) — not the safe one. Copy that reads
+ * `epistemic` as "confidence" and presents a trip as a confidence signal
+ * inverts the meaning of the field.
+ */
+export interface RiskGuard {
+  tripped: boolean;
+  /** e.g. "epistemic_in_measured_danger_zone", "epistemic_uncertainty_unavailable" */
+  reason: string | null;
+  league: string;
+  /** Null when uncertainty could not be measured at all — which itself trips the breaker. */
+  epistemic: number | null;
+  threshold: number | null;
+  version: string | null;
 }
 
 export interface StakingAuthorization {

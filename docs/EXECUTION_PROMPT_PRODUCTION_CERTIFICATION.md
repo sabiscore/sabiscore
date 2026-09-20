@@ -98,16 +98,33 @@ reported green while enforcing nothing. Two corollaries, both earned here:
 
 > **Re-verify before use (§0.1).** Figures below are measurements, not standing facts.
 
+> ⚠️ **RE-MEASURED 2026-09-20, same-day, from a genuinely fresh from-scratch bootstrap**
+> (`python3 -m venv`, fresh `pip install`, then `scripts/ci_local_enforcer.sh` run to
+> completion — not carried forward from a prior session's claim). Two corrections below,
+> both real and both now fixed in the same pass: the backend suite count had drifted
+> (2568 → 2571, harmless — three new tests landed since PR #221), and **the local CI
+> enforcer itself could not previously reach zero-exit on a fresh install** — its own
+> `ruff` steps ran unselected against an unpinned `ruff` version, which on this
+> environment's resolved release (`0.16.8`) surfaces ~4,650 findings CI never gates on.
+> Fixed (`docs/DEBT.md` item 112); the enforcer now genuinely passes end-to-end (14
+> gates passed, 2 correctly skipped, 8m03s) for what is very likely the first time in
+> this repository's history. See `backend/reports/certification/
+> certification_report_v5_phase7-20260808_2026-09-20T060000Z.json` for the full
+> re-verification record, including a first-ever real execution of the G11 evidence
+> harness (genuine `FAIL`, ECE 0.0977 on 87 real settled predictions) and a real but
+> unresolved G16 calibrator discrepancy (`docs/DEBT.md` item 113).
+
 ### 3.1 Repository
 
 ```
 master tip            f9be07b   (PR #221 merged 2026-09-20)
-backend suite         2568 passed · 16 skipped · 2 xfailed · 0 failed   (env -u SECRET_KEY)
-ruff                  0         (ruff check src --select E4,E7,E9,F)
-mypy                  775 ≤ 784 local  ·  CI reads ~+9 higher — budget ~6 errors of headroom
-artifact lineage      verify_active_artifacts.py exit 0, 6 hash-locked pairs
-web                   lint 0 · typecheck 0 · Vitest 57 test files · production build clean
-CI on master          all 7 jobs green, runner boots (billing lock clear as of 2026-09-20)
+backend suite         2571 passed · 16 skipped · 2 xfailed · 0 failed   (env -u SECRET_KEY, re-measured 2026-09-20)
+ruff                  0         (ruff check src --select E4,E7,E9,F — and the local enforcer's own steps now use this exact selector too, DEBT 112)
+mypy                  775 ≤ 784 local  ·  CI reads ~+9 higher — budget ~6 errors of headroom (re-confirmed 2026-09-20, unchanged)
+artifact lineage      verify_active_artifacts.py exit 0, 6 hash-locked pairs (re-confirmed 2026-09-20)
+web                   lint 0 · typecheck 0 · Vitest 358 passed (358), 57 files · production build clean (re-confirmed 2026-09-20)
+CI on master          not independently re-queried via the GitHub API this session (no gh/API access path exercised); CLAUDE.md's own 2026-09-20 entry reports it clear — taken as current, not re-verified here
+settled predictions   87 (grew from 80 on 2026-09-13 / 59 on 2026-09-09 — real elapsed-match-volume growth; no new gate floor crossed)
 ```
 
 ### 3.2 Served model
