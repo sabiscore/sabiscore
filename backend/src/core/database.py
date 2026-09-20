@@ -239,7 +239,14 @@ class UserAccount(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, nullable=False, unique=True)
     full_name = Column(String, nullable=True)
-    hashed_password = Column(String, nullable=False)
+    # Nullable since migration 0014: an account created through an OAuth
+    # provider has no password at all (`auth.py` passes
+    # `hashed_password=None`). Declaring NOT NULL here contradicted both
+    # the migration and the live code, and failed the schema-drift gate.
+    # Login already fails closed on a null value before any hash is
+    # compared (`if not user or not user.hashed_password`), so this widens
+    # no authentication path.
+    hashed_password = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     last_login_at = Column(DateTime, nullable=True)

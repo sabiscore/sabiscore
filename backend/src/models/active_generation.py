@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,39 @@ MANIFEST_NAME = "active_generation.json"
 # CERTIFIED claim must carry hash-verified evidence that earned it.
 UNVERIFIED = "UNVERIFIED"
 CERTIFIED = "CERTIFIED"
-ALLOWED_CERTIFICATION_STATES = frozenset({UNVERIFIED, CERTIFIED})
+
+# A third state for the case the first two cannot express: an operator who has
+# read the failing evidence and accepts the risk deliberately, on the record.
+#
+# It exists because the alternative people actually reach for is worse. Without
+# it, "ship anyway" means editing `certification_state` to CERTIFIED, or
+# lowering a threshold in `certification_policy.py` until the gate yields a
+# pass. Both destroy the measurement: every downstream reader — this repo's own
+# future sessions included — then sees a system that claims it earned something
+# it did not. This state unblocks the same release while leaving every
+# instrument reading true.
+#
+# It is deliberately NOT a synonym for CERTIFIED:
+#   * `active_generation_is_certified()` returns False for it, so nothing that
+#     asks "is this certified?" is ever told yes;
+#   * the promotion gates keep reporting FAIL, unmodified;
+#   * it carries its own mandatory disclosure (who authorised it, why, and
+#     which failing gates were knowingly accepted) which rides with every
+#     staked recommendation to the surface, not just into an operator console.
+OPERATOR_OVERRIDE_UNCERTIFIED = "OPERATOR_OVERRIDE_UNCERTIFIED"
+
+ALLOWED_CERTIFICATION_STATES = frozenset(
+    {UNVERIFIED, CERTIFIED, OPERATOR_OVERRIDE_UNCERTIFIED}
+)
+
+#: Fields an `operator_override` block must carry. Each exists so the decision
+#: is attributable and reviewable after the fact rather than anonymous.
+_REQUIRED_OVERRIDE_FIELDS = (
+    "authorizing_identity",   # who took the decision
+    "rationale",              # why, in their own words
+    "authorized_at",          # when (ISO-8601)
+    "acknowledged_failures",  # which gates they read and accepted anyway
+)
 
 
 def _load_feature_schema_registry() -> Any:
@@ -149,6 +182,9 @@ def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
             f"Unknown certification_state {state!r}; expected one of "
             f"{sorted(ALLOWED_CERTIFICATION_STATES)}"
         )
+    if state == OPERATOR_OVERRIDE_UNCERTIFIED:
+        _verify_operator_override_claim(payload)
+        return
     if state != CERTIFIED:
         return
 
@@ -185,6 +221,59 @@ def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
     if failed:
         raise ActiveGenerationError(
             f"Certification evidence has failing gates: {', '.join(failed)}"
+        )
+
+
+def _verify_operator_override_claim(payload: dict[str, Any]) -> None:
+    """Reject an operator override that is not actually attributable.
+
+    The override deliberately does NOT require passing gates — accepting
+    failing gates is the entire point of it. What it requires instead is that
+    the acceptance be a real, signed, reviewable decision rather than an
+    anonymous state flip:
+
+    * ``authorizing_identity`` and ``rationale`` must be non-empty strings, so
+      the record names a person and their reasoning.
+    * ``acknowledged_failures`` must be a non-empty list, so the operator has
+      enumerated what they are overriding. An override that does not say what
+      it is overriding is indistinguishable from one taken in ignorance, and a
+      future reader cannot tell whether the risk was understood or missed.
+
+    This is the same asymmetry `_verify_certification_claim` closes one field
+    over: the artifacts were tamper-evident while the verdict about them was
+    free text. Here the verdict is "ship it anyway", and it must carry its
+    reasons.
+    """
+
+    override = payload.get("operator_override")
+    if not isinstance(override, dict):
+        raise ActiveGenerationError(
+            f"certification_state is {OPERATOR_OVERRIDE_UNCERTIFIED} but no "
+            "operator_override block is declared"
+        )
+
+    missing = [f for f in _REQUIRED_OVERRIDE_FIELDS if not override.get(f)]
+    if missing:
+        raise ActiveGenerationError(
+            f"operator_override is missing required field(s): {', '.join(sorted(missing))}"
+        )
+
+    for field in ("authorizing_identity", "rationale", "authorized_at"):
+        value = override.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise ActiveGenerationError(
+                f"operator_override.{field} must be a non-empty string"
+            )
+
+    failures = override.get("acknowledged_failures")
+    if not isinstance(failures, list) or not failures:
+        raise ActiveGenerationError(
+            "operator_override.acknowledged_failures must be a non-empty list naming "
+            "the gates being overridden"
+        )
+    if not all(isinstance(f, str) and f.strip() for f in failures):
+        raise ActiveGenerationError(
+            "operator_override.acknowledged_failures entries must be non-empty strings"
         )
 
 
@@ -288,11 +377,98 @@ def active_artifact_path(league_slug: str, models_dir: Path | None = None) -> Pa
 
 
 def active_generation_is_certified(models_dir: Path | None = None) -> bool:
+    """True only for a genuinely earned CERTIFIED verdict.
+
+    ⚠️ Deliberately returns False under ``OPERATOR_OVERRIDE_UNCERTIFIED``. The
+    override permits staking; it does not confer certification, and every
+    caller asking this question is asking the second thing. Callers that mean
+    "may this stake?" must use `staking_authorization()` instead — the split
+    is what keeps an override from silently laundering itself into a
+    certification claim.
+    """
     try:
         generation = load_active_generation(models_dir)
     except ActiveGenerationError:
         return False
-    return generation.get("certification_state") == "CERTIFIED"
+    return generation.get("certification_state") == CERTIFIED
+
+
+@dataclass(frozen=True)
+class StakingAuthorization:
+    """Whether public staking is permitted, and on what basis.
+
+    ``basis`` is ``"CERTIFIED"`` when the generation earned it, or
+    ``"OPERATOR_OVERRIDE"`` when a named operator accepted failing gates. The
+    disclosure fields are populated only in the latter case and are meant to be
+    rendered wherever a stake is shown — not merely logged.
+    """
+
+    permitted: bool
+    basis: str  # "CERTIFIED" | "OPERATOR_OVERRIDE" | "NONE"
+    certification_state: str
+    authorizing_identity: str | None = None
+    rationale: str | None = None
+    authorized_at: str | None = None
+    acknowledged_failures: tuple[str, ...] = ()
+
+    @property
+    def is_override(self) -> bool:
+        return self.basis == "OPERATOR_OVERRIDE"
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "permitted": self.permitted,
+            "basis": self.basis,
+            "certification_state": self.certification_state,
+            "is_override": self.is_override,
+            "authorizing_identity": self.authorizing_identity,
+            "rationale": self.rationale,
+            "authorized_at": self.authorized_at,
+            "acknowledged_failures": list(self.acknowledged_failures),
+        }
+
+
+NO_STAKING_AUTHORIZATION = StakingAuthorization(
+    permitted=False, basis="NONE", certification_state=UNVERIFIED
+)
+
+
+def staking_authorization(models_dir: Path | None = None) -> StakingAuthorization:
+    """The single answer to "may this generation publish a real stake, and why?".
+
+    Fails closed: any manifest error yields ``permitted=False``, matching
+    `active_generation_is_certified`'s own behaviour rather than raising into
+    a request path.
+    """
+    try:
+        generation = load_active_generation(models_dir)
+    except ActiveGenerationError:
+        return NO_STAKING_AUTHORIZATION
+
+    state = str(generation.get("certification_state") or UNVERIFIED)
+
+    if state == CERTIFIED:
+        return StakingAuthorization(
+            permitted=True, basis="CERTIFIED", certification_state=state
+        )
+
+    if state == OPERATOR_OVERRIDE_UNCERTIFIED:
+        # `load_active_generation` already ran `_verify_operator_override_claim`,
+        # so these fields are present and well-formed by the time we get here.
+        override = generation.get("operator_override") or {}
+        return StakingAuthorization(
+            permitted=True,
+            basis="OPERATOR_OVERRIDE",
+            certification_state=state,
+            authorizing_identity=str(override.get("authorizing_identity")),
+            rationale=str(override.get("rationale")),
+            authorized_at=str(override.get("authorized_at")),
+            acknowledged_failures=tuple(override.get("acknowledged_failures") or ()),
+        )
+
+    return StakingAuthorization(
+        permitted=False, basis="NONE", certification_state=state
+    )
 
 
 def active_feature_schema_version(models_dir: Path | None = None) -> str:
@@ -334,11 +510,17 @@ def active_model_version(models_dir: Path | None = None) -> str:
 
 
 __all__ = [
+    "CERTIFIED",
+    "OPERATOR_OVERRIDE_UNCERTIFIED",
+    "UNVERIFIED",
     "ActiveGenerationError",
+    "NO_STAKING_AUTHORIZATION",
+    "StakingAuthorization",
     "active_artifact_path",
     "active_feature_schema_version",
     "active_generation_is_certified",
     "active_model_version",
     "load_active_generation",
+    "staking_authorization",
     "verify_feature_contract_freshness",
 ]

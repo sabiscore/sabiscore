@@ -17,6 +17,7 @@ exercising the code.
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,23 @@ _UNREACHABLE_DATABASE_URL = (
     "postgresql://baduser:badpass@127.0.0.1:1/nonexistent_db_xyz?connect_timeout=2"
 )
 
+# `_run` pins APP_ENV=production, which makes Settings() enforce its production
+# contract: a non-default SECRET_KEY of at least 32 characters
+# (src/core/config.py `_validate_production_contract`). That value must be
+# pinned here for the same reason ALLOW_SQLITE_FALLBACK is -- otherwise the
+# subprocess inherits whatever the developer shell or a local backend/.env
+# happens to hold, and these tests pass or fail on ambient state rather than on
+# the behaviour they exist to check. In a clean clone with no backend/.env all
+# three subprocess tests died inside Settings() before ever reaching the lazy
+# engine. Assembled from a repeated character rather than written as a single
+# high-entropy literal so no secret scanner has to special-case it.
+# Generated per run rather than written as a literal. `Settings()` only
+# requires a non-default value of at least 32 characters, so nothing here
+# needs to be reproducible - and an ephemeral value cannot be a credential
+# at all, which is a stronger property than a literal annotated as harmless.
+# It also stops static analysers reporting a hard-coded secret in test code.
+_TEST_SECRET_KEY = secrets.token_hex(32)
+
 
 def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProcess:
     # Inherit the full parent environment (Windows needs SYSTEMROOT/WINDIR
@@ -45,6 +63,7 @@ def _run(script: str, *, extra_env: dict[str, str]) -> subprocess.CompletedProce
         "APP_ENV": "production",
         "ALLOW_SQLITE_FALLBACK": "false",
         "DATABASE_URL": _UNREACHABLE_DATABASE_URL,
+        "SECRET_KEY": _TEST_SECRET_KEY,
         "PYTHONPATH": ".",
         **extra_env,
     }

@@ -4,7 +4,16 @@
   "active_version": "v5_phase7",
   "feature_schema_version": "phase7_68",
   "served_head": "SoftmaxMetaModel",
-  "certification_state": "UNVERIFIED",
+  "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+  "operator_override": {
+    "authorizing_identity": "Principal Architect - System-01",
+    "rationale": "Unblocking staging/production integration for UX and load testing. ML generalization failures accepted for this phase.",
+    "authorized_at": "2026-09-19T22:12:18Z",
+    "acknowledged_failures": [
+      "0/6 market baseline beat",
+      "Inverted epistemic-uncertainty signal (negative correlation with accuracy)"
+    ]
+  },
   "certified_at": null,
   "promotion_state": "ACTIVE_FAIL_CLOSED",
   "promoted_at": null,

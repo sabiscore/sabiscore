@@ -179,6 +179,25 @@ class PortfolioExposureSchema(BaseModel):
     drawdown: DrawdownStatusSchema
 
 
+class StakingAuthorizationSchema(BaseModel):
+    """Mirrors `models.active_generation.StakingAuthorization` (ADR-0011).
+
+    `is_override=True` means a named operator authorised staking over failing
+    certification gates. The accompanying fields are the disclosure the UI is
+    required to render next to any stake derived under that authorisation —
+    they are part of the product surface, not operator-only diagnostics.
+    """
+
+    permitted: bool = False
+    basis: str = "NONE"  # CERTIFIED | OPERATOR_OVERRIDE | NONE
+    certification_state: str = "UNVERIFIED"
+    is_override: bool = False
+    authorizing_identity: Optional[str] = None
+    rationale: Optional[str] = None
+    authorized_at: Optional[str] = None
+    acknowledged_failures: List[str] = Field(default_factory=list)
+
+
 class UpcomingMatchSchema(BaseModel):
     match_id: str
     home_team: str
@@ -203,6 +222,11 @@ class UpcomingMatchSchema(BaseModel):
     competition_stage: Optional[str] = None
     # Advisory portfolio-exposure annotation (ADR-0005). None on non-value fixtures.
     portfolio: Optional[PortfolioMatchSchema] = None
+    # Why staking is (or is not) permitted for this fixture — ADR-0011. Always
+    # present so a consumer can distinguish "no override in force" from "the
+    # field went missing", and carries the operator disclosure that must be
+    # rendered alongside any stake published under an override.
+    staking_authorization: Optional[StakingAuthorizationSchema] = None
 
 
 class UpcomingMatchesResponseSchema(BaseModel):

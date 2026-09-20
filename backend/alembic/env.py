@@ -14,6 +14,13 @@ from src.core.database import Base
 from src.db import models as _db_models  # noqa: F401
 from src.db import provider_elo_team_mapping as _provider_elo_team_mapping  # noqa: F401
 
+# Mapped tables live outside `src/db/` too. `social_auth_models` defines
+# `user_identities` and installs the social columns on `users`; without this
+# import they are absent from `Base.metadata` and autogenerate proposes
+# dropping what migration 0014 created. `test_alembic_metadata_registration.py`
+# fails if any mapped table is missing from the set imported here.
+from src.services import social_auth_models as _social_auth_models  # noqa: F401
+
 config = context.config
 
 if config.config_file_name is not None:

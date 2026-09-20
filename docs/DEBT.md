@@ -1,5 +1,370 @@
 # SabiScore Debt Ledger
 
+## 108. Staking is live on an uncertified generation under a disclosed operator override, with a measured circuit breaker in front of it
+
+**Tier:** `ACCEPTED-RISK` — deliberate, operator-authorized, fully reversible.
+**Owner:** operator (`Principal Architect - System-01`).
+**Activated:** 2026-09-19. **ADR:** `docs/adr/0011-operator-override-uncertified-staking.md`.
+**Relates to:** items 14, 25, 42, 50.
+
+### What is now true in production
+
+`backend/models/active_generation.json` declares
+`certification_state: OPERATOR_OVERRIDE_UNCERTIFIED`. `staking_authorization()`
+returns `permitted=True, basis="OPERATOR_OVERRIDE"`, so
+`GET /upcoming/matches` will publish Kelly stake sizes for fixtures that clear
+the evidence gates — from a generation that did **not** clear certification.
+
+The operator's recorded rationale is staging/production integration for UX and
+load testing, with the ML generalization failures explicitly accepted for this
+phase. Their acknowledged failures, in their own words: *"0/6 market baseline
+beat"* and *"Inverted epistemic-uncertainty signal (negative correlation with
+accuracy)"*.
+
+### What did NOT change, verified against the live loader rather than assumed
+
+| | |
+|---|---|
+| `active_generation_is_certified()` | `False` |
+| `promotion_state` | `ACTIVE_FAIL_CLOSED` |
+| `certified_at` | `null` |
+| `certification_policy.py` | untouched; hash still `4e050ad0…f664`, v1.2.0 |
+| `error_association` xfails | both still `xfail`, still printing the live measurement |
+| Promotion gates | still FAIL on `market_baseline`, `no_league_regression`, `primary_metric_improvement`, `serving_feature_availability` |
+
+⚠️ **This is the distinction the whole mechanism exists to preserve.** An
+override permits staking; it does not confer certification, and no code path
+conflates the two. Every caller asking *"is this certified?"* is still told no.
+Only callers asking the different question — *"may this publish a stake?"* —
+get a yes, and they get the basis (`OPERATOR_OVERRIDE`) with it.
+
+⚠️ **Do not "clean this up" by flipping `certification_state` to `CERTIFIED`
+once the metrics improve.** Certification is earned through
+`compare_candidate_vs_incumbent.py` producing hash-verified passing evidence,
+which `_verify_certification_claim` checks. Editing the state directly is the
+falsification class this ADR was written to make unnecessary.
+
+### Blast radius — exactly one surface
+
+`staking_authorization()` has exactly one production consumer:
+`services/upcoming_match_service.py` (`GET /upcoming/matches`). Every other
+staking-adjacent surface — `full_analysis.py`, `market_intel.py`,
+`advanced_insights_service.py`, `predictions.py`, `betting_intelligence.py`,
+`fixtures.py`, `core_engine.py`, `analytics.py`, `prediction.py` — still asks
+`active_generation_is_certified()`, which answers `False` under an override, so
+all of them are unchanged. `/full-analysis` is *additionally* blocked by the
+permanent `MODEL_UNCERTAINTY_UNAVAILABLE` critical gap (item 42) and this
+override does not touch that.
+
+⚠️ **Swapping an `active_generation_is_certified()` call for
+`staking_authorization().permitted` on any other surface silently widens a
+Class C authorization the operator never granted.** Amend ADR-0011 first.
+
+### The circuit breaker (`backend/src/services/risk_guard.py`)
+
+The inverted uncertainty signal is not diffuse — it is concentrated in the
+low-epistemic quartile, where the 300 bootstrap trees agree most, and that
+region is computable at serving time. Under an override only, a fixture whose
+epistemic uncertainty falls at or below its league's measured p25 is suppressed
+(`stake_permitted=False`, `staking_suppressed_by_risk_guard` in `data_gaps`,
+`risk_guard` block on the wire, structured `WARNING` with
+`event=override_circuit_breaker_tripped`).
+
+Measured on `v5_phase7-20260808`, each league's own artifact against its own
+chronological holdout — reproduce with
+`backend/scripts/measure_epistemic_danger_zone.py`:
+
+| league | n | p25 | hit inside | hit outside | delta |
+|---|---|---|---|---|---|
+| EPL | 375 | 0.0788 | 0.4362 | 0.5089 | −7.3pp |
+| BUNDESLIGA | 296 | 0.0879 | 0.3378 | 0.4910 | −15.3pp |
+| LIGUE_1 | 306 | 0.0859 | 0.4416 | 0.5066 | −6.5pp |
+| LA_LIGA | 380 | 0.0776 | 0.4632 | 0.4702 | −0.7pp (flat) |
+| SERIE_A | 375 | 0.0848 | 0.5106 | 0.4555 | **+5.5pp (reversed)** |
+
+⚠️ **The effect is not universal and these numbers must not be read as one
+finding with five confirmations.** It is strong in three leagues, absent in
+LA_LIGA, and runs the other way in SERIE_A. All five are suppressed anyway
+because a false positive costs a missed opportunity while a false negative
+costs a user's money — and this generation has no demonstrated edge to forgo
+(0/6 leagues beat the market). Unmeasured leagues (EREDIVISIE, pooled;
+UCL, no dedicated model) get the *most protective* measured threshold, never a
+pass-through.
+
+⚠️ **DIRECTION.** "High tree agreement" and "high epistemic uncertainty" are
+inverse quantities. The breaker tests `epistemic <= threshold`; writing `>=`
+would suppress the safest fixtures and stake the worst ones while looking
+entirely plausible in review. `test_risk_guard.py::test_breaker_is_not_inverted`
+pins both halves so an inversion fails two assertions at once rather than none.
+Verified by inverting the comparison and watching 6 tests go red before
+restoring it (DID Rule 15).
+
+⚠️ **`_epistemic_for_match` returns `None`, never a substitute**, when the
+measurement cannot be made — and the breaker treats `None` as a trip. A `0.0`
+or a league mean would be read as a real measurement, and `0.0` in particular
+sits on the dangerous side of every threshold.
+
+### Two disclosure surfaces contradicted the activation — found by the tests, fixed
+
+Activating the override immediately broke two tests, and both turned out to be
+naming real defects rather than stale expectations:
+
+**(1) `GET /api/v1/models/status` reported `stake_permitted: false` while the
+serving path was staking.** It computed the field as `cert == "CERTIFIED"` — a
+rule that was correct for exactly as long as certification was the only thing
+that could unblock staking. It now calls `staking_authorization()`, the same
+authority the serving path uses, and additionally reports `staking_basis` so a
+reader never has to infer earned-vs-overridden from the certification string.
+`validation_status` deliberately does **not** follow it: only `CERTIFIED` earns
+`"VALIDATED"`.
+
+⚠️ That endpoint reads the manifest twice at two different trust levels —
+`_load_manifest()` is a raw JSON read for the descriptive fields,
+`staking_authorization()` goes through the verifying loader. In production both
+read the same file and agree; if a manifest ever *claimed* an override with a
+malformed attribution block, the endpoint would correctly report the claimed
+state alongside `stake_permitted: false` (claimed, not honored). Tests must
+patch **both** or they silently read the live deployment.
+
+**(2) The web UI told users "staking blocked" on a system that was staking.**
+`promotionLabel("ACTIVE_FAIL_CLOSED")` hardcoded `"Serving forecasts · staking
+blocked"`, and the manifest keeps `ACTIVE_FAIL_CLOSED` under an override — so
+the sentence became false the moment the override activated, on a consumer
+surface. `promotion_state` alone can no longer describe serving behaviour; the
+function now takes the certification state as a second argument.
+`certificationLabel` also gained the override case ("Unvalidated · staking
+under operator override") — its fail-closed default, "Pending validation",
+would have *understated* what was happening rather than overstating it, which
+is the unusual direction for this failure class and the reason it needed a
+dedicated label rather than the safe fallback.
+
+### Three tests were reading a deployment decision, not a code path
+
+`test_uncertified_generation_exposes_forecast_but_never_value_or_stake`,
+`test_api.py::test_model_status` and
+`test_model_status_endpoint.py::test_returns_manifest_fields` all inherited
+whatever `active_generation.json` happened to declare, so a policy change
+surfaced as a code regression. All three now pin an explicit
+`StakingAuthorization` and assert the same contracts they always did; four new
+tests cover the override path (breaker trips inside the danger zone, stakes
+with disclosure outside it, fails closed when epistemic is unmeasurable, and
+status reported as staking-but-not-validated).
+
+⚠️ **A test that reads live state is not hermetic even when it passes.** These
+three passed for months precisely because the deployed state happened to match
+their literals.
+
+### What this does NOT resolve
+
+The breaker declines the one slice of this model we have measured to be worst.
+It does **not** fix the inversion (item 50 stays open as a research blocker),
+and it does **not** make the override safe — outside the low-epistemic quartile
+the accepted risks in ADR-0011 apply unchanged: stakes are being published from
+a model with no demonstrated edge over the prices it is betting against.
+
+### To deactivate
+
+Delete the `operator_override` block from
+`backend/models/active_generation.json` and set `certification_state` back to
+`"UNVERIFIED"`. Fail-closed behaviour resumes on the next process start. No
+migration, no persisted side effect.
+
+## 107. Three real, isolated defects found by actually running the full backend suite fresh, not by trusting the ledger's own "ruff clean" / prior-green claims
+
+**Tier:** `RESOLVED` — both fixed and verified 2026-09-19.
+**Owner:** unassigned. **Found:** 2026-09-19, a from-scratch dependency
+install and full local verification pass (`ci_local_enforcer.sh`'s six
+`verify-core` steps plus the full `pytest tests` suite, both previously
+undocumented as having been run against a genuinely fresh clone this
+session).
+
+### Method note first, because it explains why these two and not others
+
+A bare `ruff check src/` in a fresh install reported **3884 errors** —
+flatly contradicting this ledger's own repeated "Ruff zero-issue backend"
+claims. Before reporting that as a regression, checked
+`.github/workflows/ci.yml` directly: the real gate is
+`ruff check src --select E4,E7,E9,F` (line 117), a narrow rule selection: a
+bare invocation applies ruff's full default rule set instead, which is not
+what the repository has ever promised to be clean against. Run correctly,
+ruff reports 0 issues — no regression, a wrong local command. Likewise 3 of
+the first 8 pytest failures (`test_lazy_database_engine.py`) turned out to
+require a `SECRET_KEY` env var this fresh sandbox never had set (those tests
+deliberately run a subprocess with `APP_ENV=production` to test fail-closed
+DB behaviour, and `Settings()` correctly refuses to start without one) —
+fixed by exporting one, not by touching source. Both are recorded here only
+as the method: verify the enforcement mechanism before reporting a finding
+(DID Rule 15), because a plausible-looking mass failure is usually the
+harness, not the code.
+
+### Defect 1 — `ingest_fbref_sources.py` used a polars keyword argument that doesn't exist in the pinned polars version
+
+`backend/scripts/ingest_fbref_sources.py:328` called
+`.rolling_mean(window_size=window, min_samples=1)`. The installed
+`polars==0.19.19` exactly matches `requirements.txt`'s own pin for
+`python_version < "3.14"` (this repo's production interpreter is 3.11.9 per
+`render.yaml`). `Expr.rolling_mean`'s real signature at that pinned version
+takes `min_periods`, not `min_samples`:
+
+```
+TypeError: Expr.rolling_mean() got an unexpected keyword argument 'min_samples'
+```
+
+Confirmed this is the only such call in the repository — every other rolling
+window in the codebase (pandas and polars alike, `feature_registry.py`,
+`ml_ultra/feature_engineering.py`, `causal_selector.py`) already uses
+`min_periods`, which is also what the doc comment at
+`feature_registry.py:651` describes for the identical concept. `min_samples`
+appears to be a later-polars API name the author had in mind (the
+`python_version >= "3.14"` pin is `polars>=1.35.0,<2.0.0`, a research-only
+interpreter per this repo's established convention) without checking it
+against the version this exact code path actually runs under. Fixed by
+using `min_periods=1`, matching the rest of the codebase.
+
+`tests/unit/test_fbref_ingest_temporal.py` (4 tests) failed on this before
+the fix and pass cleanly after — not a new test, an existing one nobody had
+run against the correctly-pinned environment recently enough to notice.
+FBref itself remains `REJECT`ed as a live data source (item 77); this is the
+shared temporal-rollup utility's own correctness, independent of that
+decision.
+
+**Blast radius:** `apps/scraper`/`backend/scripts/ingest_fbref_sources.py`
+has zero callers from the live serving path (confirmed — FBref is rejected
+at Gate R1). Fixing it is a pure correctness improvement to research
+tooling, not a production change.
+
+### Defect 2 — a regression-pin test's premise was numpy-version-specific, and a naive fix would have made it worse
+
+`tests/unit/test_insights_simulators.py::test_factorial_source_is_the_stdlib_not_the_removed_numpy_alias`
+asserted `not hasattr(np, "math")` as a stand-in for "the fix that replaced
+`np.math.factorial` with the stdlib `math.factorial` (item 73) is still in
+place." That premise was written against NumPy 2.5.0 (the Python 3.14
+research interpreter, where `np.math` really was removed) but
+`requirements.txt` pins `numpy==1.26.2` for `python_version < "3.14"` — the
+actually-served version — where `np.math` still exists, merely deprecated
+(warning, not removal). Under the pinned, production-matching version the
+assertion is false independent of whether the module's own fix is correct:
+backwards for a regression guard.
+
+⚠️ **The first fix attempt was itself wrong, and is recorded because it is
+an instructive near-miss.** Replacing the environment-fact assertion with
+`"np.math" not in inspect.getsource(simulators)` seemed like the obvious
+version-independent fix — and it immediately failed, because the *fix's own
+explanatory comment* in `simulators.py` contains the literal string
+`` `np.math.factorial` ``, so a substring check flags its own success as a
+failure. `monkeypatch.delattr(np, "math")` was tried next and also failed:
+NumPy exposes `math` through the module's `__getattr__` deprecation shim,
+not a real attribute, so there is nothing for `delattr` to remove.
+
+The version that survives both traps: parse
+`MatchSimulator._calculate_poisson_probs`'s own source with `ast` and walk
+for an `Attribute` node matching `np.math` specifically — comments are never
+part of an AST, so the false match from attempt one is structurally
+impossible, and nothing needs deleting from a live module. Watched failing
+correctly before trusting it: reverted `simulators.py`'s fix
+(`math.factorial` → `np.math.factorial`), confirmed the new test fails and
+names exactly that line, restored the real fix, confirmed green again.
+
+**Blast radius:** test-only; `src/insights/simulators.py` itself was not
+touched (reverted back to its pre-existing, already-correct state after the
+verification revert). `insights/simulators.py` still has no live caller in
+the serving path (per its own module docstring) — this closes a test-suite
+correctness gap, not a production one.
+
+### Defect 3 — `test_lazy_database_engine.py` pinned five env vars to be shell-independent, then depended on a sixth it didn't pin
+
+Added 2026-09-19, second pass. The three subprocess tests in this module each
+call a `_run()` helper whose own comment states the design contract:
+
+> Pinning both keeps these tests independent of that ordering and of the
+> developer/CI shell.
+
+It pins `APP_ENV`, `ALLOW_SQLITE_FALLBACK`, `SABISCORE_ALLOW_INSECURE_FALLBACK`,
+`DATABASE_URL` and `PYTHONPATH` — but pinning `APP_ENV=production` is precisely
+what makes `Settings()` enforce its production contract, which requires a
+non-default `SECRET_KEY` of at least 32 characters
+(`src/core/config.py:714-718`). `SECRET_KEY` was never pinned, so the
+subprocess inherited it from `**os.environ`. The test therefore passed or
+failed on whether the developer's shell or a local (gitignored) `backend/.env`
+happened to hold one — the exact dependency the helper was written to
+eliminate.
+
+In a clean clone all three died inside `Settings()` validation **before
+reaching the lazy-engine behaviour they exist to check**, with an error naming
+a secret rather than a database. Nothing in `tests/conftest.py` supplies one,
+and the other ~2,500 tests are unaffected because they run in-process where
+`app_env` defaults to `development` and the production-only branch never
+fires — so this module is the only place the gap is reachable.
+
+Fixed by pinning `SECRET_KEY` in the same dict literal as its five siblings,
+from a module constant assembled by repetition
+(`"sabiscore-test-only-not-a-real-secret-" + "0" * 32`) rather than written as
+one high-entropy literal, so no secret scanner needs to special-case it. It
+sits before `**extra_env`, so a caller can still override it.
+
+⚠️ **The real cost of this defect was not three red tests — it was a blind
+guard.** Because the failure happened at `Settings()`, these tests could not
+have detected an actual lazy-init regression in a clean clone; they would have
+been red for the wrong reason and the genuine defect would have hidden behind
+the environment error. The Rule 15 check below is what establishes that they
+now detect their real target.
+
+**Rule 15 verification.** Injected the exact regression this module exists to
+prevent — an eager `_engine = _init_engine()` at import scope in
+`src/core/database.py`, i.e. the pre-lazy behaviour ADR 0007 removed — and
+re-ran with no ambient `SECRET_KEY`:
+
+```
+4 failed, 11 passed
+FAILED test_importing_for_base_and_models_does_not_require_a_live_database
+FAILED test_first_real_use_still_fails_closed_on_unreachable_database
+FAILED test_session_local_call_also_triggers_the_same_fail_closed_path
+FAILED test_status_helpers_reflect_reality_after_a_successful_lazy_init
+        assert 'BEFORE:False' in 'BEFORE:True\n...'
+```
+
+The fourth failure is the most informative: `BEFORE:True` means the engine was
+already initialised before first use, which is the regression named precisely.
+`src/core/database.py` was then restored byte-identically (`git status` clean
+for that path) and the module returns 15/15 passed.
+
+### Evidence
+
+| Gate | Before | After |
+|---|---|---|
+| `ruff check src --select E4,E7,E9,F` | pass (was misread locally as 3884 errors under the wrong invocation) | pass |
+| `check_mypy_ceiling.py --ceiling 784` | 775 ≤ 784 | 775 ≤ 784 (untouched) |
+| `verify-core` steps 1–6 (pytest subset, OpenAPI, provider CLI, scraper tests ×2, py-compile, zero-fab scan) | all pass | all pass |
+| Full `pytest tests -q` | 8 failed, 2515 passed, 16 skipped, 2 xfailed | **0 failed, 2523 passed**, 16 skipped, 2 xfailed |
+| `verify_active_artifacts.py` (Render buildCommand / validate-models gate) | 6 hash-locked pairs, `UNVERIFIED` | 6 hash-locked pairs, `UNVERIFIED` (unchanged) |
+| `validate_experiment_registry.py --strict` (DID §38) | 15 valid, 0 warnings | 15 valid, 0 warnings |
+| `pnpm --filter @sabiscore/web lint` | pass | pass (untouched) |
+| `pnpm --filter @sabiscore/web typecheck` | pass | pass (untouched) |
+| `pnpm --filter @sabiscore/web test` (Vitest) | 352/352 | 352/352 (untouched) |
+| `NODE_ENV=production pnpm --filter @sabiscore/web build` | exit 0 | exit 0 (untouched) |
+
+⚠️ **The "after" row for pytest was measured with `env -u SECRET_KEY`** — i.e.
+the clean-clone condition that produced defect 3 — so it is a genuine
+hermeticity result, not a pass bought by exporting a variable. All three
+defects were found only because the suite was run from a from-scratch
+dependency install rather than trusted from a prior session's green claim.
+
+The 2 xfails are item 50's already-tracked, intentionally-unresolved
+epistemic-uncertainty gap (`test_error_association` and its per-league
+robustness sibling) — unchanged, expected, not touched. They are the ML
+research blocker, not an engineering defect, and their reason strings carry
+the live measurement: overall gap **−0.0217** (lowest-epistemic bucket
+RPS 0.2345 vs highest-epistemic 0.2128, gate needs > 0), failing in the
+**wrong direction in all five scored leagues** (BUNDESLIGA −0.0448,
+EPL −0.0217, LA_LIGA −0.0025, LIGUE_1 −0.0288, SERIE_A −0.0098).
+
+**Governance surfaces confirmed untouched across all three fixes:**
+`certification_policy.py` still hashes to
+`4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664`
+(policy v1.2.0), and `active_generation.json` still reads
+`certification_state: "UNVERIFIED"` / `promotion_state: "ACTIVE_FAIL_CLOSED"`.
+`git status` reports both paths unmodified.
+
 ## 106. E0b's "no calibrator at all" premise went stale four days after it was written, and its result was never compared against what item 83 later shipped
 
 **Tier:** `RESEARCH` — a methodology gap, not a production defect. **Recorded:** 2026-09-19.
@@ -1109,7 +1474,7 @@ integration tests needing external resources, a deleted-module gate,
 catboost-unavailable-on-3.14, one deliberately-isolated test), 2 xfailed
 (the same item-50 `error_association` reversal, unchanged), 0 failed.**
 
-## 86. `models/candidate/training_manifest.json` declares `apex_v1_68` for the same `v5_phase7` artifact_suffix the served generation declares as `phase7_68` — flagged for confirmation, not yet classified as a defect
+## 86. `models/candidate/training_manifest.json` declares `apex_v1_68` for the same `v5_phase7` artifact_suffix the served generation declares as `phase7_68` — CONFIRMED 2026-09-19: by design, not a defect, currently harmless
 
 **Tier:** `NEXT` (documentation/confirmation only — no code change).
 **Owner:** unassigned.
@@ -1161,6 +1526,59 @@ the served generation.
 session's manifest refresh touch it. **Cost to resolve:** low (one naming
 decision plus a rename, or an explicit "working as designed" confirmation
 closing this item). **Priority:** low, non-blocking.
+
+### Confirmation, 2026-09-19
+
+Read `train_on_real_matches.py`'s own `_SCHEMAS` mapping directly rather than
+inferring from file contents. It is deliberate, not accidental, and precisely
+documented in the module itself:
+
+```python
+#: Every feature-schema version this script can train -> its artifact suffix,
+#: keyed exactly as `feature_registry.FEATURE_SCHEMA_VERSIONS` keys it. The
+#: suffix is part of the filename because `prediction.py._wrap_artifact` infers
+#: provenance from artifact shape: writing a differently-shaped model over a
+#: v5_phase7 filename would make the two disagree.
+_SCHEMAS: Dict[str, str] = {
+    "apex_v1_68": "v5_phase7",
+    ...
+}
+_DEFAULT_SCHEMA = "apex_v1_68"
+```
+
+So `train_on_real_matches.py` (default schema `apex_v1_68`) writes candidate
+output under the **same** `v5_phase7` artifact_suffix the served generation
+uses for its **different** `phase7_68` schema — the "sandbox-incumbent"
+reading in this item's original body was a plausible guess, not what's
+actually happening; this is a second, independent source of the collision.
+Confirmed harmless by checking the two things that would make it dangerous:
+
+1. **Output directory.** `--out-dir` defaults to `models/candidate/`
+   (`ap.add_argument("--out-dir", ..., default=_BACKEND_ROOT / "models" /
+   "candidate")`), never the served `backend/models/` root. `ls
+   backend/models/candidate/` confirms zero `*_v5_phase7*.pkl` binaries exist
+   there today — only `.json` reports.
+2. **Integrity backstop.** Even a hypothetical accidental write to the served
+   path is independently caught: `load_active_generation()` verifies every
+   artifact against its SHA-256 in `active_generation.json` before serving
+   it, so a schema-mismatched file at that path would fail closed at load
+   time regardless of this naming collision.
+
+**The suggested fix is not as cheap as originally estimated.** The comment
+above states the suffix is load-bearing for `_wrap_artifact`'s discovery
+order (`prediction.py`'s `_SUFFIXES` list tries `_ensemble_v6_phase8` before
+`_ensemble_v5_phase7`), and the same suffix threads through
+`training_report_real*.json` / `comparison_report_v5_phase7_*.json` naming
+across the candidate-comparison pipeline. A rename is a real, multi-file,
+research-pipeline change, not "one naming decision plus a rename" — deferred,
+not attempted here.
+
+**Closing disposition:** confirmed working-as-designed and currently inert.
+Downgraded from a documentation *question* to a documentation *fact*; kept
+open only as a named risk for whoever next touches
+`compare_candidate_vs_incumbent.py` or the `_SCHEMAS` table, per this item's
+own original warning about the two-vocabulary collision class. No code
+changed.
 
 ## 85. Production Vercel alias `web-lac-theta-42.vercel.app` returns platform-level `DEPLOYMENT_NOT_FOUND` despite correct alias assignment — 2026-09-12
 
@@ -5010,7 +5428,63 @@ gains one case for the new list-subscriptions service method.
 
 ---
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3 and 4 ruled out), so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3, 4 **and the calculation-bug hypothesis** ruled out)
+
+> ⚠️ **Title corrected 2026-09-19.** This heading previously ended "so staking
+> stays blocked". That clause is no longer true: staking is live under the
+> disclosed operator override (item 108, ADR-0011). What remains true — and is
+> what this item is actually about — is that `error_association` still FAILS on
+> real evidence and the inversion is unexplained. The override bypassed the
+> gate; it did not move the metric. The circuit breaker in item 108 suppresses
+> the measured low-epistemic danger zone, which is a mitigation of this item's
+> consequence, not a resolution of its cause.
+
+> **STILL OPEN as a research blocker — 2026-09-19.** Two updates, neither of
+> which moves the metric:
+>
+> **(1) The calculation-bug hypothesis is now closed.** `ensemble_uncertainty.py`
+> was audited directly for the failure modes that would produce a spurious
+> inversion — sign error, member-basis mistake, variance mis-aggregation — and
+> then measured against the real shipped EPL artifact on its own holdout
+> (n=375, 300 members/row). Findings:
+>
+> * decomposition identity exact: `max |total − (aleatoric + epistemic)| = 0.000e+00`
+> * no sign inversion: epistemic ∈ [0.047, 0.195], 375 distinct values, never
+>   negative, always ≤ total. A negated MI would have been clamped to
+>   identically zero by `max(0.0, ...)`; the live non-degenerate spread rules
+>   that out empirically, not just by reading the code.
+> * the gate's own bucketing is correct: `np.argsort` ascending, `buckets[0]`
+>   genuinely lowest-epistemic, `gap = high − low`.
+>
+> **The math is right. The gate is right. The model is what fails.**
+>
+> **(2) A prior hypothesis in this entry's own framing was refuted.** The
+> natural explanation — "low epistemic = confident on lopsided fixtures, and
+> confident predictions carry high RPS variance" — does not hold. Confidence is
+> *flat* across all four epistemic quartiles (0.4866 / 0.5074 / 0.5042 /
+> 0.4871) and `corr(epistemic, confidence) = −0.056`, i.e. nil. The real shape
+> is in hit-rate:
+>
+> | bucket | epistemic | confidence | hit_rate | RPS |
+> |---|---|---|---|---|
+> | LOWEST | 0.0697 | 0.4866 | **0.4301** | 0.2345 |
+> | q2 | 0.0854 | 0.5074 | 0.5054 | 0.2301 |
+> | q3 | 0.0971 | 0.5042 | **0.5376** | 0.2103 |
+> | HIGHEST | 0.1181 | 0.4871 | 0.4896 | 0.2128 |
+>
+> Where the 300 trees **agree most**, the model is **least accurate** (43% vs
+> 50–54%). That is stable-but-wrong — systematic bias in that region of feature
+> space, not variance. ⚠️ Note the hit-rate is **non-monotonic** (q3 > q4), so
+> no re-specification of the gate along a monotonic ordering rescues it either;
+> that closes off the "maybe the gate is mis-specified" family of explanations
+> as well.
+>
+> **(3) An override path now exists and does not touch this.** ADR-0011 adds
+> `OPERATOR_OVERRIDE_UNCERTIFIED`, which lets an operator authorise staking
+> over these failing gates *with disclosure*. It changes no threshold,
+> suppresses no test, and leaves this item open. The two `xfail`s still print
+> the live measurement on every run. An override is not a resolution, and this
+> entry must not be closed because one is in force.
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C
 authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE`.**
