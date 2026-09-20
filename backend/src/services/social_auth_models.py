@@ -45,9 +45,14 @@ class UserIdentity(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    provider = Column(String, nullable=False)
-    provider_subject = Column(String, nullable=False)
-    provider_email = Column(String, nullable=True)
+    # Lengths must match migration 0014 exactly. An unbounded `String` renders
+    # as VARCHAR with no length, and alembic's default type comparator treats a
+    # metadata type with `length is None` as "don't care" - so the gate stayed
+    # green while the ORM silently declined to enforce the physical limits the
+    # database does enforce. Declaring them makes the model describe reality.
+    provider = Column(String(32), nullable=False)
+    provider_subject = Column(String(255), nullable=False)
+    provider_email = Column(String(320), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
