@@ -179,3 +179,57 @@ def test_training_scripts_never_derive_features_from_the_label() -> None:
                 f"{code.strip()!r}. Training features must never be derived from "
                 f"the outcome; fix the corpus instead."
             )
+
+
+def test_fabricating_predictors_stay_off_the_serving_path() -> None:
+    """Two modules can manufacture probabilities out of nothing. Neither is
+    reachable from serving today, and this pins that.
+
+    `MockModelOrchestrator.predict()` (`services/orchestrator.py`) returns
+    `random.uniform()` probabilities under a `model_version` of `"mock_v1.0"`,
+    and it is substituted **silently** on an `ImportError` with only a
+    `logger.warning`. `LiveCalibrator._generate_mock_data()`
+    (`models/live_calibrator.py`) synthesises prediction/outcome pairs whenever
+    its Redis client is absent — which would calibrate against invented
+    outcomes.
+
+    Both are dead: `services/orchestrator.py` is not imported by the served
+    application at all, and `LiveCalibrator` has no call sites (only its sibling
+    `PlattCalibrator` is imported from that module). Dead today is not dead
+    tomorrow, though, and the failure mode is silent by construction — the
+    orchestrator swaps in the mock on an exception path, so wiring it up would
+    publish random numbers with a warning nobody reads.
+
+    Audited 2026-09-20 (directive §22). If a legitimate need to wire either one
+    arises, the fabrication has to be removed first, not the test.
+    """
+    backend_root = Path(__file__).resolve().parents[1]
+    src = backend_root / "src"
+
+    def call_sites(needle: str, *, excluding: str) -> list[str]:
+        hits: list[str] = []
+        for path in src.rglob("*.py"):
+            if path.name == excluding:
+                continue
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1
+            ):
+                if needle in line:
+                    hits.append(f"{path.relative_to(backend_root)}:{lineno}: {line.strip()}")
+        return hits
+
+    # The mock orchestrator must not be constructed anywhere but its own module.
+    assert call_sites("MockModelOrchestrator(", excluding="orchestrator.py") == []
+
+    # `LiveCalibrator` must stay unused. `PlattCalibrator` lives in the same
+    # module and IS imported, so match the class name with a word boundary
+    # rather than the module name.
+    live_calibrator_uses = [
+        hit
+        for hit in call_sites("LiveCalibrator", excluding="live_calibrator.py")
+        if "PlattCalibrator" not in hit
+    ]
+    assert live_calibrator_uses == [], live_calibrator_uses
+
+    # And the synthetic-data helper must have no caller outside its own module.
+    assert call_sites("_generate_mock_data(", excluding="live_calibrator.py") == []

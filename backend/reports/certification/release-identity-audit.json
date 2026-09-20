@@ -1,0 +1,155 @@
+{
+  "artifact_integrity": {
+    "bundesliga": {
+      "artifact": "bundesliga_ensemble_v5_phase7.pkl",
+      "declared_sha256": "83dbcd3d42ef566e966794ad1741b68160eaa4caed572b5ed2dd39cabc67d852",
+      "recomputed_sha256": "83dbcd3d42ef566e966794ad1741b68160eaa4caed572b5ed2dd39cabc67d852",
+      "required": true,
+      "status": "BOUND"
+    },
+    "epl": {
+      "artifact": "epl_ensemble_v5_phase7.pkl",
+      "declared_sha256": "3b59285b194b87167423413f479c300d9bff5fb39e62c49b1cd65ba094c46d30",
+      "recomputed_sha256": "3b59285b194b87167423413f479c300d9bff5fb39e62c49b1cd65ba094c46d30",
+      "required": true,
+      "status": "BOUND"
+    },
+    "eredivisie": {
+      "artifact": "eredivisie_ensemble_v5_phase7.pkl",
+      "declared_sha256": "40ed3ef224e740e4833122343d2681ccc9d404c375625f89a661091fe3b5b76f",
+      "recomputed_sha256": "40ed3ef224e740e4833122343d2681ccc9d404c375625f89a661091fe3b5b76f",
+      "required": false,
+      "status": "BOUND"
+    },
+    "la_liga": {
+      "artifact": "la_liga_ensemble_v5_phase7.pkl",
+      "declared_sha256": "06505ae566ec92a4a6bbe630af7425bfca3df9599909341480f4170f9f259d16",
+      "recomputed_sha256": "06505ae566ec92a4a6bbe630af7425bfca3df9599909341480f4170f9f259d16",
+      "required": true,
+      "status": "BOUND"
+    },
+    "ligue_1": {
+      "artifact": "ligue_1_ensemble_v5_phase7.pkl",
+      "declared_sha256": "0f417e4ca26043a54c7ff4d420a8afa4a56dcc8b9ea2498794ac64abf5a54bb1",
+      "recomputed_sha256": "0f417e4ca26043a54c7ff4d420a8afa4a56dcc8b9ea2498794ac64abf5a54bb1",
+      "required": true,
+      "status": "BOUND"
+    },
+    "serie_a": {
+      "artifact": "serie_a_ensemble_v5_phase7.pkl",
+      "declared_sha256": "ad971607b72fee041c3ac8db0c3913e989eca30c40e695db023c6e32e357a736",
+      "recomputed_sha256": "ad971607b72fee041c3ac8db0c3913e989eca30c40e695db023c6e32e357a736",
+      "required": true,
+      "status": "BOUND"
+    }
+  },
+  "binding_training_manifest": null,
+  "generated_at": "2026-09-20T13:57:45Z",
+  "identity_chain": {
+    "calibrator": {
+      "detail": "Calibrators live inside the artifact pickles and are therefore covered by artifact_sha256. Measured separately: 0 of 6 leagues has a USABLE calibrator (docs/DEBT.md item 122), so no calibrator participates in serving.",
+      "status": "NOT_APPLICABLE"
+    },
+    "certification_policy": {
+      "detail": "The policy is hashed and verifiable at runtime, but the serving manifest does not record WHICH policy version judged this generation \u2014 the binding is implicit, established only by the deployed code.",
+      "live_policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
+      "live_policy_version": "1.2.0",
+      "recorded_in_serving_manifest": false,
+      "status": "BOUND"
+    },
+    "conformal": {
+      "detail": "No conformal layer exists in serving. Absent is the honest state, not a gap.",
+      "status": "NOT_APPLICABLE"
+    },
+    "dataset_snapshot": {
+      "binding_manifest": null,
+      "detail": "No file records the dataset that produced the served artifacts.",
+      "status": "UNBOUND"
+    },
+    "feature_contract": {
+      "contract_declares": "phase7_68",
+      "contract_sha256": "6b5ebd6bdde6290afb36e9c338787699037d23022c4c68587715372522007768",
+      "detail": "feature_contract.json must describe the schema the serving manifest declares.",
+      "manifest_declares": "phase7_68",
+      "status": "BOUND"
+    },
+    "model_artifacts": {
+      "detail": "Per-league artifact and metadata SHA-256 are pinned in active_generation.json and recomputed here.",
+      "leagues": 6,
+      "status": "BOUND"
+    },
+    "source_commit": {
+      "binding_manifest": null,
+      "detail": "No file records the commit that produced the served artifacts. active_generation.json has no git field, and per-league metadata carries only performance figures and trained_at.",
+      "status": "UNBOUND"
+    }
+  },
+  "report_version": "release-identity-audit-1",
+  "repository": {
+    "audited_at_commit": "fc8ece8e7f4defdefce24554df9421237ff1c2df",
+    "name": "sabiscore/sabiscore"
+  },
+  "result": {
+    "chain_complete": false,
+    "interpretation": "Artifacts are hash-pinned, so it is provable they have not CHANGED. Their ORIGIN is not recorded: no file binds the served generation to a source commit or a dataset snapshot. Reproducing or re-deriving this generation from the repository alone is therefore not possible.",
+    "unbound_links": [
+      "source_commit",
+      "dataset_snapshot"
+    ],
+    "verdict": "RELEASE_IDENTITY_INCOMPLETE"
+  },
+  "served_generation": {
+    "active_version": "v5_phase7",
+    "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+    "certified_at": null,
+    "feature_schema_version": "phase7_68",
+    "generation": "v5_phase7-20260808",
+    "promotion_state": "ACTIVE_FAIL_CLOSED"
+  },
+  "training_manifests_found": [
+    {
+      "artifact_hashes": null,
+      "binds_served_generation": false,
+      "certification_policy_sha256": "f823648253fc2708fc676b5fe25da807d3393d25a62bf80a3085508f130908f8",
+      "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+      "declares_generation_id": null,
+      "feature_schema_version": "apex_v1_68",
+      "git_commit": "037bbb38d3d0de14b30f03a7621228974679978a",
+      "git_dirty": true,
+      "path": "backend/models/candidate/training_manifest.json"
+    },
+    {
+      "artifact_hashes": null,
+      "binds_served_generation": false,
+      "certification_policy_sha256": null,
+      "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+      "declares_generation_id": null,
+      "feature_schema_version": "apex_v5_66",
+      "git_commit": "71cf2cdfe52600ecc1341af8b599e06f2786cf91",
+      "git_dirty": true,
+      "path": "backend/models/candidate/training_manifest_v10_gate7_hpo.json"
+    },
+    {
+      "artifact_hashes": null,
+      "binds_served_generation": false,
+      "certification_policy_sha256": null,
+      "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+      "declares_generation_id": null,
+      "feature_schema_version": "apex_v3_68",
+      "git_commit": "01f03c177f5b52be123091cc32c4d69b75f6ba46",
+      "git_dirty": true,
+      "path": "backend/models/candidate/training_manifest_v8_dense68.json"
+    },
+    {
+      "artifact_hashes": null,
+      "binds_served_generation": false,
+      "certification_policy_sha256": null,
+      "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+      "declares_generation_id": null,
+      "feature_schema_version": "apex_v4_66",
+      "git_commit": "d793e9be52c5963033df8bf9a12d08d6280529fd",
+      "git_dirty": true,
+      "path": "backend/models/candidate/training_manifest_v9_gate7.json"
+    }
+  ]
+}

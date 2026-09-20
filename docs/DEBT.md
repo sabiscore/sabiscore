@@ -1,5 +1,161 @@
 # SabiScore Debt Ledger
 
+## 125. Repo-wide debt audit: every fabrication path is dead or flag-gated, and two dead ones are now pinned dead
+
+**Tier:** `RESOLVED` (audit complete; guard added) — 2026-09-20, P18 certification
+execution, directive §22. **Owner:** unassigned.
+
+### Method
+
+Swept `backend/src` and `apps/web/src` for the directive's marker list, then —
+and this is the part that mattered — checked **reachability**, not just
+presence. Grep alone gave the wrong answer twice, so every conclusion below
+rests on importing `src.api.main` (the served application) and inspecting
+`sys.modules`, plus call-site analysis.
+
+Marker counts in production source: TODO 21, FIXME 0, XXX 0, HACK 0,
+"temporary" 4, "bypass" 3, "unsafe" 6.
+
+### ⚠️ Where grep was wrong
+
+A first pass concluded `data/enrichment/feature_engineer.py` (7 "TODO:
+Implement Elo / tactical / weather / set-piece" stubs) was "not reachable",
+because nothing in `src/api`, `src/services` or `src/models` imports it.
+**It is in fact loaded by the served app** — `data/enrichment/__init__.py` does
+`from .feature_engineer import FeatureEngineer`, so importing the unrelated
+`statsbomb_aggregator` sibling pulls it in.
+
+The accurate statement is narrower and had to be verified separately:
+**imported as a package side effect, never invoked.** `FeatureEngineer` is used
+nowhere in `src/api`, `src/services` or `src/models` (the `ultra_prediction_service`
+hits are a *different* class, `AdvancedFeatureEngineer`), and
+`_add_elo_features` / `_add_tactical_features` / `_add_weather_features` have
+zero callers outside their own file.
+
+**"Not imported" and "never called" are different claims. Check the import
+graph, then check the call sites — a grep answers neither on its own.**
+
+### Findings
+
+| Item | Location | On the serving path? | Certification impact |
+|---|---|---|---|
+| 21 TODOs | various | No — stubs never invoked | None |
+| `MockModelOrchestrator.predict()` → `random.uniform()` | `services/orchestrator.py` | **No** — module not in the served import graph; never instantiated | None today; latent |
+| `LiveCalibrator._generate_mock_data()` | `models/live_calibrator.py` | **No** — `LiveCalibrator` has zero call sites; the module loads only because `models/__init__` imports its sibling `PlattCalibrator` | None today; latent |
+| `mock_generator` matches feed | `api/endpoints/matches.py` | Gated on `settings.mock_mode`, which is `Field(default=False)` in `config.py:181` | None while the flag is off |
+| calibration stub | `api/endpoints/explain.py` | Yes, reachable | **None — it is honest.** Returns `{}` / `sample_size=0`, never invented numbers. Same fail-closed shape as the vΩ.15 explainer fix |
+| betfair / opta / pinnacle stubs | `data/connectors/` | No — zero importers | None |
+| soccerway stub parser | `data/scrapers/` | Ingestion worker only (`cli/start_ingestion.py`), not the web startCommand | None |
+
+**No fabrication path is reachable on the live serving, prediction or staking
+path.** That is the audit's headline, and it is measured rather than asserted.
+
+### What was added
+
+The two latent ones are now pinned by
+`test_fabricating_predictors_stay_off_the_serving_path` in
+`tests/test_zero_fabrication_contract.py`. They deserve a guard rather than a
+note because **both fail silently by construction**: the orchestrator swaps in
+`MockModelOrchestrator` on an `ImportError` with nothing but a
+`logger.warning`, and `LiveCalibrator` falls back to synthetic pairs whenever
+its Redis client is absent — which would calibrate against invented outcomes.
+Wiring either up would publish random numbers past a warning nobody reads.
+
+Watched failing before being trusted: importing and constructing
+`MockModelOrchestrator` from a served module reddens it by name.
+
+⚠️ Neither module was deleted. Deleting a module is a larger call than this
+pass is scoped for, and "dead" is a claim best enforced by a test rather than
+settled by removal that might break an offline tool.
+
+---
+
+## 124. The served generation has no reproducibility binding — its artifacts are pinned, but their origin is not recorded
+
+**Tier:** `OPEN — needs a new generation to fix` (found 2026-09-20, P18
+certification execution, directive §10/§12/§23). **Owner:** unassigned.
+
+### What was measured
+
+`backend/scripts/audit_release_identity.py` (new) walks the identity chain the
+directive requires and reports `BOUND` / `UNBOUND` / `MISMATCH` per link,
+refusing to infer a link from a filename — two files sharing a version string
+is not provenance. Evidence:
+`backend/reports/certification/release-identity-audit.json`.
+
+| Link | Status |
+|---|---|
+| model artifacts | **BOUND** — 6/6 recomputed SHA-256 match the manifest |
+| feature contract | **BOUND** — `feature_contract.json` declares `phase7_68`, matching the serving manifest |
+| certification policy | **BOUND** at runtime (hash verifiable), but *not recorded in the serving manifest* |
+| **source commit** | **UNBOUND** |
+| **dataset snapshot** | **UNBOUND** |
+| calibrator | N/A — inside the artifact pickles, covered by `artifact_sha256`; and 0/6 are usable anyway (item 122) |
+| conformal | N/A — no conformal layer exists; absent is honest |
+
+**Verdict: `RELEASE_IDENTITY_INCOMPLETE`.**
+
+### Why this matters, stated precisely
+
+The artifacts are hash-pinned, so it is provable they **have not changed**.
+Their **origin is unrecorded**. No file in the repository binds
+`v5_phase7-20260808` to a commit or a dataset snapshot:
+
+- `active_generation.json` has no `git`, `dataset` or `policy` field.
+- Per-league metadata (`*_ensemble_v5_phase7_metadata.json`) carries only
+  `accuracy` / `brier_score` / `rps` / `trained_at` / `training_samples` /
+  `feature_count` / `data_source` — no provenance at all.
+- All four `training_manifest*.json` files live under `models/candidate/` and
+  **none binds the served generation**. The default one declares
+  `generation_id: null`, `feature_schema_version: apex_v1_68` (the served
+  generation is `phase7_68`), `artifact_hashes: null`, a
+  `certification_policy_sha256` of `f8236482…` against the live `4e050ad0…`,
+  and `git.dirty: true` — so even its commit does not identify a reproducible
+  source state.
+
+⚠️ This sharpens `docs/DEBT.md` item 86, which called the schema mismatch
+"plausibly benign". Whatever that file is, **it is not a binding manifest for
+what production serves**, and nothing else plays that role. So this generation
+cannot be re-derived from the repository.
+
+Per directive §24 ("if artifact provenance fails: certification = invalid /
+unverified") this is an **independently sufficient** reason the generation
+cannot be certified — separate from G11, G16 and G18. It does not change
+today's decision, which is already `HOLD` / `OPERATOR_OVERRIDE_UNCERTIFIED`.
+
+### Related, and worth reading together
+
+`models/evaluation_baseline/manifest.json` records the reason it supersedes
+this generation for evaluation: *"v5_phase7-20260808 trained on season 2526
+while declaring holdout 2425, so it memorised the holdout every candidate
+comparison scores against"* (item 81). So the served generation is both
+unrecorded in origin and known-contaminated in construction.
+
+### Fix, and why it is not done here
+
+Not fixable by editing `active_generation.json`: back-filling a commit and a
+dataset hash for artifacts trained on 2026-08-08 would be **inventing
+provenance**, which is the exact failure this audit exists to detect. The
+binding has to be emitted at training time. `training_manifest.py` already
+emits every needed field (`git`, `dataset.dataset_sha256`,
+`certification_policy_sha256`, `artifact_hashes`, `reproducibility_sha256`) —
+it simply was not run, with a clean tree and a real `generation_id`, for this
+generation. **The next generation should be refused promotion unless
+`audit_release_identity.py` reports `RELEASE_IDENTITY_COMPLETE`.**
+
+### ⚠️ The auditor is an audit, not a gate
+
+It exits 0 by default even when links are unbound, and is deliberately **not**
+wired into `verify_active_artifacts.py` or the Render build command. A
+documentation-shaped finding must not be able to fail a deploy and hold a
+healthy release — that is the vΩ.47 shape, where a metadata problem crash-looped
+a service. `--strict` exits 1 for ad-hoc or future gate use.
+
+Watched biting before being trusted: corrupting one declared `artifact_sha256`
+flips that league to `MISMATCH` and the `model_artifacts` link to `UNBOUND`;
+`active_generation.json` was restored byte-identical afterwards.
+
+
 ## 123. The G18 market baseline de-vigged proportionally, which mis-specifies the bar the model is scored against — Shin's method adopted as the designated baseline
 
 **Tier:** `RESOLVED` — shipped and measured 2026-09-20 (P18 certification execution,
