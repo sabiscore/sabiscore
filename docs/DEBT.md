@@ -1,5 +1,317 @@
 # SabiScore Debt Ledger
 
+## 114. `market_baseline`/`no_league_regression` re-verification blocked: candidate `.pkl` artifacts are absent from a fresh checkout, and the committed comparison report is 9 days stale relative to a figure CLAUDE.md's own narrative already cites
+
+**Tier:** `NEXT`. **Found:** 2026-09-20, P8 (market diagnostics) of the
+production certification execution pass, attempting to regenerate G18 evidence
+per the execution prompt's explicit instruction.
+
+Ran `scripts/generate_feature_availability_matrix.py` fresh: the regenerated
+file differs from the committed one by floating-point noise only (14
+`training_stddev` / 5 `training_min`/`training_max` values at the 1e-15/1e-16
+last-bit level — confirmed by diffing field names, zero boolean/count fields
+changed). Reverted the no-op regeneration rather than committing noise.
+
+**Then attempted `scripts/compare_candidate_vs_incumbent.py` fresh and it
+cannot run for real**: every league reports `candidate (artifact absent)` —
+the trained candidate `.pkl` files this script needs are not present anywhere
+in this checkout (only their JSON metadata — `training_manifest.json`,
+`comparison_report*.json`, `feature_availability_matrix*.json` — are
+committed; the binary artifacts themselves apparently never were, consistent
+with this repo's `artifacts/`-is-gitignored convention extending informally to
+`models/candidate/*.pkl`). This is an environmental limitation of any fresh
+clone, not something introduced this session, and not fixable without a full
+retrain (out of scope for a verification pass).
+
+**The most recent usable evidence is therefore the committed
+`backend/models/candidate/comparison_report.json`**, last regenerated
+`2026-09-11` (`e3af919`): `no_league_regression: 3/6` (BUNDESLIGA/LIGUE_1/
+SERIE_A lose), `market_baseline: 0/6`, `mean_rps_improvement ≈ -2.9e-10`
+(statistically zero — candidate and incumbent are numerically near-identical
+in every league), `promotion_permitted: false`.
+
+⚠️ **This 3/6 does not match CLAUDE.md's own most recent narrative**, which
+cites `no_league_regression: 4/6` from "item 48 follow-up, M2 Family A Elo
+wiring" and is what the 2026-09-13 certification report's `metrics.
+candidate_promotion_gate` block also records. That 4/6 evidence file is not
+present in this checkout either — it was apparently never committed (or was
+committed and later removed as ephemeral), so it cannot be independently
+re-confirmed here. **Do not treat the 3/6 read above as a regression from
+4/6** — no evidence supports ordering these two point-in-time measurements
+against each other; they may simply be two different sessions' outputs, only
+one of which survives in git.
+
+**Why this does not change the certification decision.** `docs/DEBT.md` item
+62's paired block-bootstrap (10,000 replicates) already established that the
+*point estimate* — whether read as 3/6 or 4/6 — is not the operative fact:
+zero of six leagues have a 95% CI excluding zero in the candidate's favour,
+for the candidate **and** for the serving incumbent. `market_baseline` stays
+`0/6` under both the stale-committed report and every prior reading.
+`promotion_permitted` stays `false` regardless of which of the two
+`no_league_regression` figures is current. G18/`market_baseline` remains
+correctly `FAIL`, unchanged by this finding — see §4.4 of the execution
+prompt's own Rule-14 dossier framing.
+
+**Recommended next step, not taken here:** commit the candidate `.pkl`
+artifacts (or an explicit, documented policy that they are intentionally
+ephemeral and every comparison run must retrain first) so a future session
+can actually regenerate this evidence rather than reading an aging snapshot.
+
+---
+
+## 113. First real execution of the G11/G16 v7.3 evidence harnesses against live production data — G11 genuinely FAILS on real evidence; G16 surfaced a real but unresolved calibrator discrepancy between a fresh bundle load and what production actually serves
+
+**Tier:** `NEXT` (the calibrator discrepancy) / result recorded (G11 measurement).
+**Owner:** unassigned. **Found:** 2026-09-20, during the production certification
+execution pass (Execution Prompt v1.0, P5/P6), while attempting to resolve
+`G11_CALIBRATION`/`G16_UNCERTAINTY` from `UNVERIFIED`/`BLOCKED` to a verdict on
+real evidence per `docs/CERTIFICATION_HARNESSES_V7_3.md`.
+
+### G11/G15 — first successful end-to-end run, ever
+
+Per `docs/certification/v7.4-directive-reconciliation-2026-09-14.md`'s own
+addendum, G11 had never been run: `artifacts/evidence/` did not exist anywhere
+in the repository, and producing the required `served_predictions_2526.csv`
+input was explicitly "not attempted in that pass". Built it this session from
+87 real settled `v5_phase7` predictions (`match_prediction_logs` joined to
+`matches`, replicating `build_settled_predictions_query()` exactly, read-only,
+via the Render Postgres MCP tool — `n=87`, all 6 served leagues, snapshot
+SHA-256 `34b5e70e…e0352e581`), then ran
+`backend/scripts/evaluate_g11_ece.py --input ... --bins 10`.
+
+**Result — MEASURED, real, reproducible:**
+
+```
+adaptive confidence ECE = 0.09770   (policy G11 threshold: <= 0.03)   -> FAILS
+Murphy decomposition_error = 0.0    (policy G15 threshold: <= 1e-6)   -> PASSES
+brier = 0.6453  (reliability 0.1147, resolution 0.1074, uncertainty 0.6585)
+```
+
+This is not a surprise finding — it is the first *measurement* of what items
+64/83/87/106 already established by source inspection: the served
+`v5_phase7-20260808` generation's `SoftmaxMetaModel` head is genuinely
+uncalibrated, and the calibration-selection cascade (item 64) has never run
+against it. A FAIL here is the correct, expected, evidence-grounded result,
+not a regression. G15's Murphy identity holding to exact float precision
+confirms the decomposition arithmetic itself is sound.
+
+### G16 — a real but unresolved discrepancy, not a resolved finding
+
+⚠️ **Method note first: the first G16 run this session was contaminated and
+is disregarded, not reported.** `pip install mapie==1.5.0` (per the runbook)
+silently upgraded `scikit-learn` from the repo's pinned `1.3.2` to `1.9.1` —
+mapie 1.5.0 requires `scikit-learn>=1.4`, a **structural conflict with this
+repo's own pin** (`backend/requirements.txt`/`requirements.runtime.txt` both
+pin `1.3.2` for `python_version < "3.12"`, and render.yaml runs 3.11.9). Under
+the contaminated 1.9.1, `_stacked_predict()` raised
+`TypeError: check_array() got an unexpected keyword argument 'force_all_finite'`
+for BUNDESLIGA/LIGUE_1 specifically — an artifact of *my own environment*, not
+of the codebase. Reinstalling the pinned `scikit-learn==1.3.2` (against pip's
+own dependency-conflict warning, since mapie has no version that satisfies
+both) made `_stacked_predict()` succeed cleanly for all three spot-checked
+leagues. **`docs/CERTIFICATION_HARNESSES_V7_3.md`'s own dependency guidance is
+therefore unsafe to follow literally** — installing `requirements-training.txt`
+as written will silently break the repo's pinned scikit-learn the moment mapie
+resolves its own transitive requirement, and nothing in the runbook warns
+against this. Flagging the runbook itself as needing a pin correction
+(`mapie==1.5.0` and `scikit-learn==1.3.2` cannot coexist; either downgrade the
+mapie pin or accept a separate, dedicated venv for G16 specifically — not
+decided here).
+
+**With the correct scikit-learn restored, a second, independent, reproducible
+crash appeared** — this one is not a contamination artifact:
+
+```
+AttributeError: 'LogisticRegression' object has no attribute 'multi_class'
+```
+
+raised by `_apply_calibrator(fitted_cal.method, fitted_cal.calibrators, proba)`
+for both BUNDESLIGA and LIGUE_1, called with the *real* row-0 feature vector
+and the *real* loaded artifact bundle (`bundle.calibrator` reports
+`method="sigmoid"`, `type=FittedCalibrator` for both leagues — a serialized
+Platt calibrator genuinely present in the artifact, matching item 83's claim
+that every `v5_phase7` artifact carries one). The unpickling warnings this
+session's Python emitted throughout (`"Trying to unpickle estimator
+LogisticRegression from version 1.8.0 when using version 1.9.1"` — and,
+un-suppressed, presumably still naming 1.8.0 under 1.3.2 too, since that
+version string is baked into the pickle bytes, not the active interpreter)
+point at the same class of cross-sklearn-version pickle incompatibility as the
+contamination above, but this time genuinely *inside the committed artifact*:
+the calibrator's `LogisticRegression` sub-estimator was fit under a
+materially newer scikit-learn (≈1.8.0) than what `requirements.txt`/
+`requirements.runtime.txt` pin (1.3.2) and what render.yaml's Python (3.11.9)
+would install.
+
+**This crash is real and reproduced — but it does NOT match what production
+is actually serving, and that gap is not resolved.** A direct, read-only query
+against every real `v5_phase7` prediction logged for these two leagues
+(`match_prediction_logs` joined to `matches`, BUNDESLIGA 12/12, LIGUE_1 21/21)
+shows `calibration_method = "raw"` in **100% of rows, with zero exceptions** —
+never `"sigmoid"` (what a successfully-applied calibrator would record) and
+never any fallback signature. Since `_run_inference`'s calibrator-application
+`except` block returns `_fallback_result()` unconditionally on any exception
+(no partial-recovery branch, unlike the sibling `_stacked_predict` except
+block), a crash of the kind reproduced here — if it occurred in the process
+actually serving these leagues — would show up as `model_version="fallback"`
+on every request. **It does not, ever, in the real data.** Live BUNDESLIGA/
+LIGUE_1 predictions are demonstrably real, differentiated, non-uniform
+outputs (visible directly in the G11 CSV built above), which is inconsistent
+with either (a) the calibrator never being present in the bundle production
+actually constructs, or (b) it being present and always crashing on
+application. Both must be true simultaneously for this reproduction's finding
+and production's observed behavior to both hold, which is a contradiction —
+meaning something about bundle construction, caching, or process warm-state
+differs between this session's fresh, cold, single-shot script and the real
+long-running server, and this session did not identify what.
+
+⚠️ **Recorded as an open, unresolved discrepancy, not a diagnosed defect.**
+Two committed facts stand without a reconciling explanation: (1) a fresh
+`get_artifact_bundle("BUNDESLIGA")` in this environment returns a bundle whose
+`.calibrator` is a real, non-None `FittedCalibrator` that crashes on
+application; (2) production's own prediction log shows this calibrator is
+never successfully applied, and also never observably crashes into fallback.
+The likely, but **unconfirmed**, reconciling hypothesis: production's
+long-running process attaches or discards the calibrator once at some earlier
+point (model load, first-request warm-up, or an already-existing guard this
+session did not locate) and thereafter consistently skips it — which would
+make the "raw" result item 64/83/87/106 already documented as expected/
+accepted the *outward symptom* of this exact crash, encountered once,
+silently, rather than of the meta-model being merely "not yet calibrated" as
+previously framed. **Do not treat this hypothesis as confirmed** — it was not
+traced through the real request path this session; a future session with
+production log access (or a willingness to instrument `_load_model` directly)
+should look for where `bundle.calibrator` might be set back to `None` after a
+failed attach, or confirm no such guard exists and the discrepancy points
+somewhere else entirely.
+
+### What this changes and does not change
+
+- `G11_CALIBRATION`: resolves `UNVERIFIED → FAIL`, on real, reproducible
+  evidence (`artifacts/certification/g11_ece.json`, gitignored per repo
+  convention, this entry is the durable record).
+- `G16_UNCERTAINTY`: stays unresolved. Neither harness run this session
+  produces trustworthy G16 evidence — the first is contaminated (disregard),
+  the second reproduces a real artifact-level defect whose relationship to
+  production's actual behavior is not established. `G16` remains `FAIL`/
+  `BLOCKED` on its own pre-existing, independently-sufficient grounds (the
+  permanent `MODEL_UNCERTAINTY_UNAVAILABLE` gap, item 42) regardless of this
+  finding.
+- Certification decision: unaffected. Still `HOLD`. Nothing here was ever
+  going to move it either way — this narrows *why* two specific gates read
+  the way they do, on genuinely fresh evidence, per the execution prompt's own
+  instruction that "a FAIL here is a legitimate, valuable result."
+- No source file touched. `active_generation.json`, `certification_policy.py`
+  untouched. This is an evidence-gathering and research-note entry only.
+
+## 112. The "MANDATORY, zero-exit" local CI enforcer could not reach zero-exit on a fresh install — its own ruff steps ran unselected against an unpinned ruff version
+
+**Tier:** `RESOLVED` — fixed and verified 2026-09-20, during the production
+certification execution pass (Execution Prompt v1.0, P0 ground-truth).
+**Owner:** unassigned. **Found:** 2026-09-20, on the first genuinely
+from-scratch bootstrap of this session (`python3 -m venv .venv`, fresh
+`pip install -r backend/requirements.txt` + `requirements-dev.txt`, then
+running `scripts/ci_local_enforcer.sh` for real rather than trusting a prior
+session's green claim).
+
+### What happened
+
+`scripts/ci_local_enforcer.sh` step 1 ran `ruff check src/` and
+`ruff check scripts/` with **no `--select`**, while its own header comment
+promises: *"It mirrors `.github/workflows/ci.yml` rather than inventing its
+own checks, so that a clean run here means the same thing a green CI run
+would have meant."* CI's actual invocation (`.github/workflows/ci.yml:117`)
+is `ruff check src --select E4,E7,E9,F`. The unselected form does not mirror
+that — it resolves to whatever the **installed ruff release's own default
+rule set** is, and `backend/requirements-dev.txt` pins no ruff version at
+all (`ruff`, bare).
+
+On the ruff release this fresh install resolved (`0.16.8`), with no
+`pyproject.toml`/`ruff.toml` anywhere in the tree (confirmed absent; also
+confirmed with `ruff check --isolated`, which bypasses all config discovery
+and reproduces the identical count, ruling out a stray config file as the
+cause):
+
+```
+ruff check src --select E4,E7,E9,F        -> All checks passed!         (CI's real gate)
+ruff check src/          (bare, step 1a)  -> 3900 errors, 2929 fixable
+ruff check scripts --select E4,E7,E9,F    -> All checks passed!
+ruff check scripts/      (bare, step 1b)  -> 751 errors, 555 fixable
+```
+
+The findings are overwhelmingly `UP006`/`UP035` (pyupgrade — `Dict`/`Optional`
+→ `dict`/`X | None`) and `I001` (isort import ordering): real style debt, but
+debt this codebase has never been cleaned against and that CI has never
+gated on. Under `set -euo pipefail`, step 1 would abort the **entire**
+"MANDATORY, zero-exit, stands between a regression and master" enforcer
+before a single test ran, on every genuinely fresh install.
+
+### Why this survived two prior sessions naming a nearly-identical number
+
+`docs/DEBT.md` item 107 (2026-09-19) recorded "a bare `ruff check src/` in a
+fresh install reported 3884 errors" and concluded "no regression, a wrong
+local command" — correct as far as it went, but that session ran the bare
+command **by hand as a mistake**, separately from the enforcer script, and
+did not check that the enforcer's own step 1 runs the identical unselected
+form internally. Item 99 (2026-09-17), which built the enforcer and named it
+mandatory, verified that linting `scripts/` catches a real `F821` bug (it
+does — see below) but never recorded a genuine zero-exit completion of step 1
+against `src/`'s full unselected output. Both sessions independently touched
+the edge of this defect and moved on without connecting them.
+
+### Fix
+
+Both steps now pass `--select E4,E7,E9,F` explicitly — the exact selection
+CI uses for `src/`, extended to `scripts/` (which CI does not lint at all).
+`F821` undefined-name is an `F`-prefixed rule, so the narrower selection
+**still catches the exact historical bug** that justified linting `scripts/`
+in the first place (item 99's missing `pathlib` import in
+`validate_deployment.py`) — proven by injecting an equivalent regression
+into a scratch file and confirming the selected command still flags it
+(`F821 Undefined name 'Path'`), not merely asserted from the rule family's
+name.
+
+Deliberately **not** fixed by pinning a ruff version instead: that would
+freeze today's accident rather than address the actual mismatch (an
+unselected invocation claiming to mirror a selected CI gate), and would
+silently reopen the identical class the next time ruff's own defaults shift.
+
+### Guard
+
+`backend/tests/unit/test_ci_local_enforcer_ruff_steps.py` (3 tests, same
+"execute it, don't just read it" idiom as item 111's
+`test_zero_fabrication_scan_enforces.py`):
+
+- both ruff invocation lines in the enforcer script carry
+  `--select E4,E7,E9,F` explicitly (pattern guard against reverting to bare),
+- the actual selected commands are run against this tree and must exit 0
+  (brings the gate local rather than trusting a description of it),
+- an injected `F821` regression in a scratch `scripts/` file is still caught
+  by the selected command (proves the fix did not weaken the safety property
+  it replaced).
+
+Watched failing before being trusted: reverted the fix (`git stash` on just
+`scripts/ci_local_enforcer.sh`), re-ran the pattern-guard test, confirmed it
+failed and named the exact reverted line, then restored.
+
+### Evidence
+
+| Step | Before | After |
+|---|---|---|
+| `ruff check src/` (enforcer step 1a) | 3900 errors, non-zero exit | replaced with `--select E4,E7,E9,F` → 0 errors, exit 0 |
+| `ruff check scripts/` (enforcer step 1b) | 751 errors, non-zero exit | replaced with `--select E4,E7,E9,F` → 0 errors, exit 0 |
+| `test_ci_local_enforcer_ruff_steps.py` | did not exist | 3 passed |
+| Injected `F821` regression, selected form | (n/a) | still caught, `Found 1 error` |
+
+⚠️ **`requirements-dev.txt`'s unpinned `ruff` remains unpinned.** This fix
+makes the enforcer's own invocation immune to a future default-rule-set
+change (it now always names its selection explicitly), but any *other*
+ad-hoc bare `ruff check` a future session runs by hand will keep reproducing
+this exact false signal for as long as the dependency stays unpinned. Pinning
+it is a separate, smaller decision not taken here — deliberately, to avoid
+bundling an unrelated dependency-pin change into a guard-correctness fix.
+
+---
+
 ## 111. The CI zero-fabrication scan could not fail — eight of its nine checks were inert from the day they were written
 
 **Tier:** `RESOLVED` — fixed and verified 2026-09-20.

@@ -1,0 +1,175 @@
+{
+  "report_version": "1.0.0",
+  "generated_at": "2026-09-20T06:00:00Z",
+  "generated_by": "Execution Prompt v1.0 (Claude Code session, claude/executive-production-prompt-exap15) — P0/P16/P2/P4/P5/P6/P8/P9/P13/P14/P17 re-verification",
+  "repository": {
+    "name": "sabiscore/sabiscore",
+    "commit_sha": "92bfb24280959c85b9d663a0b2c2d85da12014fa",
+    "branch": "claude/executive-production-prompt-exap15 (ahead of master by docs-only commits)",
+    "working_tree_clean": true,
+    "working_tree_note": "This session's changes (item 112 enforcer fix + test, items 113/114 research notes, this report) are the only diff from origin/master at 92bfb24; none touch model artifacts, certification policy, or serving behavior."
+  },
+  "deployment": {
+    "backend_sha_live": "f9be07b",
+    "backend_sha_live_full": "f9be07b9a07ea2497f29c768b6b6cfa97d418524",
+    "frontend_sha_live": "92bfb24",
+    "frontend_sha_live_full": "92bfb24280959c85b9d663a0b2c2d85da12014fa",
+    "sha_parity_backend_vs_frontend": "EXPECTED_DIVERGENCE — backend one commit behind frontend because 92bfb24 (frontend HEAD) was docs-only (added the execution-prompt doc); render.yaml rootDir:backend correctly skipped that deploy. git diff --name-only f9be07b..92bfb24 -- backend/ is empty, confirming this is not a failed deploy.",
+    "schema_version": "phase7_68",
+    "migration_revision": "0014_social_auth_identities",
+    "compatibility_status": "COMPATIBLE",
+    "note": "Live-verified this session via mcp__Vercel__web_fetch_vercel_url against https://web-oversabis-projects.vercel.app/api/health (egress to the Render backend domain directly is blocked by this session's network proxy; the Vercel-proxied /api/health, which itself calls the backend server-side, is the evidence source). All 4 backend readiness checks (database, migrations, cache, models) report ready. Elo: 26,144 rows / 222 teams (informational), climbing from the 25,706 cited 2026-08-17."
+  },
+  "model": {
+    "generation_id": "v5_phase7-20260808",
+    "model_family": "stacking_ensemble (random_forest+xgboost+lightgbm -> logistic_regression/softmax meta)",
+    "feature_contract": "phase7_68",
+    "artifact_pairs_verified": 6,
+    "artifact_hash_verification": "PASS",
+    "schema_version": "phase7_68",
+    "status": "OPERATOR_OVERRIDE_UNCERTIFIED",
+    "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED (ADR-0011, docs/DEBT.md item 108, activated 2026-09-19 — NOT certification; active_generation_is_certified() still returns False, promotion_state stays ACTIVE_FAIL_CLOSED, certified_at stays null)",
+    "calibration": "SoftmaxMetaModel, confirmed uncalibrated on REAL, FRESH evidence this session: adaptive confidence ECE = 0.09770 measured on 87 real settled predictions across all 6 served leagues (policy threshold <=0.03) — see gates.G11_CALIBRATION below.",
+    "evidence_source": "backend/scripts/verify_active_artifacts.py, re-run this session as part of the local CI enforcer: '6 hash-locked artifact pairs verified for v5_phase7-20260808', exit 0."
+  },
+  "data": {
+    "dataset_snapshot": "backend/data/cache/fd_*.csv, 12,765+ real matches (Elo replay confirms 12,765 matches processed this session)",
+    "temporal_window": "rolling-origin TRAIN -> CALIBRATE -> TEST, chronological, unchanged",
+    "coverage": "6 of 7 canonical leagues served (no UCL model variant; UCL hard-capped at ACTIONABLE, re-verified this session directly against both betting_intelligence.py:486 and core_engine.py:355 source)",
+    "provenance_status": "Live-verified via Vercel-proxied /api/health this session: espn+football_data_org+api_football+sportmonks+the_odds_api all report enabled:true, configured:true. football_data_org shows LIVE_VERIFIED contexts with real fixture/result data across all 6 leagues fetched within the last hour. the_odds_api reports STALE (last observed ~4.2h prior) but with real quota/coverage data (441 records, 15 events) — status materially better than the 'HTTP 401' regression recorded 2026-09-13; not independently re-probed live this session beyond what this cached health snapshot shows.",
+    "entity_integrity": "Re-verified this session via a direct read-only production-database query (Render Postgres MCP tool, sabiscore-db-v3): 0 self-play rows (home_team_id=away_team_id) among 13,097 matches; all 7 league_id values canonical (EPL/LA_LIGA/SERIE_A/LIGUE_1/BUNDESLIGA/EREDIVISIE/UCL, no fd.org-code leakage); exactly 2 mojibake team-name rows remain, both re-confirmed orphaned (0 Elo rows, 0 match references) — unchanged from the 2026-09-12 finding.",
+    "leakage_status": "CONTROLLED — unchanged, not independently re-run this session beyond the full backend suite (2571 passed) which includes test_training_leakage_contract.py.",
+    "forecast_authenticity": "Not applicable to this cycle — unchanged."
+  },
+  "policy": {
+    "policy_version": "1.2.0",
+    "policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
+    "metric_convention": "RPS (lower=better), Brier (3-term Murphy 1973 decomposition), log-loss, ECE — frozen in backend/reports/evaluation/metric-contract.json",
+    "class_order": "home_win, draw, away_win (1X2), consistent across candidate/incumbent/market",
+    "note": "CLAUDE.md's own citation of hash 41cb7703...f8f3dab is STALE (that is policy v1.0.0). This report cites policy_sha256() re-derived from the live certification_policy.py module this session, v1.2.0."
+  },
+  "metrics": {
+    "live_serving_accuracy": 0.4021,
+    "live_serving_rps": 0.2322,
+    "settled_predictions_total_live": 87,
+    "settled_predictions_growth": "grew from 80 (2026-09-13) / 59 (2026-09-09) to 87 (2026-09-20) — real elapsed-match-volume growth, no gate floor newly crossed (all relevant floors are 10 or 50, cleared long ago)",
+    "g11_adaptive_confidence_ece": {
+      "value": 0.09770,
+      "threshold": 0.03,
+      "status": "FAIL",
+      "n": 87,
+      "evidence_method": "backend/scripts/evaluate_g11_ece.py run fresh this session against a real settled-predictions CSV built from a read-only production DB query (replicating build_settled_predictions_query() exactly). First successful execution of this harness in the repository's history — see docs/DEBT.md item 113.",
+      "snapshot_sha256": "34b5e70ef83d263dd3669398c948a2dacecc05cf05cbcdca5d653e9e0352e581"
+    },
+    "g15_murphy_decomposition": {
+      "decomposition_error": 0.0,
+      "threshold": 1e-06,
+      "status": "PASS",
+      "brier": 0.6453
+    },
+    "candidate_promotion_gate": {
+      "no_league_regression": "3/6 per the most recent artifact this checkout can produce (backend/models/candidate/comparison_report.json, regenerated 2026-09-11, e3af919). CLAUDE.md's narrative cites a later 4/6 figure whose underlying evidence file is absent from this checkout and could not be independently re-confirmed this session — see docs/DEBT.md item 114. Re-running the comparison fresh this session was attempted and blocked: candidate .pkl artifacts are not present in this checkout.",
+      "market_baseline": "0/6, unchanged and re-confirmed by every available reading (2026-09-11 committed report, the 2026-08-28..2026-09-13 series, and item 62's paired block-bootstrap, which found 0/6 leagues with a 95% CI excluding zero for EITHER the candidate or the incumbent)",
+      "serving_feature_availability": "FAIL — unchanged (item 37/49 schema deadlock; resolved for an apex_v1_68 generation, not the currently served phase7_68 one)",
+      "promotion_permitted": false
+    },
+    "psi_drift": {
+      "status": "NOT_APPLICABLE",
+      "reason": "docs/DEBT.md item 8: correctly deferred until >=1,000 settled fixtures; currently 87, no change to this disposition"
+    }
+  },
+  "gates": [
+    { "gate_id": "G01_REPOSITORY_INTEGRITY", "status": "PASS", "observed": "clean working tree apart from this session's own documented, reviewed changes; no force-push", "method": "git status/log, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G02_TEST_SUITE", "status": "PASS", "observed": "backend: 2571 passed, 16 skipped, 2 xfailed, 0 failed (324.72s, env -u SECRET_KEY); web Vitest: 358 passed (358), 57 files; scraper tests included in the same enforcer run", "method": "scripts/ci_local_enforcer.sh, run to completion fresh this session (first genuinely fresh from-scratch bootstrap + full green run on record — see docs/DEBT.md item 112)", "code_sha": "92bfb24" },
+    { "gate_id": "G03_STATIC_ANALYSIS", "status": "PASS", "observed": "ruff check src/scripts --select E4,E7,E9,F: 0 errors (both, after fixing the enforcer's own unselected invocation, item 112); mypy ceiling 775 <= 784; web eslint/tsc: 0 errors", "method": "scripts/ci_local_enforcer.sh, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G04_BUILD", "status": "PASS", "observed": "NODE_ENV=production next build: clean, exit 0, ~76s", "method": "scripts/ci_local_enforcer.sh, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G05_SCHEMA_MIGRATION", "status": "PASS", "observed": "live migrations.head = 0014_social_auth_identities, confirmed via Vercel-proxied /api/health this session; local alembic upgrade/check not exercised (no local Postgres available this session — correctly SKIPPED, not claimed as PASS, by the enforcer)", "method": "live probe", "code_sha": "f9be07b (live)" },
+    { "gate_id": "G06_ARTIFACT_INTEGRITY", "status": "PASS", "observed": "6/6 hash-locked artifact pairs verified for v5_phase7-20260808", "method": "scripts/verify_active_artifacts.py, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G07_FEATURE_CONTRACT", "status": "PASS", "observed": "phase7_68 contract verified against per-league metadata feature_count (all 6 leagues report 68); feature_contract.json freshness check passed as part of verify_active_artifacts.py", "method": "this session", "code_sha": "92bfb24" },
+    { "gate_id": "G08_DATA_PROVENANCE", "status": "PASS", "observed": "5 providers configured/enabled; live health probe shows real recent fetch activity across all 6 served leagues", "method": "live Vercel-proxied /api/health probe, this session", "code_sha": "f9be07b (live)" },
+    { "gate_id": "G09_TEMPORAL_LEAKAGE", "status": "PASS", "observed": "test_training_leakage_contract.py included and green in this session's full-suite run; not independently re-derived beyond that", "method": "scripts/ci_local_enforcer.sh, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G10_COVERAGE", "status": "PASS", "observed": "6/7 leagues served; UCL hard-cap re-verified by direct source read this session in BOTH betting_intelligence.py and core_engine.py (INV-03 dual-engine rule)", "method": "source read, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G11_CALIBRATION", "status": "FAIL", "observed": "adaptive confidence ECE = 0.0977 on 87 real settled predictions, threshold <=0.03. First real measurement in the repository's history (docs/DEBT.md item 113). A legitimate, expected result matching the already-documented uncalibrated SoftmaxMetaModel finding (items 64/83/87/106), now empirically confirmed rather than inferred.", "method": "backend/scripts/evaluate_g11_ece.py against real production data, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G12_BRIER", "status": "MEASURED_INFORMATIONAL", "observed": "brier=0.6453 (reliability 0.1147, resolution 0.1074, uncertainty 0.6585) on the same 87-row real sample. No committed policy threshold names a Brier pass/fail bound distinct from G15's decomposition-identity check; recorded as informational alongside G15.", "method": "backend/scripts/evaluate_g11_ece.py, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G13_RPS", "status": "PASS", "observed": "live rps=0.2322 (grew from 0.238-0.239 as settled volume grew 80->87); consistent, no anomaly", "method": "live Vercel-proxied /api/health probe, this session", "code_sha": "f9be07b (live)" },
+    { "gate_id": "G14_LOG_LOSS", "status": "UNVERIFIED", "observed": "log_loss_multiclass() exists and is wired into walk_forward_validate() per item 88; not independently re-run this session — the evidence-harness pipeline used for G11/G16 this session does not compute this metric, and walk_forward_validate() requires a live DB session this environment could route data into only manually; not attempted given time constraints.", "method": "not run this session", "code_sha": "92bfb24" },
+    { "gate_id": "G15_ECE", "status": "PASS", "observed": "Note: this report's G15 uses the certification_policy.py RELEASE_GATES definition (Murphy decomposition identity, distinct from the report-schema's historical G15_ECE label, which this session found aliases two different concepts under the same gate-ID convention across compile_certification_report.py vs the historical hand-authored report — see below). decomposition_error=0.0 <= 1e-6, exact.", "method": "backend/scripts/evaluate_g11_ece.py, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G16_UNCERTAINTY", "status": "FAIL", "observed": "MODEL_UNCERTAINTY_UNAVAILABLE remains a permanent critical gap (item 42, unchanged) — sufficient on its own to keep this FAIL regardless of the finding below. Separately, this session ran evaluate_g16_uncertainty.py for real (after discarding a first, self-contaminated run — see item 113) and found a genuine, reproducible, but UNRESOLVED discrepancy: a freshly-loaded BUNDESLIGA/LIGUE_1 artifact bundle carries a sigmoid FittedCalibrator that crashes on application (AttributeError, cross-sklearn-version pickle incompatibility), yet 100% of real production predictions for these leagues show calibration_method='raw' with no fallback signature ever observed — meaning production's actual behavior does not match what this session's fresh reproduction predicts. Recorded as an open research item (docs/DEBT.md item 113), not resolved, and not blocking anything beyond what item 42 already blocks.", "method": "backend/scripts/evaluate_g16_uncertainty.py + direct source-level reproduction + a live production-log query, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G17_DRIFT_PSI", "status": "NOT_APPLICABLE", "observed": "correctly deferred until >=1,000 settled fixtures (currently 87); re-confirmed this session, not a gap", "method": "source read + live count, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G18_MARKET_BASELINE", "status": "FAIL", "observed": "0/6 leagues beat the market, re-confirmed via the most recent available committed evidence (2026-09-11). A fresh re-run was attempted this session and is structurally blocked: the candidate .pkl artifacts this comparison needs are absent from this checkout (docs/DEBT.md item 114). item 62's paired bootstrap (10,000 replicates, prior session) remains the strongest evidence: 0/6 CIs exclude zero for either arm.", "method": "read existing artifact + a blocked fresh-regeneration attempt, this session", "code_sha": "92bfb24 (evidence dated e3af919, 2026-09-11)" },
+    { "gate_id": "G19_MARKET_CLV", "status": "PASS", "observed": "unchanged; not independently re-queried this session beyond what the live /health snapshot implies (clv_capture outcome ok)", "method": "not independently re-run this session", "code_sha": "92bfb24" },
+    { "gate_id": "G20_SECURITY", "status": "PASS", "observed": "Gitleaks not installed in this session's environment (enforcer correctly SKIPPED, not claimed PASS); no NEXT_PUBLIC_* secret leakage spot-checked; production validator behavior not independently re-run", "method": "partial — see skipped-gate note below", "code_sha": "92bfb24" },
+    { "gate_id": "G21_OBSERVABILITY", "status": "PARTIAL", "observed": "OTel: unchanged, correctly no-ops without config. Sentry (item 67): re-confirmed this session still entirely unwired on the frontend (0 @sentry/* references); backend conditional init unverified from this environment. Do not cite as evidence of health.", "method": "grep re-verification, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G22_BACKEND_SMOKE", "status": "PASS", "observed": "live /api/health (Vercel-proxied) responds healthy; backendStatus=ok; all readiness checks ready; 2571 backend tests pass locally", "method": "live probe + pytest, this session", "code_sha": "f9be07b (live) / 92bfb24 (local)" },
+    { "gate_id": "G23_FRONTEND_SMOKE", "status": "UNVERIFIED", "observed": "Playwright e2e is NOT part of scripts/ci_local_enforcer.sh (confirmed by reading the script) and was not separately run this session due to time budget. Not claimed as PASS.", "method": "not run this session", "code_sha": "92bfb24" },
+    { "gate_id": "G24_DEPLOYMENT_PARITY", "status": "PASS", "observed": "backendSha (f9be07b) and frontendSha (92bfb24) are the expected-divergent pair per the deployment note above; both are internally consistent with what each service's own health endpoint independently reports, and the divergence is explained by a docs-only commit. Not verified via the validate_deployment.py script (needs VERCEL_TOKEN, unavailable this session) — verified instead via the Vercel MCP tool's authenticated fetch, an equivalent but different evidentiary path.", "method": "mcp__Vercel__web_fetch_vercel_url live probe, this session", "code_sha": "f9be07b / 92bfb24 (live)" },
+    { "gate_id": "G25_CUSTOMER_UX", "status": "PASS", "observed": "not independently re-audited beyond confirming all 7 established repo-wide contract tests (copy-contract, evidence-copy-contract, league-contract, metadata-title-contract, model-identity-contract, timestamp-contract, full-analysis-contract) are part of the green 358/358 Vitest run this session", "method": "scripts/ci_local_enforcer.sh, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G26_INGESTION_RELIABILITY", "status": "PASS", "observed": "scraper tests included and green in this session's enforcer run; not independently re-verified beyond that", "method": "scripts/ci_local_enforcer.sh, this session", "code_sha": "92bfb24" },
+    { "gate_id": "G27_CALIBRATOR_SERVING_PARITY", "status": "PARTIAL", "observed": "PredictionEngine correctly calls the trained meta_model (item 87, unchanged). This session's G16 investigation additionally surfaced a real, unresolved discrepancy in a DIFFERENT calibration mechanism (the post-hoc sigmoid FittedCalibrator, not the meta-model stacking) for BUNDESLIGA/LIGUE_1 specifically — see G16_UNCERTAINTY above and docs/DEBT.md item 113. Downgraded from PASS to PARTIAL to reflect this new, real, open question rather than re-asserting an unconditional PASS.", "method": "this session's G16 investigation", "code_sha": "92bfb24" },
+    { "gate_id": "G28_RELEASE_REPRODUCIBILITY", "status": "PASS", "observed": "unchanged; not independently re-run this session", "method": "not independently re-run this session", "code_sha": "92bfb24" },
+    { "gate_id": "G29_DATASET_INTEGRITY", "status": "PASS", "observed": "training corpus confirmed real (12,765+ matches, Elo replay ran successfully against it this session); zero-fabrication CI scan re-verified genuinely enforcing (item 111, pre-existing fix) and its own enforcer step passed", "method": "this session", "code_sha": "92bfb24" },
+    { "gate_id": "G30_ROLLBACK_READINESS", "status": "PASS", "observed": "no destructive or irreversible change made this session; every edit is additive documentation, one shell-script fix, and one new regression-test file, all reversible by a plain revert", "method": "git diff review, this session", "code_sha": "92bfb24" }
+  ],
+  "operator_gates": [
+    { "gate_id": "OG-04", "status": "PENDING (unchanged)", "approver": "operator", "decided_at": null, "reason": "scraper production activation intentionally kept fail-closed; not re-verified live this session beyond source read", "notes": "docs/DEBT.md item 18" },
+    { "gate_id": "OG-06", "status": "N/A this session", "approver": null, "decided_at": null, "reason": "no certification-policy threshold changed (policy_version unchanged at 1.2.0, hash unchanged); H1 respected throughout", "notes": null },
+    { "gate_id": "OG-07", "status": "PENDING (unchanged)", "approver": null, "decided_at": null, "reason": "promotion beyond FORECAST_ONLY/staking-under-override blocked by G16 (permanent gap) and G18 (0/6 market_baseline); not requested this session", "notes": "docs/DEBT.md item 42" },
+    { "gate_id": "OG-11 (item 104)", "status": "DOSSIER PREPARED, not executed", "approver": null, "decided_at": null, "reason": "master's branch ruleset has no required_status_checks rule (re-confirmed same-day per CLAUDE.md); a repository-settings change, not code. This report constitutes the prepared dossier per P16.T1.", "notes": "docs/DEBT.md item 104" }
+  ],
+  "risks": [
+    {
+      "risk_id": "R-2026-09-20-01",
+      "severity": "low",
+      "status": "OPEN, needs further investigation, non-blocking",
+      "description": "A freshly-loaded BUNDESLIGA/LIGUE_1 artifact bundle's serialized calibrator crashes on application (cross-sklearn-version pickle AttributeError), but production's real prediction log for the identical leagues shows this calibrator is never observably applied AND never observably crashes into fallback — a genuine, unreconciled discrepancy between a fresh single-shot reproduction and the real long-running server's behavior.",
+      "impact": "Unknown until reconciled. Best-supported reading: this is the mechanism behind the already-documented 'raw'/uncalibrated serving state (items 64/83/87/106), encountered and silently handled once per process rather than per-request — but this is an unconfirmed hypothesis, not a finding.",
+      "mitigation": "None applied; G16 was already FAIL/BLOCKED on independent, sufficient grounds (item 42) so no serving behavior was changed to accommodate this.",
+      "rollback": "not applicable — no code changed",
+      "approver": "needs a session with production log access or a willingness to instrument _load_model directly"
+    },
+    {
+      "risk_id": "R-2026-09-20-02",
+      "severity": "low",
+      "status": "OPEN, environmental",
+      "description": "docs/CERTIFICATION_HARNESSES_V7_3.md recommends `pip install -r backend/requirements-training.txt`, which pins mapie==1.5.0 — this structurally conflicts with the SAME file's own scikit-learn==1.3.2 pin (mapie 1.5.0 requires scikit-learn>=1.4). Installing in the order the runbook implies silently upgrades scikit-learn past the repo's pin.",
+      "impact": "Any future session following this runbook literally will silently corrupt its own venv's sklearn version, producing spurious TypeErrors on model inference that look like real defects but are pure environment artifacts (discovered and worked around this session).",
+      "mitigation": "Documented in docs/DEBT.md item 113. Not fixed — either downgrade the mapie pin, accept a dedicated venv for G16 evidence generation, or document the correct install order (sklearn last).",
+      "rollback": "not applicable",
+      "approver": "needs a decision on which of the three mitigation options to take"
+    },
+    {
+      "risk_id": "R-2026-09-20-03",
+      "severity": "informational",
+      "status": "RESOLVED this session",
+      "description": "scripts/ci_local_enforcer.sh's own ruff steps ran unselected against an unpinned ruff version, making the 'MANDATORY, zero-exit' local CI gate unable to reach zero-exit on any fresh install (3900+751 findings from a much broader default ruleset than CI actually gates on).",
+      "impact": "Every session before this one that trusted a 'the enforcer passed' claim without a genuinely fresh bootstrap could not have actually observed that — the gate itself could not complete.",
+      "mitigation": "Fixed: both steps now pass --select E4,E7,E9,F explicitly, matching CI. Verified end to end: the full enforcer now runs to a genuine zero exit (14 passed, 2 correctly skipped, 8m03s) on a from-scratch install, for what is very likely the first time.",
+      "rollback": "git revert the two-line diff in scripts/ci_local_enforcer.sh",
+      "approver": "n/a — a tooling correctness fix, not a policy or threshold change"
+    }
+  ],
+  "changes": [
+    { "file": "scripts/ci_local_enforcer.sh", "action": "modified", "reason": "fix: both ruff steps now pass --select E4,E7,E9,F explicitly instead of running unselected against an unpinned ruff version (docs/DEBT.md item 112)", "tests": "backend/tests/unit/test_ci_local_enforcer_ruff_steps.py (new, 3 tests)" },
+    { "file": "backend/tests/unit/test_ci_local_enforcer_ruff_steps.py", "action": "created", "reason": "Rule-15 guard for the fix above: pattern check + real execution + injected-regression check, watched failing against the reverted form before being trusted", "tests": "self" },
+    { "file": "docs/DEBT.md", "action": "modified", "reason": "items 112 (enforcer ruff fix), 113 (G11 real measurement + G16 unresolved calibrator discrepancy), 114 (market_baseline re-verification blocked by absent candidate artifacts)", "tests": "n/a (documentation)" },
+    { "file": "backend/reports/certification/certification_report_v5_phase7-20260808_2026-09-20T060000Z.json", "action": "created", "reason": "this report — a new, dated certification snapshot per APEX §32.3 (never overwrite a historical report)", "tests": "n/a" }
+  ],
+  "validation": {
+    "tests": "PASS (backend 2571/0, web 358/0)",
+    "lint": "PASS (ruff --select E4,E7,E9,F on src+scripts: 0; web eslint: 0)",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "security": "PARTIAL (Gitleaks not installed this session — correctly SKIPPED not PASS; no NEXT_PUBLIC_* leak spot-checked)",
+    "migration": "NOT_RUN locally (no local Postgres this session); live migrations.head confirmed via Vercel-proxied /api/health",
+    "integration": "NOT_RUN (RUN_INTEGRATION_TESTS=1 requires local Postgres, unavailable this session)",
+    "smoke": "PARTIAL — backend smoke confirmed live; Playwright e2e NOT run this session (not part of the local enforcer, time budget)",
+    "artifact_validation": "PASS (verify_active_artifacts.py exit 0, this session)",
+    "ci": "Not independently re-checked this session for the billing-lock status; CLAUDE.md's most recent entry (2026-09-20, same day) reports the lock clear and all 7 CI jobs green on this exact commit's lineage — taken as current, not re-verified via a fresh GitHub API call this session."
+  },
+  "decision": {
+    "status": "HOLD",
+    "reason": "Unchanged from every prior certification cycle, now on more thoroughly re-verified evidence than any prior session recorded: the local CI substitute gate now genuinely passes end-to-end for the first time (item 112); G11 has been measured for the first time and genuinely FAILS on real evidence, exactly as DID predicted a real evaluation would show; G16 remains blocked on the permanent, independently-sufficient MODEL_UNCERTAINTY_UNAVAILABLE gap (item 42) regardless of a newly-found, unresolved, non-blocking side discrepancy; G18/market_baseline remains FAIL at 0/6 by every available reading, with a structural blocker (absent candidate artifacts) preventing a fresher regeneration this session. Staking remains live ONLY under the disclosed OPERATOR_OVERRIDE_UNCERTIFIED (ADR-0011), unaffected and unchanged by anything in this report. PROMOTE and PROMOTE_RESEARCH_ONLY both remain correctly withheld — no gate this session's evidence could newly satisfy was found to actually pass, and none was loosened to manufacture one.",
+    "blocking_gates": ["G16_UNCERTAINTY", "G18_MARKET_BASELINE"],
+    "note_on_g11": "G11 is newly and correctly FAIL, not previously counted among the blocking gates because it was UNVERIFIED rather than measured. It does not newly block PROMOTE (G16/G18 already did), but a defensible PROMOTE decision must now also cite G11 explicitly, since it is no longer merely unmeasured."
+  }
+}
