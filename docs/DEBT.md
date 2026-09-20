@@ -5259,7 +5259,63 @@ gains one case for the new list-subscriptions service method.
 
 ---
 
-## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3 and 4 ruled out), so staking stays blocked
+## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3, 4 **and the calculation-bug hypothesis** ruled out)
+
+> ⚠️ **Title corrected 2026-09-19.** This heading previously ended "so staking
+> stays blocked". That clause is no longer true: staking is live under the
+> disclosed operator override (item 108, ADR-0011). What remains true — and is
+> what this item is actually about — is that `error_association` still FAILS on
+> real evidence and the inversion is unexplained. The override bypassed the
+> gate; it did not move the metric. The circuit breaker in item 108 suppresses
+> the measured low-epistemic danger zone, which is a mitigation of this item's
+> consequence, not a resolution of its cause.
+
+> **STILL OPEN as a research blocker — 2026-09-19.** Two updates, neither of
+> which moves the metric:
+>
+> **(1) The calculation-bug hypothesis is now closed.** `ensemble_uncertainty.py`
+> was audited directly for the failure modes that would produce a spurious
+> inversion — sign error, member-basis mistake, variance mis-aggregation — and
+> then measured against the real shipped EPL artifact on its own holdout
+> (n=375, 300 members/row). Findings:
+>
+> * decomposition identity exact: `max |total − (aleatoric + epistemic)| = 0.000e+00`
+> * no sign inversion: epistemic ∈ [0.047, 0.195], 375 distinct values, never
+>   negative, always ≤ total. A negated MI would have been clamped to
+>   identically zero by `max(0.0, ...)`; the live non-degenerate spread rules
+>   that out empirically, not just by reading the code.
+> * the gate's own bucketing is correct: `np.argsort` ascending, `buckets[0]`
+>   genuinely lowest-epistemic, `gap = high − low`.
+>
+> **The math is right. The gate is right. The model is what fails.**
+>
+> **(2) A prior hypothesis in this entry's own framing was refuted.** The
+> natural explanation — "low epistemic = confident on lopsided fixtures, and
+> confident predictions carry high RPS variance" — does not hold. Confidence is
+> *flat* across all four epistemic quartiles (0.4866 / 0.5074 / 0.5042 /
+> 0.4871) and `corr(epistemic, confidence) = −0.056`, i.e. nil. The real shape
+> is in hit-rate:
+>
+> | bucket | epistemic | confidence | hit_rate | RPS |
+> |---|---|---|---|---|
+> | LOWEST | 0.0697 | 0.4866 | **0.4301** | 0.2345 |
+> | q2 | 0.0854 | 0.5074 | 0.5054 | 0.2301 |
+> | q3 | 0.0971 | 0.5042 | **0.5376** | 0.2103 |
+> | HIGHEST | 0.1181 | 0.4871 | 0.4896 | 0.2128 |
+>
+> Where the 300 trees **agree most**, the model is **least accurate** (43% vs
+> 50–54%). That is stable-but-wrong — systematic bias in that region of feature
+> space, not variance. ⚠️ Note the hit-rate is **non-monotonic** (q3 > q4), so
+> no re-specification of the gate along a monotonic ordering rescues it either;
+> that closes off the "maybe the gate is mis-specified" family of explanations
+> as well.
+>
+> **(3) An override path now exists and does not touch this.** ADR-0011 adds
+> `OPERATOR_OVERRIDE_UNCERTIFIED`, which lets an operator authorise staking
+> over these failing gates *with disclosure*. It changes no threshold,
+> suppresses no test, and leaves this item open. The two `xfail`s still print
+> the live measurement on every run. An override is not a resolution, and this
+> entry must not be closed because one is in force.
 
 **Tier:** `NEXT` — genuinely open research question, not a Class C
 authorization gap like items 38/49. **Blocks M2 / `MODEL_UNCERTAINTY_UNAVAILABLE`.**

@@ -3,6 +3,7 @@ import {
   certificationIsCertified,
   certificationLabel,
   generationLabel,
+  isOperatorOverride,
   promotionLabel,
 } from "@/lib/model-identity";
 
@@ -35,5 +36,41 @@ describe("model identity mapping (APEX §11 product language)", () => {
     expect(promotionLabel("ACTIVE_FAIL_CLOSED")).toBe("Serving forecasts · staking blocked");
     expect(promotionLabel("ACTIVE_FAIL_CLOSED")).not.toContain("ACTIVE_FAIL_CLOSED");
     expect(promotionLabel("UNKNOWN")).toBe("Status unavailable");
+  });
+
+  it("labels an operator override as staking, never as validation", () => {
+    // ADR-0011. The override permits staking without conferring certification,
+    // so the label must say so on both counts: it must not borrow certified
+    // language, and it must not read as inert while stakes are being published.
+    const label = certificationLabel("OPERATOR_OVERRIDE_UNCERTIFIED");
+    expect(label).toBe("Unvalidated · staking under operator override");
+    expect(label).not.toContain("Production-validated");
+    expect(label).not.toContain("OPERATOR_OVERRIDE_UNCERTIFIED");
+    expect(certificationIsCertified("OPERATOR_OVERRIDE_UNCERTIFIED")).toBe(false);
+    expect(isOperatorOverride("OPERATOR_OVERRIDE_UNCERTIFIED")).toBe(true);
+    expect(isOperatorOverride("UNVERIFIED")).toBe(false);
+  });
+
+  it("never claims staking is blocked while an override has it enabled", () => {
+    // ⚠️ The regression this pins: `promotion_state` stays ACTIVE_FAIL_CLOSED
+    // under an override, so the old one-argument copy would have told a reader
+    // "staking blocked" on a system that is actively staking.
+    const overridden = promotionLabel(
+      "ACTIVE_FAIL_CLOSED",
+      "OPERATOR_OVERRIDE_UNCERTIFIED",
+    );
+    expect(overridden).toBe("Serving forecasts · staking enabled by operator override");
+    expect(overridden).not.toContain("blocked");
+
+    expect(promotionLabel("ACTIVE_FAIL_CLOSED", "UNVERIFIED")).toBe(
+      "Serving forecasts · staking blocked",
+    );
+    expect(promotionLabel("ACTIVE_FAIL_CLOSED", "CERTIFIED")).toBe(
+      "Serving forecasts · staking permitted",
+    );
+    // An unknown certification state must fall back to the safe sentence.
+    expect(promotionLabel("ACTIVE_FAIL_CLOSED", "SHADOW_PENDING")).toBe(
+      "Serving forecasts · staking blocked",
+    );
   });
 });

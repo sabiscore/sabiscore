@@ -13,6 +13,8 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Request
 
+from ...models.active_generation import staking_authorization
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -85,17 +87,32 @@ async def model_status(request: Request) -> Dict[str, Any]:
         }
 
     cert = manifest.get("certification_state", "UNVERIFIED")
+
+    # `stake_permitted` must answer the same question the serving path answers,
+    # or this endpoint contradicts it. Before ADR-0011 the two were the same
+    # test (`cert == "CERTIFIED"`); under an operator override they diverge —
+    # `upcoming_match_service` publishes stakes on `basis="OPERATOR_OVERRIDE"`
+    # while `cert != "CERTIFIED"`. Reading the manifest string here instead of
+    # asking `staking_authorization()` would report `stake_permitted: false`
+    # on a system that is actively staking: a status surface disagreeing with
+    # the behaviour it describes, which is the exact failure class this
+    # repository has logged three times over.
+    stake_auth = staking_authorization()
     return {
         "active_version": manifest.get("active_version"),
         "generation": manifest.get("generation"),
         "generation_hash": manifest_hash,
         "certification_state": cert,
         "promotion_state": manifest.get("promotion_state"),
-        # Uppercase to match existing test contract: "VALIDATED" | "UNVERIFIED"
+        # Uppercase to match existing test contract: "VALIDATED" | "UNVERIFIED".
+        # An override is NOT validation — only CERTIFIED earns "VALIDATED".
         "validation_status": "VALIDATED" if cert == "CERTIFIED" else "UNVERIFIED",
         "manifest_valid": True,
         "models_loaded": models_loaded,
-        # Stake is only permitted when the generation is fully certified
-        "stake_permitted": cert == "CERTIFIED",
+        "stake_permitted": stake_auth.permitted,
+        # The basis distinguishes earned staking from overridden staking, so a
+        # reader never has to infer it from `certification_state`.
+        "staking_basis": stake_auth.basis,
+        "staking_authorization": stake_auth.as_dict(),
         "models": models,
     }

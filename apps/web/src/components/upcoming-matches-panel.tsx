@@ -9,6 +9,7 @@ import { getUpcomingMatches, getOffseasonStatus, type UpcomingMatch, type Upcomi
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
+import { StakingOverrideBadge } from "@/components/staking-override-notice";
 import { canonicalLeagueId, leagueDisplayName } from "@/lib/league";
 import { mapEvidenceFreshness } from "@/lib/freshness";
 
@@ -226,7 +227,12 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
   const valueLabelPart = match.has_value ? " · value bet" : "";
   const freshnessAria = ` · ${freshness.label.toLowerCase()} data`;
   const partialAria = hasDataGaps ? " · partial intelligence" : "";
-  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${leagueDisplayName(match.league)} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}`;
+  // A screen-reader user must hear the override too — a visual-only
+  // disclosure is not a disclosure for everyone.
+  const overrideAria = match.staking_authorization?.is_override
+    ? " · staking under operator override, not certified"
+    : "";
+  const ariaLabel = `${match.home_team} vs ${match.away_team} · ${leagueDisplayName(match.league)} · ${formatMatchDate(match.match_date)}${valueLabelPart}${confLabel}${freshnessAria}${partialAria}${overrideAria}`;
 
   // `min-w-0` on the Link below is load-bearing: the row is a grid item, and
   // grid items default to min-width:auto (their min-content), so at a 360px
@@ -285,6 +291,9 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
             Value {edge !== null ? `${edge.toFixed(1)}%` : ""}
           </span>
         )}
+        {/* Rides directly beside the value/stake signal, never further away:
+            the disclosure has to be where the number is. */}
+        <StakingOverrideBadge auth={match.staking_authorization} className="hidden sm:inline-flex" />
         {conf !== null && (
           <div className="hidden min-w-[4.5rem] sm:block text-right">
             <p className="text-xs font-bold text-slate-300">{(conf * 100).toFixed(0)}%</p>

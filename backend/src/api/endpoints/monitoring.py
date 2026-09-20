@@ -120,6 +120,32 @@ def _check_alembic_revision() -> Dict[str, Any]:
     }
 
 
+def _staking_authorization_snapshot() -> Dict[str, Any]:
+    """The `/health` view of who authorised staking, if anyone.
+
+    Import is local to keep the module-import graph of this endpoint file
+    unchanged for the health-probe path, and the whole thing is wrapped:
+    a health endpoint must never 500 because a manifest field is malformed.
+    An error degrades to the same shape a non-staking deployment reports.
+    """
+    try:
+        from ...models.active_generation import staking_authorization
+
+        return staking_authorization().as_dict()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("staking authorization snapshot failed: %s", exc)
+        return {
+            "permitted": False,
+            "basis": "UNKNOWN",
+            "certification_state": "UNKNOWN",
+            "is_override": False,
+            "authorizing_identity": None,
+            "rationale": None,
+            "authorized_at": None,
+            "acknowledged_failures": [],
+        }
+
+
 @router.get("/health")
 def health_check() -> Dict[str, Any]:
     """
@@ -143,6 +169,13 @@ def health_check() -> Dict[str, Any]:
         # fallback is "local" (absent off-Render), never a fabricated SHA.
         "sha": (os.getenv("RENDER_GIT_COMMIT") or "local")[:7],
         "uptime_seconds": int(time.time() - _startup_time),
+        # Whether this deployment is publishing real stakes, and on what
+        # authority (ADR-0011). Surfaced at the top level rather than buried in
+        # `components` because "is this instance staking under an operator
+        # override?" is the single highest-consequence fact about a running
+        # SabiScore, and an operator should not have to go looking for it.
+        # Fails closed to a non-staking answer if the manifest is unreadable.
+        "staking": _staking_authorization_snapshot(),
         "components": {}
     }
     
