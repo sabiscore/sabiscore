@@ -400,7 +400,7 @@ operator with the block explicitly on the record.
 A gate that is defined, tested and documented still enforces nothing if the mechanism that runs it
 is not live. Confirm the mechanism, not the definition.
 
-Four measured instances in this repository:
+Five measured instances in this repository:
 
 - **CI that never ran.** Under the GitHub Actions billing lock, every job reports
   `conclusion: "failure"` — identical to a genuine test failure. Only
@@ -422,6 +422,16 @@ Four measured instances in this repository:
   the commit that introduced it, and shipped that way to `master` in PR #220. Fixed by capturing
   the metadata in a fresh interpreter (`subprocess`, importing only `env.py`'s derived module set);
   the same experiment then gives **3 failed**.
+- **A gate that could not fail at all.** *(added 2026-09-20.)* Every check in CI's
+  "Zero-fabrication scan" — nine of them, including the one forbidding a deprecated stdlib call
+  across `src` — was written as `! grep …`. POSIX exempts a command whose return value is inverted
+  with `!` from `set -e`, so a positive match did not abort and the step's exit code was only ever
+  the **last** line's. Eight checks were decorative from the day they were written, and a real
+  violation sat in `master` while the gate reported green. Reproduced under exactly what
+  `shell: bash` invokes: on the identical seeded violation the old form exits **0** and the
+  repaired form exits **1**. ⚠️ **The first repair was also inert, differently**:
+  `out="$(grep …)"; rc=$?` takes the substitution's status, so under `set -e` a *clean* grep aborted
+  the step — caught only by executing the script, not by reading it. (`docs/DEBT.md` item 111.)
 - **A gate that is structurally blind to a class of drift.** *(added 2026-09-20.)* `alembic check`
   with `compare_type=True` cannot report an unbounded ORM `String` against a migration's
   `VARCHAR(32)`: its default comparator reduces to
@@ -437,6 +447,11 @@ Four measured instances in this repository:
 > runs.** A guard that shares mutable process state with the rest of the suite (module-level
 > registries, import side effects, a global `metadata`) proves nothing when run alone. Isolate it
 > — a subprocess, a fresh interpreter — before its failure is evidence of anything.
+>
+> **And a gate written in shell must be executed, not read.** `set -e` does not mean what it looks
+> like it means around `!`, `||`, `&&` and command substitution; two consecutive attempts at the
+> same nine-line scan were silently non-enforcing for two different reasons. Seed a violation, run
+> the real script under the runner's own shell invocation, and watch it exit non-zero.
 
 ---
 

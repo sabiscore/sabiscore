@@ -9,7 +9,6 @@ module.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
@@ -23,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from ..core.database import Base, UserAccount
+from ..utils.db_time import naive_utc_now
 
 
 class UserIdentity(Base):
@@ -53,7 +53,12 @@ class UserIdentity(Base):
     provider = Column(String(32), nullable=False)
     provider_subject = Column(String(255), nullable=False)
     provider_email = Column(String(320), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # `naive_utc_now`, not the deprecated stdlib naive-UTC call: this is a
+    # plain `DateTime` (TIMESTAMP WITHOUT TIME ZONE), and the CI
+    # zero-fabrication scan forbids that call across `src`. The scan matches a
+    # bare token, so naming it even in a comment re-triggers it - which is how
+    # this comment was first written, and what the scan caught.
+    created_at = Column(DateTime, default=naive_utc_now, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
     user = relationship("UserAccount", backref="identities")

@@ -132,28 +132,81 @@ jobs:
         working-directory: backend
         shell: bash
         run: |
-          ! grep -rn "FEATURE_DEFAULTS\[" src/services src/api src/insights --include="*.py"
-          ! grep -rn "FEATURE_DEFAULTS\[" src/data/transformers.py
-          ! grep -rn "hardcoded_odds" src/services src/api src/providers --include="*.py"
-          ! grep -rn "Base\.metadata\.create_all" alembic --include="*.py"
-          ! grep -rn "full_kelly_fraction" src --include="*.py"
+          # ⚠️ Every check below was `! grep ...` and NONE of them could fail
+          # this step. POSIX exempts a command whose return value is inverted
+          # with `!` from `set -e`, so a positive match did not abort, and the
+          # step's exit code was only ever the LAST line's. Eight of the nine
+          # checks - including the datetime.utcnow one, which had a real live
+          # violation in src/services/social_auth_models.py - were inert from
+          # the day they were written. Verified, not inferred: under
+          # `bash --noprofile --norc -eo pipefail` (what `shell: bash` runs),
+          # a two-line script whose first `! grep` MATCHES exits 0.
+          #
+          # `forbid` records a violation instead of inverting an exit code, so
+          # every check runs and ALL violations are reported in one pass.
+          violations=0
 
-          # datetime.utcnow() deprecated (Python 3.12+): now clean across ALL
-          # of src. database.py SQLAlchemy column callable defaults are exempt.
-          ! grep -rn "datetime\.utcnow" src --include="*.py" --exclude="database.py"
+          forbid() {
+            local label="$1"; shift
+            local out
+            local rc=0
+            # `|| rc=$?`, not `; rc=$?`: under `set -e` an assignment from a
+            # command substitution takes the substitution's exit status, so a
+            # clean `grep` (exit 1, no match) would abort the step before
+            # `rc=$?` ever ran. A `||` list is exempt from `set -e`.
+            out="$(grep -rn "$@" 2>&1)" || rc=$?
+            case "$rc" in
+              0)  echo "::error::zero-fabrication scan violated: $label"
+                  printf '%s\n' "$out"
+                  violations=$((violations + 1)) ;;
+              1)  ;;  # no match - clean
+              *)  # grep itself failed (bad path, unreadable file). Never treat
+                  # an unrunnable check as a passing one.
+                  echo "::error::zero-fabrication scan could not run: $label (grep exit $rc)"
+                  printf '%s\n' "$out"
+                  violations=$((violations + 1)) ;;
+            esac
+          }
+
+          forbid "FEATURE_DEFAULTS[ in services/api/insights" \
+            "FEATURE_DEFAULTS\[" src/services src/api src/insights --include="*.py"
+          forbid "FEATURE_DEFAULTS[ in data/transformers.py" \
+            "FEATURE_DEFAULTS\[" src/data/transformers.py
+          forbid "hardcoded_odds" \
+            "hardcoded_odds" src/services src/api src/providers --include="*.py"
+          forbid "Base.metadata.create_all in alembic" \
+            "Base\.metadata\.create_all" alembic --include="*.py"
+          forbid "full_kelly_fraction" \
+            "full_kelly_fraction" src --include="*.py"
+
+          # datetime.utcnow() deprecated (Python 3.12+): clean across ALL of
+          # src. database.py SQLAlchemy column callable defaults are exempt.
+          # New service code writing a naive DateTime column must use
+          # src/utils/db_time.py's naive_utc_now().
+          forbid "datetime.utcnow outside database.py" \
+            "datetime\.utcnow" src --include="*.py" --exclude="database.py"
 
           # INV-19: verification predicates (*_verified/*_validated/*_certified)
           # must be computed, never asserted as bare dict-literal booleans.
-          ! grep -rnE '"[a-zA-Z_]*(_verified|_validated|_certified)"\s*:\s*(True|False)' \
+          forbid "INV-19 bare verification predicate" -E \
+            '"[a-zA-Z_]*(_verified|_validated|_certified)"\s*:\s*(True|False)' \
             src/ --include="*.py"
 
           cd ..
 
-          ! grep -rn "full_kelly\|Full-Kelly\|Full Kelly" \
+          forbid "full-Kelly copy in apps/web" \
+            "full_kelly\|Full-Kelly\|Full Kelly" \
             apps/web/src --include="*.ts" --include="*.tsx"
 
-          ! grep -rn "NEXT_PUBLIC_KELLY_FRACTION" \
-            vercel.json .env.example backend/.env.example 2>/dev/null
+          forbid "NEXT_PUBLIC_KELLY_FRACTION" \
+            "NEXT_PUBLIC_KELLY_FRACTION" \
+            vercel.json .env.example backend/.env.example
+
+          if [ "$violations" -ne 0 ]; then
+            echo "zero-fabrication scan FAILED: $violations check(s) violated"
+            exit 1
+          fi
+          echo "zero-fabrication scan: all 9 checks clean"
 
       - name: Backend tests with branch coverage
         working-directory: backend

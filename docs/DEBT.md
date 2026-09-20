@@ -1,5 +1,125 @@
 # SabiScore Debt Ledger
 
+## 111. The CI zero-fabrication scan could not fail — eight of its nine checks were inert from the day they were written
+
+**Tier:** `RESOLVED` — fixed and verified 2026-09-20.
+**Owner:** unassigned. **Found:** 2026-09-20, from a Copilot review comment on
+PR #221 flagging a single `datetime.utcnow` occurrence. Verifying *why* a named
+CI gate had not already caught it is what exposed the real defect.
+
+### The reported symptom
+
+`src/services/social_auth_models.py:56` used `default=datetime.utcnow`, which
+`.github/workflows/ci.yml`'s "Zero-fabrication scan" explicitly forbids across
+all of `src` (only files named `database.py` are exempt). The line has been
+present since #185 on 2026-09-14 — including at `da8fa93` and at `79df258`,
+where `Backend Lint, Typecheck, Tests` reported **success**.
+
+⚠️ **A gate that names a violation and reports green is the finding.** The
+first question was not "how do I fix the line" but "why did the gate pass".
+
+### Root cause
+
+Every check in the step was written as `! grep ...`. POSIX exempts a command
+whose return value is inverted with `!` from `set -e`:
+
+> The shell does not exit if the command that fails is […] part of any command
+> executed in a `&&` or `||` list […] **or if the command's return value is
+> being inverted with `!`**.
+
+So a positive match did not abort the script; execution continued, and the
+step's exit code was whatever the **last** line returned
+(`NEXT_PUBLIC_KELLY_FRACTION`, which has always been clean). Eight of nine
+checks were decorative.
+
+Reproduced rather than inferred, under exactly what `shell: bash` invokes:
+
+```
+$ cat t.sh
+! grep -q "MATCH_ME" a.txt       # FINDS it -> ! inverts to exit 1
+echo "REACHED LINE 2"
+! grep -q "ABSENT" a.txt         # finds nothing -> ! inverts to exit 0
+$ bash --noprofile --norc -eo pipefail t.sh
+REACHED LINE 2
+$ echo $?
+0
+```
+
+And against the real seeded violation, old form vs. new:
+
+```
+old `! grep` form  -> exit 0     (violation ignored)
+current form       -> exit 1
+```
+
+### ⚠️ Confirmed live by this PR's own CI, not only by local reproduction
+
+PR #221's run at `9e21d1d` — the commit immediately before this fix — reported
+**`Backend Lint, Typecheck, Tests: success`** (job `106013116060`, completed
+2026-09-20T03:27:53Z) with the violation present in the tree, alongside 12 other
+green checks and a passing SonarCloud gate. The step named the symbol, the
+symbol was there, and the job was green. No stronger demonstration of an inert
+gate is available than the gate itself.
+
+### Scope, measured before changing anything
+
+Each of the nine checks was run individually against the tree. **Exactly one
+was violated** — the `datetime.utcnow` occurrence above. The other eight were
+genuinely clean, so repairing the gate could not turn CI red on unrelated
+pre-existing debt. That measurement is what made fixing the scan safe to do in
+the same PR as the line.
+
+### Fix
+
+1. `social_auth_models.py` uses `naive_utc_now()` from `src/utils/db_time.py`
+   — the shared helper whose own docstring says new service code should import
+   it rather than reinvent the two-line strip. `created_at` is a plain
+   `DateTime` column, so a naive value is the correct one.
+2. The scan replaces `! grep` with a `forbid` helper that **records** a
+   violation, so every check runs and all violations are reported in one pass,
+   then exits 1 on a non-zero tally.
+3. `forbid` distinguishes `grep` exit 1 (no match, clean) from exit ≥2 (grep
+   could not run). ⚠️ **An unrunnable check must never read as a passing one** —
+   that is how a typo'd path silently disables a check, the same class one
+   level down.
+
+### ⚠️ The first replacement was ALSO inert, in a different way
+
+`out="$(grep -rn "$@" 2>&1)"; rc=$?` takes the command substitution's exit
+status, so under `set -e` a **clean** grep (exit 1, no match) aborted the step
+before `rc=$?` ever ran — the scan failed on a clean tree. Now
+`out="$(...)" || rc=$?`, which `set -e` exempts as a `||` list.
+
+**This was caught only by executing the script, not by reading it.** The fix
+for an inert guard was one character away from being a differently inert guard.
+
+### Guard
+
+`backend/tests/unit/test_zero_fabrication_scan_enforces.py` (5 tests):
+
+- no `! <cmd>` may return to the step,
+- the script must test its own violation tally and exit non-zero,
+- `forbid` must fail on a match **and** on an unrunnable check (behavioural,
+  in a temp dir, isolated from this repo's contents),
+- **the real scan is executed against this tree on every `pytest` run** — which
+  brings the gate local instead of leaving it to CI alone.
+
+Each was watched failing on its own reverted regression: reinstating one
+`! grep` reddens the pattern test; reinstating `; rc=$?` reddens both
+behavioural tests; reinstating the banned call reddens the real-scan test.
+
+### ⚠️ A bare-token scan matches its own documentation
+
+The first version of the explanatory comment on the fixed line spelled the
+banned symbol, and the scan correctly flagged the comment. Resolved by
+rewording the comment rather than teaching the scan to skip comment lines —
+filtering comments would let a real violation hide behind a `#`. The repo has
+hit this before on the responsible-gambling copy scan; the two resolutions
+differ deliberately, because that scan polices *prose* and this one polices
+*symbols*.
+
+---
+
 ## 110. A squash merge deleted the ledger entry for a live staking override, because the merged branch was cut before it existed
 
 **Tier:** `RESOLVED` — restored 2026-09-20, same day, in the follow-up branch.
