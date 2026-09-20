@@ -1,5 +1,287 @@
 # SabiScore Debt Ledger
 
+## 120. The "MANDATORY" local CI enforcer was committed non-executable, so its own documented invocation failed on a fresh clone
+
+**Tier:** `RESOLVED` (2026-09-20)
+**Files:** `scripts/ci_local_enforcer.sh`, `scripts/deploy-production.sh`
+
+`scripts/ci_local_enforcer.sh` was committed with git mode `100644`. The
+execution prompt documents it twice as `./scripts/ci_local_enforcer.sh`
+(§P0.T2 and §the verification block), and that form requires the executable
+bit. On a fresh clone it returns:
+
+```
+/bin/bash: line 1: ./scripts/ci_local_enforcer.sh: Permission denied   (exit 126)
+```
+
+Second finding of the same family as item 112, one layer out: item 112 was the
+enforcer's own steps being unable to reach zero-exit on a fresh install; this
+is the enforcer being unable to *start* the documented way. Both are invisible
+to anyone who has run it once with `bash scripts/...`, which is how it stayed
+hidden.
+
+⚠️ **Exit 126 is not exit 1.** A caller checking only for non-zero sees a
+failing gate; a caller reading the message sees a gate that never ran. Item
+111's repair of the zero-fabrication scan turned on exactly this distinction —
+an unrunnable check must never be read as a passing one — and the same
+distinction applies to the runner itself.
+
+**Fix:** `git update-index --chmod=+x` on both this script and
+`scripts/deploy-production.sh`, the only other script in `scripts/` documented
+with a `./` invocation (`docs/archive/CREATIVE_ENHANCEMENTS_IMPLEMENTATION.md`).
+`fetch-models.sh` and `init-db.sh` are also mode 644 and were deliberately left
+alone — neither is documented as `./`-invoked anywhere, so changing them would
+be unmotivated churn rather than a fix.
+
+Verified by running `./scripts/ci_local_enforcer.sh` after the change: exit 0,
+14 gates passed, 2 correctly skipped.
+
+---
+
+## 119. Consumer copy contradicted the active operator override in two places — one asserting stakes are withheld, one asserting the model is certified
+
+**Tier:** `RESOLVED` (2026-09-20)
+**Files:** `apps/web/src/components/model-metadata-panel.tsx`,
+`apps/web/src/components/full-analysis-dashboard.tsx`
+
+ADR-0011 flipped `stake_permitted` to `true` on 2026-09-19. Two static strings
+written before that date became false the moment it activated, and both sit on
+consumer surfaces.
+
+**(1) The homepage hero rail told readers no stake is recommended.**
+`ModelMetadataPanel`'s "Validation" tile carried an unconditional hint:
+
+> "Research mode means forecasts are analytical output only — no stake is
+> recommended until validation passes."
+
+Live at the time of writing, `/api/models/status` returns
+`stake_permitted: true`, `staking_basis: "OPERATOR_OVERRIDE"`. The tile's own
+*value* read "Unvalidated · staking under operator override" — correct — while
+the explanatory line directly beneath it denied that staking was happening. The
+hint is now conditional on the override.
+
+⚠️ **A static reassurance that outlives the condition it describes is a false
+statement, not a stale one.** The value was routed through
+`certificationLabel()` and therefore tracked the backend; the hint was a
+literal and did not. When a state machine grows a state, every string that
+describes its behaviour is a candidate, not only the ones that name it.
+
+**(2) The match dashboard could claim certification the model had not earned.**
+`HYPE_COPY.HIGH_CONVICTION` contains four lines, one of which is
+`"The certified model is available."`, selected by a deterministic hash of
+`match_id` (`hash % 4 === 2`). Under the override the generation is explicitly
+not certified — `active_generation_is_certified()` returns `False` — so this
+line asserts earned certification on the exact surface that is supposed to
+disclose the opposite.
+
+Its three siblings were checked and are *safe*: "Verified evidence gates
+passed", "Model and market evidence are aligned" and "Risk controls permit a
+bounded stake" describe this **fixture's evidence**, which is a genuinely
+separate thing from the **model's** certification status. Only the one line
+conflates them.
+
+Latent rather than live today — `HIGH_CONVICTION` is unreachable while
+`MODEL_UNCERTAINTY_UNAVAILABLE` forces `PARTIAL` on every analysis (item 42) —
+and fixed anyway, for the same reason item 116's mojibake was: it is one gate
+flip from being rendered, and the flip is the goal of the work in flight.
+
+`sabiInsightCopy` now takes the certification state and **substitutes** rather
+than filters. Filtering would renumber the pool and silently change the copy
+shown for every other fixture the day a generation certifies; substitution
+changes exactly one line and leaves selection stable. Pinned by four tests in
+`full-analysis-dashboard.test.tsx`, the first of which is a guard-the-guard
+asserting a certified generation *does* still reach the claim — without it the
+other three pass against a completely unfixed component.
+
+---
+
+## 118. The ADR-0011 per-fixture staking disclosure is inert in production: the panel that renders it asks for no predictions
+
+**Tier:** `OPEN — OPERATOR DECISION` (found 2026-09-20)
+**Files:** `apps/web/src/lib/api.ts:943`, `apps/web/src/app/api/upcoming/route.ts`
+
+`StakingOverrideBadge` is mounted in `upcoming-matches-panel.tsx` and is the
+only per-fixture surface that discloses the override. It cannot ever render.
+
+`apps/web/src/lib/api.ts:943` hardcodes `qs.set("include_predictions", "false")`.
+The backend appends `staking_authorization`, `risk_guard` and the staking
+`data_gaps` tokens only inside the prediction branch of
+`upcoming_match_service.py`, so the non-prediction path returns none of them.
+
+**Measured live this session** (`/api/upcoming?limit=5`, via the Vercel proxy,
+2026-09-20T08:29Z) — all five fixtures:
+
+```
+"predictions": null, "data_gaps": [], "staking_authorization": null
+```
+
+So the badge's fail-quiet contract (`if (!auth?.is_override) return null`)
+fires on every row, and the disclosure the ADR calls mandatory is absent from
+the fixtures surface entirely.
+
+⚠️ **This was NOT "fixed" by flipping the flag, and should not be.** Two
+reasons, and the second is the binding one:
+
+1. The non-prediction path is deliberately "a bounded DB read with no model
+   work" (the component's own comment at line 183). Flipping the default turns
+   every anonymous panel load into N model inferences.
+2. **It would widen a Class C authorization.** The operator authorised staking
+   on `GET /upcoming/matches`; they did not authorise computing and publishing
+   stakes to every homepage visitor by default. Making that call is OG-06, not
+   a UI change.
+
+**What was done instead:** the whole disclosure path was made correct so that
+the day the flag flips, the surface is already right rather than being written
+afterwards — `RiskGuardSchema` on the wire (item 115), the `RiskGuard` TS
+type, copy for both staking codes (item 117), a distinct "Stake withheld" chip,
+and six tests in `upcoming-matches-panel.test.tsx` that are explicit about
+testing a contract rather than today's production payload.
+
+**Also done, and this one IS live:** the platform-level disclosure now carries
+substance. `/api/models/status` has always returned the full
+`staking_authorization` block — authorizing identity, rationale, and the two
+acknowledged failures — and `ModelStatus` did not declare the field, so no
+consumer could read it. The already-written, already-tested, **never-mounted**
+`StakingOverrideNotice` export is now wired into `ModelMetadataPanel` behind a
+fail-closed normalizer. A reader of the homepage now sees *which* gates were
+overridden, by whom, and why — not just a label saying that some were.
+
+**Trigger to revisit:** an operator decision on whether the fixtures panel
+should request predictions. Until then the per-fixture chip is correct and
+inert, and that is stated here rather than implied by a green test run.
+
+---
+
+## 117. The evidence-copy contract test could not fail — every assertion was structurally unfailable from the day it was written
+
+**Tier:** `RESOLVED` (2026-09-20)
+**File:** `apps/web/src/lib/evidence-copy-contract.test.ts`
+
+This is the **fifth** recorded instance of the "a gate that cannot fail" class
+(item 111's CI zero-fabrication scan; the inert schema-drift guard in item 110;
+the `LIVE` badge that was structurally never true; the providers pill whose
+numerator was structurally always zero).
+
+The test existed to prove every backend-emitted gap code has consumer-safe
+copy, and asserted it by inspecting the *shape* of the rendered string:
+
+```ts
+expect(result).not.toMatch(/_diff$/);
+expect(result).not.toMatch(/_ratio$/);
+expect(result).not.toMatch(/^MODEL_/);
+expect(result).not.toContain("_");
+```
+
+But the fall-through it is policing is:
+
+```ts
+function titleCaseCode(code: string): string {
+  return code.replaceAll("_", " ")...
+```
+
+`.replaceAll("_", " ")` runs **first**, so the fall-through's output can never
+contain an underscore and can never match any of those three patterns. Every
+assertion passes for any input whatsoever.
+
+⚠️ **Verified by execution, not by reading.** Deleting the long-registered
+`ppda_ratio` entry from `EVIDENCE_CODE_COPY` left all 23 tests green. That is
+the finding; the reasoning above is only the explanation.
+
+**Fix:** compare against the fall-through instead of inspecting the output's
+shape — `expect(result).not.toBe(titleCaseCodeReplica(code))` — which asks the
+only question that matters: does this code have real copy, or is it falling
+through? The replica is itself pinned by a test asserting it still matches
+`titleCaseCode`, because a replica that drifts makes every assertion vacuous
+again, which is precisely the failure being fixed.
+
+Watched failing three ways before being trusted: deleting `ppda_ratio` (the
+code the old guard could not catch) → 1 failure naming it; deleting both new
+ADR-0011 entries → 2 failures naming them; and a standing
+`an unregistered code is detectably falling through` test that fails if the
+comparison ever stops biting.
+
+---
+
+## 116. Double-encoded UTF-8 in a user-facing betting narrative, and no guard covered source literals
+
+**Tier:** `RESOLVED` (2026-09-20)
+**Files:** `backend/src/services/intelligence_synthesizer.py:466`,
+`backend/tests/unit/test_no_mojibake_in_source_literals.py`
+
+`intelligence_synthesizer.py` carried
+`"No bet â€” measured model evidence is unavailable."` — bytes
+`\xc3\xa2\xe2\x82\xac\xe2\x80\x9d`, an em-dash decoded as cp1252 and
+re-encoded as UTF-8 — while its two sibling narratives **on the adjacent
+lines** used a clean `—`.
+
+Fourth recorded instance of the class in this repository: the `Makefile`
+zero-fab echo lines (2026-07-05), the production `teams` rows that cost
+fixtures their Elo identity (2026-08-23), and this.
+
+⚠️ **Every existing guard polices provider DATA; none looked at source
+literals.** That is why this one survived all of them.
+
+⚠️ **Latent, not live.** `_compose_narrative`'s `else` branch is unreachable
+while `MODEL_UNCERTAINTY_UNAVAILABLE` forces `partial=True` on every analysis
+(item 42), and the `partial` branch is tested first. It is one gate-flip away
+from being among the most-rendered strings in the product, which is why it was
+worth pinning now rather than after.
+
+**Guard:** a repo-wide byte scan of `backend/src` + `apps/web/src` for four
+double-encoding signatures, each anchored on `0xC3` followed by a byte that is
+itself a multi-byte lead. Deliberately narrow — a broad "any 0xC3" rule would
+flag every legitimate `Málaga` and `München` and be disabled within a week. It
+carries a guard-the-guard (>200 files scanned) and a parametrized test that
+each signature matches a genuinely round-tripped corruption, because a
+signature that cannot match anything silently disables a check.
+
+Watched failing by re-injecting the exact original bytes — the guard named
+`backend/src/services/intelligence_synthesizer.py:466`.
+
+---
+
+## 115. `risk_guard` was dropped at response validation, so the circuit breaker's reason never reached any consumer
+
+**Tier:** `RESOLVED` (2026-09-20)
+**Files:** `backend/src/api/endpoints/upcoming_matches.py`,
+`backend/tests/unit/test_risk_guard_wire_contract.py`
+
+`upcoming_match_service.py` sets `match["risk_guard"] = risk_decision.as_dict()`
+whenever the ADR-0011 breaker suppresses a stake. `UpcomingMatchSchema` did not
+declare the field, and Pydantic v2 defaults to `extra="ignore"`, so the entire
+block was discarded on the way out.
+
+Measured on the payload the service actually builds, before the fix:
+
+```
+risk_guard survives schema?      -> False
+staking_authorization survives?  -> True
+```
+
+Consequence: a stake suppressed because a fixture sits in its league's measured
+epistemic danger zone arrived at the UI as one opaque
+`staking_suppressed_by_risk_guard` token in `data_gaps` and nothing else — no
+league, no threshold, no measured value, indistinguishable from a missing
+lineup.
+
+⚠️ **A field the service sets is not a field the client receives. The response
+model is a filter, and a silent one.** The sibling `staking_authorization`
+field carries a comment explaining it is "always present so a consumer can
+distinguish 'no override in force' from 'the field went missing'" — that exact
+reasoning applies here and had not been applied to it.
+
+`RiskGuardSchema` mirrors `RiskDecision.as_dict()` field-for-field, including
+its optionality: a stricter model that 422s on one fixture's disclosure would
+take down the entire fixture list, a self-inflicted outage on the surface whose
+job is to disclose. `epistemic` stays nullable deliberately —
+`_epistemic_for_match` returns `None` when it cannot measure, the breaker
+treats `None` as a trip, and a substituted `0.0` would read as a real
+measurement sitting on the dangerous side of every threshold.
+
+Three tests, all watched failing with the schema reverted.
+
+---
+
 ## 114. `market_baseline`/`no_league_regression` re-verification blocked: candidate `.pkl` artifacts are absent from a fresh checkout, and the committed comparison report is 9 days stale relative to a figure CLAUDE.md's own narrative already cites
 
 **Tier:** `NEXT`. **Found:** 2026-09-20, P8 (market diagnostics) of the

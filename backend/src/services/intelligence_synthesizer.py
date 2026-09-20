@@ -463,7 +463,7 @@ class IntelligenceSynthesizer:
                 phase8_ctx=phase8_ctx,
             )
         else:
-            narrative = "No bet â€” measured model evidence is unavailable."
+            narrative = "No bet — measured model evidence is unavailable."
 
         staleness = int(kwargs.get("staleness_seconds", 0))
         staleness_available = bool(kwargs.get("staleness_available", True))

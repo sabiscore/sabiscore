@@ -72,14 +72,41 @@ const BACKEND_EMITTED_CODES: string[] = [
   // feature identifier reaches the user.
   "model_generation_uncertified",
   "required_model_inputs_unavailable",
+
+  // ── Staking disclosure codes (ADR-0011 / docs/DEBT.md item 108) ────────────
+  // upcoming_match_service.py appends exactly one of these to data_gaps on every
+  // fixture evaluated under the operator override. Today UpcomingMatch.data_gaps
+  // is read only as a boolean by upcoming-matches-panel.tsx, so the fall-through
+  // is latent rather than live — registering them here is what stops it becoming
+  // live the first time any surface renders that array as text.
+  "staking_under_operator_override",
+  "staking_suppressed_by_risk_guard",
 ];
 
-/** Raw identifiers that must NOT leak to the user (spot-check for the fall-through). */
-const RAW_IDENTIFIER_PATTERNS = [
-  /_diff$/,     // progressive_carry_diff → "Progressive Carry Diff"
-  /_ratio$/,    // ppda_ratio → "Ppda Ratio"
-  /^MODEL_/,    // MODEL_GENERATION_UNCERTIFIED → "Model Generation Uncertified"
-];
+/**
+ * The exact fall-through `describeEvidenceCode` uses when a code has no copy.
+ *
+ * ⚠️ THIS REPLICA IS THE WHOLE GUARD. Asserting on the *shape* of the rendered
+ * string cannot work here, and this test asserted exactly that from the day it
+ * was written until 2026-09-20 (docs/DEBT.md item 117): `titleCaseCode` opens
+ * with `.replaceAll("_", " ")`, so its output can never contain an underscore
+ * and can never match `/_diff$/`, `/_ratio$/` or `/^MODEL_/`. Every assertion
+ * was structurally unfailable — deleting the long-registered `ppda_ratio` entry
+ * from EVIDENCE_CODE_COPY left all 23 tests green. Verified by execution, not
+ * by reading the code.
+ *
+ * Comparing against the fall-through instead asks the only question that
+ * matters: does this code have real copy, or is it falling through?
+ *
+ * Kept in sync by `test_fall_through_replica_matches_the_real_implementation`
+ * below — a replica that drifts from the original is a guard that lies.
+ */
+function titleCaseCodeReplica(code: string): string {
+  return code
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 describe("Evidence copy contract", () => {
   test.each(BACKEND_EMITTED_CODES)(
@@ -94,27 +121,31 @@ describe("Evidence copy contract", () => {
       // Must not be the raw code itself
       expect(result).not.toBe(code);
 
-      // Must not read as a title-cased raw identifier (the titleCaseCode fallback).
-      for (const pattern of RAW_IDENTIFIER_PATTERNS) {
-        expect(result).not.toMatch(pattern);
-      }
+      // THE ASSERTION THAT BITES: the code must have real copy, not the
+      // title-cased fall-through. A shape check cannot express this, because
+      // the fall-through already produces underscore-free Title Case.
+      expect(result).not.toBe(titleCaseCodeReplica(code));
 
-      // Must not look like a raw feature identifier (no unprocessed snake_case or SCREAMING_SNAKE)
-      expect(result).not.toMatch(/^[a-z_]+_[a-z_]+$/);   // bare snake_case
-      expect(result).not.toMatch(/^[A-Z_]+_[A-Z_]+$/);   // bare SCREAMING_SNAKE
-
-      // Should not contain underscores (they signal un-mapped raw identifiers)
+      // Belt-and-braces: no raw identifier residue survived the mapped copy.
       expect(result).not.toContain("_");
     }
   );
 
-  test("titleCaseCode fallthrough does NOT produce consumer-safe output for known codes", () => {
-    // Demonstrate WHY every code must be in the map: the fallthrough is unsuitable.
-    // This test will fail if describeEvidenceCode falls through for any registered code.
-    for (const code of BACKEND_EMITTED_CODES) {
-      const result = describeEvidenceCode(code);
-      // None of the known codes should produce underscore output
-      expect(result).not.toMatch(/_/);
+  test("fall-through replica matches the real implementation", () => {
+    // A replica that drifts from titleCaseCode() would make every assertion
+    // above vacuously true again — the exact failure this rewrite fixes.
+    // Codes chosen to exercise each transform: separators, casing, digits.
+    for (const code of ["ppda_ratio", "MODEL_GENERATION_UNCERTIFIED", "set_piece_xg_diff", "causal_analysis"]) {
+      expect(describeEvidenceCode(`__unmapped__${code}`)).toBe(
+        titleCaseCodeReplica(`__unmapped__${code}`)
+      );
     }
+  });
+
+  test("an unregistered code is detectably falling through", () => {
+    // Guard the guard: prove the assertion above can actually fail, rather
+    // than trusting that it can. If this ever passes, the check is inert.
+    const unmapped = "definitely_not_a_registered_gap_code";
+    expect(describeEvidenceCode(unmapped)).toBe(titleCaseCodeReplica(unmapped));
   });
 });

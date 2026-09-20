@@ -353,3 +353,121 @@ describe("C9 — per-league offseason detection in UpcomingMatchesPanel", () => 
     expect(offseasonCalls).toHaveLength(0);
   });
 });
+
+// ─── ADR-0011 staking disclosure (docs/DEBT.md items 108, 115, 118) ──────────
+
+/**
+ * Render the panel with one fixture whose staking fields are overridden.
+ *
+ * ⚠️ These assertions are about the CONTRACT, not about what production sends
+ * today. `lib/api.ts` hardcodes `include_predictions=false`, so the live panel
+ * receives `data_gaps: []` and `staking_authorization: null` on every row and
+ * none of this renders (docs/DEBT.md item 118). Turning that flag on is an
+ * operator decision, not a UI one — these tests exist so the surface is
+ * correct on the day it is turned on, rather than being written afterwards.
+ */
+function renderWithStakingFixture(overrides: Record<string, unknown>) {
+  const response = upcomingResponse(1);
+  response.upcoming_matches[0] = {
+    ...response.upcoming_matches[0],
+    ...overrides,
+  } as (typeof response.upcoming_matches)[0];
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      return new Response(
+        JSON.stringify(url.startsWith("/api/leagues") ? LEAGUES : response),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }),
+  );
+  return renderPanel();
+}
+
+const TRIPPED_GUARD = {
+  tripped: true,
+  reason: "epistemic_in_measured_danger_zone",
+  league: "EPL",
+  epistemic: 0.0701,
+  threshold: 0.0788,
+  version: "v1",
+};
+
+describe("UpcomingMatchesPanel staking disclosure", () => {
+  it("marks a suppressed stake distinctly, not as a generic evidence gap", async () => {
+    renderWithStakingFixture({
+      data_gaps: ["staking_suppressed_by_risk_guard"],
+      risk_guard: TRIPPED_GUARD,
+    });
+
+    expect(await screen.findByText("Stake withheld")).toBeInTheDocument();
+    // The breaker's decision must not be flattened into "Partial", which is
+    // the label for incomplete evidence. This fixture's evidence is complete.
+    expect(screen.queryByText("Partial")).not.toBeInTheDocument();
+  });
+
+  it("does not mark a fixture partial when its only gap is a staking disclosure", async () => {
+    // The backend appends this to EVERY publishable fixture under the
+    // override. Counting it would make the Partial chip structurally
+    // always-on and therefore meaningless.
+    renderWithStakingFixture({ data_gaps: ["staking_under_operator_override"] });
+
+    await screen.findByText(/Home 1/);
+    expect(screen.queryByText("Partial")).not.toBeInTheDocument();
+  });
+
+  it("still marks a fixture partial when a real evidence gap sits alongside the disclosure", async () => {
+    renderWithStakingFixture({
+      data_gaps: ["staking_under_operator_override", "ppda_ratio"],
+    });
+
+    expect(await screen.findByText("Partial")).toBeInTheDocument();
+  });
+
+  it("explains a withheld stake without inverting what the measurement means", async () => {
+    renderWithStakingFixture({
+      data_gaps: ["staking_suppressed_by_risk_guard"],
+      risk_guard: TRIPPED_GUARD,
+    });
+
+    const chip = await screen.findByText("Stake withheld");
+    const tooltip = chip.closest("span")?.getAttribute("title") ?? "";
+
+    // The breaker fires on LOW epistemic uncertainty — the range where this
+    // model is measured to be WORSE. Copy calling that "confidence" would
+    // tell the reader the opposite of what the backend decided.
+    expect(tooltip).toMatch(/measured to be worse/i);
+    expect(tooltip).not.toMatch(/\bconfiden/i);
+    // Withholding a stake says nothing about the forecast itself.
+    expect(tooltip).toMatch(/Forecasts above are unaffected/i);
+  });
+
+  it("treats an unmeasurable epistemic reading as a risk, never as a clean bill", async () => {
+    renderWithStakingFixture({
+      data_gaps: ["staking_suppressed_by_risk_guard"],
+      risk_guard: {
+        tripped: true,
+        reason: "epistemic_uncertainty_unavailable",
+        league: "EPL",
+        epistemic: null,
+        threshold: 0.0788,
+        version: "v1",
+      },
+    });
+
+    const chip = await screen.findByText("Stake withheld");
+    const tooltip = chip.closest("span")?.getAttribute("title") ?? "";
+    expect(tooltip).toMatch(/could not be measured/i);
+    // A null reading must never be narrated as a number.
+    expect(tooltip).not.toMatch(/0\.0000/);
+  });
+
+  it("renders no withheld chip when the breaker did not trip", async () => {
+    renderWithStakingFixture({ data_gaps: ["staking_under_operator_override"] });
+
+    await screen.findByText(/Home 1/);
+    expect(screen.queryByText("Stake withheld")).not.toBeInTheDocument();
+  });
+});

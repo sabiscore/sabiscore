@@ -198,6 +198,38 @@ class StakingAuthorizationSchema(BaseModel):
     acknowledged_failures: List[str] = Field(default_factory=list)
 
 
+class RiskGuardSchema(BaseModel):
+    """Mirrors `services.risk_guard.RiskDecision.as_dict()` (ADR-0011).
+
+    ⚠️ This schema exists because its absence was a silent data loss.
+    `upcoming_match_service.py` sets `match["risk_guard"]` whenever the
+    circuit breaker suppresses a stake, but Pydantic's default `extra="ignore"`
+    dropped the whole block at response validation — so the breaker's *reason*
+    (which league threshold, what epistemic value) never reached any consumer,
+    and a suppressed stake was indistinguishable from any other data gap.
+
+    The sibling `staking_authorization` field carries a comment explaining it
+    is "always present so a consumer can distinguish 'no override in force'
+    from 'the field went missing'". The same reasoning applies here and was
+    not applied; `test_upcoming_match_schema_preserves_risk_guard` now pins it.
+    """
+
+    tripped: bool
+    league: str
+    # `RiskDecision.reason` is Optional at the source (None on a non-trip), and
+    # every optional below mirrors it deliberately rather than tightening it: a
+    # response model strict enough to 422 on one fixture's disclosure would take
+    # down the whole fixture list — a self-inflicted outage on the exact surface
+    # whose job is to disclose.
+    reason: Optional[str] = None
+    # None when epistemic uncertainty could not be measured at all — the
+    # breaker treats that as a trip, and a substituted 0.0 would read as a
+    # real measurement sitting on the dangerous side of every threshold.
+    epistemic: Optional[float] = None
+    threshold: Optional[float] = None
+    version: Optional[str] = None
+
+
 class UpcomingMatchSchema(BaseModel):
     match_id: str
     home_team: str
@@ -227,6 +259,11 @@ class UpcomingMatchSchema(BaseModel):
     # field went missing", and carries the operator disclosure that must be
     # rendered alongside any stake published under an override.
     staking_authorization: Optional[StakingAuthorizationSchema] = None
+    # Present only when the ADR-0011 circuit breaker actually suppressed a
+    # stake. Absent otherwise — unlike `staking_authorization`, absence here is
+    # meaningful and safe ("the breaker did not trip"), because the breaker can
+    # only ever subtract permission, never add it.
+    risk_guard: Optional[RiskGuardSchema] = None
 
 
 class UpcomingMatchesResponseSchema(BaseModel):

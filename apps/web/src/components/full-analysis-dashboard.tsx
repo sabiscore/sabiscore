@@ -134,6 +134,11 @@ const HYPE_COPY: Record<string, string[]> = {
   HIGH_CONVICTION: [
     "Verified evidence gates passed.",
     "Model and market evidence are aligned.",
+    // ⚠️ Asserts CERTIFICATION, not evidence. Under ADR-0011 the serving
+    // generation is override-staked and explicitly not certified, so this line
+    // is swapped out below rather than sitting in the pool unconditionally.
+    // The sibling entries are safe: they describe this fixture's *evidence*
+    // gates, which is a genuinely separate thing from the model's own status.
     "The certified model is available.",
     "Risk controls permit a bounded stake.",
   ],
@@ -163,10 +168,24 @@ const HYPE_COPY: Record<string, string[]> = {
   ],
 };
 
-function sabiInsightCopy(verdict: Verdict, matchId: string): string {
+/** The one line in HYPE_COPY that claims certification rather than evidence. */
+const CERTIFICATION_CLAIM = "The certified model is available.";
+/** What to say instead when the generation has not earned that claim. */
+const UNCERTIFIED_SUBSTITUTE = "Model output is uncertified — treat as research.";
+
+export function sabiInsightCopy(
+  verdict: Verdict,
+  matchId: string,
+  certificationState?: string | null,
+): string {
+  const certified = String(certificationState ?? "").toUpperCase() === "CERTIFIED";
   const pool = HYPE_COPY[verdict] ?? HYPE_COPY.HOLD;
   const hash = matchId.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return pool[hash % pool.length];
+  const line = pool[hash % pool.length];
+  // Substitute rather than filter: filtering would shift every other fixture's
+  // deterministic selection, so the same match would silently change its copy
+  // the moment a generation is certified.
+  return !certified && line === CERTIFICATION_CLAIM ? UNCERTIFIED_SUBSTITUTE : line;
 }
 
 // ─── Sabi Insights badge (E.6) ────────────────────────────────────────────────
@@ -175,12 +194,14 @@ function SabiInsightsBadge({
   verdict,
   matchId,
   copy,
+  certificationState,
 }: {
   verdict: Verdict;
   matchId: string;
   copy?: string;
+  certificationState?: string | null;
 }) {
-  const displayedCopy = copy ?? sabiInsightCopy(verdict, matchId);
+  const displayedCopy = copy ?? sabiInsightCopy(verdict, matchId, certificationState);
   return (
     <p className="text-[11px] text-slate-400 italic leading-relaxed truncate">
       <span className="sr-only">Sabi Insights: </span>
@@ -454,7 +475,12 @@ function EnhancedMatchHero({
             </span>
           )}
         </div>
-        <SabiInsightsBadge verdict={data.verdict} matchId={matchId} copy={presentation.reason} />
+        <SabiInsightsBadge
+          verdict={data.verdict}
+          matchId={matchId}
+          copy={presentation.reason}
+          certificationState={data.ensemble.certification_state}
+        />
       </div>
       {/* ── Verdict description (Phase 3) ── */}
       <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/30 pt-2">

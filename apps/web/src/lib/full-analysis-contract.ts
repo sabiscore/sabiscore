@@ -432,8 +432,41 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   model_generation_uncertified: "this model hasn't passed certification yet",
   required_model_inputs_unavailable:
     "the inputs the model requires — recent form, head-to-head, and a coherent market — are not available",
+
+  // ── Staking disclosure codes (ADR-0011, emitted by upcoming_match_service.py)
+  // These are not evidence gaps: they describe WHY a stake is or is not shown,
+  // and they are the only user-visible trace of the operator override. Copy must
+  // never imply the model earned the permission, and must never describe a
+  // breaker trip as a confidence signal — the breaker fires on LOW epistemic
+  // uncertainty, which is this generation's measured danger zone, not its safe one.
+  staking_under_operator_override:
+    "any stake shown here is permitted by operator authorisation, not by passing certification",
+  staking_suppressed_by_risk_guard:
+    "the stake was withheld because this fixture falls where this model has measured worse accuracy, not better",
 };
 
+
+/**
+ * Codes that `upcoming_match_service.py` puts in `data_gaps` to disclose a
+ * STAKING decision, not to report missing evidence (ADR-0011).
+ *
+ * ⚠️ These must be filtered out before counting evidence gaps. Under the
+ * active override the service appends exactly one of them to EVERY publishable
+ * fixture, so a consumer that treats `data_gaps.length > 0` as "intelligence is
+ * incomplete" marks every fixture partial — including fixtures whose evidence
+ * is complete. That is the same always-on-chip failure this repo has already
+ * shipped twice: the `LIVE` badge that was structurally never false, and the
+ * providers pill whose numerator was structurally always zero.
+ */
+export const STAKING_DISCLOSURE_CODES: ReadonlySet<string> = new Set([
+  "staking_under_operator_override",
+  "staking_suppressed_by_risk_guard",
+]);
+
+/** Evidence gaps only — staking disclosures removed. See STAKING_DISCLOSURE_CODES. */
+export function evidenceGapsOnly(codes: readonly string[] | null | undefined): string[] {
+  return (codes ?? []).filter((code) => !STAKING_DISCLOSURE_CODES.has(code));
+}
 
 /** Title-case a backend code so an unmapped value still reads as words, not an enum. */
 function titleCaseCode(code: string): string {
