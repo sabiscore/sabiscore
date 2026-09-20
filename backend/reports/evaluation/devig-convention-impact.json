@@ -1,0 +1,157 @@
+{
+  "data": {
+    "bookmaker_tier_usage": {
+      "bet365": 12760,
+      "pinnacle": 1
+    },
+    "corpus": "backend/data/cache",
+    "corpus_sha256": "2d5ec7cf4bade7fa9804cd1976b930f624c10d731bf2214cfc3ed5f2056cbd32",
+    "files": [
+      "fd_D1_1920.csv",
+      "fd_D1_2021.csv",
+      "fd_D1_2122.csv",
+      "fd_D1_2223.csv",
+      "fd_D1_2324.csv",
+      "fd_D1_2425.csv",
+      "fd_D1_2526.csv",
+      "fd_E0_1920.csv",
+      "fd_E0_2021.csv",
+      "fd_E0_2122.csv",
+      "fd_E0_2223.csv",
+      "fd_E0_2324.csv",
+      "fd_E0_2425.csv",
+      "fd_E0_2526.csv",
+      "fd_F1_1920.csv",
+      "fd_F1_2021.csv",
+      "fd_F1_2122.csv",
+      "fd_F1_2223.csv",
+      "fd_F1_2324.csv",
+      "fd_F1_2425.csv",
+      "fd_F1_2526.csv",
+      "fd_I1_1920.csv",
+      "fd_I1_2021.csv",
+      "fd_I1_2122.csv",
+      "fd_I1_2223.csv",
+      "fd_I1_2324.csv",
+      "fd_I1_2425.csv",
+      "fd_I1_2526.csv",
+      "fd_N1_2526.csv",
+      "fd_SP1_1920.csv",
+      "fd_SP1_2021.csv",
+      "fd_SP1_2122.csv",
+      "fd_SP1_2223.csv",
+      "fd_SP1_2324.csv",
+      "fd_SP1_2425.csv",
+      "fd_SP1_2526.csv"
+    ],
+    "rejected_by_baseline_validation": {},
+    "rows_without_result": 0,
+    "rows_without_usable_opening_odds": 4
+  },
+  "finding": {
+    "interpretation": "Shin de-vigging produces a sharper market baseline in 5 of 6 leagues, so adopting it makes G18 marginally HARDER, not easier. The pooled effect (-0.000117 RPS) is far smaller than the reported G18 confidence intervals, so the convention change is methodologically correct but immaterial to the G18 verdict.",
+    "leagues_total": 6,
+    "leagues_where_shin_is_sharper": 5
+  },
+  "generated_at": "2026-09-20T13:20:04Z",
+  "method": {
+    "baseline": "shin",
+    "comparison": "proportional",
+    "metric": "3-class RPS, lower is better",
+    "prices": "opening only; closing columns excluded as post-forecast",
+    "reference": "Shin (1993); inversion per Strumbelj (2014), Int. J. Forecasting"
+  },
+  "metrics": {
+    "by_league": {
+      "BUNDESLIGA": {
+        "delta_shin_minus_proportional": -3.575764330104869e-06,
+        "market_rps_proportional": 0.19819831452893655,
+        "market_rps_shin": 0.19819473876460644,
+        "n": 2142,
+        "overround_max": 1.1177156177156178,
+        "overround_mean": 1.054670264341122,
+        "overround_min": 1.0276162790697674,
+        "shin_z_max": 0.06149360496959379,
+        "shin_z_mean": 0.027662135815594,
+        "shin_z_min": 0.01382286295664453
+      },
+      "EPL": {
+        "delta_shin_minus_proportional": 3.4188245287669616e-05,
+        "market_rps_proportional": 0.1981968324885788,
+        "market_rps_shin": 0.19823102073386648,
+        "n": 2660,
+        "overround_max": 1.1666666666666665,
+        "overround_mean": 1.054260207553632,
+        "overround_min": 1.0298245614035089,
+        "shin_z_max": 0.08548983747087369,
+        "shin_z_mean": 0.027460295163227746,
+        "shin_z_min": 0.015588862577699598
+      },
+      "EREDIVISIE": {
+        "delta_shin_minus_proportional": -2.0239431316154688e-05,
+        "market_rps_proportional": 0.19460306781560355,
+        "market_rps_shin": 0.1945828283842874,
+        "n": 306,
+        "overround_max": 1.1165790731008123,
+        "overround_mean": 1.0568109121428078,
+        "overround_min": 1.0394736842105263,
+        "shin_z_max": 0.06079966034297572,
+        "shin_z_mean": 0.028750299517639494,
+        "shin_z_min": 0.019790883556177724
+      },
+      "LA_LIGA": {
+        "delta_shin_minus_proportional": -0.0003079043400946724,
+        "market_rps_proportional": 0.19299924621295766,
+        "market_rps_shin": 0.192691341872863,
+        "n": 2660,
+        "overround_max": 1.1226053639846745,
+        "overround_mean": 1.0552265012653643,
+        "overround_min": 1.0310391363022942,
+        "shin_z_max": 0.06197489400067921,
+        "shin_z_mean": 0.027859882887558633,
+        "shin_z_min": 0.015648365566433127
+      },
+      "LIGUE_1": {
+        "delta_shin_minus_proportional": -5.1484492902043044e-05,
+        "market_rps_proportional": 0.20244319986002657,
+        "market_rps_shin": 0.20239171536712453,
+        "n": 2336,
+        "overround_max": 1.122900773212511,
+        "overround_mean": 1.0546895623070522,
+        "overround_min": 1.0248532816453992,
+        "shin_z_max": 0.06149807084323801,
+        "shin_z_mean": 0.02759689638552015,
+        "shin_z_min": 0.0125052779494456
+      },
+      "SERIE_A": {
+        "delta_shin_minus_proportional": -0.00023859617420407542,
+        "market_rps_proportional": 0.19123788616136447,
+        "market_rps_shin": 0.1909992899871604,
+        "n": 2657,
+        "overround_max": 1.0854129530600118,
+        "overround_mean": 1.054920939876878,
+        "overround_min": 1.0363521416152994,
+        "shin_z_max": 0.04343486587090614,
+        "shin_z_mean": 0.02772864342468095,
+        "shin_z_min": 0.018244780647346436
+      }
+    },
+    "pooled": {
+      "delta_shin_minus_proportional": -0.00011724435198215422,
+      "market_rps_proportional": 0.19635587150085507,
+      "market_rps_shin": 0.1962386271488729,
+      "n": 12761,
+      "overround_max": 1.1666666666666665,
+      "overround_mean": 1.0548077929312007,
+      "overround_min": 1.0248532816453992,
+      "shin_z_max": 0.08548983747087369,
+      "shin_z_mean": 0.027689281068916553,
+      "shin_z_min": 0.0125052779494456
+    }
+  },
+  "report_version": "devig-convention-impact-1",
+  "repository": {
+    "commit_sha": "d79fc6b933b5be669778e86d3376da30477435d0",
+    "name": "sabiscore/sabiscore"
+  }
+}

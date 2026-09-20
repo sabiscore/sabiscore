@@ -1,0 +1,235 @@
+{
+  "blockers": [
+    {
+      "id": "G18",
+      "next": "A candidate with a measured edge. The de-vig method is now correct; the result is unchanged.",
+      "resolvable_by_code": false,
+      "summary": "No demonstrated market edge in any league (0/6 by paired 95% CI, candidate and incumbent alike)."
+    },
+    {
+      "id": "G16 / item 50",
+      "next": "Funded research (dossier option B). The ADR-0011 circuit breaker mitigates the consequence, not the cause.",
+      "resolvable_by_code": false,
+      "summary": "error_association inverted - the highest-epistemic quartile scores better than the lowest, across all 5 scoreable leagues. Four hypotheses ruled out; cause unexplained."
+    },
+    {
+      "id": "G11 / item 122",
+      "next": "A retrain under the pinned scikit-learn 1.3.2 stack, shipped as a NEW generation with its own certification lineage. Not a loading-code fix.",
+      "resolvable_by_code": false,
+      "summary": "0 of 6 leagues has a usable calibrator; measured ECE 0.0977 vs a 0.03 ceiling."
+    },
+    {
+      "id": "G17 / item 8",
+      "next": "Elapsed settled-fixture volume (trigger >=1000; currently far below).",
+      "resolvable_by_code": false,
+      "summary": "Drift reference baseline cannot exist yet."
+    },
+    {
+      "id": "release identity / item 124",
+      "next": "Emit the binding at training time for the NEXT generation. training_manifest.py already produces every needed field; it was simply never run with a clean tree and a real generation_id for this one. Back-filling it now would be inventing provenance.",
+      "resolvable_by_code": false,
+      "summary": "The served generation has no reproducibility binding: source commit and dataset snapshot are UNBOUND, and no training manifest binds it."
+    }
+  ],
+  "debt_118_fixture_panel_staking": {
+    "action_taken": "None. Directive section 14 requires it stay inert; activating it would widen a Class C authorization ADR-0011 never granted and would run N inferences per anonymous homepage load.",
+    "status": "OPEN - LEFT INERT, as directed",
+    "verified_this_pass": "apps/web/src/lib/api.ts:943 still hardcodes include_predictions=false."
+  },
+  "debt_audit": {
+    "flag_gated": "api/endpoints/matches.py mock feed is gated on settings.mock_mode, Field(default=False).",
+    "headline": "No fabrication path is reachable on the live serving, prediction or staking path.",
+    "honest_stub_confirmed": "api/endpoints/explain.py's calibration stub returns {} and sample_size 0 - empty, not invented. Same fail-closed shape as the vOmega.15 explainer fix.",
+    "latent_risks_pinned": "MockModelOrchestrator.predict() (random.uniform probabilities, swapped in silently on ImportError) and LiveCalibrator._generate_mock_data() (synthetic prediction/outcome pairs when Redis is absent) are both dead today and are now pinned dead by test_fabricating_predictors_stay_off_the_serving_path.",
+    "marker_counts": {
+      "FIXME": 0,
+      "HACK": 0,
+      "TODO": 21,
+      "XXX": 0,
+      "bypass": 3,
+      "temporary": 4,
+      "unsafe": 6
+    },
+    "method": "Reachability, not presence: imported src.api.main and inspected sys.modules, then checked call sites. Grep alone gave the wrong answer twice.",
+    "record": "docs/DEBT.md item 125",
+    "scope": "directive section 22; backend/src and apps/web/src"
+  },
+  "decision": {
+    "certification_decision": "HOLD",
+    "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+    "certification_state_was_not_altered": "Confirmed. active_generation.json is byte-identical to its pre-session state; certified_at is still null; promotion_state is still ACTIVE_FAIL_CLOSED; active_generation_is_certified() still returns False.",
+    "promotion_permitted": false,
+    "promotion_rung": "FORECAST_ONLY",
+    "rationale": "OG-06 was decided this pass: G18 -> option C (serving-only, gate unchanged and unmet) with a mandated switch to Shin de-vigging; G16 -> option A (accept as a documented limitation) with a bounded investigation, now completed. Four promotion gates remain FAIL. No threshold in certification_policy.py was edited (v1.2.0, policy_sha256 re-verified unchanged). No candidate was promoted. The Shin correction makes G18 marginally HARDER, not easier, and is immaterial to its verdict."
+  },
+  "gates": {
+    "G11_CALIBRATION": {
+      "diagnosis_added_this_pass": "docs/DEBT.md item 122 explains WHY the served head is uncalibrated: SabiScoreEnsemble.load_model() copied five of the artifact's six keys and never read 'calibrator', so the production startup path dropped it silently. Measured: 0 of 6 leagues has a usable calibrator (4 artifacts carry none; 2 carry a sigmoid one that raises under the pinned scikit-learn 1.3.2). The measurement is unaffected - measurement and diagnosis were always independent.",
+      "measured": 0.0977,
+      "metric": "adaptive-confidence Expected Calibration Error",
+      "sample": "87 real settled predictions across all 6 served leagues",
+      "status": "FAIL",
+      "threshold": 0.03,
+      "unchanged_this_pass": true
+    },
+    "G15_MURPHY_DECOMPOSITION": {
+      "measured_decomposition_error": 0.0,
+      "status": "PASS",
+      "unchanged_this_pass": true
+    },
+    "G16_UNCERTAINTY": {
+      "basis": "Independently blocked by the permanent MODEL_UNCERTAINTY_UNAVAILABLE critical gap (docs/DEBT.md item 42) and by the unexplained error_association inversion (item 50). Both xfail markers remain xfail and still print their live measurements; neither was touched.",
+      "blocking": true,
+      "conformal_layer": "NOT built this pass, deliberately. The directive gates a conformal layer on the base probability pipeline being deterministic and reproducible; with 0/6 leagues calibrated and an unexplained uncertainty inversion, that precondition is not met. Building it now would layer a coverage guarantee over a base whose behaviour is not yet established.",
+      "investigation_completed_this_pass": "The scikit-learn serialization discrepancy item 113 left open is RESOLVED as a diagnosis (item 122). It is an artifact-level defect: the two serialized calibrators were fitted under scikit-learn ~1.8.0 while requirements pin 1.3.2. Not fixable by loading code; requires a retrain under the pinned stack, i.e. a new generation and certification lineage.",
+      "status": "FAIL"
+    },
+    "G17_DRIFT_PSI": {
+      "reason": "reference baseline cannot exist yet (docs/DEBT.md item 8; trigger is >=1000 score-verified settled fixtures, currently far below)",
+      "status": "BLOCKED",
+      "unchanged_this_pass": true
+    },
+    "G18_MARKET_BASELINE": {
+      "leagues_passing": "0/6",
+      "measured_effect_of_the_correction": {
+        "delta": -0.00011724435198215422,
+        "evidence": "backend/reports/evaluation/devig-convention-impact.json",
+        "interpretation": "Shin produces a SHARPER market baseline in 5 of 6 leagues, so the correction makes G18 marginally HARDER. The pooled effect is ~25-40x smaller than the half-widths of the paired 95% CIs in docs/DEBT.md item 62, so it cannot flip any league. The method is corrected; the result is not moved, and must not be presented as if it were.",
+        "leagues_where_shin_is_sharper": 5,
+        "n": 12761,
+        "pooled_market_rps_proportional": 0.19635587150085507,
+        "pooled_market_rps_shin": 0.1962386271488729,
+        "shin_z_mean": 0.027689281068916553
+      },
+      "method": "Shin (1993), inverted per Strumbelj (2014) IJF; z solved by bisection on a proved bracket",
+      "method_corrected_this_pass": true,
+      "previous_method": "proportional normalisation ((1/o_i) / booksum)",
+      "status": "FAIL",
+      "unchanged_this_pass": true
+    }
+  },
+  "generated_at": "2026-09-20T15:30:00Z",
+  "generated_by": "P18 NEXUS certification execution (OG-06 decisions applied)",
+  "market_edge_claims": {
+    "actionable_market_edge": false,
+    "basis": "0/6 leagues by paired 95% CI, for both candidate and incumbent (docs/DEBT.md item 62), reconfirmed unchanged by the Shin correction.",
+    "market_edge_certified": false
+  },
+  "model": {
+    "active_version": "v5_phase7",
+    "calibrator_usability_measured_this_pass": {
+      "absent_from_artifact": [
+        "epl",
+        "eredivisie",
+        "la_liga",
+        "serie_a"
+      ],
+      "corrects": "docs/DEBT.md item 83's claim that every v5_phase7 artifact carries a FittedCalibrator. Measured: two of six do.",
+      "of": 6,
+      "present_but_unusable_sigmoid": [
+        "bundesliga",
+        "ligue_1"
+      ],
+      "usable": 0
+    },
+    "certified_at": null,
+    "feature_schema_version": "phase7_68",
+    "generation_id": "v5_phase7-20260808",
+    "leagues_served": 6,
+    "promotion_state": "ACTIVE_FAIL_CLOSED",
+    "served_head": "SoftmaxMetaModel"
+  },
+  "next_promotion_prerequisites": [
+    "FORECAST_ONLY -> higher rung requires G18 to pass on an independently reproducible run, which requires a candidate with a measured edge. Nothing in this pass moves that.",
+    "Any staking beyond ADR-0011's single consumer requires amending ADR-0011 first.",
+    "/full-analysis staking additionally requires resolving MODEL_UNCERTAINTY_UNAVAILABLE (item 42) - two independent locks, not one.",
+    "The next generation should be refused promotion unless audit_release_identity.py reports RELEASE_IDENTITY_COMPLETE."
+  ],
+  "operator_gates": {
+    "OG-06": {
+      "authorizing_identity": "Operator, via the P18 NEXUS certification execution directive",
+      "date": "2026-09-20",
+      "dossier": "docs/certification/og-06-dossier-2026-09-20.md (decision record section 6)",
+      "g16_decision": "A - accept as a documented limitation of this generation; HOLD stands",
+      "g16_option_c_explicitly_declined": "Reclassifying MODEL_UNCERTAINTY_UNAVAILABLE to advisory was NOT taken. It would loosen a staking safety gate after observing that it blocks a desired result (APEX 23), and would stake precisely where the uncertainty signal is known to be inverted.",
+      "g18_additional_mandate": "All future 1X2 market-baseline comparisons must use Shin's method and record raw odds, implied probabilities, overround, solved z and devigged probabilities; post-forecast and stale market observations must be rejected. IMPLEMENTED this pass.",
+      "g18_decision": "C - accept as serving-only; restrict candidate to FORECAST_ONLY; no threshold amended",
+      "status": "DECIDED"
+    }
+  },
+  "release_identity": {
+    "active_generation_manifest_sha256": null,
+    "build_gate": "backend/scripts/verify_active_artifacts.py - exit 0; 6 hash-locked artifact pairs verified",
+    "certification_policy_hash_verified_unchanged": true,
+    "certification_policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
+    "certification_policy_version": "1.2.0",
+    "chain_audit": {
+      "binding_training_manifest": null,
+      "bound": [
+        "certification_policy",
+        "feature_contract",
+        "model_artifacts"
+      ],
+      "does_not_change_todays_decision": true,
+      "evidence": "backend/reports/certification/release-identity-audit.json",
+      "finding": "Artifacts are hash-pinned (6/6 recomputed SHA-256 match), so it is provable they have not CHANGED. Their ORIGIN is unrecorded: no file binds v5_phase7-20260808 to a source commit or dataset snapshot. None of the four training_manifest*.json files binds the served generation - the default one declares generation_id null, a different feature schema (apex_v1_68 vs phase7_68), a different certification policy hash, null artifact_hashes and git.dirty true. Per directive section 24 this is an INDEPENDENTLY SUFFICIENT reason the generation cannot be certified, separate from G11/G16/G18. See docs/DEBT.md item 124.",
+      "not_applicable": [
+        "calibrator",
+        "conformal"
+      ],
+      "producer": "backend/scripts/audit_release_identity.py",
+      "unbound": [
+        "source_commit",
+        "dataset_snapshot"
+      ],
+      "verdict": "RELEASE_IDENTITY_INCOMPLETE"
+    },
+    "corpus_sha256": "2d5ec7cf4bade7fa9804cd1976b930f624c10d731bf2214cfc3ed5f2056cbd32",
+    "devig_evidence_sha256": "114d4cd5a2796f53d3985b86537fc77e3c93e97d04d2a780dbf19d3aabca1663",
+    "market_baseline_module_sha256": "566b0b8cc65f7b7454246f2c82bbfb42e6d5e20ecbb69eaa3621276686b4b1bd"
+  },
+  "report_version": "certification-report-4",
+  "repository": {
+    "branch": "claude/sabiscore-p18-certification-j45g6v",
+    "commit_sha_at_session_start": "d79fc6b933b5be669778e86d3376da30477435d0",
+    "name": "sabiscore/sabiscore"
+  },
+  "serving_validation": {
+    "calibration_observed": "calibration_method 'raw', calibration_applied false, in every league",
+    "corroborates_item_122": "BUNDESLIGA and LIGUE_1 - the two leagues whose artifacts carry an unusable calibrator - return real differentiated predictions, not the fallback. This is the independent confirmation that the preflight degrades cleanly and that naively admitting those calibrators would have returned _fallback_result() on every request for both leagues.",
+    "directional_response": "Flipping home-form for away-form moves the probabilities in the correct direction in every league, so the pipeline runs end to end and responds to its inputs.",
+    "method": "Directive section 17. Ran the real PredictionEngine.predict() end to end against the committed artifacts, on two perturbed 68-feature vectors per league (strong-home vs strong-away), with no network and no database.",
+    "model_version_observed": "v5_phase7 in EPL, BUNDESLIGA and LIGUE_1 - never 'fallback'",
+    "result": "PASS"
+  },
+  "staking": {
+    "authority": "docs/adr/0011-operator-override-uncertified-staking.md; docs/DEBT.md item 108",
+    "blast_radius_unchanged": "staking_authorization() still has exactly one production consumer, services/upcoming_match_service.py. Nothing in this pass widened it.",
+    "directive_conflict_and_resolution": "The directive's sections 3/13 (stake_permitted=false) and section 11 (retain OPERATOR_OVERRIDE_UNCERTIFIED) are mechanically opposite in this codebase: staking_authorization() returns permitted=True for exactly that state. Raised with the operator and resolved in favour of section 11 - the ADR-0011 override stands. FORECAST_ONLY is recorded as the certification and market-edge posture, not as a revocation of ADR-0011.",
+    "full_analysis_staking": "Still blocked, independently, by the permanent MODEL_UNCERTAINTY_UNAVAILABLE critical gap. Certifying the model would not by itself open it.",
+    "stake_permitted_upcoming_matches": true,
+    "staking_basis": "OPERATOR_OVERRIDE",
+    "unchanged_this_pass": true
+  },
+  "supersedes": "certification_report_v5_phase7-20260808_2026-09-20T084500Z.json",
+  "verification": {
+    "backend_tests": "2647 passed, 16 skipped, 2 xfailed, 0 failed",
+    "backend_tests_baseline": "2580 passed at prior session; +67 added this pass (40 Shin, 26 calibrator, 1 wrap-artifact screening)",
+    "build_gate": "verify_active_artifacts.py - exit 0",
+    "mypy": "775 errors, measured identical with this pass's source changes stashed - zero type debt added (local mypy 2.1.0; only the CI number counts against the 784 ceiling)",
+    "release_identity_audit": "RELEASE_IDENTITY_INCOMPLETE - watched biting: corrupting one declared artifact_sha256 flips that league to MISMATCH; manifest restored byte-identical.",
+    "ruff": "ruff check --select E4,E7,E9,F src/ scripts/ - All checks passed",
+    "rule_15_verifications": [
+      "Reverting the ensemble.py calibrator carry reddens test_startup_loader_carries_the_calibrator_key for all 6 leagues.",
+      "Reverting the _wrap_artifact preflight reddens 4 tests in test_calibrator_load_and_preflight.py plus test_wrap_artifact_rejects_an_unusable_calibrator.",
+      "Degrading shin_devig to proportional reddens 4 direction tests in test_market_baseline_shin.py.",
+      "A hostile calibrator escaping the preflight's own except handler was caught by test_preflight_never_raises_on_a_hostile_object and fixed.",
+      "Wiring MockModelOrchestrator into a served module reddens test_fabricating_predictors_stay_off_the_serving_path by name."
+    ],
+    "serving_validation": "PASS - v5_phase7 in all probed leagues, never fallback.",
+    "web_lint": "eslint --max-warnings 0 - exit 0",
+    "web_tests": "371 passed across 57 files - identical to the prior baseline; zero frontend files were touched",
+    "web_typecheck": "tsc --noEmit - exit 0",
+    "xfail_markers_untouched": "The 2 error_association inversion xfails remain xfail and still print live measurements."
+  }
+}

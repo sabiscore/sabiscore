@@ -38,6 +38,13 @@ class EnsembleModel:
         self.v2_model_data: Dict[str, Any] = {}
         self.v2_scaler = None
         self.v2_feature_names: list[str] = []
+        # Declared here so a constructed instance and a loaded one expose the
+        # same surface. `PredictionEngine.prime_cache` bridges these by
+        # `getattr`, so an attribute that exists only after `load_model` would
+        # make an in-memory model behave differently from a deserialized one --
+        # which is the shape of the defect in `docs/DEBT.md` item 122.
+        self.calibrator: Optional[Any] = None
+        self.bivariate_poisson_overlay: Optional[Any] = None
 
     def build_ensemble(self, X: pd.DataFrame, y: pd.DataFrame) -> None:
         """Build the ensemble model"""
@@ -452,6 +459,21 @@ class EnsembleModel:
             instance.feature_columns = model_data.get('feature_columns', [])
             instance.model_metadata = model_data.get('model_metadata', {})
             instance.is_trained = model_data.get('is_trained', False)
+            # Carried so the instance faithfully represents the artifact. This
+            # loader previously copied five of the artifact's six keys, so
+            # `calibrator` (and any overlay) vanished the moment an artifact was
+            # loaded this way -- and this is the loader the production startup
+            # path uses. `PredictionEngine.prime_cache` bridges via
+            # `getattr(model, "calibrator", None)`, which silently returned None,
+            # so a certified calibrator was dropped with no signal anywhere.
+            # That is the same two-loader asymmetry that dropped `meta_model`
+            # (item 87), one field over. See `docs/DEBT.md` item 113.
+            #
+            # Carrying it is safe because `PredictionEngine._wrap_artifact`
+            # preflights every calibrator before admitting it; an unusable one
+            # is rejected there with a logged reason rather than being applied.
+            instance.calibrator = model_data.get('calibrator')
+            instance.bivariate_poisson_overlay = model_data.get('bivariate_poisson_overlay')
             cls._repair_sklearn_compatibility(instance.models)
             cls._repair_sklearn_compatibility(instance.meta_model)
 

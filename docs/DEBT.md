@@ -1,5 +1,387 @@
 # SabiScore Debt Ledger
 
+## 125. Repo-wide debt audit: every fabrication path is dead or flag-gated, and two dead ones are now pinned dead
+
+**Tier:** `RESOLVED` (audit complete; guard added) — 2026-09-20, P18 certification
+execution, directive §22. **Owner:** unassigned.
+
+### Method
+
+Swept `backend/src` and `apps/web/src` for the directive's marker list, then —
+and this is the part that mattered — checked **reachability**, not just
+presence. Grep alone gave the wrong answer twice, so every conclusion below
+rests on importing `src.api.main` (the served application) and inspecting
+`sys.modules`, plus call-site analysis.
+
+Marker counts in production source: TODO 21, FIXME 0, XXX 0, HACK 0,
+"temporary" 4, "bypass" 3, "unsafe" 6.
+
+### ⚠️ Where grep was wrong
+
+A first pass concluded `data/enrichment/feature_engineer.py` (7 "TODO:
+Implement Elo / tactical / weather / set-piece" stubs) was "not reachable",
+because nothing in `src/api`, `src/services` or `src/models` imports it.
+**It is in fact loaded by the served app** — `data/enrichment/__init__.py` does
+`from .feature_engineer import FeatureEngineer`, so importing the unrelated
+`statsbomb_aggregator` sibling pulls it in.
+
+The accurate statement is narrower and had to be verified separately:
+**imported as a package side effect, never invoked.** `FeatureEngineer` is used
+nowhere in `src/api`, `src/services` or `src/models` (the `ultra_prediction_service`
+hits are a *different* class, `AdvancedFeatureEngineer`), and
+`_add_elo_features` / `_add_tactical_features` / `_add_weather_features` have
+zero callers outside their own file.
+
+**"Not imported" and "never called" are different claims. Check the import
+graph, then check the call sites — a grep answers neither on its own.**
+
+### Findings
+
+| Item | Location | On the serving path? | Certification impact |
+|---|---|---|---|
+| 21 TODOs | various | No — stubs never invoked | None |
+| `MockModelOrchestrator.predict()` → `random.uniform()` | `services/orchestrator.py` | **No** — module not in the served import graph; never instantiated | None today; latent |
+| `LiveCalibrator._generate_mock_data()` | `models/live_calibrator.py` | **No** — `LiveCalibrator` has zero call sites; the module loads only because `models/__init__` imports its sibling `PlattCalibrator` | None today; latent |
+| `mock_generator` matches feed | `api/endpoints/matches.py` | Gated on `settings.mock_mode`, which is `Field(default=False)` in `config.py:181` | None while the flag is off |
+| calibration stub | `api/endpoints/explain.py` | Yes, reachable | **None — it is honest.** Returns `{}` / `sample_size=0`, never invented numbers. Same fail-closed shape as the vΩ.15 explainer fix |
+| betfair / opta / pinnacle stubs | `data/connectors/` | No — zero importers | None |
+| soccerway stub parser | `data/scrapers/` | Ingestion worker only (`cli/start_ingestion.py`), not the web startCommand | None |
+
+**No fabrication path is reachable on the live serving, prediction or staking
+path.** That is the audit's headline, and it is measured rather than asserted.
+
+### What was added
+
+The two latent ones are now pinned by
+`test_fabricating_predictors_stay_off_the_serving_path` in
+`tests/test_zero_fabrication_contract.py`. They deserve a guard rather than a
+note because **both fail silently by construction**: the orchestrator swaps in
+`MockModelOrchestrator` on an `ImportError` with nothing but a
+`logger.warning`, and `LiveCalibrator` falls back to synthetic pairs whenever
+its Redis client is absent — which would calibrate against invented outcomes.
+Wiring either up would publish random numbers past a warning nobody reads.
+
+Watched failing before being trusted: importing and constructing
+`MockModelOrchestrator` from a served module reddens it by name.
+
+⚠️ Neither module was deleted. Deleting a module is a larger call than this
+pass is scoped for, and "dead" is a claim best enforced by a test rather than
+settled by removal that might break an offline tool.
+
+---
+
+## 124. The served generation has no reproducibility binding — its artifacts are pinned, but their origin is not recorded
+
+**Tier:** `OPEN — needs a new generation to fix` (found 2026-09-20, P18
+certification execution, directive §10/§12/§23). **Owner:** unassigned.
+
+### What was measured
+
+`backend/scripts/audit_release_identity.py` (new) walks the identity chain the
+directive requires and reports `BOUND` / `UNBOUND` / `MISMATCH` per link,
+refusing to infer a link from a filename — two files sharing a version string
+is not provenance. Evidence:
+`backend/reports/certification/release-identity-audit.json`.
+
+| Link | Status |
+|---|---|
+| model artifacts | **BOUND** — 6/6 recomputed SHA-256 match the manifest |
+| feature contract | **BOUND** — `feature_contract.json` declares `phase7_68`, matching the serving manifest |
+| certification policy | **BOUND** at runtime (hash verifiable), but *not recorded in the serving manifest* |
+| **source commit** | **UNBOUND** |
+| **dataset snapshot** | **UNBOUND** |
+| calibrator | N/A — inside the artifact pickles, covered by `artifact_sha256`; and 0/6 are usable anyway (item 122) |
+| conformal | N/A — no conformal layer exists; absent is honest |
+
+**Verdict: `RELEASE_IDENTITY_INCOMPLETE`.**
+
+### Why this matters, stated precisely
+
+The artifacts are hash-pinned, so it is provable they **have not changed**.
+Their **origin is unrecorded**. No file in the repository binds
+`v5_phase7-20260808` to a commit or a dataset snapshot:
+
+- `active_generation.json` has no `git`, `dataset` or `policy` field.
+- Per-league metadata (`*_ensemble_v5_phase7_metadata.json`) carries only
+  `accuracy` / `brier_score` / `rps` / `trained_at` / `training_samples` /
+  `feature_count` / `data_source` — no provenance at all.
+- All four `training_manifest*.json` files live under `models/candidate/` and
+  **none binds the served generation**. The default one declares
+  `generation_id: null`, `feature_schema_version: apex_v1_68` (the served
+  generation is `phase7_68`), `artifact_hashes: null`, a
+  `certification_policy_sha256` of `f8236482…` against the live `4e050ad0…`,
+  and `git.dirty: true` — so even its commit does not identify a reproducible
+  source state.
+
+⚠️ This sharpens `docs/DEBT.md` item 86, which called the schema mismatch
+"plausibly benign". Whatever that file is, **it is not a binding manifest for
+what production serves**, and nothing else plays that role. So this generation
+cannot be re-derived from the repository.
+
+Per directive §24 ("if artifact provenance fails: certification = invalid /
+unverified") this is an **independently sufficient** reason the generation
+cannot be certified — separate from G11, G16 and G18. It does not change
+today's decision, which is already `HOLD` / `OPERATOR_OVERRIDE_UNCERTIFIED`.
+
+### Related, and worth reading together
+
+`models/evaluation_baseline/manifest.json` records the reason it supersedes
+this generation for evaluation: *"v5_phase7-20260808 trained on season 2526
+while declaring holdout 2425, so it memorised the holdout every candidate
+comparison scores against"* (item 81). So the served generation is both
+unrecorded in origin and known-contaminated in construction.
+
+### Fix, and why it is not done here
+
+Not fixable by editing `active_generation.json`: back-filling a commit and a
+dataset hash for artifacts trained on 2026-08-08 would be **inventing
+provenance**, which is the exact failure this audit exists to detect. The
+binding has to be emitted at training time. `training_manifest.py` already
+emits every needed field (`git`, `dataset.dataset_sha256`,
+`certification_policy_sha256`, `artifact_hashes`, `reproducibility_sha256`) —
+it simply was not run, with a clean tree and a real `generation_id`, for this
+generation. **The next generation should be refused promotion unless
+`audit_release_identity.py` reports `RELEASE_IDENTITY_COMPLETE`.**
+
+### ⚠️ The auditor is an audit, not a gate
+
+It exits 0 by default even when links are unbound, and is deliberately **not**
+wired into `verify_active_artifacts.py` or the Render build command. A
+documentation-shaped finding must not be able to fail a deploy and hold a
+healthy release — that is the vΩ.47 shape, where a metadata problem crash-looped
+a service. `--strict` exits 1 for ad-hoc or future gate use.
+
+Watched biting before being trusted: corrupting one declared `artifact_sha256`
+flips that league to `MISMATCH` and the `model_artifacts` link to `UNBOUND`;
+`active_generation.json` was restored byte-identical afterwards.
+
+
+## 123. The G18 market baseline de-vigged proportionally, which mis-specifies the bar the model is scored against — Shin's method adopted as the designated baseline
+
+**Tier:** `RESOLVED` — shipped and measured 2026-09-20 (P18 certification execution,
+directive §9). **Owner:** unassigned.
+
+### What was wrong
+
+Every de-vig in the repository divided each raw implied probability by the
+booksum (`(1/o_i) / Sum(1/o_j)`). That assumes the bookmaker spreads its margin
+evenly across outcomes. It does not — the margin is concentrated on longshots
+(the favourite-longshot bias) — so proportional normalisation systematically
+overstates the market's longshot probabilities and understates the favourite's.
+
+This matters because **the de-vig is part of the gate, not part of the model.**
+G18 scores a candidate against the de-vigged market, so a mis-specified de-vig
+mis-specifies the bar, in a direction that varies with how lopsided the fixture
+is. `evaluate_g18_bootstrap.py` even declared the convention in its own report
+(`"metric_convention": "... proportional de-vig"`), so the report was honest
+about it — nothing was hidden — but nobody had measured what it cost.
+
+### What shipped
+
+`backend/src/models/evaluation/market_baseline.py` — Shin (1993), inverted per
+Štrumbelj (2014, *IJF*):
+
+    p_i(z) = ( sqrt( z^2 + 4 (1 - z) q_i^2 / PI ) - z ) / ( 2 (1 - z) )
+
+with `z` solved so `Sum p_i = 1`. Bracketing is **proved, not assumed**:
+`f(0) = sqrt(PI) - 1 > 0` for a vigged book, and `p_i -> q_i^2 / PI` as
+`z -> 1`, so `f(1-) < max(q_i) - 1 < 0` whenever every decimal odd exceeds 1.0
+— which validation already guarantees. So a sign change always exists and plain
+**bisection** converges. Bisection is deliberate over a library root-finder: it
+is dependency-free and bit-stable across versions, and item 113 (below) is an
+open incident caused by exactly that kind of version drift.
+
+Wired into `evaluate_g18_bootstrap.py` behind `--devig {shin,proportional}`,
+defaulting to `shin`. The report now records the method actually used, the mean
+and median solved `z`, and a rejection count by cause, instead of a hardcoded
+convention string.
+
+⚠️ **Scope is the certification baseline only** (operator decision, 2026-09-20).
+Live serving (`odds_service`, `market_intel`, `betting_intelligence`,
+`core_engine`) still normalises proportionally and is deliberately untouched:
+switching it would move published EV/edge numbers on production surfaces, which
+is a separate authorisation, and both betting engines would be in scope under
+the dual-engine rule.
+
+### Measured, on the real corpus — the finding that matters
+
+`backend/scripts/measure_devig_convention_impact.py` de-vigs every coherent
+pre-match 1X2 book in `backend/data/cache/fd_*.csv` under both conventions and
+scores each against the real result. **No model is involved**, so nothing here
+can be confounded by model quality. Evidence artifact:
+`backend/reports/evaluation/devig-convention-impact.json`.
+
+n = **12,761** matches, 6 leagues, **zero** books rejected by the integrity
+limits, mean Shin `z` ≈ **0.0277** and strikingly stable across leagues
+(0.0275–0.0288).
+
+| League | Market RPS (Shin) | Market RPS (proportional) | Δ |
+|---|---:|---:|---:|
+| BUNDESLIGA | 0.19819 | 0.19820 | −0.000004 |
+| EPL | 0.19823 | 0.19820 | **+0.000034** |
+| EREDIVISIE | 0.19458 | 0.19460 | −0.000020 |
+| LA_LIGA | 0.19269 | 0.19300 | −0.000308 |
+| LIGUE_1 | 0.20239 | 0.20244 | −0.000051 |
+| SERIE_A | 0.19100 | 0.19124 | −0.000239 |
+| **POOLED** | **0.19624** | **0.19636** | **−0.000117** |
+
+**Shin produces a sharper market baseline in 5 of 6 leagues, so adopting it
+makes G18 marginally HARDER, not easier.** That direction is the point: a
+convention change that quietly made the gate easier would be indistinguishable
+from progress, and would be APEX §23 in substance whatever the intent.
+
+⚠️ **And it is immaterial to the G18 verdict.** The pooled effect
+(−0.000117 RPS) is roughly **25–40× smaller** than the half-widths of the
+reported G18 confidence intervals (~0.003–0.005, item 62). It cannot flip any
+league. **G18 remains FAIL and `market_baseline` remains 0/6.** This change
+corrects the *method*; it does not move the *result*, and must not be presented
+as if it did.
+
+EPL is the one league where Shin does not help (+0.000034). Noted rather than
+explained — at this magnitude it is indistinguishable from noise.
+
+### Coverage note worth keeping
+
+Only the `2526`-vintage corpus files use the `B365H`/`B365D`/`B365A` column
+names; the 29 older season files carry the same bookmakers under normalised
+names (`bet365_home`, `pinnacle_home`, …). `ODDS_TIERS` already handles both,
+which is why the harness sees the whole corpus. An ad-hoc script that greps only
+for `B365H` sees **2,058 of 12,761 rows** and will silently under-report.
+Closing columns (`B365CH`, `pinnacle_closing_*`) exist in the corpus and are
+deliberately excluded everywhere — a closing price postdates a pre-match
+forecast, so scoring against one is leakage.
+
+### Tests
+
+`backend/tests/unit/test_market_baseline_shin.py`, 40 cases covering every
+scenario the directive enumerates: symmetric, heavy favourite, extreme
+favourite, malformed odds, zero/negative odds, excessive overround, missing
+outcome, stale market, duplicated market, and timestamp leakage.
+
+The anchor is analytic, not self-referential: a symmetric book (q = 0.37,
+booksum 1.11) requiring `p_i = 1/3` reduces to
+`0.888889 z^2 - 0.937778 z + 0.048889 = 0`, whose admissible root is exactly
+**0.055**. The solver finds it to 8 decimal places. Every other test would pass
+against a wrong-but-self-consistent implementation; this one would not.
+
+Watched failing before being trusted: degrading `shin_devig` to proportional
+reddens 4 direction tests (`test_shin_moves_mass_toward_the_favourite` ×3 and
+`test_correction_grows_with_market_lopsidedness`).
+
+---
+
+## 122. `SabiScoreEnsemble.load_model()` dropped the calibrator, which is why item 113's two "contradictory" facts were both true
+
+**Tier:** `RESOLVED` — diagnosed, fixed and measured 2026-09-20 (P18
+certification execution, directive §4). **Owner:** unassigned.
+**Closes the open discrepancy in item 113.**
+
+### The contradiction, and its resolution
+
+Item 113 recorded two committed facts with no reconciling explanation:
+
+1. A fresh, cold `get_artifact_bundle("BUNDESLIGA")` returns a bundle whose
+   `.calibrator` is a real `FittedCalibrator` that **raises on application**.
+2. Production's own prediction log shows that calibrator is **never applied**
+   (`calibration_method="raw"`, 100% of rows, zero exceptions) and **never
+   crashes into** `model_version="fallback"`.
+
+Both are true, and the mechanism is upstream of where item 113 was looking.
+Its hypothesis — "something sets `bundle.calibrator` back to `None` after a
+failed attach" — was wrong in mechanism but right in direction. The calibrator
+is dropped much earlier, **at deserialization**:
+
+`SabiScoreEnsemble.load_model()` (`src/models/ensemble.py`) copied exactly five
+of the artifact's six keys — `models`, `meta_model`, `feature_columns`,
+`model_metadata`, `is_trained`. The string `calibrator` appeared **zero times
+in the entire file**. That is the loader the *production startup* path uses
+(`_startup_load_models_strict` → `load_ensemble_per_league`), and
+`PredictionEngine.prime_cache` bridges from the resulting object via
+`getattr(model, "calibrator", None)` — which silently returned `None` because
+the attribute did not exist at all.
+
+The cold path deserializes the raw dict instead and `_wrap_artifact` reads
+`raw.get("calibrator")` directly, so **only the cold path ever saw it**.
+
+⚠️ **This is the vΩ.47 two-loader defect, one field over.** PR #180 (item 87)
+fixed `meta_model` being dropped at both sites. `calibrator` and
+`bivariate_poisson_overlay` were never checked. Knowing a second loader exists
+is not the same as validating against it — which is the lesson vΩ.47 already
+wrote, and which this repeat confirms was not yet learned.
+
+**Verified empirically, both halves, under correctly pinned scikit-learn
+1.3.2** (not the contaminated 1.9.1 that invalidated item 113's first run):
+`hasattr(model, "calibrator")` was `False` for every league, and the cold path
+still reproduced `AttributeError: 'LogisticRegression' object has no attribute
+'multi_class'`.
+
+### Measured state of the served generation
+
+| League | Calibrator in artifact | Applies in this runtime? |
+|---|---|---|
+| bundesliga | `FittedCalibrator(sigmoid)` | ❌ raises |
+| ligue_1 | `FittedCalibrator(sigmoid)` | ❌ raises |
+| epl | absent | — |
+| eredivisie | absent | — |
+| la_liga | absent | — |
+| serie_a | absent | — |
+
+⚠️ **0 of 6 leagues has a usable calibrator.** So serving is uncalibrated in
+every league, `calibration_method: "raw"` is honest, and G11's measured ECE
+0.0977 failure (item 113) stands unchanged.
+
+⚠️ **This also corrects item 83's claim that *every* `v5_phase7` artifact
+carries a `FittedCalibrator`. Measured: two of six do.**
+
+### What was fixed, and what was deliberately not
+
+`_wrap_artifact` now screens every calibrator through a new
+`PredictionEngine._usable_calibrator()` before admitting it: apply it to an
+interior probe (`[[0.40, 0.30, 0.30]]`) and admit it only if it returns a valid
+simplex. `SabiScoreEnsemble.load_model()` now carries `calibrator` and
+`bivariate_poisson_overlay` so the instance represents the artifact faithfully.
+
+The preflight lives in `_wrap_artifact` because **both loaders funnel through
+it**, so one chokepoint fixes both — and the cold/offline path (the G16 harness)
+stops crashing as a side effect.
+
+⚠️ **The calibrator was deliberately NOT wired through to be applied.**
+`_run_inference` answers *any* calibrator exception with `_fallback_result()`,
+with no partial-recovery branch. Admitting these calibrators would not degrade
+one response — it would return the fallback on **every** BUNDESLIGA and LIGUE_1
+request, permanently. Per directive §4, the error is not suppressed and no
+calibrator is refitted and passed off as the certified artifact; a genuinely
+recalibrated head requires a **new generation and certification lineage**.
+
+**Behaviour today is byte-identical**: every league still serves uncalibrated,
+`bundle.calibrator is None` everywhere, no probability moves. What changed is
+that the drop is now explicit, logged with the real reason, and screened — so a
+*future* generation shipping a loadable calibrator will actually use it, instead
+of it being silently discarded as these were.
+
+### The remaining artifact-level defect
+
+The two serialized calibrators were fitted under scikit-learn ≈1.8.0 (the
+version string is baked into the pickle bytes) while `requirements.txt` and
+`requirements.runtime.txt` both pin **1.3.2** for `python_version < "3.12"`, and
+`render.yaml` runs Python 3.11.9. They deserialize cleanly and raise on first
+use. **This is not fixable by loading code** — it needs a retrain under the
+pinned stack, which means a new generation. Tracked here rather than closed.
+
+### Tests
+
+`backend/tests/unit/test_calibrator_load_and_preflight.py` — 26 cases. Both
+guards were watched failing before being trusted: reverting the `ensemble.py`
+carry reddens `test_startup_loader_carries_the_calibrator_key` for all 6
+leagues; reverting the `_wrap_artifact` preflight reddens 4 tests including
+`test_a_rejected_calibrator_leaves_the_league_serving_not_falling_back`.
+
+⚠️ One test caught a real hole in the preflight itself: `getattr(calibrator,
+"method", "unknown")` **inside the except handler** only absorbs
+`AttributeError`, so a hostile object escaped the guard that exists to make the
+preflight unable to abort startup. Fixed with its own nested guard.
+
+
 ## 120. The "MANDATORY" local CI enforcer was committed non-executable, so its own documented invocation failed on a fresh clone
 
 **Tier:** `RESOLVED` (2026-09-20)
@@ -343,7 +725,8 @@ can actually regenerate this evidence rather than reading an aging snapshot.
 
 ## 113. First real execution of the G11/G16 v7.3 evidence harnesses against live production data — G11 genuinely FAILS on real evidence; G16 surfaced a real but unresolved calibrator discrepancy between a fresh bundle load and what production actually serves
 
-**Tier:** `NEXT` (the calibrator discrepancy) / result recorded (G11 measurement).
+**Tier:** `RESOLVED` (the calibrator discrepancy — see item 122) / result
+recorded (G11 measurement, unchanged and still FAIL).
 **Owner:** unassigned. **Found:** 2026-09-20, during the production certification
 execution pass (Execution Prompt v1.0, P5/P6), while attempting to resolve
 `G11_CALIBRATION`/`G16_UNCERTAINTY` from `UNVERIFIED`/`BLOCKED` to a verdict on
@@ -465,6 +848,18 @@ production log access (or a willingness to instrument `_load_model` directly)
 should look for where `bundle.calibrator` might be set back to `None` after a
 failed attach, or confirm no such guard exists and the discrepancy points
 somewhere else entirely.
+
+> ✅ **RESOLVED 2026-09-20 — see item 122.** The discrepancy is real and now
+> explained, but not by this hypothesis. There is no guard setting
+> `bundle.calibrator` back to `None`: `SabiScoreEnsemble.load_model()` — the
+> loader the production startup path uses — copied five of the artifact's six
+> keys and never read `calibrator` at all, so `prime_cache`'s
+> `getattr(model, "calibrator", None)` bridge silently yielded `None`. The cold
+> path reads the raw dict and so was the only path that ever saw the calibrator.
+> Both committed facts hold simultaneously with no contradiction. The direction
+> of this entry's guess was right; the mechanism sits one layer further up, at
+> deserialization rather than at attach. **G11's ECE 0.0977 FAIL is unaffected**
+> — measurement and diagnosis were always independent.
 
 ### What this changes and does not change
 

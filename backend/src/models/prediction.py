@@ -242,6 +242,73 @@ class PredictionEngine:
         logger.warning("PredictionEngine: no model found for league=%r — will use fallback", slug)
         return None
 
+    # A 1x3 probe on the interior of the simplex. Interior matters: a calibrator
+    # that only fails on a degenerate input would pass a probe at a vertex.
+    _CALIBRATOR_PROBE: "np.ndarray" = np.array([[0.40, 0.30, 0.30]], dtype=np.float64)
+
+    @staticmethod
+    def _usable_calibrator(calibrator: Any, slug: str, path: Any) -> Optional[Any]:
+        """Admit a serialized calibrator only if it demonstrably runs here.
+
+        A ``FittedCalibrator`` fitted under one scikit-learn and unpickled under
+        another can deserialize cleanly and still raise on first use -- the
+        committed ``v5_phase7`` bundesliga/ligue_1 calibrators do exactly that
+        (``'LogisticRegression' object has no attribute 'multi_class'``; see
+        ``docs/DEBT.md`` item 113). ``_run_inference`` answers any calibrator
+        exception with ``_fallback_result()``, so admitting an unusable
+        calibrator would not degrade one response -- it would return the
+        fallback on *every* request for that league, permanently.
+
+        So the decision is made once, here, at load: apply the calibrator to a
+        probe and admit it only if it returns a valid simplex. A rejected
+        calibrator leaves the league serving uncalibrated probabilities, which
+        is the honest outcome and is reported as ``calibration_method="raw"``.
+
+        Never raises: this runs on the startup path, and a preflight that could
+        abort boot would be worse than the defect it screens for.
+        """
+        if calibrator is None:
+            return None
+
+        if not _CAL_AVAILABLE or _apply_calibrator is None:
+            logger.error(
+                "PredictionEngine: %s carries a serialized calibrator but the calibration "
+                "runtime is unavailable; serving uncalibrated (artifact=%s)",
+                slug,
+                path,
+            )
+            return None
+
+        try:
+            probed = _apply_calibrator(
+                calibrator.method,
+                calibrator.calibrators,
+                PredictionEngine._CALIBRATOR_PROBE.copy(),
+            )
+            if not PredictionEngine._valid_probability_matrix(probed):
+                raise ValueError("calibrator probe returned an invalid probability simplex")
+        except Exception as exc:
+            # `getattr(..., default)` only absorbs AttributeError, so reading the
+            # method name for the log message can itself raise. This handler runs
+            # on the startup path, so it gets its own guard rather than becoming
+            # the one line that aborts boot.
+            try:
+                method = str(getattr(calibrator, "method", "unknown"))
+            except Exception:
+                method = "unreadable"
+            logger.error(
+                "PredictionEngine: %s serialized calibrator (method=%s) is unusable in this "
+                "runtime; serving uncalibrated rather than failing every request. "
+                "artifact=%s reason=%s",
+                slug,
+                method,
+                path,
+                redact_text(exc),
+            )
+            return None
+
+        return calibrator
+
     @staticmethod
     def _wrap_artifact(
         raw: Any,
@@ -261,7 +328,9 @@ class PredictionEngine:
             return _ArtifactBundle(
                 direct_model=None,
                 models_dict=models_dict,
-                calibrator=raw.get("calibrator"),
+                calibrator=PredictionEngine._usable_calibrator(
+                    raw.get("calibrator"), slug, path
+                ),
                 overlay=raw.get("bivariate_poisson_overlay"),
                 feature_columns=raw.get("feature_columns"),
                 meta_model=raw.get("meta_model"),

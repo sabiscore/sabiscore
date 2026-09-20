@@ -373,13 +373,26 @@ def test_wrap_artifact_preserves_manifest_provenance():
 
 # ── PE-17 ─────────────────────────────────────────────────────────────────────
 
+class _UsableTemperatureCalibrator:
+    """A calibrator that genuinely applies.
+
+    `_wrap_artifact` screens every calibrator through `_usable_calibrator`
+    before admitting it (`docs/DEBT.md` item 122), so a bare `MagicMock` is now
+    correctly rejected and cannot be used to prove passthrough. Temperature
+    scaling at t=1.0 is the identity and returns a valid simplex.
+    """
+
+    method = "temperature"
+    calibrators = 1.0
+
+
 def test_wrap_artifact_v6_dict_artifact():
     """PE-17: _wrap_artifact returns bundle with models_dict for v6 dict artifacts."""
     sub_model = MagicMock()
     sub_model.predict_proba = MagicMock(return_value=np.array([[0.5, 0.25, 0.25]]))
     raw = {
         "models": {"rf": sub_model},
-        "calibrator": MagicMock(),
+        "calibrator": _UsableTemperatureCalibrator(),
         "bivariate_poisson_overlay": MagicMock(),
         "feature_columns": ["feat_a", "feat_b"],
     }
@@ -391,6 +404,29 @@ def test_wrap_artifact_v6_dict_artifact():
     assert bundle.calibrator is raw["calibrator"]
     assert bundle.overlay is raw["bivariate_poisson_overlay"]
     assert bundle.feature_columns == ["feat_a", "feat_b"]
+
+
+def test_wrap_artifact_rejects_an_unusable_calibrator():
+    """PE-17b: the screen is real, and rejecting one field keeps the rest.
+
+    A calibrator that raises on use must not reach the bundle -- admitting it
+    would make `_run_inference` return `_fallback_result()` on every request for
+    that league. The overlay and models must survive the rejection.
+    """
+    sub_model = MagicMock()
+    sub_model.predict_proba = MagicMock(return_value=np.array([[0.5, 0.25, 0.25]]))
+    overlay = MagicMock()
+    raw = {
+        "models": {"rf": sub_model},
+        "calibrator": MagicMock(),  # method/calibrators are Mocks -> unusable
+        "bivariate_poisson_overlay": overlay,
+        "feature_columns": ["feat_a", "feat_b"],
+    }
+    bundle = PredictionEngine._wrap_artifact(raw, "epl", "<test>")
+    assert bundle is not None
+    assert bundle.calibrator is None
+    assert bundle.overlay is overlay
+    assert "rf" in bundle.models_dict
 
 
 # ── PE-18 ─────────────────────────────────────────────────────────────────────
