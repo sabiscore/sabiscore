@@ -1,0 +1,78 @@
+{
+  "_scope_caveat": "INFORMATIONAL ONLY - NOT a G16 certification PASS. Produced by calling evaluate_league() directly for the two leagues whose calibrator survives item-127's fix, bypassing evaluate_g16_uncertainty.py's own all-or-none decision gate (which correctly still reports overall G16 as BLOCKED, since EPL/EREDIVISIE/LA_LIGA/SERIE_A genuinely have no calibrator to evaluate at all). Recorded to preserve exact reproducible numbers for P19 scoping, per docs/DEBT.md item 127. Does not authorize staking, Kelly sizing, or APS adoption - error_association (item 50) is unchanged and still fails in every league, and mean prediction-set sizes here (2.4-3.0 of 3 possible classes) are themselves evidence that these coverage guarantees are not sharp enough to be decision-useful, independent of that blocker.",
+  "generated_at": "2026-09-21T17:57:00Z",
+  "repository": {
+    "name": "sabiscore/sabiscore",
+    "commit_sha": "11145a8f454ce8d31a8ebc05efdc49a42aa736c3"
+  },
+  "method": {
+    "library": "mapie 1.5.0",
+    "conformity_score": "lac",
+    "prefit": true,
+    "training_cutoff": "2025-06-01",
+    "holdout_season": "2526"
+  },
+  "leagues": {
+    "BUNDESLIGA": {
+      "n_holdout": 301,
+      "n_conformalize": 150,
+      "n_test": 151,
+      "calibration_methods": ["sigmoid"],
+      "generations": ["v5_phase7-20260808"],
+      "feature_schema_versions": ["phase7_68"],
+      "artifact_hashes": ["83dbcd3d42ef566e966794ad1741b68160eaa4caed572b5ed2dd39cabc67d852"],
+      "test_date_range": ["2026-01-17T00:00:00.000000000", "2026-05-16T00:00:00.000000000"],
+      "levels": {
+        "0.80": {
+          "nominal_coverage": 0.8,
+          "empirical_marginal_coverage": 0.9403973509933775,
+          "coverage_gap": 0.14039735099337747,
+          "n": 151,
+          "mean_set_size": 2.5099337748344372,
+          "set_size_distribution": {"0": 0, "1": 0, "2": 74, "3": 77}
+        },
+        "0.90": {
+          "nominal_coverage": 0.9,
+          "empirical_marginal_coverage": 0.9403973509933775,
+          "coverage_gap": 0.04039735099337749,
+          "n": 151,
+          "mean_set_size": 2.5099337748344372,
+          "set_size_distribution": {"0": 0, "1": 0, "2": 74, "3": 77}
+        }
+      }
+    },
+    "LIGUE_1": {
+      "n_holdout": 301,
+      "n_conformalize": 150,
+      "n_test": 151,
+      "calibration_methods": ["sigmoid"],
+      "generations": ["v5_phase7-20260808"],
+      "feature_schema_versions": ["phase7_68"],
+      "artifact_hashes": ["0f417e4ca26043a54c7ff4d420a8afa4a56dcc8b9ea2498794ac64abf5a54bb1"],
+      "test_date_range": ["2026-01-17T00:00:00.000000000", "2026-05-17T00:00:00.000000000"],
+      "levels": {
+        "0.80": {
+          "nominal_coverage": 0.8,
+          "empirical_marginal_coverage": 0.8344370860927153,
+          "coverage_gap": 0.03443708609271523,
+          "n": 151,
+          "mean_set_size": 2.403973509933775,
+          "set_size_distribution": {"0": 0, "1": 0, "2": 90, "3": 61}
+        },
+        "0.90": {
+          "nominal_coverage": 0.9,
+          "empirical_marginal_coverage": 1.0,
+          "coverage_gap": 0.09999999999999998,
+          "n": 151,
+          "mean_set_size": 3.0,
+          "set_size_distribution": {"0": 0, "1": 0, "2": 0, "3": 151}
+        }
+      }
+    }
+  },
+  "observations": [
+    "Both leagues over-cover substantially relative to nominal (BUNDESLIGA +14.0pp at 80%, LIGUE_1 +10.0pp at 90%) rather than under-cover -- the marginal coverage guarantee holds in the safe direction.",
+    "Mean prediction-set sizes (2.4-3.0 of 3 classes) are large enough to be minimally decision-useful. LIGUE_1 at 90% nominal returns the full 3-class set on all 151 test rows -- a mathematically valid but completely uninformative prediction ('could be anything') on every fixture.",
+    "This is independent, concrete evidence for the dossier's own stated principle that conformal coverage does not by itself authorize capital allocation -- even where coverage is achieved, the resulting sets here are too wide to size a stake against."
+  ]
+}

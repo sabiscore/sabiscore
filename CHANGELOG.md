@@ -5,6 +5,28 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — G16 MAPIE harness measured for real; a tolerance bug, not a model defect, was blocking it (2026-09-21)
+
+### Fixed
+
+- **`scripts/evaluate_g16_uncertainty.py`'s `ServedPredictionAdapter.predict_proba` rejected genuinely valid
+  calibrated probabilities as an "invalid probability simplex."** Reproduced directly against 301 real
+  BUNDESLIGA holdout rows: every prediction is finite, non-negative, and sums to `1.0 ± 1e-4` — ordinary
+  float32 rounding after a base-ensemble average is carried through a per-class sigmoid calibrator and
+  renormalised. The adapter's own check used `atol=1e-5`, tighter than `float32` precision supports, and
+  misclassified 94/301 (31%) valid rows. Loosening that check alone wasn't sufficient — it then surfaced a
+  second, stricter check *inside MAPIE's own library code* (`rtol=1e-05, atol=0`), which cannot be relaxed
+  from this repo. Fixed at the root: the adapter now returns `float64`, explicitly renormalises every row to
+  sum to exactly 1.0 before handing it to MAPIE, and only rejects genuine garbage (non-finite, negative, or a
+  sum meaningfully far from 1.0). Verified against the exact repro; watched the new regression test fail
+  against the pre-fix code with the identical error message the real harness produced before trusting it.
+  New `tests/unit/test_evaluate_g16_uncertainty_adapter.py` (6 cases, no model/MAPIE dependency). See
+  `docs/DEBT.md` item 127.
+- This was found while scoping P19's MAPIE/Shin work to "measure, don't authorize" — `error_association`
+  (item 50) is unchanged and still fails in every league, so this fix produces real G16 coverage numbers for
+  the two calibrated leagues where none existed before; it does not authorize staking, Kelly sizing, or APS
+  adoption, and doesn't touch the served prediction path.
+
 ## Unreleased — Production readiness sweep: no code blockers found; one test-environment false-failure fixed (2026-09-21)
 
 ### Fixed
