@@ -5,6 +5,37 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Production readiness sweep: no code blockers found; one test-environment false-failure fixed (2026-09-21)
+
+### Fixed
+
+- **`requires_bash`'s skip condition only checked that *a* `bash.exe` existed on PATH, not that it
+  actually ran.** On Windows there can be several (Git Bash, a non-functional WSL launcher stub in
+  `System32`, a WindowsApps execution alias), and which one `subprocess.run(["bash", ...])` resolves
+  is not guaranteed to match `shutil.which`'s answer. On a machine with a broken WSL install, this
+  surfaced as two tests in `test_zero_fabrication_scan_enforces.py`
+  (`test_forbid_fails_on_a_match_and_on_an_unrunnable_check`,
+  `test_the_real_scan_passes_on_this_tree`) failing with a confusing WSL config error instead of
+  skipping — indistinguishable at a glance from a real zero-fabrication violation. `_bash_works()`
+  now actually runs `bash -c "true"` and checks the exit code, the same "verify the precondition
+  instead of trusting a proxy for it" pattern the DB-dependent tests in this suite already use.
+  Verified: both tests now skip cleanly with an accurate reason on the affected machine; unaffected
+  on Linux CI, where there is exactly one `bash` and no WSL ambiguity.
+
+### Verified, not changed
+
+A full production-readiness sweep (`scripts/ci_local_enforcer.sh`, plus a standalone frontend
+typecheck/lint pass) found no other current, code-fixable blockers. 2,642 backend tests pass (17
+skipped with documented reasons, 2 `xfail`ed with the live measurement printed, per
+`docs/DEBT.md` item 50); frontend `tsc --noEmit` and `eslint --max-warnings 0` are both clean. The
+three remaining `test_calibrator_load_and_preflight.py` failures are the already-diagnosed
+Python 3.14/sklearn 1.8 (local) vs. Python 3.11.9/sklearn 1.3.2 (production, per `render.yaml` and
+`.github/workflows/ci.yml`) cross-version pickle incompatibility from `docs/DEBT.md` items 113/122
+— not a regression. Every currently open `docs/DEBT.md` item in the 104–125 range is gated on an
+operator decision (104, 118), a full model retrain (114, 124), or a research question already
+recorded as `ACCEPTED-RISK`/`RESEARCH` (108, 106) — none are resolvable by writing more code
+without that authorization. See `docs/DEBT.md` item 126.
+
 ## Unreleased — Schema-drift guard isolated; deleted ledger entry restored (2026-09-20)
 
 ### Fixed
