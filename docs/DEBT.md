@@ -1,5 +1,45 @@
 # SabiScore Debt Ledger
 
+## 126. Production-readiness sweep found no code blockers; `requires_bash`'s skip condition gave a false failure instead of skipping on a broken-WSL machine
+
+**Tier:** `RESOLVED` — 2026-09-21.
+
+Ran the full `scripts/ci_local_enforcer.sh` plus a standalone frontend
+typecheck/lint pass as a genuine "what's blocking production readiness"
+sweep, rather than assuming an answer from `docs/DEBT.md`'s own narrative.
+Result: nothing new. 2,642 backend tests pass; frontend `tsc --noEmit` and
+`eslint --max-warnings 0` are both clean; the only backend failures are the
+already-diagnosed items 113/122 sklearn cross-version mismatch (reproduces
+only on a dev machine whose Python/sklearn doesn't match the `render.yaml` /
+`.github/workflows/ci.yml` pin of 3.11.9/1.3.2) and the two below.
+
+**One real, small defect found and fixed.** `test_zero_fabrication_scan_enforces.py`'s
+`requires_bash = pytest.mark.skipif(shutil.which("bash") is None, ...)` checks
+that *some* `bash.exe` exists on PATH, not that the one `subprocess.run`
+actually resolves is functional. On Windows there can be several candidates
+(Git Bash, a WSL launcher stub in `System32`, a WindowsApps execution alias),
+and `which` finding one is no guarantee `subprocess.run(["bash", ...])`
+resolves to the same one. A machine with a broken WSL install (a malformed
+`.wslconfig`, unrelated to this repo) hit exactly this: both bash-invoking
+tests failed with a WSL config error indistinguishable at a glance from a
+real zero-fabrication violation, rather than skipping. Fixed by having
+`_bash_works()` actually run `bash -c "true"` and check the exit code — the
+same "verify the precondition, don't trust a proxy for it" pattern this
+file's own DB-dependent tests already use. Verified: both tests now skip
+cleanly with an accurate reason on the affected machine. Inert on Linux CI,
+where there is exactly one `bash` and no ambiguity to resolve.
+
+**Everything else open in the 104–125 range is not a code blocker.** Item 104
+(branch protection) and item 118 (fixture-panel disclosure) are explicitly
+`OPEN — OPERATOR DECISION`; item 114 (market-baseline re-verification) and
+item 124 (reproducibility binding) explicitly need a full retrain or a
+committed-artifact policy decision, not more code; item 108 (the ADR-0011
+override itself) is `ACCEPTED-RISK`, deliberate and reversible; item 106 is
+`RESEARCH`. None of these are things a fresh sweep can resolve by writing
+code without that authorization, and treating them as if they were would be
+exactly the fabricated-urgency pattern items 105/111/117 already caught this
+repo doing to itself.
+
 ## 125. Repo-wide debt audit: every fabrication path is dead or flag-gated, and two dead ones are now pinned dead
 
 **Tier:** `RESOLVED` (audit complete; guard added) — 2026-09-20, P18 certification

@@ -42,8 +42,33 @@ STEP_NAME = "Zero-fabrication scan"
 #: What GitHub Actions actually invokes for `shell: bash`.
 GHA_BASH = ["bash", "--noprofile", "--norc", "-eo", "pipefail"]
 
+
+def _bash_works() -> bool:
+    """`shutil.which("bash")` only proves *a* ``bash.exe`` exists on PATH.
+
+    On Windows there can be several — Git Bash, a WSL launcher stub in
+    System32, a WindowsApps execution alias — and which one
+    ``subprocess.run(["bash", ...])`` actually resolves is not guaranteed to
+    match ``which``'s answer, or to be a working interpreter at all. A broken
+    WSL install surfaces exactly this way: ``which`` finds *something*, but
+    every invocation exits non-zero with a WSL config error before running
+    any script. Run it and check, the same way the DB-dependent tests below
+    check connectivity rather than trusting a URL is merely set.
+    """
+    if shutil.which("bash") is None:
+        return False
+    try:
+        result = subprocess.run(
+            [*GHA_BASH, "-c", "true"], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 requires_bash = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="bash unavailable (Windows without Git Bash)"
+    not _bash_works(),
+    reason="bash on PATH does not run cleanly (e.g. Windows with a broken WSL install shadowing Git Bash)",
 )
 
 
