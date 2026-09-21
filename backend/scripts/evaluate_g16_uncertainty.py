@@ -44,7 +44,20 @@ class ServedPredictionAdapter:
         arr = np.asarray(X, dtype=np.float32)
         if arr.ndim != 2:
             raise ValueError(f"expected 2D matrix, got {arr.shape}")
-        output = np.empty((len(arr), 3), dtype=np.float32)
+        # float64, not float32: the served path sums a base-ensemble average
+        # through a per-class sigmoid calibrator then renormalises -- several
+        # float32 operations deep -- so each row's raw sum carries up to 1e-4
+        # of accumulated rounding error (measured directly against 301 real
+        # BUNDESLIGA holdout rows; docs/DEBT.md item 127). MAPIE's own
+        # SplitConformalClassifier validates its input probabilities sum to 1
+        # at rtol=1e-05, atol=0 -- tighter than float32 precision supports and
+        # not a tolerance this adapter can loosen from the outside, since it
+        # lives inside the mapie package. Fix the cause instead of the
+        # threshold: renormalise every row to sum to exactly 1 in float64,
+        # which is well within MAPIE's tolerance (float64 machine epsilon is
+        # ~1e-16). This does not touch the served prediction path itself --
+        # only how this evaluation adapter packages its output for MAPIE.
+        output = np.empty((len(arr), 3), dtype=np.float64)
         for i, row in enumerate(arr):
             result = self.engine._run_inference(self.bundle, row, self.league)
             if result.model_version == "fallback":
@@ -53,9 +66,12 @@ class ServedPredictionAdapter:
                 raise RuntimeError(f"{self.league}: calibration provenance failed; method={result.calibration_method!r}")
             output[i] = (result.home_win, result.draw, result.away_win)
             self.observed.add((str(result.calibration_method), str(result.generation or "unknown"), result.feature_schema_version, result.artifact_sha256))
-        if not np.isfinite(output).all() or np.any(output < 0) or not np.allclose(output.sum(axis=1), 1.0, atol=1e-5):
+        if not np.isfinite(output).all() or np.any(output < 0):
             raise RuntimeError(f"{self.league}: served path returned an invalid probability simplex")
-        return output
+        row_sums = output.sum(axis=1, keepdims=True)
+        if np.any(row_sums <= 0) or not np.allclose(row_sums, 1.0, atol=0.05):
+            raise RuntimeError(f"{self.league}: served path returned an invalid probability simplex")
+        return output / row_sums
 
     def predict(self, X: Any) -> np.ndarray:
         return self.predict_proba(X).argmax(axis=1)
