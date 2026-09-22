@@ -1,6 +1,6 @@
 {
   "artifact_hashes": null,
-  "certification_policy_sha256": "f823648253fc2708fc676b5fe25da807d3393d25a62bf80a3085508f130908f8",
+  "certification_policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
   "dataset": {
     "auxiliary": {},
     "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
@@ -205,17 +205,17 @@
     "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.14.6"
   },
-  "experiment_id": "v5_phase7-20260913-46c5d2fd44",
+  "experiment_id": "v5_phase7-20260922-38522d998b",
   "features": {
-    "feature_contract_sha256": "2f80df948bb52e0a1f746271573c3b448fd6be23f322b2c988cf6d3a98076288",
+    "feature_contract_sha256": "6b5ebd6bdde6290afb36e9c338787699037d23022c4c68587715372522007768",
     "feature_count": 68,
     "feature_schema_version": "apex_v1_68",
     "order_sha256": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338"
   },
-  "generated_at": "2026-09-13T00:42:21.755043+00:00",
+  "generated_at": "2026-09-22T02:29:19.689386+00:00",
   "generation_id": null,
   "git": {
-    "commit": "037bbb38d3d0de14b30f03a7621228974679978a",
+    "commit": "6b7e86ed930b92f166f9da440471056815b0a346",
     "dirty": true
   },
   "labels": {
@@ -335,11 +335,11 @@
       "rps": 0.19982636981453486,
       "stacked": {
         "accuracy": 0.521594684385382,
-        "brier": 0.5833243698858858,
-        "calibration_error": 0.06323534335658063,
-        "log_loss": 0.9816868193912663,
+        "brier": 0.5833243698852347,
+        "calibration_error": 0.0632353433559734,
+        "log_loss": 0.9816868193903743,
         "n": 301,
-        "rps": 0.1993771706021916
+        "rps": 0.1993771706019112
       },
       "train_n": 1455,
       "training_window": {
@@ -448,11 +448,11 @@
       "rps": 0.20602679613172206,
       "stacked": {
         "accuracy": 0.49333333333333335,
-        "brier": 0.6097897483529748,
-        "calibration_error": 0.07479077799252923,
-        "log_loss": 1.0159994215092407,
+        "brier": 0.6097897483527479,
+        "calibration_error": 0.07479077799134905,
+        "log_loss": 1.0159994215089598,
         "n": 375,
-        "rps": 0.20537497930114906
+        "rps": 0.20537497930107876
       },
       "train_n": 1821,
       "training_window": {
@@ -479,7 +479,7 @@
         "holdout_draw_f1_before": 0.0
       },
       "brier": 0.5810614560857974,
-      "calibration_error": 0.05903806259990239,
+      "calibration_error": 0.059038062599902394,
       "calibration_n": 380,
       "calibration_season": "2425",
       "calibration_selection": {
@@ -561,11 +561,11 @@
       "rps": 0.19915829562429432,
       "stacked": {
         "accuracy": 0.544,
-        "brier": 0.5775595577756999,
-        "calibration_error": 0.03453392836539107,
-        "log_loss": 0.977087884830227,
+        "brier": 0.5775595577758381,
+        "calibration_error": 0.034533928365601665,
+        "log_loss": 0.9770878848301952,
         "n": 375,
-        "rps": 0.1975530244435568
+        "rps": 0.1975530244435598
       },
       "train_n": 1817,
       "training_window": {
@@ -674,11 +674,11 @@
       "rps": 0.19910235117996755,
       "stacked": {
         "accuracy": 0.5249169435215947,
-        "brier": 0.5893641865165768,
-        "calibration_error": 0.047700858042300426,
-        "log_loss": 0.9901090077354534,
+        "brier": 0.5893641774981654,
+        "calibration_error": 0.04770094594403449,
+        "log_loss": 0.99010898284291,
         "n": 301,
-        "rps": 0.20061411944221574
+        "rps": 0.20061411659796258
       },
       "train_n": 1641,
       "training_window": {
@@ -705,7 +705,7 @@
         "holdout_draw_f1_before": 0.0
       },
       "brier": 0.5921006187914959,
-      "calibration_error": 0.01683649267754965,
+      "calibration_error": 0.016836492677549622,
       "calibration_n": 1732,
       "calibration_season": "2425",
       "calibration_selection": {
@@ -787,11 +787,11 @@
       "rps": 0.2002131951853337,
       "stacked": {
         "accuracy": 0.5319577252138903,
-        "brier": 0.5847840971214138,
-        "calibration_error": 0.021275901331530914,
-        "log_loss": 0.9824772924992954,
+        "brier": 0.5847840971214244,
+        "calibration_error": 0.021275901331530137,
+        "log_loss": 0.9824772924993141,
         "n": 1987,
-        "rps": 0.19806913289208547
+        "rps": 0.19806913289209221
       },
       "train_n": 8537,
       "training_window": {
@@ -818,7 +818,7 @@
         "holdout_draw_f1_before": 0.02
       },
       "brier": 0.6135502581775767,
-      "calibration_error": 0.06145648325332853,
+      "calibration_error": 0.06145648325332852,
       "calibration_n": 375,
       "calibration_season": "2425",
       "calibration_selection": {
@@ -900,11 +900,11 @@
       "rps": 0.2058914192638688,
       "stacked": {
         "accuracy": 0.5306666666666666,
-        "brier": 0.5919517442373601,
-        "calibration_error": 0.028175288960195787,
-        "log_loss": 0.9949205306089886,
+        "brier": 0.5919517442374216,
+        "calibration_error": 0.02817528896071703,
+        "log_loss": 0.9949205306091271,
         "n": 375,
-        "rps": 0.20083607924724758
+        "rps": 0.20083607924727975
       },
       "train_n": 1803,
       "training_window": {
@@ -934,7 +934,7 @@
     "mode": "offline_corpus",
     "note": "Training reads cached football-data.co.uk CSV snapshots (see dataset.dataset_sha256 for exact corpus identity); there is no live provider API call at training time, so no API version string applies. The dataset content hash is a stronger per-exact-corpus identity than a provider version number would be."
   },
-  "reproducibility_sha256": "46c5d2fd44638d537ae461eda11d97dfe2be35a15cd33b48c3c9d79539e416fb",
+  "reproducibility_sha256": "38522d998b82e3589e756b3406309ccb891de75584f089748f10368cda77324e",
   "schema": "sabiscore_training_manifest_v1",
   "training_config": {
     "artifact_suffix": "v5_phase7",
