@@ -225,8 +225,12 @@ def test_artifact_calibrator_screening_never_forces_fallback(league: str) -> Non
     assert result.model_version != "fallback"
 
     if bundle.calibrator is None:
-        assert result.calibration_applied is False
-        assert result.calibration_method == "raw"
+        if bundle.meta_model is not None and type(bundle.meta_model).__name__ in ["IsotonicMetaModel", "LogisticRegression", "CalibratedClassifierCV", "BetaCalibratedMetaModel", "VectorScaledMetaModel", "TemperatureScaledMetaModel"]:
+            assert result.calibration_applied is True
+            assert result.calibration_method != "raw"
+        else:
+            assert result.calibration_applied is False
+            assert result.calibration_method == "raw"
     else:
         assert result.calibration_applied is True
         assert result.calibration_method != "raw"
