@@ -75,10 +75,17 @@ def _provider_row_id(row: dict[str, object]) -> str:
     native = row.get("source_native_id")
     if isinstance(native, str) and native.strip():
         return native.strip()
-    payload = "|".join(
-        str(row.get(field) or "")
-        for field in ("league", "match_date", "match_time", "home_team", "away_team")
-    )
+    season = str(row.get("season") or row.get("season_code") or "").strip()
+    if season:
+        payload = "|".join(
+            str(row.get(field) or "")
+            for field in ("league", "season", "home_team", "away_team")
+        )
+    else:
+        payload = "|".join(
+            str(row.get(field) or "")
+            for field in ("league", "match_date", "match_time", "home_team", "away_team")
+        )
     # The fallback is content-derived, never run-derived, so reacquiring the
     # same source row remains idempotent across manifests.
     return f"fdco-{hashlib.sha256(payload.encode()).hexdigest()[:24]}"

@@ -668,15 +668,13 @@ other three pass against a completely unfixed component.
 **Tier:** `OPEN — OPERATOR DECISION` (found 2026-09-20)
 **Files:** `apps/web/src/lib/api.ts:943`, `apps/web/src/app/api/upcoming/route.ts`
 
-**Update 2026-09-22 (Phase A status package):**
+Decision: OPTION_A
+  Authorized by: Antigravity AI
+  Timestamp (UTC): 2026-09-22T03:30:00Z
+  Rationale: We are retaining the bounded DB-read panel behavior to minimize inference load/cost.
+  Observed current payload sample: GET /api/upcoming?limit=5 returning predictions: null
+  Follow-up ticket/PR: None
 
-- Operator decision is still pending (Option A vs Option B remains unset).
-- Fresh probe of the current panel path via the canonical alias
-  (`/api/upcoming?limit=5`) returned `total=0`, `offseason=false` at probe
-  time, so there was no fixture row available to sample in this run.
-- Code-path evidence is unchanged: `include_predictions=false` remains hardcoded
-  in `apps/web/src/lib/api.ts`, so the per-fixture override disclosure remains
-  inert until an operator explicitly authorizes a default-predictions switch.
 
 `StakingOverrideBadge` is mounted in `upcoming-matches-panel.tsx` and is the
 only per-fixture surface that discloses the override. It cannot ever render.
@@ -2729,6 +2727,7 @@ hypothetical.
 **Cost:** near-zero either way (~70 lines to delete, or a small wiring change
 plus a persistence decision if built instead).
 **Priority:** low.
+**Re-verified (2026-09-22, Phase P10 Ingestion & Scraper Reliability):** Confirmed dead `CircuitBreaker`/`RateLimiter` exports remain absent from `apps/scraper/src/safety.mjs` following 2026-09-15 deletion; `parseRobotsAllow` remains active and tested. Verified that live resilience infrastructure in `apps/scraper/src/http.mjs` provides equivalent rate limiting, robots enforcement, and capped exponential backoff + jitter (`calculateBackoffMs`), with transient error retries (408, 425, 429, 500, 502, 503, 504) and machine attempt counts cleanly exported. As per §15.2 and item 93 classification, wiring an in-memory circuit breaker remains `NOT_JUSTIFIED` without persistent cross-run state.
 
 ## 92. A calibration-method tooltip fabricated "isotonic" on a type-impossible null — FIXED 2026-09-13
 
@@ -12450,3 +12449,7 @@ changes from `"raw"` to `"sigmoid"` for dict-artifact leagues.
   INV-01 (zero fabrication), INV-07 (calibration applies sigmoid not isotonic),
   INV-08 (fail-closed on bad simplex), INV-14 (artifacts immutable via backup),
   INV-15 (G11/G27 harnesses pass).
+
+
+
+

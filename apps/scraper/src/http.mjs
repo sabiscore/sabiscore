@@ -1,6 +1,19 @@
 import { Configuration, HttpCrawler } from "crawlee";
 import { scraperUserAgent } from "./config.mjs";
 
+export function calculateBackoffMs(retryCount, {
+  baseMs = 250,
+  maxMs = 2000,
+  maxJitterMs = 250,
+  randomFn = Math.random,
+} = {}) {
+  const count = Math.max(0, Number(retryCount) || 0);
+  const exponential = baseMs * (2 ** count);
+  const capped = Math.min(maxMs, exponential);
+  const jitter = Math.floor(randomFn() * maxJitterMs);
+  return capped + jitter;
+}
+
 export class PublicHttpClient {
   constructor({
     minDelayMs = 3000,
@@ -9,6 +22,8 @@ export class PublicHttpClient {
     maxRequestsPerMinute = 6,
     timeoutMs = 20_000,
     crawlerFactory = null,
+    backoffOptions = {},
+    sleepFn = null,
   } = {}) {
     this.minDelayMs = minDelayMs;
     this.retries = retries;
@@ -16,11 +31,14 @@ export class PublicHttpClient {
     this.maxRequestsPerMinute = maxRequestsPerMinute;
     this.timeoutMs = timeoutMs;
     this.crawlerFactory = crawlerFactory;
+    this.backoffOptions = backoffOptions;
+    this.sleepFn = sleepFn;
   }
 
   async getText(url) {
     let bodyText = null;
     let terminalError = null;
+    const self = this;
     const options = {
       minConcurrency: 1,
       maxConcurrency: 1,
@@ -34,11 +52,14 @@ export class PublicHttpClient {
       retryOnBlocked: false,
       useSessionPool: false,
       additionalMimeTypes: ["text/csv", "text/plain", "application/octet-stream"],
-      additionalHttpErrorStatusCodes: [408, 425, 429],
+      additionalHttpErrorStatusCodes: [408, 425, 429, 500, 502, 503, 504],
       async errorHandler({ request }) {
-        const delayMs = Math.min(2_000, 250 * (2 ** Number(request.retryCount ?? 0)))
-          + Math.floor(Math.random() * 250);
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const delayMs = calculateBackoffMs(request.retryCount, self.backoffOptions);
+        if (typeof self.sleepFn === "function") {
+          await self.sleepFn(delayMs, request.retryCount);
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
       },
       preNavigationHooks: [
         async (_context, requestOptions) => {

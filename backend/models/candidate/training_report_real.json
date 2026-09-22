@@ -1,17 +1,17 @@
 {
   "BUNDESLIGA": {
-    "accuracy": 0.521594684385382,
-    "rps": 0.19982636981453486,
-    "brier": 0.5945051826410722,
-    "log_loss": 1.0010742618732387,
-    "calibration_error": 0.04500568309039879,
+    "accuracy": 0.5116279069767442,
+    "rps": 0.19861551770729283,
+    "brier": 0.5908014251561238,
+    "log_loss": 0.99425985961016,
+    "calibration_error": 0.055584990391693255,
     "n": 301,
     "stacked": {
-      "accuracy": 0.521594684385382,
-      "rps": 0.1993771706019112,
-      "brier": 0.5833243698852347,
-      "log_loss": 0.9816868193903743,
-      "calibration_error": 0.0632353433559734,
+      "accuracy": 0.5415282392026578,
+      "rps": 0.19511160666902486,
+      "brier": 0.5719760218454513,
+      "log_loss": 0.9622331500820734,
+      "calibration_error": 0.059068188769464236,
       "n": 301
     },
     "hyperparameters": {
@@ -50,54 +50,54 @@
     "holdout_season": "2526",
     "calibration_selection": {
       "temperature": {
-        "reliability": 0.0092,
-        "resolution": 0.0251
+        "reliability": 0.009,
+        "resolution": 0.0238
       },
       "isotonic": {
-        "reliability": 0.0016,
-        "resolution": 0.0249
+        "reliability": 0.0023,
+        "resolution": 0.0263
       },
       "vector": {
-        "reliability": 0.0024,
-        "resolution": 0.024
+        "reliability": 0.0018,
+        "resolution": 0.0248
       },
       "beta": {
-        "reliability": 0.0034,
-        "resolution": 0.0239
+        "reliability": 0.0018,
+        "resolution": 0.0237
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0064,
-          "resolution": 0.0261
+          "reliability": 0.0063,
+          "resolution": 0.0257
         },
         "isotonic": {
-          "reliability": 0.0086,
-          "resolution": 0.0249
+          "reliability": 0.0081,
+          "resolution": 0.0245
         },
         "vector": {
-          "reliability": 0.006,
-          "resolution": 0.0309
+          "reliability": 0.0047,
+          "resolution": 0.0292
         },
         "beta": {
-          "reliability": 0.0071,
-          "resolution": 0.0308
+          "reliability": 0.0068,
+          "resolution": 0.0305
         },
         "conclusion_persists": true
       },
-      "chosen": "temperature",
-      "reason": "isotonic_degraded_resolution"
+      "chosen": "vector",
+      "reason": "reliability_improved_resolution_held_and_persisted_on_holdout"
     },
     "bivariate_poisson_overlay": {
       "alpha": 0.0,
       "gate_passed": true,
       "calibration_draw_f1_before": 0.0,
       "calibration_draw_f1_after": 0.0,
-      "calibration_brier_before": 0.6105,
-      "calibration_brier_after": 0.6105,
+      "calibration_brier_before": 0.5878,
+      "calibration_brier_after": 0.5878,
       "holdout_draw_f1_before": 0.0,
       "holdout_draw_f1_after": 0.0,
-      "holdout_brier_before": 0.5833,
-      "holdout_brier_after": 0.5833
+      "holdout_brier_before": 0.572,
+      "holdout_brier_after": 0.572
     },
     "training_window": {
       "start": "2019-09-27",
@@ -113,18 +113,18 @@
     }
   },
   "EPL": {
-    "accuracy": 0.5093333333333333,
-    "rps": 0.20602679613172206,
-    "brier": 0.6211832408284326,
-    "log_loss": 1.0381915240083568,
-    "calibration_error": 0.07217782878810916,
+    "accuracy": 0.504,
+    "rps": 0.20603638812719183,
+    "brier": 0.6219230644375233,
+    "log_loss": 1.0384451210505956,
+    "calibration_error": 0.06487935018618658,
     "n": 375,
     "stacked": {
-      "accuracy": 0.49333333333333335,
-      "rps": 0.20537497930107876,
-      "brier": 0.6097897483527479,
-      "log_loss": 1.0159994215089598,
-      "calibration_error": 0.07479077799134905,
+      "accuracy": 0.49066666666666664,
+      "rps": 0.20524407096334096,
+      "brier": 0.6093787474903867,
+      "log_loss": 1.015251130771425,
+      "calibration_error": 0.06587139666312097,
       "n": 375
     },
     "hyperparameters": {
@@ -163,54 +163,54 @@
     "holdout_season": "2526",
     "calibration_selection": {
       "temperature": {
-        "reliability": 0.0035,
-        "resolution": 0.028
+        "reliability": 0.0024,
+        "resolution": 0.0273
       },
       "isotonic": {
-        "reliability": 0.002,
-        "resolution": 0.0299
+        "reliability": 0.0024,
+        "resolution": 0.0304
       },
       "vector": {
         "reliability": 0.0027,
-        "resolution": 0.029
+        "resolution": 0.0292
       },
       "beta": {
-        "reliability": 0.0026,
-        "resolution": 0.029
+        "reliability": 0.0023,
+        "resolution": 0.0279
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0033,
-          "resolution": 0.0168
+          "reliability": 0.0034,
+          "resolution": 0.0174
         },
         "isotonic": {
-          "reliability": 0.0041,
-          "resolution": 0.0159
+          "reliability": 0.0039,
+          "resolution": 0.015
         },
         "vector": {
-          "reliability": 0.0043,
-          "resolution": 0.0175
+          "reliability": 0.0041,
+          "resolution": 0.0176
         },
         "beta": {
-          "reliability": 0.0047,
-          "resolution": 0.0185
+          "reliability": 0.0045,
+          "resolution": 0.0182
         },
-        "conclusion_persists": false
+        "conclusion_persists": true
       },
       "chosen": "temperature",
-      "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+      "reason": "isotonic_did_not_improve_reliability"
     },
     "bivariate_poisson_overlay": {
       "alpha": 0.0,
       "gate_passed": true,
       "calibration_draw_f1_before": 0.0,
       "calibration_draw_f1_after": 0.0,
-      "calibration_brier_before": 0.5749,
-      "calibration_brier_after": 0.5749,
+      "calibration_brier_before": 0.5746,
+      "calibration_brier_after": 0.5746,
       "holdout_draw_f1_before": 0.0,
       "holdout_draw_f1_after": 0.0,
-      "holdout_brier_before": 0.6098,
-      "holdout_brier_after": 0.6098
+      "holdout_brier_before": 0.6094,
+      "holdout_brier_after": 0.6094
     },
     "training_window": {
       "start": "2019-09-20",
@@ -226,18 +226,18 @@
     }
   },
   "LA_LIGA": {
-    "accuracy": 0.5093333333333333,
-    "rps": 0.19915829562429432,
-    "brier": 0.5810614560857974,
-    "log_loss": 0.9867386674588154,
-    "calibration_error": 0.059038062599902394,
+    "accuracy": 0.5066666666666667,
+    "rps": 0.19917596561152337,
+    "brier": 0.5801400400377814,
+    "log_loss": 0.9848448240072821,
+    "calibration_error": 0.05597226417575318,
     "n": 375,
     "stacked": {
       "accuracy": 0.544,
-      "rps": 0.1975530244435598,
-      "brier": 0.5775595577758381,
-      "log_loss": 0.9770878848301952,
-      "calibration_error": 0.034533928365601665,
+      "rps": 0.19757546906131362,
+      "brier": 0.5775858245749693,
+      "log_loss": 0.977080331474369,
+      "calibration_error": 0.044951559156260604,
       "n": 375
     },
     "hyperparameters": {
@@ -276,37 +276,37 @@
     "holdout_season": "2526",
     "calibration_selection": {
       "temperature": {
-        "reliability": 0.0039,
-        "resolution": 0.0282
+        "reliability": 0.0038,
+        "resolution": 0.028
       },
       "isotonic": {
-        "reliability": 0.0021,
-        "resolution": 0.033
+        "reliability": 0.0019,
+        "resolution": 0.0338
       },
       "vector": {
-        "reliability": 0.0038,
-        "resolution": 0.0286
+        "reliability": 0.0029,
+        "resolution": 0.0283
       },
       "beta": {
         "reliability": 0.002,
-        "resolution": 0.0287
+        "resolution": 0.0284
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0033,
-          "resolution": 0.0206
+          "reliability": 0.0044,
+          "resolution": 0.0209
         },
         "isotonic": {
-          "reliability": 0.0054,
-          "resolution": 0.022
+          "reliability": 0.0059,
+          "resolution": 0.0213
         },
         "vector": {
-          "reliability": 0.0046,
-          "resolution": 0.0227
+          "reliability": 0.0054,
+          "resolution": 0.0222
         },
         "beta": {
-          "reliability": 0.0053,
-          "resolution": 0.0212
+          "reliability": 0.0052,
+          "resolution": 0.0211
         },
         "conclusion_persists": false
       },
@@ -316,12 +316,12 @@
     "bivariate_poisson_overlay": {
       "alpha": 0.0,
       "gate_passed": true,
-      "calibration_draw_f1_before": 0.0198,
-      "calibration_draw_f1_after": 0.0198,
-      "calibration_brier_before": 0.5699,
-      "calibration_brier_after": 0.5699,
-      "holdout_draw_f1_before": 0.0,
-      "holdout_draw_f1_after": 0.0,
+      "calibration_draw_f1_before": 0.0396,
+      "calibration_draw_f1_after": 0.0396,
+      "calibration_brier_before": 0.5693,
+      "calibration_brier_after": 0.5693,
+      "holdout_draw_f1_before": 0.0408,
+      "holdout_draw_f1_after": 0.0408,
       "holdout_brier_before": 0.5776,
       "holdout_brier_after": 0.5776
     },
@@ -339,18 +339,18 @@
     }
   },
   "LIGUE_1": {
-    "accuracy": 0.5149501661129569,
-    "rps": 0.19910235117996755,
-    "brier": 0.5903327374042928,
-    "log_loss": 0.9882541612372638,
-    "calibration_error": 0.05349692508504045,
+    "accuracy": 0.5282392026578073,
+    "rps": 0.19987068348135487,
+    "brier": 0.5929069943758467,
+    "log_loss": 0.9914105822685033,
+    "calibration_error": 0.057385524854806795,
     "n": 301,
     "stacked": {
-      "accuracy": 0.5249169435215947,
-      "rps": 0.20061411659796258,
-      "brier": 0.5893641774981654,
-      "log_loss": 0.99010898284291,
-      "calibration_error": 0.04770094594403449,
+      "accuracy": 0.5049833887043189,
+      "rps": 0.20474538344596885,
+      "brier": 0.5955426110631213,
+      "log_loss": 1.0004632607749004,
+      "calibration_error": 0.0536249123088541,
       "n": 301
     },
     "hyperparameters": {
@@ -380,7 +380,7 @@
     "train_n": 1641,
     "calibration_n": 306,
     "evaluation_n": 301,
-    "responsive_features": 47,
+    "responsive_features": 46,
     "baseline_accuracy_home": 0.4584717607973422,
     "baseline_rps_trainprior": 0.22926811378159884,
     "baseline_rps_market": 0.19912628829479218,
@@ -389,54 +389,54 @@
     "holdout_season": "2526",
     "calibration_selection": {
       "temperature": {
-        "reliability": 0.0038,
-        "resolution": 0.0217
+        "reliability": 0.0036,
+        "resolution": 0.0219
       },
       "isotonic": {
-        "reliability": 0.002,
-        "resolution": 0.0243
+        "reliability": 0.0009,
+        "resolution": 0.023
       },
       "vector": {
-        "reliability": 0.0021,
-        "resolution": 0.0235
+        "reliability": 0.0022,
+        "resolution": 0.0238
       },
       "beta": {
-        "reliability": 0.0027,
-        "resolution": 0.0229
+        "reliability": 0.0013,
+        "resolution": 0.0226
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0059,
-          "resolution": 0.0206
+          "reliability": 0.008,
+          "resolution": 0.0228
         },
         "isotonic": {
-          "reliability": 0.0069,
-          "resolution": 0.0186
+          "reliability": 0.0075,
+          "resolution": 0.0219
         },
         "vector": {
-          "reliability": 0.0056,
-          "resolution": 0.0229
+          "reliability": 0.0063,
+          "resolution": 0.0226
         },
         "beta": {
-          "reliability": 0.0058,
-          "resolution": 0.0217
+          "reliability": 0.0064,
+          "resolution": 0.0216
         },
         "conclusion_persists": false
       },
-      "chosen": "vector",
-      "reason": "reliability_improved_resolution_held_and_persisted_on_holdout"
+      "chosen": "temperature",
+      "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
     },
     "bivariate_poisson_overlay": {
-      "alpha": 1.0,
+      "alpha": 0.0,
       "gate_passed": true,
       "calibration_draw_f1_before": 0.0,
       "calibration_draw_f1_after": 0.0,
-      "calibration_brier_before": 0.566,
-      "calibration_brier_after": 0.5666,
+      "calibration_brier_before": 0.5734,
+      "calibration_brier_after": 0.5734,
       "holdout_draw_f1_before": 0.0,
       "holdout_draw_f1_after": 0.0,
-      "holdout_brier_before": 0.5894,
-      "holdout_brier_after": 0.5886
+      "holdout_brier_before": 0.5955,
+      "holdout_brier_after": 0.5955
     },
     "training_window": {
       "start": "2019-09-20",
@@ -452,18 +452,18 @@
     }
   },
   "SERIE_A": {
-    "accuracy": 0.49333333333333335,
-    "rps": 0.2058914192638688,
-    "brier": 0.6135502581775767,
-    "log_loss": 1.0298299837337122,
-    "calibration_error": 0.06145648325332852,
+    "accuracy": 0.49066666666666664,
+    "rps": 0.20471089846877047,
+    "brier": 0.6093209587067248,
+    "log_loss": 1.0240272703559865,
+    "calibration_error": 0.06216174843703337,
     "n": 375,
     "stacked": {
-      "accuracy": 0.5306666666666666,
-      "rps": 0.20083607924727975,
-      "brier": 0.5919517442374216,
-      "log_loss": 0.9949205306091271,
-      "calibration_error": 0.02817528896071703,
+      "accuracy": 0.536,
+      "rps": 0.19997485559105213,
+      "brier": 0.5905485989759273,
+      "log_loss": 0.9927459864189896,
+      "calibration_error": 0.02920367702464765,
       "n": 375
     },
     "hyperparameters": {
@@ -502,37 +502,37 @@
     "holdout_season": "2526",
     "calibration_selection": {
       "temperature": {
-        "reliability": 0.0031,
-        "resolution": 0.0315
+        "reliability": 0.0028,
+        "resolution": 0.0303
       },
       "isotonic": {
-        "reliability": 0.0012,
+        "reliability": 0.0011,
         "resolution": 0.0293
       },
       "vector": {
-        "reliability": 0.0029,
-        "resolution": 0.0317
+        "reliability": 0.002,
+        "resolution": 0.0306
       },
       "beta": {
-        "reliability": 0.0016,
-        "resolution": 0.0306
+        "reliability": 0.0014,
+        "resolution": 0.0299
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0031,
-          "resolution": 0.024
+          "reliability": 0.0036,
+          "resolution": 0.0248
         },
         "isotonic": {
-          "reliability": 0.0096,
-          "resolution": 0.024
+          "reliability": 0.0066,
+          "resolution": 0.0224
         },
         "vector": {
-          "reliability": 0.0035,
-          "resolution": 0.0256
+          "reliability": 0.0038,
+          "resolution": 0.0277
         },
         "beta": {
-          "reliability": 0.0032,
-          "resolution": 0.0257
+          "reliability": 0.0027,
+          "resolution": 0.0263
         },
         "conclusion_persists": true
       },
@@ -544,12 +544,12 @@
       "gate_passed": true,
       "calibration_draw_f1_before": 0.0,
       "calibration_draw_f1_after": 0.0,
-      "calibration_brier_before": 0.5737,
-      "calibration_brier_after": 0.5737,
+      "calibration_brier_before": 0.5748,
+      "calibration_brier_after": 0.5748,
       "holdout_draw_f1_before": 0.02,
       "holdout_draw_f1_after": 0.02,
-      "holdout_brier_before": 0.592,
-      "holdout_brier_after": 0.592
+      "holdout_brier_before": 0.5905,
+      "holdout_brier_after": 0.5905
     },
     "training_window": {
       "start": "2019-09-28",
@@ -565,18 +565,18 @@
     }
   },
   "POOLED": {
-    "accuracy": 0.5259184700553599,
-    "rps": 0.2002131951853337,
-    "brier": 0.5921006187914959,
-    "log_loss": 0.9951508311339314,
-    "calibration_error": 0.016836492677549622,
+    "accuracy": 0.5244086562657272,
+    "rps": 0.19978709363410177,
+    "brier": 0.5913914490065246,
+    "log_loss": 0.9939794740470278,
+    "calibration_error": 0.021774299755775686,
     "n": 1987,
     "stacked": {
-      "accuracy": 0.5319577252138903,
-      "rps": 0.19806913289209221,
-      "brier": 0.5847840971214244,
-      "log_loss": 0.9824772924993141,
-      "calibration_error": 0.021275901331530137,
+      "accuracy": 0.5309511826874685,
+      "rps": 0.1982233772134001,
+      "brier": 0.5850467812686516,
+      "log_loss": 0.9828970603625692,
+      "calibration_error": 0.02095495493984608,
       "n": 1987
     },
     "hyperparameters": {
@@ -606,7 +606,7 @@
     "train_n": 8537,
     "calibration_n": 1732,
     "evaluation_n": 1987,
-    "responsive_features": 55,
+    "responsive_features": 57,
     "baseline_accuracy_home": 0.4393558127830901,
     "baseline_rps_trainprior": 0.22896537429419572,
     "baseline_rps_market": 0.19784937798976898,
@@ -616,36 +616,36 @@
     "calibration_selection": {
       "temperature": {
         "reliability": 0.0015,
-        "resolution": 0.0259
+        "resolution": 0.0262
       },
       "isotonic": {
-        "reliability": 0.0004,
-        "resolution": 0.0277
+        "reliability": 0.0002,
+        "resolution": 0.0273
       },
       "vector": {
-        "reliability": 0.0006,
-        "resolution": 0.025
+        "reliability": 0.0005,
+        "resolution": 0.0251
       },
       "beta": {
         "reliability": 0.0004,
-        "resolution": 0.025
+        "resolution": 0.0249
       },
       "held_out_persistence": {
         "temperature": {
-          "reliability": 0.0005,
-          "resolution": 0.0211
+          "reliability": 0.0004,
+          "resolution": 0.0209
         },
         "isotonic": {
-          "reliability": 0.0017,
-          "resolution": 0.0209
+          "reliability": 0.0019,
+          "resolution": 0.0213
         },
         "vector": {
           "reliability": 0.0014,
-          "resolution": 0.0214
+          "resolution": 0.0213
         },
         "beta": {
-          "reliability": 0.0018,
-          "resolution": 0.0219
+          "reliability": 0.0017,
+          "resolution": 0.0217
         },
         "conclusion_persists": false
       },
@@ -657,12 +657,12 @@
       "gate_passed": true,
       "calibration_draw_f1_before": 0.0,
       "calibration_draw_f1_after": 0.0,
-      "calibration_brier_before": 0.5772,
-      "calibration_brier_after": 0.5772,
+      "calibration_brier_before": 0.5771,
+      "calibration_brier_after": 0.5771,
       "holdout_draw_f1_before": 0.0,
       "holdout_draw_f1_after": 0.0,
-      "holdout_brier_before": 0.5848,
-      "holdout_brier_after": 0.5848
+      "holdout_brier_before": 0.585,
+      "holdout_brier_after": 0.585
     },
     "training_window": {
       "start": "2019-09-20",

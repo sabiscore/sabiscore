@@ -24,30 +24,30 @@
       },
       "candidate": {
         "accuracy": 0.521594684385382,
-        "rps": 0.1993771706021916,
-        "brier": 0.5833243698858857,
-        "log_loss": 0.9816868193912663,
-        "calibration_error": 0.06323534335658063,
+        "rps": 0.1993771706019099,
+        "brier": 0.5833243698852316,
+        "log_loss": 0.9816868193903701,
+        "calibration_error": 0.06323534335597049,
         "n": 301
       },
-      "candidate_rps_improvement": -2.815525590449397e-13,
-      "candidate_wins": false,
+      "candidate_rps_improvement": 1.3877787807814457e-16,
+      "candidate_wins": true,
       "market_baseline_rps": 0.19083929061889648,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
       "candidate_beats_market_baseline": false,
       "responsive_features": 43,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6066366069250754,
-          0.2495977174895341,
-          0.14376567558539047
+          0.6066366069299088,
+          0.24959771748740264,
+          0.14376567558268855
         ],
         "away_favourite_probabilities": [
-          0.3709970852179016,
-          0.2769015365329759,
-          0.35210137824912247
+          0.3709970852185871,
+          0.27690153653198185,
+          0.352101378249431
         ],
-        "max_probability_change": 0.23563952170717378,
+        "max_probability_change": 0.23563952171132174,
         "directionally_coherent": true
       }
     },
@@ -57,18 +57,18 @@
         "rps": 0.20537497930122056,
         "brier": 0.6097897483532058,
         "log_loss": 1.0159994215095258,
-        "calibration_error": 0.07479077799372966,
+        "calibration_error": 0.07479077799372968,
         "n": 375
       },
       "candidate": {
         "accuracy": 0.49333333333333335,
-        "rps": 0.20537497930114906,
-        "brier": 0.6097897483529748,
-        "log_loss": 1.0159994215092407,
-        "calibration_error": 0.07479077799252924,
+        "rps": 0.20537497930108,
+        "brier": 0.6097897483527519,
+        "log_loss": 1.015999421508965,
+        "calibration_error": 0.07479077799136975,
         "n": 375
       },
-      "candidate_rps_improvement": 7.149836278586008e-14,
+      "candidate_rps_improvement": 1.4055423491754482e-13,
       "candidate_wins": true,
       "market_baseline_rps": 0.2053660899400711,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
@@ -76,37 +76,37 @@
       "responsive_features": 50,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6729639790554883,
-          0.18594965959545298,
-          0.1410863613490587
+          0.6729639790529127,
+          0.18594965959673324,
+          0.1410863613503541
         ],
         "away_favourite_probabilities": [
-          0.2051390420146121,
-          0.2606215249896543,
-          0.5342394329957336
+          0.20513904201559216,
+          0.2606215249903801,
+          0.5342394329940277
         ],
-        "max_probability_change": 0.46782493704087624,
+        "max_probability_change": 0.46782493703732053,
         "directionally_coherent": true
       }
     },
     "EREDIVISIE": {
       "incumbent": {
         "accuracy": 0.5230769230769231,
-        "rps": 0.19934586472921725,
+        "rps": 0.19934586472921723,
         "brier": 0.5946020278610398,
         "log_loss": 0.9967134988884735,
-        "calibration_error": 0.046097711892516186,
+        "calibration_error": 0.046097711892516255,
         "n": 260
       },
       "candidate": {
         "accuracy": 0.5230769230769231,
-        "rps": 0.19934586472921695,
-        "brier": 0.594602027861054,
-        "log_loss": 0.9967134988884899,
-        "calibration_error": 0.04609771189251037,
+        "rps": 0.19934586472921706,
+        "brier": 0.5946020278610566,
+        "log_loss": 0.9967134988884931,
+        "calibration_error": 0.04609771189251189,
         "n": 260
       },
-      "candidate_rps_improvement": 3.0531133177191805e-16,
+      "candidate_rps_improvement": 1.6653345369377348e-16,
       "candidate_wins": true,
       "market_baseline_rps": 0.19784937798976898,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
@@ -114,16 +114,16 @@
       "responsive_features": 55,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6679631010735184,
-          0.2170467108612019,
-          0.11499018806527972
+          0.6679631010735066,
+          0.21704671086121707,
+          0.11499018806527617
         ],
         "away_favourite_probabilities": [
-          0.17179809177478028,
-          0.2315460279190194,
-          0.5966558803062003
+          0.17179809177478347,
+          0.23154602791901346,
+          0.5966558803062031
         ],
-        "max_probability_change": 0.49616500929873814,
+        "max_probability_change": 0.4961650092987232,
         "directionally_coherent": true
       }
     },
@@ -139,9 +139,9 @@
       "candidate": {
         "accuracy": 0.544,
         "rps": 0.19755302444355674,
-        "brier": 0.5775595577756999,
-        "log_loss": 0.977087884830227,
-        "calibration_error": 0.03453392836539107,
+        "brier": 0.5775595577756959,
+        "log_loss": 0.9770878848302276,
+        "calibration_error": 0.03453392836538639,
         "n": 375
       },
       "candidate_rps_improvement": 5.995204332975845e-15,
@@ -152,16 +152,16 @@
       "responsive_features": 51,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6647225854538731,
-          0.22492203830001495,
-          0.11035537624611196
+          0.6647225854540412,
+          0.22492203829992838,
+          0.11035537624603044
         ],
         "away_favourite_probabilities": [
-          0.12000392415998042,
-          0.2223577881571459,
-          0.6576382876828737
+          0.12000392415989351,
+          0.22235778815706256,
+          0.657638287683044
         ],
-        "max_probability_change": 0.5472829114367618,
+        "max_probability_change": 0.5472829114370136,
         "directionally_coherent": true
       }
     },
@@ -176,30 +176,30 @@
       },
       "candidate": {
         "accuracy": 0.5249169435215947,
-        "rps": 0.20061411944221572,
-        "brier": 0.5893641865165768,
-        "log_loss": 0.9901090077354534,
-        "calibration_error": 0.04770085804230041,
+        "rps": 0.200614114645258,
+        "brier": 0.5893641720707088,
+        "log_loss": 0.9901089736868258,
+        "calibration_error": 0.04770097145390701,
         "n": 301
       },
-      "candidate_rps_improvement": -1.7581740785477251e-09,
-      "candidate_wins": false,
+      "candidate_rps_improvement": 3.038783641384768e-09,
+      "candidate_wins": true,
       "market_baseline_rps": 0.19912628829479218,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
       "candidate_beats_market_baseline": false,
       "responsive_features": 47,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6274304400962017,
-          0.19687103215338708,
-          0.17569852775041112
+          0.6274304698948402,
+          0.19687100049463263,
+          0.17569852961052712
         ],
         "away_favourite_probabilities": [
-          0.15694209774856102,
-          0.15564920650641637,
-          0.6874086957450225
+          0.15694187516536845,
+          0.1556496113174643,
+          0.6874085135171671
         ],
-        "max_probability_change": 0.5117101679946114,
+        "max_probability_change": 0.51170998390664,
         "directionally_coherent": true
       }
     },
@@ -207,20 +207,20 @@
       "incumbent": {
         "accuracy": 0.5306666666666666,
         "rps": 0.20083607924724098,
-        "brier": 0.5919517442373474,
+        "brier": 0.5919517442373475,
         "log_loss": 0.9949205306089598,
-        "calibration_error": 0.028175288960084983,
+        "calibration_error": 0.028175288960085015,
         "n": 375
       },
       "candidate": {
         "accuracy": 0.5306666666666666,
-        "rps": 0.20083607924724758,
-        "brier": 0.5919517442373601,
-        "log_loss": 0.9949205306089886,
-        "calibration_error": 0.028175288960195822,
+        "rps": 0.20083607924724917,
+        "brier": 0.5919517442373632,
+        "log_loss": 0.994920530608996,
+        "calibration_error": 0.028175288960228452,
         "n": 375
       },
-      "candidate_rps_improvement": -6.6058269965196814e-15,
+      "candidate_rps_improvement": -8.18789480661053e-15,
       "candidate_wins": false,
       "market_baseline_rps": 0.19714131951332092,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
@@ -228,16 +228,16 @@
       "responsive_features": 50,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6129428754759692,
-          0.24195393527451875,
-          0.14510318924951207
+          0.6129428754760242,
+          0.24195393527449593,
+          0.14510318924947985
         ],
         "away_favourite_probabilities": [
-          0.12855199586483296,
-          0.2536288357791789,
-          0.6178191683559882
+          0.1285519958647984,
+          0.25362883577914963,
+          0.6178191683560519
         ],
-        "max_probability_change": 0.4843908796111362,
+        "max_probability_change": 0.48439087961122584,
         "directionally_coherent": true
       }
     }
@@ -265,12 +265,12 @@
       }
     },
     "primary_metric_improvement": {
-      "status": "FAIL",
-      "mean_rps_improvement": -2.9306407300921933e-10
+      "status": "PASS",
+      "mean_rps_improvement": 5.06487051373424e-10
     },
     "no_league_regression": {
       "status": "FAIL",
-      "league_wins": 3,
+      "league_wins": 5,
       "leagues_compared": 6
     },
     "market_baseline": {
@@ -281,9 +281,9 @@
       ]
     }
   },
-  "candidate_league_wins": 3,
+  "candidate_league_wins": 5,
   "leagues_compared": 6,
-  "mean_rps_improvement": -2.9306407300921933e-10,
+  "mean_rps_improvement": 5.06487051373424e-10,
   "no_league_regression": false,
   "promotion_permitted": false
 }

@@ -2,16 +2,18 @@
 import { access, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
-import { defaultLeagues, manifestDir, processedDir, rawDir } from "./config.mjs";
+import { defaultLeagues, dlqDir, manifestDir, processedDir, rawDir } from "./config.mjs";
 import { sourceRegistry, validateSourceRegistry } from "./registry.mjs";
 import { PublicHttpClient } from "./http.mjs";
 import { FootballDataAdapter } from "./adapters/football-data.mjs";
 import {
   ensureStorage,
+  getDlqMetrics,
   probeImmutableStorage,
   readFixture,
   storageFailureReport,
   summarizeResults,
+  writeDlqRecord,
   writeManifest,
 } from "./storage.mjs";
 
@@ -56,13 +58,37 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
         league, leagueCode, seasonCode, fixtureText, runId, acquiredAt
       }));
     } catch (error) {
+      const lastAttemptAt = new Date().toISOString();
+      const attemptCount = Number(error?.attempts ?? 1);
+      const failureReason = error instanceof Error ? error.message : String(error);
+
+      let dlqResult = null;
+      try {
+        dlqResult = await writeDlqRecord({
+          originalQueue: `scraper:${source.id}:${league}`,
+          failureReason,
+          attemptCount,
+          firstAttemptAt,
+          lastAttemptAt,
+          originalPayload: error?.rawPayload ?? fixtureText ?? null,
+          reference: error?.rawArtifact?.uri ?? error?.rawArtifact?.file ?? null,
+          sourceId: source.id,
+          league,
+          season: seasonCode,
+          runId,
+          errorDetails: error instanceof Error ? error.stack : String(error),
+        });
+      } catch (dlqError) {
+        console.warn(JSON.stringify({ event: "dlq_route_failed", error: dlqError?.message }));
+      }
+
       results.push({
         source_id: source.id,
         league,
         season_code: seasonCode,
         skipped: true,
         validation_status: "FAILED",
-        reason: error instanceof Error && error.message.startsWith("schema_drift_")
+        reason: error instanceof Error && (error.message.startsWith("schema_drift_") || error.message.startsWith("poison_payload_"))
           ? error.message
           : "acquisition_failed",
         failure: {
@@ -71,10 +97,11 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
           // P10 DLQ enrichment: attempt_count comes from http.mjs's
           // failedRequestHandler when the failure was an HTTP crawl (absent —
           // defaults to 1 — for a non-HTTP failure, e.g. a parser/schema error).
-          attempt_count: Number(error?.attempts ?? 1),
+          attempt_count: attemptCount,
           first_attempt_at: firstAttemptAt,
-          last_attempt_at: new Date().toISOString(),
+          last_attempt_at: lastAttemptAt,
         },
+        ...(dlqResult ? { dlq: dlqResult.file, dlq_uri: dlqResult.uri } : {}),
       });
     }
   }
@@ -143,12 +170,14 @@ async function validate() {
 
 async function doctor() {
   await ensureStorage();
+  const dlqMetrics = await getDlqMetrics();
   const payload = {
     ok: true,
     zero_paid_api: true,
     dynamic_scrapers_enabled: process.env.ENABLE_DYNAMIC_SCRAPERS === "true",
     user_agent_rotation: false,
-    storage: { rawDir, processedDir, manifestDir },
+    storage: { rawDir, processedDir, manifestDir, dlqDir },
+    dlq: dlqMetrics,
     source_registry: {
       version: sourceRegistry.registryVersion,
       valid: validateSourceRegistry(sourceRegistry).valid,

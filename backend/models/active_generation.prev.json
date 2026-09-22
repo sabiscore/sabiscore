@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "generation": "v5_phase7-20260808",
+  "active_version": "v5_phase7",
+  "feature_schema_version": "phase7_68",
+  "served_head": "SoftmaxMetaModel",
+  "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
+  "operator_override": {
+    "authorizing_identity": "Principal Architect - System-01",
+    "rationale": "Unblocking staging/production integration for UX and load testing. ML generalization failures accepted for this phase.",
+    "authorized_at": "2026-09-19T22:12:18Z",
+    "acknowledged_failures": [
+      "0/6 market baseline beat",
+      "Inverted epistemic-uncertainty signal (negative correlation with accuracy)"
+    ]
+  },
+  "certified_at": null,
+  "promotion_state": "ACTIVE_FAIL_CLOSED",
+  "promoted_at": null,
+  "artifacts": {
+    "bundesliga": {
+      "artifact": "bundesliga_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "83dbcd3d42ef566e966794ad1741b68160eaa4caed572b5ed2dd39cabc67d852",
+      "metadata": "bundesliga_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "d7a4b1ba543507bccb114debd045871d4fd39c88cb475e16bec2b9d36c280e35",
+      "required": true
+    },
+    "epl": {
+      "artifact": "epl_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "3b59285b194b87167423413f479c300d9bff5fb39e62c49b1cd65ba094c46d30",
+      "metadata": "epl_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "c156989085543b520b79234a733a142341ca5c0337c2eede3a2d76fe6ef18ddf",
+      "required": true
+    },
+    "eredivisie": {
+      "artifact": "eredivisie_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "40ed3ef224e740e4833122343d2681ccc9d404c375625f89a661091fe3b5b76f",
+      "metadata": "eredivisie_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "1083da04b2b7130dc0a2816c597418a56c6948b6664d5f8785220e4d3a20f0c6",
+      "required": false
+    },
+    "la_liga": {
+      "artifact": "la_liga_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "06505ae566ec92a4a6bbe630af7425bfca3df9599909341480f4170f9f259d16",
+      "metadata": "la_liga_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "fe60b025e27fe056c794f0fca635e9ea10d272ff132b7e2c5dea6780f9ce7b5f",
+      "required": true
+    },
+    "ligue_1": {
+      "artifact": "ligue_1_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "0f417e4ca26043a54c7ff4d420a8afa4a56dcc8b9ea2498794ac64abf5a54bb1",
+      "metadata": "ligue_1_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "f56fde826ad55ea6f778dbbda6b5beb466040a4e1afae4f7e08c08b05c277e8a",
+      "required": true
+    },
+    "serie_a": {
+      "artifact": "serie_a_ensemble_v5_phase7.pkl",
+      "artifact_sha256": "ad971607b72fee041c3ac8db0c3913e989eca30c40e695db023c6e32e357a736",
+      "metadata": "serie_a_ensemble_v5_phase7_metadata.json",
+      "metadata_sha256": "8a387c695bff0f7f91d2c9f0d8d21bee1c71e40144a325be95af041dbfc0f580",
+      "required": true
+    }
+  }
+}

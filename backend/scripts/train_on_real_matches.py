@@ -1068,58 +1068,13 @@ def _fit_served_base_calibrator(
         n = len(y_calibration)
         # force_method=None lets the standard selection rule run; the result is
         # recorded in calibration_method so the artifact manifest reflects what shipped.
-        method = select_calibration_method(n)
-        # DEBT-83 override: isotonic overfits on this path's calibration-set sizes
-        # (item 64 — 4/4 in-sample wins, 0/4 held-out wins) and vector scaling has
-        # not been measured against this specific fit/split (docs/DEBT.md item 106).
-        # Force sigmoid regardless of sample count so the artifact is always
-        # deterministic. This is a research-evidence choice, not a certification
-        # requirement — see the corrected docstring above.
-        method = "sigmoid"
-
-        calibrators = fit_calibrator(method, y_calibration.astype(np.int64), proba_cal)
-        proba_cal_after = apply_calibrator(method, calibrators, proba_cal)
-        proba_hold_after = apply_calibrator(method, calibrators, proba_hold)
-
-        ece_before = compute_ece(y_calibration.astype(np.int64), proba_cal)
-        ece_after = compute_ece(y_calibration.astype(np.int64), proba_cal_after)
-        ece_hold_before = compute_ece(y_holdout.astype(np.int64), proba_hold)
-        ece_hold_after = compute_ece(y_holdout.astype(np.int64), proba_hold_after)
-
-        def _brier(y: np.ndarray, p: np.ndarray) -> float:
-            oh = np.eye(3)[y.astype(int)]
-            return float(np.mean(np.sum((p - oh) ** 2, axis=1)))
-
-        brier_before = _brier(y_calibration, proba_cal)
-        brier_after = _brier(y_calibration, proba_cal_after)
-
-        logger.info(
-            "[DEBT-83] %s: Platt/sigmoid calibrator on base-learner average fitted. "
-            "n_cal=%d ece_before=%.4f ece_after=%.4f brier_before=%.4f brier_after=%.4f "
-            "holdout_ece_before=%.4f holdout_ece_after=%.4f",
-            league, n,
-            ece_before.get("mean", 0.0), ece_after.get("mean", 0.0),
-            brier_before, brier_after,
-            ece_hold_before.get("mean", 0.0), ece_hold_after.get("mean", 0.0),
+        from src.models.calibration import compare_calibration_methods
+        fitted_cal = compare_calibration_methods(
+            league,
+            y_calibration.astype(np.int64), proba_cal,
+            y_holdout.astype(np.int64), proba_hold,
         )
-
-        return FittedCalibrator(
-            method=method,
-            league=league,
-            n_training_rows=n,
-            calibrators=calibrators,
-            ece_before=ece_before,
-            ece_after=ece_after,
-            brier_before=round(brier_before, 4),
-            brier_after=round(brier_after, 4),
-            draw_f1_before=0.0,
-            draw_f1_after=0.0,
-            selection_rationale=(
-                "DEBT-83: Platt/sigmoid fitted on base-learner equal-weight average "
-                "(the path prediction.py's _ensemble_predict_dict actually serves). "
-                "Isotonic is explicitly forbidden in this certified pipeline."
-            ),
-        )
+        return fitted_cal
     except Exception as exc:
         logger.warning(
             "[DEBT-83] %s: Platt/sigmoid calibrator fitting failed — "
@@ -1368,18 +1323,21 @@ def _instantiate(learner: str, params: Dict[str, object], *, n_jobs: int = -1):
     from lightgbm import LGBMClassifier
     from sklearn.ensemble import RandomForestClassifier
     from xgboost import XGBClassifier
+    from src.models.ensemble import LogOddsResidualWrapper
 
     if learner == "random_forest":
-        return RandomForestClassifier(random_state=_TRAINING_SEED, n_jobs=n_jobs, **params)
-    if learner == "xgboost":
-        return XGBClassifier(
+        clf = RandomForestClassifier(random_state=_TRAINING_SEED, n_jobs=n_jobs, **params)
+    elif learner == "xgboost":
+        clf = XGBClassifier(
             objective="multi:softprob", num_class=3, random_state=_TRAINING_SEED,
             tree_method="hist", eval_metric="mlogloss", n_jobs=n_jobs, **params,
         )
-    return LGBMClassifier(
-        objective="multiclass", num_class=3, random_state=_TRAINING_SEED, verbose=-1,
-        n_jobs=n_jobs, **params,
-    )
+    else:
+        clf = LGBMClassifier(
+            objective="multiclass", num_class=3, random_state=_TRAINING_SEED, verbose=-1,
+            n_jobs=n_jobs, **params,
+        )
+    return LogOddsResidualWrapper(clf)
 
 
 def tune_hyperparameters(

@@ -1,17 +1,39 @@
 {
-  "accuracy": 0.4797921478060046,
-  "brier_score": 0.6259752514931776,
-  "data_source": "football-data.co.uk (real matches)",
+  "generation": "v5_phase7",
+  "league": "EREDIVISIE",
   "feature_count": 68,
-  "holdout_samples": 1732,
-  "holdout_season": "2425",
-  "log_loss": 1.0405477383720372,
-  "note": "Trained on all leagues; used for competitions with too little history to fit or validate independently.",
-  "pooled_fallback_for": [
-    "EREDIVISIE"
+  "feature_schema_version": "apex_v1_68",
+  "data_source": "football-data.co.uk (real matches)",
+  "trained_at": "2026-09-22T02:35:36.479836+00:00",
+  "temporal_split": {
+    "train_seasons": "1920-2324 (core, disjoint from the calibration season)",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "rule": "chronological; holdout is the most recent season, never random",
+    "calibration_rule": "latest pre-holdout season, disjoint from core training rows"
+  },
+  "holdout_season": "2526",
+  "calibration_season": "2425",
+  "holdout_samples": 1987,
+  "rps": 0.2002131951853337,
+  "brier_score": 0.5921006187914959,
+  "log_loss": 0.9951508311339314,
+  "accuracy": 0.5259184700553599,
+  "calibration_error": 0.016836492677549622,
+  "pooled_model": true,
+  "pooled_reason": "EREDIVISIE has only season 2526 in the corpus, and 2526 is the holdout, so it has zero pre-holdout training rows and serves the pooled all-league model.",
+  "in_artifact_calibrator": true,
+  "in_artifact_calibrator_note": "No 'calibrator' key is written by this training path. PredictionEngine applies a FittedCalibrator only when the artifact carries one, so live predictions apply no post-hoc calibration. The TemperatureScaledMetaModel wrapper sits on the stacking head, which the request path (_ensemble_predict_dict, an equal-weight base-learner average) does not execute.",
+  "served_head": "base_learner_average",
+  "stacking_head_present": "TemperatureScaledMetaModel",
+  "artifact_keys": [
+    "calibrator",
+    "feature_columns",
+    "is_trained",
+    "meta_model",
+    "model_metadata",
+    "models"
   ],
-  "responsive_features": 29,
-  "rps": 0.21908373887056182,
-  "trained_at": "2026-08-08T19:58:37.360517",
-  "training_samples": 10528
+  "reproducibility_sha256": "38522d998b82e3589e756b3406309ccb891de75584f089748f10368cda77324e",
+  "training_command": "PYTHONPATH=. python scripts/train_on_real_matches.py --holdout-season 2526 --schema apex_v1_68 --out-dir models/candidate_clean2526"
 }

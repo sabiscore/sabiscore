@@ -194,28 +194,28 @@
   "environment": {
     "implementation": "CPython",
     "libraries": {
-      "joblib": "1.5.3",
-      "lightgbm": "4.6.0",
-      "numpy": "2.5.0",
+      "joblib": "1.6.0",
+      "lightgbm": "4.7.0",
+      "numpy": "2.5.2",
       "pandas": "2.3.3",
-      "scikit-learn": "1.8.0",
-      "scipy": "1.18.0",
-      "xgboost": "3.3.0"
+      "scikit-learn": "1.9.0",
+      "scipy": "1.18.1",
+      "xgboost": "3.4.1"
     },
     "platform": "Windows-11-10.0.26200-SP0",
     "python": "3.14.6"
   },
-  "experiment_id": "v5_phase7-20260922-38522d998b",
+  "experiment_id": "v5_phase7-20260922-265e8f757a",
   "features": {
     "feature_contract_sha256": "6b5ebd6bdde6290afb36e9c338787699037d23022c4c68587715372522007768",
     "feature_count": 68,
     "feature_schema_version": "apex_v1_68",
     "order_sha256": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338"
   },
-  "generated_at": "2026-09-22T02:29:19.689386+00:00",
+  "generated_at": "2026-09-22T03:56:50.902227+00:00",
   "generation_id": null,
   "git": {
-    "commit": "6b7e86ed930b92f166f9da440471056815b0a346",
+    "commit": "c86a73618f26e7ba380c8a6ca1ce40a3bc54db92",
     "dirty": true
   },
   "labels": {
@@ -235,64 +235,64 @@
   },
   "leagues": {
     "BUNDESLIGA": {
-      "accuracy": 0.521594684385382,
+      "accuracy": 0.5116279069767442,
       "baseline_accuracy_home": 0.43853820598006643,
       "baseline_rps_market": 0.19083929061889648,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.2317386552251736,
       "bivariate_poisson_overlay": {
         "alpha": 0.0,
-        "calibration_brier_after": 0.6105,
-        "calibration_brier_before": 0.6105,
+        "calibration_brier_after": 0.5878,
+        "calibration_brier_before": 0.5878,
         "calibration_draw_f1_after": 0.0,
         "calibration_draw_f1_before": 0.0,
         "gate_passed": true,
-        "holdout_brier_after": 0.5833,
-        "holdout_brier_before": 0.5833,
+        "holdout_brier_after": 0.572,
+        "holdout_brier_before": 0.572,
         "holdout_draw_f1_after": 0.0,
         "holdout_draw_f1_before": 0.0
       },
-      "brier": 0.5945051826410722,
-      "calibration_error": 0.04500568309039879,
+      "brier": 0.5908014251561238,
+      "calibration_error": 0.055584990391693255,
       "calibration_n": 296,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
-          "reliability": 0.0034,
-          "resolution": 0.0239
+          "reliability": 0.0018,
+          "resolution": 0.0237
         },
-        "chosen": "temperature",
+        "chosen": "vector",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0071,
-            "resolution": 0.0308
+            "reliability": 0.0068,
+            "resolution": 0.0305
           },
           "conclusion_persists": true,
           "isotonic": {
-            "reliability": 0.0086,
-            "resolution": 0.0249
+            "reliability": 0.0081,
+            "resolution": 0.0245
           },
           "temperature": {
-            "reliability": 0.0064,
-            "resolution": 0.0261
+            "reliability": 0.0063,
+            "resolution": 0.0257
           },
           "vector": {
-            "reliability": 0.006,
-            "resolution": 0.0309
+            "reliability": 0.0047,
+            "resolution": 0.0292
           }
         },
         "isotonic": {
-          "reliability": 0.0016,
-          "resolution": 0.0249
+          "reliability": 0.0023,
+          "resolution": 0.0263
         },
-        "reason": "isotonic_degraded_resolution",
+        "reason": "reliability_improved_resolution_held_and_persisted_on_holdout",
         "temperature": {
-          "reliability": 0.0092,
-          "resolution": 0.0251
+          "reliability": 0.009,
+          "resolution": 0.0238
         },
         "vector": {
-          "reliability": 0.0024,
-          "resolution": 0.024
+          "reliability": 0.0018,
+          "resolution": 0.0248
         }
       },
       "calibration_window": {
@@ -329,17 +329,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 1.0010742618732387,
+      "log_loss": 0.99425985961016,
       "n": 301,
       "responsive_features": 43,
-      "rps": 0.19982636981453486,
+      "rps": 0.19861551770729283,
       "stacked": {
-        "accuracy": 0.521594684385382,
-        "brier": 0.5833243698852347,
-        "calibration_error": 0.0632353433559734,
-        "log_loss": 0.9816868193903743,
+        "accuracy": 0.5415282392026578,
+        "brier": 0.5719760218454513,
+        "calibration_error": 0.059068188769464236,
+        "log_loss": 0.9622331500820734,
         "n": 301,
-        "rps": 0.1993771706019112
+        "rps": 0.19511160666902486
       },
       "train_n": 1455,
       "training_window": {
@@ -348,64 +348,64 @@
       }
     },
     "EPL": {
-      "accuracy": 0.5093333333333333,
+      "accuracy": 0.504,
       "baseline_accuracy_home": 0.424,
       "baseline_rps_market": 0.2053660899400711,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.22849150417621494,
       "bivariate_poisson_overlay": {
         "alpha": 0.0,
-        "calibration_brier_after": 0.5749,
-        "calibration_brier_before": 0.5749,
+        "calibration_brier_after": 0.5746,
+        "calibration_brier_before": 0.5746,
         "calibration_draw_f1_after": 0.0,
         "calibration_draw_f1_before": 0.0,
         "gate_passed": true,
-        "holdout_brier_after": 0.6098,
-        "holdout_brier_before": 0.6098,
+        "holdout_brier_after": 0.6094,
+        "holdout_brier_before": 0.6094,
         "holdout_draw_f1_after": 0.0,
         "holdout_draw_f1_before": 0.0
       },
-      "brier": 0.6211832408284326,
-      "calibration_error": 0.07217782878810916,
+      "brier": 0.6219230644375233,
+      "calibration_error": 0.06487935018618658,
       "calibration_n": 375,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
-          "reliability": 0.0026,
-          "resolution": 0.029
+          "reliability": 0.0023,
+          "resolution": 0.0279
         },
         "chosen": "temperature",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0047,
-            "resolution": 0.0185
+            "reliability": 0.0045,
+            "resolution": 0.0182
           },
-          "conclusion_persists": false,
+          "conclusion_persists": true,
           "isotonic": {
-            "reliability": 0.0041,
-            "resolution": 0.0159
+            "reliability": 0.0039,
+            "resolution": 0.015
           },
           "temperature": {
-            "reliability": 0.0033,
-            "resolution": 0.0168
+            "reliability": 0.0034,
+            "resolution": 0.0174
           },
           "vector": {
-            "reliability": 0.0043,
-            "resolution": 0.0175
+            "reliability": 0.0041,
+            "resolution": 0.0176
           }
         },
         "isotonic": {
-          "reliability": 0.002,
-          "resolution": 0.0299
+          "reliability": 0.0024,
+          "resolution": 0.0304
         },
-        "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
+        "reason": "isotonic_did_not_improve_reliability",
         "temperature": {
-          "reliability": 0.0035,
-          "resolution": 0.028
+          "reliability": 0.0024,
+          "resolution": 0.0273
         },
         "vector": {
           "reliability": 0.0027,
-          "resolution": 0.029
+          "resolution": 0.0292
         }
       },
       "calibration_window": {
@@ -442,17 +442,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 1.0381915240083568,
+      "log_loss": 1.0384451210505956,
       "n": 375,
       "responsive_features": 50,
-      "rps": 0.20602679613172206,
+      "rps": 0.20603638812719183,
       "stacked": {
-        "accuracy": 0.49333333333333335,
-        "brier": 0.6097897483527479,
-        "calibration_error": 0.07479077799134905,
-        "log_loss": 1.0159994215089598,
+        "accuracy": 0.49066666666666664,
+        "brier": 0.6093787474903867,
+        "calibration_error": 0.06587139666312097,
+        "log_loss": 1.015251130771425,
         "n": 375,
-        "rps": 0.20537497930107876
+        "rps": 0.20524407096334096
       },
       "train_n": 1821,
       "training_window": {
@@ -461,64 +461,64 @@
       }
     },
     "LA_LIGA": {
-      "accuracy": 0.5093333333333333,
+      "accuracy": 0.5066666666666667,
       "baseline_accuracy_home": 0.48533333333333334,
       "baseline_rps_market": 0.19628490507602692,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.22345809865387004,
       "bivariate_poisson_overlay": {
         "alpha": 0.0,
-        "calibration_brier_after": 0.5699,
-        "calibration_brier_before": 0.5699,
-        "calibration_draw_f1_after": 0.0198,
-        "calibration_draw_f1_before": 0.0198,
+        "calibration_brier_after": 0.5693,
+        "calibration_brier_before": 0.5693,
+        "calibration_draw_f1_after": 0.0396,
+        "calibration_draw_f1_before": 0.0396,
         "gate_passed": true,
         "holdout_brier_after": 0.5776,
         "holdout_brier_before": 0.5776,
-        "holdout_draw_f1_after": 0.0,
-        "holdout_draw_f1_before": 0.0
+        "holdout_draw_f1_after": 0.0408,
+        "holdout_draw_f1_before": 0.0408
       },
-      "brier": 0.5810614560857974,
-      "calibration_error": 0.059038062599902394,
+      "brier": 0.5801400400377814,
+      "calibration_error": 0.05597226417575318,
       "calibration_n": 380,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
           "reliability": 0.002,
-          "resolution": 0.0287
+          "resolution": 0.0284
         },
         "chosen": "temperature",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0053,
-            "resolution": 0.0212
+            "reliability": 0.0052,
+            "resolution": 0.0211
           },
           "conclusion_persists": false,
           "isotonic": {
-            "reliability": 0.0054,
-            "resolution": 0.022
+            "reliability": 0.0059,
+            "resolution": 0.0213
           },
           "temperature": {
-            "reliability": 0.0033,
-            "resolution": 0.0206
+            "reliability": 0.0044,
+            "resolution": 0.0209
           },
           "vector": {
-            "reliability": 0.0046,
-            "resolution": 0.0227
+            "reliability": 0.0054,
+            "resolution": 0.0222
           }
         },
         "isotonic": {
-          "reliability": 0.0021,
-          "resolution": 0.033
+          "reliability": 0.0019,
+          "resolution": 0.0338
         },
         "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
         "temperature": {
-          "reliability": 0.0039,
-          "resolution": 0.0282
+          "reliability": 0.0038,
+          "resolution": 0.028
         },
         "vector": {
-          "reliability": 0.0038,
-          "resolution": 0.0286
+          "reliability": 0.0029,
+          "resolution": 0.0283
         }
       },
       "calibration_window": {
@@ -555,17 +555,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 0.9867386674588154,
+      "log_loss": 0.9848448240072821,
       "n": 375,
       "responsive_features": 51,
-      "rps": 0.19915829562429432,
+      "rps": 0.19917596561152337,
       "stacked": {
         "accuracy": 0.544,
-        "brier": 0.5775595577758381,
-        "calibration_error": 0.034533928365601665,
-        "log_loss": 0.9770878848301952,
+        "brier": 0.5775858245749693,
+        "calibration_error": 0.044951559156260604,
+        "log_loss": 0.977080331474369,
         "n": 375,
-        "rps": 0.1975530244435598
+        "rps": 0.19757546906131362
       },
       "train_n": 1817,
       "training_window": {
@@ -574,64 +574,64 @@
       }
     },
     "LIGUE_1": {
-      "accuracy": 0.5149501661129569,
+      "accuracy": 0.5282392026578073,
       "baseline_accuracy_home": 0.4584717607973422,
       "baseline_rps_market": 0.19912628829479218,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.22926811378159884,
       "bivariate_poisson_overlay": {
-        "alpha": 1.0,
-        "calibration_brier_after": 0.5666,
-        "calibration_brier_before": 0.566,
+        "alpha": 0.0,
+        "calibration_brier_after": 0.5734,
+        "calibration_brier_before": 0.5734,
         "calibration_draw_f1_after": 0.0,
         "calibration_draw_f1_before": 0.0,
         "gate_passed": true,
-        "holdout_brier_after": 0.5886,
-        "holdout_brier_before": 0.5894,
+        "holdout_brier_after": 0.5955,
+        "holdout_brier_before": 0.5955,
         "holdout_draw_f1_after": 0.0,
         "holdout_draw_f1_before": 0.0
       },
-      "brier": 0.5903327374042928,
-      "calibration_error": 0.05349692508504045,
+      "brier": 0.5929069943758467,
+      "calibration_error": 0.057385524854806795,
       "calibration_n": 306,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
-          "reliability": 0.0027,
-          "resolution": 0.0229
+          "reliability": 0.0013,
+          "resolution": 0.0226
         },
-        "chosen": "vector",
+        "chosen": "temperature",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0058,
-            "resolution": 0.0217
+            "reliability": 0.0064,
+            "resolution": 0.0216
           },
           "conclusion_persists": false,
           "isotonic": {
-            "reliability": 0.0069,
-            "resolution": 0.0186
+            "reliability": 0.0075,
+            "resolution": 0.0219
           },
           "temperature": {
-            "reliability": 0.0059,
-            "resolution": 0.0206
+            "reliability": 0.008,
+            "resolution": 0.0228
           },
           "vector": {
-            "reliability": 0.0056,
-            "resolution": 0.0229
+            "reliability": 0.0063,
+            "resolution": 0.0226
           }
         },
         "isotonic": {
-          "reliability": 0.002,
-          "resolution": 0.0243
+          "reliability": 0.0009,
+          "resolution": 0.023
         },
-        "reason": "reliability_improved_resolution_held_and_persisted_on_holdout",
+        "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
         "temperature": {
-          "reliability": 0.0038,
-          "resolution": 0.0217
+          "reliability": 0.0036,
+          "resolution": 0.0219
         },
         "vector": {
-          "reliability": 0.0021,
-          "resolution": 0.0235
+          "reliability": 0.0022,
+          "resolution": 0.0238
         }
       },
       "calibration_window": {
@@ -668,17 +668,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 0.9882541612372638,
+      "log_loss": 0.9914105822685033,
       "n": 301,
-      "responsive_features": 47,
-      "rps": 0.19910235117996755,
+      "responsive_features": 46,
+      "rps": 0.19987068348135487,
       "stacked": {
-        "accuracy": 0.5249169435215947,
-        "brier": 0.5893641774981654,
-        "calibration_error": 0.04770094594403449,
-        "log_loss": 0.99010898284291,
+        "accuracy": 0.5049833887043189,
+        "brier": 0.5955426110631213,
+        "calibration_error": 0.0536249123088541,
+        "log_loss": 1.0004632607749004,
         "n": 301,
-        "rps": 0.20061411659796258
+        "rps": 0.20474538344596885
       },
       "train_n": 1641,
       "training_window": {
@@ -687,64 +687,64 @@
       }
     },
     "POOLED": {
-      "accuracy": 0.5259184700553599,
+      "accuracy": 0.5244086562657272,
       "baseline_accuracy_home": 0.4393558127830901,
       "baseline_rps_market": 0.19784937798976898,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.22896537429419572,
       "bivariate_poisson_overlay": {
         "alpha": 0.0,
-        "calibration_brier_after": 0.5772,
-        "calibration_brier_before": 0.5772,
+        "calibration_brier_after": 0.5771,
+        "calibration_brier_before": 0.5771,
         "calibration_draw_f1_after": 0.0,
         "calibration_draw_f1_before": 0.0,
         "gate_passed": true,
-        "holdout_brier_after": 0.5848,
-        "holdout_brier_before": 0.5848,
+        "holdout_brier_after": 0.585,
+        "holdout_brier_before": 0.585,
         "holdout_draw_f1_after": 0.0,
         "holdout_draw_f1_before": 0.0
       },
-      "brier": 0.5921006187914959,
-      "calibration_error": 0.016836492677549622,
+      "brier": 0.5913914490065246,
+      "calibration_error": 0.021774299755775686,
       "calibration_n": 1732,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
           "reliability": 0.0004,
-          "resolution": 0.025
+          "resolution": 0.0249
         },
         "chosen": "temperature",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0018,
-            "resolution": 0.0219
+            "reliability": 0.0017,
+            "resolution": 0.0217
           },
           "conclusion_persists": false,
           "isotonic": {
-            "reliability": 0.0017,
-            "resolution": 0.0209
+            "reliability": 0.0019,
+            "resolution": 0.0213
           },
           "temperature": {
-            "reliability": 0.0005,
-            "resolution": 0.0211
+            "reliability": 0.0004,
+            "resolution": 0.0209
           },
           "vector": {
             "reliability": 0.0014,
-            "resolution": 0.0214
+            "resolution": 0.0213
           }
         },
         "isotonic": {
-          "reliability": 0.0004,
-          "resolution": 0.0277
+          "reliability": 0.0002,
+          "resolution": 0.0273
         },
         "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
         "temperature": {
           "reliability": 0.0015,
-          "resolution": 0.0259
+          "resolution": 0.0262
         },
         "vector": {
-          "reliability": 0.0006,
-          "resolution": 0.025
+          "reliability": 0.0005,
+          "resolution": 0.0251
         }
       },
       "calibration_window": {
@@ -781,17 +781,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 0.9951508311339314,
+      "log_loss": 0.9939794740470278,
       "n": 1987,
-      "responsive_features": 55,
-      "rps": 0.2002131951853337,
+      "responsive_features": 57,
+      "rps": 0.19978709363410177,
       "stacked": {
-        "accuracy": 0.5319577252138903,
-        "brier": 0.5847840971214244,
-        "calibration_error": 0.021275901331530137,
-        "log_loss": 0.9824772924993141,
+        "accuracy": 0.5309511826874685,
+        "brier": 0.5850467812686516,
+        "calibration_error": 0.02095495493984608,
+        "log_loss": 0.9828970603625692,
         "n": 1987,
-        "rps": 0.19806913289209221
+        "rps": 0.1982233772134001
       },
       "train_n": 8537,
       "training_window": {
@@ -800,64 +800,64 @@
       }
     },
     "SERIE_A": {
-      "accuracy": 0.49333333333333335,
+      "accuracy": 0.49066666666666664,
       "baseline_accuracy_home": 0.392,
       "baseline_rps_market": 0.19714131951332092,
       "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
       "baseline_rps_trainprior": 0.2332832744095393,
       "bivariate_poisson_overlay": {
         "alpha": 0.0,
-        "calibration_brier_after": 0.5737,
-        "calibration_brier_before": 0.5737,
+        "calibration_brier_after": 0.5748,
+        "calibration_brier_before": 0.5748,
         "calibration_draw_f1_after": 0.0,
         "calibration_draw_f1_before": 0.0,
         "gate_passed": true,
-        "holdout_brier_after": 0.592,
-        "holdout_brier_before": 0.592,
+        "holdout_brier_after": 0.5905,
+        "holdout_brier_before": 0.5905,
         "holdout_draw_f1_after": 0.02,
         "holdout_draw_f1_before": 0.02
       },
-      "brier": 0.6135502581775767,
-      "calibration_error": 0.06145648325332852,
+      "brier": 0.6093209587067248,
+      "calibration_error": 0.06216174843703337,
       "calibration_n": 375,
       "calibration_season": "2425",
       "calibration_selection": {
         "beta": {
-          "reliability": 0.0016,
-          "resolution": 0.0306
+          "reliability": 0.0014,
+          "resolution": 0.0299
         },
         "chosen": "temperature",
         "held_out_persistence": {
           "beta": {
-            "reliability": 0.0032,
-            "resolution": 0.0257
+            "reliability": 0.0027,
+            "resolution": 0.0263
           },
           "conclusion_persists": true,
           "isotonic": {
-            "reliability": 0.0096,
-            "resolution": 0.024
+            "reliability": 0.0066,
+            "resolution": 0.0224
           },
           "temperature": {
-            "reliability": 0.0031,
-            "resolution": 0.024
+            "reliability": 0.0036,
+            "resolution": 0.0248
           },
           "vector": {
-            "reliability": 0.0035,
-            "resolution": 0.0256
+            "reliability": 0.0038,
+            "resolution": 0.0277
           }
         },
         "isotonic": {
-          "reliability": 0.0012,
+          "reliability": 0.0011,
           "resolution": 0.0293
         },
         "reason": "isotonic_degraded_resolution",
         "temperature": {
-          "reliability": 0.0031,
-          "resolution": 0.0315
+          "reliability": 0.0028,
+          "resolution": 0.0303
         },
         "vector": {
-          "reliability": 0.0029,
-          "resolution": 0.0317
+          "reliability": 0.002,
+          "resolution": 0.0306
         }
       },
       "calibration_window": {
@@ -894,17 +894,17 @@
           "subsample": 0.85
         }
       },
-      "log_loss": 1.0298299837337122,
+      "log_loss": 1.0240272703559865,
       "n": 375,
       "responsive_features": 50,
-      "rps": 0.2058914192638688,
+      "rps": 0.20471089846877047,
       "stacked": {
-        "accuracy": 0.5306666666666666,
-        "brier": 0.5919517442374216,
-        "calibration_error": 0.02817528896071703,
-        "log_loss": 0.9949205306091271,
+        "accuracy": 0.536,
+        "brier": 0.5905485989759273,
+        "calibration_error": 0.02920367702464765,
+        "log_loss": 0.9927459864189896,
         "n": 375,
-        "rps": 0.20083607924727975
+        "rps": 0.19997485559105213
       },
       "train_n": 1803,
       "training_window": {
@@ -934,7 +934,7 @@
     "mode": "offline_corpus",
     "note": "Training reads cached football-data.co.uk CSV snapshots (see dataset.dataset_sha256 for exact corpus identity); there is no live provider API call at training time, so no API version string applies. The dataset content hash is a stronger per-exact-corpus identity than a provider version number would be."
   },
-  "reproducibility_sha256": "38522d998b82e3589e756b3406309ccb891de75584f089748f10368cda77324e",
+  "reproducibility_sha256": "265e8f757a3323fc7d70972adcd17bdeebd7152ef21021d49116a71ab2442c74",
   "schema": "sabiscore_training_manifest_v1",
   "training_config": {
     "artifact_suffix": "v5_phase7",

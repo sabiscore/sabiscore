@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, extname, join, parse } from "node:path";
-import { manifestDir, processedDir, rawDir } from "./config.mjs";
+import { dlqDir, manifestDir, processedDir, rawDir } from "./config.mjs";
 
 export async function ensureStorage() {
   await mkdir(rawDir, { recursive: true });
   await mkdir(processedDir, { recursive: true });
   await mkdir(manifestDir, { recursive: true });
+  await mkdir(dlqDir, { recursive: true });
 }
 
 export function contentHash(content) {
@@ -266,6 +267,116 @@ export async function probeImmutableStorage(dependencies = {}) {
   return { ok: true, bucket, object_key: key, sha256: hash, conflict_verified: true };
 }
 
+export async function writeDlqRecord({
+  originalQueue = "scraper:football-data-csv",
+  failureReason = "unknown_failure",
+  attemptCount = 1,
+  firstAttemptAt = null,
+  lastAttemptAt = null,
+  originalPayload = null,
+  reference = null,
+  sourceId = "node-scraper",
+  league = "unknown",
+  season = "unknown",
+  runId = null,
+  errorDetails = null,
+} = {}, dependencies = {}) {
+  await ensureStorage();
+  const now = new Date().toISOString();
+  const effectiveRunId = runId ?? randomUUID();
+  const dlqId = randomUUID();
+  const record = {
+    dlq_id: dlqId,
+    originalQueue: String(originalQueue),
+    failureReason: String(failureReason),
+    attemptCount: Number(attemptCount ?? 1),
+    firstAttemptAt: firstAttemptAt ?? now,
+    lastAttemptAt: lastAttemptAt ?? now,
+    originalPayload: originalPayload !== null && originalPayload !== undefined ? String(originalPayload) : null,
+    reference: reference ?? null,
+    metadata: {
+      sourceId,
+      league,
+      season,
+      runId: effectiveRunId,
+      enqueuedAt: now,
+    },
+    errorDetails: errorDetails ? String(errorDetails) : null,
+  };
+
+  const timestamp = now.replace(/[:.]/g, "-");
+  const fileName = `${timestamp}-${sourceId}-${league}-${dlqId}.dlq.json`;
+  const file = join(dlqDir, fileName);
+  const content = `${JSON.stringify(record, null, 2)}\n`;
+  await atomicWrite(file, content);
+
+  const relativeKey = `dlq/${sourceId}/${league}/${fileName}`;
+  let remoteStorage = process.env.SABISCORE_ARTIFACT_BUCKET ? "available" : "not_configured";
+  let uri = file;
+  let storageError = null;
+  try {
+    const s3Uri = await (dependencies.putObject ?? putS3Object)({
+      key: relativeKey,
+      content,
+      contentType: "application/json",
+      metadata: {
+        sha256: contentHash(content),
+        dlq_id: dlqId,
+        source_id: sourceId,
+        run_id: effectiveRunId,
+      },
+    }, dependencies);
+    if (s3Uri) uri = s3Uri;
+  } catch (error) {
+    remoteStorage = "unavailable";
+    storageError = storageFailureCode(error);
+    reportStorageFailure(error, relativeKey);
+  }
+
+  return {
+    dlq_id: dlqId,
+    file,
+    uri,
+    object_key: relativeKey,
+    record,
+    hash: contentHash(content),
+    remote_storage: remoteStorage,
+    storage_error: storageError,
+  };
+}
+
+export async function getDlqMetrics({ dir = dlqDir } = {}) {
+  await ensureStorage();
+  const { readdir, stat } = await import("node:fs/promises");
+  let entries = [];
+  try {
+    entries = await readdir(dir);
+  } catch (error) {
+    if (error?.code === "ENOENT") return { depth: 0, oldestEnqueuedAt: null, newestEnqueuedAt: null };
+    throw error;
+  }
+  const dlqFiles = entries.filter((name) => name.endsWith(".dlq.json"));
+  if (dlqFiles.length === 0) {
+    return { depth: 0, oldestEnqueuedAt: null, newestEnqueuedAt: null };
+  }
+
+  const times = [];
+  for (const name of dlqFiles) {
+    try {
+      const stats = await stat(join(dir, name));
+      times.push(stats.mtime.toISOString());
+    } catch {
+      // ignore concurrent deletions
+    }
+  }
+  times.sort();
+  return {
+    depth: dlqFiles.length,
+    oldestEnqueuedAt: times[0] ?? null,
+    newestEnqueuedAt: times.at(-1) ?? null,
+  };
+}
+
 export async function readFixture(path) {
   return readFile(path, "utf8");
 }
@@ -293,6 +404,7 @@ export function summarizeResults(results) {
         // P10 DLQ enrichment: only acquisition failures carry attempt/timing
         // detail (policy skips like "unsupported_league" have neither).
         ...(result.failure ? { failure: result.failure } : {}),
+        ...(result.dlq ? { dlq: result.dlq } : {}),
       });
     }
   }

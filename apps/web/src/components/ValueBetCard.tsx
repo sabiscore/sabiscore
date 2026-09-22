@@ -28,6 +28,8 @@ interface ValueBetCardProps {
   bankroll?: number;
   /** CLV-centered actionability block from FullMatchAnalysisResponse (optional). */
   actionability?: MatchActionability | null;
+  stakePermitted?: boolean;
+  researchMode?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -67,16 +69,25 @@ const TIER_LABELS = { HIGH: "High Edge", MEDIUM: "Medium Edge", LOW: "Low Edge" 
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function KellyVisualizer({ fraction, abstain }: { fraction: number; abstain: boolean }) {
+function KellyVisualizer({
+  fraction,
+  abstain,
+  stakingDisabled = false,
+}: {
+  fraction: number;
+  abstain: boolean;
+  stakingDisabled?: boolean;
+}) {
   const MAX = 0.05;
-  const pct = abstain ? 0 : Math.min(1, Math.max(0, fraction) / MAX);
-  const label = abstain ? "No bet" : `${(fraction * 100).toFixed(1)}%`;
+  const isBlocked = abstain || stakingDisabled;
+  const pct = isBlocked ? 0 : Math.min(1, Math.max(0, fraction) / MAX);
+  const label = abstain ? "No bet" : stakingDisabled ? "Disabled" : `${(fraction * 100).toFixed(1)}%`;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs text-slate-400">Suggested exposure</span>
-        <span className={cn("text-xs font-bold tabular-nums", abstain ? "text-slate-400" : "text-slate-200")}>
+        <span className={cn("text-xs font-bold tabular-nums", isBlocked ? "text-slate-400" : "text-slate-200")}>
           {label}
         </span>
       </div>
@@ -91,7 +102,7 @@ function KellyVisualizer({ fraction, abstain }: { fraction: number; abstain: boo
         <div
           className={cn(
             "h-full rounded-full transition-[width] duration-500 ease-out",
-            abstain ? "bg-slate-700" : pct >= 0.8 ? "bg-rose-400" : pct >= 0.5 ? "bg-amber-400" : "bg-emerald-400",
+            isBlocked ? "bg-slate-700" : pct >= 0.8 ? "bg-rose-400" : pct >= 0.5 ? "bg-amber-400" : "bg-emerald-400",
           )}
           style={{ width: `${pct * 100}%` }}
         />
@@ -140,17 +151,25 @@ function ConvergenceIndicator({ delta }: { delta: number | null | undefined }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: ValueBetCardProps) {
+export function ValueBetCard({
+  bet,
+  context,
+  bankroll = 1000,
+  actionability,
+  stakePermitted = false,
+  researchMode = true,
+}: ValueBetCardProps) {
   const [copied, setCopied] = useState(false);
   const bookmakerName = context.bookmaker ?? "Preferred Book";
   const premiumVisualsEnabled = useFeatureFlag(FeatureFlag.PREMIUM_VISUAL_HIERARCHY);
 
   const safe = getValueBetDefaults(bet);
   const isAbstain = actionability?.abstain === true;
+  const isStakingAllowed = stakePermitted === true && !researchMode && !isAbstain;
   const edgeTier = resolveEdgeTier(actionability, safe.qualityTier);
 
   const kellyFraction = Math.max(safe.kellyStake, 0);
-  const stakeValue = isAbstain ? 0 : bankroll * kellyFraction;
+  const stakeValue = !isStakingAllowed ? 0 : bankroll * kellyFraction;
   const bookmakerOdds = safe.marketOdds;
   const potentialReturnValue = stakeValue * bookmakerOdds;
   const potentialProfitValue = potentialReturnValue - stakeValue;
@@ -290,16 +309,22 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
             {(suggestedStake * 100).toFixed(1)}% Kelly
           </span>
         </div>
-        <KellyVisualizer fraction={suggestedStake} abstain={false} />
+        <KellyVisualizer fraction={suggestedStake} abstain={false} stakingDisabled={!isStakingAllowed} />
         <div className="flex items-baseline gap-2">
-          <span className="text-xl sm:text-2xl font-bold text-white">{formatCurrency(stakeValue)}</span>
-          <span className="text-xs sm:text-sm text-slate-400">
-            → {formatCurrency(potentialReturnValue)} return
+          <span className="text-xl sm:text-2xl font-bold text-white">
+            {!isStakingAllowed ? "Disabled" : formatCurrency(stakeValue)}
           </span>
+          {isStakingAllowed && (
+            <span className="text-xs sm:text-sm text-slate-400">
+              → {formatCurrency(potentialReturnValue)} return
+            </span>
+          )}
         </div>
-        <div className="text-xs text-emerald-400">
-          Potential profit: {formatCurrency(potentialProfitValue)}
-        </div>
+        {isStakingAllowed && (
+          <div className="text-xs text-emerald-400">
+            Potential profit: {formatCurrency(potentialProfitValue)}
+          </div>
+        )}
       </div>
 
       {/* Probability breakdown + convergence */}
@@ -341,20 +366,32 @@ export function ValueBetCard({ bet, context, bankroll = 1000, actionability }: V
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={openBookmaker}
-          aria-label={`Open ${bookmakerName} to place bet`}
-          className={cn(
-            "flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 min-h-[44px]",
-            premiumVisualsEnabled
-              ? "bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-[0_8px_20px_rgba(0,212,255,0.3)] hover:scale-[1.02]"
-              : "bg-emerald-600 text-white hover:bg-emerald-700",
-          )}
-        >
-          <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          Place Bet
-        </button>
+        {isStakingAllowed ? (
+          <button
+            type="button"
+            onClick={openBookmaker}
+            aria-label={`Open ${bookmakerName} to place bet`}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 min-h-[44px]",
+              premiumVisualsEnabled
+                ? "bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-[0_8px_20px_rgba(0,212,255,0.3)] hover:scale-[1.02]"
+                : "bg-emerald-600 text-white hover:bg-emerald-700",
+            )}
+          >
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            Place Bet
+          </button>
+        ) : (
+          <span
+            role="status"
+            aria-label="Staking disabled in research mode"
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-slate-400 min-h-[44px] cursor-not-allowed select-none",
+            )}
+          >
+            Staking Disabled
+          </span>
+        )}
       </div>
 
       {/* Marginal/avoid warning */}

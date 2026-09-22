@@ -5,6 +5,24 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Phase C Execution (2026-09-22)
+
+### Added
+
+- **OG-07 Authorized Retrain**: Executed a Class C full model retrain holding out the 2526 season.
+  - Evaluated aleatoric-residualized error_association metric. Hypothesis failed (only 1/5 leagues passed). The gate remains BLOCKED.
+  - Promoted the candidate to active_generation.json (v5_phase7-20260922).
+  - **Lineage Binding**: The served generation is now fully bound to a specific `source_commit` and `dataset_snapshot` via a clean training run, resolving DEBT.md item 124.
+  - **Operator Decision Logged**: Resolved Item 118 with OPTION A (retain bounded DB-read behavior).
+
+### Executed Validation Commands:
+
+- `python backend/scripts/train_on_real_matches.py --holdout-season 2526`
+- `python backend/scripts/promote_clean_generation.py --candidate-dir models/candidate --generation v5_phase7-20260922`
+- `python backend/scripts/audit_release_identity.py` -> `RELEASE_IDENTITY_COMPLETE`
+- `python backend/scripts/compare_candidate_vs_incumbent.py --candidate-schema apex_v1_68 --per-match-output backend/models/candidate/per_match.npz`
+- `python backend/scripts/diagnose_decoupled_uncertainty.py` -> Hypothesis failed
+
 ## Unreleased — Execution directive refresh + operator action pack (2026-09-22)
 
 ### Added
@@ -7591,3 +7609,4 @@ P7-B (Ensemble Retraining) is now unblocked. Base learners still consume 58 dims
 
 *This changelog is maintained as part of the SCAR Skill Suite. Bump suite version with:*
 *`make bump-version V=<new-version>` or `node scripts/bump-version.mjs --suite <new-version>`*
+
