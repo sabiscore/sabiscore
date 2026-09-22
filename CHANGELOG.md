@@ -5,7 +5,72 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Execution directive refresh + operator action pack (2026-09-22)
+
+### Added
+
+- **One-page operator action pack**:
+  - `docs/certification/operator-action-pack-118-28-16-85-2026-09-22.md`
+  - Covers copy/paste execution checklists and evidence templates for DEBT items 118, 28, 16, and 85.
+
+### Changed
+
+- **`docs/certification/upgraded-execution-directive-2026-09-21.md`** updated with:
+  - current snapshot date alignment,
+  - corrected item 85 handling (resolved-monitoring, not active-open),
+  - explicit link to the operator action pack as the first execution artifact.
+
+- **`docs/certification/blocker-matrix-2026-09-21.md`** reconciled with ledger truth:
+  - item 67 remains resolved frontend-side,
+  - item 85 moved from `OPEN` to `RESOLVED (monitor)` with parity re-check guidance.
+
+### Notes
+
+- This update is documentation/governance alignment only; no runtime logic or model behavior was changed.
+
+## Unreleased — Frontend Sentry instrumentation (DEBT 67 frontend closed) (2026-09-21)
+
+### Added
+
+- **Minimal, CSP-safe Sentry wiring in `apps/web`**:
+  - `apps/web/instrumentation-client.ts`
+  - `apps/web/sentry.server.config.ts`
+  - `apps/web/sentry.edge.config.ts`
+  - `apps/web/src/instrumentation.ts`
+
+### Changed
+
+- **Shared frontend error logger now emits to Sentry** in
+  `apps/web/src/lib/error-utils.ts` via `Sentry.captureException`, including
+  structured tags/extra context from existing `logError` callsites.
+- **App Router boundaries now use the shared logger** instead of console/
+  Rollbar-placeholder paths:
+  - `apps/web/src/app/error.tsx`
+  - `apps/web/src/app/global-error.tsx`
+  - `apps/web/src/app/match/[id]/error.tsx`
+- **CSP connect-src now conditionally allows Sentry ingest origin** derived
+  from `NEXT_PUBLIC_SENTRY_DSN` in `apps/web/src/middleware.ts`.
+
+### Tested
+
+- `pnpm --filter @sabiscore/web test -- src/middleware.test.ts src/lib/error-utils.test.ts`
+- `pnpm --filter @sabiscore/web typecheck`
+- `pnpm --filter @sabiscore/web lint`
+- `pnpm --filter @sabiscore/web build`
+
+### Notes
+
+- `pnpm approve-builds @sentry/cli` was required once in this workspace to
+  satisfy the repository build-script policy before running the web tests.
+
 ## Unreleased — Production readiness sweep: no code blockers found; one test-environment false-failure fixed (2026-09-21)
+
+### Added
+
+- **`docs/certification/blocker-matrix-2026-09-21.md`** — dated blocker matrix split into
+  `CODE-FIXABLE`, `OPERATOR-ONLY`, and `DATA/RESEARCH` classes, with each row mapped to an
+  active `docs/DEBT.md` item and explicit next action. This is the auditable handoff artifact for
+  the current integration-phase sweep.
 
 ### Fixed
 
