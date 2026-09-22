@@ -36,7 +36,9 @@ class TestBuildSourceRegistry:
         assert odds.request_time_safe is True
 
     def test_football_data_disabled_without_key(self):
-        registry = build_source_registry(settings=_MockSettings(football_data_api_key=None))
+        registry = build_source_registry(
+            settings=_MockSettings(football_data_api_key=None)
+        )
         fd = next(s for s in registry if s.name == "football-data.org")
         assert fd.enabled is False
 

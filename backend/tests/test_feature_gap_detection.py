@@ -11,6 +11,7 @@
 
 WP-10.1 regression tests (bottom of file): ScrapedTeamFormStore fallback wiring.
 """
+
 from __future__ import annotations
 
 import json
@@ -104,8 +105,12 @@ async def test_get_team_stats_is_home_controls_key_prefix(
     the moment any remap read these keys (which project_match_features()
     now does)."""
     await _seed_old_match(session, days_before=1)
-    home_shaped = await projector._get_team_stats("team-home", session, MATCH_DATE, is_home=True)
-    away_shaped = await projector._get_team_stats("team-home", session, MATCH_DATE, is_home=False)
+    home_shaped = await projector._get_team_stats(
+        "team-home", session, MATCH_DATE, is_home=True
+    )
+    away_shaped = await projector._get_team_stats(
+        "team-home", session, MATCH_DATE, is_home=False
+    )
     assert "home_form_5" in home_shaped and "away_form_5" not in home_shaped
     assert "away_form_5" in away_shaped and "home_form_5" not in away_shaped
     # Same team, same underlying history — only the key prefix differs.
@@ -116,7 +121,9 @@ async def test_get_team_results_sequence_finds_match_older_than_120_days(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
     await _seed_old_match(session, days_before=150)
-    results = await projector._get_team_results_sequence("team-home", session, MATCH_DATE)
+    results = await projector._get_team_results_sequence(
+        "team-home", session, MATCH_DATE
+    )
     assert results == [1]  # 2-1 win
 
 
@@ -124,7 +131,9 @@ async def test_get_team_results_sequence_empty_with_no_history(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
     await _seed_old_match(session, days_before=150)
-    results = await projector._get_team_results_sequence("team-away", session, MATCH_DATE)
+    results = await projector._get_team_results_sequence(
+        "team-away", session, MATCH_DATE
+    )
     assert results == []
 
 
@@ -144,14 +153,18 @@ async def test_get_h2h_stats_returns_none_with_no_shared_history(
     team-away have never played each other directly, so h2h must be None,
     not an empty/zeroed dict."""
     await _seed_old_match(session, days_before=1)
-    stats = await projector._get_h2h_stats("team-home", "team-away", session, MATCH_DATE)
+    stats = await projector._get_h2h_stats(
+        "team-home", "team-away", session, MATCH_DATE
+    )
     assert stats is None
 
 
 async def test_get_h2h_stats_returns_computed_values_for_seeded_meeting(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    await _seed_old_match(session, days_before=1)  # creates team-home/team-away/team-opp
+    await _seed_old_match(
+        session, days_before=1
+    )  # creates team-home/team-away/team-opp
     session.add(
         Match(
             id="h2h-match",
@@ -164,7 +177,9 @@ async def test_get_h2h_stats_returns_computed_values_for_seeded_meeting(
         )
     )
     await session.commit()
-    stats = await projector._get_h2h_stats("team-home", "team-away", session, MATCH_DATE)
+    stats = await projector._get_h2h_stats(
+        "team-home", "team-away", session, MATCH_DATE
+    )
     assert stats == {
         "h2h_home_wins": 1.0,
         "h2h_away_wins": 0.0,
@@ -227,34 +242,57 @@ async def test_project_match_features_home_and_away_form_dont_collide(
     of side, and the away-side dict.update() at the merge step would have
     silently clobbered home's numbers under those identical keys the moment
     a remap ever read them."""
-    session.add_all([
-        Team(id="team-winner", name="Winner FC", active=True),
-        Team(id="team-loser", name="Loser FC", active=True),
-        Team(id="team-foe1", name="Foe1 FC", active=True),
-        Team(id="team-foe2", name="Foe2 FC", active=True),
-    ])
+    session.add_all(
+        [
+            Team(id="team-winner", name="Winner FC", active=True),
+            Team(id="team-loser", name="Loser FC", active=True),
+            Team(id="team-foe1", name="Foe1 FC", active=True),
+            Team(id="team-foe2", name="Foe2 FC", active=True),
+        ]
+    )
     await session.commit()
     old_date = MATCH_DATE - timedelta(days=1)
-    session.add_all([
-        Match(
-            id="home-win", home_team_id="team-winner", away_team_id="team-foe1",
-            match_date=old_date, status="finished", home_score=3, away_score=0,
-        ),
-        Match(
-            id="away-loss", home_team_id="team-foe2", away_team_id="team-loser",
-            match_date=old_date, status="finished", home_score=3, away_score=0,
-        ),
-    ])
+    session.add_all(
+        [
+            Match(
+                id="home-win",
+                home_team_id="team-winner",
+                away_team_id="team-foe1",
+                match_date=old_date,
+                status="finished",
+                home_score=3,
+                away_score=0,
+            ),
+            Match(
+                id="away-loss",
+                home_team_id="team-foe2",
+                away_team_id="team-loser",
+                match_date=old_date,
+                status="finished",
+                home_score=3,
+                away_score=0,
+            ),
+        ]
+    )
     await session.commit()
 
     result = await projector.project_match_features(
-        {"id": "m1", "home_team": "Winner FC", "away_team": "Loser FC", "league": "EPL"},
+        {
+            "id": "m1",
+            "home_team": "Winner FC",
+            "away_team": "Loser FC",
+            "league": "EPL",
+        },
         session,
         MATCH_DATE,
     )
     fd = result["features_dict"]
-    assert fd["home_wins_last5_home"] == pytest.approx(1.0)  # Winner FC won its only match
-    assert fd["away_wins_last5_away"] == pytest.approx(0.0)  # Loser FC lost its only match
+    assert fd["home_wins_last5_home"] == pytest.approx(
+        1.0
+    )  # Winner FC won its only match
+    assert fd["away_wins_last5_away"] == pytest.approx(
+        0.0
+    )  # Loser FC lost its only match
     assert fd["home_form_last5_home"] != fd["away_form_last5_away"]
 
 
@@ -266,10 +304,17 @@ async def test_feature_defaulted_ratio_reflects_resolved_canonical_fields(
     resolves canonical fields, not stay constant regardless of data (the
     pre-fix behaviour, since home_stats/away_stats keys never intersected a
     canonical feature name at all until this work package)."""
-    projector.scraped_form_store = ScrapedTeamFormStore(tmp_path)  # empty dir — no fallback noise
+    projector.scraped_form_store = ScrapedTeamFormStore(
+        tmp_path
+    )  # empty dir — no fallback noise
 
     no_data_result = await projector.project_match_features(
-        {"id": "m1", "home_team": "Nobody FC", "away_team": "Nowhere FC", "league": "EPL"},
+        {
+            "id": "m1",
+            "home_team": "Nobody FC",
+            "away_team": "Nowhere FC",
+            "league": "EPL",
+        },
         session,
         MATCH_DATE,
     )
@@ -309,7 +354,10 @@ async def test_caller_resolved_features_never_locally_flagged(
         MATCH_DATE,
     )
     for feature in PHASE7_FEATURES_7:
-        if feature in result["data_gaps"] and feature not in PHASE7_FEATURES_ALWAYS_DATA_GAP:
+        if (
+            feature in result["data_gaps"]
+            and feature not in PHASE7_FEATURES_ALWAYS_DATA_GAP
+        ):
             pytest.fail(f"{feature} is caller-resolved and must not be locally flagged")
 
 
@@ -334,7 +382,12 @@ async def test_market_features_rescued_from_gaps_when_odds_available(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
     projector.odds_service.get_match_odds = AsyncMock(
-        return_value={"home_win": 2.0, "draw": 3.0, "away_win": 4.0, "source": "odds_api"}
+        return_value={
+            "home_win": 2.0,
+            "draw": 3.0,
+            "away_win": 4.0,
+            "source": "odds_api",
+        }
     )
     result = await projector.project_match_features(
         {"id": "m1", "home_team": "Home FC", "away_team": "Away FC", "league": "EPL"},
@@ -350,7 +403,10 @@ async def test_market_features_remain_gap_when_odds_unavailable(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
     projector.odds_service.get_match_odds = AsyncMock(
-        return_value={"source": "unavailable", "reason": "coherent_1x2_market_snapshot_not_found"}
+        return_value={
+            "source": "unavailable",
+            "reason": "coherent_1x2_market_snapshot_not_found",
+        }
     )
     result = await projector.project_match_features(
         {"id": "m1", "home_team": "Home FC", "away_team": "Away FC", "league": "EPL"},
@@ -463,13 +519,24 @@ async def test_feature_array_length_mismatch_raises_schema_mismatch(
 
 
 def _write_scraped_form(tmp_path, *, league: str, team: str) -> None:
-    payload = [{
-        "source": "football-data-csv", "team": team, "matches_sampled": 5,
-        "ppg": 1.8, "wins": 2, "draws": 2, "losses": 1,
-        "goals_for_avg": 1.4, "goals_against_avg": 1.0,
-        "goal_difference_avg": 0.4, "latest_match_date": "01/07/2026",
-    }]
-    (tmp_path / f"team-form-{league}-2526.json").write_text(json.dumps(payload), encoding="utf-8")
+    payload = [
+        {
+            "source": "football-data-csv",
+            "team": team,
+            "matches_sampled": 5,
+            "ppg": 1.8,
+            "wins": 2,
+            "draws": 2,
+            "losses": 1,
+            "goals_for_avg": 1.4,
+            "goals_against_avg": 1.0,
+            "goal_difference_avg": 0.4,
+            "latest_match_date": "01/07/2026",
+        }
+    ]
+    (tmp_path / f"team-form-{league}-2526.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
 
 
 async def test_scraped_fallback_rescues_canonical_form_features(
@@ -497,14 +564,24 @@ async def test_scraped_fallback_rescues_canonical_form_features(
     assert fallback["away"]["source"].startswith("scraped:football-data-csv:")
     assert "home" not in fallback  # team-home had real DB history — never consulted
 
-    assert result["data_quality"]["is_synthetic"] is True  # DB was still missing for "away"
+    assert (
+        result["data_quality"]["is_synthetic"] is True
+    )  # DB was still missing for "away"
 
     for feature in (
-        "home_form_last5_home", "home_wins_last5_home", "home_draws_last5_home",
-        "home_losses_last5_home", "home_goals_for_avg", "home_goals_against_avg",
+        "home_form_last5_home",
+        "home_wins_last5_home",
+        "home_draws_last5_home",
+        "home_losses_last5_home",
+        "home_goals_for_avg",
+        "home_goals_against_avg",
         "home_gd_recent",
-        "away_form_last5_away", "away_wins_last5_away", "away_draws_last5_away",
-        "away_losses_last5_away", "away_goals_for_avg", "away_goals_against_avg",
+        "away_form_last5_away",
+        "away_wins_last5_away",
+        "away_draws_last5_away",
+        "away_losses_last5_away",
+        "away_goals_for_avg",
+        "away_goals_against_avg",
         "away_gd_recent",
     ):
         assert feature not in result["data_gaps"], feature

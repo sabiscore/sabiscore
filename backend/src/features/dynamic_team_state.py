@@ -253,7 +253,9 @@ class DynamicTeamStateReplay:
         grown = state.variance + self._process_variance_per_day * elapsed_days
         return min(grown, _MAX_VARIANCE)
 
-    def _carried_strength(self, state: _TeamState, league: str, season: str | None) -> float:
+    def _carried_strength(
+        self, state: _TeamState, league: str, season: str | None
+    ) -> float:
         """Rating entering this match, after the optional carryover rule.
 
         With `season_carryover=False` (E6's tested configuration) this is the
@@ -436,7 +438,12 @@ def compute_dynamic_state_columns(
         }
         # Update AFTER emitting — a match never informs its own row.
         replay.update(
-            home, away, league, when, int(match["hg"]), int(match["ag"])  # type: ignore[arg-type]
+            home,
+            away,
+            league,
+            when,
+            int(match["hg"]),
+            int(match["ag"]),  # type: ignore[arg-type]
         )
 
     return rows

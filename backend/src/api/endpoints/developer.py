@@ -22,9 +22,15 @@ router = APIRouter(prefix="/developer", tags=["developer"])
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
+
 class ApiKeyCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="Friendly label for this API key")
-    tier: str = Field("FREE", description="'FREE' (10 req/min, 100/day) or 'PRO' (60 req/min, 5000/day)")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Friendly label for this API key"
+    )
+    tier: str = Field(
+        "FREE",
+        description="'FREE' (10 req/min, 100/day) or 'PRO' (60 req/min, 5000/day)",
+    )
 
 
 class ApiKeyCreatedResponse(BaseModel):
@@ -73,7 +79,10 @@ class DeveloperUsageResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.post("/keys", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/keys", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_key(
     payload: ApiKeyCreateRequest,
     request: Request,

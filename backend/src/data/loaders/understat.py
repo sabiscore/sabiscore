@@ -39,7 +39,7 @@ class UnderstatLoader:
     """Scrape xG data from Understat using Playwright"""
 
     BASE_URL = "https://understat.com/"
-    
+
     LEAGUE_URLS = {
         "EPL": "league/EPL",
         "La_Liga": "league/La_Liga",
@@ -48,11 +48,11 @@ class UnderstatLoader:
         "Ligue_1": "league/Ligue_1",
         "RFPL": "league/RFPL",
     }
-    
+
     def __init__(self, max_concurrent: int = 8, cache_ttl: int = 20):
         """
         Initialize Understat loader
-        
+
         Args:
             max_concurrent: Maximum number of concurrent browser instances
             cache_ttl: Cache TTL in seconds (default: 20s)
@@ -87,7 +87,7 @@ class UnderstatLoader:
         page = await self.browser.new_page(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
         )
-        
+
         # Anti-detection scripts
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {
@@ -106,7 +106,7 @@ class UnderstatLoader:
                 runtime: {}
             };
         """)
-        
+
         return page
 
     @retry(
@@ -115,49 +115,53 @@ class UnderstatLoader:
     )
     async def fetch_match_xg(self, match_id: str) -> Optional[Dict]:
         """Fetch xG data for a specific match"""
-        
+
         # Check cache
         if match_id in self.cache:
             logger.debug(f"Cache hit for match {match_id}")
             return self.cache[match_id]
-        
+
         async with self.semaphore:  # Limit concurrent requests
             url = urljoin(self.BASE_URL, f"match/{match_id}")
-            
+
             page = await self.create_stealth_page()
-            
+
             try:
                 await page.goto(url, wait_until="networkidle", timeout=30000)
-                
+
                 # Wait for data to load
                 await page.wait_for_selector(".scheme-block", timeout=10000)
-                
+
                 # Extract match data from JavaScript variables
                 content = await page.content()
-                
+
                 # Parse shotsData JSON
-                shots_match = re.search(r"var shotsData\s*=\s*JSON\.parse\('(.+?)'\)", content)
+                shots_match = re.search(
+                    r"var shotsData\s*=\s*JSON\.parse\('(.+?)'\)", content
+                )
                 if not shots_match:
                     logger.warning(f"No shots data found for match {match_id}")
                     return None
-                
+
                 shots_json = shots_match.group(1).replace("\\'", "'")
                 shots_data = json.loads(shots_json)
-                
+
                 # Parse match info
-                match_info_match = re.search(r"var matchInfo\s*=\s*JSON\.parse\('(.+?)'\)", content)
+                match_info_match = re.search(
+                    r"var matchInfo\s*=\s*JSON\.parse\('(.+?)'\)", content
+                )
                 match_info = {}
                 if match_info_match:
                     match_info_json = match_info_match.group(1).replace("\\'", "'")
                     match_info = json.loads(match_info_json)
-                
+
                 # Process shots data
                 home_shots = []
                 away_shots = []
-                
-                for team_key in ['h', 'a']:
+
+                for team_key in ["h", "a"]:
                     team_shots = shots_data.get(team_key, [])
-                    
+
                     for shot in team_shots:
                         shot_info = {
                             "player": shot.get("player", "Unknown"),
@@ -165,21 +169,27 @@ class UnderstatLoader:
                             "x": float(shot.get("X", 0)),
                             "y": float(shot.get("Y", 0)),
                             "xg": float(shot.get("xG", 0)),
-                            "result": shot.get("result", ""),  # Goal, SavedShot, MissedShots, etc.
-                            "situation": shot.get("situation", ""),  # OpenPlay, SetPiece, etc.
-                            "shot_type": shot.get("shotType", ""),  # RightFoot, LeftFoot, Head
+                            "result": shot.get(
+                                "result", ""
+                            ),  # Goal, SavedShot, MissedShots, etc.
+                            "situation": shot.get(
+                                "situation", ""
+                            ),  # OpenPlay, SetPiece, etc.
+                            "shot_type": shot.get(
+                                "shotType", ""
+                            ),  # RightFoot, LeftFoot, Head
                             "last_action": shot.get("lastAction", ""),
                         }
-                        
-                        if team_key == 'h':
+
+                        if team_key == "h":
                             home_shots.append(shot_info)
                         else:
                             away_shots.append(shot_info)
-                
+
                 # Calculate team xG
                 home_xg = sum(shot["xg"] for shot in home_shots)
                 away_xg = sum(shot["xg"] for shot in away_shots)
-                
+
                 result = {
                     "match_id": match_id,
                     "home_xg": round(home_xg, 2),
@@ -189,63 +199,71 @@ class UnderstatLoader:
                     "match_info": match_info,
                     "scraped_at": datetime.now(timezone.utc).isoformat(),
                 }
-                
+
                 # Cache result
                 self.cache[match_id] = result
-                
-                logger.info(f"Scraped xG for match {match_id}: {home_xg:.2f} - {away_xg:.2f}")
-                
+
+                logger.info(
+                    f"Scraped xG for match {match_id}: {home_xg:.2f} - {away_xg:.2f}"
+                )
+
                 return result
-                
+
             except Exception as e:
                 logger.error(f"Error scraping match {match_id}: {e}")
                 raise
             finally:
                 await page.close()
 
-    async def fetch_league_matches(self, league: str, season: str = "2024") -> List[Dict]:
+    async def fetch_league_matches(
+        self, league: str, season: str = "2024"
+    ) -> List[Dict]:
         """Fetch all matches for a league in a given season"""
-        
+
         if league not in self.LEAGUE_URLS:
             raise ValueError(f"Unknown league: {league}")
-        
+
         url = urljoin(self.BASE_URL, f"{self.LEAGUE_URLS[league]}/{season}")
-        
+
         page = await self.create_stealth_page()
-        
+
         try:
             await page.goto(url, wait_until="networkidle", timeout=30000)
             await page.wait_for_selector(".calendar", timeout=10000)
-            
+
             content = await page.content()
-            
+
             # Extract datesData JSON
-            dates_match = re.search(r"var datesData\s*=\s*JSON\.parse\('(.+?)'\)", content)
+            dates_match = re.search(
+                r"var datesData\s*=\s*JSON\.parse\('(.+?)'\)", content
+            )
             if not dates_match:
                 logger.warning(f"No match data found for {league} {season}")
                 return []
-            
+
             dates_json = dates_match.group(1).replace("\\'", "'")
             dates_data = json.loads(dates_json)
-            
+
             matches = []
-            
+
             for date_group in dates_data:
                 for match in date_group.get("matches", []):
-                    matches.append({
-                        "id": match.get("id"),
-                        "date": match.get("datetime"),
-                        "home_team": match.get("h", {}).get("title", ""),
-                        "away_team": match.get("a", {}).get("title", ""),
-                        "home_score": match.get("goals", {}).get("h"),
-                        "away_score": match.get("goals", {}).get("a"),
-                        "home_xg": float(match.get("xG", {}).get("h", 0)),
-                        "away_xg": float(match.get("xG", {}).get("a", 0)),
-                    })
-            
+                    matches.append(
+                        {
+                            "id": match.get("id"),
+                            "date": match.get("datetime"),
+                            "home_team": match.get("h", {}).get("title", ""),
+                            "away_team": match.get("a", {}).get("title", ""),
+                            "home_score": match.get("goals", {}).get("h"),
+                            "away_score": match.get("goals", {}).get("a"),
+                            "home_xg": float(match.get("xG", {}).get("h", 0)),
+                            "away_xg": float(match.get("xG", {}).get("a", 0)),
+                        }
+                    )
+
             logger.info(f"Found {len(matches)} matches for {league} {season}")
             return matches
-            
+
         except Exception as e:
             logger.error(f"Error fetching league matches: {e}")
             raise
@@ -254,28 +272,30 @@ class UnderstatLoader:
 
     async def update_match_xg(self, match_id: str, db_session: Session) -> bool:
         """Update xG data for a match in the database"""
-        
+
         xg_data = await self.fetch_match_xg(match_id)
-        
+
         if not xg_data:
             return False
-        
+
         try:
             # Find match in database (match by teams and date)
             # This requires mapping Understat team names to our team IDs
             # For now, we'll update stats by match_id if it exists
-            
+
             match = db_session.query(Match).filter_by(id=match_id).first()
-            
+
             if not match:
                 logger.warning(f"Match {match_id} not found in database")
                 return False
-            
+
             # Update match stats with xG
-            home_stats = db_session.query(MatchStats).filter_by(
-                match_id=match.id, team_id=match.home_team_id
-            ).first()
-            
+            home_stats = (
+                db_session.query(MatchStats)
+                .filter_by(match_id=match.id, team_id=match.home_team_id)
+                .first()
+            )
+
             if home_stats:
                 home_stats.expected_goals = xg_data["home_xg"]
             else:
@@ -286,11 +306,13 @@ class UnderstatLoader:
                     created_at=datetime.now(timezone.utc),
                 )
                 db_session.add(home_stats)
-            
-            away_stats = db_session.query(MatchStats).filter_by(
-                match_id=match.id, team_id=match.away_team_id
-            ).first()
-            
+
+            away_stats = (
+                db_session.query(MatchStats)
+                .filter_by(match_id=match.id, team_id=match.away_team_id)
+                .first()
+            )
+
             if away_stats:
                 away_stats.expected_goals = xg_data["away_xg"]
             else:
@@ -301,7 +323,7 @@ class UnderstatLoader:
                     created_at=datetime.now(timezone.utc),
                 )
                 db_session.add(away_stats)
-            
+
             # Store individual xG shots as match events
             for shot in xg_data["home_shots"]:
                 event = MatchEvent(
@@ -322,7 +344,7 @@ class UnderstatLoader:
                     timestamp=datetime.now(timezone.utc),
                 )
                 db_session.add(event)
-            
+
             for shot in xg_data["away_shots"]:
                 event = MatchEvent(
                     match_id=match.id,
@@ -342,12 +364,12 @@ class UnderstatLoader:
                     timestamp=datetime.now(timezone.utc),
                 )
                 db_session.add(event)
-            
+
             db_session.commit()
             logger.info(f"Updated xG for match {match_id}")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Error updating match xG: {e}")
             db_session.rollback()
@@ -355,7 +377,7 @@ class UnderstatLoader:
 
     async def load_recent_matches(self, days: int = 7) -> int:
         """Load xG data for recent matches from the database"""
-        
+
         with session_scope() as db_session:
             # Log scraping job
             log = ScrapingLog(
@@ -367,10 +389,10 @@ class UnderstatLoader:
             )
             db_session.add(log)
             db_session.commit()
-            
+
             start_time = datetime.now(timezone.utc)
             cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-            
+
             # Find matches without xG data
             matches = (
                 db_session.query(Match)
@@ -378,45 +400,49 @@ class UnderstatLoader:
                 .filter(Match.status == "finished")
                 .all()
             )
-            
+
             logger.info(f"Found {len(matches)} recent matches to update")
-            
+
             success_count = 0
             failed_count = 0
-            
+
             try:
                 for match in matches:
                     # Check if xG already exists
-                    stats = db_session.query(MatchStats).filter_by(
-                        match_id=match.id
-                    ).first()
-                    
+                    stats = (
+                        db_session.query(MatchStats)
+                        .filter_by(match_id=match.id)
+                        .first()
+                    )
+
                     if stats and stats.expected_goals:
                         continue  # Skip matches with existing xG
-                    
+
                     # Try to update (this requires mapping to Understat match ID)
                     # For now, we'll skip matches without Understat IDs
                     # In production, implement team name mapping logic
-                    
+
                     success_count += 1
-                    
+
                     await asyncio.sleep(0.5)  # Rate limiting
-                
+
                 # Update log
-                execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+                execution_time = (
+                    datetime.now(timezone.utc) - start_time
+                ).total_seconds()
                 log.status = "success"
                 log.records_processed = success_count
                 log.records_failed = failed_count
                 log.execution_time_seconds = execution_time
                 db_session.commit()
-                
+
             except Exception as e:
                 logger.error(f"Load recent matches failed: {e}")
                 log.status = "failed"
                 log.error_message = str(e)
                 db_session.commit()
                 raise
-        
+
         return success_count
 
 
@@ -427,11 +453,11 @@ if __name__ == "__main__":
             # Test fetching EPL matches
             matches = await loader.fetch_league_matches("EPL", "2024")
             print(f"Found {len(matches)} matches")
-            
+
             if matches:
                 # Test fetching xG for first match
                 match_id = matches[0]["id"]
                 xg_data = await loader.fetch_match_xg(match_id)
                 print("xG data:", json.dumps(xg_data, indent=2))
-    
+
     asyncio.run(main())

@@ -62,7 +62,9 @@ def test_probabilities_form_an_exact_simplex(odds: tuple[float, float, float]) -
 
 
 @pytest.mark.parametrize("odds", [SYMMETRIC, REALISTIC, HEAVY_FAVOURITE, NEAR_EVEN])
-def test_solver_residual_is_driven_to_tolerance(odds: tuple[float, float, float]) -> None:
+def test_solver_residual_is_driven_to_tolerance(
+    odds: tuple[float, float, float],
+) -> None:
     z, iterations, residual = solve_shin_z(odds)
     assert 0.0 <= z < 1.0
     assert iterations > 0
@@ -93,7 +95,10 @@ def test_correction_grows_with_market_lopsidedness() -> None:
 
     def favourite_shift(odds: tuple[float, float, float]) -> float:
         i = min(range(3), key=lambda k: odds[k])
-        return shin_devig(odds).probabilities[i] - proportional_devig(odds).probabilities[i]
+        return (
+            shin_devig(odds).probabilities[i]
+            - proportional_devig(odds).probabilities[i]
+        )
 
     assert (
         favourite_shift(NEAR_EVEN)
@@ -228,7 +233,9 @@ def test_fresh_pre_evaluation_market_is_accepted() -> None:
         (datetime(2026, 8, 20), datetime(2026, 8, 21, tzinfo=UTC), "naive_timestamp"),
     ],
 )
-def test_unprovable_timing_fails_closed(observed_at, evaluation_at, reason: str) -> None:
+def test_unprovable_timing_fails_closed(
+    observed_at, evaluation_at, reason: str
+) -> None:
     """Missing or naive timing cannot demonstrate the market predates the
     forecast, so it must be refused rather than assumed benign."""
     with pytest.raises(MarketBaselineError) as excinfo:

@@ -1,5 +1,44 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+export function getSentryIngestOrigin(dsn: string | undefined): string | null {
+  if (!dsn) return null;
+  try {
+    return new URL(dsn).origin;
+  } catch {
+    return null;
+  }
+}
+
+export function buildCspPolicy(options: {
+  nonce: string;
+  backendUrl: string;
+  sentryDsn?: string;
+}): string {
+  const connectSrc = ["'self'", options.backendUrl];
+  const sentryOrigin = getSentryIngestOrigin(options.sentryDsn);
+  if (sentryOrigin) connectSrc.push(sentryOrigin);
+
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${options.nonce}' 'strict-dynamic'`,
+    // Explicit, not inherited. `worker-src` falls back to `script-src`, and
+    // that value carries 'strict-dynamic', which neutralises 'self' — the
+    // WEB_PUSH service worker at /sw.js would be blocked with no nonce to give
+    // it. Registration failure is silent from the page's perspective, so this
+    // has to be stated rather than relied on.
+    "worker-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://media.api-sports.io https://flagcdn.com https://*.googleusercontent.com",
+    "font-src 'self' data:",
+    `connect-src ${connectSrc.join(" ")}`,
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "frame-src 'self' https://vercel.live",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join("; ");
+}
+
 /**
  * Per-request CSP with a script-src nonce.
  *
@@ -19,26 +58,11 @@ import { NextResponse, type NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const backendUrl = process.env.SABISCORE_BACKEND_URL || "http://localhost:8000";
-
-  const csp = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    // Explicit, not inherited. `worker-src` falls back to `script-src`, and
-    // that value carries 'strict-dynamic', which neutralises 'self' — the
-    // WEB_PUSH service worker at /sw.js would be blocked with no nonce to give
-    // it. Registration failure is silent from the page's perspective, so this
-    // has to be stated rather than relied on.
-    "worker-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://media.api-sports.io https://flagcdn.com https://*.googleusercontent.com",
-    "font-src 'self' data:",
-    `connect-src 'self' ${backendUrl}`,
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-    "frame-src 'self' https://vercel.live",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ");
+  const csp = buildCspPolicy({
+    nonce,
+    backendUrl,
+    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

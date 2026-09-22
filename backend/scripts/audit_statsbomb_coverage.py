@@ -16,6 +16,7 @@ Exit codes
 0   Audit complete (result written to stdout + reports/evaluation/).
 1   Fetch error (network or JSON parse failure).
 """
+
 from __future__ import annotations
 
 import json
@@ -39,9 +40,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CORPUS_DIR = _REPO_ROOT / "data" / "processed" / "v4_sources"
 _REPORT_DIR = _REPO_ROOT / "reports" / "evaluation"
 
-_SB_GITHUB_BASE = (
-    "https://raw.githubusercontent.com/statsbomb/open-data/master/data"
-)
+_SB_GITHUB_BASE = "https://raw.githubusercontent.com/statsbomb/open-data/master/data"
 _SB_COMPETITIONS_URL = f"{_SB_GITHUB_BASE}/competitions.json"
 
 # StatsBomb competition IDs → SabiScore league keys.
@@ -68,14 +67,37 @@ COVERAGE_THRESHOLD_PCT = 85.0
 
 # Legal tokens stripped from team names (same set as team_identity.py).
 _LEGAL_TOKENS: Set[str] = {
-    "fc", "cf", "sc", "ac", "rc", "afc", "bsc", "ud", "cd", "rcd",
-    "sd", "ad", "sv", "bv", "tsv", "fsv", "vfb", "vfl", "1",
-    "de", "du", "la", "le", "los", "las",
+    "fc",
+    "cf",
+    "sc",
+    "ac",
+    "rc",
+    "afc",
+    "bsc",
+    "ud",
+    "cd",
+    "rcd",
+    "sd",
+    "ad",
+    "sv",
+    "bv",
+    "tsv",
+    "fsv",
+    "vfb",
+    "vfl",
+    "1",
+    "de",
+    "du",
+    "la",
+    "le",
+    "los",
+    "las",
 }
 
 # ---------------------------------------------------------------------------
 # Normalisation (inline copy of team_identity._identity_key)
 # ---------------------------------------------------------------------------
+
 
 def _identity_key(name: str) -> str:
     """NFKD-normalise, strip diacritics, lowercase, strip legal tokens.
@@ -99,6 +121,7 @@ def _identity_key(name: str) -> str:
 # StatsBomb Open Data fetching (no statsbombpy required)
 # ---------------------------------------------------------------------------
 
+
 def _fetch_json(url: str, retries: int = 3) -> object:
     for attempt in range(retries):
         try:
@@ -108,7 +131,7 @@ def _fetch_json(url: str, retries: int = 3) -> object:
             if attempt == retries - 1:
                 raise
             log.warning("Fetch attempt %d failed for %s: %s", attempt + 1, url, exc)
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     raise RuntimeError("unreachable")
 
 
@@ -125,10 +148,7 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
 
     rows: List[Tuple[str, str, str, str]] = []
 
-    target = [
-        c for c in competitions
-        if c["competition_id"] in _SB_COMP_TO_LEAGUE
-    ]
+    target = [c for c in competitions if c["competition_id"] in _SB_COMP_TO_LEAGUE]
     log.info("  %d StatsBomb seasons span our 5 leagues", len(target))
 
     for comp in target:
@@ -140,7 +160,9 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
         try:
             matches = _fetch_json(url)
             if not isinstance(matches, list):
-                raise TypeError(f"expected a list of matches, got {type(matches).__name__}")
+                raise TypeError(
+                    f"expected a list of matches, got {type(matches).__name__}"
+                )
         except Exception as exc:
             log.warning("Could not fetch %s %s: %s", league, season, exc)
             continue
@@ -149,7 +171,9 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
             home_raw = m.get("home_team", {}).get("home_team_name", "")
             away_raw = m.get("away_team", {}).get("away_team_name", "")
             if home_raw and away_raw:
-                rows.append((league, season, _identity_key(home_raw), _identity_key(away_raw)))
+                rows.append(
+                    (league, season, _identity_key(home_raw), _identity_key(away_raw))
+                )
 
         log.info("  %s %s: %d matches", league, season, len(matches))
         time.sleep(0.05)  # polite rate
@@ -160,6 +184,7 @@ def fetch_sb_match_tuples() -> List[Tuple[str, str, str, str]]:
 # ---------------------------------------------------------------------------
 # Understat corpus loading
 # ---------------------------------------------------------------------------
+
 
 def load_understat_tuples() -> List[Tuple[str, str, str]]:
     """Return (league, home_key, away_key) for every played Understat match."""
@@ -199,6 +224,7 @@ def load_understat_tuples() -> List[Tuple[str, str, str]]:
 # Crosswalk
 # ---------------------------------------------------------------------------
 
+
 def run_crosswalk() -> Dict[str, object]:
     """Perform identity crosswalk, compute coverage, return result dict."""
     sb_tuples = fetch_sb_match_tuples()
@@ -229,7 +255,9 @@ def run_crosswalk() -> Dict[str, object]:
             "sb_matches": len(sb_lg),
             "understat_matches": len(us_lg),
             "intersection": len(inter_lg),
-            "coverage_pct": round(100.0 * len(inter_lg) / len(us_lg), 2) if us_lg else 0.0,
+            "coverage_pct": round(100.0 * len(inter_lg) / len(us_lg), 2)
+            if us_lg
+            else 0.0,
         }
 
     result = {
@@ -249,6 +277,7 @@ def run_crosswalk() -> Dict[str, object]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     log.info("=== StatsBomb / Understat Coverage Audit ===")
     log.info("Threshold: %.0f%%  |  Corpus: %s", COVERAGE_THRESHOLD_PCT, _CORPUS_DIR)
@@ -258,12 +287,18 @@ def main() -> None:
     print("\n" + "=" * 60)
     print("STATSBOMB COVERAGE AUDIT RESULT")
     print("=" * 60)
-    print(f"  StatsBomb Open matches (5 leagues): {result['statsbomb_total_matches']:,}")
-    print(f"  Understat played matches:           {result['understat_played_matches']:,}")
+    print(
+        f"  StatsBomb Open matches (5 leagues): {result['statsbomb_total_matches']:,}"
+    )
+    print(
+        f"  Understat played matches:           {result['understat_played_matches']:,}"
+    )
     print(f"  Intersection (identity crosswalk):  {result['intersection_matches']:,}")
     print(f"  Coverage:                           {result['coverage_pct']:.2f}%")
     print(f"  Threshold:                          {COVERAGE_THRESHOLD_PCT:.0f}%")
-    print(f"  VERDICT:  PATH {'A (viable)' if result['path'] == 'A' else 'B (INVIABLE — event data relegated to ALWAYS_DATA_GAP)'}")
+    print(
+        f"  VERDICT:  PATH {'A (viable)' if result['path'] == 'A' else 'B (INVIABLE — event data relegated to ALWAYS_DATA_GAP)'}"
+    )
     print()
     print("Per-league breakdown:")
     for lg, d in result["per_league"].items():

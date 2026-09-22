@@ -13,6 +13,7 @@ that outcome (sharp money flowing in).
 B13 compliance: if odds are unavailable, the caller should surface DATA_GAP
 rather than passing zeroed odds. Zeroed odds return a feature vector of zeros.
 """
+
 from __future__ import annotations
 
 import logging
@@ -133,7 +134,9 @@ async def compute_market_drift(
         "away": current_odds.get("away_win", 0.0),
     }
     if not all(v > 1.01 for v in closing.values()):
-        logger.debug("compute_market_drift: invalid current odds for match %s", match_id)
+        logger.debug(
+            "compute_market_drift: invalid current odds for match %s", match_id
+        )
         return _gap
 
     opening_record = None
@@ -152,7 +155,9 @@ async def compute_market_drift(
         result = await db.execute(query)
         opening_record = result.scalar_one_or_none()
     except Exception as exc:
-        logger.debug("compute_market_drift: OddsHistory query failed for %s: %s", match_id, exc)
+        logger.debug(
+            "compute_market_drift: OddsHistory query failed for %s: %s", match_id, exc
+        )
 
     if opening_record is None:
         return _gap

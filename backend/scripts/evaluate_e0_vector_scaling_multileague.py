@@ -60,6 +60,7 @@ Usage
 -----
     cd backend && PYTHONPATH=. python scripts/evaluate_e0_vector_scaling_multileague.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,7 +91,9 @@ from train_on_real_matches import (  # noqa: E402
     ranked_probability_score,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 EPSILON = 1e-12
@@ -115,13 +118,18 @@ _MODELS_DIR = _REPO_ROOT / "models"
 # gated (test_default_schema_version_is_unchanged exists to catch exactly that
 # flip). Calibration research needs a clean baseline, not a serving change.
 _EVAL_BASELINE_DIR = _REPO_ROOT / "models" / "evaluation_baseline"
-_PRED_CACHE = _REPO_ROOT / "data" / "processed" / "served_ensemble_predictions_holdout.parquet"
-_REPORT_PATH = _REPO_ROOT.parent / "reports" / "research" / "e0b_clean_baseline_results.json"
+_PRED_CACHE = (
+    _REPO_ROOT / "data" / "processed" / "served_ensemble_predictions_holdout.parquet"
+)
+_REPORT_PATH = (
+    _REPO_ROOT.parent / "reports" / "research" / "e0b_clean_baseline_results.json"
+)
 
 
 # ---------------------------------------------------------------------------
 # Stage 1 — served-ensemble probabilities
 # ---------------------------------------------------------------------------
+
 
 def _served_probabilities(models_dict: Dict[str, Any], X: np.ndarray) -> np.ndarray:
     """Equal-weight base-learner average — the request path, not the meta-model.
@@ -141,7 +149,9 @@ def _served_probabilities(models_dict: Dict[str, Any], X: np.ndarray) -> np.ndar
     return np.mean(all_probs, axis=0)
 
 
-def build_prediction_table(force: bool = False, models_dir: Path | None = None) -> pl.DataFrame:
+def build_prediction_table(
+    force: bool = False, models_dir: Path | None = None
+) -> pl.DataFrame:
     """Run the baseline ensemble over the corpus and cache the result."""
     if _PRED_CACHE.exists() and not force:
         logger.info("Reusing cached baseline predictions: %s", _PRED_CACHE)
@@ -150,12 +160,16 @@ def build_prediction_table(force: bool = False, models_dir: Path | None = None) 
     import joblib
 
     root = models_dir or _EVAL_BASELINE_DIR
-    manifest_path = root / ("manifest.json" if root != _MODELS_DIR else "active_generation.json")
+    manifest_path = root / (
+        "manifest.json" if root != _MODELS_DIR else "active_generation.json"
+    )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     logger.info(
         "Baseline %s (%s), head %s — from %s",
-        manifest["generation"], manifest.get("role", "SERVING"),
-        manifest.get("served_head"), manifest_path.relative_to(_REPO_ROOT),
+        manifest["generation"],
+        manifest.get("role", "SERVING"),
+        manifest.get("served_head"),
+        manifest_path.relative_to(_REPO_ROOT),
     )
 
     # Which 68-block the ACTIVE generation is built on is a manifest fact, not a
@@ -168,13 +182,17 @@ def build_prediction_table(force: bool = False, models_dir: Path | None = None) 
     uses_legacy_block = list(serving_columns) == list(CANONICAL_FEATURES_68)
     logger.info(
         "Serving contract: %s (%d features, %s block)",
-        schema_version, len(serving_columns), "legacy" if uses_legacy_block else "apex",
+        schema_version,
+        len(serving_columns),
+        "legacy" if uses_legacy_block else "apex",
     )
 
     matches = load_matches(_CORPUS_DIR)
     # `build_dataset` emits the schema vector as `X` and the legacy 68-block as
     # `X_incumbent`; pick whichever the active generation actually declares.
-    dataset = build_dataset(matches, schema=schema_version if not uses_legacy_block else "apex_v1_68")
+    dataset = build_dataset(
+        matches, schema=schema_version if not uses_legacy_block else "apex_v1_68"
+    )
     vector_key = "X_incumbent" if uses_legacy_block else "X"
 
     rows: List[Dict[str, Any]] = []
@@ -202,7 +220,10 @@ def build_prediction_table(force: bool = False, models_dir: Path | None = None) 
             logger.error(
                 "%s: artifact feature_columns (%d) do not match the manifest's "
                 "declared %s contract (%d) — refusing to score it",
-                league, len(columns), schema_version, len(serving_columns),
+                league,
+                len(columns),
+                schema_version,
+                len(serving_columns),
             )
             continue
 
@@ -231,7 +252,9 @@ def build_prediction_table(force: bool = False, models_dir: Path | None = None) 
         logger.info(
             "  %s: %d rows scored through the served base-learner average "
             "(artifact declares holdout_season=%s)",
-            league, len(y), declared_holdout or "UNDECLARED",
+            league,
+            len(y),
+            declared_holdout or "UNDECLARED",
         )
 
     df = pl.DataFrame(rows)
@@ -244,6 +267,7 @@ def build_prediction_table(force: bool = False, models_dir: Path | None = None) 
 # ---------------------------------------------------------------------------
 # Stage 2 — vector scaling
 # ---------------------------------------------------------------------------
+
 
 class VectorCalibrator:
     """Per-class scale and bias on centred log-odds, fitted by NLL + L2."""
@@ -270,7 +294,9 @@ class VectorCalibrator:
         def loss_fn(params: np.ndarray) -> float:
             w, b = params[:3], params[3:]
             p_hat = self._softmax(z * w + b)
-            nll = -np.mean(np.sum(targets * np.log(np.clip(p_hat, EPSILON, 1.0)), axis=1))
+            nll = -np.mean(
+                np.sum(targets * np.log(np.clip(p_hat, EPSILON, 1.0)), axis=1)
+            )
             reg = self.l2_reg * (np.sum((w - 1.0) ** 2) + np.sum(b**2))
             return float(nll + reg)
 
@@ -299,9 +325,10 @@ def _onehot(y: np.ndarray) -> np.ndarray:
 
 def _rps_per_fixture(probs: np.ndarray, y: np.ndarray) -> np.ndarray:
     onehot = _onehot(y)
-    return np.sum(
-        (np.cumsum(probs, axis=1) - np.cumsum(onehot, axis=1)) ** 2, axis=1
-    ) / 2.0
+    return (
+        np.sum((np.cumsum(probs, axis=1) - np.cumsum(onehot, axis=1)) ** 2, axis=1)
+        / 2.0
+    )
 
 
 def _brier_per_fixture(probs: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -352,7 +379,10 @@ def paired_block_bootstrap_ci(
     # with 5 tests, one nominally-significant result is roughly what chance
     # alone produces (~12% of the time).
     alpha_corrected = FAMILY_ALPHA / FAMILY_SIZE
-    lo_pct, hi_pct = 100.0 * alpha_corrected / 2.0, 100.0 * (1.0 - alpha_corrected / 2.0)
+    lo_pct, hi_pct = (
+        100.0 * alpha_corrected / 2.0,
+        100.0 * (1.0 - alpha_corrected / 2.0),
+    )
     return {
         "mean_delta": round(point, 6),
         "ci_lower": round(float(np.percentile(replicates, 2.5)), 6),
@@ -391,7 +421,12 @@ def assess_temporal_integrity(df: pl.DataFrame, league: str) -> Dict[str, Any]:
         rows = league_df.filter(pl.col("season") == season)
         per_season[season] = {
             "n": rows.height,
-            "rps": round(ranked_probability_score(rows["y"].to_numpy(), rows.select(cols).to_numpy()), 6),
+            "rps": round(
+                ranked_probability_score(
+                    rows["y"].to_numpy(), rows.select(cols).to_numpy()
+                ),
+                6,
+            ),
         }
 
     holdout_rps = per_season.get(declared, {}).get("rps")
@@ -431,7 +466,9 @@ def evaluate_league(df: pl.DataFrame, league: str) -> Dict[str, Any]:
         logger.error(
             "%s: seasons %s carry an in-sample signature against declared holdout %s "
             "— refusing to report a calibration delta across a contaminated split",
-            league, blocking, integrity["declared_holdout_season"],
+            league,
+            blocking,
+            integrity["declared_holdout_season"],
         )
         return {
             "league": league,
@@ -443,9 +480,16 @@ def evaluate_league(df: pl.DataFrame, league: str) -> Dict[str, Any]:
     if train_df.height < 50 or test_df.height < 50:
         logger.warning(
             "%s: insufficient rows (cal=%d test=%d) — skipped",
-            league, train_df.height, test_df.height,
+            league,
+            train_df.height,
+            test_df.height,
         )
-        return {"league": league, "status": "SKIPPED", "n_cal": train_df.height, "n_test": test_df.height}
+        return {
+            "league": league,
+            "status": "SKIPPED",
+            "n_cal": train_df.height,
+            "n_test": test_df.height,
+        }
 
     cols = ["prob_home", "prob_draw", "prob_away"]
     train_probs = train_df.select(cols).to_numpy()
@@ -477,7 +521,11 @@ def evaluate_league(df: pl.DataFrame, league: str) -> Dict[str, Any]:
         rps_ci.get("ci_upper_bonferroni") is not None
         and rps_ci["ci_upper_bonferroni"] < 0.0
     )
-    brier_no_regress = brier_ci["ci_lower"] is not None and brier_ci["ci_lower"] < 0.0 or cand_brier <= base_brier
+    brier_no_regress = (
+        brier_ci["ci_lower"] is not None
+        and brier_ci["ci_lower"] < 0.0
+        or cand_brier <= base_brier
+    )
 
     return {
         "league": league,
@@ -506,9 +554,15 @@ def evaluate_league(df: pl.DataFrame, league: str) -> Dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--regenerate", action="store_true", help="rebuild the prediction cache")
-    parser.add_argument("--models-dir", type=Path, default=None,
-                        help="baseline directory (default: models/evaluation_baseline)")
+    parser.add_argument(
+        "--regenerate", action="store_true", help="rebuild the prediction cache"
+    )
+    parser.add_argument(
+        "--models-dir",
+        type=Path,
+        default=None,
+        help="baseline directory (default: models/evaluation_baseline)",
+    )
     args = parser.parse_args()
 
     df = build_prediction_table(force=args.regenerate, models_dir=args.models_dir)
@@ -525,7 +579,9 @@ def main() -> int:
     results = [evaluate_league(df, league) for league in leagues]
 
     evaluated = [r for r in results if r["status"] == "EVALUATED"]
-    blocked = [r["league"] for r in results if r["status"] == "BLOCKED_CONTAMINATED_SPLIT"]
+    blocked = [
+        r["league"] for r in results if r["status"] == "BLOCKED_CONTAMINATED_SPLIT"
+    ]
     promotable = [r["league"] for r in evaluated if r["promotable"]]
     report = {
         "experiment_id": "E0-VECTOR-MULTILEAGUE",
@@ -558,23 +614,40 @@ def main() -> int:
             ci = r["delta_rps"]
             logger.info(
                 "  %-11s ΔRPS %+.5f  CI95 [%+.5f, %+.5f]  CI99 [%+.5f, %+.5f]  %s",
-                r["league"], ci["mean_delta"], ci["ci_lower"], ci["ci_upper"],
-                ci["ci_lower_bonferroni"], ci["ci_upper_bonferroni"],
-                "PROMOTABLE" if r["promotable"] else
-                ("nominal only" if r["improves_rps_ci_excludes_zero_nominal"] else "no"),
+                r["league"],
+                ci["mean_delta"],
+                ci["ci_lower"],
+                ci["ci_upper"],
+                ci["ci_lower_bonferroni"],
+                ci["ci_upper_bonferroni"],
+                "PROMOTABLE"
+                if r["promotable"]
+                else (
+                    "nominal only"
+                    if r["improves_rps_ci_excludes_zero_nominal"]
+                    else "no"
+                ),
             )
         elif r["status"] == "BLOCKED_CONTAMINATED_SPLIT":
             ps = r["temporal_integrity"]["per_season"]
             logger.info(
                 "  %-11s BLOCKED — declared holdout %s RPS %.4f; contaminated %s",
-                r["league"], r["temporal_integrity"]["declared_holdout_season"],
-                ps.get(r["temporal_integrity"]["declared_holdout_season"], {}).get("rps", float("nan")),
+                r["league"],
+                r["temporal_integrity"]["declared_holdout_season"],
+                ps.get(r["temporal_integrity"]["declared_holdout_season"], {}).get(
+                    "rps", float("nan")
+                ),
                 {s: ps[s]["rps"] for s in r["blocking_seasons"]},
             )
-    print(json.dumps(
-        {"leagues_promotable": promotable, "leagues_blocked_contaminated_split": blocked},
-        indent=2,
-    ))
+    print(
+        json.dumps(
+            {
+                "leagues_promotable": promotable,
+                "leagues_blocked_contaminated_split": blocked,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

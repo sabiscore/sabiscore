@@ -21,8 +21,12 @@ def _ensure_numpy_shim() -> None:
     # If this is a stubbed numpy (from tests), it may lack common attributes
     # that tools like pytest expect. We add minimal fallbacks.
     if not hasattr(np, "isscalar"):
+
         def _isscalar(x: Any) -> bool:  # type: ignore
-            return isinstance(x, (int, float, bool, complex)) or getattr(x, "shape", None) in (None, (), [])
+            return isinstance(x, (int, float, bool, complex)) or getattr(
+                x, "shape", None
+            ) in (None, (), [])
+
         setattr(np, "isscalar", _isscalar)
 
     if not hasattr(np, "nan"):

@@ -4,6 +4,7 @@ Composes tactical metrics (PPDA, PSxG, xT), contextual data (referee, weather, f
 market intelligence with complete provenance, and certification invariants into a unified
 analytical read layer.
 """
+
 from __future__ import annotations
 
 import logging
@@ -82,7 +83,9 @@ class AdvancedInsightsService:
         # 3. Fetch referee profile if available
         referee_payload: Optional[RefereeInsightPayload] = None
         if match_row.referee:
-            ref_stmt = select(RefereeProfile).where(RefereeProfile.name == match_row.referee)
+            ref_stmt = select(RefereeProfile).where(
+                RefereeProfile.name == match_row.referee
+            )
             ref_res = await db.execute(ref_stmt)
             ref_row = ref_res.scalar_one_or_none()
             if ref_row:
@@ -101,11 +104,19 @@ class AdvancedInsightsService:
         # 4. Compute / assemble Advanced Metrics
         ppda_h = match_ctx.ppda_home if match_ctx else None
         ppda_a = match_ctx.ppda_away if match_ctx else None
-        ppda_status = MetricStatus.AVAILABLE.value if (ppda_h is not None or ppda_a is not None) else MetricStatus.ADVISORY_REQUIRES_CORPUS.value
+        ppda_status = (
+            MetricStatus.AVAILABLE.value
+            if (ppda_h is not None or ppda_a is not None)
+            else MetricStatus.ADVISORY_REQUIRES_CORPUS.value
+        )
 
         psxg_h = match_ctx.psxg_home if match_ctx else None
         psxg_a = match_ctx.psxg_away if match_ctx else None
-        psxg_status = MetricStatus.AVAILABLE.value if (psxg_h is not None or psxg_a is not None) else MetricStatus.UNAVAILABLE.value
+        psxg_status = (
+            MetricStatus.AVAILABLE.value
+            if (psxg_h is not None or psxg_a is not None)
+            else MetricStatus.UNAVAILABLE.value
+        )
 
         xt_res = evaluate_xt(event_corpus_available=False, event_count=0)
 
@@ -126,7 +137,9 @@ class AdvancedInsightsService:
         context_payload = MatchContextPayload(
             weather_condition=match_ctx.weather_condition if match_ctx else None,
             weather_source=match_ctx.weather_source if match_ctx else None,
-            weather_observed_at=match_ctx.weather_observed_at.isoformat() if match_ctx and match_ctx.weather_observed_at else None,
+            weather_observed_at=match_ctx.weather_observed_at.isoformat()
+            if match_ctx and match_ctx.weather_observed_at
+            else None,
             fatigue_index_home=match_ctx.fatigue_index_home if match_ctx else None,
             fatigue_index_away=match_ctx.fatigue_index_away if match_ctx else None,
             referee=referee_payload,
@@ -167,9 +180,7 @@ class AdvancedInsightsService:
 
         if odds_row and odds_row.home_win and odds_row.draw and odds_row.away_win:
             captured_at = (
-                odds_row.timestamp
-                if isinstance(odds_row.timestamp, datetime)
-                else now
+                odds_row.timestamp if isinstance(odds_row.timestamp, datetime) else now
             )
             odds_dict = {
                 "home_win": float(odds_row.home_win),
@@ -193,14 +204,26 @@ class AdvancedInsightsService:
         # 8. Decision State
         decision_state = DecisionStatePayload(
             research_only=not is_cert,
-            stake_permitted=False if not is_cert else (market_intel_summary.stake_permitted if market_intel_summary else False),
-            verdict="RESEARCH_ONLY" if not is_cert else (market_intel_summary.decision.value if market_intel_summary else "HOLD"),
+            stake_permitted=False
+            if not is_cert
+            else (
+                market_intel_summary.stake_permitted if market_intel_summary else False
+            ),
+            verdict="RESEARCH_ONLY"
+            if not is_cert
+            else (
+                market_intel_summary.decision.value if market_intel_summary else "HOLD"
+            ),
         )
 
         response = AdvancedInsightsResponse(
             match_id=match_id,
-            home_team=getattr(match_row.home_team, "name", str(match_row.home_team_id or "Home")),
-            away_team=getattr(match_row.away_team, "name", str(match_row.away_team_id or "Away")),
+            home_team=getattr(
+                match_row.home_team, "name", str(match_row.home_team_id or "Home")
+            ),
+            away_team=getattr(
+                match_row.away_team, "name", str(match_row.away_team_id or "Away")
+            ),
             league=str(match_row.league_id or "unknown"),
             kickoff_utc=kickoff.isoformat() if kickoff else None,
             advanced_metrics=advanced_metrics,

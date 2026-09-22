@@ -1,4 +1,5 @@
 """Temporal-integrity regressions for closing-line capture and CLV joins."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -11,7 +12,10 @@ from sqlalchemy.orm import sessionmaker
 from src.core.database import Base, Match
 from src.db.models import MarketSnapshot, MatchPredictionLog
 from src.repositories.fixtures import get_clv_records
-from src.services.clv_capture_service import _is_strictly_pre_kickoff, run_clv_capture_pass
+from src.services.clv_capture_service import (
+    _is_strictly_pre_kickoff,
+    run_clv_capture_pass,
+)
 
 
 @pytest.fixture
@@ -27,9 +31,13 @@ async def factory():
 def test_closing_boundary_is_strictly_before_kickoff() -> None:
     kickoff = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
 
-    assert _is_strictly_pre_kickoff(kickoff - timedelta(microseconds=1), kickoff) is True
+    assert (
+        _is_strictly_pre_kickoff(kickoff - timedelta(microseconds=1), kickoff) is True
+    )
     assert _is_strictly_pre_kickoff(kickoff, kickoff) is False
-    assert _is_strictly_pre_kickoff(kickoff + timedelta(microseconds=1), kickoff) is False
+    assert (
+        _is_strictly_pre_kickoff(kickoff + timedelta(microseconds=1), kickoff) is False
+    )
 
 
 async def test_capture_does_not_recover_post_kickoff_fixture(factory) -> None:

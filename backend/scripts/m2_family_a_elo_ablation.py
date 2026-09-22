@@ -47,6 +47,7 @@ and never retrains or promotes anything itself.
 
 Run: PYTHONPATH=. .venv/Scripts/python.exe backend/scripts/m2_family_a_elo_ablation.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -60,7 +61,9 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s"
+)
 log = logging.getLogger("m2_family_a")
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -93,6 +96,7 @@ def _brier_multiclass(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     y_oh = np.zeros((n, n_classes), dtype=float)
     y_oh[np.arange(n), y_true.astype(int)] = 1.0
     return float(np.mean(np.sum((y_proba - y_oh) ** 2, axis=1)))
+
 
 VAL_SPLIT = 0.20  # matches train_bnn.py's chronological split convention
 SEED = 42
@@ -165,16 +169,29 @@ def _build_rows(matches: List[dict]) -> Tuple[List[dict], List[int], List[dateti
 
     log.info(
         "Built %d rows (both sides >=5 matches). Elo resolved both sides: %d (%.1f%%)",
-        len(rows), resolved_both, 100.0 * resolved_both / max(len(rows), 1),
+        len(rows),
+        resolved_both,
+        100.0 * resolved_both / max(len(rows), 1),
     )
     return rows, labels, dates
 
 
 _BASE_COLS = [
-    "home_form_5", "away_form_5", "home_win_rate_5", "away_win_rate_5",
-    "home_goals_per_match_5", "away_goals_per_match_5", "home_gd_avg_5", "away_gd_avg_5",
+    "home_form_5",
+    "away_form_5",
+    "home_win_rate_5",
+    "away_win_rate_5",
+    "home_goals_per_match_5",
+    "away_goals_per_match_5",
+    "home_gd_avg_5",
+    "away_gd_avg_5",
 ]
-_ELO_COLS = ["elo_difference", "elo_home_trend_5", "elo_away_trend_5", "elo_momentum_cross"]
+_ELO_COLS = [
+    "elo_difference",
+    "elo_home_trend_5",
+    "elo_away_trend_5",
+    "elo_momentum_cross",
+]
 
 
 def _matrix(rows: List[dict], cols: List[str]) -> np.ndarray:
@@ -182,7 +199,9 @@ def _matrix(rows: List[dict], cols: List[str]) -> np.ndarray:
 
 
 def _score(y_true: np.ndarray, probs: np.ndarray) -> Dict[str, object]:
-    rps_values = [ranked_probability_score(int(y), list(p)) for y, p in zip(y_true, probs)]
+    rps_values = [
+        ranked_probability_score(int(y), list(p)) for y, p in zip(y_true, probs)
+    ]
     return {
         "rps_mean": round(float(np.mean(rps_values)), 6),
         "rps_std": round(float(np.std(rps_values)), 6),
@@ -194,7 +213,9 @@ def _score(y_true: np.ndarray, probs: np.ndarray) -> Dict[str, object]:
     }
 
 
-def _fit_logreg(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray) -> np.ndarray:
+def _fit_logreg(
+    X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray
+) -> np.ndarray:
     from sklearn.linear_model import LogisticRegression
 
     mu, sigma = X_train.mean(axis=0), X_train.std(axis=0) + 1e-8
@@ -217,10 +238,17 @@ def main() -> int:
     cache_dir = _ROOT / "backend" / "data" / "cache"
     log.info("Loading real corpus from %s …", cache_dir)
     matches = trainer.load_matches(cache_dir)
-    log.info("%d parseable matches, %s -> %s", len(matches), matches[0]["date"].date(), matches[-1]["date"].date())
+    log.info(
+        "%d parseable matches, %s -> %s",
+        len(matches),
+        matches[0]["date"].date(),
+        matches[-1]["date"].date(),
+    )
 
     cross_verify_against_elo_engine(matches, n_check=300)
-    log.info("FastEloReplay cross-verified against real EloEngine on 300 matches: identical.")
+    log.info(
+        "FastEloReplay cross-verified against real EloEngine on 300 matches: identical."
+    )
 
     rows, labels, dates = _build_rows(matches)
     y = np.array(labels, dtype=np.int64)
@@ -229,8 +257,12 @@ def main() -> int:
     n_train = n - n_val
     log.info(
         "Chronological split: train=%d (%s -> %s), val=%d (%s -> %s)",
-        n_train, dates[0].date(), dates[n_train - 1].date(),
-        n_val, dates[n_train].date(), dates[-1].date(),
+        n_train,
+        dates[0].date(),
+        dates[n_train - 1].date(),
+        n_val,
+        dates[n_train].date(),
+        dates[-1].date(),
     )
 
     y_train, y_val = y[:n_train], y[n_train:]
@@ -251,18 +283,25 @@ def main() -> int:
     for lg in set(leagues_train):
         idx = [i for i in range(n_train) if leagues_train[i] == lg]
         per_league_rate[lg] = np.bincount(y_train[idx], minlength=3) / max(len(idx), 1)
-    league_probs = np.array([
-        per_league_rate.get(lg, train_rate) for lg in leagues_val
-    ])
+    league_probs = np.array([per_league_rate.get(lg, train_rate) for lg in leagues_val])
     results["league_prior"] = _score(y_val, league_probs)
 
     # --- elo_only: resolved-both subset only, to isolate Elo's own signal ---
-    resolved_mask_val = np.array([rows[i]["elo_resolved"] for i in range(n_train, n)]) > 0.5
-    resolved_mask_train = np.array([rows[i]["elo_resolved"] for i in range(n_train)]) > 0.5
+    resolved_mask_val = (
+        np.array([rows[i]["elo_resolved"] for i in range(n_train, n)]) > 0.5
+    )
+    resolved_mask_train = (
+        np.array([rows[i]["elo_resolved"] for i in range(n_train)]) > 0.5
+    )
     if resolved_mask_train.sum() >= 30 and resolved_mask_val.sum() >= 10:
-        X_elo_train = _matrix([rows[i] for i in range(n_train) if resolved_mask_train[i]], _ELO_COLS[:1])
+        X_elo_train = _matrix(
+            [rows[i] for i in range(n_train) if resolved_mask_train[i]], _ELO_COLS[:1]
+        )
         y_elo_train = y_train[resolved_mask_train]
-        X_elo_val = _matrix([rows[n_train + i] for i in range(n_val) if resolved_mask_val[i]], _ELO_COLS[:1])
+        X_elo_val = _matrix(
+            [rows[n_train + i] for i in range(n_val) if resolved_mask_val[i]],
+            _ELO_COLS[:1],
+        )
         y_elo_val = y_val[resolved_mask_val]
         probs_elo = _fit_logreg(X_elo_train, y_elo_train, X_elo_val)
         elo_only_score = _score(y_elo_val, probs_elo)
@@ -273,7 +312,10 @@ def main() -> int:
         )
         results["elo_only"] = elo_only_score
     else:
-        results["elo_only"] = {"skipped": True, "reason": "insufficient resolved-Elo rows"}
+        results["elo_only"] = {
+            "skipped": True,
+            "reason": "insufficient resolved-Elo rows",
+        }
 
     # --- BASE (form/recency, all real) ---
     X_base_train = _matrix(rows[:n_train], _BASE_COLS)
@@ -297,17 +339,25 @@ def main() -> int:
         "report_version": "1.0.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "git_sha": subprocess.run(
-            ["git", "rev-parse", "--short=7", "HEAD"], cwd=_ROOT,
-            capture_output=True, text=True, check=False,
-        ).stdout.strip() or "unknown",
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        or "unknown",
         "metric_contract_version": "1.0.0",
         "milestone": "M2 Family A — Strength and recency (Elo)",
         "corpus": {
             "source": "backend/data/cache/fd_*.csv",
             "n_matches_loaded": len(matches),
             "n_rows_with_5plus_history_both_sides": n,
-            "date_range": [matches[0]["date"].date().isoformat(), matches[-1]["date"].date().isoformat()],
-            "train_rows": n_train, "val_rows": n_val,
+            "date_range": [
+                matches[0]["date"].date().isoformat(),
+                matches[-1]["date"].date().isoformat(),
+            ],
+            "train_rows": n_train,
+            "val_rows": n_val,
         },
         "motivating_finding": (
             "elo_difference and all 4 sibling canonical Elo features are a "
@@ -327,7 +377,7 @@ def main() -> int:
             "interpretation": (
                 f"Adding real Elo to the form/recency BASE {'improved' if delta < 0 else 'did not improve'} "
                 f"out-of-sample RPS ({rps_base:.4f} -> {rps_full:.4f}, delta {delta:+.4f}); "
-                f"Elo was resolved for both sides on {elo_resolved_val_rate*100:.1f}% of validation rows."
+                f"Elo was resolved for both sides on {elo_resolved_val_rate * 100:.1f}% of validation rows."
             ),
         },
         "not_done_here": (
@@ -343,7 +393,9 @@ def main() -> int:
         ),
     }
 
-    out_path = _ROOT / "backend" / "reports" / "evaluation" / "m2-family-a-elo-ablation.json"
+    out_path = (
+        _ROOT / "backend" / "reports" / "evaluation" / "m2-family-a-elo-ablation.json"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     log.info("Wrote %s", out_path)
@@ -353,8 +405,16 @@ def main() -> int:
         if r.get("skipped"):
             log.info("  %-20s SKIPPED (%s)", name, r["reason"])
         else:
-            log.info("  %-20s rps=%.4f  brier=%.4f  logloss=%.4f  ece=%.4f  acc=%.4f  n=%d",
-                      name, r["rps_mean"], r["brier"], r["log_loss"], r["ece"], r["accuracy"], r["n"])
+            log.info(
+                "  %-20s rps=%.4f  brier=%.4f  logloss=%.4f  ece=%.4f  acc=%.4f  n=%d",
+                name,
+                r["rps_mean"],
+                r["brier"],
+                r["log_loss"],
+                r["ece"],
+                r["accuracy"],
+                r["n"],
+            )
     log.info(report["m2_ablation_answer"]["interpretation"])
 
     return 0

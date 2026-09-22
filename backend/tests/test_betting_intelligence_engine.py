@@ -133,7 +133,8 @@ def _request(
         ),
         data_gaps=data_gaps or [],
         verified_evidence_providers=(
-            _FOUR_PROVIDERS if verified_evidence_providers is _DEFAULT
+            _FOUR_PROVIDERS
+            if verified_evidence_providers is _DEFAULT
             else verified_evidence_providers
         ),
     )
@@ -404,9 +405,7 @@ class TestHoldGate:
         assert result.verdict in (VerdictEnum.HOLD, VerdictEnum.PARTIAL)
 
     def test_hold_stake_is_pass(self):
-        req = _request(
-            model=_model(tier=EvidenceTierEnum.LOW_EVIDENCE)
-        )
+        req = _request(model=_model(tier=EvidenceTierEnum.LOW_EVIDENCE))
         result = analyze_match(req)
         if result.verdict == VerdictEnum.HOLD:
             assert result.stake == "pass"
@@ -427,7 +426,12 @@ class TestSpeculativeActionable:
             market=_market(home=1.95, draw=3.60, away=4.20),
         )
         result = analyze_match(req)
-        assert result.verdict in (VerdictEnum.SPECULATIVE, VerdictEnum.NO_BET, VerdictEnum.ACTIONABLE, VerdictEnum.HOLD)
+        assert result.verdict in (
+            VerdictEnum.SPECULATIVE,
+            VerdictEnum.NO_BET,
+            VerdictEnum.ACTIONABLE,
+            VerdictEnum.HOLD,
+        )
 
     def test_speculative_is_watchlist_only_with_zero_stake(self):
         req = _request(
@@ -640,9 +644,19 @@ class TestAllOutcomeEvaluation:
             market=_market(home=1.80, draw=3.50, away=4.50),
         )
         result = analyze_match(req)
-        if result.edge is not None and result.market_odds is not None and result.fair_market_probability is not None:
+        if (
+            result.edge is not None
+            and result.market_odds is not None
+            and result.fair_market_probability is not None
+        ):
             # Edge should use fair_market (de-vigged) not raw implied
-            assert abs(result.edge - (result.probabilities.home - result.fair_market_probability)) < 0.01
+            assert (
+                abs(
+                    result.edge
+                    - (result.probabilities.home - result.fair_market_probability)
+                )
+                < 0.01
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +712,9 @@ class TestBatchAnalysis:
                 kickoff_utc=FUTURE_KICKOFF,
                 model=_model(home=0.70, draw=0.18, away=0.12, epistemic=0.05),
                 market=_market(home=1.75, draw=4.00, away=7.00, seconds_old=200),
-                freshness=FreshnessInput(market_seconds=200, model_features_seconds=200),
+                freshness=FreshnessInput(
+                    market_seconds=200, model_features_seconds=200
+                ),
                 source_status=SourceStatusInput(
                     model=SourceStatusEnum.VERIFIED,
                     market=SourceStatusEnum.VERIFIED,
@@ -786,7 +802,10 @@ class TestBatchAnalysis:
         partial = analyze_match(_request(match_id="match-partial-2", model=None))
 
         assert speculative.verdict == VerdictEnum.SPECULATIVE
-        assert actionable.verdict in (VerdictEnum.ACTIONABLE, VerdictEnum.HIGH_CONVICTION)
+        assert actionable.verdict in (
+            VerdictEnum.ACTIONABLE,
+            VerdictEnum.HIGH_CONVICTION,
+        )
         assert partial.verdict == VerdictEnum.PARTIAL
 
         # Default test signals carry no contextual fields, so completeness (and
@@ -842,7 +861,9 @@ class TestBatchAnalysis:
         lower_cav_actionable.confidence_adjusted_value = 0.04
         lower_cav_actionable.expected_value = 0.12
 
-        top, watchlist = _rank_top_opportunities([lower_cav_actionable, high_cav_speculative])
+        top, watchlist = _rank_top_opportunities(
+            [lower_cav_actionable, high_cav_speculative]
+        )
 
         # SPECULATIVE never enters top_opportunities, regardless of CAV ranking.
         assert top == ["actionable-lower-cav"]
@@ -863,7 +884,10 @@ class TestInvalidationConditions:
         result = analyze_match(req)
         if result.verdict in (VerdictEnum.ACTIONABLE, VerdictEnum.HIGH_CONVICTION):
             assert len(result.invalidation_conditions) > 0
-            assert any("odds" in c.lower() or "edge" in c.lower() for c in result.invalidation_conditions)
+            assert any(
+                "odds" in c.lower() or "edge" in c.lower()
+                for c in result.invalidation_conditions
+            )
 
     def test_minimum_acceptable_odds_present_when_actionable(self):
         req = _request(
@@ -871,7 +895,11 @@ class TestInvalidationConditions:
             market=_market(home=1.80, draw=3.50, away=4.50),
         )
         result = analyze_match(req)
-        if result.verdict in (VerdictEnum.ACTIONABLE, VerdictEnum.HIGH_CONVICTION, VerdictEnum.SPECULATIVE):
+        if result.verdict in (
+            VerdictEnum.ACTIONABLE,
+            VerdictEnum.HIGH_CONVICTION,
+            VerdictEnum.SPECULATIVE,
+        ):
             assert result.minimum_acceptable_odds is not None
             assert result.minimum_acceptable_odds > 1.0
 
@@ -945,4 +973,7 @@ class TestModelProbabilityValidation:
             aleatoric_uncertainty=0.1,
             confidence_tier=EvidenceTierEnum.OK,
         )
-        assert abs(m.home_probability + m.draw_probability + m.away_probability - 1.0) < 0.005
+        assert (
+            abs(m.home_probability + m.draw_probability + m.away_probability - 1.0)
+            < 0.005
+        )

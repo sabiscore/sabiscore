@@ -4,6 +4,7 @@ These cases mirror real production self-play rows discovered by read-only audit.
 A missing provider team must reduce historical coverage; it must never cause a
 shared city/name token to bind both sides of a fixture to one Team id.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -59,8 +60,7 @@ async def test_backfill_never_inserts_distinct_clubs_as_self_play(
     await session.commit()
 
     (tmp_path / "fd_I1_1920.csv").write_text(
-        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
-        "I1,21/09/2019,Milan,Inter,0,2\n",
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\nI1,21/09/2019,Milan,Inter,0,2\n",
         encoding="utf-8",
     )
 
@@ -76,12 +76,13 @@ async def test_backfill_guard_skips_collision_even_if_resolver_regresses(
     session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     shared_id = "fd-team-serie_a:fc_internazionale_milano"
-    session.add(Team(id=shared_id, name="FC Internazionale Milano", league_id="SERIE_A"))
+    session.add(
+        Team(id=shared_id, name="FC Internazionale Milano", league_id="SERIE_A")
+    )
     await session.commit()
 
     (tmp_path / "fd_I1_1920.csv").write_text(
-        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\n"
-        "I1,21/09/2019,Milan,Inter,0,2\n",
+        "Div,Date,HomeTeam,AwayTeam,FTHG,FTAG\nI1,21/09/2019,Milan,Inter,0,2\n",
         encoding="utf-8",
     )
 

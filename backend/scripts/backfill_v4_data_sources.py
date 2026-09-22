@@ -143,7 +143,10 @@ async def backfill_league(
                 _write_json(meta_path, fd_meta)
                 logger.info(
                     "[%s/%s] football-data.org OK %d rows in %s",
-                    league, season, len(matches), _elapsed(t0),
+                    league,
+                    season,
+                    len(matches),
+                    _elapsed(t0),
                 )
                 manifest["artefacts"].append(
                     {
@@ -155,9 +158,7 @@ async def backfill_league(
                     }
                 )
             except Exception as exc:
-                logger.error(
-                    "[%s/%s] football-data.org FAILED %s", league, season, exc
-                )
+                logger.error("[%s/%s] football-data.org FAILED %s", league, season, exc)
                 manifest["warnings"].append(f"football-data.org error: {exc}")
 
     # ------------------------------------------------------------------
@@ -190,8 +191,10 @@ async def backfill_league(
 
                 logger.info(
                     "[%s/%s] Understat OK %d matches / %d rollup rows in %s",
-                    league, season,
-                    len(understat_matches), len(rollups),
+                    league,
+                    season,
+                    len(understat_matches),
+                    len(rollups),
                     _elapsed(t0),
                 )
                 manifest["artefacts"].append(

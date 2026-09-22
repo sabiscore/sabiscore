@@ -11,7 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
-from ...services.auth_service import get_anon_id_from_request, get_optional_user_from_request
+from ...services.auth_service import (
+    get_anon_id_from_request,
+    get_optional_user_from_request,
+)
 from ...services.notification_service import NotificationService
 from ...services.web_push_delivery import is_web_push_configured, vapid_public_key
 
@@ -20,10 +23,17 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
+
 class NotificationPreferenceUpdate(BaseModel):
-    timezone: Optional[str] = Field(None, description="User IANA timezone (e.g., 'Africa/Lagos', 'Europe/London')")
-    odds_format: Optional[str] = Field(None, description="'DECIMAL', 'FRACTIONAL', or 'AMERICAN'")
-    default_league: Optional[str] = Field(None, description="Default league slug, e.g. 'EPL'")
+    timezone: Optional[str] = Field(
+        None, description="User IANA timezone (e.g., 'Africa/Lagos', 'Europe/London')"
+    )
+    odds_format: Optional[str] = Field(
+        None, description="'DECIMAL', 'FRACTIONAL', or 'AMERICAN'"
+    )
+    default_league: Optional[str] = Field(
+        None, description="Default league slug, e.g. 'EPL'"
+    )
 
 
 class NotificationPreferenceResponse(BaseModel):
@@ -37,11 +47,19 @@ class NotificationPreferenceResponse(BaseModel):
 
 class MatchSubscriptionCreate(BaseModel):
     match_id: str = Field(..., description="Match identifier to monitor")
-    subscription_type: str = Field("KICKOFF_REMINDER", description="'KICKOFF_REMINDER' or 'PROBABILITY_SWING'")
+    subscription_type: str = Field(
+        "KICKOFF_REMINDER", description="'KICKOFF_REMINDER' or 'PROBABILITY_SWING'"
+    )
     channel: str = Field("IN_APP", description="'IN_APP', 'WEB_PUSH', or 'EMAIL'")
-    destination: Optional[str] = Field(None, description="Push endpoint, email, or device token")
-    threshold_pct: Optional[float] = Field(0.05, description="Probability delta threshold for alerts (default 5%)")
-    reminder_minutes_before: Optional[int] = Field(60, description="Minutes before kickoff for reminder")
+    destination: Optional[str] = Field(
+        None, description="Push endpoint, email, or device token"
+    )
+    threshold_pct: Optional[float] = Field(
+        0.05, description="Probability delta threshold for alerts (default 5%)"
+    )
+    reminder_minutes_before: Optional[int] = Field(
+        60, description="Minutes before kickoff for reminder"
+    )
 
 
 class MatchSubscriptionResponse(BaseModel):
@@ -116,6 +134,7 @@ class VapidPublicKeyResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/preferences", response_model=NotificationPreferenceResponse)
 async def get_notification_preferences(
     request: Request,
@@ -159,7 +178,11 @@ async def update_notification_preferences(
     return NotificationPreferenceResponse.model_validate(pref)
 
 
-@router.post("/subscriptions/matches", response_model=MatchSubscriptionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/subscriptions/matches",
+    response_model=MatchSubscriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def subscribe_match_notifications(
     payload: MatchSubscriptionCreate,
     request: Request,
@@ -277,7 +300,9 @@ async def mark_notification_read(
         anonymous_session_id=anon_id if not user else None,
     )
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found"
+        )
     return {"status": "READ", "id": notification_id}
 
 
@@ -317,7 +342,9 @@ async def get_vapid_public_key():
 
 
 @router.post(
-    "/push/devices", response_model=PushDeviceResponse, status_code=status.HTTP_201_CREATED
+    "/push/devices",
+    response_model=PushDeviceResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def register_push_device(
     payload: PushDeviceRegister,
@@ -370,5 +397,7 @@ async def unregister_push_device(
     Keyed on the endpoint alone: the browser owns that opaque string, and a
     caller who can present it is by construction the device being removed.
     """
-    removed = await NotificationService.unregister_push_device(db, endpoint=payload.endpoint)
+    removed = await NotificationService.unregister_push_device(
+        db, endpoint=payload.endpoint
+    )
     return {"status": "UNREGISTERED" if removed else "NOT_FOUND"}

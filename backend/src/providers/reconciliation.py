@@ -229,7 +229,8 @@ def reconcile_team(
     (team name) instead of a blended team+kickoff score.
     """
     scored: list[tuple[float, TeamCandidate]] = [
-        (round(_similarity(provider_team_name, candidate.name), 4), candidate) for candidate in candidates
+        (round(_similarity(provider_team_name, candidate.name), 4), candidate)
+        for candidate in candidates
     ]
     scored.sort(key=lambda item: item[0], reverse=True)
 

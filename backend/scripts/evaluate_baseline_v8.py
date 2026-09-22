@@ -22,6 +22,7 @@ Gates (all must pass for RELEASE READY verdict)
   draw_f1_delta            ≥ 0.0   (must not degrade vs. baseline report, if provided)
   balanced_accuracy_delta  ≥ 0.0   (must not degrade vs. baseline, if provided)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -64,8 +65,16 @@ from models.feature_registry import (  # noqa: E402
 TARGET_COL = "result"
 DATE_COL = "match_date"
 LEAGUE_COL = "league"
-DROP_COLS = {TARGET_COL, DATE_COL, LEAGUE_COL, "match_id", "home_team", "away_team",
-             "home_team_id", "away_team_id"}
+DROP_COLS = {
+    TARGET_COL,
+    DATE_COL,
+    LEAGUE_COL,
+    "match_id",
+    "home_team",
+    "away_team",
+    "home_team_id",
+    "away_team_id",
+}
 
 RPS_GATE = 0.210
 
@@ -78,22 +87,30 @@ logger = logging.getLogger("evaluate_baseline_v8")
 
 # ── metric helpers ────────────────────────────────────────────────────────────
 
+
 def _compute_rps(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     n_classes = y_proba.shape[1]
     y_onehot = np.eye(n_classes, dtype=float)[y_true.astype(int)]
     cdf_pred = np.cumsum(y_proba, axis=1)[:, :-1]
     cdf_true = np.cumsum(y_onehot, axis=1)[:, :-1]
-    return float(round(np.mean(np.sum((cdf_pred - cdf_true) ** 2, axis=1) / (n_classes - 1)), 4))
+    return float(
+        round(np.mean(np.sum((cdf_pred - cdf_true) ** 2, axis=1) / (n_classes - 1)), 4)
+    )
 
 
 def _multiclass_brier(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     return float(
-        np.mean([brier_score_loss((y_true == c).astype(float), y_proba[:, c])
-                 for c in range(y_proba.shape[1])])
+        np.mean(
+            [
+                brier_score_loss((y_true == c).astype(float), y_proba[:, c])
+                for c in range(y_proba.shape[1])
+            ]
+        )
     )
 
 
 # ── data helpers ──────────────────────────────────────────────────────────────
+
 
 def _load_dataset(path: Path) -> pd.DataFrame:
     if path.is_file():
@@ -103,7 +120,9 @@ def _load_dataset(path: Path) -> pd.DataFrame:
     files = sorted(path.rglob("*.parquet")) + sorted(path.rglob("*.csv"))
     if not files:
         raise ValueError(f"No parquet/csv files under {path}")
-    frames = [pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f) for f in files]
+    frames = [
+        pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f) for f in files
+    ]
     return pd.concat(frames, ignore_index=True)
 
 
@@ -114,9 +133,15 @@ def _normalize_target(y: pd.Series) -> Tuple[np.ndarray, int]:
         draw_class = 1 if 1 in classes else classes[len(classes) // 2]
         return y_int, int(draw_class)
     mapping = {
-        "home_win": 0, "h": 0, "0": 0,
-        "draw": 1, "d": 1, "1": 1,
-        "away_win": 2, "a": 2, "2": 2,
+        "home_win": 0,
+        "h": 0,
+        "0": 0,
+        "draw": 1,
+        "d": 1,
+        "1": 1,
+        "away_win": 2,
+        "a": 2,
+        "2": 2,
     }
     mapped = y.astype(str).str.strip().str.lower().map(mapping)
     if mapped.isna().any():
@@ -151,6 +176,7 @@ def _select_features(df: pd.DataFrame, model: object) -> pd.DataFrame:
 
 # ── per-league summary ────────────────────────────────────────────────────────
 
+
 def _league_breakdown(
     leagues: Iterable[str],
     y_true: np.ndarray,
@@ -166,11 +192,16 @@ def _league_breakdown(
         yt = y_true[mask]
         yp = y_pred[mask]
         ypr = y_proba[mask]
-        draw_prec = float(precision_score(yt, yp, labels=[1], average="micro", zero_division=0))
-        draw_rec = float(recall_score(yt, yp, labels=[1], average="micro", zero_division=0))
+        draw_prec = float(
+            precision_score(yt, yp, labels=[1], average="micro", zero_division=0)
+        )
+        draw_rec = float(
+            recall_score(yt, yp, labels=[1], average="micro", zero_division=0)
+        )
         draw_f1 = (
             2 * draw_prec * draw_rec / (draw_prec + draw_rec)
-            if (draw_prec + draw_rec) > 0 else 0.0
+            if (draw_prec + draw_rec) > 0
+            else 0.0
         )
         out[str(league)] = {
             "matches": int(mask.sum()),
@@ -188,6 +219,7 @@ def _league_breakdown(
 
 
 # ── gate validation ───────────────────────────────────────────────────────────
+
 
 def _validate_report(
     results: dict,
@@ -229,6 +261,7 @@ def _validate_report(
 
 # ── per-league delta report ───────────────────────────────────────────────────
 
+
 def _build_delta_report(
     current_per_league: Dict[str, dict],
     baseline_per_league: Optional[Dict[str, dict]],
@@ -242,13 +275,21 @@ def _build_delta_report(
             continue
         deltas[league] = {
             k: round(curr.get(k, 0.0) - base.get(k, 0.0), 4)
-            for k in ("accuracy", "log_loss", "rps", "brier", "macro_f1",
-                      "balanced_accuracy", "draw_f1")
+            for k in (
+                "accuracy",
+                "log_loss",
+                "rps",
+                "brier",
+                "macro_f1",
+                "balanced_accuracy",
+                "draw_f1",
+            )
         }
     return deltas
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Phase 8 baseline evaluator")
@@ -335,11 +376,20 @@ def main() -> None:
     ece = expected_calibration_error(y_eval, p_all)
     macro_f1 = float(f1_score(y_eval, y_pred, average="macro", zero_division=0))
     bal_acc = float(balanced_accuracy_score(y_eval, y_pred))
-    draw_prec = float(precision_score(y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0))
-    draw_rec = float(recall_score(y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0))
+    draw_prec = float(
+        precision_score(
+            y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0
+        )
+    )
+    draw_rec = float(
+        recall_score(
+            y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0
+        )
+    )
     draw_f1 = (
         round(2 * draw_prec * draw_rec / (draw_prec + draw_rec), 4)
-        if (draw_prec + draw_rec) > 0 else 0.0
+        if (draw_prec + draw_rec) > 0
+        else 0.0
     )
 
     results: dict = {
@@ -396,8 +446,12 @@ def main() -> None:
         f"draw_f1={draw_f1:.4f} "
         f"ece={ece['mean']:.4f}"
     )
-    print(f"[baseline_v8] gates={'PASS' if gate_passed else 'FAIL — ' + '; '.join(gate_failures)}")
-    print("[baseline_v8] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
+    print(
+        f"[baseline_v8] gates={'PASS' if gate_passed else 'FAIL — ' + '; '.join(gate_failures)}"
+    )
+    print(
+        "[baseline_v8] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV"
+    )
     print(f"[baseline_v8] report written to {output_path}")
 
     if not gate_passed:

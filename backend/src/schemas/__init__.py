@@ -27,19 +27,15 @@ __all__ = [
     "UserInDB",
     "UserUpdate",
     "UserResponse",
-    
     # Authentication schemas
     "Token",
     "TokenPayload",
     "LoginRequest",
     "LoginResponse",
-    
     # Team schemas
     "TeamResponse",
-    
     # League schemas
     "LeagueResponse",
-    
     # Match schemas
     "Match",
     "MatchCreate",
@@ -49,12 +45,10 @@ __all__ = [
     "MatchResponse",
     "MatchDetail",
     "MatchSummary",
-    
     # Prediction schemas
     "PredictionCreate",
     "PredictionResponse",
     "ValueBetResponse",
-    
     # Odds schemas
     "Odds",
     "OddsCreate",

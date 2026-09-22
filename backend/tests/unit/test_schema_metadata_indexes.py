@@ -1,4 +1,5 @@
 """Schema metadata must retain every migration-owned production index."""
+
 from __future__ import annotations
 
 from src.core.database import Base

@@ -4,6 +4,7 @@ The critical invariant is that a calibrator fitted on meta-model probabilities
 must never receive an equal-weight base-ensemble probability vector merely
 because the meta-model or calibration runtime failed at serving time.
 """
+
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -47,9 +48,10 @@ def test_meta_model_failure_with_serialized_calibrator_fails_closed_and_never_ca
 
     bundle = _bundle(meta_model=BrokenMetaModel(), calibrator=calibrator)
 
-    with patch("src.models.prediction._CAL_AVAILABLE", True), patch(
-        "src.models.prediction._apply_calibrator"
-    ) as apply_calibrator:
+    with (
+        patch("src.models.prediction._CAL_AVAILABLE", True),
+        patch("src.models.prediction._apply_calibrator") as apply_calibrator,
+    ):
         result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
 
     assert result.model_version == "fallback"
@@ -72,9 +74,12 @@ def test_serialized_calibrator_failure_fails_closed_without_serving_raw_meta_out
 
     bundle = _bundle(meta_model=ValidMetaModel(), calibrator=calibrator)
 
-    with patch("src.models.prediction._CAL_AVAILABLE", True), patch(
-        "src.models.prediction._apply_calibrator",
-        side_effect=ValueError("serialized calibrator corrupted"),
+    with (
+        patch("src.models.prediction._CAL_AVAILABLE", True),
+        patch(
+            "src.models.prediction._apply_calibrator",
+            side_effect=ValueError("serialized calibrator corrupted"),
+        ),
     ):
         result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
 
@@ -93,8 +98,9 @@ def test_serialized_calibrator_requires_runtime_dependency():
     calibrator = MagicMock()
     bundle = _bundle(meta_model=ValidMetaModel(), calibrator=calibrator)
 
-    with patch("src.models.prediction._CAL_AVAILABLE", False), patch(
-        "src.models.prediction._apply_calibrator", None
+    with (
+        patch("src.models.prediction._CAL_AVAILABLE", False),
+        patch("src.models.prediction._apply_calibrator", None),
     ):
         result = PredictionEngine()._run_inference(bundle, FEATURES, "EPL")
 

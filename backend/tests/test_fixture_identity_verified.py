@@ -4,6 +4,7 @@ actual team-name resolution, never a hardcoded literal (INV-19).
 Also pins WP-0's model de-duplication: canonical/provider classes must be
 defined exactly once, in db.models, not core.database.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -59,11 +60,15 @@ async def session():
 @pytest.fixture
 def projector() -> UpcomingMatchFeatureProjector:
     p = UpcomingMatchFeatureProjector()
-    p._use_phase8 = False  # skip parquet/DB-backed Phase 8 enrichment — irrelevant to identity
+    p._use_phase8 = (
+        False  # skip parquet/DB-backed Phase 8 enrichment — irrelevant to identity
+    )
     return p
 
 
-async def _seed_teams(session: AsyncSession, home: str = "Arsenal", away: str = "Chelsea") -> None:
+async def _seed_teams(
+    session: AsyncSession, home: str = "Arsenal", away: str = "Chelsea"
+) -> None:
     session.add_all(
         [
             Team(id="team-home", name=home, active=True),
@@ -78,7 +83,10 @@ async def test_matchup_path_exact_match_is_verified(
 ) -> None:
     await _seed_teams(session)
     result = await projector.build_live_feature_vector_from_matchup(
-        home_team="Arsenal", away_team="Chelsea", league="epl", db=session,
+        home_team="Arsenal",
+        away_team="Chelsea",
+        league="epl",
+        db=session,
         match_date=datetime(2026, 8, 10, 15, 0),
     )
     assert result["fixture_identity_verified"] is True
@@ -100,7 +108,10 @@ async def test_matchup_path_default_match_date_does_not_raise(
     storage convention, and must resolve real teams successfully end-to-end."""
     await _seed_teams(session)
     result = await projector.build_live_feature_vector_from_matchup(
-        home_team="Arsenal", away_team="Chelsea", league="epl", db=session,
+        home_team="Arsenal",
+        away_team="Chelsea",
+        league="epl",
+        db=session,
     )
     assert result["fixture_identity_verified"] is True
     assert result["identity_resolution"] == {
@@ -114,7 +125,10 @@ async def test_matchup_path_unresolvable_team_is_unverified(
 ) -> None:
     await _seed_teams(session)
     result = await projector.build_live_feature_vector_from_matchup(
-        home_team="Arsenal", away_team="Some Nonexistent FC", league="epl", db=session,
+        home_team="Arsenal",
+        away_team="Some Nonexistent FC",
+        league="epl",
+        db=session,
         match_date=datetime(2026, 8, 10, 15, 0),
     )
     assert result["fixture_identity_verified"] is False
@@ -140,7 +154,9 @@ async def test_db_match_id_path_with_valid_teams_is_verified(
     )
     await session.commit()
 
-    result = await projector.build_live_feature_vector(match_id="match-1", league="epl", db=session)
+    result = await projector.build_live_feature_vector(
+        match_id="match-1", league="epl", db=session
+    )
     assert result["fixture_identity_verified"] is True
     assert result["identity_resolution"] == {
         "home_team_resolved": True,

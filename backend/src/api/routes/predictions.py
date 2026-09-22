@@ -51,7 +51,9 @@ class CertifiedSignalsInput(BaseModel):
     travel_load: float | None = None
     confirmed_absences: list[str] = Field(default_factory=list)
     lineup_status: Literal["CONFIRMED", "PROVISIONAL", "UNKNOWN"] = "UNKNOWN"
-    sharp_market_signal: Literal["CONFIRMING", "NEUTRAL", "CONFLICTING", "UNKNOWN"] = "UNKNOWN"
+    sharp_market_signal: Literal["CONFIRMING", "NEUTRAL", "CONFLICTING", "UNKNOWN"] = (
+        "UNKNOWN"
+    )
 
 
 class CertifiedFreshnessInput(BaseModel):
@@ -78,7 +80,9 @@ class CertifiedPredictionRequest(BaseModel):
     market: CertifiedMarketInput | None = None
     signals: CertifiedSignalsInput = Field(default_factory=CertifiedSignalsInput)
     freshness: CertifiedFreshnessInput = Field(default_factory=CertifiedFreshnessInput)
-    source_status: CertifiedSourceStatusInput = Field(default_factory=CertifiedSourceStatusInput)
+    source_status: CertifiedSourceStatusInput = Field(
+        default_factory=CertifiedSourceStatusInput
+    )
     data_gaps: list[str] = Field(default_factory=list)
     known_risks: list[str] = Field(default_factory=list)
 
@@ -96,7 +100,9 @@ async def analyze_prediction(
     """Evaluate untrusted caller input without certifying it for execution."""
     try:
         service = CertifiedAnalyticsService(db)
-        return await service.analyze_payload(request.model_dump(), trusted_backend=False)
+        return await service.analyze_payload(
+            request.model_dump(), trusted_backend=False
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

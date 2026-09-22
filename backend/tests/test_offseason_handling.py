@@ -308,7 +308,11 @@ class TestLeagueIsOffseasonDecoupledFromMatchCount:
         form, two words) must resolve identically to 'LA_LIGA' (canonical)."""
         with patch("src.api.endpoints.upcoming_matches.date") as mock_date:
             self._frozen_today(mock_date, date(2026, 8, 14))
-            assert _league_is_offseason("La Liga") is _league_is_offseason("LA_LIGA") is True
+            assert (
+                _league_is_offseason("La Liga")
+                is _league_is_offseason("LA_LIGA")
+                is True
+            )
 
     def test_becomes_false_once_season_start_date_passes(self):
         """The same league flips from off-season to in-season purely as a

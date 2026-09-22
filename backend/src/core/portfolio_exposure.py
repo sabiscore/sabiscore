@@ -21,13 +21,18 @@ a live recommendation:
 Constants below are reasoned starting points, not calibrated against real
 same-matchday settlement outcomes (none exist yet — see docs/DEBT.md item 9).
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from .league_policy import LeaguePolicyUnavailableError, canonical_league_id, get_league_policy
+from .league_policy import (
+    LeaguePolicyUnavailableError,
+    canonical_league_id,
+    get_league_policy,
+)
 
 # aggregate cap = this multiple of the largest per-league kelly_cap present in
 # the batch — reuses an existing deliberated number rather than a fresh
@@ -35,7 +40,9 @@ from .league_policy import LeaguePolicyUnavailableError, canonical_league_id, ge
 AGGREGATE_CAP_MULTIPLIER = 3.0
 HAIRCUT_PER_ADDITIONAL_FIXTURE = 0.10
 HAIRCUT_FLOOR_MULTIPLIER = 0.50
-PORTFOLIO_POLICY_SOURCE = "DEFAULT_PENDING_CALIBRATION"  # mirrors LeaguePolicy's own vocabulary
+PORTFOLIO_POLICY_SOURCE = (
+    "DEFAULT_PENDING_CALIBRATION"  # mirrors LeaguePolicy's own vocabulary
+)
 _FALLBACK_KELLY_CAP = 0.05  # matches models/prediction.py's MAX_KELLY_CAP
 
 
@@ -84,7 +91,10 @@ def _group_key(match: Dict[str, Any]) -> Tuple[str, str]:
 
 def _league_cap(match: Dict[str, Any]) -> Optional[float]:
     try:
-        return min(get_league_policy(str(match.get("league") or "")).kelly_cap, _FALLBACK_KELLY_CAP)
+        return min(
+            get_league_policy(str(match.get("league") or "")).kelly_cap,
+            _FALLBACK_KELLY_CAP,
+        )
     except LeaguePolicyUnavailableError:
         return None
 

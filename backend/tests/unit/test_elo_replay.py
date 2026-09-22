@@ -4,6 +4,7 @@ Regression guard for the finding that motivated this module: every canonical
 Elo feature was a constant 0.0 across every row `train_on_real_matches.py`
 emitted, because nothing replayed Elo over the offline training corpus.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -23,9 +24,13 @@ def _matches(results: list[tuple[str, str, int, int]]) -> list[dict]:
     """Build a chronological match list. Each tuple is (home, away, hg, ag)."""
     return [
         {
-            "league": _LEAGUE, "season": _SEASON,
+            "league": _LEAGUE,
+            "season": _SEASON,
             "date": _KICKOFF + timedelta(days=i),
-            "home": home, "away": away, "hg": hg, "ag": ag,
+            "home": home,
+            "away": away,
+            "hg": hg,
+            "ag": ag,
         }
         for i, (home, away, hg, ag) in enumerate(results)
     ]
@@ -35,7 +40,10 @@ def test_elo_training_columns_excludes_the_permanently_gapped_field() -> None:
     """elo_league_adjusted is permanently PHASE7_FEATURES_ALWAYS_DATA_GAP by
     ATE-review policy — this replay must never touch it."""
     assert set(ELO_TRAINING_COLUMNS) == {
-        "elo_difference", "elo_home_trend_5", "elo_away_trend_5", "elo_momentum_cross",
+        "elo_difference",
+        "elo_home_trend_5",
+        "elo_away_trend_5",
+        "elo_momentum_cross",
     }
     assert "elo_league_adjusted" not in ELO_TRAINING_COLUMNS
 
@@ -43,13 +51,15 @@ def test_elo_training_columns_excludes_the_permanently_gapped_field() -> None:
 def test_cross_verify_against_real_elo_engine_does_not_raise() -> None:
     """The from-scratch reimplementation must agree with EloEngine before
     anything trusts its output at scale."""
-    matches = _matches([
-        ("Team A", "Team B", 2, 1),
-        ("Team B", "Team C", 0, 0),
-        ("Team A", "Team C", 3, 0),
-        ("Team C", "Team A", 1, 1),
-        ("Team B", "Team A", 2, 0),
-    ])
+    matches = _matches(
+        [
+            ("Team A", "Team B", 2, 1),
+            ("Team B", "Team C", 0, 0),
+            ("Team A", "Team C", 3, 0),
+            ("Team C", "Team A", 1, 1),
+            ("Team B", "Team A", 2, 0),
+        ]
+    )
     cross_verify_against_elo_engine(matches, n_check=len(matches))
 
 
@@ -66,10 +76,12 @@ def test_first_meeting_is_unresolved_neutral() -> None:
 def test_elo_difference_varies_after_a_result_is_recorded() -> None:
     """The regression this module exists to fix: elo_difference must NOT stay
     a constant 0.0 once teams have a real, divergent result history."""
-    matches = _matches([
-        ("Team A", "Team B", 3, 0),   # A beats B — A's rating rises, B's falls
-        ("Team A", "Team B", 2, 0),   # rematch: A now enters as a real favourite
-    ])
+    matches = _matches(
+        [
+            ("Team A", "Team B", 3, 0),  # A beats B — A's rating rises, B's falls
+            ("Team A", "Team B", 2, 0),  # rematch: A now enters as a real favourite
+        ]
+    )
     result = compute_elo_training_columns(matches)
     first_diff = result.rows[0]["elo_difference"]
     second_diff = result.rows[1]["elo_difference"]
@@ -92,10 +104,12 @@ def test_a_match_never_sees_its_own_result() -> None:
     """The row for a match is computed PRE-match; the state update happens
     strictly after, so replaying the same fixture twice back-to-back must
     give the identical elo_difference both times."""
-    matches = _matches([
-        ("Team A", "Team B", 5, 0),
-        ("Team A", "Team B", 5, 0),
-    ])
+    matches = _matches(
+        [
+            ("Team A", "Team B", 5, 0),
+            ("Team A", "Team B", 5, 0),
+        ]
+    )
     result = compute_elo_training_columns(matches)
     # Both rows are computed from a state where only the FIRST match (if any)
     # has already been applied — the second row must reflect the first

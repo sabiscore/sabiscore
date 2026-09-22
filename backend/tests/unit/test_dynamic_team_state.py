@@ -12,6 +12,7 @@ E6's hypothesis rather than a reparameterised Elo:
   different link function;
 * a match never informs its own row.
 """
+
 from __future__ import annotations
 
 from datetime import date, timedelta
@@ -90,8 +91,12 @@ def test_uncertainty_grows_with_elapsed_time() -> None:
     start = date(2023, 1, 1)
     _play(replay, "Alpha", "Beta", start)
 
-    soon = replay.get_context("Alpha", "Gamma", "EPL", start + timedelta(days=1)).home_rd
-    later = replay.get_context("Alpha", "Gamma", "EPL", start + timedelta(days=90)).home_rd
+    soon = replay.get_context(
+        "Alpha", "Gamma", "EPL", start + timedelta(days=1)
+    ).home_rd
+    later = replay.get_context(
+        "Alpha", "Gamma", "EPL", start + timedelta(days=90)
+    ).home_rd
 
     assert later > soon
 
@@ -113,7 +118,9 @@ def test_accumulated_uncertainty_is_capped_at_the_initial_deviation() -> None:
     start = date(2019, 1, 1)
     _play(replay, "Alpha", "Beta", start)
 
-    far_future = replay.get_context("Alpha", "Gamma", "EPL", start + timedelta(days=5 * 365))
+    far_future = replay.get_context(
+        "Alpha", "Gamma", "EPL", start + timedelta(days=5 * 365)
+    )
     assert far_future.home_rd <= 350.0 + 1e-9
 
 
@@ -205,8 +212,22 @@ def test_a_match_never_informs_its_own_row() -> None:
     first row then carries a non-zero strength_diff instead of 0.0.
     """
     matches = [
-        {"league": "EPL", "date": date(2023, 1, 1), "home": "Alpha", "away": "Beta", "hg": 5, "ag": 0},
-        {"league": "EPL", "date": date(2023, 1, 8), "home": "Alpha", "away": "Beta", "hg": 0, "ag": 0},
+        {
+            "league": "EPL",
+            "date": date(2023, 1, 1),
+            "home": "Alpha",
+            "away": "Beta",
+            "hg": 5,
+            "ag": 0,
+        },
+        {
+            "league": "EPL",
+            "date": date(2023, 1, 8),
+            "home": "Alpha",
+            "away": "Beta",
+            "hg": 0,
+            "ag": 0,
+        },
     ]
     rows = compute_dynamic_state_columns(matches, home_advantage=_HOME_ADVANTAGE)
 
@@ -222,7 +243,14 @@ def test_self_play_rows_are_skipped_not_rated() -> None:
     """docs/DEBT.md item 23: 26 rows in the production twin of this corpus
     record a team playing itself. They must yield no rating, not a zero one."""
     matches = [
-        {"league": "EPL", "date": date(2023, 1, 1), "home": "Alpha", "away": "Alpha", "hg": 1, "ag": 1},
+        {
+            "league": "EPL",
+            "date": date(2023, 1, 1),
+            "home": "Alpha",
+            "away": "Alpha",
+            "hg": 1,
+            "ag": 1,
+        },
     ]
     rows = compute_dynamic_state_columns(matches, home_advantage=_HOME_ADVANTAGE)
     assert rows[0] == {}
@@ -261,7 +289,9 @@ def _dominant_team_strength(*, season_carryover: bool) -> float:
         replay.get_context("Alpha", f"Rival{i % 4}", "EPL", when, season="2324")
         replay.update("Alpha", f"Rival{i % 4}", "EPL", when, 3, 0, season="2324")
     next_season = start + timedelta(days=365)
-    return replay.get_context("Alpha", "Rival0", "EPL", next_season, season="2425").home_strength
+    return replay.get_context(
+        "Alpha", "Rival0", "EPL", next_season, season="2425"
+    ).home_strength
 
 
 def test_carryover_off_by_default_leaves_the_rating_untouched_across_seasons() -> None:

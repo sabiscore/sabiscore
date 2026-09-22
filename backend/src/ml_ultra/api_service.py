@@ -43,17 +43,16 @@ logger = logging.getLogger(__name__)
 
 redis_client: Optional[redis.Redis] = None
 
+
 async def get_redis() -> redis.Redis:
     """Get Redis client (singleton pattern)"""
     global redis_client
     if redis_client is None:
         redis_client = await redis.from_url(
-            REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-            max_connections=50
+            REDIS_URL, encoding="utf-8", decode_responses=True, max_connections=50
         )
     return redis_client
+
 
 async def close_redis():
     """Close Redis connection"""
@@ -62,18 +61,21 @@ async def close_redis():
         await redis_client.close()
         redis_client = None
 
+
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
 
+
 class MatchFeatures(BaseModel):
     """Input features for a single match prediction"""
+
     match_id: str = Field(..., description="Unique match identifier")
     home_team_id: int = Field(..., description="Home team ID")
     away_team_id: int = Field(..., description="Away team ID")
     league_id: int = Field(..., description="League ID")
     match_date: str = Field(..., description="Match date (ISO format)")
-    
+
     # Team form (last 5 matches)
     home_last_5_wins: int = Field(0, ge=0, le=5)
     home_last_5_draws: int = Field(0, ge=0, le=5)
@@ -81,41 +83,47 @@ class MatchFeatures(BaseModel):
     away_last_5_wins: int = Field(0, ge=0, le=5)
     away_last_5_draws: int = Field(0, ge=0, le=5)
     away_last_5_losses: int = Field(0, ge=0, le=5)
-    
+
     # Goals statistics
     home_goals_scored_avg: float = Field(0.0, ge=0.0)
     home_goals_conceded_avg: float = Field(0.0, ge=0.0)
     away_goals_scored_avg: float = Field(0.0, ge=0.0)
     away_goals_conceded_avg: float = Field(0.0, ge=0.0)
-    
+
     # Head-to-head
     h2h_home_wins: int = Field(0, ge=0)
     h2h_draws: int = Field(0, ge=0)
     h2h_away_wins: int = Field(0, ge=0)
-    
+
     # Additional context (optional)
     home_odds: Optional[float] = Field(None, gt=1.0)
     draw_odds: Optional[float] = Field(None, gt=1.0)
     away_odds: Optional[float] = Field(None, gt=1.0)
 
-    @validator('match_date')
+    @validator("match_date")
     def validate_date(cls, v):
         try:
-            datetime.fromisoformat(v.replace('Z', '+00:00'))
+            datetime.fromisoformat(v.replace("Z", "+00:00"))
             return v
         except ValueError:
             raise ValueError("match_date must be in ISO format")
 
+
 class PredictionRequest(BaseModel):
     """Single prediction request"""
+
     features: MatchFeatures
+
 
 class BatchPredictionRequest(BaseModel):
     """Batch prediction request"""
+
     matches: List[MatchFeatures] = Field(..., max_items=MAX_BATCH_SIZE)
+
 
 class PredictionResponse(BaseModel):
     """Prediction response"""
+
     match_id: str
     home_win_prob: float = Field(..., ge=0.0, le=1.0)
     draw_prob: float = Field(..., ge=0.0, le=1.0)
@@ -127,14 +135,18 @@ class PredictionResponse(BaseModel):
     latency_ms: float
     cached: bool = False
 
+
 class BatchPredictionResponse(BaseModel):
     """Batch prediction response"""
+
     predictions: List[PredictionResponse]
     total_latency_ms: float
     avg_latency_ms: float
 
+
 class HealthResponse(BaseModel):
     """Health check response"""
+
     status: str
     model_loaded: bool
     model_version: str
@@ -143,68 +155,73 @@ class HealthResponse(BaseModel):
     total_requests: int
     cache_hit_rate: float
 
+
 # ============================================================================
 # MODEL MANAGER
 # ============================================================================
 
+
 class ModelManager:
     """Manages ML model lifecycle"""
-    
+
     def __init__(self):
         self.pipeline: Optional[ProductionMLPipeline] = None
         self.model_version: str = "unknown"
         self.load_time: float = 0
-        
+
     def load_model(self, model_path: str) -> None:
         """Load trained model from directory"""
         start_time = time.time()
         logger.info(f"Loading model from {model_path}...")
-        
+
         try:
             self.pipeline = ProductionMLPipeline.load_trained_model(model_path)
-            
+
             # Load metadata from directory
-            metadata_path = os.path.join(model_path, 'metadata.json')
+            metadata_path = os.path.join(model_path, "metadata.json")
             if os.path.exists(metadata_path):
-                with open(metadata_path, 'r') as f:
+                with open(metadata_path, "r") as f:
                     metadata = json.load(f)
-                    self.model_version = metadata.get('model_version', 'v1.0.0')
-            
+                    self.model_version = metadata.get("model_version", "v1.0.0")
+
             self.load_time = time.time() - start_time
-            logger.info(f"✅ Model loaded in {self.load_time:.2f}s (version: {self.model_version})")
-            
+            logger.info(
+                f"✅ Model loaded in {self.load_time:.2f}s (version: {self.model_version})"
+            )
+
         except Exception as e:
             logger.error(f"❌ Failed to load model: {e}")
             raise
-    
+
     def predict(self, features_dict: Dict[str, Any]) -> Dict[str, float]:
         """Make prediction from pre-computed features"""
         if not self.pipeline:
             raise RuntimeError("Model not loaded")
-        
+
         # The API receives pre-computed features, so we need to use the ensemble directly
         # rather than going through feature engineering
-        
+
         # Create DataFrame with features
         feature_names = self.pipeline.feature_names
-        
+
         # Build feature vector from input dict, filling missing features with 0
         feature_values = {}
         for feat_name in feature_names:
             feature_values[feat_name] = features_dict.get(feat_name, 0.0)
-        
+
         # Create single-row DataFrame
         df = pd.DataFrame([feature_values])
-        
+
         # Get predictions from ensemble
         probas = self.pipeline.ensemble.predict_proba(df)
-        
+
         # probas is [away_win, draw, home_win] (0, 1, 2)
         return {
-            'home_win_prob': float(probas[0, 2]),
-            'draw_prob': float(probas[0, 1]),
-            'away_win_prob': float(probas[0, 0])
+            "home_win_prob": float(probas[0, 2]),
+            "draw_prob": float(probas[0, 1]),
+            "away_win_prob": float(probas[0, 0]),
         }
+
 
 # Global model manager
 model_manager = ModelManager()
@@ -213,8 +230,10 @@ model_manager = ModelManager()
 # CACHING DECORATOR
 # ============================================================================
 
+
 def cache_prediction(ttl: int = CACHE_TTL):
     """Decorator to cache predictions in Redis"""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -224,39 +243,41 @@ def cache_prediction(ttl: int = CACHE_TTL):
                 if isinstance(arg, (PredictionRequest, BatchPredictionRequest)):
                     request = arg
                     break
-            
+
             if not request:
                 return await func(*args, **kwargs)
-            
+
             # Generate cache key
             cache_key = _generate_cache_key(request)
-            
+
             # Try to get from cache
             redis_conn = await get_redis()
             cached_result = await redis_conn.get(cache_key)
-            
+
             if cached_result:
                 logger.info(f"Cache HIT: {cache_key}")
                 result = json.loads(cached_result)
                 if isinstance(result, dict):
-                    result['cached'] = True
+                    result["cached"] = True
                 return result
-            
+
             # Cache miss - call function
             logger.info(f"Cache MISS: {cache_key}")
             result = await func(*args, **kwargs)
-            
+
             # Store in cache
             await redis_conn.setex(
                 cache_key,
                 ttl,
-                json.dumps(result if isinstance(result, dict) else result.dict())
+                json.dumps(result if isinstance(result, dict) else result.dict()),
             )
-            
+
             return result
-        
+
         return wrapper
+
     return decorator
+
 
 def _generate_cache_key(request) -> str:
     """Generate cache key from request"""
@@ -264,38 +285,41 @@ def _generate_cache_key(request) -> str:
         data = request.features.dict()
     else:
         data = [m.dict() for m in request.matches]
-    
+
     key_string = json.dumps(data, sort_keys=True)
     hash_key = hashlib.md5(key_string.encode()).hexdigest()
     return f"pred:{hash_key}"
+
 
 # ============================================================================
 # METRICS TRACKER
 # ============================================================================
 
+
 class MetricsTracker:
     """Track API metrics"""
-    
+
     def __init__(self):
         self.start_time = time.time()
         self.total_requests = 0
         self.cache_hits = 0
         self.cache_misses = 0
-        
+
     def record_request(self, cached: bool = False):
         self.total_requests += 1
         if cached:
             self.cache_hits += 1
         else:
             self.cache_misses += 1
-    
+
     def get_cache_hit_rate(self) -> float:
         if self.total_requests == 0:
             return 0.0
         return self.cache_hits / self.total_requests
-    
+
     def get_uptime(self) -> float:
         return time.time() - self.start_time
+
 
 metrics = MetricsTracker()
 
@@ -308,7 +332,7 @@ app = FastAPI(
     description="Ultra-fast football prediction API with <30ms latency",
     version="3.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Middleware
@@ -325,6 +349,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # AUTHENTICATION
 # ============================================================================
 
+
 async def verify_api_key(x_api_key: str = Header(...)):
     """Verify API key"""
     if not API_KEY:
@@ -333,29 +358,32 @@ async def verify_api_key(x_api_key: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key
 
+
 # ============================================================================
 # STARTUP/SHUTDOWN
 # ============================================================================
+
 
 @app.on_event("startup")
 async def startup_event():
     """Load model and connect to Redis on startup"""
     logger.info("🚀 Starting SabiScore Ultra API...")
-    
+
     # Load model
     if os.path.exists(MODEL_PATH):
         model_manager.load_model(MODEL_PATH)
     else:
         logger.warning(f"⚠️ Model not found at {MODEL_PATH}, running without model")
-    
+
     # Connect to Redis
     try:
         await get_redis()
         logger.info("✅ Connected to Redis")
     except Exception as e:
         logger.error(f"❌ Failed to connect to Redis: {e}")
-    
+
     logger.info("✅ API ready to serve requests")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -363,16 +391,18 @@ async def shutdown_event():
     logger.info("Shutting down...")
     await close_redis()
 
+
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
     redis_conn = await get_redis()
     redis_ok = await redis_conn.ping()
-    
+
     return HealthResponse(
         status="healthy" if model_manager.pipeline and redis_ok else "degraded",
         model_loaded=model_manager.pipeline is not None,
@@ -380,102 +410,100 @@ async def health_check():
         redis_connected=redis_ok,
         uptime_seconds=metrics.get_uptime(),
         total_requests=metrics.total_requests,
-        cache_hit_rate=metrics.get_cache_hit_rate()
+        cache_hit_rate=metrics.get_cache_hit_rate(),
     )
+
 
 @app.post("/predict", response_model=PredictionResponse)
 @cache_prediction(ttl=CACHE_TTL)
-async def predict(
-    request: PredictionRequest,
-    api_key: str = Depends(verify_api_key)
-):
+async def predict(request: PredictionRequest, api_key: str = Depends(verify_api_key)):
     """
     Make a single match prediction
     Target latency: <30ms (cache hit), <100ms (cache miss)
     """
     start_time = time.time()
-    
+
     try:
         # Make prediction
         result = model_manager.predict(request.features.dict())
-        
+
         # Determine predicted outcome
-        probs = [result['home_win_prob'], result['draw_prob'], result['away_win_prob']]
+        probs = [result["home_win_prob"], result["draw_prob"], result["away_win_prob"]]
         max_prob = max(probs)
-        outcomes = ['home_win', 'draw', 'away_win']
+        outcomes = ["home_win", "draw", "away_win"]
         predicted_outcome = outcomes[probs.index(max_prob)]
-        
+
         # Calculate uncertainty (entropy)
         probs_array = np.array(probs)
         uncertainty = -np.sum(probs_array * np.log(probs_array + 1e-10))
-        
+
         latency_ms = (time.time() - start_time) * 1000
-        
+
         response = PredictionResponse(
             match_id=request.features.match_id,
-            home_win_prob=result['home_win_prob'],
-            draw_prob=result['draw_prob'],
-            away_win_prob=result['away_win_prob'],
+            home_win_prob=result["home_win_prob"],
+            draw_prob=result["draw_prob"],
+            away_win_prob=result["away_win_prob"],
             predicted_outcome=predicted_outcome,
             confidence=max_prob,
             uncertainty=float(uncertainty),
             model_version=model_manager.model_version,
             latency_ms=latency_ms,
-            cached=False
+            cached=False,
         )
-        
+
         metrics.record_request(cached=False)
         logger.info(f"Prediction completed in {latency_ms:.2f}ms")
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/predict/batch", response_model=BatchPredictionResponse)
 async def predict_batch(
-    request: BatchPredictionRequest,
-    api_key: str = Depends(verify_api_key)
+    request: BatchPredictionRequest, api_key: str = Depends(verify_api_key)
 ):
     """
     Make batch predictions for multiple matches
     Target throughput: 1000+ predictions/second
     """
     start_time = time.time()
-    
+
     if len(request.matches) > MAX_BATCH_SIZE:
         raise HTTPException(
-            status_code=400,
-            detail=f"Batch size exceeds maximum of {MAX_BATCH_SIZE}"
+            status_code=400, detail=f"Batch size exceeds maximum of {MAX_BATCH_SIZE}"
         )
-    
+
     try:
         # Process predictions in parallel
         tasks = []
         for match_features in request.matches:
             single_request = PredictionRequest(features=match_features)
             tasks.append(predict(single_request, api_key))
-        
+
         predictions = await asyncio.gather(*tasks)
-        
+
         total_latency_ms = (time.time() - start_time) * 1000
         avg_latency_ms = total_latency_ms / len(predictions)
-        
+
         logger.info(
             f"Batch prediction: {len(predictions)} matches in {total_latency_ms:.2f}ms "
             f"(avg: {avg_latency_ms:.2f}ms/match)"
         )
-        
+
         return BatchPredictionResponse(
             predictions=predictions,
             total_latency_ms=total_latency_ms,
-            avg_latency_ms=avg_latency_ms
+            avg_latency_ms=avg_latency_ms,
         )
-        
+
     except Exception as e:
         logger.error(f"Batch prediction failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/cache/clear")
 async def clear_cache(api_key: str = Depends(verify_api_key)):
@@ -485,11 +513,12 @@ async def clear_cache(api_key: str = Depends(verify_api_key)):
         keys = await redis_conn.keys("pred:*")
         if keys:
             await redis_conn.delete(*keys)
-        
+
         return {"message": f"Cleared {len(keys)} cached predictions"}
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/")
 async def root():
@@ -499,8 +528,9 @@ async def root():
         "version": "3.0.0",
         "status": "running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
+
 
 # ============================================================================
 # DEVELOPMENT SERVER
@@ -508,7 +538,7 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Run with: python -m backend.src.ml_ultra.api_service
     uvicorn.run(
         app,
@@ -516,5 +546,5 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
         access_log=True,
-        workers=4  # For production
+        workers=4,  # For production
     )

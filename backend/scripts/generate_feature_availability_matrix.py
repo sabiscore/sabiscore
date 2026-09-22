@@ -49,7 +49,9 @@ def generate(cache_dir: Path, schema: str = _DEFAULT_SCHEMA) -> dict[str, Any]:
     dataset = build_dataset(load_matches(cache_dir), schema=schema)
     contract = resolve_feature_schema(schema)
     report = build_promotion_feature_evidence(
-        dataset, candidate_features=contract, candidate_schema=schema,
+        dataset,
+        candidate_features=contract,
+        candidate_schema=schema,
     )
     validate_promotion_feature_evidence(report, candidate_features=contract)
     return report
@@ -57,7 +59,9 @@ def generate(cache_dir: Path, schema: str = _DEFAULT_SCHEMA) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache-dir", type=Path, default=BACKEND_ROOT / "data" / "cache")
+    parser.add_argument(
+        "--cache-dir", type=Path, default=BACKEND_ROOT / "data" / "cache"
+    )
     parser.add_argument("--json-out", type=Path, required=True)
     parser.add_argument("--markdown-out", type=Path, required=True)
     parser.add_argument("--schema", choices=sorted(_SCHEMAS), default=_DEFAULT_SCHEMA)

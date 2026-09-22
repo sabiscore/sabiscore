@@ -53,6 +53,7 @@ investigate the club first.
 
     cd backend && PYTHONPATH=. python scripts/validate_venue_manifest.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -65,7 +66,10 @@ from typing import Any
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_MANIFEST = (
-    _BACKEND_ROOT.parent / "reports" / "research" / "portfolio-f-venue-location-manifest.json"
+    _BACKEND_ROOT.parent
+    / "reports"
+    / "research"
+    / "portfolio-f-venue-location-manifest.json"
 )
 
 #: Nearest-neighbour distance, within a country, beyond which a VERIFIED club is
@@ -152,9 +156,13 @@ def validate(manifest: dict[str, Any]) -> list[str]:
     for entry in entries:
         actual[str(entry.get("verdict"))] += 1
     if dict(actual) != dict(declared):
-        failures.append(f"counts header {dict(declared)} does not match entries {dict(actual)}")
+        failures.append(
+            f"counts header {dict(declared)} does not match entries {dict(actual)}"
+        )
 
-    verified_points: dict[str, list[tuple[str, tuple[float, float]]]] = defaultdict(list)
+    verified_points: dict[str, list[tuple[str, tuple[float, float]]]] = defaultdict(
+        list
+    )
 
     for entry in entries:
         club = str(entry.get("club"))
@@ -224,7 +232,9 @@ def demote_geographically_implausible(
     out = json.loads(json.dumps(manifest))  # deep copy without a stdlib import
     entries = out.get("entries") or []
 
-    verified_points: dict[str, list[tuple[str, tuple[float, float]]]] = defaultdict(list)
+    verified_points: dict[str, list[tuple[str, tuple[float, float]]]] = defaultdict(
+        list
+    )
     by_club: dict[str, dict[str, Any]] = {}
     for entry in entries:
         club = str(entry.get("club"))
@@ -283,8 +293,7 @@ def main() -> int:
         for failure in failures:
             print(f"  - {failure}", file=sys.stderr)
         print(
-            f"\nisolation bound: {_ISOLATION_KM:,.0f} km "
-            f"({_ISOLATION_POLICY_SOURCE})",
+            f"\nisolation bound: {_ISOLATION_KM:,.0f} km ({_ISOLATION_POLICY_SOURCE})",
             file=sys.stderr,
         )
         return 1

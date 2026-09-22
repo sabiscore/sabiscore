@@ -5,6 +5,7 @@ progress and evaluates the same persisted structural/semantic invariants used by
 the canonical production verification SQL so a freshly bootstrapped database
 cannot look production-complete merely because it contains some Elo rows.
 """
+
 from __future__ import annotations
 
 from sqlalchemy import and_, exists, func, or_, select
@@ -60,12 +61,16 @@ async def _structural_integrity(session: AsyncSession) -> dict[str, object]:
             .join(snapshot_counts, snapshot_counts.c.match_id == Match.id)
             .where(
                 and_(*predicates),
-                or_(snapshot_counts.c.row_count != 2, snapshot_counts.c.team_count != 2),
+                or_(
+                    snapshot_counts.c.row_count != 2, snapshot_counts.c.team_count != 2
+                ),
             ),
         ),
         "partial_one_row_matches": await _scalar_count(
             session,
-            select(func.count()).select_from(snapshot_counts).where(snapshot_counts.c.row_count == 1),
+            select(func.count())
+            .select_from(snapshot_counts)
+            .where(snapshot_counts.c.row_count == 1),
         ),
         "duplicate_match_team_pairs": await _scalar_count(
             session,
@@ -171,7 +176,9 @@ async def _semantic_integrity(session: AsyncSession) -> dict[str, object]:
         select(func.count(EloRatingSnapshot.id))
         .select_from(EloRatingSnapshot)
         .outerjoin(Team, Team.id == EloRatingSnapshot.team_id)
-        .where(or_(Team.league_id.is_(None), Team.league_id != EloRatingSnapshot.league)),
+        .where(
+            or_(Team.league_id.is_(None), Team.league_id != EloRatingSnapshot.league)
+        ),
     )
 
     counters = {

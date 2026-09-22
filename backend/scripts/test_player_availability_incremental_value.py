@@ -48,6 +48,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/test_player_availability_incremental_value.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -79,7 +80,11 @@ from src.core.config import settings  # noqa: E402
 from src.providers.api_football import APIFootballProvider  # noqa: E402
 
 _REPORT_DIR = _BACKEND_ROOT.parent / "reports" / "research"
-_OUTCOME_CODE = {"H": 0, "D": 1, "A": 2}  # matches ranked_probability_score's own convention
+_OUTCOME_CODE = {
+    "H": 0,
+    "D": 1,
+    "A": 2,
+}  # matches ranked_probability_score's own convention
 _TRAIN_SEASONS = (2022, 2023)
 _TEST_SEASON = 2024
 
@@ -108,7 +113,11 @@ def load_fixtures_with_odds(division: str, suffix: str) -> list[dict[str, Any]]:
         parsed = pd.to_datetime(row[cols["date"]], errors="coerce", dayfirst=False)
         result = str(row[cols["result"]]).strip().upper()
         try:
-            oh, od, oa = float(row[cols["oh"]]), float(row[cols["od"]]), float(row[cols["oa"]])
+            oh, od, oa = (
+                float(row[cols["oh"]]),
+                float(row[cols["od"]]),
+                float(row[cols["oa"]]),
+            )
         except (TypeError, ValueError):
             continue
         if pd.isna(parsed) or result not in _OUTCOME_CODE or min(oh, od, oa) <= 1.0:
@@ -154,15 +163,22 @@ async def build_dataset() -> list[dict[str, Any]]:
     joined: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=30.0) as client:
         provider = APIFootballProvider(
-            api_key=settings.api_football_key, enabled=True, live_tests=True, http_client=client
+            api_key=settings.api_football_key,
+            enabled=True,
+            live_tests=True,
+            http_client=client,
         )
         for league, division in _LEAGUE_TO_DIVISION.items():
             for season, suffix in _SEASONS.items():
                 fixtures = load_fixtures_with_odds(division, suffix)
                 if not fixtures:
                     continue
-                roster = {f["home_team"] for f in fixtures} | {f["away_team"] for f in fixtures}
-                counts = await collect_unavailable_counts(provider, league, roster, season)
+                roster = {f["home_team"] for f in fixtures} | {
+                    f["away_team"] for f in fixtures
+                }
+                counts = await collect_unavailable_counts(
+                    provider, league, roster, season
+                )
                 await asyncio.sleep(1.0)
 
                 for fx in fixtures:
@@ -211,7 +227,9 @@ async def main() -> int:
     # below is local/no-network; re-fetching to debug it would spend live
     # api_football quota (100/day free tier) for identical data.
     if "--refetch" not in sys.argv and raw_out.exists():
-        print(f"Loading cached dataset from {raw_out} (pass --refetch to re-query live).")
+        print(
+            f"Loading cached dataset from {raw_out} (pass --refetch to re-query live)."
+        )
         joined = json.loads(raw_out.read_text())
     else:
         if not settings.api_football_key:

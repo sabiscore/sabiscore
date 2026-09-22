@@ -230,7 +230,9 @@ def parse_retry_after_seconds(
         reference = now or utc_now()
         if reference.tzinfo is None:
             reference = reference.replace(tzinfo=timezone.utc)
-        seconds = (retry_at.astimezone(timezone.utc) - reference.astimezone(timezone.utc)).total_seconds()
+        seconds = (
+            retry_at.astimezone(timezone.utc) - reference.astimezone(timezone.utc)
+        ).total_seconds()
     if seconds < 0:
         return None
     return seconds
@@ -446,15 +448,25 @@ class BaseProvider:
             return ProviderTransportError(
                 ProviderTransportKind.RATE_LIMITED,
                 status_code=status,
-                retry_after_seconds=parse_retry_after_seconds(response.headers.get("Retry-After")),
+                retry_after_seconds=parse_retry_after_seconds(
+                    response.headers.get("Retry-After")
+                ),
             )
         if status in (401, 403):
-            return ProviderTransportError(ProviderTransportKind.AUTHENTICATION, status_code=status)
+            return ProviderTransportError(
+                ProviderTransportKind.AUTHENTICATION, status_code=status
+            )
         if 400 <= status < 500 or 300 <= status < 400:
-            return ProviderTransportError(ProviderTransportKind.CLIENT_ERROR, status_code=status)
+            return ProviderTransportError(
+                ProviderTransportKind.CLIENT_ERROR, status_code=status
+            )
         if status >= 500:
-            return ProviderTransportError(ProviderTransportKind.SERVER_ERROR, status_code=status)
-        return ProviderTransportError(ProviderTransportKind.INVALID_RESPONSE, status_code=status)
+            return ProviderTransportError(
+                ProviderTransportKind.SERVER_ERROR, status_code=status
+            )
+        return ProviderTransportError(
+            ProviderTransportKind.INVALID_RESPONSE, status_code=status
+        )
 
     @staticmethod
     def _counts_toward_breaker(error: ProviderTransportError) -> bool:
@@ -471,7 +483,9 @@ class BaseProvider:
         if self._counts_toward_breaker(error):
             self.breaker.record_failure()
 
-    def _should_retry_transport_failure(self, error: ProviderTransportError, attempt: int) -> bool:
+    def _should_retry_transport_failure(
+        self, error: ProviderTransportError, attempt: int
+    ) -> bool:
         if self.breaker.open:
             return False
         if error.kind in {
@@ -489,8 +503,13 @@ class BaseProvider:
             )
         return False
 
-    async def _sleep_for_transport_failure(self, error: ProviderTransportError, attempt: int) -> None:
-        if error.kind is ProviderTransportKind.RATE_LIMITED and error.retry_after_seconds is not None:
+    async def _sleep_for_transport_failure(
+        self, error: ProviderTransportError, attempt: int
+    ) -> None:
+        if (
+            error.kind is ProviderTransportKind.RATE_LIMITED
+            and error.retry_after_seconds is not None
+        ):
             await asyncio.sleep(error.retry_after_seconds)
             return
         await self._sleep_with_jitter(attempt)
@@ -523,8 +542,12 @@ class BaseProvider:
                         timeout=httpx.Timeout(self.timeout_seconds),
                     )
                 else:
-                    async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
-                        response = await client.get(url, headers=dict(headers or {}), params=params)
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(self.timeout_seconds)
+                    ) as client:
+                        response = await client.get(
+                            url, headers=dict(headers or {}), params=params
+                        )
             except httpx.TimeoutException:
                 error = ProviderTransportError(ProviderTransportKind.TIMEOUT)
             except httpx.TransportError:
@@ -546,7 +569,8 @@ class BaseProvider:
                         self._transport_observation.set(
                             (
                                 response.status_code,
-                                self._http_status_category(response.status_code) or "UNKNOWN",
+                                self._http_status_category(response.status_code)
+                                or "UNKNOWN",
                             )
                         )
                         return payload, response.headers
@@ -564,7 +588,9 @@ class BaseProvider:
         # guard so future loop edits cannot accidentally return an untyped value.
         raise ProviderTransportError(ProviderTransportKind.NETWORK)
 
-    def _transport_failure_result(self, operation: str, error: Exception) -> ProviderResult:
+    def _transport_failure_result(
+        self, operation: str, error: Exception
+    ) -> ProviderResult:
         """Convert typed transport failures to a stable public ProviderResult."""
         if isinstance(error, ProviderTransportError):
             return ProviderResult(

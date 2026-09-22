@@ -234,16 +234,13 @@ def section_deployment(offline: bool, local_sha_short: str | None) -> dict[str, 
         if backend_sha == web_sha:
             parity = f"DEPLOY PARITY — backend and web both serve {backend_sha}"
             if local_sha_short and local_sha_short != backend_sha:
-                parity += (
-                    f"; local HEAD is {local_sha_short}"
-                    + (
-                        " on master — check whether a deploy is pending, was "
-                        "skipped (render.yaml rootDir=backend skips when nothing "
-                        "under backend/ changed), or failed."
-                        if on_master
-                        else f" on branch '{branch}', which is expected to lead "
-                        "production and is not a divergence."
-                    )
+                parity += f"; local HEAD is {local_sha_short}" + (
+                    " on master — check whether a deploy is pending, was "
+                    "skipped (render.yaml rootDir=backend skips when nothing "
+                    "under backend/ changed), or failed."
+                    if on_master
+                    else f" on branch '{branch}', which is expected to lead "
+                    "production and is not a divergence."
                 )
         else:
             parity = (
@@ -309,7 +306,9 @@ def section_database(health_body: Any, offline: bool) -> dict[str, Any]:
         ),
         "elo_state": {
             "rows": _dig(elo, "rows") if isinstance(elo, dict) else None,
-            "unique_teams": _dig(elo, "unique_teams") if isinstance(elo, dict) else None,
+            "unique_teams": _dig(elo, "unique_teams")
+            if isinstance(elo, dict)
+            else None,
             "last_match_date": _dig(elo, "last_match_date")
             if isinstance(elo, dict)
             else None,
@@ -407,12 +406,12 @@ def section_evidence(offline: bool) -> dict[str, Any]:
             "meets_sample_floor": _dig(cal["body"], "meets_sample_floor"),
             "ece_mean": _dig(cal["body"], "ece", "mean"),
             "ece_per_class": {
-                k: v
-                for k, v in (_dig(cal["body"], "ece") or {}).items()
-                if k != "mean"
+                k: v for k, v in (_dig(cal["body"], "ece") or {}).items() if k != "mean"
             }
             or None,
-            "brier_decomposition_mean": _dig(cal["body"], "brier_decomposition", "mean"),
+            "brier_decomposition_mean": _dig(
+                cal["body"], "brier_decomposition", "mean"
+            ),
             "brier_decomposition_convention": (
                 "mean over one-vs-rest per-class Brier; identity is "
                 "Brier = Reliability - Resolution + Uncertainty"

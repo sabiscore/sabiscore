@@ -42,6 +42,7 @@ offline and was never applied at inference. PE-26..PE-30 pin the fix.
   PE-30 recognised calibrated meta-model classes report calibration state
         accurately; bare SoftmaxMetaModel and unknown classes remain uncalibrated
 """
+
 from __future__ import annotations
 
 from dataclasses import fields
@@ -54,6 +55,7 @@ from src.models.prediction import PredictionEngine, PredictionResult, _ArtifactB
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_v5_bundle(proba=(0.50, 0.25, 0.25), n_features=58) -> _ArtifactBundle:
     """v5-style bundle: direct sklearn model, no calibrator or overlay."""
@@ -112,12 +114,17 @@ FEATURES_30 = np.random.rand(30).astype(np.float32)
 
 # ── PE-1 ──────────────────────────────────────────────────────────────────────
 
+
 def test_prediction_result_is_frozen():
     """PE-1: PredictionResult cannot be mutated after construction."""
     result = PredictionResult(
-        home_win=0.5, draw=0.25, away_win=0.25,
-        confidence=0.17, model_dim=58,
-        model_version="v6_phase8", calibration_method="isotonic",
+        home_win=0.5,
+        draw=0.25,
+        away_win=0.25,
+        confidence=0.17,
+        model_dim=58,
+        model_version="v6_phase8",
+        calibration_method="isotonic",
     )
     with pytest.raises((AttributeError, TypeError)):
         result.home_win = 0.9  # type: ignore[misc]
@@ -125,12 +132,17 @@ def test_prediction_result_is_frozen():
 
 # ── PE-2 ──────────────────────────────────────────────────────────────────────
 
+
 def test_to_dict_has_all_keys():
     """PE-2: to_dict() includes all dataclass fields including Phase D additions."""
     result = PredictionResult(
-        home_win=0.5, draw=0.25, away_win=0.25,
-        confidence=0.17, model_dim=58,
-        model_version="v6_phase8", calibration_method="isotonic",
+        home_win=0.5,
+        draw=0.25,
+        away_win=0.25,
+        confidence=0.17,
+        model_dim=58,
+        model_version="v6_phase8",
+        calibration_method="isotonic",
     )
     d = result.to_dict()
     expected_keys = {f.name for f in fields(PredictionResult)}
@@ -143,6 +155,7 @@ def test_to_dict_has_all_keys():
 
 # ── PE-3 ──────────────────────────────────────────────────────────────────────
 
+
 def test_fallback_result_uniform():
     """PE-3: Fallback gives ~1/3 probs and confidence 0."""
     r = PredictionEngine._fallback_result(input_dim=58)
@@ -153,6 +166,7 @@ def test_fallback_result_uniform():
 
 
 # ── PE-4 ──────────────────────────────────────────────────────────────────────
+
 
 def test_inference_probs_sum_to_one():
     """PE-4: Probabilities returned from a 3-class v5 bundle sum to 1.0."""
@@ -165,6 +179,7 @@ def test_inference_probs_sum_to_one():
 
 # ── PE-5 ──────────────────────────────────────────────────────────────────────
 
+
 def test_short_vector_fails_closed_not_padded(caplog):
     """PE-5: A 30-dim vector against a 58-dim model fails closed to the fallback
     result instead of zero-padding the missing 28 slots (INV-10) — the model is
@@ -172,6 +187,7 @@ def test_short_vector_fails_closed_not_padded(caplog):
     established signal full_analysis.py/upcoming_match_service.py already check
     to treat a result as diagnostic-only rather than a real prediction."""
     import logging
+
     engine = PredictionEngine()
     bundle = _make_v5_bundle(n_features=58)
     with caplog.at_level(logging.ERROR, logger="src.models.prediction"):
@@ -183,9 +199,11 @@ def test_short_vector_fails_closed_not_padded(caplog):
 
 # ── PE-6 ──────────────────────────────────────────────────────────────────────
 
+
 def test_long_vector_fails_closed_instead_of_truncating(caplog):
     """PE-6: A wider vector cannot be silently truncated into an older schema."""
     import logging
+
     engine = PredictionEngine()
     bundle = _make_v5_bundle(n_features=58)
     with caplog.at_level(logging.ERROR, logger="src.models.prediction"):
@@ -198,11 +216,15 @@ def test_long_vector_fails_closed_instead_of_truncating(caplog):
 
 # ── PE-7 ──────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("proba", [
-    (1.0, 0.0, 0.0),
-    (0.33, 0.33, 0.34),
-    (0.0, 0.0, 1.0),
-])
+
+@pytest.mark.parametrize(
+    "proba",
+    [
+        (1.0, 0.0, 0.0),
+        (0.33, 0.33, 0.34),
+        (0.0, 0.0, 1.0),
+    ],
+)
 def test_probs_in_unit_interval(proba):
     """PE-7: Valid model probabilities are preserved within [0, 1]."""
     engine = PredictionEngine()
@@ -215,6 +237,7 @@ def test_probs_in_unit_interval(proba):
 
 # ── PE-8 ──────────────────────────────────────────────────────────────────────
 
+
 def test_value_bets_empty_when_no_edge():
     """PE-8: No value bets returned when all edges are below min_edge_pct."""
     preds = {"home_win": 0.40, "draw": 0.30, "away_win": 0.30}
@@ -224,6 +247,7 @@ def test_value_bets_empty_when_no_edge():
 
 
 # ── PE-9 ──────────────────────────────────────────────────────────────────────
+
 
 def test_value_bets_identifies_high_edge():
     """PE-9: A genuine edge outcome appears in the value bets list."""
@@ -237,6 +261,7 @@ def test_value_bets_identifies_high_edge():
 
 # ── PE-10 ─────────────────────────────────────────────────────────────────────
 
+
 def test_clv_pct_null_without_closing_odds():
     """PE-10: clv_pct is None when closing_odds are absent (B-contract)."""
     preds = {"home_win": 0.65, "draw": 0.20, "away_win": 0.15}
@@ -247,6 +272,7 @@ def test_clv_pct_null_without_closing_odds():
 
 
 # ── PE-11 ─────────────────────────────────────────────────────────────────────
+
 
 def test_clv_pct_computed_with_closing_odds():
     """PE-11: clv_pct is computed when closing_odds supplied."""
@@ -263,6 +289,7 @@ def test_clv_pct_computed_with_closing_odds():
 
 # ── PE-12 ─────────────────────────────────────────────────────────────────────
 
+
 def test_value_bets_sorted_by_edge_descending():
     """PE-12: Multiple value bets are ordered by edge_pct highest first."""
     preds = {"home_win": 0.70, "draw": 0.15, "away_win": 0.15}
@@ -273,6 +300,7 @@ def test_value_bets_sorted_by_edge_descending():
 
 
 # ── PE-13 ─────────────────────────────────────────────────────────────────────
+
 
 def test_prime_and_clear_cache():
     """PE-13: prime_cache wraps model into _ArtifactBundle; clear_cache empties it."""
@@ -292,6 +320,7 @@ def test_prime_and_clear_cache():
 
 # ── PE-14 ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_predict_returns_fallback_when_no_model(tmp_path):
     """PE-14: predict() returns fallback probabilities when model directory is empty."""
@@ -310,6 +339,7 @@ async def test_predict_returns_fallback_when_no_model(tmp_path):
 
 
 # ── PE-15 ─────────────────────────────────────────────────────────────────────
+
 
 def test_binary_model_handled_correctly():
     """PE-15: A two-class v5 bundle output is unpacked as (away, home) binary."""
@@ -332,6 +362,7 @@ def test_binary_model_handled_correctly():
 
 
 # ── PE-16 ─────────────────────────────────────────────────────────────────────
+
 
 def test_wrap_artifact_v5_direct_model():
     """PE-16: _wrap_artifact returns bundle with direct_model for v5 sklearn models."""
@@ -372,6 +403,7 @@ def test_wrap_artifact_preserves_manifest_provenance():
 
 
 # ── PE-17 ─────────────────────────────────────────────────────────────────────
+
 
 class _UsableTemperatureCalibrator:
     """A calibrator that genuinely applies.
@@ -431,14 +463,19 @@ def test_wrap_artifact_rejects_an_unusable_calibrator():
 
 # ── PE-18 ─────────────────────────────────────────────────────────────────────
 
+
 def test_wrap_artifact_invalid_returns_none():
     """PE-18: _wrap_artifact returns None for artifacts that are neither dict nor predict_proba."""
     assert PredictionEngine._wrap_artifact("not_a_model", "epl", "<test>") is None
     assert PredictionEngine._wrap_artifact(42, "epl", "<test>") is None
-    assert PredictionEngine._wrap_artifact({"no_models_key": True}, "epl", "<test>") is None
+    assert (
+        PredictionEngine._wrap_artifact({"no_models_key": True}, "epl", "<test>")
+        is None
+    )
 
 
 # ── PE-19 ─────────────────────────────────────────────────────────────────────
+
 
 def test_calibration_applied_when_calibrator_present():
     """PE-19: calibration_applied=True and calibration_method set when FittedCalibrator present."""
@@ -450,8 +487,10 @@ def test_calibration_applied_when_calibrator_present():
     bundle = _make_v6_bundle((0.6, 0.2, 0.2), calibrator=mock_calibrator)
     calibrated_proba = np.array([[0.55, 0.22, 0.23]])
 
-    with patch("src.models.prediction._CAL_AVAILABLE", True), \
-         patch("src.models.prediction._apply_calibrator", return_value=calibrated_proba):
+    with (
+        patch("src.models.prediction._CAL_AVAILABLE", True),
+        patch("src.models.prediction._apply_calibrator", return_value=calibrated_proba),
+    ):
         engine = PredictionEngine()
         result = engine._run_inference(bundle, FEATURES_58, "EPL")
 
@@ -462,6 +501,7 @@ def test_calibration_applied_when_calibrator_present():
 
 
 # ── PE-20 ─────────────────────────────────────────────────────────────────────
+
 
 def test_overlay_applied_when_alpha_nonzero():
     """PE-20: overlay_applied=True when overlay.alpha > 0."""
@@ -479,6 +519,7 @@ def test_overlay_applied_when_alpha_nonzero():
 
 # ── PE-21 ─────────────────────────────────────────────────────────────────────
 
+
 def test_overlay_not_applied_when_alpha_zero():
     """PE-21: overlay_applied=False when overlay.alpha == 0 (inactive overlay)."""
     mock_overlay = MagicMock()
@@ -495,6 +536,7 @@ def test_overlay_not_applied_when_alpha_zero():
 
 # ── PE-22 ─────────────────────────────────────────────────────────────────────
 
+
 def test_ensemble_predict_dict_averages_models():
     """PE-22: _ensemble_predict_dict computes equal-weight average across base learners."""
     m1 = MagicMock()
@@ -502,12 +544,15 @@ def test_ensemble_predict_dict_averages_models():
     m2 = MagicMock()
     m2.predict_proba = MagicMock(return_value=np.array([[0.4, 0.3, 0.3]]))
 
-    result = PredictionEngine._ensemble_predict_dict({"rf": m1, "xgb": m2}, FEATURES_58.reshape(1, -1))
+    result = PredictionEngine._ensemble_predict_dict(
+        {"rf": m1, "xgb": m2}, FEATURES_58.reshape(1, -1)
+    )
     expected = np.array([[0.5, 0.25, 0.25]])
     np.testing.assert_allclose(result, expected, atol=1e-5)
 
 
 # ── PE-23 ─────────────────────────────────────────────────────────────────────
+
 
 def test_ensemble_predict_dict_fails_closed_when_no_valid_proba():
     """PE-23: no valid base learner output is never repaired or fabricated."""
@@ -539,18 +584,24 @@ def test_invalid_model_probability_simplex_fails_closed(proba):
 
 # ── PE-24 ─────────────────────────────────────────────────────────────────────
 
+
 def test_prediction_result_defaults_no_calibration():
     """PE-24: PredictionResult.calibration_applied and overlay_applied default to False."""
     r = PredictionResult(
-        home_win=0.5, draw=0.25, away_win=0.25,
-        confidence=0.17, model_dim=58,
-        model_version="v5_phase7", calibration_method="raw",
+        home_win=0.5,
+        draw=0.25,
+        away_win=0.25,
+        confidence=0.17,
+        model_dim=58,
+        model_version="v5_phase7",
+        calibration_method="raw",
     )
     assert r.calibration_applied is False
     assert r.overlay_applied is False
 
 
 # ── PE-25 ─────────────────────────────────────────────────────────────────────
+
 
 def test_v6_bundle_inference_returns_valid_proba():
     """PE-25: v6 bundle (models_dict path) returns a valid 3-class simplex."""
@@ -566,6 +617,7 @@ def test_v6_bundle_inference_returns_valid_proba():
 
 
 # ── PE-26 ─────────────────────────────────────────────────────────────────────
+
 
 def _two_learner_bundle(meta_model):
     """rf and xgb deliberately disagree, so "the meta-model's own answer" and
@@ -610,14 +662,19 @@ def test_stacked_meta_model_output_is_returned_not_the_base_learner_average():
 
 # ── PE-27 ─────────────────────────────────────────────────────────────────────
 
+
 def test_meta_features_are_grouped_per_model_not_per_class():
     """PE-27: column order is rf_home,rf_draw,rf_away,xgb_home,xgb_draw,xgb_away
     — per-model grouping, matching train_on_real_matches.py::_build_meta_features
     exactly. A class-major layout (all three models' home probs, then all three
     draw probs, ...) would silently feed the meta-model transposed garbage."""
     models_dict = {
-        "rf": MagicMock(predict_proba=MagicMock(return_value=np.array([[0.9, 0.05, 0.05]]))),
-        "xgb": MagicMock(predict_proba=MagicMock(return_value=np.array([[0.1, 0.05, 0.85]]))),
+        "rf": MagicMock(
+            predict_proba=MagicMock(return_value=np.array([[0.9, 0.05, 0.05]]))
+        ),
+        "xgb": MagicMock(
+            predict_proba=MagicMock(return_value=np.array([[0.1, 0.05, 0.85]]))
+        ),
     }
     features = PredictionEngine._build_meta_features(models_dict, np.zeros((1, 58)))
     np.testing.assert_array_almost_equal(
@@ -626,6 +683,7 @@ def test_meta_features_are_grouped_per_model_not_per_class():
 
 
 # ── PE-28 ─────────────────────────────────────────────────────────────────────
+
 
 def test_stacked_prediction_failure_falls_back_to_average_not_flat_fallback():
     """PE-28: a meta-model that raises degrades to the equal-weight average —
@@ -649,6 +707,7 @@ def test_stacked_prediction_failure_falls_back_to_average_not_flat_fallback():
 
 # ── PE-29 ─────────────────────────────────────────────────────────────────────
 
+
 def test_unrecognised_meta_model_class_fails_closed_for_calibration():
     """PE-29: an unmapped meta-model remains usable for prediction but is not
     reported as calibrated until its class has an explicit calibration label."""
@@ -665,6 +724,7 @@ def test_unrecognised_meta_model_class_fails_closed_for_calibration():
 
 
 # ── PE-30 ─────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize(
     ("meta_model_name", "expected_applied", "expected_method"),

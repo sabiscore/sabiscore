@@ -92,7 +92,7 @@ gh run list --branch master --limit 5
 - [ ] For latest failed/successful run IDs, verify real runner and non-zero steps:
 
 ```powershell
-gh api repos/oversabis/sabiscore/actions/runs/<RUN_ID>/jobs
+gh api repos/sabiscore/sabiscore/actions/runs/<RUN_ID>/jobs
 ```
 
 - [ ] Re-run historical secret scan proof (history mode):
@@ -144,6 +144,31 @@ SHA parity: <frontend_sha vs backend_sha>
 Result: <healthy|regressed>
 Timestamp (UTC): <yyyy-mm-ddThh:mm:ssZ>
 ```
+
+---
+
+## Execution Snapshot (2026-09-22)
+
+Use this section only as a quick reference for the most recent run; authoritative status still lives in `docs/DEBT.md`.
+
+- Item 16 (run list): latest `master` runs observed as `completed/success` for
+  canonical workflows (`35671911694`, `35671911700`, `35671911778`,
+  `35671911696`, `35668060261`).
+- Item 16 (runner evidence): run `35671911696` jobs reported non-empty runners
+  and non-zero steps (example: backend job `runner=GitHub Actions 1000008272`,
+  `steps=18`).
+- Item 16 (history scan): `gitleaks detect --source . --report-format json --report-path artifacts/gitleaks-history.json`
+  reported `leaks found: 2` after scanning 668 commits (40.88 MB).
+- Item 28 rerun output:
+
+```json
+{ "ok": false, "error_code": "s3_write_failed", "http_status": null }
+```
+
+  Interpret this with prerequisite checks: if `SABISCORE_ARTIFACT_BUCKET` is
+  unset locally, the probe result is non-diagnostic for IAM/root-cause status.
+- Item 85 parity check: frontend alias health returned `sha=6f15c04`,
+  `backendStatus=ok`, backend health returned `sha=6b9b48b`, `status=healthy`.
 
 ---
 

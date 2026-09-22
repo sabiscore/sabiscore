@@ -14,6 +14,7 @@ Contracts verified:
   5. EMAIL gets an in-app log row plus a best-effort SMTP send attempt via
      email_delivery, never blocking the log write on a transport failure.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -90,7 +91,13 @@ def _now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-async def _make_match(session: AsyncSession, match_id: str, *, minutes_until_kickoff: float, status: str = "scheduled") -> Match:
+async def _make_match(
+    session: AsyncSession,
+    match_id: str,
+    *,
+    minutes_until_kickoff: float,
+    status: str = "scheduled",
+) -> Match:
     match = Match(
         id=match_id,
         league_id="EPL",
@@ -139,7 +146,10 @@ async def _make_subscription(
 async def test_kickoff_reminder_fires_inside_due_window(session: AsyncSession) -> None:
     await _make_match(session, "m1", minutes_until_kickoff=30)
     await _make_subscription(
-        session, match_id="m1", subscription_type="KICKOFF_REMINDER", reminder_minutes_before=60
+        session,
+        match_id="m1",
+        subscription_type="KICKOFF_REMINDER",
+        reminder_minutes_before=60,
     )
 
     counts = await _dispatch_kickoff_reminders(session)
@@ -151,10 +161,15 @@ async def test_kickoff_reminder_fires_inside_due_window(session: AsyncSession) -
     assert logs[0].category == "KICKOFF_REMINDER"
 
 
-async def test_kickoff_reminder_does_not_fire_before_due_window(session: AsyncSession) -> None:
+async def test_kickoff_reminder_does_not_fire_before_due_window(
+    session: AsyncSession,
+) -> None:
     await _make_match(session, "m2", minutes_until_kickoff=120)
     await _make_subscription(
-        session, match_id="m2", subscription_type="KICKOFF_REMINDER", reminder_minutes_before=60
+        session,
+        match_id="m2",
+        subscription_type="KICKOFF_REMINDER",
+        reminder_minutes_before=60,
     )
 
     counts = await _dispatch_kickoff_reminders(session)
@@ -163,10 +178,15 @@ async def test_kickoff_reminder_does_not_fire_before_due_window(session: AsyncSe
     assert counts["created"] == 0
 
 
-async def test_kickoff_reminder_idempotent_across_repeated_passes(session: AsyncSession) -> None:
+async def test_kickoff_reminder_idempotent_across_repeated_passes(
+    session: AsyncSession,
+) -> None:
     await _make_match(session, "m3", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m3", subscription_type="KICKOFF_REMINDER", reminder_minutes_before=60
+        session,
+        match_id="m3",
+        subscription_type="KICKOFF_REMINDER",
+        reminder_minutes_before=60,
     )
 
     first = await _dispatch_kickoff_reminders(session)
@@ -179,7 +199,9 @@ async def test_kickoff_reminder_idempotent_across_repeated_passes(session: Async
     assert second["skipped_existing"] == 1
 
 
-async def test_notification_log_unique_constraint_handles_dispatch_race(session: AsyncSession) -> None:
+async def test_notification_log_unique_constraint_handles_dispatch_race(
+    session: AsyncSession,
+) -> None:
     sub = await _make_subscription(
         session, match_id="m-race", subscription_type="KICKOFF_REMINDER"
     )
@@ -258,12 +280,16 @@ async def test_web_push_channel_creates_log_and_pushes_to_registered_devices(
     await _make_push_device(session, endpoint="https://push.example/a")
     await _make_push_device(session, endpoint="https://push.example/b")
 
-    with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
-    ), patch(
-        "src.services.notification_dispatch_service.send_web_push",
-        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
-    ) as mocked_send:
+    with (
+        patch(
+            "src.services.notification_dispatch_service.is_web_push_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.notification_dispatch_service.send_web_push",
+            new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+        ) as mocked_send,
+    ):
         counts = await _dispatch_kickoff_reminders(session)
     await session.commit()
 
@@ -283,11 +309,15 @@ async def test_web_push_without_a_registered_device_still_writes_the_log(
     Losing the in-app row too would make that a silent double failure."""
     await _make_match(session, "m4f", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m4f", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4f",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
 
     with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
+        "src.services.notification_dispatch_service.is_web_push_configured",
+        return_value=True,
     ):
         counts = await _dispatch_kickoff_reminders(session)
     await session.commit()
@@ -303,12 +333,16 @@ async def test_web_push_unconfigured_is_counted_not_silently_dropped(
 ) -> None:
     await _make_match(session, "m4g", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m4g", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4g",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
     await _make_push_device(session, endpoint="https://push.example/c")
 
     with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=False
+        "src.services.notification_dispatch_service.is_web_push_configured",
+        return_value=False,
     ):
         counts = await _dispatch_kickoff_reminders(session)
 
@@ -316,23 +350,32 @@ async def test_web_push_unconfigured_is_counted_not_silently_dropped(
     assert counts["web_push_not_configured"] == 1
 
 
-async def test_expired_subscription_deactivates_the_device(session: AsyncSession) -> None:
+async def test_expired_subscription_deactivates_the_device(
+    session: AsyncSession,
+) -> None:
     """404/410 means the endpoint is gone for good. Leaving it active would make
     every future pass burn a request on a subscription that can never deliver."""
     await _make_match(session, "m4h", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m4h", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4h",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
     device = await _make_push_device(session, endpoint="https://push.example/gone")
 
-    with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
-    ), patch(
-        "src.services.notification_dispatch_service.send_web_push",
-        new=AsyncMock(
-            return_value=WebPushSendResult(
-                sent=False, reason="subscription_expired", expired=True
-            )
+    with (
+        patch(
+            "src.services.notification_dispatch_service.is_web_push_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.notification_dispatch_service.send_web_push",
+            new=AsyncMock(
+                return_value=WebPushSendResult(
+                    sent=False, reason="subscription_expired", expired=True
+                )
+            ),
         ),
     ):
         counts = await _dispatch_kickoff_reminders(session)
@@ -344,83 +387,117 @@ async def test_expired_subscription_deactivates_the_device(session: AsyncSession
     assert device.is_active is False
 
 
-async def test_web_push_reaches_an_anonymous_reader_s_own_device(session: AsyncSession) -> None:
+async def test_web_push_reaches_an_anonymous_reader_s_own_device(
+    session: AsyncSession,
+) -> None:
     """Push does not require an account. The anonymous session id is the owner
     key, and it must scope the device lookup exactly as a user id does."""
     await _make_match(session, "m4j", minutes_until_kickoff=10)
     sub = await _make_subscription(
-        session, match_id="m4j", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4j",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
     sub.user_id = None
     sub.anonymous_session_id = "anon-9"
     await _make_push_device(
-        session, endpoint="https://push.example/anon", user_id=None, anonymous_session_id="anon-9"
+        session,
+        endpoint="https://push.example/anon",
+        user_id=None,
+        anonymous_session_id="anon-9",
     )
     await _make_push_device(session, endpoint="https://push.example/someone-else")
     await session.flush()
 
-    with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
-    ), patch(
-        "src.services.notification_dispatch_service.send_web_push",
-        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
-    ) as mocked_send:
+    with (
+        patch(
+            "src.services.notification_dispatch_service.is_web_push_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.notification_dispatch_service.send_web_push",
+            new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+        ) as mocked_send,
+    ):
         await _dispatch_kickoff_reminders(session)
 
     assert mocked_send.await_count == 1
     assert mocked_send.await_args.kwargs["endpoint"] == "https://push.example/anon"
 
 
-async def test_web_push_with_no_owner_at_all_sends_nothing(session: AsyncSession) -> None:
+async def test_web_push_with_no_owner_at_all_sends_nothing(
+    session: AsyncSession,
+) -> None:
     """A subscription with neither identifier has no safe device query — an
     unscoped select would reach every browser in the table."""
     await _make_match(session, "m4k", minutes_until_kickoff=10)
     sub = await _make_subscription(
-        session, match_id="m4k", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4k",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
     sub.user_id = None
     sub.anonymous_session_id = None
     await _make_push_device(session, endpoint="https://push.example/orphan")
     await session.flush()
 
-    with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
-    ), patch(
-        "src.services.notification_dispatch_service.send_web_push",
-        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
-    ) as mocked_send:
+    with (
+        patch(
+            "src.services.notification_dispatch_service.is_web_push_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.notification_dispatch_service.send_web_push",
+            new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+        ) as mocked_send,
+    ):
         counts = await _dispatch_kickoff_reminders(session)
 
     assert mocked_send.await_count == 0
     assert counts["web_push_skipped_no_device"] == 1
 
 
-async def test_web_push_never_reaches_another_owners_device(session: AsyncSession) -> None:
+async def test_web_push_never_reaches_another_owners_device(
+    session: AsyncSession,
+) -> None:
     """The subscription belongs to user-1; an unscoped device query would fan a
     private alert out to every browser in the table."""
     await _make_match(session, "m4i", minutes_until_kickoff=10)
     await _make_subscription(
-        session, match_id="m4i", subscription_type="KICKOFF_REMINDER", channel="WEB_PUSH"
+        session,
+        match_id="m4i",
+        subscription_type="KICKOFF_REMINDER",
+        channel="WEB_PUSH",
     )
     await _make_push_device(session, endpoint="https://push.example/mine")
-    await _make_push_device(session, endpoint="https://push.example/theirs", user_id="user-2")
+    await _make_push_device(
+        session, endpoint="https://push.example/theirs", user_id="user-2"
+    )
     await _make_push_device(
         session, endpoint="https://push.example/stale", is_active=False
     )
 
-    with patch(
-        "src.services.notification_dispatch_service.is_web_push_configured", return_value=True
-    ), patch(
-        "src.services.notification_dispatch_service.send_web_push",
-        new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
-    ) as mocked_send:
+    with (
+        patch(
+            "src.services.notification_dispatch_service.is_web_push_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.notification_dispatch_service.send_web_push",
+            new=AsyncMock(return_value=WebPushSendResult(sent=True, reason="ok")),
+        ) as mocked_send,
+    ):
         await _dispatch_kickoff_reminders(session)
 
     assert mocked_send.await_count == 1
     assert mocked_send.await_args.kwargs["endpoint"] == "https://push.example/mine"
 
 
-async def test_kickoff_reminder_email_channel_creates_log(session: AsyncSession) -> None:
+async def test_kickoff_reminder_email_channel_creates_log(
+    session: AsyncSession,
+) -> None:
     """EMAIL is now dispatched like IN_APP for the in-app log; the transport
     side-effect is covered separately below."""
     await _make_match(session, "m4b", minutes_until_kickoff=10)
@@ -480,7 +557,9 @@ async def test_email_dispatch_no_destination_skips_send(session: AsyncSession) -
     assert counts["email_skipped_no_destination"] == 1
 
 
-async def test_email_send_failure_does_not_block_log_write(session: AsyncSession) -> None:
+async def test_email_send_failure_does_not_block_log_write(
+    session: AsyncSession,
+) -> None:
     await _make_match(session, "m4e", minutes_until_kickoff=10)
     await _make_subscription(
         session,
@@ -526,15 +605,30 @@ async def _add_prediction_log(
     await session.flush()
 
 
-async def test_probability_swing_fires_when_delta_meets_threshold(session: AsyncSession) -> None:
+async def test_probability_swing_fires_when_delta_meets_threshold(
+    session: AsyncSession,
+) -> None:
     await _add_prediction_log(
-        session, match_id="m5", home=0.40, draw=0.30, away=0.30, created_at=datetime.now(timezone.utc) - timedelta(minutes=10)
+        session,
+        match_id="m5",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
     )
     await _add_prediction_log(
-        session, match_id="m5", home=0.55, draw=0.25, away=0.20, created_at=datetime.now(timezone.utc)
+        session,
+        match_id="m5",
+        home=0.55,
+        draw=0.25,
+        away=0.20,
+        created_at=datetime.now(timezone.utc),
     )
     await _make_subscription(
-        session, match_id="m5", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+        session,
+        match_id="m5",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     counts = await _dispatch_probability_swing_alerts(session)
@@ -543,15 +637,30 @@ async def test_probability_swing_fires_when_delta_meets_threshold(session: Async
     assert counts["created"] == 1
 
 
-async def test_probability_swing_does_not_fire_below_threshold(session: AsyncSession) -> None:
+async def test_probability_swing_does_not_fire_below_threshold(
+    session: AsyncSession,
+) -> None:
     await _add_prediction_log(
-        session, match_id="m6", home=0.40, draw=0.30, away=0.30, created_at=datetime.now(timezone.utc) - timedelta(minutes=10)
+        session,
+        match_id="m6",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
     )
     await _add_prediction_log(
-        session, match_id="m6", home=0.42, draw=0.29, away=0.29, created_at=datetime.now(timezone.utc)
+        session,
+        match_id="m6",
+        home=0.42,
+        draw=0.29,
+        away=0.29,
+        created_at=datetime.now(timezone.utc),
     )
     await _make_subscription(
-        session, match_id="m6", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+        session,
+        match_id="m6",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     counts = await _dispatch_probability_swing_alerts(session)
@@ -561,10 +670,18 @@ async def test_probability_swing_does_not_fire_below_threshold(session: AsyncSes
 
 async def test_probability_swing_requires_two_snapshots(session: AsyncSession) -> None:
     await _add_prediction_log(
-        session, match_id="m7", home=0.40, draw=0.30, away=0.30, created_at=datetime.now(timezone.utc)
+        session,
+        match_id="m7",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc),
     )
     await _make_subscription(
-        session, match_id="m7", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+        session,
+        match_id="m7",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     counts = await _dispatch_probability_swing_alerts(session)
@@ -573,7 +690,9 @@ async def test_probability_swing_requires_two_snapshots(session: AsyncSession) -
     assert counts["skipped_missing_data"] == 1
 
 
-async def test_probability_swing_does_not_compare_model_versions(session: AsyncSession) -> None:
+async def test_probability_swing_does_not_compare_model_versions(
+    session: AsyncSession,
+) -> None:
     await _add_prediction_log(
         session,
         match_id="m-version",
@@ -605,15 +724,30 @@ async def test_probability_swing_does_not_compare_model_versions(session: AsyncS
     assert counts["skipped_missing_data"] == 1
 
 
-async def test_probability_swing_idempotent_across_repeated_passes(session: AsyncSession) -> None:
+async def test_probability_swing_idempotent_across_repeated_passes(
+    session: AsyncSession,
+) -> None:
     await _add_prediction_log(
-        session, match_id="m8", home=0.40, draw=0.30, away=0.30, created_at=datetime.now(timezone.utc) - timedelta(minutes=10)
+        session,
+        match_id="m8",
+        home=0.40,
+        draw=0.30,
+        away=0.30,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=10),
     )
     await _add_prediction_log(
-        session, match_id="m8", home=0.60, draw=0.20, away=0.20, created_at=datetime.now(timezone.utc)
+        session,
+        match_id="m8",
+        home=0.60,
+        draw=0.20,
+        away=0.20,
+        created_at=datetime.now(timezone.utc),
     )
     await _make_subscription(
-        session, match_id="m8", subscription_type="PROBABILITY_SWING", threshold_pct=0.05
+        session,
+        match_id="m8",
+        subscription_type="PROBABILITY_SWING",
+        threshold_pct=0.05,
     )
 
     first = await _dispatch_probability_swing_alerts(session)
@@ -630,7 +764,9 @@ async def test_probability_swing_idempotent_across_repeated_passes(session: Asyn
 
 
 async def test_run_notification_dispatch_pass_db_not_ready() -> None:
-    from src.services.notification_dispatch_service import run_notification_dispatch_pass
+    from src.services.notification_dispatch_service import (
+        run_notification_dispatch_pass,
+    )
 
     with patch("src.db.session.AsyncSessionLocal", new=None):
         result = await run_notification_dispatch_pass()
@@ -638,8 +774,12 @@ async def test_run_notification_dispatch_pass_db_not_ready() -> None:
     assert result["outcome"] == "db_not_ready"
 
 
-async def test_run_notification_dispatch_pass_success_creates_kickoff_reminder(factory) -> None:
-    from src.services.notification_dispatch_service import run_notification_dispatch_pass
+async def test_run_notification_dispatch_pass_success_creates_kickoff_reminder(
+    factory,
+) -> None:
+    from src.services.notification_dispatch_service import (
+        run_notification_dispatch_pass,
+    )
 
     async with factory() as session:
         await _make_match(session, "m-pass-1", minutes_until_kickoff=30)
@@ -665,13 +805,18 @@ async def test_run_notification_dispatch_pass_success_creates_kickoff_reminder(f
     assert logs[0].category == "KICKOFF_REMINDER"
 
 
-async def test_run_notification_dispatch_pass_genuine_exception_yields_error(factory) -> None:
+async def test_run_notification_dispatch_pass_genuine_exception_yields_error(
+    factory,
+) -> None:
     from src.services import notification_dispatch_service
 
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch.object(
-        notification_dispatch_service,
-        "_dispatch_kickoff_reminders",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch.object(
+            notification_dispatch_service,
+            "_dispatch_kickoff_reminders",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ),
     ):
         result = await notification_dispatch_service.run_notification_dispatch_pass()
 
@@ -712,7 +857,9 @@ def test_last_notification_dispatch_result_handles_missing_last_success_at() -> 
 # ── _background_notification_dispatch() loop wiring (main.py) ──────────────
 
 
-async def test_background_notification_dispatch_calls_run_pass_then_stops(monkeypatch) -> None:
+async def test_background_notification_dispatch_calls_run_pass_then_stops(
+    monkeypatch,
+) -> None:
     """Same pattern as test_settlement_startup_coordination.py: force the loop
     to run exactly once via a controlled asyncio.sleep, then cancel."""
     import asyncio
@@ -728,9 +875,13 @@ async def test_background_notification_dispatch_calls_run_pass_then_stops(monkey
         if sleep_calls >= 1:
             raise asyncio.CancelledError
 
-    with patch(
-        "src.services.notification_dispatch_service.run_notification_dispatch_pass", run_pass
-    ), patch("src.api.main.asyncio.sleep", new=controlled_sleep):
+    with (
+        patch(
+            "src.services.notification_dispatch_service.run_notification_dispatch_pass",
+            run_pass,
+        ),
+        patch("src.api.main.asyncio.sleep", new=controlled_sleep),
+    ):
         with pytest.raises(asyncio.CancelledError):
             await main._background_notification_dispatch()
 

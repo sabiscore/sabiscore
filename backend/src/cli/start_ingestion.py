@@ -18,27 +18,27 @@ logger = logging.getLogger(__name__)
 async def main():
     """Main entry point for data ingestion service"""
     logger.info("=== SabiScore Data Ingestion Service ===")
-    
+
     # Setup signal handlers for graceful shutdown
     asyncio.get_running_loop()
-    
+
     def shutdown_handler(sig, frame):
         logger.info(f"Received signal {sig}, shutting down...")
         asyncio.create_task(ingestion_service.stop())
-    
+
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
-    
+
     try:
         # Start ingestion service
         await ingestion_service.start()
-        
+
         logger.info("Data ingestion service running. Press Ctrl+C to stop.")
-        
+
         # Keep running until stopped
         while ingestion_service._running:
             await asyncio.sleep(1)
-            
+
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
     except Exception as e:

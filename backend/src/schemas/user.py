@@ -20,14 +20,18 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(default=None, max_length=200)
     avatar_url: Optional[str] = Field(default=None, max_length=1000)
     email_verified: bool = False
-    is_active: bool = Field(default=True, description="Whether the user can authenticate")
+    is_active: bool = Field(
+        default=True, description="Whether the user can authenticate"
+    )
 
 
 class UserCreate(BaseModel):
     """Payload required to register a password account."""
 
     email: EmailStr
-    username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$")
+    username: str = Field(
+        min_length=3, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$"
+    )
     password: str = Field(min_length=8, max_length=128)
     full_name: Optional[str] = Field(default=None, max_length=200)
 

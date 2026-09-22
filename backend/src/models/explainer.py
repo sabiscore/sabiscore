@@ -5,6 +5,7 @@ import logging
 
 try:
     import shap
+
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
@@ -12,6 +13,7 @@ except ImportError:
     logger.warning("SHAP not available, explanations will be limited")
 
 logger = logging.getLogger(__name__)
+
 
 class ModelExplainer:
     """SHAP-based model explanations"""
@@ -21,7 +23,9 @@ class ModelExplainer:
         self.explainer = None
         self.feature_names = []
 
-    def setup_explainer(self, background_data: pd.DataFrame, feature_names: List[str]) -> None:
+    def setup_explainer(
+        self, background_data: pd.DataFrame, feature_names: List[str]
+    ) -> None:
         """Setup SHAP explainer"""
         if not SHAP_AVAILABLE:
             logger.warning("SHAP not available — explanations disabled (fail-closed)")
@@ -31,15 +35,19 @@ class ModelExplainer:
             self.feature_names = feature_names
 
             # Use a subset of background data for SHAP
-            background_sample = background_data.sample(min(100, len(background_data)), random_state=42)
+            background_sample = background_data.sample(
+                min(100, len(background_data)), random_state=42
+            )
 
             # Create explainer based on model type
-            if hasattr(self.model, 'predict_proba'):
+            if hasattr(self.model, "predict_proba"):
                 self.explainer = shap.TreeExplainer(self.model, background_sample)
             else:
                 # For ensemble, use the meta model
-                if hasattr(self.model, 'meta_model'):
-                    self.explainer = shap.LinearExplainer(self.model.meta_model, background_sample)
+                if hasattr(self.model, "meta_model"):
+                    self.explainer = shap.LinearExplainer(
+                        self.model.meta_model, background_sample
+                    )
                 else:
                     self.explainer = shap.Explainer(self.model, background_sample)
 
@@ -62,18 +70,26 @@ class ModelExplainer:
             if isinstance(shap_values, list):
                 # Multi-class case
                 shap_values_dict = {}
-                for i, class_name in enumerate(['home_win', 'draw', 'away_win']):
-                    shap_values_dict[class_name] = shap_values[i][0] if len(shap_values[i]) > 0 else []
+                for i, class_name in enumerate(["home_win", "draw", "away_win"]):
+                    shap_values_dict[class_name] = (
+                        shap_values[i][0] if len(shap_values[i]) > 0 else []
+                    )
             else:
                 # Single output
-                shap_values_dict = {'prediction': shap_values[0] if len(shap_values) > 0 else []}
+                shap_values_dict = {
+                    "prediction": shap_values[0] if len(shap_values) > 0 else []
+                }
 
             # Create explanation
             explanation = {
-                'shap_values': shap_values_dict,
-                'feature_importance': self._calculate_feature_importance(shap_values),
-                'waterfall_data': self._create_waterfall_data(features.iloc[0], shap_values),
-                'feature_contributions': self._get_top_contributions(features.iloc[0], shap_values)
+                "shap_values": shap_values_dict,
+                "feature_importance": self._calculate_feature_importance(shap_values),
+                "waterfall_data": self._create_waterfall_data(
+                    features.iloc[0], shap_values
+                ),
+                "feature_contributions": self._get_top_contributions(
+                    features.iloc[0], shap_values
+                ),
             }
 
             return explanation
@@ -100,10 +116,14 @@ class ModelExplainer:
             # Create feature importance dict
             importance_dict = {}
             for i, feature in enumerate(self.feature_names):
-                importance_dict[feature] = float(feature_importance[i]) if i < len(feature_importance) else 0.0
+                importance_dict[feature] = (
+                    float(feature_importance[i]) if i < len(feature_importance) else 0.0
+                )
 
             # Sort by importance
-            sorted_importance = dict(sorted(importance_dict.items(), key=lambda x: x[1], reverse=True))
+            sorted_importance = dict(
+                sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
+            )
 
             return sorted_importance
 
@@ -111,7 +131,9 @@ class ModelExplainer:
             logger.error(f"Feature importance calculation failed: {e}")
             return {}
 
-    def _create_waterfall_data(self, features: pd.Series, shap_values) -> Dict[str, Any]:
+    def _create_waterfall_data(
+        self, features: pd.Series, shap_values
+    ) -> Dict[str, Any]:
         """Create waterfall plot data"""
         try:
             base_value = float(self.explainer.expected_value)
@@ -119,7 +141,11 @@ class ModelExplainer:
             # Get SHAP values for this prediction
             if isinstance(shap_values, list):
                 # Use first class for simplicity
-                values = shap_values[0][0] if len(shap_values) > 0 and len(shap_values[0]) > 0 else []
+                values = (
+                    shap_values[0][0]
+                    if len(shap_values) > 0 and len(shap_values[0]) > 0
+                    else []
+                )
             else:
                 values = shap_values[0] if len(shap_values) > 0 else []
 
@@ -127,26 +153,31 @@ class ModelExplainer:
             contributions = []
             for i, feature in enumerate(self.feature_names):
                 if i < len(values):
-                    contributions.append({
-                        'feature': feature,
-                        'value': float(features[feature]),
-                        'shap_value': float(values[i])
-                    })
+                    contributions.append(
+                        {
+                            "feature": feature,
+                            "value": float(features[feature]),
+                            "shap_value": float(values[i]),
+                        }
+                    )
 
-            return {
-                'base_value': base_value,
-                'contributions': contributions
-            }
+            return {"base_value": base_value, "contributions": contributions}
 
         except Exception as e:
             logger.error(f"Waterfall data creation failed: {e}")
-            return {'base_value': 0.33, 'contributions': []}
+            return {"base_value": 0.33, "contributions": []}
 
-    def _get_top_contributions(self, features: pd.Series, shap_values, top_n: int = 5) -> List[Dict[str, Any]]:
+    def _get_top_contributions(
+        self, features: pd.Series, shap_values, top_n: int = 5
+    ) -> List[Dict[str, Any]]:
         """Get top contributing features"""
         try:
             if isinstance(shap_values, list):
-                values = shap_values[0][0] if len(shap_values) > 0 and len(shap_values[0]) > 0 else []
+                values = (
+                    shap_values[0][0]
+                    if len(shap_values) > 0 and len(shap_values[0]) > 0
+                    else []
+                )
             else:
                 values = shap_values[0] if len(shap_values) > 0 else []
 
@@ -154,14 +185,16 @@ class ModelExplainer:
             contributions = []
             for i, feature in enumerate(self.feature_names):
                 if i < len(values):
-                    contributions.append({
-                        'feature': feature,
-                        'contribution': float(values[i]),
-                        'feature_value': float(features[feature])
-                    })
+                    contributions.append(
+                        {
+                            "feature": feature,
+                            "contribution": float(values[i]),
+                            "feature_value": float(features[feature]),
+                        }
+                    )
 
             # Sort by absolute contribution
-            contributions.sort(key=lambda x: abs(x['contribution']), reverse=True)
+            contributions.sort(key=lambda x: abs(x["contribution"]), reverse=True)
 
             return contributions[:top_n]
 
@@ -177,10 +210,14 @@ class ModelExplainer:
         a falsy result as "no SHAP" and falls back to deterministic ranking
         derived from the real validated feature vector.
         """
-        logger.info("SHAP explanation unavailable — returning empty result (fail-closed)")
+        logger.info(
+            "SHAP explanation unavailable — returning empty result (fail-closed)"
+        )
         return {}
 
-    def explain_model_performance(self, X_test: pd.DataFrame, y_test: pd.DataFrame) -> Dict[str, Any]:
+    def explain_model_performance(
+        self, X_test: pd.DataFrame, y_test: pd.DataFrame
+    ) -> Dict[str, Any]:
         """Generate model performance explanations"""
         try:
             if not SHAP_AVAILABLE or self.explainer is None:
@@ -193,15 +230,19 @@ class ModelExplainer:
             summary_data = self._create_summary_plot_data(X_test, shap_values)
 
             return {
-                'summary_plot': summary_data,
-                'feature_importance_global': self._calculate_feature_importance(shap_values)
+                "summary_plot": summary_data,
+                "feature_importance_global": self._calculate_feature_importance(
+                    shap_values
+                ),
             }
 
         except Exception as e:
             logger.error(f"Model performance explanation failed: {e}")
             return self._mock_performance_explanation()
 
-    def _create_summary_plot_data(self, X: pd.DataFrame, shap_values) -> List[Dict[str, Any]]:
+    def _create_summary_plot_data(
+        self, X: pd.DataFrame, shap_values
+    ) -> List[Dict[str, Any]]:
         """Create summary plot data"""
         try:
             # This would create data for a SHAP summary plot
@@ -210,10 +251,10 @@ class ModelExplainer:
 
             for feature in self.feature_names:
                 feature_data = {
-                    'feature': feature,
-                    'mean_shap': 0.0,
-                    'feature_values': [],
-                    'shap_values': []
+                    "feature": feature,
+                    "mean_shap": 0.0,
+                    "feature_values": [],
+                    "shap_values": [],
                 }
                 summary_data.append(feature_data)
 
@@ -225,7 +266,4 @@ class ModelExplainer:
 
     def _mock_performance_explanation(self) -> Dict[str, Any]:
         """SHAP unavailable — empty performance explanation (fail-closed, zero-fab)."""
-        return {
-            'summary_plot': [],
-            'feature_importance_global': {}
-        }
+        return {"summary_plot": [], "feature_importance_global": {}}

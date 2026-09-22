@@ -85,23 +85,31 @@ async def _team_state(
     league_id = _league_key(league)
     cutoff = _naive_utc(match_date)
     rows = (
-        await session.execute(
-            select(EloRatingSnapshot)
-            .where(
-                EloRatingSnapshot.team_id == str(team_id),
-                EloRatingSnapshot.league == league_id,
-                EloRatingSnapshot.match_date < cutoff,
+        (
+            await session.execute(
+                select(EloRatingSnapshot)
+                .where(
+                    EloRatingSnapshot.team_id == str(team_id),
+                    EloRatingSnapshot.league == league_id,
+                    EloRatingSnapshot.match_date < cutoff,
+                )
+                .order_by(
+                    EloRatingSnapshot.match_date.desc(), EloRatingSnapshot.id.desc()
+                )
+                .limit(5)
             )
-            .order_by(EloRatingSnapshot.match_date.desc(), EloRatingSnapshot.id.desc())
-            .limit(5)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not rows:
         return _BASE_ELO, 0.0, False
 
     latest = rows[0]
     last_post = float(latest.post_match_elo)
-    trend = sum(float(row.post_match_elo - row.pre_match_elo) for row in rows) / len(rows)
+    trend = sum(float(row.post_match_elo - row.pre_match_elo) for row in rows) / len(
+        rows
+    )
 
     has_current_season = any(str(row.season) == str(season) for row in rows)
     if not has_current_season:
@@ -169,10 +177,16 @@ async def apply_finished_match_to_elo(session: AsyncSession, match: Match) -> bo
     """
 
     existing = (
-        await session.execute(
-            select(EloRatingSnapshot).where(EloRatingSnapshot.match_id == str(match.id))
+        (
+            await session.execute(
+                select(EloRatingSnapshot).where(
+                    EloRatingSnapshot.match_id == str(match.id)
+                )
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if len(existing) == 2:
         return False
     if existing:
@@ -265,19 +279,23 @@ async def sync_elo_from_finished_matches(
         select(EloRatingSnapshot.id).where(EloRatingSnapshot.match_id == Match.id)
     )
     matches: Iterable[Match] = (
-        await session.execute(
-            select(Match)
-            .where(
-                func.lower(Match.status) == "finished",
-                Match.home_score.is_not(None),
-                Match.away_score.is_not(None),
-                Match.league_id.is_not(None),
-                ~already_has_elo,
+        (
+            await session.execute(
+                select(Match)
+                .where(
+                    func.lower(Match.status) == "finished",
+                    Match.home_score.is_not(None),
+                    Match.away_score.is_not(None),
+                    Match.league_id.is_not(None),
+                    ~already_has_elo,
+                )
+                .order_by(Match.match_date.asc(), Match.id.asc())
+                .limit(limit)
             )
-            .order_by(Match.match_date.asc(), Match.id.asc())
-            .limit(limit)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     processed = 0
     skipped = 0
@@ -299,7 +317,11 @@ async def elo_state_health(session: AsyncSession) -> dict[str, object]:
         (await session.execute(select(func.count(EloRatingSnapshot.id)))).scalar_one()
     )
     team_count = int(
-        (await session.execute(select(func.count(func.distinct(EloRatingSnapshot.team_id))))).scalar_one()
+        (
+            await session.execute(
+                select(func.count(func.distinct(EloRatingSnapshot.team_id)))
+            )
+        ).scalar_one()
     )
     latest = (
         await session.execute(select(func.max(EloRatingSnapshot.match_date)))

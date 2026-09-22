@@ -100,7 +100,12 @@ def test_conflicting_on_ambiguous_candidates():
     """
     rec = _record(home="Nottingham Forest", away="Leicester City")
     cands = [
-        _candidate("fix-001", home="Nottm Forest", away="Leicester City", kickoff=_kickoff().replace(hour=18, minute=4)),
+        _candidate(
+            "fix-001",
+            home="Nottm Forest",
+            away="Leicester City",
+            kickoff=_kickoff().replace(hour=18, minute=4),
+        ),
         _candidate("fix-002", home="Nottingham Forest", away="Leicester"),
     ]
     decision = reconcile_fixture(rec, cands)
@@ -167,7 +172,12 @@ def test_requires_review_has_no_fixture_id_but_has_candidate():
     """REQUIRES_REVIEW carries review_candidate_id so triage can act on it."""
     rec = _record(home="Dortmund", away="Schalke 04", competition="BUNDESLIGA")
     cands = [
-        _candidate("fix-GER-001", home="Borussia Dortmund", away="FC Schalke 04", competition="BUNDESLIGA")
+        _candidate(
+            "fix-GER-001",
+            home="Borussia Dortmund",
+            away="FC Schalke 04",
+            competition="BUNDESLIGA",
+        )
     ]
     decision = reconcile_fixture(rec, cands)
     if decision.status == "REQUIRES_REVIEW":
@@ -228,6 +238,7 @@ def _h2h_event(
 def test_normalize_valid_record():
     p = _provider()
     from datetime import datetime, timezone
+
     captured = datetime(2026, 6, 26, 17, 30, tzinfo=timezone.utc)
     event = _h2h_event()
     bm = event["bookmakers"][0]
@@ -263,14 +274,16 @@ def test_normalize_maps_teams_by_name_not_outcome_position():
         away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
-        markets=[{
-            "key": "h2h",
-            "outcomes": [
-                {"name": "Chelsea", "price": 4.20},
-                {"name": "Draw", "price": 3.40},
-                {"name": "Arsenal", "price": 2.10},
-            ],
-        }],
+        markets=[
+            {
+                "key": "h2h",
+                "outcomes": [
+                    {"name": "Chelsea", "price": 4.20},
+                    {"name": "Draw", "price": 3.40},
+                    {"name": "Arsenal", "price": 2.10},
+                ],
+            }
+        ],
         provider_event_timestamp=None,
         captured_at=datetime.now(timezone.utc),
     )
@@ -283,6 +296,7 @@ def test_normalize_maps_teams_by_name_not_outcome_position():
 def test_normalize_missing_h2h_market():
     p = _provider()
     from datetime import datetime, timezone
+
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
@@ -303,6 +317,7 @@ def test_normalize_incomplete_outcomes():
     """Missing draw outcome → incomplete_1x2_outcomes rejection."""
     p = _provider()
     from datetime import datetime, timezone
+
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
@@ -310,14 +325,16 @@ def test_normalize_incomplete_outcomes():
         away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
-        markets=[{
-            "key": "h2h",
-            "outcomes": [
-                {"name": "Arsenal", "price": 2.10},
-                # Draw is absent
-                {"name": "Chelsea", "price": 4.20},
-            ],
-        }],
+        markets=[
+            {
+                "key": "h2h",
+                "outcomes": [
+                    {"name": "Arsenal", "price": 2.10},
+                    # Draw is absent
+                    {"name": "Chelsea", "price": 4.20},
+                ],
+            }
+        ],
         provider_event_timestamp=None,
         captured_at=datetime.now(timezone.utc),
     )
@@ -329,6 +346,7 @@ def test_normalize_overround_outside_limits():
     """Suspicious overround (too low — below 1.01) → rejected."""
     p = _provider()
     from datetime import datetime, timezone
+
     record = p._normalize_bookmaker(
         event_id="evt-001",
         canonical_fixture_id=None,
@@ -336,14 +354,16 @@ def test_normalize_overround_outside_limits():
         away_team="Chelsea",
         bookmaker="betfair",
         bookmaker_last_update=None,
-        markets=[{
-            "key": "h2h",
-            "outcomes": [
-                {"name": "Arsenal", "price": 100.0},
-                {"name": "Draw", "price": 100.0},
-                {"name": "Chelsea", "price": 100.0},
-            ],
-        }],
+        markets=[
+            {
+                "key": "h2h",
+                "outcomes": [
+                    {"name": "Arsenal", "price": 100.0},
+                    {"name": "Draw", "price": 100.0},
+                    {"name": "Chelsea", "price": 100.0},
+                ],
+            }
+        ],
         provider_event_timestamp=None,
         captured_at=datetime.now(timezone.utc),
     )
@@ -354,6 +374,7 @@ def test_normalize_overround_outside_limits():
 def test_normalize_preserves_bookmaker_last_update():
     p = _provider()
     from datetime import datetime, timezone
+
     last_update = datetime(2026, 6, 26, 17, 0, tzinfo=timezone.utc)
     event = _h2h_event(last_update="2026-06-26T17:00:00Z")
     bm = event["bookmakers"][0]
@@ -374,6 +395,7 @@ def test_normalize_preserves_bookmaker_last_update():
 def test_canonical_fixture_id_preserved():
     p = _provider()
     from datetime import datetime, timezone
+
     event = _h2h_event()
     bm = event["bookmakers"][0]
     record = p._normalize_bookmaker(

@@ -8,6 +8,7 @@ pre-existing production state) and use ``ensure_canonical_fixture`` for the
 production's per-tick refresh (which has no name-quality guard and keeps
 ``ProviderTeamMapping.provider_team_name`` current regardless).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -39,7 +40,12 @@ async def session():
 
 
 async def _seed_elo_history(
-    session: AsyncSession, *, team_id: str, name: str, league_id: str, opponent_index: int
+    session: AsyncSession,
+    *,
+    team_id: str,
+    name: str,
+    league_id: str,
+    opponent_index: int,
 ) -> None:
     """A team with real durable Elo history — the legitimate repair target."""
     if await session.get(League, league_id) is None:
@@ -50,7 +56,9 @@ async def _seed_elo_history(
     if await session.get(Team, team_id) is None:
         session.add(Team(id=team_id, name=name, league_id=league_id))
     if await session.get(Team, opponent_id) is None:
-        session.add(Team(id=opponent_id, name=f"Opponent {opponent_index}", league_id=league_id))
+        session.add(
+            Team(id=opponent_id, name=f"Opponent {opponent_index}", league_id=league_id)
+        )
     await session.flush()
 
     match_id = f"history-{league_id.lower()}-{opponent_index}"
@@ -145,15 +153,22 @@ async def test_orphan_with_now_clean_name_resolves_to_the_real_history_bearing_t
     session: AsyncSession,
 ) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=1,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=1,
     )
     # Orphan created at a corrupted moment; a later tick refreshed the observed
     # name to clean — exactly production's shape.
     await _seed_orphan_fixture(
-        session, match_id="fd-1", league_id="LA_LIGA",
-        home_provider_id="500", away_provider_id="501",
-        observed_home_name="Malaga CF", observed_away_name="Clean Opponent CF",
+        session,
+        match_id="fd-1",
+        league_id="LA_LIGA",
+        home_provider_id="500",
+        away_provider_id="501",
+        observed_home_name="Malaga CF",
+        observed_away_name="Clean Opponent CF",
     )
 
     manifest = await build_orphan_team_repair_manifest(session)
@@ -176,13 +191,20 @@ async def test_orphan_still_carrying_a_corrupt_freshest_name_is_not_proposed(
     session: AsyncSession,
 ) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=2,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=2,
     )
     await _seed_orphan_fixture(
-        session, match_id="fd-2", league_id="LA_LIGA",
-        home_provider_id="510", away_provider_id="511",
-        observed_home_name="M??laga CF", observed_away_name="Clean Opponent CF",
+        session,
+        match_id="fd-2",
+        league_id="LA_LIGA",
+        home_provider_id="510",
+        away_provider_id="511",
+        observed_home_name="M??laga CF",
+        observed_away_name="Clean Opponent CF",
     )
 
     manifest = await build_orphan_team_repair_manifest(session)
@@ -194,17 +216,26 @@ async def test_team_with_real_history_is_never_flagged_as_an_orphan(
     session: AsyncSession,
 ) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=3,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=3,
     )
     # Match already uses the real, history-bearing id on both sides.
-    session.add(League(id="LA_LIGA", name="LA_LIGA", country="test")) if await session.get(League, "LA_LIGA") is None else None
+    session.add(
+        League(id="LA_LIGA", name="LA_LIGA", country="test")
+    ) if await session.get(League, "LA_LIGA") is None else None
     opponent_id = "opponent-la_liga-3"
     session.add(
         Match(
-            id="fd-3", league_id="LA_LIGA",
-            home_team_id="fdco-team-la_liga-malaga", away_team_id=opponent_id,
-            match_date=_FUTURE, season="2026/2027", status="scheduled",
+            id="fd-3",
+            league_id="LA_LIGA",
+            home_team_id="fdco-team-la_liga-malaga",
+            away_team_id=opponent_id,
+            match_date=_FUTURE,
+            season="2026/2027",
+            status="scheduled",
         )
     )
     await session.commit()
@@ -216,13 +247,20 @@ async def test_team_with_real_history_is_never_flagged_as_an_orphan(
 
 async def test_kickoff_passed_blocker(session: AsyncSession) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=4,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=4,
     )
     await _seed_orphan_fixture(
-        session, match_id="fd-4", league_id="LA_LIGA",
-        home_provider_id="530", away_provider_id="531",
-        observed_home_name="Malaga CF", observed_away_name="Clean Opponent CF",
+        session,
+        match_id="fd-4",
+        league_id="LA_LIGA",
+        home_provider_id="530",
+        away_provider_id="531",
+        observed_home_name="Malaga CF",
+        observed_away_name="Clean Opponent CF",
         kickoff=_PAST,
     )
 
@@ -235,13 +273,20 @@ async def test_kickoff_passed_blocker(session: AsyncSession) -> None:
 
 async def test_existing_predictions_blocker(session: AsyncSession) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=5,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=5,
     )
     await _seed_orphan_fixture(
-        session, match_id="fd-5", league_id="LA_LIGA",
-        home_provider_id="540", away_provider_id="541",
-        observed_home_name="Malaga CF", observed_away_name="Clean Opponent CF",
+        session,
+        match_id="fd-5",
+        league_id="LA_LIGA",
+        home_provider_id="540",
+        away_provider_id="541",
+        observed_home_name="Malaga CF",
+        observed_away_name="Clean Opponent CF",
     )
     session.add(
         MatchPredictionLog(
@@ -263,13 +308,20 @@ async def test_existing_predictions_blocker(session: AsyncSession) -> None:
 
 async def test_manifest_sha256_is_deterministic(session: AsyncSession) -> None:
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=6,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=6,
     )
     await _seed_orphan_fixture(
-        session, match_id="fd-6", league_id="LA_LIGA",
-        home_provider_id="550", away_provider_id="551",
-        observed_home_name="Malaga CF", observed_away_name="Clean Opponent CF",
+        session,
+        match_id="fd-6",
+        league_id="LA_LIGA",
+        home_provider_id="550",
+        away_provider_id="551",
+        observed_home_name="Malaga CF",
+        observed_away_name="Clean Opponent CF",
     )
 
     first = await build_orphan_team_repair_manifest(session)
@@ -290,9 +342,13 @@ async def test_unrepaired_orphan_sides_diagnostics_distinguish_failure_reasons(
     # No opponent with Elo history exists in this league at all, so
     # resolve_team_id has nothing to match against — ORPHAN_NO_RESOLVER_MATCH.
     await _seed_orphan_fixture(
-        session, match_id="fd-8", league_id=league_id,
-        home_provider_id="600", away_provider_id="601",
-        observed_home_name="Unmatched Club CF", observed_away_name="Also Unmatched",
+        session,
+        match_id="fd-8",
+        league_id=league_id,
+        home_provider_id="600",
+        away_provider_id="601",
+        observed_home_name="Unmatched Club CF",
+        observed_away_name="Also Unmatched",
     )
 
     manifest = await build_orphan_team_repair_manifest(session)
@@ -334,9 +390,13 @@ async def test_orphan_missing_provider_team_id_evidence_is_diagnosed(
     await session.flush()
     session.add(
         Match(
-            id="fd-9", league_id=league_id,
-            home_team_id=orphan_home_id, away_team_id=orphan_away_id,
-            match_date=_FUTURE, season="2026/2027", status="scheduled",
+            id="fd-9",
+            league_id=league_id,
+            home_team_id=orphan_home_id,
+            away_team_id=orphan_away_id,
+            match_date=_FUTURE,
+            season="2026/2027",
+            status="scheduled",
         )
     )
     await session.flush()
@@ -379,9 +439,13 @@ async def test_orphan_no_provider_team_mapping_yet_is_diagnosed(
     await session.flush()
     session.add(
         Match(
-            id="fd-10", league_id=league_id,
-            home_team_id=orphan_home_id, away_team_id=orphan_away_id,
-            match_date=_FUTURE, season="2026/2027", status="scheduled",
+            id="fd-10",
+            league_id=league_id,
+            home_team_id=orphan_home_id,
+            away_team_id=orphan_away_id,
+            match_date=_FUTURE,
+            season="2026/2027",
+            status="scheduled",
         )
     )
     await session.flush()
@@ -420,8 +484,11 @@ async def test_target_that_would_collide_with_the_other_side_is_refused(
     """If the resolved target already equals the OTHER side's team id, refuse
     rather than propose a self-play collision."""
     await _seed_elo_history(
-        session, team_id="fdco-team-la_liga-malaga", name="Malaga",
-        league_id="LA_LIGA", opponent_index=7,
+        session,
+        team_id="fdco-team-la_liga-malaga",
+        name="Malaga",
+        league_id="LA_LIGA",
+        opponent_index=7,
     )
     league_id = "LA_LIGA"
     orphan_home_id = "fd-team-la_liga:home-fd-7"
@@ -429,10 +496,13 @@ async def test_target_that_would_collide_with_the_other_side_is_refused(
     await session.flush()
     session.add(
         Match(
-            id="fd-7", league_id=league_id,
+            id="fd-7",
+            league_id=league_id,
             home_team_id=orphan_home_id,
             away_team_id="fdco-team-la_liga-malaga",  # already the resolve target
-            match_date=_FUTURE, season="2026/2027", status="scheduled",
+            match_date=_FUTURE,
+            season="2026/2027",
+            status="scheduled",
         )
     )
     await session.flush()

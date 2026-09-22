@@ -207,3 +207,108 @@ Stage, commit, and push all changes using strict conventional commit standards w
 - [ ] `pnpm type-check` in the `apps/web` directory passes with zero TypeScript errors.
 - [ ] `pnpm build` completes successfully.
 
+## 2026-09-22T04:08:35Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Ready for launch — awaiting user approval.
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: A small focused team (one implementer, then adversarial review)
+
+This is a single self-contained fix; keep it small and focused.
+Audit the existing P9 Betting Safety implementation and write robust test coverage (pytest/playwright) to enforce the default-deny research posture and UCL hard-cap.
+
+Working directory: ~/teamwork_projects/p9_betting_safety
+Integrity mode: demo
+
+## Requirements
+
+### R1. Backend Betting Safety Coverage
+Audit the backend logic to ensure `stake_permitted = false` in Research Mode and that no `EXECUTE_BET` functionality or automated betting is present. Write or extend `pytest` test suites to formally verify this behavior.
+
+### R2. Backend UCL Cap Coverage
+Audit the backend logic to ensure fixtures in the Champions League are hard-capped at `ACTIONABLE` and cannot reach `HIGH_CONVICTION`. Write `pytest` test suites to verify this constraint.
+
+### R3. Frontend Safety Coverage
+Audit the Next.js frontend to ensure no staking controls or automated betting interfaces are exposed to the user in Research Mode. Write `playwright` (or equivalent component tests) to verify the UI correctly suppresses these controls.
+
+## Acceptance Criteria
+
+### Backend Verification
+- [ ] Running `pytest` against the betting safety test module passes.
+- [ ] The backend tests explicitly mock a UCL fixture and assert that its status cannot exceed `ACTIONABLE`.
+- [ ] The backend tests explicitly assert that `stake_permitted` is evaluated to `false`.
+
+### Frontend Verification
+- [ ] Running frontend UI tests (e.g., Playwright or Jest/RTL) passes.
+- [ ] The frontend tests verify the absence of staking input fields or "Execute Bet" buttons in the standard research view.
+
+*Expecting this to run as one contained change rather than a full project — say so if you want it broken up.*
+
+## 2026-09-22T08:03:56Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Launched
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: A small focused team (one implementer, then adversarial review)
+
+This is a single self-contained fix; keep it small and focused.
+Audit the existing P9 Betting Safety implementation and write robust test coverage (Vitest/RTL) to enforce the default-deny research posture in the frontend.
+
+Working directory: ~/teamwork_projects/p9_betting_safety
+Integrity mode: demo
+
+## Requirements
+
+### R1. Backend Betting Safety Coverage (COMPLETED)
+The backend tests for `stake_permitted = false` and no `EXECUTE_BET` functionality have already been implemented and are passing.
+
+### R2. Backend UCL Cap Coverage (COMPLETED)
+The backend tests for the UCL `ACTIONABLE` hard-cap have already been implemented and are passing.
+
+### R3. Frontend Safety Coverage (PENDING)
+Audit the Next.js frontend to ensure no staking controls or automated betting interfaces are exposed to the user in Research Mode. Write `vitest` and `@testing-library/react` tests for the relevant components (e.g., `full-analysis-dashboard.tsx`, `betting-agent-panel.tsx`) to verify the UI correctly suppresses these controls. Note: the project uses Vitest with React Testing Library, not Playwright.
+
+## Acceptance Criteria
+
+### Frontend Verification
+- [ ] Running frontend UI tests via `pnpm test` successfully executes the new safety coverage tests.
+- [ ] Tests explicitly verify the absence of staking input fields (e.g. text inputs for wager amounts) or "Execute Bet" / "Place Bet" buttons when `stake_permitted` is false or the system is in standard research mode.
+- [ ] Tests verify that the UI falls back to "No Bet", "Watchlist", or "Disabled" messaging appropriately.
+
+## 2026-09-22T09:26:49Z
+
+# Teamwork Project Prompt — Draft
+
+> Status: Launched
+> Goal: Craft prompt → get user approval → delegate to teamwork_preview
+> Requested team: A small focused team (one implementer, then adversarial review)
+
+This is a single self-contained fix for **Phase P10: Ingestion & Scraper Reliability**.
+Audit the existing Node.js scraper architecture (`apps/scraper/`) and harden evidence acquisition per the Production Executive Directive.
+
+Working directory: `~/teamwork_projects/p10_scraper_reliability`
+Integrity mode: demo
+
+## Requirements
+
+### R1. Idempotency & Poison Data Handling
+- Verify that canonical business identity (competition + season + participants) is used for idempotency, not mutable kickoff timestamps.
+- Ensure malformed/schema-invalid payloads are routed to a Dead Letter Queue (DLQ) with appropriate metadata (originalQueue, failureReason, attemptCount, firstAttemptAt, lastAttemptAt, originalPayload/reference).
+
+### R2. Transient Error Retries
+- Implement or verify capped exponential backoff + jitter for transient errors (timeout, 429, temporary provider failure).
+
+### R3. Verify Existing Resilience Infra
+- Verify whether the exported resilience infrastructure in `apps/scraper/src/safety.mjs` (RateLimiter, CircuitBreaker) is actually used. As noted in DEBT.md Item 93, if it is not called, it is `NOT_JUSTIFIED` to wire it in blindly without evidence. If untouched, cite DEBT.md Item 93.
+
+## Acceptance Criteria
+
+- [ ] Node.js scraper tests pass.
+- [ ] DLQ routing for poison/malformed payloads is implemented and tested.
+- [ ] Exponential backoff + jitter is implemented and tested for transient errors.
+- [ ] Idempotency is proven to rely on canonical entity identity, not mutable timestamps.
+- [ ] Update any affected documentation (`docs/DEBT.md`, etc.).
+- [ ] Commit all changes, push, and open a Pull Request to master.
+

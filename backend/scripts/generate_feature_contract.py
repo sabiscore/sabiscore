@@ -39,7 +39,9 @@ def _load_feature_registry():
 
 def main() -> None:
     registry = _load_feature_registry()
-    manifest = json.loads((MODELS_DIR / "active_generation.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (MODELS_DIR / "active_generation.json").read_text(encoding="utf-8")
+    )
     schema_version = manifest.get("feature_schema_version")
     contract = registry.build_feature_contract(schema_version)
     out_path = MODELS_DIR / "feature_contract.json"

@@ -11,6 +11,7 @@
 
 Persistence mirrors elo_engine.py: parquet at settings.pi_ratings_parquet_path.
 """
+
 from __future__ import annotations
 
 import logging
@@ -165,7 +166,9 @@ class PiRatingSystem:
             self._replay_to_current(table)
             self._cache = table
         except Exception:
-            logger.warning("Could not load pi_ratings parquet at %s; starting fresh.", path)
+            logger.warning(
+                "Could not load pi_ratings parquet at %s; starting fresh.", path
+            )
 
     def _persist(self, table: pd.DataFrame) -> None:
         if not self._parquet_path:

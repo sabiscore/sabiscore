@@ -6,6 +6,7 @@ export const workspaceRoot = resolve(fileURLToPath(new URL("../../..", import.me
 export const rawDir = resolve(workspaceRoot, "data/raw/node-scraper");
 export const processedDir = resolve(workspaceRoot, "data/processed/node-scraper");
 export const manifestDir = resolve(workspaceRoot, "data/manifests/node-scraper");
+export const dlqDir = resolve(workspaceRoot, "data/dlq/node-scraper");
 
 export const scraperUserAgent =
   process.env.SCRAPER_USER_AGENT ??

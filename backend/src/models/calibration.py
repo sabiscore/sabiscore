@@ -70,6 +70,7 @@ CalibrationMethodName = Literal["isotonic", "sigmoid", "temperature"]
 
 # ── Method selection ─────────────────────────────────────────────────────────
 
+
 def select_calibration_method(
     n_training_rows: int,
     *,
@@ -92,6 +93,7 @@ def select_calibration_method(
 
 # ── Calibrator dataclass ─────────────────────────────────────────────────────
 
+
 @dataclass
 class FittedCalibrator:
     """Fitted calibration state for a single league.
@@ -99,6 +101,7 @@ class FittedCalibrator:
     Stores per-class isotonic or Platt calibrators (or a single temperature
     scalar) together with metadata for the calibration report.
     """
+
     method: CalibrationMethodName
     league: str
     n_training_rows: int
@@ -117,6 +120,7 @@ class FittedCalibrator:
 
 
 # ── Core calibration helpers ─────────────────────────────────────────────────
+
 
 def compute_ece(
     y_true: np.ndarray,
@@ -236,6 +240,7 @@ def apply_calibrator(
 
 # ── Per-league calibration run ────────────────────────────────────────────────
 
+
 def run_league_calibration(
     league: str,
     y_train: np.ndarray,
@@ -261,7 +266,9 @@ def run_league_calibration(
         FittedCalibrator with ece_before, ece_after, draw_f1 deltas, and rationale.
     """
     n = len(y_train)
-    method = select_calibration_method(n, isotonic_min_rows=isotonic_min_rows, force=force_method)
+    method = select_calibration_method(
+        n, isotonic_min_rows=isotonic_min_rows, force=force_method
+    )
 
     rationale_parts = [
         f"n_training_rows={n}",
@@ -282,7 +289,12 @@ def run_league_calibration(
         brier_after = _compute_brier_multiclass(y_val, proba_cal)
         draw_f1_after = _draw_f1(y_val, proba_cal)
     except Exception as exc:
-        logger.warning("[calibration] %s: %s fit failed — falling back to identity. %s", league, method, exc)
+        logger.warning(
+            "[calibration] %s: %s fit failed — falling back to identity. %s",
+            league,
+            method,
+            exc,
+        )
         calibrators = None
         ece_after = ece_before
         brier_after = brier_before
@@ -294,10 +306,14 @@ def run_league_calibration(
         "[calibration] %s: method=%s ece_before=%.4f ece_after=%.4f "
         "brier_before=%.4f brier_after=%.4f "
         "draw_f1_before=%.4f draw_f1_after=%.4f",
-        league, method,
-        ece_before["mean"], ece_after["mean"],
-        brier_before, brier_after,
-        draw_f1_before, draw_f1_after,
+        league,
+        method,
+        ece_before["mean"],
+        ece_after["mean"],
+        brier_before,
+        brier_after,
+        draw_f1_before,
+        draw_f1_after,
     )
 
     return FittedCalibrator(
@@ -316,6 +332,7 @@ def run_league_calibration(
 
 
 # ── Multi-method comparison ───────────────────────────────────────────────────
+
 
 def compare_calibration_methods(
     league: str,
@@ -382,9 +399,7 @@ def compare_calibration_methods(
             }
 
     for m, r in method_results.items():
-        comparison_table[m] = {
-            k: v for k, v in r.items() if k != "calibrators"
-        }
+        comparison_table[m] = {k: v for k, v in r.items() if k != "calibrators"}
 
     # Default candidate from sample-count rule.
     default_method = select_calibration_method(n, isotonic_min_rows=isotonic_min_rows)
@@ -408,8 +423,12 @@ def compare_calibration_methods(
             logger.info(
                 "[calibration] %s: promoted %s over %s "
                 "(ece_delta=%.4f brier_after=%.4f draw_f1_after=%.4f)",
-                league, m, selected_method,
-                r["ece_delta_mean"], r["brier_after"], r["draw_f1_after"],
+                league,
+                m,
+                selected_method,
+                r["ece_delta_mean"],
+                r["brier_after"],
+                r["draw_f1_after"],
             )
 
     sel = method_results[selected_method]
@@ -425,8 +444,11 @@ def compare_calibration_methods(
     logger.info(
         "[calibration] %s: compare_methods selected=%s "
         "ece_delta=%.4f brier_delta=%.4f draw_f1_delta=%.4f",
-        league, selected_method,
-        sel["ece_delta_mean"], sel["brier_delta"], sel["draw_f1_delta"],
+        league,
+        selected_method,
+        sel["ece_delta_mean"],
+        sel["brier_delta"],
+        sel["draw_f1_delta"],
     )
 
     return FittedCalibrator(
@@ -446,6 +468,7 @@ def compare_calibration_methods(
 
 
 # ── Bivariate Poisson draw overlay ────────────────────────────────────────────
+
 
 @dataclass
 class BivariatePoissonDrawOverlay:
@@ -490,6 +513,7 @@ class BivariatePoissonDrawOverlay:
         holdout_brier_after:    Multiclass Brier after overlay, on the disjoint holdout.
         gate_passed: True when both F1 and Brier gates were met ON THE HOLDOUT.
     """
+
     alpha: float = 0.0
     league_avg_goals: float = 2.65
     calibration_draw_f1_before: float = 0.0
@@ -523,7 +547,9 @@ class BivariatePoissonDrawOverlay:
         lam_h = league_avg_goals * p_home / denom
         lam_a = league_avg_goals * p_away / denom
         # Skellam P(diff=0): e^{-(λH+λA)} · I_0(2√(λH·λA))
-        p_draw_sk = np.exp(-(lam_h + lam_a)) * bessel_i0_fn(0, 2.0 * np.sqrt(lam_h * lam_a))
+        p_draw_sk = np.exp(-(lam_h + lam_a)) * bessel_i0_fn(
+            0, 2.0 * np.sqrt(lam_h * lam_a)
+        )
         return np.clip(p_draw_sk, 0.0, 1.0)
 
     def _blend(self, y_proba: np.ndarray) -> np.ndarray:
@@ -557,10 +583,14 @@ class BivariatePoissonDrawOverlay:
         Returns an instance with alpha=0.0 (identity) when the holdout gate is
         not passed, regardless of how well the calibration set scored.
         """
-        calibration_brier_before = _compute_brier_multiclass(y_calibration, proba_calibration)
+        calibration_brier_before = _compute_brier_multiclass(
+            y_calibration, proba_calibration
+        )
         calibration_draw_f1_before = _draw_f1(y_calibration, proba_calibration)
 
-        sk_draw_calibration = cls._skellam_draw_proba(proba_calibration, league_avg_goals)
+        sk_draw_calibration = cls._skellam_draw_proba(
+            proba_calibration, league_avg_goals
+        )
 
         best_alpha = 0.0
         best_nll = float("inf")
@@ -568,14 +598,18 @@ class BivariatePoissonDrawOverlay:
         draw_mask = y_calibration == 1
 
         for alpha in np.linspace(0.0, 1.0, n_alpha_steps):
-            blended_draw = (1.0 - alpha) * proba_calibration[:, 1] + alpha * sk_draw_calibration
+            blended_draw = (1.0 - alpha) * proba_calibration[
+                :, 1
+            ] + alpha * sk_draw_calibration
             blended = proba_calibration.copy()
             blended[:, 1] = blended_draw
             row_sums = blended.sum(axis=1, keepdims=True)
             blended /= np.where(row_sums > 0, row_sums, 1.0)
             # Optimise on draw-class NLL.
             draw_probs = np.clip(blended[draw_mask, 1], eps, 1.0 - eps)
-            nll = -float(np.mean(np.log(draw_probs))) if draw_mask.any() else float("inf")
+            nll = (
+                -float(np.mean(np.log(draw_probs))) if draw_mask.any() else float("inf")
+            )
             if nll < best_nll:
                 best_nll = nll
                 best_alpha = float(alpha)
@@ -583,7 +617,9 @@ class BivariatePoissonDrawOverlay:
         # Report calibration-set before/after for audit (not the gate).
         candidate = cls(alpha=best_alpha, league_avg_goals=league_avg_goals)
         calibration_blended = candidate._blend(proba_calibration)
-        calibration_brier_after = _compute_brier_multiclass(y_calibration, calibration_blended)
+        calibration_brier_after = _compute_brier_multiclass(
+            y_calibration, calibration_blended
+        )
         calibration_draw_f1_after = _draw_f1(y_calibration, calibration_blended)
 
         # Gate on the disjoint holdout — this decides whether alpha ships.
@@ -593,17 +629,24 @@ class BivariatePoissonDrawOverlay:
         holdout_brier_after = _compute_brier_multiclass(y_holdout, holdout_blended)
         holdout_draw_f1_after = _draw_f1(y_holdout, holdout_blended)
 
-        gate_passed = holdout_draw_f1_after >= holdout_draw_f1_before and holdout_brier_after <= holdout_brier_before
+        gate_passed = (
+            holdout_draw_f1_after >= holdout_draw_f1_before
+            and holdout_brier_after <= holdout_brier_before
+        )
 
         if not gate_passed:
             logger.info(
                 "[bivariate_poisson] holdout gate not passed — alpha reset to 0.0 "
                 "(calibration draw_f1 %.4f→%.4f brier %.4f→%.4f; "
                 "holdout draw_f1 %.4f→%.4f brier %.4f→%.4f)",
-                calibration_draw_f1_before, calibration_draw_f1_after,
-                calibration_brier_before, calibration_brier_after,
-                holdout_draw_f1_before, holdout_draw_f1_after,
-                holdout_brier_before, holdout_brier_after,
+                calibration_draw_f1_before,
+                calibration_draw_f1_after,
+                calibration_brier_before,
+                calibration_brier_after,
+                holdout_draw_f1_before,
+                holdout_draw_f1_after,
+                holdout_brier_before,
+                holdout_brier_after,
             )
             best_alpha = 0.0
             holdout_brier_after = holdout_brier_before
@@ -612,8 +655,11 @@ class BivariatePoissonDrawOverlay:
             logger.info(
                 "[bivariate_poisson] holdout gate passed — alpha=%.3f "
                 "holdout draw_f1 %.4f→%.4f brier %.4f→%.4f",
-                best_alpha, holdout_draw_f1_before, holdout_draw_f1_after,
-                holdout_brier_before, holdout_brier_after,
+                best_alpha,
+                holdout_draw_f1_before,
+                holdout_draw_f1_after,
+                holdout_brier_before,
+                holdout_brier_after,
             )
 
         return cls(
@@ -652,10 +698,14 @@ def write_bivariate_poisson_report(
         "calibration_brier_after": overlay.calibration_brier_after,
         "holdout_draw_f1_before": overlay.holdout_draw_f1_before,
         "holdout_draw_f1_after": overlay.holdout_draw_f1_after,
-        "holdout_draw_f1_delta": round(overlay.holdout_draw_f1_after - overlay.holdout_draw_f1_before, 4),
+        "holdout_draw_f1_delta": round(
+            overlay.holdout_draw_f1_after - overlay.holdout_draw_f1_before, 4
+        ),
         "holdout_brier_before": overlay.holdout_brier_before,
         "holdout_brier_after": overlay.holdout_brier_after,
-        "holdout_brier_delta": round(overlay.holdout_brier_after - overlay.holdout_brier_before, 4),
+        "holdout_brier_delta": round(
+            overlay.holdout_brier_after - overlay.holdout_brier_before, 4
+        ),
         "gate_passed": overlay.gate_passed,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -666,6 +716,7 @@ def write_bivariate_poisson_report(
 
 
 # ── Calibration report persistence ───────────────────────────────────────────
+
 
 def write_calibration_report(
     fc: FittedCalibrator,
@@ -704,16 +755,18 @@ def write_calibration_report(
 
 # ── Ensemble diversity diagnostics ────────────────────────────────────────────
 
+
 @dataclass
 class DiversityReport:
     """Pairwise correlation summary and pruning decisions for a league's ensemble."""
+
     league: str
     member_names: List[str]
     correlation_matrix: List[List[float]]  # [n_members, n_members]
     mean_off_diagonal_correlation: float
     pruning_threshold: float
-    flagged_members: List[str]   # members above threshold (candidate for pruning)
-    pruned_members: List[str]    # members actually pruned (draw-F1 gate passed)
+    flagged_members: List[str]  # members above threshold (candidate for pruning)
+    pruned_members: List[str]  # members actually pruned (draw-F1 gate passed)
     retained_members: List[str]  # members kept after pruning
     pruning_rationale: Dict[str, str]  # member → reason kept/removed
 
@@ -745,8 +798,8 @@ class EnsembleDiversityDiagnostics:
         proba_vecs: List[np.ndarray] = []
         for name in names:
             model = models[name]
-            p = model.predict_proba(X)            # [n, 3]
-            proba_vecs.append(p.ravel())          # flatten to [n*3]
+            p = model.predict_proba(X)  # [n, 3]
+            proba_vecs.append(p.ravel())  # flatten to [n*3]
 
         n = len(names)
         corr = np.zeros((n, n), dtype=float)
@@ -790,18 +843,24 @@ class EnsembleDiversityDiagnostics:
             return models, {n: "retained: not flagged" for n in names}
 
         # Baseline draw-F1 with all members.
-        all_proba = np.mean([models[n].predict_proba(X_holdout) for n in models], axis=0)
+        all_proba = np.mean(
+            [models[n].predict_proba(X_holdout) for n in models], axis=0
+        )
         baseline_draw_f1 = _draw_f1(y_holdout, all_proba)
 
         retained = dict(models)
-        rationale: Dict[str, str] = {n: "retained: below threshold" for n in names if n not in flagged}
+        rationale: Dict[str, str] = {
+            n: "retained: below threshold" for n in names if n not in flagged
+        }
 
         for candidate in flagged:
             without = {k: v for k, v in retained.items() if k != candidate}
             if not without:
                 rationale[candidate] = "retained: last remaining member"
                 continue
-            pruned_proba = np.mean([without[n].predict_proba(X_holdout) for n in without], axis=0)
+            pruned_proba = np.mean(
+                [without[n].predict_proba(X_holdout) for n in without], axis=0
+            )
             pruned_draw_f1 = _draw_f1(y_holdout, pruned_proba)
             if pruned_draw_f1 >= baseline_draw_f1:
                 rationale[candidate] = (
@@ -810,7 +869,9 @@ class EnsembleDiversityDiagnostics:
                 )
                 retained = without
                 baseline_draw_f1 = pruned_draw_f1
-                logger.info("[diversity] pruned %s — draw_f1=%.4f", candidate, pruned_draw_f1)
+                logger.info(
+                    "[diversity] pruned %s — draw_f1=%.4f", candidate, pruned_draw_f1
+                )
             else:
                 rationale[candidate] = (
                     f"retained: pruning would degrade draw_f1 "
@@ -835,7 +896,9 @@ class EnsembleDiversityDiagnostics:
 
         # Mean off-diagonal correlation.
         off_diag_vals = [corr[i, j] for i in range(n) for j in range(n) if i != j]
-        mean_off_diag = round(float(np.mean(off_diag_vals)) if off_diag_vals else 0.0, 4)
+        mean_off_diag = round(
+            float(np.mean(off_diag_vals)) if off_diag_vals else 0.0, 4
+        )
 
         flagged = self.flag_redundant(names, corr)
         retained_models, rationale = self.prune_if_safe(
@@ -859,12 +922,18 @@ class EnsembleDiversityDiagnostics:
         if flagged:
             logger.info(
                 "[diversity] %s: flagged=%s pruned=%s retained=%s mean_off_diag=%.4f",
-                league, flagged, pruned, retained, mean_off_diag,
+                league,
+                flagged,
+                pruned,
+                retained,
+                mean_off_diag,
             )
         else:
             logger.info(
                 "[diversity] %s: no redundant members (mean_off_diag=%.4f < threshold=%.2f)",
-                league, mean_off_diag, self.prune_threshold,
+                league,
+                mean_off_diag,
+                self.prune_threshold,
             )
 
         return retained_models, report

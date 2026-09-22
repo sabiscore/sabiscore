@@ -2,9 +2,11 @@
 """
 Initialize database with schema and seed data
 """
+
 import sys
 import os
 import subprocess
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.database import SessionLocal
@@ -12,6 +14,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def init_database():
     """Run migrations and seed reference data."""
@@ -32,6 +35,7 @@ def init_database():
         logger.error(f"Database initialization failed: {e}")
         raise
 
+
 def seed_database():
     """Seed database with initial data"""
     try:
@@ -39,6 +43,7 @@ def seed_database():
 
         # Check if data already exists
         from src.core.database import League
+
         existing_leagues = db.query(League).count()
 
         if existing_leagues > 0:
@@ -55,7 +60,12 @@ def seed_database():
             {"id": "Bundesliga", "name": "Bundesliga", "country": "Germany", "tier": 1},
             {"id": "Serie A", "name": "Serie A", "country": "Italy", "tier": 1},
             {"id": "Ligue 1", "name": "Ligue 1", "country": "France", "tier": 1},
-            {"id": "UCL", "name": "UEFA Champions League", "country": "Europe", "tier": 0},
+            {
+                "id": "UCL",
+                "name": "UEFA Champions League",
+                "country": "Europe",
+                "tier": 0,
+            },
         ]
 
         for league_data in leagues_data:
@@ -70,6 +80,7 @@ def seed_database():
     except Exception as e:
         logger.error(f"Database seeding failed: {e}")
         raise
+
 
 if __name__ == "__main__":
     init_database()

@@ -10,6 +10,7 @@ number is stored per fixture as it is predicted.
 These tests pin BOTH halves of that: the measurement is captured, and
 capturing it did not quietly reopen the staking gate.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,7 +45,11 @@ def test_the_gate_stays_closed_no_matter_what_the_features_say():
 
     If this ever returns a breakdown, the gap stops firing and `stake_permitted`
     can become true, so this failing means staking was re-enabled."""
-    for features in ({}, {"home_form_last5_home": 0.5}, {f"f{i}": 0.1 for i in range(68)}):
+    for features in (
+        {},
+        {"home_form_last5_home": 0.5},
+        {f"f{i}": 0.1 for i in range(68)},
+    ):
         assert asyncio.run(_uncertainty_from_features("EPL", features)) is None
 
 
@@ -63,7 +68,14 @@ def test_payload_carries_the_research_measurement():
 
     assert payload["research_uncertainty"] == measurement
     # Stage 15's required shadow uncertainty fields must all be present.
-    for field in ("epistemic", "aleatoric", "total", "method", "model_count", "available"):
+    for field in (
+        "epistemic",
+        "aleatoric",
+        "total",
+        "method",
+        "model_count",
+        "available",
+    ):
         assert field in payload["research_uncertainty"]
 
 
@@ -95,5 +107,7 @@ def test_critical_gap_still_names_uncertainty_as_unavailable():
     """Belt-and-braces on the honesty of the record: the same payload that
     carries a real epistemic number must still declare the gate closed, or the
     stored evidence would contradict the served verdict."""
-    payload = _payload({"epistemic": 0.09, "available": True, "method": "ensemble_dispersion"})
+    payload = _payload(
+        {"epistemic": 0.09, "available": True, "method": "ensemble_dispersion"}
+    )
     assert "MODEL_UNCERTAINTY_UNAVAILABLE" in payload["evidence"]["critical_gaps"]

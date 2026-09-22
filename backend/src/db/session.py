@@ -8,7 +8,12 @@ from typing import Any, AsyncGenerator, Dict, Optional
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
@@ -48,7 +53,9 @@ def _get_async_database_url(raw_url: str) -> str:
     return raw_url
 
 
-async def _try_create_async_engine(database_url: str, engine_kwargs: Dict[str, Any]) -> AsyncEngine:
+async def _try_create_async_engine(
+    database_url: str, engine_kwargs: Dict[str, Any]
+) -> AsyncEngine:
     """Create async engine and test connection."""
     eng = create_async_engine(database_url, **engine_kwargs)
     # Test the connection
@@ -95,7 +102,9 @@ async def require_alembic_current(engine: AsyncEngine | None = None) -> str:
     if not head:
         raise RuntimeError("Alembic head revision could not be resolved")
     if applied != head:
-        raise RuntimeError(f"Database schema revision {applied or 'missing'} is not current head {head}")
+        raise RuntimeError(
+            f"Database schema revision {applied or 'missing'} is not current head {head}"
+        )
     logger.info("Alembic schema revision verified: %s", applied)
     return applied
 
@@ -111,10 +120,12 @@ async def init_db() -> None:
 
     # Check if sync engine is already using fallback
     using_fallback = is_using_fallback()
-    
+
     if using_fallback:
         # Sync engine already fell back to SQLite, use same for async
-        logger.info("Sync engine using SQLite fallback, initializing async engine with SQLite")
+        logger.info(
+            "Sync engine using SQLite fallback, initializing async engine with SQLite"
+        )
         database_url = SQLITE_FALLBACK_URL
     else:
         database_url = _get_async_database_url(settings.database_url)
@@ -144,30 +155,42 @@ async def init_db() -> None:
 
     try:
         async_engine = await _try_create_async_engine(database_url, engine_kwargs)
-        logger.info(f"Async database engine created successfully ({'SQLite' if 'sqlite' in database_url else 'PostgreSQL'})")
+        logger.info(
+            f"Async database engine created successfully ({'SQLite' if 'sqlite' in database_url else 'PostgreSQL'})"
+        )
     except Exception as e:
         if not database_url.startswith("sqlite"):
             if not _sqlite_fallback_allowed():
-                logger.error("PostgreSQL async connection failed and SQLite fallback is not explicitly allowed")
+                logger.error(
+                    "PostgreSQL async connection failed and SQLite fallback is not explicitly allowed"
+                )
                 raise
             # PostgreSQL failed, try SQLite fallback
-            logger.warning(f"PostgreSQL async connection failed ({e}), using explicit SQLite fallback")
+            logger.warning(
+                f"PostgreSQL async connection failed ({e}), using explicit SQLite fallback"
+            )
             engine_kwargs["poolclass"] = NullPool
             engine_kwargs.pop("pool_pre_ping", None)
             engine_kwargs.pop("pool_size", None)
             engine_kwargs.pop("max_overflow", None)
             engine_kwargs.pop("pool_timeout", None)
             engine_kwargs.pop("pool_recycle", None)
-            
+
             try:
-                async_engine = await _try_create_async_engine(SQLITE_FALLBACK_URL, engine_kwargs)
+                async_engine = await _try_create_async_engine(
+                    SQLITE_FALLBACK_URL, engine_kwargs
+                )
                 database_url = SQLITE_FALLBACK_URL
                 logger.info("Async SQLite fallback database initialized")
             except Exception as fallback_error:
-                logger.error(f"Both PostgreSQL and SQLite async fallback failed: {fallback_error}")
+                logger.error(
+                    f"Both PostgreSQL and SQLite async fallback failed: {fallback_error}"
+                )
                 raise
         else:
-            logger.error(f"Failed to initialize SQLite async database: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize SQLite async database: {e}", exc_info=True
+            )
             raise
 
     # Create session factory
@@ -182,8 +205,10 @@ async def init_db() -> None:
     if not database_url.startswith("sqlite"):
         await require_alembic_current(async_engine)
     else:
-        logger.warning("SQLite fallback active; Alembic current-revision check skipped for fallback database")
-    
+        logger.warning(
+            "SQLite fallback active; Alembic current-revision check skipped for fallback database"
+        )
+
 
 async def close_db() -> None:
     """
@@ -206,7 +231,7 @@ async def close_db() -> None:
 async def check_db_connection() -> bool:
     """
     Verify database connection is working.
-    
+
     Returns:
         True if connection successful, False otherwise
     """
@@ -222,7 +247,7 @@ async def check_db_connection() -> bool:
 async def get_db_stats() -> Dict[str, Any]:
     """
     Get database connection pool statistics.
-    
+
     Returns:
         Dictionary with pool statistics
     """
@@ -248,17 +273,17 @@ async def get_db_stats() -> Dict[str, Any]:
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Get database session with automatic cleanup.
-    
+
     Usage:
         async with get_db_session() as session:
             result = await session.execute(...)
-    
+
     Yields:
         AsyncSession: Database session
     """
     if AsyncSessionLocal is None:
         raise RuntimeError("Database not initialized. Call init_db() first.")
-    
+
     session = AsyncSessionLocal()
     try:
         yield session
@@ -284,12 +309,12 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency for FastAPI endpoints to get database session.
-    
+
     Usage:
         @app.get("/")
         async def endpoint(db: AsyncSession = Depends(get_db)):
             result = await db.execute(...)
-    
+
     Yields:
         AsyncSession: Database session
     """

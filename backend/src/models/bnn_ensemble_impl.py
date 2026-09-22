@@ -10,6 +10,7 @@ Implements Prior Networks (Malinin & Gales 2018) for Dirichlet-output
 uncertainty decomposition. Single forward-pass — no MC overhead at inference.
 MC-Dropout fallback class included for use if EDL fails ECE ≤ 0.050 gate.
 """
+
 from __future__ import annotations
 
 import math
@@ -27,22 +28,24 @@ from torch import Tensor
 #                         and credible_interval fields must all be present)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class UncertaintyOutput:
     """
     Full uncertainty decomposition from a single BNN forward pass.
     All scalar fields are plain Python floats (detached from autograd).
     """
-    home_prob:     float              # E[p_home] = alpha_home / alpha_0
-    draw_prob:     float              # E[p_draw]
-    away_prob:     float              # E[p_away]
-    epistemic:     float              # Σ_k Var[p_k] — bounded (0, 0.25)
-    aleatoric:     float              # H[E[p]] — bounded (0, log 3 ≈ 1.099)
-    total:         float              # epistemic + aleatoric
-    concentration: float              # alpha_0 = Σ alpha_k (evidence strength)
-    ci_lower:      List[float]        # 95% CI lower [home, draw, away]
-    ci_upper:      List[float]        # 95% CI upper
-    low_evidence:  bool               # True when epistemic > EPISTEMIC_THRESHOLD
+
+    home_prob: float  # E[p_home] = alpha_home / alpha_0
+    draw_prob: float  # E[p_draw]
+    away_prob: float  # E[p_away]
+    epistemic: float  # Σ_k Var[p_k] — bounded (0, 0.25)
+    aleatoric: float  # H[E[p]] — bounded (0, log 3 ≈ 1.099)
+    total: float  # epistemic + aleatoric
+    concentration: float  # alpha_0 = Σ alpha_k (evidence strength)
+    ci_lower: List[float]  # 95% CI lower [home, draw, away]
+    ci_upper: List[float]  # 95% CI upper
+    low_evidence: bool  # True when epistemic > EPISTEMIC_THRESHOLD
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,6 +53,7 @@ class UncertaintyOutput:
 # Architecture: 58 → 256 (BN+GELU) → 128 (BN+GELU+Dropout) → 3
 # Output: Dirichlet concentrations alpha [B, 3]
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class BNNEnsembleMember(nn.Module):
     """
@@ -113,15 +117,13 @@ class BNNEnsembleMember(nn.Module):
         Credible intervals: Dirichlet sample quantiles (lightweight, CPU).
         """
         self.eval()
-        alpha = self(x)                                        # [B, 3]
-        alpha_0 = alpha.sum(dim=1, keepdim=True)               # [B, 1]
-        mean_p = alpha / alpha_0                               # [B, 3]
+        alpha = self(x)  # [B, 3]
+        alpha_0 = alpha.sum(dim=1, keepdim=True)  # [B, 1]
+        mean_p = alpha / alpha_0  # [B, 3]
 
         # Epistemic: sum of Dirichlet marginal variances
-        var_k = (alpha * (alpha_0 - alpha)) / (
-            alpha_0.pow(2) * (alpha_0 + 1.0)
-        )
-        epistemic = var_k.sum(dim=1)                           # [B]
+        var_k = (alpha * (alpha_0 - alpha)) / (alpha_0.pow(2) * (alpha_0 + 1.0))
+        epistemic = var_k.sum(dim=1)  # [B]
 
         # Aleatoric: entropy of the mean predictive distribution
         aleatoric = -(mean_p * (mean_p + 1e-8).log()).sum(dim=1)  # [B]
@@ -131,25 +133,27 @@ class BNNEnsembleMember(nn.Module):
         # 95% credible intervals via Dirichlet sampling (CPU, T=ci_samples)
         alpha_cpu = alpha.cpu()
         dirichlet = torch.distributions.Dirichlet(alpha_cpu)
-        samples = dirichlet.sample((ci_samples,))              # [T, B, 3]
-        ci_lower = samples.quantile(0.025, dim=0)              # [B, 3]
-        ci_upper = samples.quantile(0.975, dim=0)              # [B, 3]
+        samples = dirichlet.sample((ci_samples,))  # [T, B, 3]
+        ci_lower = samples.quantile(0.025, dim=0)  # [B, 3]
+        ci_upper = samples.quantile(0.975, dim=0)  # [B, 3]
 
         results: List[UncertaintyOutput] = []
         for i in range(x.shape[0]):
             ep = float(epistemic[i])
-            results.append(UncertaintyOutput(
-                home_prob     = float(mean_p[i, 0]),
-                draw_prob     = float(mean_p[i, 1]),
-                away_prob     = float(mean_p[i, 2]),
-                epistemic     = ep,
-                aleatoric     = float(aleatoric[i]),
-                total         = float(total[i]),
-                concentration = float(alpha_0[i, 0]),
-                ci_lower      = ci_lower[i].tolist(),
-                ci_upper      = ci_upper[i].tolist(),
-                low_evidence  = ep > epistemic_threshold,
-            ))
+            results.append(
+                UncertaintyOutput(
+                    home_prob=float(mean_p[i, 0]),
+                    draw_prob=float(mean_p[i, 1]),
+                    away_prob=float(mean_p[i, 2]),
+                    epistemic=ep,
+                    aleatoric=float(aleatoric[i]),
+                    total=float(total[i]),
+                    concentration=float(alpha_0[i, 0]),
+                    ci_lower=ci_lower[i].tolist(),
+                    ci_upper=ci_upper[i].tolist(),
+                    low_evidence=ep > epistemic_threshold,
+                )
+            )
         return results
 
     @torch.no_grad()
@@ -162,22 +166,19 @@ class BNNEnsembleMember(nn.Module):
         This method is ONLY called during Phase 7+ retraining (bnn_meta_enabled=True).
         """
         self.eval()
-        alpha = self(x)                                        # [B, 3]
-        alpha_0 = alpha.sum(dim=1, keepdim=True)               # [B, 1]
-        mean_p = alpha / alpha_0                               # [B, 3]
-        var_k = (alpha * (alpha_0 - alpha)) / (
-            alpha_0.pow(2) * (alpha_0 + 1.0)
-        )
-        epistemic = var_k.sum(dim=1, keepdim=True)             # [B, 1]
-        aleatoric = -(mean_p * (mean_p + 1e-8).log()).sum(
-            dim=1, keepdim=True
-        )                                                       # [B, 1]
+        alpha = self(x)  # [B, 3]
+        alpha_0 = alpha.sum(dim=1, keepdim=True)  # [B, 1]
+        mean_p = alpha / alpha_0  # [B, 3]
+        var_k = (alpha * (alpha_0 - alpha)) / (alpha_0.pow(2) * (alpha_0 + 1.0))
+        epistemic = var_k.sum(dim=1, keepdim=True)  # [B, 1]
+        aleatoric = -(mean_p * (mean_p + 1e-8).log()).sum(dim=1, keepdim=True)  # [B, 1]
         return torch.cat([mean_p, epistemic, aleatoric, alpha_0], dim=1)  # [B, 6]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MC-Dropout BNN (Fallback — used only if EDL ECE > 0.050 on validation set)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MCDropoutBNN(nn.Module):
     """
@@ -238,16 +239,16 @@ class MCDropoutBNN(nn.Module):
         with torch.no_grad():
             all_probs: List[Tensor] = []
             for _ in range(T):
-                logits = self.net(x)              # [B, 3]
+                logits = self.net(x)  # [B, 3]
                 probs = F.softmax(logits, dim=-1)  # [B, 3]
                 all_probs.append(probs)
 
-        stacked = torch.stack(all_probs, dim=0)   # [T, B, 3]
-        mean_p = stacked.mean(dim=0)              # [B, 3]
+        stacked = torch.stack(all_probs, dim=0)  # [T, B, 3]
+        mean_p = stacked.mean(dim=0)  # [B, 3]
 
         # Epistemic proxy: predictive variance across samples
-        var_p = stacked.var(dim=0)                # [B, 3]
-        epistemic = var_p.sum(dim=1)              # [B]
+        var_p = stacked.var(dim=0)  # [B, 3]
+        epistemic = var_p.sum(dim=1)  # [B]
 
         # Aleatoric proxy: mean of per-sample entropies
         per_sample_entropy = -(stacked * (stacked + 1e-8).log()).sum(dim=2)  # [T, B]
@@ -262,18 +263,20 @@ class MCDropoutBNN(nn.Module):
         results: List[UncertaintyOutput] = []
         for i in range(x.shape[0]):
             ep = float(epistemic[i])
-            results.append(UncertaintyOutput(
-                home_prob     = float(mean_p[i, 0]),
-                draw_prob     = float(mean_p[i, 1]),
-                away_prob     = float(mean_p[i, 2]),
-                epistemic     = ep,
-                aleatoric     = float(aleatoric[i]),
-                total         = float(total[i]),
-                concentration = 0.0,  # not applicable to MC-Dropout
-                ci_lower      = ci_lower[i].tolist(),
-                ci_upper      = ci_upper[i].tolist(),
-                low_evidence  = ep > epistemic_threshold,
-            ))
+            results.append(
+                UncertaintyOutput(
+                    home_prob=float(mean_p[i, 0]),
+                    draw_prob=float(mean_p[i, 1]),
+                    away_prob=float(mean_p[i, 2]),
+                    epistemic=ep,
+                    aleatoric=float(aleatoric[i]),
+                    total=float(total[i]),
+                    concentration=0.0,  # not applicable to MC-Dropout
+                    ci_lower=ci_lower[i].tolist(),
+                    ci_upper=ci_upper[i].tolist(),
+                    low_evidence=ep > epistemic_threshold,
+                )
+            )
         return results
 
     @torch.no_grad()
@@ -291,11 +294,11 @@ class MCDropoutBNN(nn.Module):
 
         stacked = torch.stack(
             [F.softmax(self.net(x), dim=-1) for _ in range(T)], dim=0
-        )                                                       # [T, B, 3]
-        mean_p = stacked.mean(dim=0)                           # [B, 3]
-        var_p = stacked.var(dim=0).sum(dim=1, keepdim=True)    # [B, 1] — epistemic proxy
+        )  # [T, B, 3]
+        mean_p = stacked.mean(dim=0)  # [B, 3]
+        var_p = stacked.var(dim=0).sum(dim=1, keepdim=True)  # [B, 1] — epistemic proxy
         per_entropy = -(stacked * (stacked + 1e-8).log()).sum(dim=2)
-        aleatoric = per_entropy.mean(dim=0, keepdim=True).T     # [B, 1]
+        aleatoric = per_entropy.mean(dim=0, keepdim=True).T  # [B, 1]
         zeros = torch.zeros(x.shape[0], 1, device=x.device)
         return torch.cat([mean_p, var_p, aleatoric, zeros], dim=1)  # [B, 6]
 
@@ -303,6 +306,7 @@ class MCDropoutBNN(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 # EDL training loss — Sensoy et al. 2018 (Equations 3 + 5)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def edl_nll_loss(
     alpha: Tensor,
@@ -332,8 +336,8 @@ def edl_nll_loss(
 
     # ── KL regularisation (Sensoy Eq. 5) ─────────────────────────────────────
     # Remove evidence for wrong classes to avoid over-regularising correct class
-    alpha_tilde = y + (1.0 - y) * alpha                        # [B, K]
-    alpha_tilde_0 = alpha_tilde.sum(dim=1, keepdim=True)        # [B, 1]
+    alpha_tilde = y + (1.0 - y) * alpha  # [B, K]
+    alpha_tilde_0 = alpha_tilde.sum(dim=1, keepdim=True)  # [B, 1]
     ones = torch.ones_like(alpha_tilde)
 
     # KL[ Dir(alpha_tilde) || Dir(1,...,1) ]

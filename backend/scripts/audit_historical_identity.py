@@ -6,6 +6,7 @@ READ ONLY before running the audit query. Source identities are reconstructed
 from the committed football-data.co.uk cache using the production parser and
 deterministic match-id contract.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -40,7 +41,9 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def _run(cache_dir: Path | None) -> tuple[dict[str, object], list[dict[str, object]]]:
+async def _run(
+    cache_dir: Path | None,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
     await init_db()
     try:
         from src.db.session import AsyncSessionLocal

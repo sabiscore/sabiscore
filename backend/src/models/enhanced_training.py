@@ -110,7 +110,9 @@ class CalibratedEnsemble:
     Wraps a trained classifier with isotonic probability calibration.
     """
 
-    def __init__(self, base_estimator: Any, method: str = "isotonic", cv: Any = "prefit"):
+    def __init__(
+        self, base_estimator: Any, method: str = "isotonic", cv: Any = "prefit"
+    ):
         self.base_estimator = base_estimator
         self.method = method
         self.cv = cv
@@ -448,9 +450,7 @@ class EnhancedModelTrainer:
                     return pd.read_csv(path)
         raise FileNotFoundError(f"No training data found for {league}")
 
-    def _prepare_data(
-        self, df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, pd.Series]:
+    def _prepare_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
         exclude = {"result", "match_id", "match_date", "referee"}
         feature_cols = [c for c in df.columns if c not in exclude]
         X = df[feature_cols].copy()

@@ -7,7 +7,11 @@ from datetime import datetime
 import pandas as pd
 import pytest
 
-from src.features.berrar_ratings import BerrarContext, BerrarRatingSystem, _DEFAULT_RATING
+from src.features.berrar_ratings import (
+    BerrarContext,
+    BerrarRatingSystem,
+    _DEFAULT_RATING,
+)
 
 
 @pytest.fixture()
@@ -16,6 +20,7 @@ def sys() -> BerrarRatingSystem:
 
 
 # ── get_context defaults ──────────────────────────────────────────────────────
+
 
 def test_get_context_fresh_system_default_ratings(sys):
     ctx = sys.get_context("TeamA", "TeamB")
@@ -73,7 +78,9 @@ def test_context_reflects_updated_ratings(sys):
 
 def test_sequential_wins_increase_rating(sys):
     for i in range(5):
-        sys.update(f"m{i}", "Arsenal", "Chelsea", result=1, league="EPL", match_date=_DT)
+        sys.update(
+            f"m{i}", "Arsenal", "Chelsea", result=1, league="EPL", match_date=_DT
+        )
     assert sys._ratings["Arsenal"] > _DEFAULT_RATING + 5
 
 
@@ -94,6 +101,7 @@ def test_persist_noop_without_parquet(sys):
 
 
 # ── BerrarContext dataclass ───────────────────────────────────────────────────
+
 
 def test_berrar_context_frozen():
     ctx = BerrarContext(

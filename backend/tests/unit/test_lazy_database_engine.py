@@ -99,7 +99,7 @@ def test_canonical_alias_outranks_the_legacy_one_when_both_conflict():
         "APP_ENV": "development",
         "DATABASE_URL": _UNREACHABLE_DATABASE_URL,
         "PYTHONPATH": ".",
-        "ALLOW_SQLITE_FALLBACK": "false",             # canonical -- must win
+        "ALLOW_SQLITE_FALLBACK": "false",  # canonical -- must win
         "SABISCORE_ALLOW_INSECURE_FALLBACK": "true",  # legacy -- must lose
     }
     result = subprocess.run(
@@ -300,7 +300,9 @@ class _FakeEngine:
 def test_init_engine_sqlite_primary_success(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(db, "_sync_url", "sqlite:///:memory:")
     monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
-    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-primary"))
+    monkeypatch.setattr(
+        db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-primary")
+    )
     monkeypatch.setattr(db, "_test_connection", lambda eng: True)
 
     engine = db._init_engine()
@@ -310,7 +312,9 @@ def test_init_engine_sqlite_primary_success(monkeypatch: pytest.MonkeyPatch):
     assert db.is_using_fallback() is False
 
 
-def test_init_engine_sqlite_primary_rejected_without_fallback_flag(monkeypatch: pytest.MonkeyPatch):
+def test_init_engine_sqlite_primary_rejected_without_fallback_flag(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(db, "_sync_url", "sqlite:///:memory:")
     monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: False)
 
@@ -318,9 +322,13 @@ def test_init_engine_sqlite_primary_rejected_without_fallback_flag(monkeypatch: 
         db._init_engine()
 
 
-def test_init_engine_postgres_success_never_touches_fallback(monkeypatch: pytest.MonkeyPatch):
+def test_init_engine_postgres_success_never_touches_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
-    monkeypatch.setattr(db, "_create_postgres_engine", lambda url: _FakeEngine("postgres"))
+    monkeypatch.setattr(
+        db, "_create_postgres_engine", lambda url: _FakeEngine("postgres")
+    )
 
     class _FakeConn:
         def __enter__(self):
@@ -341,7 +349,9 @@ def test_init_engine_postgres_success_never_touches_fallback(monkeypatch: pytest
     assert db.is_using_fallback() is False
 
 
-def test_init_engine_postgres_failure_falls_back_to_sqlite(monkeypatch: pytest.MonkeyPatch):
+def test_init_engine_postgres_failure_falls_back_to_sqlite(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
 
     def _raise_postgres(url):
@@ -349,7 +359,9 @@ def test_init_engine_postgres_failure_falls_back_to_sqlite(monkeypatch: pytest.M
 
     monkeypatch.setattr(db, "_create_postgres_engine", _raise_postgres)
     monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
-    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback"))
+    monkeypatch.setattr(
+        db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback")
+    )
     monkeypatch.setattr(db, "_test_connection", lambda eng: True)
 
     engine = db._init_engine()
@@ -359,7 +371,9 @@ def test_init_engine_postgres_failure_falls_back_to_sqlite(monkeypatch: pytest.M
     assert db.is_db_available() is True
 
 
-def test_init_engine_postgres_failure_no_fallback_raises(monkeypatch: pytest.MonkeyPatch):
+def test_init_engine_postgres_failure_no_fallback_raises(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(db, "_sync_url", "postgresql+psycopg://irrelevant")
 
     def _raise_postgres(url):
@@ -374,7 +388,9 @@ def test_init_engine_postgres_failure_no_fallback_raises(monkeypatch: pytest.Mon
     assert db.is_using_fallback() is False
 
 
-def test_init_engine_both_postgres_and_fallback_fail_reports_unavailable(monkeypatch: pytest.MonkeyPatch):
+def test_init_engine_both_postgres_and_fallback_fail_reports_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+):
     """_init_engine() does not raise when the fallback engine itself fails
     its connection test -- it returns the (broken) engine and leaves
     is_db_available() False, matching the pre-refactor behaviour exactly."""
@@ -385,7 +401,9 @@ def test_init_engine_both_postgres_and_fallback_fail_reports_unavailable(monkeyp
 
     monkeypatch.setattr(db, "_create_postgres_engine", _raise_postgres)
     monkeypatch.setattr(db, "_sqlite_fallback_allowed", lambda: True)
-    monkeypatch.setattr(db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback"))
+    monkeypatch.setattr(
+        db, "_create_sqlite_engine", lambda url: _FakeEngine("sqlite-fallback")
+    )
     monkeypatch.setattr(db, "_test_connection", lambda eng: False)
 
     engine = db._init_engine()

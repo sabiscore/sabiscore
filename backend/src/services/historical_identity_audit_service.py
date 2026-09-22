@@ -7,6 +7,7 @@ source identity remains visible during incident review and repair planning.
 
 Nothing in this module mutates database state.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -18,7 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ..core.database import Match, Team
-from .historical_backfill_service import HistoricalMatch, default_cache_dir, parse_fd_csv
+from .historical_backfill_service import (
+    HistoricalMatch,
+    default_cache_dir,
+    parse_fd_csv,
+)
 
 
 @dataclass(frozen=True)
@@ -57,7 +62,9 @@ class SemanticIdentityFinding:
         return asdict(self)
 
 
-def _source_identity(item: HistoricalMatch, source_file: str) -> HistoricalSourceIdentity:
+def _source_identity(
+    item: HistoricalMatch, source_file: str
+) -> HistoricalSourceIdentity:
     return HistoricalSourceIdentity(
         match_id=item.match_id,
         league_id=item.league_id,

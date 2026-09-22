@@ -28,9 +28,7 @@ def _validated_limit(limit: int) -> int:
     if not isinstance(limit, int):
         raise TypeError("limit must be an integer")
     if limit < 1 or limit > MAX_SETTLED_FIXTURE_LIMIT:
-        raise ValueError(
-            f"limit must be between 1 and {MAX_SETTLED_FIXTURE_LIMIT}"
-        )
+        raise ValueError(f"limit must be between 1 and {MAX_SETTLED_FIXTURE_LIMIT}")
     return limit
 
 
@@ -228,7 +226,14 @@ async def get_settled_predictions(
     )
 
     records: List[Dict[str, Any]] = []
-    for match_date, home_score, away_score, home_prob, draw_prob, away_prob in result.all():
+    for (
+        match_date,
+        home_score,
+        away_score,
+        home_prob,
+        draw_prob,
+        away_prob,
+    ) in result.all():
         if home_score > away_score:
             outcome = 0
         elif home_score == away_score:
@@ -444,7 +449,9 @@ async def get_next_upcoming_fixture(
         Match.status == "scheduled",
     )
     if leagues:
-        statement = statement.where(func.lower(Match.league_id).in_([league.lower() for league in leagues]))
+        statement = statement.where(
+            func.lower(Match.league_id).in_([league.lower() for league in leagues])
+        )
 
     result = await session.execute(statement.order_by(Match.match_date.asc()).limit(1))
     return result.scalars().first()

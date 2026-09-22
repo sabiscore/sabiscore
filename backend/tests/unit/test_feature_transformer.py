@@ -203,6 +203,7 @@ def test_engineer_features_legacy_defaults_require_explicit_opt_in():
 # data reaches the completeness counter.
 # ---------------------------------------------------------------------------
 
+
 def _form_stub() -> dict:
     return {"home": {"last_5_games": []}, "away": {"last_5_games": []}}
 
@@ -219,18 +220,22 @@ def test_feature_completeness_one_source():
 
 def test_feature_completeness_two_sources():
     transformer = FeatureTransformer(allow_legacy_defaults=True)
-    transformer.engineer_features({
-        "current_form": _form_stub(),
-        "team_stats": {"home": {}, "away": {}},
-    })
+    transformer.engineer_features(
+        {
+            "current_form": _form_stub(),
+            "team_stats": {"home": {}, "away": {}},
+        }
+    )
     assert transformer.feature_completeness == pytest.approx(0.50)
 
 
 def test_feature_completeness_three_sources():
     transformer = FeatureTransformer(allow_legacy_defaults=True)
-    transformer.engineer_features({
-        "current_form": _form_stub(),
-        "team_stats": {"home": {}, "away": {}},
-        "historical_stats": _history_stub(),
-    })
+    transformer.engineer_features(
+        {
+            "current_form": _form_stub(),
+            "team_stats": {"home": {}, "away": {}},
+            "historical_stats": _history_stub(),
+        }
+    )
     assert transformer.feature_completeness == pytest.approx(0.75)

@@ -43,7 +43,12 @@ async def session():
 
 
 async def _seed_team_with_history(
-    session: AsyncSession, *, team_id: str, name: str, opponent_id: str, match_date: datetime
+    session: AsyncSession,
+    *,
+    team_id: str,
+    name: str,
+    opponent_id: str,
+    match_date: datetime,
 ) -> None:
     """A team with a real settled match + Elo snapshot — resolve_team_id's
     require_elo_history=True floor."""
@@ -52,31 +57,58 @@ async def _seed_team_with_history(
     match_id = f"seed-{team_id}-{match_date.isoformat()}"
     session.add(
         Match(
-            id=match_id, league_id=LEAGUE, home_team_id=team_id, away_team_id=opponent_id,
-            match_date=match_date, season="2023/2024", status="finished",
-            home_score=1, away_score=0,
+            id=match_id,
+            league_id=LEAGUE,
+            home_team_id=team_id,
+            away_team_id=opponent_id,
+            match_date=match_date,
+            season="2023/2024",
+            status="finished",
+            home_score=1,
+            away_score=0,
         )
     )
     await session.flush()
     session.add(
         EloRatingSnapshot(
-            match_id=match_id, team_id=team_id, pre_match_elo=1500.0, post_match_elo=1510.0,
-            league=LEAGUE, season="2023/2024", match_date=match_date, created_at=match_date,
+            match_id=match_id,
+            team_id=team_id,
+            pre_match_elo=1500.0,
+            post_match_elo=1510.0,
+            league=LEAGUE,
+            season="2023/2024",
+            match_date=match_date,
+            created_at=match_date,
         )
     )
 
 
-def _write_corpus_parquet(tmp_path: Path, *, league: str, season: int, rows: list[dict]) -> Path:
+def _write_corpus_parquet(
+    tmp_path: Path, *, league: str, season: int, rows: list[dict]
+) -> Path:
     sources_dir = tmp_path / "v4_sources"
     sources_dir.mkdir(exist_ok=True)
-    pd.DataFrame(rows).to_parquet(sources_dir / f"understat_matches_{league}_{season}.parquet")
+    pd.DataFrame(rows).to_parquet(
+        sources_dir / f"understat_matches_{league}_{season}.parquet"
+    )
     return sources_dir
 
 
-def _row(*, home_team: str, away_team: str, date: datetime, home_xg=1.5, away_xg=1.0, has_data=True) -> dict:
+def _row(
+    *,
+    home_team: str,
+    away_team: str,
+    date: datetime,
+    home_xg=1.5,
+    away_xg=1.0,
+    has_data=True,
+) -> dict:
     return {
-        "home_team": home_team, "away_team": away_team, "date": date,
-        "home_xg": home_xg if has_data else None, "away_xg": away_xg if has_data else None,
+        "home_team": home_team,
+        "away_team": away_team,
+        "date": date,
+        "home_xg": home_xg if has_data else None,
+        "away_xg": away_xg if has_data else None,
         "has_data": has_data,
     }
 
@@ -102,10 +134,17 @@ def test_kickoff_window_strips_tzinfo() -> None:
 
 def test_load_corpus_drops_null_xg_rows(tmp_path: Path) -> None:
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="ligue_1", season=2019,
+        tmp_path,
+        league="ligue_1",
+        season=2019,
         rows=[
             _row(home_team="Lyon", away_team="Nice", date=datetime(2019, 9, 1)),
-            _row(home_team="Lyon", away_team="Nice", date=datetime(2020, 4, 1), has_data=False),
+            _row(
+                home_team="Lyon",
+                away_team="Nice",
+                date=datetime(2020, 4, 1),
+                has_data=False,
+            ),
         ],
     )
     corpus = load_corpus_matches(sources_dir)
@@ -120,22 +159,47 @@ def test_load_corpus_drops_null_xg_rows(tmp_path: Path) -> None:
 
 async def test_resolvable_pair_is_ready(session: AsyncSession, tmp_path: Path) -> None:
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await _seed_team_with_history(
-        session, team_id="away-id", name="Chelsea", opponent_id="home-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="away-id",
+        name="Chelsea",
+        opponent_id="home-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     session.add(
         Match(
-            id="the-real-fixture", league_id=LEAGUE, home_team_id="home-id", away_team_id="away-id",
-            match_date=KICKOFF, season="2024/2025", status="finished", home_score=2, away_score=1,
+            id="the-real-fixture",
+            league_id=LEAGUE,
+            home_team_id="home-id",
+            away_team_id="away-id",
+            match_date=KICKOFF,
+            season="2024/2025",
+            status="finished",
+            home_score=2,
+            away_score=1,
         )
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
-        rows=[_row(home_team="Arsenal", away_team="Chelsea", date=KICKOFF, home_xg=1.8, away_xg=0.9)],
+        tmp_path,
+        league="epl",
+        season=2024,
+        rows=[
+            _row(
+                home_team="Arsenal",
+                away_team="Chelsea",
+                date=KICKOFF,
+                home_xg=1.8,
+                away_xg=0.9,
+            )
+        ],
     )
 
     manifest = await build_understat_match_stats_manifest(session, sources_dir)
@@ -156,13 +220,25 @@ async def test_unknown_team_name_is_team_unresolved_not_guessed(
     session: AsyncSession, tmp_path: Path
 ) -> None:
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
-        rows=[_row(home_team="Arsenal", away_team="A Club That Does Not Exist FC", date=KICKOFF)],
+        tmp_path,
+        league="epl",
+        season=2024,
+        rows=[
+            _row(
+                home_team="Arsenal",
+                away_team="A Club That Does Not Exist FC",
+                date=KICKOFF,
+            )
+        ],
     )
 
     manifest = await build_understat_match_stats_manifest(session, sources_dir)
@@ -180,17 +256,27 @@ async def test_resolved_teams_with_no_matching_fixture_is_match_unresolved(
     session: AsyncSession, tmp_path: Path
 ) -> None:
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await _seed_team_with_history(
-        session, team_id="away-id", name="Chelsea", opponent_id="home-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="away-id",
+        name="Chelsea",
+        opponent_id="home-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await session.commit()
     # No Match row for Arsenal vs Chelsea at KICKOFF — only the seed matches
     # exist, and those are 200 days earlier, well outside the tolerance window.
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
+        tmp_path,
+        league="epl",
+        season=2024,
         rows=[_row(home_team="Arsenal", away_team="Chelsea", date=KICKOFF)],
     )
 
@@ -206,29 +292,54 @@ async def test_two_candidate_matches_in_window_is_ambiguous_not_guessed(
     session: AsyncSession, tmp_path: Path
 ) -> None:
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await _seed_team_with_history(
-        session, team_id="away-id", name="Chelsea", opponent_id="home-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="away-id",
+        name="Chelsea",
+        opponent_id="home-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     # Two distinct Match rows for the same pairing, both inside the 36h window
     # around KICKOFF — a data-quality scenario the resolver must refuse to
     # pick between rather than silently choosing the first.
-    session.add_all([
-        Match(
-            id="dup-a", league_id=LEAGUE, home_team_id="home-id", away_team_id="away-id",
-            match_date=KICKOFF, season="2024/2025", status="finished", home_score=2, away_score=1,
-        ),
-        Match(
-            id="dup-b", league_id=LEAGUE, home_team_id="home-id", away_team_id="away-id",
-            match_date=KICKOFF + timedelta(hours=10), season="2024/2025", status="finished",
-            home_score=1, away_score=1,
-        ),
-    ])
+    session.add_all(
+        [
+            Match(
+                id="dup-a",
+                league_id=LEAGUE,
+                home_team_id="home-id",
+                away_team_id="away-id",
+                match_date=KICKOFF,
+                season="2024/2025",
+                status="finished",
+                home_score=2,
+                away_score=1,
+            ),
+            Match(
+                id="dup-b",
+                league_id=LEAGUE,
+                home_team_id="home-id",
+                away_team_id="away-id",
+                match_date=KICKOFF + timedelta(hours=10),
+                season="2024/2025",
+                status="finished",
+                home_score=1,
+                away_score=1,
+            ),
+        ]
+    )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
+        tmp_path,
+        league="epl",
+        season=2024,
         rows=[_row(home_team="Arsenal", away_team="Chelsea", date=KICKOFF)],
     )
 
@@ -249,21 +360,38 @@ async def test_kickoff_tolerance_absorbs_a_same_day_timezone_style_offset(
     understat_recorded = KICKOFF - timedelta(hours=30)
 
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await _seed_team_with_history(
-        session, team_id="away-id", name="Chelsea", opponent_id="home-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="away-id",
+        name="Chelsea",
+        opponent_id="home-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     session.add(
         Match(
-            id="the-fixture", league_id=LEAGUE, home_team_id="home-id", away_team_id="away-id",
-            match_date=real_kickoff, season="2024/2025", status="finished", home_score=2, away_score=1,
+            id="the-fixture",
+            league_id=LEAGUE,
+            home_team_id="home-id",
+            away_team_id="away-id",
+            match_date=real_kickoff,
+            season="2024/2025",
+            status="finished",
+            home_score=2,
+            away_score=1,
         )
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
+        tmp_path,
+        league="epl",
+        season=2024,
         rows=[_row(home_team="Arsenal", away_team="Chelsea", date=understat_recorded)],
     )
 
@@ -281,21 +409,38 @@ async def test_manifest_sha256_is_deterministic_across_repeated_review_runs(
     must produce the same hash — the property a future --apply gate would
     check against."""
     await _seed_team_with_history(
-        session, team_id="home-id", name="Arsenal", opponent_id="away-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="home-id",
+        name="Arsenal",
+        opponent_id="away-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     await _seed_team_with_history(
-        session, team_id="away-id", name="Chelsea", opponent_id="home-id", match_date=KICKOFF - timedelta(days=200)
+        session,
+        team_id="away-id",
+        name="Chelsea",
+        opponent_id="home-id",
+        match_date=KICKOFF - timedelta(days=200),
     )
     session.add(
         Match(
-            id="the-fixture", league_id=LEAGUE, home_team_id="home-id", away_team_id="away-id",
-            match_date=KICKOFF, season="2024/2025", status="finished", home_score=2, away_score=1,
+            id="the-fixture",
+            league_id=LEAGUE,
+            home_team_id="home-id",
+            away_team_id="away-id",
+            match_date=KICKOFF,
+            season="2024/2025",
+            status="finished",
+            home_score=2,
+            away_score=1,
         )
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
+        tmp_path,
+        league="epl",
+        season=2024,
         rows=[_row(home_team="Arsenal", away_team="Chelsea", date=KICKOFF)],
     )
 
@@ -330,9 +475,20 @@ async def test_near_orphaned_duplicate_resolves_to_the_real_identity(
     """
     # The near-orphan: matches the input via affix-stripping, wins the
     # resolution, but has almost no real match history.
-    session.add(Team(id="fd-team-epl:manchester_city_fc", name="Manchester City FC", league_id=LEAGUE, active=True))
+    session.add(
+        Team(
+            id="fd-team-epl:manchester_city_fc",
+            name="Manchester City FC",
+            league_id=LEAGUE,
+            active=True,
+        )
+    )
     # The real, high-usage identity for the same club.
-    session.add(Team(id="fdco-team-epl-man_city", name="Man City", league_id=LEAGUE, active=True))
+    session.add(
+        Team(
+            id="fdco-team-epl-man_city", name="Man City", league_id=LEAGUE, active=True
+        )
+    )
     session.add(Team(id="opponent", name="Arsenal", league_id=LEAGUE, active=True))
     await session.flush()
 
@@ -341,50 +497,89 @@ async def test_near_orphaned_duplicate_resolves_to_the_real_identity(
     orphan_match_date = KICKOFF - timedelta(days=900)
     session.add(
         Match(
-            id="orphan-match", league_id=LEAGUE, home_team_id="fd-team-epl:manchester_city_fc",
-            away_team_id="opponent", match_date=orphan_match_date, season="2019/2020",
-            status="finished", home_score=1, away_score=1,
+            id="orphan-match",
+            league_id=LEAGUE,
+            home_team_id="fd-team-epl:manchester_city_fc",
+            away_team_id="opponent",
+            match_date=orphan_match_date,
+            season="2019/2020",
+            status="finished",
+            home_score=1,
+            away_score=1,
         )
     )
     await session.flush()
-    session.add_all([
-        EloRatingSnapshot(
-            match_id="orphan-match", team_id="fd-team-epl:manchester_city_fc",
-            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
-            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
-        ),
-        # "opponent" (Arsenal) needs its own Elo history too, or
-        # require_elo_history=True excludes it and the away side fails to
-        # resolve for an unrelated reason (no Elo row), masking the defect
-        # this test exists to reproduce.
-        EloRatingSnapshot(
-            match_id="orphan-match", team_id="opponent",
-            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
-            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
-        ),
-    ])
+    session.add_all(
+        [
+            EloRatingSnapshot(
+                match_id="orphan-match",
+                team_id="fd-team-epl:manchester_city_fc",
+                pre_match_elo=1500.0,
+                post_match_elo=1500.0,
+                league=LEAGUE,
+                season="2019/2020",
+                match_date=orphan_match_date,
+                created_at=orphan_match_date,
+            ),
+            # "opponent" (Arsenal) needs its own Elo history too, or
+            # require_elo_history=True excludes it and the away side fails to
+            # resolve for an unrelated reason (no Elo row), masking the defect
+            # this test exists to reproduce.
+            EloRatingSnapshot(
+                match_id="orphan-match",
+                team_id="opponent",
+                pre_match_elo=1500.0,
+                post_match_elo=1500.0,
+                league=LEAGUE,
+                season="2019/2020",
+                match_date=orphan_match_date,
+                created_at=orphan_match_date,
+            ),
+        ]
+    )
 
     # The real identity's actual match — the one this Understat row describes.
     session.add(
         Match(
-            id="the-real-fixture", league_id=LEAGUE, home_team_id="fdco-team-epl-man_city",
-            away_team_id="opponent", match_date=KICKOFF, season="2024/2025",
-            status="finished", home_score=3, away_score=1,
+            id="the-real-fixture",
+            league_id=LEAGUE,
+            home_team_id="fdco-team-epl-man_city",
+            away_team_id="opponent",
+            match_date=KICKOFF,
+            season="2024/2025",
+            status="finished",
+            home_score=3,
+            away_score=1,
         )
     )
     await session.flush()
     session.add(
         EloRatingSnapshot(
-            match_id="the-real-fixture", team_id="fdco-team-epl-man_city",
-            pre_match_elo=1800.0, post_match_elo=1815.0, league=LEAGUE,
-            season="2024/2025", match_date=KICKOFF, created_at=KICKOFF,
+            match_id="the-real-fixture",
+            team_id="fdco-team-epl-man_city",
+            pre_match_elo=1800.0,
+            post_match_elo=1815.0,
+            league=LEAGUE,
+            season="2024/2025",
+            match_date=KICKOFF,
+            created_at=KICKOFF,
         )
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
-        rows=[_row(home_team="Manchester City", away_team="Arsenal", date=KICKOFF, home_xg=2.4, away_xg=1.1)],
+        tmp_path,
+        league="epl",
+        season=2024,
+        rows=[
+            _row(
+                home_team="Manchester City",
+                away_team="Arsenal",
+                date=KICKOFF,
+                home_xg=2.4,
+                away_xg=1.1,
+            )
+        ],
     )
 
     manifest = await build_understat_match_stats_manifest(session, sources_dir)
@@ -411,53 +606,106 @@ async def test_unaliased_near_orphan_still_fails_closed(
     # near-orphan the decorated legal name ("Manchester City FC"), and the
     # corpus sends the undecorated full name ("Manchester City") -- which
     # exact-matches neither row but affix-strips to match the orphan.
-    session.add(Team(id="fd-team-epl:fictional_rovers_fc", name="Fictional Rovers FC", league_id=LEAGUE, active=True))
-    session.add(Team(id="fdco-team-epl-fictional-rovers", name="Fic Rovers", league_id=LEAGUE, active=True))
+    session.add(
+        Team(
+            id="fd-team-epl:fictional_rovers_fc",
+            name="Fictional Rovers FC",
+            league_id=LEAGUE,
+            active=True,
+        )
+    )
+    session.add(
+        Team(
+            id="fdco-team-epl-fictional-rovers",
+            name="Fic Rovers",
+            league_id=LEAGUE,
+            active=True,
+        )
+    )
     session.add(Team(id="opponent", name="Arsenal", league_id=LEAGUE, active=True))
     await session.flush()
 
     orphan_match_date = KICKOFF - timedelta(days=900)
     session.add(
         Match(
-            id="orphan-match", league_id=LEAGUE, home_team_id="fd-team-epl:fictional_rovers_fc",
-            away_team_id="opponent", match_date=orphan_match_date, season="2019/2020",
-            status="finished", home_score=1, away_score=1,
+            id="orphan-match",
+            league_id=LEAGUE,
+            home_team_id="fd-team-epl:fictional_rovers_fc",
+            away_team_id="opponent",
+            match_date=orphan_match_date,
+            season="2019/2020",
+            status="finished",
+            home_score=1,
+            away_score=1,
         )
     )
     await session.flush()
-    session.add_all([
-        EloRatingSnapshot(
-            match_id="orphan-match", team_id="fd-team-epl:fictional_rovers_fc",
-            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
-            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
-        ),
-        EloRatingSnapshot(
-            match_id="orphan-match", team_id="opponent",
-            pre_match_elo=1500.0, post_match_elo=1500.0, league=LEAGUE,
-            season="2019/2020", match_date=orphan_match_date, created_at=orphan_match_date,
-        ),
-    ])
+    session.add_all(
+        [
+            EloRatingSnapshot(
+                match_id="orphan-match",
+                team_id="fd-team-epl:fictional_rovers_fc",
+                pre_match_elo=1500.0,
+                post_match_elo=1500.0,
+                league=LEAGUE,
+                season="2019/2020",
+                match_date=orphan_match_date,
+                created_at=orphan_match_date,
+            ),
+            EloRatingSnapshot(
+                match_id="orphan-match",
+                team_id="opponent",
+                pre_match_elo=1500.0,
+                post_match_elo=1500.0,
+                league=LEAGUE,
+                season="2019/2020",
+                match_date=orphan_match_date,
+                created_at=orphan_match_date,
+            ),
+        ]
+    )
 
     session.add(
         Match(
-            id="the-real-fixture", league_id=LEAGUE, home_team_id="fdco-team-epl-fictional-rovers",
-            away_team_id="opponent", match_date=KICKOFF, season="2024/2025",
-            status="finished", home_score=3, away_score=1,
+            id="the-real-fixture",
+            league_id=LEAGUE,
+            home_team_id="fdco-team-epl-fictional-rovers",
+            away_team_id="opponent",
+            match_date=KICKOFF,
+            season="2024/2025",
+            status="finished",
+            home_score=3,
+            away_score=1,
         )
     )
     await session.flush()
     session.add(
         EloRatingSnapshot(
-            match_id="the-real-fixture", team_id="fdco-team-epl-fictional-rovers",
-            pre_match_elo=1800.0, post_match_elo=1815.0, league=LEAGUE,
-            season="2024/2025", match_date=KICKOFF, created_at=KICKOFF,
+            match_id="the-real-fixture",
+            team_id="fdco-team-epl-fictional-rovers",
+            pre_match_elo=1800.0,
+            post_match_elo=1815.0,
+            league=LEAGUE,
+            season="2024/2025",
+            match_date=KICKOFF,
+            created_at=KICKOFF,
         )
     )
     await session.commit()
 
     sources_dir = _write_corpus_parquet(
-        tmp_path, league="epl", season=2024,
-        rows=[_row(home_team="Fictional Rovers", away_team="Arsenal", date=KICKOFF, home_xg=2.4, away_xg=1.1)],
+        tmp_path,
+        league="epl",
+        season=2024,
+        rows=[
+            _row(
+                home_team="Fictional Rovers",
+                away_team="Arsenal",
+                date=KICKOFF,
+                home_xg=2.4,
+                away_xg=1.1,
+            )
+        ],
     )
 
     manifest = await build_understat_match_stats_manifest(session, sources_dir)

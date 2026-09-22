@@ -6,6 +6,7 @@ Soft-loading wrapper around bnn_ensemble_impl. When torch is unavailable
 None sentinels so the FastAPI app can boot and the UncertaintyService falls
 back to its non-BNN code path. Consuming code already guards on `torch is None`.
 """
+
 from __future__ import annotations
 
 try:
@@ -15,6 +16,7 @@ try:
         UncertaintyOutput,
         edl_nll_loss,
     )
+
     _BNN_AVAILABLE = True
 except ImportError:
     _BNN_AVAILABLE = False

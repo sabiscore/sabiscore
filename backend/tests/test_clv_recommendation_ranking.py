@@ -106,7 +106,7 @@ class TestTopQuartileDominatesMedian:
     def test_top_quartile_edge_quality_above_median(self):
         scores = self._sorted_scores()
         median_score = statistics.median(scores)
-        top_q_scores = scores[len(scores) * 3 // 4:]  # top 25%
+        top_q_scores = scores[len(scores) * 3 // 4 :]  # top 25%
         for s in top_q_scores:
             assert s > median_score, (
                 f"Top-quartile score {s:.3f} not above median {median_score:.3f}"
@@ -116,7 +116,7 @@ class TestTopQuartileDominatesMedian:
         """Top-quartile CLV% must exceed the median recommendation's CLV%."""
         clv_values = sorted([0.5, 1.0, 1.8, 2.5, 3.2, 4.1, 5.0, 6.8])
         median_clv = statistics.median(clv_values)
-        top_q = clv_values[len(clv_values) * 3 // 4:]
+        top_q = clv_values[len(clv_values) * 3 // 4 :]
         for v in top_q:
             assert v > median_clv
 
@@ -124,7 +124,7 @@ class TestTopQuartileDominatesMedian:
         """Spec gate: top-quartile avg CLV% must be ≥ 2.0% above median."""
         clv_values = sorted([0.5, 1.0, 1.8, 2.5, 3.2, 4.1, 5.0, 6.8])
         median_clv = statistics.median(clv_values)
-        top_q = clv_values[len(clv_values) * 3 // 4:]
+        top_q = clv_values[len(clv_values) * 3 // 4 :]
         top_q_avg = statistics.mean(top_q)
         assert top_q_avg - median_clv >= 2.0, (
             f"CLV gap {top_q_avg - median_clv:.2f}% < required 2.0%"
@@ -140,7 +140,9 @@ class TestAbstainThreshold:
     @pytest.mark.parametrize("score", [0.00, 0.10, 0.20, 0.29])
     def test_abstain_required_below_threshold(self, score: float):
         """Scores strictly below 0.30 must have abstain=True."""
-        action = _action(edge_quality_score=score, abstain=True, abstain_reason="Below threshold")
+        action = _action(
+            edge_quality_score=score, abstain=True, abstain_reason="Below threshold"
+        )
         assert action.abstain is True
         assert action.edge_quality_score < ABSTAIN_THRESHOLD
 
@@ -152,7 +154,11 @@ class TestAbstainThreshold:
         assert action.edge_quality_score >= ABSTAIN_THRESHOLD
 
     def test_abstain_reason_present_when_abstain_true(self):
-        action = _action(edge_quality_score=0.15, abstain=True, abstain_reason="edge_quality 0.15 < 0.30")
+        action = _action(
+            edge_quality_score=0.15,
+            abstain=True,
+            abstain_reason="edge_quality 0.15 < 0.30",
+        )
         assert action.abstain_reason is not None
         assert len(action.abstain_reason) > 0
 
@@ -181,8 +187,12 @@ class TestClosingLineConvergenceDeltaNullability:
 
     def test_zero_delta_is_distinct_from_none(self):
         """0.0 is a valid convergence delta (flat movement), not a null sentinel."""
-        action_zero = _action(edge_quality_score=0.55, closing_line_convergence_delta=0.0)
-        action_none = _action(edge_quality_score=0.55, closing_line_convergence_delta=None)
+        action_zero = _action(
+            edge_quality_score=0.55, closing_line_convergence_delta=0.0
+        )
+        action_none = _action(
+            edge_quality_score=0.55, closing_line_convergence_delta=None
+        )
         assert action_zero.closing_line_convergence_delta is not None
         assert action_zero.closing_line_convergence_delta == 0.0
         assert action_none.closing_line_convergence_delta is None
@@ -224,7 +234,9 @@ class TestComputeEdgeQualityScore:
                 )
                 score = _compute_edge_quality_score(match)
                 if score is not None:
-                    assert 0.0 <= score <= 1.0, f"Score {score} out of [0,1] for conf={confidence} edge={edge_pct}"
+                    assert 0.0 <= score <= 1.0, (
+                        f"Score {score} out of [0,1] for conf={confidence} edge={edge_pct}"
+                    )
 
     def test_higher_confidence_increases_score(self):
         """Confidence weight (0.40) must make high-confidence match score higher."""
@@ -266,7 +278,9 @@ class TestComputeEdgeQualityScore:
     def test_more_gaps_lowers_score(self):
         """Completeness is gap-driven — the same direction full_analysis uses."""
         few = _upcoming_match(confidence=0.60, data_gaps=["a", "b"])
-        many = _upcoming_match(confidence=0.60, data_gaps=[f"gap_{i}" for i in range(40)])
+        many = _upcoming_match(
+            confidence=0.60, data_gaps=[f"gap_{i}" for i in range(40)]
+        )
         assert _compute_edge_quality_score(few) > _compute_edge_quality_score(many)
 
 
@@ -276,13 +290,16 @@ class TestComputeEdgeQualityScore:
 
 
 class TestAbstainOnMarketDriftGap:
-    @pytest.mark.parametrize("drift_feature", [
-        "odds_drift_home",
-        "odds_drift_draw",
-        "odds_drift_away",
-        "max_abs_odds_drift",
-        "sharp_money_direction",
-    ])
+    @pytest.mark.parametrize(
+        "drift_feature",
+        [
+            "odds_drift_home",
+            "odds_drift_draw",
+            "odds_drift_away",
+            "max_abs_odds_drift",
+            "sharp_money_direction",
+        ],
+    )
     def test_abstain_required_for_each_market_drift_gap(self, drift_feature: str):
         """Any missing market drift feature must trigger abstain (CLV uncomputable)."""
         action = _action(

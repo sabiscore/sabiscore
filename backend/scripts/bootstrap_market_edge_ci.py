@@ -48,6 +48,7 @@ Usage:
     PYTHONPATH=. python scripts/bootstrap_market_edge_ci.py \\
         --per-match models/candidate/per_match_v10_gate7_hpo.npz
 """
+
 from __future__ import annotations
 
 import argparse
@@ -146,7 +147,11 @@ def main() -> int:
     season = str(data["holdout_season"]) if "holdout_season" in data else "unknown"
     logger.info(
         "candidate schema %s | holdout %s | %d leagues | %d replicates, block=%d",
-        schema, season, len(leagues), args.n_bootstrap, args.block_size,
+        schema,
+        season,
+        len(leagues),
+        args.n_bootstrap,
+        args.block_size,
     )
 
     report: Dict[str, Any] = {
@@ -192,7 +197,9 @@ def main() -> int:
         if ci["n_bootstrap"] != args.n_bootstrap:
             logger.error(
                 "%s: only %d of %d replicates scored -- metric_fn is raising",
-                league, ci["n_bootstrap"], args.n_bootstrap,
+                league,
+                ci["n_bootstrap"],
+                args.n_bootstrap,
             )
             return 1
         if lo is None or hi is None:
@@ -215,18 +222,28 @@ def main() -> int:
                 "lower": bonf["ci_lower"],
                 "upper": bonf["ci_upper"],
             },
-            "excludes_zero": bool(lo is not None and hi is not None and (hi < 0 or lo > 0)),
+            "excludes_zero": bool(
+                lo is not None and hi is not None and (hi < 0 or lo > 0)
+            ),
             "verdict": verdict,
         }
         logger.info(
             "%-12s %5d %8.4f %8.4f %+9.5f  [%+.4f,%+.4f] %-22s [%+.4f,%+.4f]",
-            league, len(y), _mean_rps(y, cand), _mean_rps(y, market),
-            ci["point_estimate"], lo, hi, verdict,
-            bonf["ci_lower"], bonf["ci_upper"],
+            league,
+            len(y),
+            _mean_rps(y, cand),
+            _mean_rps(y, market),
+            ci["point_estimate"],
+            lo,
+            hi,
+            verdict,
+            bonf["ci_lower"],
+            bonf["ci_upper"],
         )
 
     beating = [
-        lg for lg, r in report["leagues"].items()
+        lg
+        for lg, r in report["leagues"].items()
         if r["verdict"] == f"{args.head.upper()} BEATS MARKET"
     ]
     report["leagues_beating_market_with_ci_excluding_zero"] = beating
@@ -236,7 +253,9 @@ def main() -> int:
     logger.info(
         "Leagues where the 95%% CI excludes zero in the %s's favour: %d of %d%s",
         args.head,
-        len(beating), len(leagues), f" ({', '.join(beating)})" if beating else "",
+        len(beating),
+        len(leagues),
+        f" ({', '.join(beating)})" if beating else "",
     )
 
     if args.output is not None:

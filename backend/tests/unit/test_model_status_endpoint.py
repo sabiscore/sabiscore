@@ -3,6 +3,7 @@ Unit tests for GET /api/v1/models/status.
 
 These tests mock the filesystem so no real artifacts or database are required.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -67,12 +68,18 @@ _SAMPLE_MANIFEST = {
 
 
 def test_returns_manifest_fields(client):
-    with patch("src.api.endpoints.model_status._load_manifest", return_value=(
-        _SAMPLE_MANIFEST,
-        "abc123hash",
-    )), patch(
-        "src.api.endpoints.model_status.staking_authorization",
-        return_value=_UNCERTIFIED_AUTH,
+    with (
+        patch(
+            "src.api.endpoints.model_status._load_manifest",
+            return_value=(
+                _SAMPLE_MANIFEST,
+                "abc123hash",
+            ),
+        ),
+        patch(
+            "src.api.endpoints.model_status.staking_authorization",
+            return_value=_UNCERTIFIED_AUTH,
+        ),
     ):
         resp = client.get("/api/v1/models/status")
 
@@ -101,12 +108,18 @@ def test_operator_override_is_reported_as_staking_but_never_as_validation(client
     override_manifest = dict(
         _SAMPLE_MANIFEST, certification_state="OPERATOR_OVERRIDE_UNCERTIFIED"
     )
-    with patch("src.api.endpoints.model_status._load_manifest", return_value=(
-        override_manifest,
-        "abc123hash",
-    )), patch(
-        "src.api.endpoints.model_status.staking_authorization",
-        return_value=_OVERRIDE_AUTH,
+    with (
+        patch(
+            "src.api.endpoints.model_status._load_manifest",
+            return_value=(
+                override_manifest,
+                "abc123hash",
+            ),
+        ),
+        patch(
+            "src.api.endpoints.model_status.staking_authorization",
+            return_value=_OVERRIDE_AUTH,
+        ),
     ):
         resp = client.get("/api/v1/models/status")
 
@@ -122,10 +135,13 @@ def test_operator_override_is_reported_as_staking_but_never_as_validation(client
 
 
 def test_model_records_have_required_shape(client):
-    with patch("src.api.endpoints.model_status._load_manifest", return_value=(
-        _SAMPLE_MANIFEST,
-        "somehash",
-    )):
+    with patch(
+        "src.api.endpoints.model_status._load_manifest",
+        return_value=(
+            _SAMPLE_MANIFEST,
+            "somehash",
+        ),
+    ):
         resp = client.get("/api/v1/models/status")
 
     models = resp.json()["models"]
@@ -139,7 +155,9 @@ def test_model_records_have_required_shape(client):
 
 
 def test_graceful_degradation_when_manifest_absent(client):
-    with patch("src.api.endpoints.model_status._load_manifest", return_value=(None, None)):
+    with patch(
+        "src.api.endpoints.model_status._load_manifest", return_value=(None, None)
+    ):
         resp = client.get("/api/v1/models/status")
 
     assert resp.status_code == 200
@@ -152,12 +170,15 @@ def test_graceful_degradation_when_manifest_absent(client):
     assert data["active_version"] is None
 
 
-@pytest.mark.parametrize("schema,expected", [
-    ("phase7_68", 68),
-    ("v6_phase8_86", 86),
-    ("unknown", None),
-    (None, None),
-    ("", None),
-])
+@pytest.mark.parametrize(
+    "schema,expected",
+    [
+        ("phase7_68", 68),
+        ("v6_phase8_86", 86),
+        ("unknown", None),
+        (None, None),
+        ("", None),
+    ],
+)
 def test_feature_count_parsing(schema, expected):
     assert _feature_count_from_schema(schema) == expected

@@ -30,6 +30,7 @@ the information ``FORBIDDEN_EPISTEMIC_SOURCES`` (``1 - max(p)``, ``entropy(p)``,
 ...) cannot carry, because those are deterministic functions of that same mean
 vector alone.
 """
+
 from __future__ import annotations
 
 import logging
@@ -111,7 +112,9 @@ UNAVAILABLE = EnsembleUncertainty(
 )
 
 
-def _ordered_vector(feature_columns: List[str], features: Mapping[str, Any]) -> Optional[np.ndarray]:
+def _ordered_vector(
+    feature_columns: List[str], features: Mapping[str, Any]
+) -> Optional[np.ndarray]:
     """Build the model's exact training-order feature vector, or None.
 
     Strict on purpose, mirroring `UncertaintyService._build_input_tensor`'s
@@ -133,7 +136,9 @@ def _ordered_vector(feature_columns: List[str], features: Mapping[str, Any]) -> 
     return np.asarray(values, dtype=np.float64).reshape(1, -1)
 
 
-def member_probabilities(models_dict: Dict[str, Any], X: np.ndarray) -> List[np.ndarray]:
+def member_probabilities(
+    models_dict: Dict[str, Any], X: np.ndarray
+) -> List[np.ndarray]:
     """One normalised probability vector per bootstrap tree in `random_forest`.
 
     Each `DecisionTreeClassifier` in `estimators_` was fit on a different
@@ -201,7 +206,9 @@ def dispersion_from_members(members: List[np.ndarray]) -> EnsembleUncertainty:
     )
 
 
-async def compute_ensemble_uncertainty(league: str, features: Mapping[str, Any]) -> EnsembleUncertainty:
+async def compute_ensemble_uncertainty(
+    league: str, features: Mapping[str, Any]
+) -> EnsembleUncertainty:
     """Ensemble-dispersion epistemic/aleatoric/total for one fixture's feature row.
 
     Reuses `PredictionEngine`'s own cached artifact — the identical league

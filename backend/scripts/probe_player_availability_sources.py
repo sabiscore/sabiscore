@@ -35,6 +35,7 @@ Usage:
     cd backend
     PYTHONPATH=. python scripts/probe_player_availability_sources.py [--competition EPL]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -77,7 +78,9 @@ async def main() -> int:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         print("=" * 70)
-        print(f"1) api_football.injuries(competition={args.competition!r}) — broad query")
+        print(
+            f"1) api_football.injuries(competition={args.competition!r}) — broad query"
+        )
         print("=" * 70)
         api_football = APIFootballProvider(
             api_key=settings.api_football_key,
@@ -95,22 +98,32 @@ async def main() -> int:
         for record in broad.records:
             if record.get("coherent") and record.get("fixture_id"):
                 harvested_fixture_id = record["fixture_id"]
-                _print("sample_record", {
-                    "player_name": record.get("player_name"),
-                    "team_name": record.get("team_name"),
-                    "fixture_id": record.get("fixture_id"),
-                    "injury_type": record.get("injury_type"),
-                    "reason": record.get("reason"),
-                })
+                _print(
+                    "sample_record",
+                    {
+                        "player_name": record.get("player_name"),
+                        "team_name": record.get("team_name"),
+                        "fixture_id": record.get("fixture_id"),
+                        "injury_type": record.get("injury_type"),
+                        "reason": record.get("reason"),
+                    },
+                )
                 break
         if harvested_fixture_id is None:
-            print("No coherent record with a fixture_id found — cannot test fixture-scoped mode.")
+            print(
+                "No coherent record with a fixture_id found — cannot test fixture-scoped mode."
+            )
 
         print()
         print("=" * 70)
-        print("1b) api_football.injuries(competition=%r, season=2024) — plan-permitted season" % args.competition)
+        print(
+            "1b) api_football.injuries(competition=%r, season=2024) — plan-permitted season"
+            % args.competition
+        )
         print("=" * 70)
-        historical = await api_football.injuries(competition=args.competition, season=2024)
+        historical = await api_football.injuries(
+            competition=args.competition, season=2024
+        )
         _print("status", historical.status)
         _print("error_code", historical.error_code)
         _print("record_count", len(historical.records))
@@ -120,19 +133,24 @@ async def main() -> int:
             for record in historical.records:
                 if record.get("coherent") and record.get("fixture_id"):
                     harvested_fixture_id = record["fixture_id"]
-                    _print("sample_record", {
-                        "player_name": record.get("player_name"),
-                        "team_name": record.get("team_name"),
-                        "fixture_id": record.get("fixture_id"),
-                        "injury_type": record.get("injury_type"),
-                        "reason": record.get("reason"),
-                    })
+                    _print(
+                        "sample_record",
+                        {
+                            "player_name": record.get("player_name"),
+                            "team_name": record.get("team_name"),
+                            "fixture_id": record.get("fixture_id"),
+                            "injury_type": record.get("injury_type"),
+                            "reason": record.get("reason"),
+                        },
+                    )
                     break
 
         if harvested_fixture_id is not None:
             print()
             print("=" * 70)
-            print(f"2) api_football.injuries(fixture_id={harvested_fixture_id}) — scoped query")
+            print(
+                f"2) api_football.injuries(fixture_id={harvested_fixture_id}) — scoped query"
+            )
             print("=" * 70)
             scoped = await api_football.injuries(
                 competition=args.competition, fixture_id=harvested_fixture_id
@@ -141,16 +159,22 @@ async def main() -> int:
             _print("error_code", scoped.error_code)
             _print("record_count", len(scoped.records))
             _print("quota", scoped.quota)
-            fixture_ids_in_scoped = {r.get("fixture_id") for r in scoped.records if r.get("coherent")}
+            fixture_ids_in_scoped = {
+                r.get("fixture_id") for r in scoped.records if r.get("coherent")
+            }
             _print("distinct_fixture_ids_returned", fixture_ids_in_scoped)
             _print(
                 "scoped_query_actually_scoped",
-                fixture_ids_in_scoped == {harvested_fixture_id} if scoped.records else "no_records",
+                fixture_ids_in_scoped == {harvested_fixture_id}
+                if scoped.records
+                else "no_records",
             )
 
         print()
         print("=" * 70)
-        print(f"3) sportmonks.injuries(competition={args.competition!r}) — bare /sidelined")
+        print(
+            f"3) sportmonks.injuries(competition={args.competition!r}) — bare /sidelined"
+        )
         print("=" * 70)
         if settings.sportmonks_api_key:
             sportmonks = SportmonksProvider(

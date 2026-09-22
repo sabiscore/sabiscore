@@ -11,8 +11,11 @@ if __name__ == "__main__":
     model = SabiScoreEnsemble.load_model("../models/epl_ensemble.pkl")
     engine = InsightsEngine(model)
     try:
-        insights = engine.generate_match_insights("Manchester United vs Liverpool", "EPL")
+        insights = engine.generate_match_insights(
+            "Manchester United vs Liverpool", "EPL"
+        )
         print("Success", insights.keys())
     except Exception:
         import traceback
+
         traceback.print_exc()

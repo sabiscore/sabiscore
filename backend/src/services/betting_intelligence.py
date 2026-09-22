@@ -53,16 +53,16 @@ from ..schemas.betting_intelligence import (
 # Override via environment/config injection in the endpoint layer.
 # ---------------------------------------------------------------------------
 
-MIN_ACTIONABLE_EDGE: float = 0.042        # 4.2 percentage points de-vigged
-HIGH_CONVICTION_EDGE: float = 0.062       # max(MIN_ACTIONABLE_EDGE + 0.02, 0.06)
-KELLY_FRACTION: float = 0.25             # quarter-Kelly (directive §12)
-MAX_KELLY_CAP: float = 0.05              # 5% of bankroll hard cap (directive §12)
-MARKET_FRESH_SECONDS: int = 900           # 15 min
-MARKET_RECENT_SECONDS: int = 3600         # 60 min
+MIN_ACTIONABLE_EDGE: float = 0.042  # 4.2 percentage points de-vigged
+HIGH_CONVICTION_EDGE: float = 0.062  # max(MIN_ACTIONABLE_EDGE + 0.02, 0.06)
+KELLY_FRACTION: float = 0.25  # quarter-Kelly (directive §12)
+MAX_KELLY_CAP: float = 0.05  # 5% of bankroll hard cap (directive §12)
+MARKET_FRESH_SECONDS: int = 900  # 15 min
+MARKET_RECENT_SECONDS: int = 3600  # 60 min
 MODEL_FEATURES_FRESH_SECONDS: int = 3600  # LIVE_THRESHOLD_SECONDS default
-INJURY_FRESH_SECONDS: int = 21600         # 6 h
-MAX_MARKET_OVERROUND: float = 1.20        # reject >120% book
-MIN_MARKET_OVERROUND: float = 0.90        # reject <90% book (integrity)
+INJURY_FRESH_SECONDS: int = 21600  # 6 h
+MAX_MARKET_OVERROUND: float = 1.20  # reject >120% book
+MIN_MARKET_OVERROUND: float = 0.90  # reject <90% book (integrity)
 # Compatibility export for policy/status consumers. SPECULATIVE is research
 # watchlist only under Apex and therefore has no operative public stake cap.
 SPECULATIVE_STAKE_CAP: float = 0.0
@@ -177,7 +177,9 @@ def _stable_hash(payload: Any) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def _policy_payload(settings_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _policy_payload(
+    settings_override: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     s = settings_override or {}
     return {
         "policy_version": s.get("POLICY_VERSION", POLICY_VERSION),
@@ -194,7 +196,9 @@ def _policy_payload(settings_override: Optional[Dict[str, Any]] = None) -> Dict[
         "min_market_overround": s.get("MIN_MARKET_OVERROUND", MIN_MARKET_OVERROUND),
         "max_market_overround": s.get("MAX_MARKET_OVERROUND", MAX_MARKET_OVERROUND),
         "speculative_stake_cap": s.get("SPECULATIVE_STAKE_CAP", SPECULATIVE_STAKE_CAP),
-        "target_expected_value": s.get("TARGET_EXPECTED_VALUE", DEFAULT_TARGET_EXPECTED_VALUE),
+        "target_expected_value": s.get(
+            "TARGET_EXPECTED_VALUE", DEFAULT_TARGET_EXPECTED_VALUE
+        ),
     }
 
 
@@ -253,7 +257,13 @@ def _confidence_adjusted_value(
         SharpSignalEnum.CONFLICTING: 0.5,
         SharpSignalEnum.UNKNOWN: 0.6,
     }.get(sharp_signal, 0.6)
-    score = max(ev, 0.0) * uncertainty_factor * freshness_factor * completeness * stability_factor
+    score = (
+        max(ev, 0.0)
+        * uncertainty_factor
+        * freshness_factor
+        * completeness
+        * stability_factor
+    )
     return round(score, 6)
 
 
@@ -351,9 +361,27 @@ def _evaluate_all_outcomes(
     probable model outcome.
     """
     outcomes = [
-        ("home", BestMarketEnum.HOME_ML, model.home_probability, market.home_odds, fair_home),
-        ("draw", BestMarketEnum.DRAW_ML, model.draw_probability, market.draw_odds, fair_draw),
-        ("away", BestMarketEnum.AWAY_ML, model.away_probability, market.away_odds, fair_away),
+        (
+            "home",
+            BestMarketEnum.HOME_ML,
+            model.home_probability,
+            market.home_odds,
+            fair_home,
+        ),
+        (
+            "draw",
+            BestMarketEnum.DRAW_ML,
+            model.draw_probability,
+            market.draw_odds,
+            fair_draw,
+        ),
+        (
+            "away",
+            BestMarketEnum.AWAY_ML,
+            model.away_probability,
+            market.away_odds,
+            fair_away,
+        ),
     ]
 
     results = []
@@ -362,22 +390,30 @@ def _evaluate_all_outcomes(
         edge = model_prob - fair_prob
         ev = _expected_value(model_prob, odds)
         fk = _full_kelly(ev, odds)
-        stake_frac = min(fk * kelly_fraction, max_kelly_cap) if ev > 0 and edge > 0 else 0.0
+        stake_frac = (
+            min(fk * kelly_fraction, max_kelly_cap) if ev > 0 and edge > 0 else 0.0
+        )
         # Simple CAV for ranking within this call (full CAV computed at synthesis)
-        cav = max(ev, 0.0) * (1.0 - model.epistemic_uncertainty) if ev > 0 and edge > 0 else 0.0
-        results.append({
-            "outcome": name,
-            "market_label": market_label,
-            "model_probability": round(model_prob, 6),
-            "market_odds": odds,
-            "raw_implied_probability": round(raw_implied, 6),
-            "fair_market_probability": round(fair_prob, 6),
-            "edge": round(edge, 6),
-            "edge_pct": round(edge * 100, 4),
-            "expected_value": round(ev, 6),
-            "stake_fraction": round(stake_frac, 6),
-            "confidence_adjusted_value": round(cav, 8),
-        })
+        cav = (
+            max(ev, 0.0) * (1.0 - model.epistemic_uncertainty)
+            if ev > 0 and edge > 0
+            else 0.0
+        )
+        results.append(
+            {
+                "outcome": name,
+                "market_label": market_label,
+                "model_probability": round(model_prob, 6),
+                "market_odds": odds,
+                "raw_implied_probability": round(raw_implied, 6),
+                "fair_market_probability": round(fair_prob, 6),
+                "edge": round(edge, 6),
+                "edge_pct": round(edge * 100, 4),
+                "expected_value": round(ev, 6),
+                "stake_fraction": round(stake_frac, 6),
+                "confidence_adjusted_value": round(cav, 8),
+            }
+        )
 
     # Sort by confidence-adjusted value descending (best market first)
     results.sort(
@@ -464,7 +500,13 @@ def _apply_verdict_gate(
         if minutes_to_kickoff <= 90 and lineup_status != LineupStatusEnum.CONFIRMED:
             lineup_risk = True
 
-    if tier_low or cal_unvalidated or market_stale or sharp_signal == SharpSignalEnum.CONFLICTING or lineup_risk:
+    if (
+        tier_low
+        or cal_unvalidated
+        or market_stale
+        or sharp_signal == SharpSignalEnum.CONFLICTING
+        or lineup_risk
+    ):
         if best_edge < min_actionable_edge:
             return VerdictEnum.HOLD
         if tier_low or cal_unvalidated or market_stale or lineup_risk:
@@ -490,14 +532,21 @@ def _apply_verdict_gate(
         return VerdictEnum.ACTIONABLE
 
     has_causal_support = bool(causal_drivers)
-    high_epistemic = model.epistemic_uncertainty > 0.05  # aligned with core_engine HIGH_CONVICTION_EPISTEMIC_MAX
+    high_epistemic = (
+        model.epistemic_uncertainty > 0.05
+    )  # aligned with core_engine HIGH_CONVICTION_EPISTEMIC_MAX
 
     if (
         best_edge >= hc_edge_required
         and not high_epistemic
         and market_freshness == FreshnessStatusEnum.FRESH
         and has_causal_support
-        and sharp_signal in (SharpSignalEnum.CONFIRMING, SharpSignalEnum.NEUTRAL, SharpSignalEnum.UNKNOWN)
+        and sharp_signal
+        in (
+            SharpSignalEnum.CONFIRMING,
+            SharpSignalEnum.NEUTRAL,
+            SharpSignalEnum.UNKNOWN,
+        )
     ):
         return VerdictEnum.HIGH_CONVICTION
 
@@ -524,11 +573,17 @@ def _build_invalidation_conditions(
         "Model probability changes materially after confirmed lineup ingestion.",
     ]
     if best_market == BestMarketEnum.HOME_ML:
-        conditions.append("Key home starter ruled out or unexpected rotation disclosed.")
+        conditions.append(
+            "Key home starter ruled out or unexpected rotation disclosed."
+        )
     elif best_market == BestMarketEnum.AWAY_ML:
-        conditions.append("Key away starter ruled out or unexpected rotation disclosed.")
+        conditions.append(
+            "Key away starter ruled out or unexpected rotation disclosed."
+        )
     conditions.append("Sharp movement reverses direction against the selected outcome.")
-    conditions.append("Market snapshot becomes stale before execution (>15 min without refresh).")
+    conditions.append(
+        "Market snapshot becomes stale before execution (>15 min without refresh)."
+    )
     conditions.extend(known_risks)
     return conditions
 
@@ -581,14 +636,19 @@ def analyze_match(
     _league_override: Dict[str, Any] = dict(settings_override or {})
     try:
         from ..core.league_policy import get_league_policy
+
         _lp = get_league_policy(request.competition.value)
         # Only override from policy when no explicit caller override for these keys.
         if "MAX_KELLY_CAP" not in _league_override:
             _league_override["MAX_KELLY_CAP"] = _lp.kelly_cap
         if "HIGH_CONVICTION_EDGE" not in _league_override:
-            _league_override["HIGH_CONVICTION_EDGE"] = _lp.high_conviction_edge_threshold
+            _league_override["HIGH_CONVICTION_EDGE"] = (
+                _lp.high_conviction_edge_threshold
+            )
         if "MARKET_FRESH_SECONDS" not in _league_override:
-            _league_override["MARKET_FRESH_SECONDS"] = float(_lp.market_freshness_ttl_seconds)
+            _league_override["MARKET_FRESH_SECONDS"] = float(
+                _lp.market_freshness_ttl_seconds
+            )
         if "MODEL_FEATURES_FRESH_SECONDS" not in _league_override:
             _league_override["MODEL_FEATURES_FRESH_SECONDS"] = float(
                 _lp.model_feature_freshness_ttl_seconds
@@ -651,10 +711,9 @@ def analyze_match(
             market_overround_check, _, _, _ = _compute_devig(
                 market.home_odds, market.draw_odds, market.away_odds
             )
-            if (
-                market_overround_check > float(policy["max_market_overround"])
-                or market_overround_check < float(policy["min_market_overround"])
-            ):
+            if market_overround_check > float(
+                policy["max_market_overround"]
+            ) or market_overround_check < float(policy["min_market_overround"]):
                 gaps.append(
                     "DATA_GAP: market_overround_outside_integrity_limits "
                     f"({market_overround_check:.4f})"
@@ -743,7 +802,10 @@ def analyze_match(
             away=model.away_probability,
         )
 
-    if verdict not in (VerdictEnum.PARTIAL, VerdictEnum.NO_BET, VerdictEnum.HOLD) and best_eval:
+    if (
+        verdict not in (VerdictEnum.PARTIAL, VerdictEnum.NO_BET, VerdictEnum.HOLD)
+        and best_eval
+    ):
         best_market_field = best_eval["market_label"]
         market_odds_field = best_eval["market_odds"]
         raw_implied_field = best_eval["raw_implied_probability"]
@@ -810,7 +872,7 @@ def analyze_match(
             )
         if request.signals.sharp_market_signal == SharpSignalEnum.CONFIRMING:
             drivers_extra.append("Sharp market signal confirms model direction")
-        drivers.extend(drivers_extra[:3 - len(drivers)])
+        drivers.extend(drivers_extra[: 3 - len(drivers)])
 
         invalidation = _build_invalidation_conditions(
             model=model,
@@ -880,10 +942,13 @@ def analyze_match(
         evaluation_at=evaluation_at,
         analysis_mode=(
             AnalysisModeEnum.VALUE_ANALYSIS
-            if market is not None and market_freshness not in (FreshnessStatusEnum.DATA_GAP, FreshnessStatusEnum.UNKNOWN)
+            if market is not None
+            and market_freshness
+            not in (FreshnessStatusEnum.DATA_GAP, FreshnessStatusEnum.UNKNOWN)
             else AnalysisModeEnum.FORECAST_ONLY
         ),
-        execution_eligible=verdict in (VerdictEnum.HIGH_CONVICTION, VerdictEnum.ACTIONABLE),
+        execution_eligible=verdict
+        in (VerdictEnum.HIGH_CONVICTION, VerdictEnum.ACTIONABLE),
         watchlist=verdict == VerdictEnum.SPECULATIVE,
         source_summary={
             "model": request.source_status.model.value,
@@ -906,7 +971,9 @@ def analyze_match(
         raw_market_implied_probability=raw_implied_field,
         fair_market_probability=fair_market_field,
         edge=round(edge_field, 6) if edge_field is not None else None,
-        edge_percentage_points=round(edge_pct_field, 4) if edge_pct_field is not None else None,
+        edge_percentage_points=round(edge_pct_field, 4)
+        if edge_pct_field is not None
+        else None,
         expected_value=round(ev_field, 6) if ev_field is not None else None,
         confidence=confidence_field,
         confidence_adjusted_value=cav_field,
@@ -997,7 +1064,11 @@ def _build_explanation(
         )
 
     if verdict == VerdictEnum.ACTIONABLE:
-        ucl_note = " (UCL soft-coverage cap applied)" if competition == CompetitionEnum.UCL else ""
+        ucl_note = (
+            " (UCL soft-coverage cap applied)"
+            if competition == CompetitionEnum.UCL
+            else ""
+        )
         return (
             f"{outcome}_ML: {edge_pp:.2f}pp de-vigged edge, EV={ev:.4f} at odds {odds:.2f}. "
             f"Fair market probability {fair_p:.3f}. "
@@ -1019,7 +1090,9 @@ def _build_explanation(
 # ---------------------------------------------------------------------------
 
 
-def _rank_top_opportunities(results: List[MatchAnalysisResult]) -> Tuple[List[str], List[str]]:
+def _rank_top_opportunities(
+    results: List[MatchAnalysisResult],
+) -> Tuple[List[str], List[str]]:
     """Select up to 3 top opportunities, plus a separate SPECULATIVE watchlist.
 
     top_opportunities: HIGH_CONVICTION, ACTIONABLE only — capped at 3.
@@ -1038,19 +1111,26 @@ def _rank_top_opportunities(results: List[MatchAnalysisResult]) -> Tuple[List[st
             -(r.confidence_adjusted_value or 0),
             -(r.expected_value or 0),
             r.data_freshness.oldest_critical_input_seconds
-            if r.data_freshness and r.data_freshness.oldest_critical_input_seconds is not None
+            if r.data_freshness
+            and r.data_freshness.oldest_critical_input_seconds is not None
             else 10**12,
             r.match_id,
         )
 
     def _qualifies(r: MatchAnalysisResult) -> bool:
-        return r.confidence_adjusted_value is not None and r.confidence_adjusted_value > 0
+        return (
+            r.confidence_adjusted_value is not None and r.confidence_adjusted_value > 0
+        )
 
     top = [
-        r for r in results
-        if r.verdict in (VerdictEnum.HIGH_CONVICTION, VerdictEnum.ACTIONABLE) and _qualifies(r)
+        r
+        for r in results
+        if r.verdict in (VerdictEnum.HIGH_CONVICTION, VerdictEnum.ACTIONABLE)
+        and _qualifies(r)
     ]
-    watchlist = [r for r in results if r.verdict == VerdictEnum.SPECULATIVE and _qualifies(r)]
+    watchlist = [
+        r for r in results if r.verdict == VerdictEnum.SPECULATIVE and _qualifies(r)
+    ]
 
     top.sort(key=_sort_key)
     watchlist.sort(key=_sort_key)

@@ -25,6 +25,7 @@ Every consumer of these paths fails *silently* when the path doesn't exist:
 None of these raise, so the only symptom was undifferentiated predictions and a
 fallback model version.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

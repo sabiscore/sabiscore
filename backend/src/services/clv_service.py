@@ -2,6 +2,7 @@
 lines. Read-only: never feeds EXECUTE_BET (doesn't exist), never computes ROI
 (no stake is ever placed). See docs/adr/0004-clv-capture.md, Addendum 2.
 """
+
 from __future__ import annotations
 
 import math

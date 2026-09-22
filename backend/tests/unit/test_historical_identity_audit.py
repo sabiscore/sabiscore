@@ -1,4 +1,5 @@
 """Regression coverage for the read-only historical semantic identity audit."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -156,9 +157,7 @@ async def test_same_league_historical_identity_is_not_a_finding(
     )
     session.add(
         Match(
-            id=historical_match_id(
-                "EPL", datetime(2025, 8, 10), "West Ham", "Arsenal"
-            ),
+            id=historical_match_id("EPL", datetime(2025, 8, 10), "West Ham", "Arsenal"),
             league_id="EPL",
             home_team_id="west-ham",
             away_team_id="arsenal",
@@ -216,9 +215,7 @@ async def test_missing_team_row_remains_explicit_in_manifest(
     _write_epl_source(tmp_path)
     await _seed_leagues(session)
     session.add(Team(id="arsenal", name="Arsenal", league_id="EPL"))
-    match_id = historical_match_id(
-        "EPL", datetime(2025, 8, 10), "West Ham", "Arsenal"
-    )
+    match_id = historical_match_id("EPL", datetime(2025, 8, 10), "West Ham", "Arsenal")
     session.add(
         Match(
             id=match_id,

@@ -238,8 +238,14 @@ class FBrefIngest:
 
         for label, call in (
             ("schedule", lambda: reader.read_schedule()),
-            ("team_season", lambda: reader.read_team_season_stats(stat_type="standard")),
-            ("player_season", lambda: reader.read_player_season_stats(stat_type="standard")),
+            (
+                "team_season",
+                lambda: reader.read_team_season_stats(stat_type="standard"),
+            ),
+            (
+                "player_season",
+                lambda: reader.read_player_season_stats(stat_type="standard"),
+            ),
         ):
             self._budget(label)
             started = time.time()
@@ -261,7 +267,9 @@ class FBrefIngest:
         """pandas (often MultiIndex) → flat polars. Index becomes real columns."""
         flat = frame.reset_index()
         flat.columns = [
-            "_".join(str(part) for part in col if str(part) and "Unnamed" not in str(part))
+            "_".join(
+                str(part) for part in col if str(part) and "Unnamed" not in str(part)
+            )
             if isinstance(col, tuple)
             else str(col)
             for col in flat.columns
@@ -324,7 +332,9 @@ def build_pre_match_rollups(
     """
     aggregates = [
         pl.col(col)
-        .shift(1)  # <- the cutoff; without it a match sees its own result; without it a match sees its own result
+        .shift(
+            1
+        )  # <- the cutoff; without it a match sees its own result; without it a match sees its own result
         .rolling_mean(window_size=window, min_periods=1)
         .over(team_col)
         .alias(f"{col}_pre_match_mean_{window}")
@@ -378,7 +388,9 @@ def main() -> int:
             "which requires one interpreter with both."
         ),
     )
-    parser.add_argument("--cache-dir", default=str(REPO_ROOT / "data" / "cache" / "fbref"))
+    parser.add_argument(
+        "--cache-dir", default=str(REPO_ROOT / "data" / "cache" / "fbref")
+    )
     parser.add_argument("--out-dir", default=str(OUT_ROOT))
     args = parser.parse_args()
 
@@ -409,8 +421,10 @@ def main() -> int:
             return 1
         for name, frame in frames.items():
             written[name] = write_partitioned(frame, name, raw_root)
-            print(f"  raw {name}: {written[name]['rows']} rows "
-                  f"-> {len(written[name]['files'])} partition file(s)")
+            print(
+                f"  raw {name}: {written[name]['rows']} rows "
+                f"-> {len(written[name]['files'])} partition file(s)"
+            )
 
     if args.stage in ("resolve", "all"):
         if ingest._identity_key is None:

@@ -6,6 +6,7 @@ precedent set for the sibling Phase 3/Stage 1-2 scripts in this same
 directory (test only the pure functions; the acquisition/analysis pipeline
 is exercised by actually running it, not by a mocked test).
 """
+
 import sys
 from pathlib import Path
 

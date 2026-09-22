@@ -9,6 +9,7 @@ whole finding).
 Matches the precedent in `test_incremental_value_harness.py`: pure functions
 only. The pipeline itself is exercised by running it.
 """
+
 import sys
 from pathlib import Path
 
@@ -60,7 +61,10 @@ def _fold(lower: float, upper: float) -> dict:
     return {
         "pooled": {
             "n": 500,
-            "candidate_minus_baseline_bootstrap": {"ci_lower": lower, "ci_upper": upper},
+            "candidate_minus_baseline_bootstrap": {
+                "ci_lower": lower,
+                "ci_upper": upper,
+            },
         }
     }
 
@@ -70,9 +74,9 @@ def _arm(*folds) -> dict:
 
 
 def test_favourable_requires_the_interval_to_exclude_zero():
-    assert _favourable(_fold(-0.004, -0.001)["pooled"]) is True   # wholly better
-    assert _favourable(_fold(0.001, 0.004)["pooled"]) is False    # wholly worse
-    assert _favourable(_fold(-0.002, 0.003)["pooled"]) is None    # straddles zero
+    assert _favourable(_fold(-0.004, -0.001)["pooled"]) is True  # wholly better
+    assert _favourable(_fold(0.001, 0.004)["pooled"]) is False  # wholly worse
+    assert _favourable(_fold(-0.002, 0.003)["pooled"]) is None  # straddles zero
 
 
 def test_promoted_only_when_every_pooled_fold_excludes_zero_favourably():
@@ -105,6 +109,6 @@ def test_genuinely_worse_is_distinguished_from_no_effect():
 
 
 def test_verdict_is_inconclusive_when_no_fold_scored():
-    assert verdict({"a": _arm({"error": "insufficient_train_or_test_rows"})})["label"] == (
-        "INCONCLUSIVE"
-    )
+    assert verdict({"a": _arm({"error": "insufficient_train_or_test_rows"})})[
+        "label"
+    ] == ("INCONCLUSIVE")

@@ -95,8 +95,13 @@ class TestMarketIntelligenceCalculations:
             model_probabilities={"home_win": 0.60, "draw": 0.10, "away_win": 0.2414},
         )
 
-        assert summary.outcomes["home_win"].classification == EdgeClassification.POSITIVE_EDGE
-        assert summary.outcomes["draw"].classification == EdgeClassification.NEGATIVE_EDGE
+        assert (
+            summary.outcomes["home_win"].classification
+            == EdgeClassification.POSITIVE_EDGE
+        )
+        assert (
+            summary.outcomes["draw"].classification == EdgeClassification.NEGATIVE_EDGE
+        )
 
     def test_best_edge_selection(self):
         """Verify best edge outcome and value are correctly selected."""
@@ -129,7 +134,9 @@ class TestStakingGateInvariance:
         assert summary.stake_permitted is False
         assert summary.decision == MarketDecisionState.RESEARCH_ONLY
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_certified_model_with_actionable_edge_permits_stake(self, mock_cert):
         """When certified and edge exceeds actionable threshold with positive EV, staking is permitted."""
         odds = {"home_win": 2.5, "draw": 3.4, "away_win": 3.0}
@@ -143,7 +150,9 @@ class TestStakingGateInvariance:
         assert summary.stake_permitted is True
         assert summary.decision == MarketDecisionState.ACTIONABLE
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_certified_model_sub_threshold_edge_holds(self, mock_cert):
         """When certified but edge is sub-threshold (< 0.042), hold without staking."""
         odds = {"home_win": 2.0, "draw": 3.5, "away_win": 4.0}
@@ -156,7 +165,9 @@ class TestStakingGateInvariance:
         assert summary.stake_permitted is False
         assert summary.decision == MarketDecisionState.HOLD
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_certified_model_negative_edge_yields_no_bet(self, mock_cert):
         """When certified but all edges are negative, yields NO_BET."""
         odds = {"home_win": 2.0, "draw": 3.5, "away_win": 4.0}

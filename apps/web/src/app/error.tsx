@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { safeErrorMessage } from '@/lib/error-utils';
-
-interface RollbarWindow extends Window {
-  rollbar?: {
-    error: (error: Error, context?: Record<string, unknown>) => void;
-  };
-}
+import { logError, safeErrorMessage } from '@/lib/error-utils';
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -20,25 +14,14 @@ export default function Error({ error, reset }: ErrorProps) {
   const MAX_RETRIES = 3;
 
   useEffect(() => {
-    // Log to monitoring service with context
-    console.error('Application error:', {
-      message: error.message,
-      stack: error.stack,
-      digest: error.digest,
-      timestamp: new Date().toISOString(),
-      retryCount,
+    logError(error, {
+      component: 'app/error',
+      action: 'render',
+      metadata: {
+        digest: error.digest,
+        retryCount,
+      },
     });
-
-    // TODO: Send to monitoring service (e.g., Sentry, Rollbar)
-    if (typeof window !== 'undefined') {
-      const rollbarWindow = window as RollbarWindow;
-      if (rollbarWindow.rollbar) {
-        rollbarWindow.rollbar.error(error, {
-          digest: error.digest,
-          retryCount,
-        });
-      }
-    }
   }, [error, retryCount]);
 
   const handleRetry = () => {

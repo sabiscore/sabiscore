@@ -1,4 +1,5 @@
 """Tests for Redis-backed cache with fallback."""
+
 from unittest.mock import MagicMock, patch
 import pytest
 import redis
@@ -13,7 +14,7 @@ def cache():
         mock_client = MagicMock(spec=redis.Redis)
         mock_redis.return_value = mock_client
         mock_client.ping.return_value = True
-        
+
         cache = RedisCache()
         cache._enabled = True
         cache.redis_client = mock_client
@@ -54,15 +55,15 @@ def test_metrics_snapshot(cache):
     # Reset metrics
     cache.metrics.hits = 0
     cache.metrics.misses = 0
-    
+
     # Test miss
     cache.redis_client.get.return_value = None
     cache.get("test_key")
-    
+
     # Test hit
     cache.redis_client.get.return_value = b'"test_value"'
     cache.get("test_key")
-    
+
     metrics = cache.metrics_snapshot()
     assert metrics["hits"] == 1, f"Expected 1 hit, got {metrics['hits']}"
     assert metrics["misses"] == 1, f"Expected 1 miss, got {metrics['misses']}"
@@ -72,11 +73,11 @@ def test_metrics_snapshot(cache):
 def test_cache_decorator():
     """Test the cache decorator functionality."""
     from src.core.cache import cache_decorator
-    
+
     @cache_decorator(ttl=10)
     def test_func(arg):
         return arg * 2
-    
+
     assert test_func(2) == 4  # Should cache
     assert test_func(2) == 4  # Should hit cache
 
@@ -112,7 +113,9 @@ def test_production_plaintext_redis_is_rejected_without_connection(monkeypatch):
 
     monkeypatch.setattr(settings, "app_env", "production")
     monkeypatch.setattr(settings, "redis_enabled", True)
-    monkeypatch.setattr(settings, "redis_url", "redis://user:password@cache.example:6379/0")
+    monkeypatch.setattr(
+        settings, "redis_url", "redis://user:password@cache.example:6379/0"
+    )
 
     with patch("redis.Redis.from_url") as from_url:
         cache = RedisCache()

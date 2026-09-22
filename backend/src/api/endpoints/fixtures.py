@@ -177,7 +177,9 @@ async def _get_fixture_or_404(db: AsyncSession, fixture_id: str) -> Match:
     )
     fixture = result.scalar_one_or_none()
     if fixture is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fixture not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Fixture not found"
+        )
     return fixture
 
 
@@ -201,7 +203,9 @@ async def _latest_odds(db: AsyncSession, fixture_id: str) -> Optional[Odds]:
     return result.scalar_one_or_none()
 
 
-def _fixture_summary(fixture: Match, odds: Optional[Odds], prediction: Optional[Prediction]) -> FixtureSummary:
+def _fixture_summary(
+    fixture: Match, odds: Optional[Odds], prediction: Optional[Prediction]
+) -> FixtureSummary:
     kickoff = fixture.match_date
     if kickoff.tzinfo is None:
         kickoff = kickoff.replace(tzinfo=timezone.utc)
@@ -209,12 +213,18 @@ def _fixture_summary(fixture: Match, odds: Optional[Odds], prediction: Optional[
     return FixtureSummary(
         fixture_id=str(fixture.id),
         competition=str(fixture.league_id or "EPL"),
-        home_team=str(fixture.home_team.name) if fixture.home_team else _team_label(fixture.home_team_id),
-        away_team=str(fixture.away_team.name) if fixture.away_team else _team_label(fixture.away_team_id),
+        home_team=str(fixture.home_team.name)
+        if fixture.home_team
+        else _team_label(fixture.home_team_id),
+        away_team=str(fixture.away_team.name)
+        if fixture.away_team
+        else _team_label(fixture.away_team_id),
         kickoff_utc=kickoff,
         status=str(fixture.status or "scheduled"),
         venue=fixture.venue,
-        evidence_status="MODEL_READY" if prediction and not prediction_contract_gaps else "MODEL_UNAVAILABLE",
+        evidence_status="MODEL_READY"
+        if prediction and not prediction_contract_gaps
+        else "MODEL_UNAVAILABLE",
         odds_status=RESEARCH_ONLY_MARKET_STATUS if odds else "DATA_UNAVAILABLE",
     )
 
@@ -280,7 +290,9 @@ def _prediction_contract_gaps(prediction: Optional[Prediction]) -> List[str]:
     for field in required:
         if metadata.get(field) is None:
             gaps.append(f"DATA_GAP: model_metadata.{field}")
-    if metadata.get("calibration_validated") is not None and not isinstance(metadata.get("calibration_validated"), bool):
+    if metadata.get("calibration_validated") is not None and not isinstance(
+        metadata.get("calibration_validated"), bool
+    ):
         gaps.append("DATA_GAP: model_metadata.calibration_validated_invalid")
     if metadata.get("confidence_tier") is not None:
         try:
@@ -321,7 +333,12 @@ def _model_from_prediction(prediction: Optional[Prediction]) -> Optional[ModelIn
 
 
 def _market_from_odds(odds: Optional[Odds]) -> Optional[MarketInput]:
-    if odds is None or odds.home_win is None or odds.draw is None or odds.away_win is None:
+    if (
+        odds is None
+        or odds.home_win is None
+        or odds.draw is None
+        or odds.away_win is None
+    ):
         return None
     captured = odds.timestamp or datetime.now(timezone.utc)
     if captured.tzinfo is None:
@@ -336,7 +353,9 @@ def _market_from_odds(odds: Optional[Odds]) -> Optional[MarketInput]:
     )
 
 
-async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Optional[Prediction], Optional[Odds], EvidenceResponse]:
+async def _build_evidence(
+    db: AsyncSession, fixture_id: str
+) -> tuple[Match, Optional[Prediction], Optional[Odds], EvidenceResponse]:
     fixture = await _get_fixture_or_404(db, fixture_id)
     prediction = await _latest_prediction(db, fixture_id)
     odds = await _latest_odds(db, fixture_id)
@@ -365,7 +384,11 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
 
     model_status = "DATA_GAP"
     if prediction is not None and not _prediction_contract_gaps(prediction):
-        model_status = "STALE" if model_age is None or model_age > MODEL_FEATURES_FRESH_SECONDS else "VERIFIED"
+        model_status = (
+            "STALE"
+            if model_age is None or model_age > MODEL_FEATURES_FRESH_SECONDS
+            else "VERIFIED"
+        )
 
     market_status = RESEARCH_ONLY_MARKET_STATUS if odds else "DATA_GAP"
     evidence = EvidenceResponse(
@@ -377,15 +400,22 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
             "away_probability": prediction.away_win_prob,
             "created_at": prediction.created_at,
             "metadata_complete": not _prediction_contract_gaps(prediction),
-        } if prediction else None,
+        }
+        if prediction
+        else None,
         market={
             "bookmaker": odds.bookmaker,
             "home_odds": odds.home_win,
             "draw_odds": odds.draw,
             "away_odds": odds.away_win,
             "captured_at": odds.timestamp,
-        } if odds else None,
-        freshness={"market_seconds": _market_age_seconds(odds), "model_features_seconds": model_age},
+        }
+        if odds
+        else None,
+        freshness={
+            "market_seconds": _market_age_seconds(odds),
+            "model_features_seconds": model_age,
+        },
         source_status={
             "model": model_status,
             "market": market_status,
@@ -401,14 +431,50 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
                 "status": market_status,
                 "source": "legacy or user-supplied snapshot" if odds else None,
             },
-            {"step": "availability", "status": "DATA_GAP", "source": "lineup and injury provider unavailable"},
+            {
+                "step": "availability",
+                "status": "DATA_GAP",
+                "source": "lineup and injury provider unavailable",
+            },
         ],
         readiness=[
-            {"stage": "Fixture identity", "state": "VERIFIED", "source": "database", "timestamp": summary.kickoff_utc, "reason": None},
-            {"stage": "Team metrics", "state": model_status, "source": "model features", "timestamp": prediction.created_at if prediction else None, "reason": None if prediction else "model prediction missing"},
-            {"stage": "Availability", "state": "DATA_GAP", "source": None, "timestamp": None, "reason": "availability provider evidence not verified"},
-            {"stage": "Lineup", "state": "DATA_GAP", "source": None, "timestamp": None, "reason": "confirmed lineup unavailable"},
-            {"stage": "Model", "state": model_status, "source": "SabiScore backend", "timestamp": prediction.created_at if prediction else None, "reason": None if model_status == "VERIFIED" else "model metadata incomplete or stale"},
+            {
+                "stage": "Fixture identity",
+                "state": "VERIFIED",
+                "source": "database",
+                "timestamp": summary.kickoff_utc,
+                "reason": None,
+            },
+            {
+                "stage": "Team metrics",
+                "state": model_status,
+                "source": "model features",
+                "timestamp": prediction.created_at if prediction else None,
+                "reason": None if prediction else "model prediction missing",
+            },
+            {
+                "stage": "Availability",
+                "state": "DATA_GAP",
+                "source": None,
+                "timestamp": None,
+                "reason": "availability provider evidence not verified",
+            },
+            {
+                "stage": "Lineup",
+                "state": "DATA_GAP",
+                "source": None,
+                "timestamp": None,
+                "reason": "confirmed lineup unavailable",
+            },
+            {
+                "stage": "Model",
+                "state": model_status,
+                "source": "SabiScore backend",
+                "timestamp": prediction.created_at if prediction else None,
+                "reason": None
+                if model_status == "VERIFIED"
+                else "model metadata incomplete or stale",
+            },
             {
                 "stage": "Market",
                 "state": market_status,
@@ -420,7 +486,13 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
                     else "one coherent provider snapshot required"
                 ),
             },
-            {"stage": "Risk gate", "state": "PARTIAL" if data_gaps else "VERIFIED", "source": "strict engine", "timestamp": datetime.now(timezone.utc), "reason": "; ".join(data_gaps[:3]) if data_gaps else None},
+            {
+                "stage": "Risk gate",
+                "state": "PARTIAL" if data_gaps else "VERIFIED",
+                "source": "strict engine",
+                "timestamp": datetime.now(timezone.utc),
+                "reason": "; ".join(data_gaps[:3]) if data_gaps else None,
+            },
         ],
         source_comparison=[
             {
@@ -438,7 +510,9 @@ async def _build_evidence(db: AsyncSession, fixture_id: str) -> tuple[Match, Opt
                 "field": "model",
                 "selected_source": prediction.model_version if prediction else None,
                 "status": model_status,
-                "reason": "backend-only calibrated probabilities" if prediction else "model prediction unavailable",
+                "reason": "backend-only calibrated probabilities"
+                if prediction
+                else "model prediction unavailable",
                 "timestamp": prediction.created_at if prediction else None,
             },
         ],
@@ -475,7 +549,9 @@ async def fixtures_upcoming(
         pred_result = await db.execute(
             select(Prediction)
             .where(Prediction.match_id.in_(fixture_ids))
-            .order_by(Prediction.match_id, desc(Prediction.created_at), desc(Prediction.id))
+            .order_by(
+                Prediction.match_id, desc(Prediction.created_at), desc(Prediction.id)
+            )
         )
         for prediction_row in pred_result.scalars().all():
             predictions_by_fixture.setdefault(prediction_row.match_id, prediction_row)
@@ -519,8 +595,12 @@ async def refresh_fixture_evidence(
         {
             "fixture_id": fixture_id,
             "competition": str(fixture.league_id or "EPL"),
-            "home_team": str(fixture.home_team.name) if fixture.home_team else _team_label(fixture.home_team_id),
-            "away_team": str(fixture.away_team.name) if fixture.away_team else _team_label(fixture.away_team_id),
+            "home_team": str(fixture.home_team.name)
+            if fixture.home_team
+            else _team_label(fixture.home_team_id),
+            "away_team": str(fixture.away_team.name)
+            if fixture.away_team
+            else _team_label(fixture.away_team_id),
             "kickoff_utc": fixture.match_date,
         },
         payload.profile,
@@ -533,7 +613,9 @@ async def refresh_fixture_evidence(
     )
 
 
-@router.get("/{fixture_id}/odds-snapshots", response_model=ProviderOddsCandidatesResponse)
+@router.get(
+    "/{fixture_id}/odds-snapshots", response_model=ProviderOddsCandidatesResponse
+)
 async def provider_odds_candidates(
     fixture_id: str,
     db: AsyncSession = Depends(get_async_session),
@@ -634,15 +716,25 @@ async def analyze_fixture(
     model_age = _prediction_age_seconds(prediction)
     model_status = evidence.source_status.get("model", "DATA_GAP")
 
-    _fc = _prediction_metadata(prediction).get("feature_completeness", 1.0) if prediction else 1.0
+    _fc = (
+        _prediction_metadata(prediction).get("feature_completeness", 1.0)
+        if prediction
+        else 1.0
+    )
     known_risks: List[str] = []
     if isinstance(_fc, (int, float)) and 0.5 <= _fc < 0.8:
-        known_risks.append(f"ADVISORY: {round((1 - _fc) * 100)}% of model features used league-average defaults")
+        known_risks.append(
+            f"ADVISORY: {round((1 - _fc) * 100)}% of model features used league-average defaults"
+        )
 
     req = MatchAnalysisRequest(
         match_id=fixture_id,
-        home_team=str(fixture.home_team.name) if fixture.home_team else _team_label(fixture.home_team_id),
-        away_team=str(fixture.away_team.name) if fixture.away_team else _team_label(fixture.away_team_id),
+        home_team=str(fixture.home_team.name)
+        if fixture.home_team
+        else _team_label(fixture.home_team_id),
+        away_team=str(fixture.away_team.name)
+        if fixture.away_team
+        else _team_label(fixture.away_team_id),
         competition=_competition_to_enum(str(fixture.league_id or "EPL")),
         kickoff_utc=fixture.match_date.replace(tzinfo=timezone.utc)
         if fixture.match_date.tzinfo is None
@@ -658,7 +750,9 @@ async def analyze_fixture(
             model_features_seconds=model_age,
         ),
         source_status=SourceStatusInput(
-            model=SourceStatusEnum(model_status) if model else SourceStatusEnum.DATA_GAP,
+            model=SourceStatusEnum(model_status)
+            if model
+            else SourceStatusEnum.DATA_GAP,
             # Legacy/manual Odds rows have no server-verified provenance. Keep
             # the values available for display, but force the deterministic
             # engine into forecast-only, zero-stake behavior.

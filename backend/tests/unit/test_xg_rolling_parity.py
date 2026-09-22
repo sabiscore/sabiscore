@@ -56,9 +56,12 @@ def test_rolling_xg_mean_skips_none_but_keeps_position_semantics() -> None:
 
 
 def test_derive_xg_rolling_features_is_none_if_any_side_is_none() -> None:
-    assert derive_xg_rolling_features(
-        home_xg_for=1.5, home_xg_against=1.0, away_xg_for=None, away_xg_against=1.2
-    ) is None
+    assert (
+        derive_xg_rolling_features(
+            home_xg_for=1.5, home_xg_against=1.0, away_xg_for=None, away_xg_against=1.2
+        )
+        is None
+    )
 
 
 def test_derive_xg_rolling_features_arithmetic() -> None:
@@ -133,18 +136,33 @@ async def test_get_team_xg_series_orders_most_recent_first_regardless_of_insert_
     the series still comes back newest-first — the previous implementation's
     ``WHERE match_id IN (...)`` had no ordering guarantee at all.
     """
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
 
     # Insert the OLDER match first, then the newer one — deliberately the
     # reverse of the order a correct ORDER BY match_date DESC must produce.
     await _seed_match_with_xg(
-        session, match_id="old", home_id="home", away_id="away",
-        days_before_kickoff=10, home_xg=1.0, away_xg=1.0,
+        session,
+        match_id="old",
+        home_id="home",
+        away_id="away",
+        days_before_kickoff=10,
+        home_xg=1.0,
+        away_xg=1.0,
     )
     await _seed_match_with_xg(
-        session, match_id="new", home_id="home", away_id="away",
-        days_before_kickoff=3, home_xg=2.0, away_xg=2.0,
+        session,
+        match_id="new",
+        home_id="home",
+        away_id="away",
+        days_before_kickoff=3,
+        home_xg=2.0,
+        away_xg=2.0,
     )
 
     matches = await projector._completed_matches_before("home", session, KICKOFF, 20)
@@ -162,13 +180,25 @@ async def test_get_team_xg_series_orders_most_recent_first_regardless_of_insert_
 async def test_completed_matches_before_excludes_matches_on_or_after_kickoff(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
     # A match at exactly kickoff time must not leak into pre-match features.
-    session.add(Match(
-        id="same-instant", home_team_id="home", away_team_id="away",
-        match_date=KICKOFF, status="finished", home_score=1, away_score=0,
-    ))
+    session.add(
+        Match(
+            id="same-instant",
+            home_team_id="home",
+            away_team_id="away",
+            match_date=KICKOFF,
+            status="finished",
+            home_score=1,
+            away_score=0,
+        )
+    )
     await session.commit()
 
     matches = await projector._completed_matches_before("home", session, KICKOFF, 20)
@@ -178,11 +208,21 @@ async def test_completed_matches_before_excludes_matches_on_or_after_kickoff(
 async def test_completed_matches_before_excludes_unfinished_matches(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
-    session.add(Match(
-        id="scheduled", home_team_id="home", away_team_id="away",
-        match_date=KICKOFF - timedelta(days=1), status="scheduled",
-    ))
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
+    session.add(
+        Match(
+            id="scheduled",
+            home_team_id="home",
+            away_team_id="away",
+            match_date=KICKOFF - timedelta(days=1),
+            status="scheduled",
+        )
+    )
     await session.commit()
 
     matches = await projector._completed_matches_before("home", session, KICKOFF, 20)
@@ -192,46 +232,76 @@ async def test_completed_matches_before_excludes_unfinished_matches(
 async def test_project_xg_rolling_features_is_none_below_cold_start_floor(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
     # Only 2 prior matches for "home" — below XG_ROLLING_MIN_PERIODS (3).
     for i in range(2):
         await _seed_match_with_xg(
-            session, match_id=f"h{i}", home_id="home", away_id="away",
-            days_before_kickoff=10 - i, home_xg=1.5, away_xg=1.0,
+            session,
+            match_id=f"h{i}",
+            home_id="home",
+            away_id="away",
+            days_before_kickoff=10 - i,
+            home_xg=1.5,
+            away_xg=1.0,
         )
 
     result = await projector.project_xg_rolling_features(
-        home_team_id="home", away_team_id="away", kickoff=KICKOFF, db=session,
+        home_team_id="home",
+        away_team_id="away",
+        kickoff=KICKOFF,
+        db=session,
     )
-    assert result is None, "below the cold-start floor must be a DATA_GAP, not a fabricated value"
+    assert result is None, (
+        "below the cold-start floor must be a DATA_GAP, not a fabricated value"
+    )
 
 
 async def test_project_xg_rolling_features_computes_once_both_sides_have_history(
     session: AsyncSession, projector: UpcomingMatchFeatureProjector
 ) -> None:
-    session.add_all([
-        Team(id="home", name="Home", active=True),
-        Team(id="away", name="Away", active=True),
-        Team(id="opp", name="Opp", active=True),
-    ])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+            Team(id="opp", name="Opp", active=True),
+        ]
+    )
     await session.commit()
 
     # 3 matches each for home and away, against a shared third team so xG-for
     # and xG-against are both populated on both sides.
     for i in range(3):
         await _seed_match_with_xg(
-            session, match_id=f"home-hist-{i}", home_id="home", away_id="opp",
-            days_before_kickoff=15 - i, home_xg=1.8, away_xg=1.0,
+            session,
+            match_id=f"home-hist-{i}",
+            home_id="home",
+            away_id="opp",
+            days_before_kickoff=15 - i,
+            home_xg=1.8,
+            away_xg=1.0,
         )
     for i in range(3):
         await _seed_match_with_xg(
-            session, match_id=f"away-hist-{i}", home_id="opp", away_id="away",
-            days_before_kickoff=12 - i, home_xg=1.3, away_xg=1.1,
+            session,
+            match_id=f"away-hist-{i}",
+            home_id="opp",
+            away_id="away",
+            days_before_kickoff=12 - i,
+            home_xg=1.3,
+            away_xg=1.1,
         )
 
     result = await projector.project_xg_rolling_features(
-        home_team_id="home", away_team_id="away", kickoff=KICKOFF, db=session,
+        home_team_id="home",
+        away_team_id="away",
+        kickoff=KICKOFF,
+        db=session,
     )
     assert result is not None
     # home: xg_for=1.8, xg_against=1.0 (rolling mean of 3 identical matches).

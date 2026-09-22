@@ -53,6 +53,7 @@ Usage
     cd backend && PYTHONPATH=. python scripts/ingest_openmeteo_weather.py --dry-run
     cd backend && PYTHONPATH=. python scripts/ingest_openmeteo_weather.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -73,17 +74,25 @@ import polars as pl
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BACKEND_ROOT))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 _HISTORICAL_FORECAST_BASE = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 _CORPUS_DIR = _BACKEND_ROOT / "data" / "cache"
 _VENUE_MANIFEST = (
-    _BACKEND_ROOT.parent / "reports" / "research" / "portfolio-f-venue-location-manifest.json"
+    _BACKEND_ROOT.parent
+    / "reports"
+    / "research"
+    / "portfolio-f-venue-location-manifest.json"
 )
 _OUT_PARQUET = _BACKEND_ROOT / "data" / "cache" / "weather_forecasts_f1.parquet"
 _REPORT_PATH = (
-    _BACKEND_ROOT.parent / "reports" / "research" / "portfolio-f-weather-forecast-gates.json"
+    _BACKEND_ROOT.parent
+    / "reports"
+    / "research"
+    / "portfolio-f-weather-forecast-gates.json"
 )
 
 # Measured, not assumed — see the module docstring. 2022-03-01 is the earliest
@@ -98,8 +107,12 @@ _CUTOFF_HOURS_PRE_KICKOFF = 2
 _HOURLY_VARIABLES = ("temperature_2m", "precipitation")
 
 _DIV_TO_LEAGUE: Dict[str, str] = {
-    "E0": "EPL", "SP1": "LA_LIGA", "I1": "SERIE_A",
-    "D1": "BUNDESLIGA", "F1": "LIGUE_1", "N1": "EREDIVISIE",
+    "E0": "EPL",
+    "SP1": "LA_LIGA",
+    "I1": "SERIE_A",
+    "D1": "BUNDESLIGA",
+    "F1": "LIGUE_1",
+    "N1": "EREDIVISIE",
 }
 
 GAP_NO_VENUE = "VENUE_NOT_VERIFIED"
@@ -112,6 +125,7 @@ GAP_HOUR_MISSING = "FORECAST_HOUR_MISSING"
 # ---------------------------------------------------------------------------
 # Inputs
 # ---------------------------------------------------------------------------
+
 
 def load_verified_venues() -> Dict[str, Tuple[float, float]]:
     """club name -> (lat, lon) for VERIFIED clubs only.
@@ -150,11 +164,14 @@ def load_verified_venues() -> Dict[str, Tuple[float, float]]:
         logger.warning(
             "%d VERIFIED club(s) have no 'confirmed' candidate marker -- "
             "manifest predates DEBT 101; fell back to candidates[0]: %s",
-            len(stale_manifest_fallbacks), ", ".join(stale_manifest_fallbacks),
+            len(stale_manifest_fallbacks),
+            ", ".join(stale_manifest_fallbacks),
         )
     logger.info(
         "Venue manifest: %d VERIFIED of %d clubs (%s)",
-        len(venues), manifest["roster_size"], manifest["counts"],
+        len(venues),
+        manifest["roster_size"],
+        manifest["counts"],
     )
     return venues
 
@@ -201,15 +218,17 @@ def load_fixtures() -> List[Dict[str, Any]]:
                 away = (row.get("away_team") or row.get("AwayTeam") or "").strip()
                 if not kickoff_date or not home:
                     continue
-                fixtures.append({
-                    "league": league,
-                    "season": season,
-                    "season_code": code,
-                    "kickoff_date": kickoff_date,
-                    "kickoff_clock": _parse_time(row.get("Time") or ""),
-                    "home_team": home,
-                    "away_team": away,
-                })
+                fixtures.append(
+                    {
+                        "league": league,
+                        "season": season,
+                        "season_code": code,
+                        "kickoff_date": kickoff_date,
+                        "kickoff_clock": _parse_time(row.get("Time") or ""),
+                        "home_team": home,
+                        "away_team": away,
+                    }
+                )
     logger.info("Corpus: %d fixtures", len(fixtures))
     return fixtures
 
@@ -217,6 +236,7 @@ def load_fixtures() -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Acquisition
 # ---------------------------------------------------------------------------
+
 
 def fetch_venue_window(
     lat: float, lon: float, start: date, end: date, *, retries: int = 3
@@ -248,7 +268,9 @@ def fetch_venue_window(
     raise RuntimeError("unreachable")
 
 
-def index_hourly(payload: Dict[str, Any]) -> Dict[str, Tuple[float | None, float | None]]:
+def index_hourly(
+    payload: Dict[str, Any],
+) -> Dict[str, Tuple[float | None, float | None]]:
     hourly = payload.get("hourly") or {}
     times = hourly.get("time") or []
     temps = hourly.get("temperature_2m") or []
@@ -313,25 +335,29 @@ def build_rows(
             if observation is None or observation[0] is None:
                 gaps[GAP_HOUR_MISSING] += 1
                 continue
-            rows.append({
-                "league": fixture["league"],
-                "season": fixture["season"],
-                "kickoff_date": fixture["kickoff_date"],
-                "kickoff_local": kickoff_local,
-                "forecast_valid_local": cutoff,
-                "cutoff_hours_pre_kickoff": _CUTOFF_HOURS_PRE_KICKOFF,
-                "home_team": fixture["home_team"],
-                "away_team": fixture["away_team"],
-                "latitude": lat,
-                "longitude": lon,
-                "temperature_2m_c": float(observation[0]),
-                "precipitation_mm": (
-                    float(observation[1]) if observation[1] is not None else None
-                ),
-                "source": "open-meteo historical-forecast-api",
-                "timezone_mode": "auto (venue-local); corpus Time assumed venue-local",
-            })
-        logger.info("  [%d/%d] %s: %d fixtures", position, len(clubs), club, len(club_fixtures))
+            rows.append(
+                {
+                    "league": fixture["league"],
+                    "season": fixture["season"],
+                    "kickoff_date": fixture["kickoff_date"],
+                    "kickoff_local": kickoff_local,
+                    "forecast_valid_local": cutoff,
+                    "cutoff_hours_pre_kickoff": _CUTOFF_HOURS_PRE_KICKOFF,
+                    "home_team": fixture["home_team"],
+                    "away_team": fixture["away_team"],
+                    "latitude": lat,
+                    "longitude": lon,
+                    "temperature_2m_c": float(observation[0]),
+                    "precipitation_mm": (
+                        float(observation[1]) if observation[1] is not None else None
+                    ),
+                    "source": "open-meteo historical-forecast-api",
+                    "timezone_mode": "auto (venue-local); corpus Time assumed venue-local",
+                }
+            )
+        logger.info(
+            "  [%d/%d] %s: %d fixtures", position, len(clubs), club, len(club_fixtures)
+        )
         time.sleep(0.2)
 
     return rows, dict(gaps)
@@ -339,16 +365,15 @@ def build_rows(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true",
-                        help="fetch a single venue and write nothing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="fetch a single venue and write nothing"
+    )
     parser.add_argument("--out", type=Path, default=_OUT_PARQUET)
     args = parser.parse_args()
 
     venues = load_verified_venues()
     fixtures = load_fixtures()
-    rows, gaps = build_rows(
-        fixtures, venues, dry_run_limit=1 if args.dry_run else None
-    )
+    rows, gaps = build_rows(fixtures, venues, dry_run_limit=1 if args.dry_run else None)
 
     frame = pl.DataFrame(rows) if rows else pl.DataFrame()
     total = len(fixtures)
@@ -358,9 +383,7 @@ def main() -> int:
     # archived forecast can exist at all — the second is the number that says
     # whether the SOURCE is viable, as distinct from the corpus being older
     # than the archive.
-    in_window = [
-        f for f in fixtures if f["kickoff_date"] >= _FORECAST_ARCHIVE_START
-    ]
+    in_window = [f for f in fixtures if f["kickoff_date"] >= _FORECAST_ARCHIVE_START]
     report = {
         "experiment_id": "F3",
         "generated_at": datetime.now().astimezone().isoformat(),

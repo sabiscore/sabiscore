@@ -59,7 +59,9 @@ def redact_url(url: str) -> str:
         (key, "[REDACTED]" if key.lower() in SENSITIVE_QUERY_KEYS else value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
     ]
-    return urlunsplit((parts.scheme, host, parts.path, urlencode(pairs), parts.fragment))
+    return urlunsplit(
+        (parts.scheme, host, parts.path, urlencode(pairs), parts.fragment)
+    )
 
 
 def safe_endpoint(url: str) -> str:
@@ -84,7 +86,14 @@ def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
         metadata_field = lowered in {"requires_key", "api_key_configured"}
         sensitive = any(
             marker in lowered
-            for marker in ("api_key", "token", "secret", "password", "authorization", "dsn")
+            for marker in (
+                "api_key",
+                "token",
+                "secret",
+                "password",
+                "authorization",
+                "dsn",
+            )
         )
         if sensitive and not metadata_field:
             redacted[key] = "[REDACTED]" if value else None
@@ -92,7 +101,9 @@ def redact_mapping(values: Mapping[str, Any]) -> dict[str, Any]:
             redacted[key] = redact_mapping(value)
         elif isinstance(value, (list, tuple)):
             redacted[key] = [
-                redact_mapping(item) if isinstance(item, Mapping) else redact_text(item)
+                redact_mapping(item)
+                if isinstance(item, Mapping)
+                else redact_text(item)
                 if isinstance(item, str)
                 else item
                 for item in value

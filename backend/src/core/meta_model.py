@@ -38,6 +38,7 @@ lightweight shims. The obvious home, ``src/models/``, cannot be used: its
 connection at module scope (see docs/DEBT.md item 7), which would make
 deserialising a model artifact depend on the database being reachable.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -76,18 +77,23 @@ class SoftmaxMetaModel:
         self.feature_names_in_ = list(feature_names or [])
 
         if self.coef_.ndim != 2:
-            raise ValueError(f"coef must be 2-D (n_classes, n_features), got {self.coef_.shape}")
+            raise ValueError(
+                f"coef must be 2-D (n_classes, n_features), got {self.coef_.shape}"
+            )
         if self.intercept_.shape[0] != self.coef_.shape[0]:
             raise ValueError("intercept length must equal the number of classes")
 
     @classmethod
-    def from_sklearn(cls, model: Any, feature_names: list[str] | None = None) -> "SoftmaxMetaModel":
+    def from_sklearn(
+        cls, model: Any, feature_names: list[str] | None = None
+    ) -> "SoftmaxMetaModel":
         """Copy the fitted parameters out of a scikit-learn LogisticRegression."""
         return cls(
             coef=model.coef_,
             intercept=model.intercept_,
             classes=model.classes_,
-            feature_names=feature_names or list(getattr(model, "feature_names_in_", []) or []),
+            feature_names=feature_names
+            or list(getattr(model, "feature_names_in_", []) or []),
         )
 
     def predict_proba(self, X: Any) -> np.ndarray:
@@ -165,7 +171,9 @@ class VectorScaledMetaModel:
     this module's docstring documents.
     """
 
-    def __init__(self, base_model: SoftmaxMetaModel, scale: np.ndarray, bias: np.ndarray) -> None:
+    def __init__(
+        self, base_model: SoftmaxMetaModel, scale: np.ndarray, bias: np.ndarray
+    ) -> None:
         self.base_model = base_model
         self.scale = np.asarray(scale, dtype=np.float64)
         self.bias = np.asarray(bias, dtype=np.float64)
@@ -210,7 +218,9 @@ class BetaCalibratedMetaModel:
     ``IsotonicMetaModel``.
     """
 
-    def __init__(self, base_model: SoftmaxMetaModel, params: list[tuple[float, float, float]]) -> None:
+    def __init__(
+        self, base_model: SoftmaxMetaModel, params: list[tuple[float, float, float]]
+    ) -> None:
         if len(params) != len(base_model.classes_):
             raise ValueError(
                 f"Need one (a, b, c) triple per class; got {len(params)} for "

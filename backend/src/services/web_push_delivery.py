@@ -18,6 +18,7 @@ supplies a VAPID keypair, ``send_web_push`` is a no-op reporting
 ``not_configured`` rather than raising or crashing the dispatch loop — the
 same fail-closed contract ``email_delivery.send_notification_email`` honours.
 """
+
 from __future__ import annotations
 
 import base64
@@ -141,7 +142,9 @@ def _load_vapid_private_key(raw: str) -> ec.EllipticCurvePrivateKey:
     emits, or a PEM block if an operator supplies one instead."""
     stripped = raw.strip()
     if "BEGIN" in stripped:
-        key = serialization.load_pem_private_key(stripped.encode("utf-8"), password=None)
+        key = serialization.load_pem_private_key(
+            stripped.encode("utf-8"), password=None
+        )
         if not isinstance(key, ec.EllipticCurvePrivateKey):
             raise ValueError("VAPID private key must be an EC P-256 key")
         return key
@@ -264,9 +267,13 @@ async def send_web_push(
         return WebPushSendResult(sent=False, reason="send_failed")
 
     if response.status_code in _GONE_STATUSES:
-        return WebPushSendResult(sent=False, reason="subscription_expired", expired=True)
+        return WebPushSendResult(
+            sent=False, reason="subscription_expired", expired=True
+        )
     if response.status_code >= 400:
-        logger.warning("web_push_delivery: push service returned %s", response.status_code)
+        logger.warning(
+            "web_push_delivery: push service returned %s", response.status_code
+        )
         return WebPushSendResult(sent=False, reason=f"http_{response.status_code}")
     return WebPushSendResult(sent=True, reason="ok")
 

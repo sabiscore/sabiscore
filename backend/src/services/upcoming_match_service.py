@@ -69,7 +69,8 @@ async def _epistemic_for_match(
         result = await compute_ensemble_uncertainty(league, features)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(
-            "epistemic uncertainty unavailable for risk guard: %s", exc,
+            "epistemic uncertainty unavailable for risk guard: %s",
+            exc,
             extra={"event": "risk_guard_epistemic_unavailable", "league": league},
         )
         return None
@@ -211,7 +212,9 @@ class UpcomingMatchService:
         days_ahead: int,
         limit: int,
     ) -> Dict[str, Any]:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)  # ponytail: match_date is TIMESTAMP WITHOUT TIME ZONE
+        now = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )  # ponytail: match_date is TIMESTAMP WITHOUT TIME ZONE
         end_date = now + timedelta(days=max(days_ahead, 1))
 
         home_team = aliased(Team)
@@ -262,12 +265,16 @@ class UpcomingMatchService:
                     "home_team": home_team_name or "Unknown home team",
                     "away_team": away_team_name or "Unknown away team",
                     "league": match.league_id,
-                    "match_date": match.match_date.isoformat() if match.match_date else None,
+                    "match_date": match.match_date.isoformat()
+                    if match.match_date
+                    else None,
                     "venue": match.venue,
                     "status": match.status or "scheduled",
                     "has_odds": False,
                     "data_gaps": identity_gaps,
-                    "team_identity_status": "VERIFIED" if not identity_gaps else "UNKNOWN",
+                    "team_identity_status": "VERIFIED"
+                    if not identity_gaps
+                    else "UNKNOWN",
                     "source": "database",
                 }
             )
@@ -319,7 +326,9 @@ class UpcomingMatchService:
             return cached
 
         # Initialize services
-        feature_projector = UpcomingMatchFeatureProjector(odds_service=self.odds_service)
+        feature_projector = UpcomingMatchFeatureProjector(
+            odds_service=self.odds_service
+        )
         prediction_engine = PredictionEngine()
         odds_service = self.odds_service
 
@@ -474,7 +483,9 @@ class UpcomingMatchService:
                 if risk_decision is not None and risk_decision.tripped:
                     match["risk_guard"] = risk_decision.as_dict()
                 match["staleness_seconds"] = features_result.get("staleness_seconds")
-                match["staleness_available"] = features_result.get("staleness_seconds") is not None
+                match["staleness_available"] = (
+                    features_result.get("staleness_seconds") is not None
+                )
                 match["source"] = str(match.get("source", source))
 
                 if value_bets:

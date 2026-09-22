@@ -13,8 +13,8 @@ from src.insights.calculators import (
     assess_bet_quality,
 )
 
-class TestCalculators:
 
+class TestCalculators:
     def test_calculate_expected_value(self):
         ev = calculate_expected_value(model_prob=0.6, odds=2.0)
         assert ev == pytest.approx(0.2)
@@ -48,7 +48,9 @@ class TestCalculators:
         assert calculate_value_percentage(0.4, 0.5) == -20.0
 
     def test_calculate_confidence_interval(self):
-        lower, upper = calculate_confidence_interval(0.6, sample_size=200, confidence_level=0.95)
+        lower, upper = calculate_confidence_interval(
+            0.6, sample_size=200, confidence_level=0.95
+        )
         assert 0 <= lower <= upper <= 1
         # Degenerate sample size should clamp to original probability
         assert calculate_confidence_interval(0.6, sample_size=0) == (0.6, 0.6)
@@ -56,7 +58,7 @@ class TestCalculators:
     def test_calculate_betting_edge(self):
         edges = calculate_betting_edge(
             {"home_win": 0.6, "draw": 0.2, "away_win": 0.2},
-            {"home_win": 2.0, "draw": 4.0}
+            {"home_win": 2.0, "draw": 4.0},
         )
         assert pytest.approx(edges["home_win"], rel=1e-5) == 0.1
         assert "away_win" not in edges

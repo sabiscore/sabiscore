@@ -23,21 +23,21 @@ class MetricsCollector:
         self._errors: List[Dict[str, Any]] = []
         self._start_time = time.time()
         self._last_reset = datetime.now(timezone.utc)
-        
+
         # Scraper-specific metrics
         self._scraper_calls: Dict[str, int] = defaultdict(int)
         self._scraper_errors: Dict[str, int] = defaultdict(int)
         self._scraper_latencies: Dict[str, List[float]] = defaultdict(list)
-        
+
         # Prediction-specific metrics
         self._prediction_latencies: List[float] = []
         self._cache_hits = 0
         self._cache_misses = 0
-        
+
         # Value bet tracking
         self._value_bets_found = 0
         self._edge_values: List[float] = []
-        
+
         # Model accuracy tracking (per audit: Brier <0.13, accuracy >90%)
         self._brier_scores: List[float] = []
         self._accuracy_scores: List[float] = []
@@ -93,15 +93,15 @@ class MetricsCollector:
         """Track scraper performance and reliability."""
         self._scraper_calls[scraper_name] += 1
         self._scraper_latencies[scraper_name].append(duration_ms)
-        
+
         if not success:
             self._scraper_errors[scraper_name] += 1
-            
+
         # Limit latency tracking
         if len(self._scraper_latencies[scraper_name]) > 500:
-            self._scraper_latencies[scraper_name] = (
-                self._scraper_latencies[scraper_name][-500:]
-            )
+            self._scraper_latencies[scraper_name] = self._scraper_latencies[
+                scraper_name
+            ][-500:]
 
     def record_prediction(
         self,
@@ -113,18 +113,18 @@ class MetricsCollector:
     ) -> None:
         """Track prediction service performance."""
         self._prediction_latencies.append(duration_ms)
-        
+
         if cache_hit:
             self._cache_hits += 1
         else:
             self._cache_misses += 1
-            
+
         if value_bets > 0:
             self._value_bets_found += value_bets
-            
+
         if edge is not None:
             self._edge_values.append(edge)
-            
+
         # Limit tracking
         if len(self._prediction_latencies) > 1000:
             self._prediction_latencies = self._prediction_latencies[-1000:]
@@ -149,21 +149,27 @@ class MetricsCollector:
         self._brier_scores.append(brier_score)
         self._accuracy_scores.append(accuracy)
         self._model_versions[league] = model_version
-        
+
         # Limit tracking
         if len(self._brier_scores) > 500:
             self._brier_scores = self._brier_scores[-500:]
         if len(self._accuracy_scores) > 500:
             self._accuracy_scores = self._accuracy_scores[-500:]
-        
+
         if brier_threshold is not None or accuracy_threshold is not None:
             self._model_thresholds[league] = {
                 **({"brier": brier_threshold} if brier_threshold is not None else {}),
-                **({"accuracy": accuracy_threshold} if accuracy_threshold is not None else {}),
+                **(
+                    {"accuracy": accuracy_threshold}
+                    if accuracy_threshold is not None
+                    else {}
+                ),
             }
 
         brier_exceeded = brier_threshold is not None and brier_score > brier_threshold
-        accuracy_below = accuracy_threshold is not None and accuracy < accuracy_threshold
+        accuracy_below = (
+            accuracy_threshold is not None and accuracy < accuracy_threshold
+        )
         if brier_exceeded or accuracy_below:
             alert = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -179,7 +185,7 @@ class MetricsCollector:
                 f"Calibration drift alert: {league} model v{model_version} "
                 f"Brier={brier_score:.4f} Accuracy={accuracy:.2%}"
             )
-            
+
             # Keep only last 50 alerts
             if len(self._calibration_drift_alerts) > 50:
                 self._calibration_drift_alerts = self._calibration_drift_alerts[-50:]
@@ -227,12 +233,14 @@ class MetricsCollector:
         self.increment(f"circuit.{safe_provider}.{safe_circuit}")
         if schema_rejected and safe_outcome != "schema_rejected":
             self.increment(f"provider.{safe_provider}.schema_rejected")
-        self.record_timer(f"provider.{safe_provider}.latency", max(0.0, float(duration_ms)))
+        self.record_timer(
+            f"provider.{safe_provider}.latency", max(0.0, float(duration_ms))
+        )
 
     def get_summary(self) -> Dict[str, Any]:
         """Generate summary statistics for monitoring dashboard."""
         uptime_seconds = time.time() - self._start_time
-        
+
         summary = {
             "uptime_seconds": uptime_seconds,
             "uptime_human": str(timedelta(seconds=int(uptime_seconds))),
@@ -241,7 +249,7 @@ class MetricsCollector:
             "gauges": dict(self._gauges),
             "recent_errors": self._errors[-10:],  # Last 10 errors
         }
-        
+
         # Add histogram percentiles
         if self._histograms:
             summary["histograms"] = {}
@@ -257,7 +265,7 @@ class MetricsCollector:
                         "p95": sorted_values[int(len(sorted_values) * 0.95)],
                         "p99": sorted_values[int(len(sorted_values) * 0.99)],
                     }
-        
+
         # Add timer statistics
         if self._timers:
             summary["timers"] = {}
@@ -273,30 +281,34 @@ class MetricsCollector:
                         "p95_ms": sorted_durations[int(len(sorted_durations) * 0.95)],
                         "p99_ms": sorted_durations[int(len(sorted_durations) * 0.99)],
                     }
-        
+
         # Scraper health
         if self._scraper_calls:
             summary["scrapers"] = {}
             for scraper, calls in self._scraper_calls.items():
                 errors = self._scraper_errors.get(scraper, 0)
                 latencies = self._scraper_latencies.get(scraper, [])
-                
+
                 scraper_stats = {
                     "calls": calls,
                     "errors": errors,
                     "error_rate": errors / calls if calls > 0 else 0,
                     "success_rate": 1 - (errors / calls) if calls > 0 else 1.0,
                 }
-                
+
                 if latencies:
                     sorted_latencies = sorted(latencies)
-                    scraper_stats.update({
-                        "avg_latency_ms": sum(latencies) / len(latencies),
-                        "p95_latency_ms": sorted_latencies[int(len(sorted_latencies) * 0.95)],
-                    })
-                
+                    scraper_stats.update(
+                        {
+                            "avg_latency_ms": sum(latencies) / len(latencies),
+                            "p95_latency_ms": sorted_latencies[
+                                int(len(sorted_latencies) * 0.95)
+                            ],
+                        }
+                    )
+
                 summary["scrapers"][scraper] = scraper_stats
-        
+
         # Prediction metrics
         if self._prediction_latencies:
             sorted_pred = sorted(self._prediction_latencies)
@@ -309,16 +321,17 @@ class MetricsCollector:
                     if (self._cache_hits + self._cache_misses) > 0
                     else 0
                 ),
-                "avg_latency_ms": sum(self._prediction_latencies) / len(self._prediction_latencies),
+                "avg_latency_ms": sum(self._prediction_latencies)
+                / len(self._prediction_latencies),
                 "p95_latency_ms": sorted_pred[int(len(sorted_pred) * 0.95)],
                 "value_bets_found": self._value_bets_found,
             }
-            
+
             if self._edge_values:
-                summary["predictions"]["avg_edge"] = (
-                    sum(self._edge_values) / len(self._edge_values)
+                summary["predictions"]["avg_edge"] = sum(self._edge_values) / len(
+                    self._edge_values
                 )
-        
+
         # Model accuracy metrics (per audit requirements)
         if self._brier_scores or self._accuracy_scores:
             model_metrics: Dict[str, Any] = {
@@ -327,7 +340,7 @@ class MetricsCollector:
                 "calibration_alerts": len(self._calibration_drift_alerts),
                 "recent_alerts": self._calibration_drift_alerts[-5:],
             }
-            
+
             if self._brier_scores:
                 sorted_brier = sorted(self._brier_scores)
                 model_metrics["brier"] = {
@@ -337,7 +350,7 @@ class MetricsCollector:
                     "max": max(self._brier_scores),
                     "p50": sorted_brier[len(sorted_brier) // 2],
                 }
-            
+
             if self._accuracy_scores:
                 sorted_acc = sorted(self._accuracy_scores)
                 model_metrics["accuracy"] = {
@@ -347,9 +360,9 @@ class MetricsCollector:
                     "max": max(self._accuracy_scores),
                     "p50": sorted_acc[len(sorted_acc) // 2],
                 }
-            
+
             summary["model_accuracy"] = model_metrics
-        
+
         # Latency budget status (§4.1 Production Executive Directive)
         # model_inference ≤ 150ms p95 (CI assertion in test_latency_budgets.py)
         # analysis.latency ≤ 2500ms p95 (alert threshold — not a CI hard gate)
@@ -403,6 +416,7 @@ metrics_collector = MetricsCollector()
 
 def monitor_latency(metric_name: str) -> Callable:
     """Decorator to monitor function execution time."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -421,7 +435,7 @@ def monitor_latency(metric_name: str) -> Callable:
                     context={"function": func.__name__},
                 )
                 raise
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             start = time.time()
@@ -439,17 +453,18 @@ def monitor_latency(metric_name: str) -> Callable:
                     context={"function": func.__name__},
                 )
                 raise
-        
+
         # Return appropriate wrapper based on function type
         if hasattr(func, "__code__") and func.__code__.co_flags & 0x80:
             return async_wrapper
         return sync_wrapper
-    
+
     return decorator
 
 
 def monitor_scraper(scraper_name: str) -> Callable:
     """Decorator to monitor scraper performance."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -468,7 +483,7 @@ def monitor_scraper(scraper_name: str) -> Callable:
                     duration_ms,
                     success,
                 )
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             start = time.time()
@@ -486,9 +501,9 @@ def monitor_scraper(scraper_name: str) -> Callable:
                     duration_ms,
                     success,
                 )
-        
+
         if hasattr(func, "__code__") and func.__code__.co_flags & 0x80:
             return async_wrapper
         return sync_wrapper
-    
+
     return decorator

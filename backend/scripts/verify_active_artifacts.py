@@ -75,10 +75,7 @@ def main() -> None:
         f"for {generation['generation']} ({generation['certification_state']})"
     )
     if identity is not None:
-        print(
-            "Verified exact build release identity "
-            f"{identity['release_sha']}"
-        )
+        print(f"Verified exact build release identity {identity['release_sha']}")
 
 
 if __name__ == "__main__":

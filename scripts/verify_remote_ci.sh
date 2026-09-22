@@ -70,23 +70,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# ⚠️ VERIFIED 2026-09-17: master's ruleset (id 20939497, active) contains
-# exactly four rules — deletion, non_fast_forward, required_linear_history and
-# pull_request (1 approving review). There is NO `required_status_checks` rule,
-# so GitHub does not block a merge on red CI even when runners are working.
-# This list is therefore the gate this REPOSITORY treats as binding, not one
-# GitHub enforces; re-derive it with
-#   gh api repos/<owner>/<repo>/rules/branches/master
-# before trusting it. A run of some other workflow (Keep-alive ping, say)
-# booting a runner is still valid evidence for item 99, but it is NOT evidence
-# that the suite is green — which is why the two verdicts are computed over
-# different sets.
-REQUIRED_WORKFLOWS=(
-  "CI - Canonical Platform"
-  "Secret Scan"
-  "Block large files"
-  "Validate Model Artifacts"
-)
+# ⚠️ Required checks are a live branch-ruleset property, not a hardcoded list.
+# Query them every run from:
+#   gh api repos/<owner>/<repo>/rules/branches/<branch>
+#
+# This prevents stale local assumptions when contexts are renamed or rules change.
 
 command -v gh >/dev/null 2>&1 || { echo "FAIL: gh CLI not installed." >&2; exit 4; }
 gh auth status >/dev/null 2>&1 || { echo "FAIL: gh CLI not authenticated." >&2; exit 4; }
@@ -129,18 +117,37 @@ collect_jobs() {
   done
 }
 
-is_required() {
-  local name="$1" w
-  for w in "${REQUIRED_WORKFLOWS[@]}"; do
-    [ "$name" = "$w" ] && return 0
-  done
-  return 1
+# Emits one required check context per line from the branch ruleset.
+collect_required_contexts() {
+  gh api "repos/$REPO/rules/branches/$BRANCH" \
+    --jq '.rules[]? | select(.type=="required_status_checks") | .parameters.required_status_checks[]?.context' \
+    2>/dev/null || true
 }
+
+# Emits one "name<TAB>status<TAB>conclusion<TAB>id" line per check-run for this
+# commit across all pages. Name collisions (reruns) are resolved to the newest id.
+collect_check_runs() {
+  gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+    --jq '.check_runs[] | [.name, .status, (.conclusion // "null"), (.id | tostring)] | @tsv' \
+    2>/dev/null || true
+}
+
+# Load required check contexts from the active branch ruleset once, up front.
+REQUIRED_CONTEXTS="$(collect_required_contexts)"
+if [ -z "$REQUIRED_CONTEXTS" ]; then
+  echo "FAIL: branch '$BRANCH' has no required_status_checks rule or no contexts." >&2
+  echo "      Re-check via: gh api repos/$REPO/rules/branches/$BRANCH" >&2
+  exit 1
+fi
+
+echo "required contexts:"
+printf '%s\n' "$REQUIRED_CONTEXTS" | sed 's/^/  - /'
+echo
 
 evaluate() {
   local jobs="$1"
   BOOTED=0; PENDING=0; LOCKED=0
-  REQUIRED_SEEN=0; REQUIRED_PASSED=0; REQUIRED_FAILED=0
+  REQUIRED_SEEN=0; REQUIRED_PASSED=0; REQUIRED_FAILED=0; REQUIRED_PENDING=0; REQUIRED_MISSING=0
   REPORT=""
 
   while IFS=$'\t' read -r name status conclusion runner steps; do
@@ -158,15 +165,44 @@ evaluate() {
     fi
     REPORT="${REPORT}  ${name} :: ${verdict}"$'\n'
 
-    if is_required "$name"; then
-      REQUIRED_SEEN=$((REQUIRED_SEEN + 1))
-      if [ "$conclusion" = "success" ]; then
-        REQUIRED_PASSED=$((REQUIRED_PASSED + 1))
-      elif [ "$status" = "completed" ]; then
-        REQUIRED_FAILED=$((REQUIRED_FAILED + 1))
-      fi
-    fi
   done <<< "$jobs"
+
+  # Build latest check-run status per context name from all pages/reruns.
+  local checks line cname cstatus cconclusion cid prev
+  checks="$(collect_check_runs)"
+  declare -A CHECK_STATUS=() CHECK_CONCLUSION=() CHECK_ID=()
+  while IFS=$'\t' read -r cname cstatus cconclusion cid; do
+    [ -z "${cname:-}" ] && continue
+    prev="${CHECK_ID[$cname]:-}"
+    if [ -z "$prev" ] || [ "$cid" -gt "$prev" ]; then
+      CHECK_ID[$cname]="$cid"
+      CHECK_STATUS[$cname]="$cstatus"
+      CHECK_CONCLUSION[$cname]="$cconclusion"
+    fi
+  done <<< "$checks"
+
+  while IFS= read -r cname; do
+    [ -z "${cname:-}" ] && continue
+    REQUIRED_SEEN=$((REQUIRED_SEEN + 1))
+    if [ -z "${CHECK_ID[$cname]:-}" ]; then
+      REQUIRED_MISSING=$((REQUIRED_MISSING + 1))
+      REPORT+="  required::${cname} :: MISSING for commit ${SHORT_SHA}"$'\n'
+      continue
+    fi
+
+    cstatus="${CHECK_STATUS[$cname]}"
+    cconclusion="${CHECK_CONCLUSION[$cname]}"
+    if [ "$cstatus" != "completed" ]; then
+      REQUIRED_PENDING=$((REQUIRED_PENDING + 1))
+      REPORT+="  required::${cname} :: ${cstatus} (conclusion=${cconclusion})"$'\n'
+    elif [ "$cconclusion" = "success" ]; then
+      REQUIRED_PASSED=$((REQUIRED_PASSED + 1))
+      REPORT+="  required::${cname} :: success"$'\n'
+    else
+      REQUIRED_FAILED=$((REQUIRED_FAILED + 1))
+      REPORT+="  required::${cname} :: ${cconclusion}"$'\n'
+    fi
+  done <<< "$REQUIRED_CONTEXTS"
 }
 
 DEADLINE=$(( $(date +%s) + TIMEOUT ))
@@ -192,13 +228,17 @@ while :; do
       echo "  (${PENDING} job(s) still in flight — waiting for a final verdict.)"
       sleep "$INTERVAL"; continue
     fi
-    echo "REQUIRED WORKFLOWS: ${REQUIRED_PASSED} passed, ${REQUIRED_FAILED} failed," \
-         "of ${REQUIRED_SEEN} seen."
-    if [ "$REQUIRED_FAILED" -eq 0 ] && [ "$REQUIRED_PASSED" -gt 0 ]; then
+    echo "REQUIRED CONTEXTS: ${REQUIRED_PASSED} passed, ${REQUIRED_FAILED} failed," \
+         "${REQUIRED_PENDING} pending, ${REQUIRED_MISSING} missing, of ${REQUIRED_SEEN} required."
+    if [ "$REQUIRED_PENDING" -gt 0 ] && [ "$ONCE" -eq 0 ] && [ "$(date +%s)" -lt "$DEADLINE" ]; then
+      echo "  (required checks still pending — waiting for a final verdict.)"
+      sleep "$INTERVAL"; continue
+    fi
+    if [ "$REQUIRED_FAILED" -eq 0 ] && [ "$REQUIRED_MISSING" -eq 0 ] && [ "$REQUIRED_PENDING" -eq 0 ] && [ "$REQUIRED_PASSED" -gt 0 ]; then
       echo "PASS: remote CI is green for $SHORT_SHA."
       exit 0
     fi
-    echo "FAIL: the lock is clear but required workflows are red — these are" \
+    echo "FAIL: the lock is clear but required status checks are not all green — these are" \
          "genuine failures and must be fixed." >&2
     exit 1
   fi

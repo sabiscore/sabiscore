@@ -30,7 +30,9 @@ class TestNormalizeDecimalOdds:
         assert result == {"home_win": 2.0, "draw": 3.5, "away_win": 4.0}
 
     def test_non_numeric_string_dropped(self):
-        result = normalize_decimal_odds({"home_win": 2.0, "draw": 1.0, "away_win": "bad"})
+        result = normalize_decimal_odds(
+            {"home_win": 2.0, "draw": 1.0, "away_win": "bad"}
+        )
         # draw=1.0 is exactly 1 — below min valid price; "bad" is not numeric.
         assert result == {"home_win": 2.0}
 
@@ -40,15 +42,21 @@ class TestNormalizeDecimalOdds:
         assert "draw" in result
 
     def test_none_price_dropped(self):
-        result = normalize_decimal_odds({"home_win": None, "draw": 3.3, "away_win": 4.0})
+        result = normalize_decimal_odds(
+            {"home_win": None, "draw": 3.3, "away_win": 4.0}
+        )
         assert "home_win" not in result
 
     def test_nan_price_dropped(self):
-        result = normalize_decimal_odds({"home_win": float("nan"), "draw": 3.3, "away_win": 4.0})
+        result = normalize_decimal_odds(
+            {"home_win": float("nan"), "draw": 3.3, "away_win": 4.0}
+        )
         assert "home_win" not in result
 
     def test_inf_price_dropped(self):
-        result = normalize_decimal_odds({"home_win": float("inf"), "draw": 3.3, "away_win": 4.0})
+        result = normalize_decimal_odds(
+            {"home_win": float("inf"), "draw": 3.3, "away_win": 4.0}
+        )
         assert "home_win" not in result
 
     def test_unknown_market_keys_ignored(self):
@@ -109,14 +117,18 @@ class TestBookmakerMargin:
 
 class TestIsCompleteMarket:
     def test_all_three_present(self):
-        assert is_complete_market({"home_win": 2.0, "draw": 3.5, "away_win": 4.0}) is True
+        assert (
+            is_complete_market({"home_win": 2.0, "draw": 3.5, "away_win": 4.0}) is True
+        )
 
     def test_partial_market_false(self):
         assert is_complete_market({"home_win": 2.0, "draw": 3.5}) is False
 
     def test_invalid_price_makes_incomplete(self):
         # away_win=1.0 is dropped by normalisation → incomplete.
-        assert is_complete_market({"home_win": 2.0, "draw": 3.5, "away_win": 1.0}) is False
+        assert (
+            is_complete_market({"home_win": 2.0, "draw": 3.5, "away_win": 1.0}) is False
+        )
 
     def test_empty_false(self):
         assert is_complete_market({}) is False

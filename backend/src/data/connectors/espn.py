@@ -33,7 +33,9 @@ class ESPNConnector:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         self._running = False
 
-    async def fetch_scoreboard(self, league: str, date: str | None = None) -> list[dict[str, Any]]:
+    async def fetch_scoreboard(
+        self, league: str, date: str | None = None
+    ) -> list[dict[str, Any]]:
         result = await self.provider.scoreboard(league.upper(), date=date)
         return result.records
 

@@ -34,7 +34,9 @@ from src.services.uncertainty_service import UncertaintyBreakdown
 # ---------------------------------------------------------------------------
 
 
-def _ens(home=0.55, draw=0.25, away=0.20, prediction="home_win", confidence=0.55) -> EnsemblePrediction:
+def _ens(
+    home=0.55, draw=0.25, away=0.20, prediction="home_win", confidence=0.55
+) -> EnsemblePrediction:
     return EnsemblePrediction(
         home_win_prob=home,
         draw_prob=draw,
@@ -76,7 +78,9 @@ def _elo(diff: float = 0.0) -> EloContext:
     )
 
 
-def _causal(names: list[str], classification: str = "CAUSAL_DRIVER") -> list[CausalFeatureResult]:
+def _causal(
+    names: list[str], classification: str = "CAUSAL_DRIVER"
+) -> list[CausalFeatureResult]:
     return [
         CausalFeatureResult(
             name=name,
@@ -138,20 +142,18 @@ class TestVerdictGateTable:
         assert result.verdict != "PARTIAL"
 
     def test_multiple_advisory_gaps_do_not_force_partial(self):
-        result = SYNTH.synthesize(**_synth(data_gaps=["elo_ratings", "causal_analysis"]))
+        result = SYNTH.synthesize(
+            **_synth(data_gaps=["elo_ratings", "causal_analysis"])
+        )
         assert result.verdict == "HIGH_CONVICTION"
         assert result.partial_intelligence is False
         assert result.data_gaps == ["elo_ratings", "causal_analysis"]
 
     def test_critical_gap_forces_partial(self):
-        result = SYNTH.synthesize(
-            **_synth(data_gaps=["MODEL_PREDICTION_UNAVAILABLE"])
-        )
+        result = SYNTH.synthesize(**_synth(data_gaps=["MODEL_PREDICTION_UNAVAILABLE"]))
         assert result.verdict == "PARTIAL"
         assert result.partial_intelligence is True
-        assert result.evidence_quality.critical_gaps == [
-            "MODEL_PREDICTION_UNAVAILABLE"
-        ]
+        assert result.evidence_quality.critical_gaps == ["MODEL_PREDICTION_UNAVAILABLE"]
 
     def test_conflict_forces_partial_and_remains_separate(self):
         result = SYNTH.synthesize(
@@ -162,9 +164,7 @@ class TestVerdictGateTable:
         )
         assert result.verdict == "PARTIAL"
         assert result.evidence_quality.advisory_gaps == ["lineup_context"]
-        assert result.evidence_quality.conflicts == [
-            "CONFLICTING_MARKET_SNAPSHOTS"
-        ]
+        assert result.evidence_quality.conflicts == ["CONFLICTING_MARKET_SNAPSHOTS"]
 
     def test_low_evidence_yields_hold(self):
         result = SYNTH.synthesize(**_synth(uncertainty=_uncertainty("LOW_EVIDENCE")))
@@ -205,7 +205,9 @@ class TestVerdictGateTable:
             **_synth(
                 ensemble=_ens(confidence=0.60),
                 uncertainty=_uncertainty("OK"),
-                causal_results=_causal(["home_pressing_intensity"]),  # no elo_difference
+                causal_results=_causal(
+                    ["home_pressing_intensity"]
+                ),  # no elo_difference
                 rl_rec=_rl(abstain=False),
                 elo_ctx=_elo(80.0),
             )
@@ -247,7 +249,9 @@ class TestVerdictGateTable:
         """Features with ASSUMPTION_PASS (not CAUSAL_DRIVER) must not trigger ACTIONABLE."""
         result = SYNTH.synthesize(
             **_synth(
-                causal_results=_causal(["elo_difference"], classification="ASSUMPTION_PASS"),
+                causal_results=_causal(
+                    ["elo_difference"], classification="ASSUMPTION_PASS"
+                ),
                 rl_rec=_rl(abstain=False),
             )
         )
@@ -360,18 +364,26 @@ class TestAbstainAdvisoryPath:
 
     def test_abstain_true_when_edge_quality_below_threshold(self):
         """Score below default threshold (0.30) → abstain must be True."""
-        action = _actionability(edge_quality_score=0.20, abstain=True, abstain_reason="Low edge quality")
+        action = _actionability(
+            edge_quality_score=0.20, abstain=True, abstain_reason="Low edge quality"
+        )
         assert action.abstain is True
         assert action.abstain_reason is not None
 
     def test_abstain_at_exact_threshold_boundary(self):
         """Score equal to threshold is still below — abstain True."""
-        action = _actionability(edge_quality_score=0.30, abstain=True, abstain_reason="At threshold")
+        action = _actionability(
+            edge_quality_score=0.30, abstain=True, abstain_reason="At threshold"
+        )
         assert action.abstain is True
 
     def test_abstain_propagates_through_synthesize(self):
         """synthesize() must preserve actionability.abstain in the response."""
-        action = _actionability(edge_quality_score=0.15, abstain=True, abstain_reason="edge_quality below 0.30")
+        action = _actionability(
+            edge_quality_score=0.15,
+            abstain=True,
+            abstain_reason="edge_quality below 0.30",
+        )
         result = SYNTH.synthesize(
             **_synth(
                 actionability=action,
@@ -387,7 +399,9 @@ class TestAbstainAdvisoryPath:
 
     def test_abstain_does_not_override_verdict(self):
         """Advisory ABSTAIN must NOT change the TYPE-F verdict — verdict is independent."""
-        action = _actionability(edge_quality_score=0.10, abstain=True, abstain_reason="Low edge")
+        action = _actionability(
+            edge_quality_score=0.10, abstain=True, abstain_reason="Low edge"
+        )
         result = SYNTH.synthesize(
             **_synth(
                 actionability=action,

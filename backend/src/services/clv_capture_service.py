@@ -14,6 +14,7 @@ API records contain home/away team names. Fixture matching therefore uses team
 identity plus kickoff tolerance and fails closed on ambiguity rather than using
 timestamp proximity alone.
 """
+
 from __future__ import annotations
 
 import logging

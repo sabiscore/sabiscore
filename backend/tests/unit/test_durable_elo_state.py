@@ -1,4 +1,5 @@
 """Durable Elo state contracts for production feature serving."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -81,10 +82,14 @@ async def test_finished_match_creates_two_real_identity_snapshots_and_is_idempot
         await session.commit()
 
         rows = (
-            await session.execute(
-                select(EloRatingSnapshot).where(EloRatingSnapshot.match_id == "m1")
+            (
+                await session.execute(
+                    select(EloRatingSnapshot).where(EloRatingSnapshot.match_id == "m1")
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert {row.team_id for row in rows} == {"arsenal", "chelsea"}
     assert len(rows) == 2
@@ -92,7 +97,9 @@ async def test_finished_match_creates_two_real_identity_snapshots_and_is_idempot
     assert rows[0].post_match_elo != rows[0].pre_match_elo
 
 
-async def test_malformed_match_date_fails_at_legacy_orm_boundary(session_factory) -> None:
+async def test_malformed_match_date_fails_at_legacy_orm_boundary(
+    session_factory,
+) -> None:
     async with session_factory() as session:
         match = Match(
             id="bad-date",
@@ -114,7 +121,9 @@ async def test_malformed_match_date_fails_at_legacy_orm_boundary(session_factory
             await apply_finished_match_to_elo(session, match)
 
 
-async def test_incremental_sync_is_chronological_and_resolves_next_fixture(session_factory) -> None:
+async def test_incremental_sync_is_chronological_and_resolves_next_fixture(
+    session_factory,
+) -> None:
     async with session_factory() as session:
         await _seed_identity(session)
         base = datetime(2026, 8, 1, 15, 0)
@@ -149,7 +158,9 @@ async def test_incremental_sync_is_chronological_and_resolves_next_fixture(sessi
         first = await sync_elo_from_finished_matches(session)
         second = await sync_elo_from_finished_matches(session)
         row_count = int(
-            (await session.execute(select(func.count(EloRatingSnapshot.id)))).scalar_one()
+            (
+                await session.execute(select(func.count(EloRatingSnapshot.id)))
+            ).scalar_one()
         )
         context = await get_elo_context(
             session,
@@ -192,14 +203,22 @@ async def test_self_play_match_is_skipped_not_crashed(session_factory) -> None:
         assert await apply_finished_match_to_elo(session, match) is False
 
         rows = (
-            await session.execute(
-                select(EloRatingSnapshot).where(EloRatingSnapshot.match_id == "self-play")
+            (
+                await session.execute(
+                    select(EloRatingSnapshot).where(
+                        EloRatingSnapshot.match_id == "self-play"
+                    )
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert rows == []
 
 
-async def test_sync_skips_self_play_match_and_still_processes_the_rest(session_factory) -> None:
+async def test_sync_skips_self_play_match_and_still_processes_the_rest(
+    session_factory,
+) -> None:
     async with session_factory() as session:
         await _seed_identity(session)
         base = datetime(2026, 8, 1, 15, 0)
@@ -233,7 +252,9 @@ async def test_sync_skips_self_play_match_and_still_processes_the_rest(session_f
 
         result = await sync_elo_from_finished_matches(session)
         row_count = int(
-            (await session.execute(select(func.count(EloRatingSnapshot.id)))).scalar_one()
+            (
+                await session.execute(select(func.count(EloRatingSnapshot.id)))
+            ).scalar_one()
         )
 
     assert result["processed"] == 1

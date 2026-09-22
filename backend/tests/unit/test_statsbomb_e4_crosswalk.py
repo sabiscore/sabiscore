@@ -13,6 +13,7 @@ that replaced the subset test, so the audit cannot regress into it.
 
 No network, no database -- the audit module is stdlib-only at import time.
 """
+
 from __future__ import annotations
 
 import sys
@@ -110,6 +111,8 @@ class TestBuildCrosswalk:
             [_sb_match("EPL", "hamburger sv", "arsenal")], corpus
         )
         assert ("EPL", "hamburger sv") not in mapping
-        assert "Hamburger SV".lower() in [
-            n.lower() for n in stats["unresolved_by_league"]["EPL"]
-        ] or "hamburger sv" in stats["unresolved_by_league"]["EPL"]
+        assert (
+            "Hamburger SV".lower()
+            in [n.lower() for n in stats["unresolved_by_league"]["EPL"]]
+            or "hamburger sv" in stats["unresolved_by_league"]["EPL"]
+        )

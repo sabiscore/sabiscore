@@ -11,6 +11,7 @@
 4. Excludes non-closing-line snapshots and fixtures with no closing line at all.
 5. league= filters via the Match join.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -57,7 +58,12 @@ async def _seed_match(
 
 
 def _prediction(
-    match_id: str, created_at: datetime, *, home: float = 0.5, draw: float = 0.3, away: float = 0.2
+    match_id: str,
+    created_at: datetime,
+    *,
+    home: float = 0.5,
+    draw: float = 0.3,
+    away: float = 0.2,
 ) -> MatchPredictionLog:
     return MatchPredictionLog(
         match_id=match_id,
@@ -100,11 +106,25 @@ def _closing_snapshot(
     )
 
 
-async def test_joins_latest_prediction_to_latest_closing_line(session: AsyncSession) -> None:
+async def test_joins_latest_prediction_to_latest_closing_line(
+    session: AsyncSession,
+) -> None:
     match_date = datetime(2026, 8, 8, 15, 0)
     await _seed_match(session, "match-1", match_date=match_date)
-    session.add(_prediction("match-1", match_date - timedelta(hours=2), home=0.55, draw=0.25, away=0.20))
-    session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5), home=0.48, draw=0.27, away=0.25))
+    session.add(
+        _prediction(
+            "match-1", match_date - timedelta(hours=2), home=0.55, draw=0.25, away=0.20
+        )
+    )
+    session.add(
+        _closing_snapshot(
+            "match-1",
+            match_date - timedelta(minutes=5),
+            home=0.48,
+            draw=0.27,
+            away=0.25,
+        )
+    )
     await session.commit()
 
     records = await get_clv_records(session, model_version="v5_phase7")
@@ -119,7 +139,9 @@ async def test_does_not_require_match_to_be_finished(session: AsyncSession) -> N
     captured closing line is included — CLV compares belief to market close,
     independent of the eventual result."""
     match_date = datetime(2026, 8, 10, 15, 0)
-    await _seed_match(session, "match-scheduled", match_date=match_date, status="scheduled")
+    await _seed_match(
+        session, "match-scheduled", match_date=match_date, status="scheduled"
+    )
     session.add(_prediction("match-scheduled", match_date - timedelta(hours=1)))
     session.add(_closing_snapshot("match-scheduled", match_date - timedelta(minutes=5)))
     await session.commit()
@@ -128,11 +150,21 @@ async def test_does_not_require_match_to_be_finished(session: AsyncSession) -> N
     assert len(records) == 1
 
 
-async def test_picks_latest_prediction_when_match_has_two(session: AsyncSession) -> None:
+async def test_picks_latest_prediction_when_match_has_two(
+    session: AsyncSession,
+) -> None:
     match_date = datetime(2026, 8, 8, 15, 0)
     await _seed_match(session, "match-1", match_date=match_date)
-    session.add(_prediction("match-1", match_date - timedelta(days=2), home=0.10, draw=0.10, away=0.80))
-    session.add(_prediction("match-1", match_date - timedelta(hours=1), home=0.60, draw=0.25, away=0.15))
+    session.add(
+        _prediction(
+            "match-1", match_date - timedelta(days=2), home=0.10, draw=0.10, away=0.80
+        )
+    )
+    session.add(
+        _prediction(
+            "match-1", match_date - timedelta(hours=1), home=0.60, draw=0.25, away=0.15
+        )
+    )
     session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5)))
     await session.commit()
 
@@ -184,14 +216,28 @@ async def test_excludes_prediction_captured_at_or_after_closing_line(
     assert records[0]["model_probs"] == pytest.approx([0.55, 0.25, 0.20])
 
 
-async def test_picks_latest_closing_snapshot_when_two_exist(session: AsyncSession) -> None:
+async def test_picks_latest_closing_snapshot_when_two_exist(
+    session: AsyncSession,
+) -> None:
     """Defends the dedup subquery against the capture job ever writing two
     closing-line rows for one fixture (not prevented by the schema)."""
     match_date = datetime(2026, 8, 8, 15, 0)
     await _seed_match(session, "match-1", match_date=match_date)
     session.add(_prediction("match-1", match_date - timedelta(hours=1)))
-    session.add(_closing_snapshot("match-1", match_date - timedelta(hours=1), home=0.40, draw=0.30, away=0.30))
-    session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=1), home=0.50, draw=0.25, away=0.25))
+    session.add(
+        _closing_snapshot(
+            "match-1", match_date - timedelta(hours=1), home=0.40, draw=0.30, away=0.30
+        )
+    )
+    session.add(
+        _closing_snapshot(
+            "match-1",
+            match_date - timedelta(minutes=1),
+            home=0.50,
+            draw=0.25,
+            away=0.25,
+        )
+    )
     await session.commit()
 
     records = await get_clv_records(session, model_version="v5_phase7")
@@ -208,24 +254,16 @@ async def test_equal_timestamps_use_latest_ids_without_multiplying_join(
     closing_at = match_date - timedelta(minutes=5)
     await _seed_match(session, "match-tied", match_date=match_date)
     session.add(
-        _prediction(
-            "match-tied", prediction_at, home=0.40, draw=0.30, away=0.30
-        )
+        _prediction("match-tied", prediction_at, home=0.40, draw=0.30, away=0.30)
     )
     session.add(
-        _prediction(
-            "match-tied", prediction_at, home=0.60, draw=0.25, away=0.15
-        )
+        _prediction("match-tied", prediction_at, home=0.60, draw=0.25, away=0.15)
     )
     session.add(
-        _closing_snapshot(
-            "match-tied", closing_at, home=0.45, draw=0.30, away=0.25
-        )
+        _closing_snapshot("match-tied", closing_at, home=0.45, draw=0.30, away=0.25)
     )
     session.add(
-        _closing_snapshot(
-            "match-tied", closing_at, home=0.50, draw=0.25, away=0.25
-        )
+        _closing_snapshot("match-tied", closing_at, home=0.50, draw=0.25, away=0.25)
     )
     await session.commit()
 
@@ -240,14 +278,20 @@ async def test_excludes_non_closing_line_snapshot(session: AsyncSession) -> None
     match_date = datetime(2026, 8, 8, 15, 0)
     await _seed_match(session, "match-1", match_date=match_date)
     session.add(_prediction("match-1", match_date - timedelta(hours=1)))
-    session.add(_closing_snapshot("match-1", match_date - timedelta(minutes=5), is_closing_line=False))
+    session.add(
+        _closing_snapshot(
+            "match-1", match_date - timedelta(minutes=5), is_closing_line=False
+        )
+    )
     await session.commit()
 
     records = await get_clv_records(session, model_version="v5_phase7")
     assert records == []
 
 
-async def test_excludes_fixture_with_no_closing_line_at_all(session: AsyncSession) -> None:
+async def test_excludes_fixture_with_no_closing_line_at_all(
+    session: AsyncSession,
+) -> None:
     match_date = datetime(2026, 8, 8, 15, 0)
     await _seed_match(session, "match-1", match_date=match_date)
     session.add(_prediction("match-1", match_date - timedelta(hours=1)))
@@ -268,7 +312,5 @@ async def test_league_filter_narrows_via_match_join(session: AsyncSession) -> No
     session.add(_closing_snapshot("match-ded", match_date - timedelta(minutes=5)))
     await session.commit()
 
-    records = await get_clv_records(
-        session, model_version="v5_phase7", league="EPL"
-    )
+    records = await get_clv_records(session, model_version="v5_phase7", league="EPL")
     assert len(records) == 1

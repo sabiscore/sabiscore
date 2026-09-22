@@ -26,129 +26,124 @@ logger = logging.getLogger(__name__)
 class BetfairExchangeScraper(BaseScraper):
     """
     Scraper for Betfair Exchange odds.
-    
+
     Note: Full Betfair API requires authentication. This scraper
     provides a fallback using public data sources and simulation
     for development purposes.
-    
+
     In production, integrate with official Betfair Exchange API:
     https://developer.betfair.com/exchange-api/
     """
-    
+
     BASE_URL = "https://www.betfair.com"
-    
-    def __init__(self, api_key: Optional[str] = None, session_token: Optional[str] = None):
+
+    def __init__(
+        self, api_key: Optional[str] = None, session_token: Optional[str] = None
+    ):
         super().__init__(
             base_url=self.BASE_URL,
             rate_limit_delay=3.0,  # More conservative for exchange
             max_retries=3,
-            timeout=30
+            timeout=30,
         )
-        
+
         self.api_key = api_key
         self.session_token = session_token
-        
+
         # Cache paths
         self.cache_dir = CACHE_DIR / "betfair"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.local_processed_path = PROCESSED_DIR / "betfair_odds.json"
-    
+
     def _fetch_remote(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Optional[Dict]:
         """
         Fetch exchange odds for a match.
-        
+
         In development mode, returns simulated odds based on
         typical exchange spreads and liquidity patterns.
         """
         # If API credentials available, use official API
         if self.api_key and self.session_token:
             return self._fetch_via_api(home_team, away_team, league)
-        
+
         # No credentials and no public endpoint available; fail closed.
-        logger.info(f"No Betfair credentials for {home_team} vs {away_team}; returning None")
+        logger.info(
+            f"No Betfair credentials for {home_team} vs {away_team}; returning None"
+        )
         return None
-    
+
     def _fetch_via_api(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Optional[Dict]:
         """
         Fetch odds via official Betfair API.
-        
+
         Requires valid API key and session token.
         """
         # API endpoint for exchange odds
-        
-        
+
         # Actual API integration not yet implemented; fail closed.
         logger.warning("Betfair API integration not fully implemented")
         return None
-    
+
     def _parse_data(self, page_content: Dict) -> Dict:
         """Parse exchange odds data."""
         return page_content
-    
+
     def get_match_odds(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Optional[Dict]:
         """
         Get exchange odds for a match.
-        
+
         Args:
             home_team: Home team name
             away_team: Away team name
             league: League identifier
-            
+
         Returns:
             Dict with back/lay odds and liquidity
         """
         return self.fetch_data(home_team, away_team, league)
-    
+
     def calculate_exchange_edge(
-        self,
-        model_prob: float,
-        back_odds: float,
-        lay_odds: float
+        self, model_prob: float, back_odds: float, lay_odds: float
     ) -> Dict[str, float]:
         """
         Calculate edge against exchange prices.
-        
+
         Args:
             model_prob: Our model's probability
             back_odds: Best available back price
             lay_odds: Best available lay price
-            
+
         Returns:
             Dict with edge calculations
         """
         # Back edge: profit if we're right
         back_implied = 1 / back_odds
         back_edge = model_prob - back_implied
-        
+
         # Lay edge: profit if outcome doesn't happen
         lay_implied = 1 / lay_odds
         lay_edge = (1 - model_prob) - (1 - lay_implied)
-        
+
         # Expected value
         back_ev = (model_prob * (back_odds - 1)) - (1 - model_prob)
         lay_ev = ((1 - model_prob) * 1) - (model_prob * (lay_odds - 1))
-        
+
         return {
             "back_edge": round(back_edge * 100, 2),  # Percentage
             "lay_edge": round(lay_edge * 100, 2),
             "back_ev": round(back_ev * 100, 2),
             "lay_ev": round(lay_ev * 100, 2),
-            "recommended": "back" if back_edge > lay_edge else "lay" if lay_edge > 0.02 else "pass",
+            "recommended": "back"
+            if back_edge > lay_edge
+            else "lay"
+            if lay_edge > 0.02
+            else "pass",
         }
 
     @staticmethod
@@ -161,10 +156,7 @@ class BetfairExchangeScraper(BaseScraper):
             return None
 
     def calculate_exchange_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, float]:
         """Return structured exchange odds metrics for feature engineering."""
 
@@ -174,7 +166,9 @@ class BetfairExchangeScraper(BaseScraper):
 
         match_odds = odds_payload.get("markets", {}).get("match_odds", {})
 
-        def _extract(side: str) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        def _extract(
+            side: str,
+        ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
             entry = match_odds.get(side, {})
             return (
                 self._safe_float(entry.get("back")),
@@ -226,6 +220,8 @@ class BetfairExchangeScraper(BaseScraper):
 
 
 # Convenience function
-def get_betfair_odds(home_team: str, away_team: str, league: str = "EPL") -> Optional[Dict]:
+def get_betfair_odds(
+    home_team: str, away_team: str, league: str = "EPL"
+) -> Optional[Dict]:
     """Get Betfair exchange odds for a match."""
     return BetfairExchangeScraper().get_match_odds(home_team, away_team, league)

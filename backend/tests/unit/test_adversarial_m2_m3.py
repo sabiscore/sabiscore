@@ -8,31 +8,20 @@ Empirical verification of:
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 from fastapi import HTTPException
-from httpx import ASGITransport, AsyncClient
 
 from src.api.endpoints.auth import _check_rate_limit, _rate_limit_store
 from src.api.endpoints.performance import _compute_calibration_metrics
-from src.api.main import app
-from src.core.database import UserAccount
-from src.core.security import get_password_hash
 from src.db.models import ApiKey, UserFavorite, UserPreference, UserSavedMatch
 from src.models.evaluation.metrics import (
-    accuracy_and_per_class,
-    block_bootstrap_ci,
-    brier_score_decomposition,
     expected_brier_score,
-    expected_calibration_error,
-    log_loss_multiclass,
     ranked_probability_score,
 )
 from src.services.analytics_service import (
-    AnalyticsIngestionService,
     scrub_pii_and_secrets,
 )
 from src.services.auth_service import UserStateService
@@ -48,18 +37,23 @@ from src.services.developer_service import (
 # SECTION 1: ANONYMOUS SESSION MERGING & AUTH ADVERSARIAL CASES
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_adversarial_anonymous_merge_empty_and_noop() -> None:
     """Stress test: merging with None or empty IDs returns NOOP with 0 count."""
     db = AsyncMock()
 
     # None user_id
-    res1 = await UserStateService.merge_anonymous_state(db, user_id="", anonymous_session_id="anon-123")
+    res1 = await UserStateService.merge_anonymous_state(
+        db, user_id="", anonymous_session_id="anon-123"
+    )
     assert res1["status"] == "NOOP"
     assert res1["merged_favorites"] == 0
 
     # None anonymous_session_id
-    res2 = await UserStateService.merge_anonymous_state(db, user_id="user-123", anonymous_session_id="")
+    res2 = await UserStateService.merge_anonymous_state(
+        db, user_id="user-123", anonymous_session_id=""
+    )
     assert res2["status"] == "NOOP"
     assert res2["merged_favorites"] == 0
 
@@ -70,27 +64,53 @@ async def test_adversarial_anonymous_merge_deduplication_collision() -> None:
     db = AsyncMock()
 
     # User already has Arsenal and Chelsea
-    user_fav_1 = UserFavorite(id="uf1", user_id="user-1", entity_type="team", entity_id="arsenal")
-    user_fav_2 = UserFavorite(id="uf2", user_id="user-1", entity_type="team", entity_id="chelsea")
+    user_fav_1 = UserFavorite(
+        id="uf1", user_id="user-1", entity_type="team", entity_id="arsenal"
+    )
+    user_fav_2 = UserFavorite(
+        id="uf2", user_id="user-1", entity_type="team", entity_id="chelsea"
+    )
 
     # Anonymous visitor has Arsenal (duplicate), Chelsea (duplicate), and Liverpool (new)
-    anon_fav_1 = UserFavorite(id="af1", anonymous_session_id="anon-x", entity_type="team", entity_id="arsenal")
-    anon_fav_2 = UserFavorite(id="af2", anonymous_session_id="anon-x", entity_type="team", entity_id="chelsea")
-    anon_fav_3 = UserFavorite(id="af3", anonymous_session_id="anon-x", entity_type="team", entity_id="liverpool")
+    anon_fav_1 = UserFavorite(
+        id="af1", anonymous_session_id="anon-x", entity_type="team", entity_id="arsenal"
+    )
+    anon_fav_2 = UserFavorite(
+        id="af2", anonymous_session_id="anon-x", entity_type="team", entity_id="chelsea"
+    )
+    anon_fav_3 = UserFavorite(
+        id="af3",
+        anonymous_session_id="anon-x",
+        entity_type="team",
+        entity_id="liverpool",
+    )
 
     # User already has match 'm-100'
     user_match_1 = UserSavedMatch(id="um1", user_id="user-1", match_id="m-100")
     # Anon has match 'm-100' (duplicate) and 'm-200' (new)
-    anon_match_1 = UserSavedMatch(id="am1", anonymous_session_id="anon-x", match_id="m-100")
-    anon_match_2 = UserSavedMatch(id="am2", anonymous_session_id="anon-x", match_id="m-200")
+    anon_match_1 = UserSavedMatch(
+        id="am1", anonymous_session_id="anon-x", match_id="m-100"
+    )
+    anon_match_2 = UserSavedMatch(
+        id="am2", anonymous_session_id="anon-x", match_id="m-200"
+    )
 
     # Preferences: User has preference, Anon also has preference
-    user_pref = UserPreference(id="up1", user_id="user-1", odds_format="DECIMAL", timezone="Africa/Lagos")
-    anon_pref = UserPreference(id="ap1", anonymous_session_id="anon-x", odds_format="AMERICAN", timezone="Europe/London")
+    user_pref = UserPreference(
+        id="up1", user_id="user-1", odds_format="DECIMAL", timezone="Africa/Lagos"
+    )
+    anon_pref = UserPreference(
+        id="ap1",
+        anonymous_session_id="anon-x",
+        odds_format="AMERICAN",
+        timezone="Europe/London",
+    )
 
     call_returns = [
         # 1. anon favorites
-        MagicMock(scalars=lambda: MagicMock(all=lambda: [anon_fav_1, anon_fav_2, anon_fav_3])),
+        MagicMock(
+            scalars=lambda: MagicMock(all=lambda: [anon_fav_1, anon_fav_2, anon_fav_3])
+        ),
         # 2. user favorites
         MagicMock(scalars=lambda: MagicMock(all=lambda: [user_fav_1, user_fav_2])),
         # 3. anon saved matches
@@ -150,6 +170,7 @@ async def test_adversarial_auth_rate_limit_boundary() -> None:
 # ==============================================================================
 # SECTION 2: DEVELOPER PLATFORM RATE LIMITER & QUOTA BOUNDARY STRESS
 # ==============================================================================
+
 
 @pytest.mark.asyncio
 async def test_adversarial_developer_rate_limit_and_daily_quota_boundaries() -> None:
@@ -254,9 +275,10 @@ async def test_adversarial_developer_key_revoked_and_expired() -> None:
 # SECTION 3: ANALYTICS PII & CREDENTIAL SCRUBBING DEEP STRESS
 # ==============================================================================
 
+
 def test_adversarial_analytics_deeply_nested_pii_scrubbing() -> None:
     """Stress test: deeply nested (15+ levels) payloads with mixed cases, tokens, bearer headers, and complex emails."""
-    
+
     deep_payload = {
         "level1": {
             "Level2": {
@@ -303,16 +325,20 @@ def test_adversarial_analytics_deeply_nested_pii_scrubbing() -> None:
             [
                 [
                     {"refresh_token": "rt_secret_token"},
-                    "Contact help@test.org or security-dept@gov.ac.uk for inquiries"
+                    "Contact help@test.org or security-dept@gov.ac.uk for inquiries",
                 ]
             ]
-        ]
+        ],
     }
 
     scrubbed = scrub_pii_and_secrets(deep_payload)
 
     # Traverse to level 14
-    leaf = scrubbed["level1"]["Level2"]["level3_list"][0]["LEVEL4"]["level5"]["level6"][0]["level7"]["level8"]["level9"]["level10"][0]["level11"]["level12"]["level13"]["level14"]
+    leaf = scrubbed["level1"]["Level2"]["level3_list"][0]["LEVEL4"]["level5"]["level6"][
+        0
+    ]["level7"]["level8"]["level9"]["level10"][0]["level11"]["level12"]["level13"][
+        "level14"
+    ]
 
     assert leaf["USER_PASSWORD"] == "[REDACTED_SECRET]"
     assert leaf["API_KEY"] == "[REDACTED_SECRET]"
@@ -337,18 +363,26 @@ def test_adversarial_analytics_deeply_nested_pii_scrubbing() -> None:
 # SECTION 4: CALIBRATION & RELIABILITY DEGENERATE INPUT STRESS
 # ==============================================================================
 
+
 def test_adversarial_calibration_empty_and_single_sample() -> None:
     """Stress test: empty records return METRICS_UNAVAILABLE without zero division."""
-    res_empty = _compute_calibration_metrics([], n_bins=10, league="EPL", model_version="v5")
+    res_empty = _compute_calibration_metrics(
+        [], n_bins=10, league="EPL", model_version="v5"
+    )
     assert res_empty["status"] == "METRICS_UNAVAILABLE"
     assert res_empty["sample_size"] == 0
 
     # Single sample (n=1)
     single_record = [{"outcome": 0, "probs": [0.7, 0.2, 0.1], "date": "2026-08-01"}]
-    res_single = _compute_calibration_metrics(single_record, n_bins=5, league="EPL", model_version="v5")
+    res_single = _compute_calibration_metrics(
+        single_record, n_bins=5, league="EPL", model_version="v5"
+    )
     assert res_single["status"] == "OK"
     assert res_single["sample_size"] == 1
-    assert res_single["confidence_intervals"]["rps"]["note"] == "insufficient_samples_for_block_bootstrap"
+    assert (
+        res_single["confidence_intervals"]["rps"]["note"]
+        == "insufficient_samples_for_block_bootstrap"
+    )
 
 
 def test_adversarial_calibration_deterministic_perfect_and_inverted() -> None:
@@ -388,7 +422,13 @@ def test_adversarial_calibration_uniform_distribution() -> None:
     """Stress test: uniform probabilities [1/3, 1/3, 1/3] across all samples."""
     records_uniform = []
     for i in range(30):
-        records_uniform.append({"outcome": i % 3, "probs": [1.0/3.0, 1.0/3.0, 1.0/3.0], "date": "2026-08-01"})
+        records_uniform.append(
+            {
+                "outcome": i % 3,
+                "probs": [1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
+                "date": "2026-08-01",
+            }
+        )
 
     metrics_uniform = _compute_calibration_metrics(records_uniform, n_bins=10)
     assert metrics_uniform["status"] == "OK"
@@ -415,8 +455,8 @@ def test_adversarial_expected_brier_score_validation() -> None:
         expected_brier_score([float("nan"), 0.5, 0.5])
 
     # Valid uniform: 1 - sum(1/9 * 3) = 1 - 1/3 = 2/3 = 0.6666...
-    ebs = expected_brier_score([1.0/3.0, 1.0/3.0, 1.0/3.0])
-    assert abs(ebs - 2.0/3.0) < 1e-4
+    ebs = expected_brier_score([1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0])
+    assert abs(ebs - 2.0 / 3.0) < 1e-4
 
     # Valid point mass: 1 - 1.0 = 0.0
     assert expected_brier_score([1.0, 0.0, 0.0]) == 0.0

@@ -24,15 +24,26 @@ def upgrade() -> None:
         sa.Column("provider", sa.String(), nullable=False),
         sa.Column("provider_team_id", sa.String(), nullable=False),
         sa.Column("provider_team_name", sa.String(), nullable=False),
-        sa.Column("canonical_team_id", sa.String(), sa.ForeignKey("canonical_teams.id"), nullable=True),
+        sa.Column(
+            "canonical_team_id",
+            sa.String(),
+            sa.ForeignKey("canonical_teams.id"),
+            nullable=True,
+        ),
         sa.Column("competition", sa.String(), nullable=False),
         sa.Column("reconciliation_status", sa.String(), nullable=False),
         sa.Column("reconciliation_confidence", sa.Float(), nullable=True),
         sa.Column("evidence", sa.JSON(), nullable=True),
         sa.Column("checked_at", sa.DateTime(), nullable=False),
     )
-    op.create_index("ix_provider_team_provider_id", "provider_team_mappings", ["provider", "provider_team_id"])
-    op.create_index("ix_provider_team_canonical", "provider_team_mappings", ["canonical_team_id"])
+    op.create_index(
+        "ix_provider_team_provider_id",
+        "provider_team_mappings",
+        ["provider", "provider_team_id"],
+    )
+    op.create_index(
+        "ix_provider_team_canonical", "provider_team_mappings", ["canonical_team_id"]
+    )
 
 
 def downgrade() -> None:

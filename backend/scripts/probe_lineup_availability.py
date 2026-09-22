@@ -48,8 +48,13 @@ OUT = _BACKEND.parent / "reports" / "research" / "e2-lineup-availability-probe.j
 
 # Season fixture counts for the five scoreable leagues: 20-team leagues play
 # 380, 18-team leagues 306. Used only for cost arithmetic, not fabricated data.
-FIXTURES_PER_SEASON = {"EPL": 380, "LA_LIGA": 380, "SERIE_A": 380,
-                       "BUNDESLIGA": 306, "LIGUE_1": 306}
+FIXTURES_PER_SEASON = {
+    "EPL": 380,
+    "LA_LIGA": 380,
+    "SERIE_A": 380,
+    "BUNDESLIGA": 306,
+    "LIGUE_1": 306,
+}
 FREE_TIER_DAILY_QUOTA = 100
 
 
@@ -96,7 +101,9 @@ async def main() -> int:
             "sample_record": records[0] if records else None,
             "quota": result.quota.model_dump(mode="json") if result.quota else None,
         }
-        print(f"   -> {result.status} | {len(records)} records | {result.error_code or 'no error'}")
+        print(
+            f"   -> {result.status} | {len(records)} records | {result.error_code or 'no error'}"
+        )
 
     # ---- feasibility arithmetic (derived from the endpoint shape, not guessed)
     per_season = sum(FIXTURES_PER_SEASON.values())
@@ -115,8 +122,10 @@ async def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(findings, indent=2, default=str) + "\n", encoding="utf-8")
     print(f"\nrequests spent: {findings['requests_spent']}")
-    print(f"cost for one season x 5 leagues: {per_season} requests = "
-          f"{findings['acquisition_cost']['days_of_full_quota_per_season']} days of full free-tier quota")
+    print(
+        f"cost for one season x 5 leagues: {per_season} requests = "
+        f"{findings['acquisition_cost']['days_of_full_quota_per_season']} days of full free-tier quota"
+    )
     print(f"wrote {OUT}")
     return 0
 

@@ -6,6 +6,7 @@ TypeError on every scored record, silently swallowed by a bare except, so the
 function always returned {"skipped": True, "reason": "no_valid_folds"} no
 matter how much data was supplied. These tests pin the fixed call convention.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,12 +20,17 @@ os.environ["REDIS_ENABLED"] = "false"
 import numpy as np
 import pytest
 
-from src.models.evaluation.metrics import brier_score_decomposition, ranked_probability_score
+from src.models.evaluation.metrics import (
+    brier_score_decomposition,
+    ranked_probability_score,
+)
 from src.models import model_registry
 from src.models.model_registry import ModelRegistry
 
 
-def test_registry_does_not_import_mlflow_without_tracking_uri(monkeypatch, tmp_path) -> None:
+def test_registry_does_not_import_mlflow_without_tracking_uri(
+    monkeypatch, tmp_path
+) -> None:
     def fail_if_called():
         raise AssertionError("MLflow must remain off the API path when unconfigured")
 
@@ -35,7 +41,9 @@ def test_registry_does_not_import_mlflow_without_tracking_uri(monkeypatch, tmp_p
     assert registry.mlflow_enabled is False
 
 
-def test_registry_enables_mlflow_without_logging_secret_uri(monkeypatch, caplog, tmp_path) -> None:
+def test_registry_enables_mlflow_without_logging_secret_uri(
+    monkeypatch, caplog, tmp_path
+) -> None:
     configured: list[tuple[str, str]] = []
     fake_mlflow = SimpleNamespace(
         set_tracking_uri=lambda uri: configured.append(("uri", uri)),
@@ -137,7 +145,9 @@ def test_walk_forward_validate_produces_folds_for_real_data(tmp_path) -> None:
         assert 0.0 <= fold["rps_mean"] <= 1.0
 
 
-def test_walk_forward_validate_skips_invalid_records_without_changing_shape(tmp_path) -> None:
+def test_walk_forward_validate_skips_invalid_records_without_changing_shape(
+    tmp_path,
+) -> None:
     records = _synthetic_records(20)
     records[4]["outcome"] = 3
     records[7]["outcome"] = "invalid"
@@ -177,10 +187,16 @@ def test_walk_forward_validate_skips_invalid_records_without_changing_shape(tmp_
     assert result["ece"].get("skipped") is not True
     assert "mean" in result["ece"]
     assert result["rps_ci"].get("skipped") is not True
-    assert result["rps_ci"]["ci_lower"] <= result["rps_ci"]["point_estimate"] <= result["rps_ci"]["ci_upper"]
+    assert (
+        result["rps_ci"]["ci_lower"]
+        <= result["rps_ci"]["point_estimate"]
+        <= result["rps_ci"]["ci_upper"]
+    )
 
 
-def test_walk_forward_validate_skips_brier_decomposition_below_pooled_floor(tmp_path) -> None:
+def test_walk_forward_validate_skips_brier_decomposition_below_pooled_floor(
+    tmp_path,
+) -> None:
     # n_splits=2 -> min_records=4; exactly at the RPS floor but below the
     # decomposition's own 10-pooled-record minimum, so RPS/accuracy still run
     # while brier_decomposition honestly reports its own skip reason.
@@ -197,7 +213,9 @@ def test_walk_forward_validate_skips_brier_decomposition_below_pooled_floor(tmp_
     assert "brier_overall" in result
 
 
-def test_walk_forward_validate_computes_ece_and_rps_bootstrap_ci_above_the_floor(tmp_path) -> None:
+def test_walk_forward_validate_computes_ece_and_rps_bootstrap_ci_above_the_floor(
+    tmp_path,
+) -> None:
     """Directive v7.3 P6: ECE and a block-bootstrap RPS CI, wired alongside
     the existing Brier decomposition — same pooled sample, same floor.
 
@@ -224,12 +242,16 @@ def test_walk_forward_validate_n_bootstrap_is_configurable(tmp_path) -> None:
     """The default is 10,000 (directive v7.3 P6's explicit request); callers
     who need fewer replicates for speed can still ask for them."""
     registry = ModelRegistry(registry_path=str(tmp_path))
-    result = registry.walk_forward_validate(_synthetic_records(60), n_splits=5, n_bootstrap=500)
+    result = registry.walk_forward_validate(
+        _synthetic_records(60), n_splits=5, n_bootstrap=500
+    )
 
     assert result["rps_ci"]["n_bootstrap"] == 500
 
 
-def test_walk_forward_validate_reports_no_valid_folds_for_invalid_records(tmp_path) -> None:
+def test_walk_forward_validate_reports_no_valid_folds_for_invalid_records(
+    tmp_path,
+) -> None:
     records = _synthetic_records(20)
     for record in records:
         record["probs"] = [0.6, 0.6, -0.2]

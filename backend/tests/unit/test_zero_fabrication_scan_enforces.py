@@ -23,6 +23,7 @@ Measured under `bash --noprofile --norc -eo pipefail` (exactly what
 That was caught only by executing the script, not by reading it. Hence the
 behavioural tests below rather than a pattern check alone.
 """
+
 from __future__ import annotations
 
 import re
@@ -124,13 +125,15 @@ def test_forbid_fails_on_a_match_and_on_an_unrunnable_check(tmp_path: Path) -> N
     (tmp_path / "dirty.py").write_text("FORBIDDEN_TOKEN = 1\n", encoding="utf-8")
 
     def run(body: str) -> subprocess.CompletedProcess:
-        script = f"violations=0\n{forbid}\n{body}\n" 'exit "$violations"\n'
+        script = f'violations=0\n{forbid}\n{body}\nexit "$violations"\n'
         return subprocess.run(
             [*GHA_BASH, "-c", script], cwd=tmp_path, capture_output=True, text=True
         )
 
     clean = run('forbid "nothing here" "ABSENT_TOKEN" clean.py')
-    assert clean.returncode == 0, f"a clean check must pass:\n{clean.stdout}{clean.stderr}"
+    assert clean.returncode == 0, (
+        f"a clean check must pass:\n{clean.stdout}{clean.stderr}"
+    )
 
     matched = run('forbid "seeded" "FORBIDDEN_TOKEN" dirty.py')
     assert matched.returncode != 0, "a matching check must fail the step"

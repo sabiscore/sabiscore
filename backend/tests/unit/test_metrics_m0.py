@@ -1,6 +1,7 @@
 """Unit tests for M0 metric additions: log_loss_multiclass, accuracy_and_per_class,
 block_bootstrap_ci — all added to metrics.py as part of the v5 directive M0 milestone.
 """
+
 from __future__ import annotations
 
 import math
@@ -100,10 +101,14 @@ class TestBlockBootstrapCI:
         y_proba = rng.dirichlet([1, 1, 1], size=n)
 
         def rps_mean(yt, yp):
-            return float(np.mean([
-                ranked_probability_score(int(yt[i]), yp[i].tolist())
-                for i in range(len(yt))
-            ]))
+            return float(
+                np.mean(
+                    [
+                        ranked_probability_score(int(yt[i]), yp[i].tolist())
+                        for i in range(len(yt))
+                    ]
+                )
+            )
 
         result = block_bootstrap_ci(y_true, y_proba, rps_mean, n_bootstrap=200)
         assert result["ci_lower"] <= result["point_estimate"] <= result["ci_upper"]
@@ -128,12 +133,14 @@ class TestBrierConvention:
     def test_brier_mean_aggregation_convention(self):
         """brier_score_decomposition uses MEAN, not sum — contract v1.0.0."""
         y_true = np.array([0, 1, 2, 0])
-        y_proba = np.array([
-            [0.8, 0.1, 0.1],
-            [0.1, 0.8, 0.1],
-            [0.1, 0.1, 0.8],
-            [0.5, 0.3, 0.2],
-        ])
+        y_proba = np.array(
+            [
+                [0.8, 0.1, 0.1],
+                [0.1, 0.8, 0.1],
+                [0.1, 0.1, 0.8],
+                [0.5, 0.3, 0.2],
+            ]
+        )
         result = brier_score_decomposition(y_true, y_proba)
         # Mean brier_score must be < 1.0 (it is mean, not sum of all samples)
         assert result["mean"]["brier_score"] < 1.0
@@ -157,7 +164,10 @@ class TestRankedProbabilityScoreRowwise:
 
         vectorised = ranked_probability_score_rowwise(y_true, y_proba)
         scalar = np.array(
-            [ranked_probability_score(int(y_true[i]), y_proba[i].tolist()) for i in range(200)]
+            [
+                ranked_probability_score(int(y_true[i]), y_proba[i].tolist())
+                for i in range(200)
+            ]
         )
         np.testing.assert_allclose(vectorised, scalar, atol=1e-12)
 
@@ -171,4 +181,6 @@ class TestRankedProbabilityScoreRowwise:
     def test_worst_prediction_is_one(self):
         y_true = np.array([2])
         y_proba = np.array([[1.0, 0.0, 0.0]])
-        np.testing.assert_allclose(ranked_probability_score_rowwise(y_true, y_proba), [1.0])
+        np.testing.assert_allclose(
+            ranked_probability_score_rowwise(y_true, y_proba), [1.0]
+        )

@@ -37,6 +37,7 @@ from src.services.market_intel import (
 # 1. ADVANCED METRICS ENGINE: BOUNDARY & NUMERICAL STRESS TESTS
 # ===========================================================================
 
+
 class TestAdvancedMetricsStress:
     """Stress tests for calculate_ppda, evaluate_shot_stopping, and evaluate_xt."""
 
@@ -142,6 +143,7 @@ class TestAdvancedMetricsStress:
 # 2. MARKET INTELLIGENCE: INCOMPLETE & PATHOLOGICAL MARKET COMBINATIONS
 # ===========================================================================
 
+
 class TestMarketIncompletePermutations:
     """Stress testing all subsets and incomplete permutations of 1X2 markets."""
 
@@ -193,10 +195,13 @@ class TestMarketIncompletePermutations:
 # 3. LARGE-SCALE RANDOMIZED PROPERTY FUZZING (UNCERTIFIED MODEL STATE)
 # ===========================================================================
 
+
 class TestUncertifiedModelRandomizedFuzzing:
     """Invariant: Uncertified models must NEVER permit staking under any randomized inputs."""
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=False)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=False
+    )
     def test_fuzz_1000_random_scenarios_uncertified_invariance(self, mock_cert):
         """Run 1,000 randomized market and probability scenarios; assert 100% fail-closed staking."""
         rng = random.Random(1337)
@@ -229,7 +234,10 @@ class TestUncertifiedModelRandomizedFuzzing:
                 f"Iteration {i} violated invariant: stake_permitted=True when uncertified! "
                 f"odds={odds}, model_probs={model_probs}"
             )
-            assert summary.decision in (MarketDecisionState.RESEARCH_ONLY, MarketDecisionState.PARTIAL)
+            assert summary.decision in (
+                MarketDecisionState.RESEARCH_ONLY,
+                MarketDecisionState.PARTIAL,
+            )
             assert summary.provenance.certification_state == "UNVERIFIED"
 
 
@@ -237,10 +245,13 @@ class TestUncertifiedModelRandomizedFuzzing:
 # 4. CERTIFIED MODEL THRESHOLD BOUNDARY & EV CRASH TESTS
 # ===========================================================================
 
+
 class TestCertifiedModelThresholds:
     """Exact boundary condition tests for edge >= 0.042 and positive EV requirements."""
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_edge_just_below_threshold_fails_to_hold(self, mock_cert):
         """Edge of 0.0419 (< 0.042) must result in HOLD with stake_permitted=False."""
         # 1X2 odds with fair home prob = 0.50
@@ -256,7 +267,9 @@ class TestCertifiedModelThresholds:
         assert summary.stake_permitted is False
         assert summary.decision == MarketDecisionState.HOLD
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_edge_at_exact_threshold_with_positive_ev_permits_stake(self, mock_cert):
         """Edge >= 0.042 with EV > 0 permits ACTIONABLE staking."""
         # Odds: home = 2.0, draw = 4.0, away = 4.0 (fair home = 0.50)
@@ -271,7 +284,9 @@ class TestCertifiedModelThresholds:
         assert summary.stake_permitted is True
         assert summary.decision == MarketDecisionState.ACTIONABLE
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_positive_edge_with_zero_ev_blocks_staking(self, mock_cert):
         """If EV == 0.0, staking MUST NOT be permitted (requires best_ev > 0)."""
         # Odds = 2.0, model prob = 0.50 -> EV = 0.50 * 2.0 - 1 = 0.0
@@ -291,6 +306,7 @@ class TestCertifiedModelThresholds:
 # 5. ERROR RESILIENCE & CORRUPTION INJECTION
 # ===========================================================================
 
+
 class TestErrorResilienceAndExceptionSafety:
     """Ensure no unhandled exceptions leak to callers when submodules fail."""
 
@@ -307,12 +323,25 @@ class TestErrorResilienceAndExceptionSafety:
     )
     def test_active_generation_exceptions_handled_gracefully(self, exception_type):
         """Any exception in active_generation module falls back to safe UNVERIFIED state."""
-        with patch("src.services.market_intel.active_generation_is_certified", side_effect=exception_type):
-            with patch("src.services.market_intel.active_model_version", side_effect=exception_type):
-                with patch("src.services.market_intel.active_feature_schema_version", side_effect=exception_type):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            side_effect=exception_type,
+        ):
+            with patch(
+                "src.services.market_intel.active_model_version",
+                side_effect=exception_type,
+            ):
+                with patch(
+                    "src.services.market_intel.active_feature_schema_version",
+                    side_effect=exception_type,
+                ):
                     summary = build_market_intelligence(
                         odds={"home_win": 2.0, "draw": 3.4, "away_win": 3.8},
-                        model_probabilities={"home_win": 0.6, "draw": 0.2, "away_win": 0.2},
+                        model_probabilities={
+                            "home_win": 0.6,
+                            "draw": 0.2,
+                            "away_win": 0.2,
+                        },
                     )
                     assert summary.provenance.certification_state == "UNVERIFIED"
                     assert summary.provenance.model_version == "v5_unverified"
@@ -324,6 +353,7 @@ class TestErrorResilienceAndExceptionSafety:
 # ===========================================================================
 # 6. EXTREME FLOATS & SERIALIZATION INTEGRITY
 # ===========================================================================
+
 
 class TestSerializationAndFloatAnomalies:
     """Stress tests on scientific notation, tiny probabilities, and roundtrip JSON."""

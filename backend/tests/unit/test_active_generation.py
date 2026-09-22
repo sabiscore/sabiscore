@@ -127,7 +127,9 @@ def test_rejects_schema_relabelled_over_narrower_artifacts(tmp_path: Path) -> No
         b'{"feature_count": null}',
     ],
 )
-def test_rejects_metadata_without_a_usable_feature_count(tmp_path: Path, body: bytes) -> None:
+def test_rejects_metadata_without_a_usable_feature_count(
+    tmp_path: Path, body: bytes
+) -> None:
     _write_generation(tmp_path, metadata_body=body)
 
     with pytest.raises(ActiveGenerationError, match="feature_count"):
@@ -184,7 +186,11 @@ def test_freshness_check_rejects_a_stale_contract(tmp_path: Path) -> None:
 
     _write_generation(
         tmp_path,
-        feature_contract={"schema": "sabiscore_feature_contract_v1", "feature_count": 0, "features": []},
+        feature_contract={
+            "schema": "sabiscore_feature_contract_v1",
+            "feature_count": 0,
+            "features": [],
+        },
     )
 
     with pytest.raises(ActiveGenerationError, match="feature_contract.json is stale"):
@@ -197,7 +203,9 @@ def test_freshness_check_accepts_a_freshly_generated_contract(tmp_path: Path) ->
     verify_feature_contract_freshness(tmp_path)  # must not raise
 
 
-def test_a_missing_contract_does_not_block_loading_the_generation(tmp_path: Path) -> None:
+def test_a_missing_contract_does_not_block_loading_the_generation(
+    tmp_path: Path,
+) -> None:
     """The startup/staking path must stay independent of the derived doc.
 
     This is the guard against re-coupling them: a generation with no
@@ -275,9 +283,12 @@ def test_override_without_a_block_is_rejected(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["authorizing_identity", "rationale", "authorized_at", "acknowledged_failures"]
+    "field",
+    ["authorizing_identity", "rationale", "authorized_at", "acknowledged_failures"],
 )
-def test_override_missing_any_required_field_is_rejected(tmp_path: Path, field: str) -> None:
+def test_override_missing_any_required_field_is_rejected(
+    tmp_path: Path, field: str
+) -> None:
     """An override that does not say who, why, when, or what-was-overridden is
     indistinguishable from one taken in ignorance."""
     override = _valid_override()

@@ -12,6 +12,7 @@ Contracts verified:
   4. The endpoints fail closed while the channel is unconfigured, and report the
      VAPID key as absent rather than fabricating one.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -106,12 +107,22 @@ async def test_re_registering_reactivates_a_deactivated_device(
     session: AsyncSession,
 ) -> None:
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/a", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/a",
+        p256dh="k",
+        auth="a",
     )
-    await NotificationService.unregister_push_device(session, endpoint="https://push.example/a")
+    await NotificationService.unregister_push_device(
+        session, endpoint="https://push.example/a"
+    )
 
     revived = await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/a", p256dh="k2", auth="a2"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/a",
+        p256dh="k2",
+        auth="a2",
     )
     assert revived.is_active is True
 
@@ -132,7 +143,11 @@ async def test_anonymous_registration_never_carries_both_identities(
 
 async def test_unregister_deactivates_without_deleting(session: AsyncSession) -> None:
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/a", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/a",
+        p256dh="k",
+        auth="a",
     )
 
     assert await NotificationService.unregister_push_device(
@@ -143,26 +158,48 @@ async def test_unregister_deactivates_without_deleting(session: AsyncSession) ->
     assert rows[0].is_active is False
 
 
-async def test_unregister_unknown_endpoint_reports_not_found(session: AsyncSession) -> None:
+async def test_unregister_unknown_endpoint_reports_not_found(
+    session: AsyncSession,
+) -> None:
     assert (
-        await NotificationService.unregister_push_device(session, endpoint="https://nope")
+        await NotificationService.unregister_push_device(
+            session, endpoint="https://nope"
+        )
         is False
     )
 
 
 async def test_active_devices_are_scoped_to_their_owner(session: AsyncSession) -> None:
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/mine", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/mine",
+        p256dh="k",
+        auth="a",
     )
     await NotificationService.register_push_device(
-        session, user_id="user-2", endpoint="https://push.example/theirs", p256dh="k", auth="a"
+        session,
+        user_id="user-2",
+        endpoint="https://push.example/theirs",
+        p256dh="k",
+        auth="a",
     )
     await NotificationService.register_push_device(
-        session, anonymous_session_id="anon-9", endpoint="https://push.example/anon", p256dh="k", auth="a"
+        session,
+        anonymous_session_id="anon-9",
+        endpoint="https://push.example/anon",
+        p256dh="k",
+        auth="a",
     )
-    await NotificationService.unregister_push_device(session, endpoint="https://push.example/mine")
+    await NotificationService.unregister_push_device(
+        session, endpoint="https://push.example/mine"
+    )
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/live", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/live",
+        p256dh="k",
+        auth="a",
     )
 
     mine = await NotificationService.get_active_push_devices(session, user_id="user-1")
@@ -174,20 +211,34 @@ async def test_active_devices_are_scoped_to_their_owner(session: AsyncSession) -
     assert [d.endpoint for d in anon] == ["https://push.example/anon"]
 
 
-async def test_active_devices_without_an_owner_returns_nothing(session: AsyncSession) -> None:
+async def test_active_devices_without_an_owner_returns_nothing(
+    session: AsyncSession,
+) -> None:
     """The safety property: no identifier means no query, not every row."""
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/a", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/a",
+        p256dh="k",
+        auth="a",
     )
     assert await NotificationService.get_active_push_devices(session) == []
 
 
 async def test_mark_expired_deactivates_a_single_device(session: AsyncSession) -> None:
     device = await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/gone", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/gone",
+        p256dh="k",
+        auth="a",
     )
     keep = await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/keep", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/keep",
+        p256dh="k",
+        auth="a",
     )
 
     await NotificationService.mark_push_device_expired(session, device_id=device.id)
@@ -207,7 +258,9 @@ async def _client(session: AsyncSession):
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-async def test_public_key_endpoint_reports_unconfigured(session: AsyncSession, monkeypatch) -> None:
+async def test_public_key_endpoint_reports_unconfigured(
+    session: AsyncSession, monkeypatch
+) -> None:
     monkeypatch.setattr(settings, "enable_web_push_notifications", False)
     try:
         async with await _client(session) as client:
@@ -226,7 +279,10 @@ async def test_public_key_endpoint_serves_the_key_when_configured(
     try:
         async with await _client(session) as client:
             response = await client.get("/api/v1/notifications/push/public-key")
-        assert response.json() == {"configured": True, "public_key": "BPublicKeyForTests"}
+        assert response.json() == {
+            "configured": True,
+            "public_key": "BPublicKeyForTests",
+        }
     finally:
         app.dependency_overrides.pop(get_async_session, None)
 
@@ -296,7 +352,11 @@ async def test_unregister_endpoint_deactivates_then_reports_not_found(
     session: AsyncSession, configured_vapid
 ) -> None:
     await NotificationService.register_push_device(
-        session, user_id="user-1", endpoint="https://push.example/x", p256dh="k", auth="a"
+        session,
+        user_id="user-1",
+        endpoint="https://push.example/x",
+        p256dh="k",
+        auth="a",
     )
     try:
         async with await _client(session) as client:

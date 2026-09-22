@@ -83,14 +83,17 @@ def _utc_aware_datetime(value: object) -> Optional[datetime]:
     if value is None:
         return None
     try:
-        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
+        parsed = (
+            value
+            if isinstance(value, datetime)
+            else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         )
     except (TypeError, ValueError):
         return None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
 
 router = APIRouter(prefix="/matches", tags=["intelligence"])
 
@@ -177,7 +180,9 @@ def _empty_ensemble(league: str) -> EnsemblePrediction:
     )
 
 
-def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[EnsemblePrediction]:
+def _ensemble_from_prediction(
+    pred: Dict[str, Any], league: str
+) -> Optional[EnsemblePrediction]:
     probs = pred.get("predictions")
     if not isinstance(probs, dict):
         probs = pred
@@ -205,7 +210,10 @@ def _ensemble_from_prediction(pred: Dict[str, Any], league: str) -> Optional[Ens
             total,
         )
         return None
-    prediction = max({"home_win": h, "draw": d, "away_win": a}, key=lambda k: {"home_win": h, "draw": d, "away_win": a}[k])
+    prediction = max(
+        {"home_win": h, "draw": d, "away_win": a},
+        key=lambda k: {"home_win": h, "draw": d, "away_win": a}[k],
+    )
     return EnsemblePrediction(
         home_win_prob=h,
         draw_prob=d,
@@ -343,14 +351,26 @@ def _rl_from_ensemble(
         return RLRecommendationPayload(
             stake_fraction=0.0,
             abstain=True,
-            reward_components={"R_pnl": 0.0, "R_ic": 0.0, "R_cal": 0.0, "R_risk": 0.0, "R_abs": 0.05},
+            reward_components={
+                "R_pnl": 0.0,
+                "R_ic": 0.0,
+                "R_cal": 0.0,
+                "R_risk": 0.0,
+                "R_abs": 0.05,
+            },
             reason="Abstained: measured model uncertainty unavailable",
         )
     if odds is None:
         return RLRecommendationPayload(
             stake_fraction=0.0,
             abstain=True,
-            reward_components={"R_pnl": 0.0, "R_ic": 0.0, "R_cal": 0.0, "R_risk": 0.0, "R_abs": 0.05},
+            reward_components={
+                "R_pnl": 0.0,
+                "R_ic": 0.0,
+                "R_cal": 0.0,
+                "R_risk": 0.0,
+                "R_abs": 0.05,
+            },
             reason="Abstained: market odds unavailable",
         )
     agent = RLBettingAgent(max_kelly_cap=effective_kelly_cap)
@@ -360,9 +380,13 @@ def _rl_from_ensemble(
         confidence=ensemble.confidence,
         epistemic_unc=uncertainty.epistemic_unc,
     )
-    public_stake = 0.0 if recommendation.abstain else min(
-        recommendation.stake_fraction * _QUARTER_KELLY,
-        effective_kelly_cap,
+    public_stake = (
+        0.0
+        if recommendation.abstain
+        else min(
+            recommendation.stake_fraction * _QUARTER_KELLY,
+            effective_kelly_cap,
+        )
     )
     return RLRecommendationPayload(
         stake_fraction=public_stake,
@@ -402,7 +426,11 @@ async def _fetch_market_odds(
     except Exception as exc:
         logger.warning(
             "Live odds lookup failed for %s vs %s (%s): %s: %s",
-            home_team, away_team, league, type(exc).__name__, redact_text(str(exc)),
+            home_team,
+            away_team,
+            league,
+            type(exc).__name__,
+            redact_text(str(exc)),
         )
         return None
 
@@ -456,7 +484,9 @@ def _odds_edge_from_features(
     overround = sum(raw_implied.values())
     if overround <= 0:
         return None
-    fair_market = {market: implied / overround for market, implied in raw_implied.items()}
+    fair_market = {
+        market: implied / overround for market, implied in raw_implied.items()
+    }
     model_probs = {
         "home_win": ensemble.home_win_prob,
         "draw": ensemble.draw_prob,
@@ -469,7 +499,11 @@ def _odds_edge_from_features(
         edge = model_prob - fair_market[market]
         expected_value = (model_prob * market_odds) - 1.0
         denom = market_odds - 1.0
-        kelly = max(0.0, expected_value / denom) if denom > 0 and expected_value > 0 else 0.0
+        kelly = (
+            max(0.0, expected_value / denom)
+            if denom > 0 and expected_value > 0
+            else 0.0
+        )
         candidate = (market, market_odds, model_prob, edge, kelly)
         if best is None or (edge > best[3] and expected_value > 0):
             best = candidate
@@ -575,7 +609,9 @@ def _build_actionability(
     )
     conv_delta = _closing_line_convergence_delta(ensemble, features_dict, data_gaps)
 
-    should_abstain = rl_rec.abstain or edge_score < settings.edge_quality_abstain_threshold
+    should_abstain = (
+        rl_rec.abstain or edge_score < settings.edge_quality_abstain_threshold
+    )
     if should_abstain:
         suggested_stake_pct = 0.0
     else:
@@ -605,12 +641,16 @@ def _build_actionability(
     if uncertainty is None:
         caveats.append("Certified ensemble-dispersion uncertainty unavailable")
     elif uncertainty.confidence_tier == "LOW_EVIDENCE":
-        caveats.append(f"Low model evidence (epistemic {uncertainty.epistemic_unc:.2f})")
+        caveats.append(
+            f"Low model evidence (epistemic {uncertainty.epistemic_unc:.2f})"
+        )
     # Exclude structural always-gap features from user-visible caveat count
     important_gaps = [g for g in data_gaps if g not in ("shot_quality_diff",)]
     if important_gaps:
         human = [g.replace("_", " ").title() for g in important_gaps[:3]]
-        suffix = f" and {len(important_gaps) - 3} more" if len(important_gaps) > 3 else ""
+        suffix = (
+            f" and {len(important_gaps) - 3} more" if len(important_gaps) > 3 else ""
+        )
         caveats.append(
             f"{len(important_gaps)} live data gap(s): {', '.join(human)}{suffix}"
         )
@@ -699,7 +739,10 @@ async def get_full_analysis(
         logger.warning(
             "Feature projection failed for match_id=%r league=%r: %s: %s — "
             "model inference skipped; all fields marked DATA_GAP",
-            match_id, league, type(exc).__name__, redact_text(exc),
+            match_id,
+            league,
+            type(exc).__name__,
+            redact_text(exc),
         )
         # The diagnostic vector is response scaffolding only. It is never sent
         # to a model after a projection failure.
@@ -712,7 +755,9 @@ async def get_full_analysis(
         critical_gaps.append("MODEL_GENERATION_UNCERTIFIED")
     advisory_gaps: List[str] = list(live.get("advisory_gaps", []))
     conflicts: List[str] = list(live.get("conflicts", []))
-    effective_kelly_cap, policy_gap, model_freshness_limit = _effective_kelly_cap(league)
+    effective_kelly_cap, policy_gap, model_freshness_limit = _effective_kelly_cap(
+        league
+    )
     if policy_gap:
         critical_gaps.append(policy_gap)
     fixture_verified = bool(live.get("fixture_identity_verified", False))
@@ -772,7 +817,9 @@ async def get_full_analysis(
             full_features = np.asarray(
                 live.get("features")
                 if live.get("features") is not None
-                else np.asarray(list(live.get("features_dict", {}).values()), dtype=np.float32),
+                else np.asarray(
+                    list(live.get("features_dict", {}).values()), dtype=np.float32
+                ),
                 dtype=np.float32,
             )
             pred_result = await prediction_engine.predict(
@@ -800,7 +847,10 @@ async def get_full_analysis(
         ensemble = _empty_ensemble(league)
         prediction_status = PredictionStatus.UNAVAILABLE
         prediction_source = PredictionSource.NONE
-    elif str(raw_pred.get("model_version", "")).casefold() == "fallback" or reduced_evidence_input:
+    elif (
+        str(raw_pred.get("model_version", "")).casefold() == "fallback"
+        or reduced_evidence_input
+    ):
         critical_gaps.append("MODEL_PREDICTION_REDUCED_EVIDENCE")
         prediction_status = PredictionStatus.REDUCED_EVIDENCE_BASELINE
         prediction_source = PredictionSource.DIAGNOSTIC_BASELINE
@@ -920,7 +970,9 @@ async def get_full_analysis(
     field_availability = {
         "fixture": fixture_verified,
         "prediction": prediction_status == PredictionStatus.AVAILABLE,
-        "market": bool(market_odds and {"home_win", "draw", "away_win"}.issubset(market_odds)),
+        "market": bool(
+            market_odds and {"home_win", "draw", "away_win"}.issubset(market_odds)
+        ),
         "uncertainty": uncertainty is not None,
         "elo": elo_ctx is not None,
     }
@@ -986,7 +1038,9 @@ async def get_full_analysis(
         # snapshot that settlement and CLV depend on. `compute_ensemble_uncertainty`
         # is fail-safe by construction (returns an `available=False` result rather
         # than raising), so a failure here is recorded honestly, not propagated.
-        research_uncertainty = (await compute_ensemble_uncertainty(league, features_dict)).as_dict()
+        research_uncertainty = (
+            await compute_ensemble_uncertainty(league, features_dict)
+        ).as_dict()
         input_hash = deterministic_input_hash(
             {
                 "match_id": match_id,
@@ -1042,9 +1096,7 @@ async def get_full_analysis(
                 require_scheduled_pre_kickoff=True,
             )
             await db.commit()
-            metrics_collector.increment(
-                f"analysis.prediction_log.{capture_outcome}"
-            )
+            metrics_collector.increment(f"analysis.prediction_log.{capture_outcome}")
         except Exception as exc:
             await db.rollback()
             metrics_collector.increment("analysis.prediction_log.error")

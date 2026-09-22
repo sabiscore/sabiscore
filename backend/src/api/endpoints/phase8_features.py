@@ -90,7 +90,9 @@ class FeatureValue(BaseModel):
     name: str
     value: float
     is_data_gap: bool = False
-    freshness_seconds: Optional[int] = None  # None = DATA_GAP; 0 = fresh; >0 = staleness in seconds
+    freshness_seconds: Optional[int] = (
+        None  # None = DATA_GAP; 0 = fresh; >0 = staleness in seconds
+    )
     source: Optional[str] = None
 
 
@@ -110,7 +112,9 @@ class Phase8FeaturesResponse(BaseModel):
     status: str = Field(description="'ok' or 'partial' when data gaps exist")
     data_gaps: List[str] = Field(default_factory=list)
     feature_groups: List[FeatureGroup]
-    feature_freshness_seconds: Dict[str, Optional[int]] = Field(default_factory=dict)  # None = DATA_GAP
+    feature_freshness_seconds: Dict[str, Optional[int]] = Field(
+        default_factory=dict
+    )  # None = DATA_GAP
     feature_source: Dict[str, str] = Field(default_factory=dict)
     total_phase8_features: int = len(PHASE8_FEATURES_18)
     available_features: int
@@ -123,6 +127,7 @@ class Phase8FeaturesResponse(BaseModel):
 
 def _is_phase8_enabled() -> bool:
     import os as _os
+
     raw = _os.environ.get("USE_PHASE8_FEATURES", "").lower()
     if raw in ("1", "true", "yes"):
         return True
@@ -144,7 +149,11 @@ def _build_feature_values(
     for feat in PHASE8_FEATURES_18:
         freshness = _freshness.get(feat, None)
         src = _sources.get(feat, None)
-        if feat in live_values and live_values[feat] is not None and feat not in data_gaps:
+        if (
+            feat in live_values
+            and live_values[feat] is not None
+            and feat not in data_gaps
+        ):
             result[feat] = FeatureValue(
                 name=feat,
                 value=float(live_values[feat]),
@@ -170,7 +179,8 @@ def _build_groups(fv_map: Dict[str, FeatureValue]) -> List[FeatureGroup]:
     for group_id, meta in _GROUP_META.items():
         feats = [fv_map[f] for f in meta["features"] if f in fv_map]
         live_freshness = [
-            f.freshness_seconds for f in feats
+            f.freshness_seconds
+            for f in feats
             if not f.is_data_gap and f.freshness_seconds is not None
         ]
         group_freshness = max(live_freshness) if live_freshness else 0
@@ -211,7 +221,9 @@ async def get_phase8_features(
     phase8_enabled = _is_phase8_enabled()
 
     if not phase8_enabled:
-        defaults = {f: DEFAULT_FEATURE_VALUES_86.get(f, 0.0) for f in PHASE8_FEATURES_18}
+        defaults = {
+            f: DEFAULT_FEATURE_VALUES_86.get(f, 0.0) for f in PHASE8_FEATURES_18
+        }
         data_gaps = list(PHASE8_FEATURES_18)
         fv_map = _build_feature_values(defaults, data_gaps)
         groups = _build_groups(fv_map)
@@ -246,11 +258,13 @@ async def get_phase8_features(
 
         if sep is not None:
             parts = match_id.split(sep, 1)
-            proj_result = await feature_projector.build_live_feature_vector_from_matchup(
-                home_team=parts[0].strip(),
-                away_team=parts[1].strip() if len(parts) > 1 else "Unknown",
-                league=league,
-                db=db,
+            proj_result = (
+                await feature_projector.build_live_feature_vector_from_matchup(
+                    home_team=parts[0].strip(),
+                    away_team=parts[1].strip() if len(parts) > 1 else "Unknown",
+                    league=league,
+                    db=db,
+                )
             )
         else:
             proj_result = await feature_projector.build_live_feature_vector(
@@ -260,7 +274,9 @@ async def get_phase8_features(
             )
 
         features_dict: Dict[str, Any] = proj_result.get("features_dict", {})
-        live_values = {f: features_dict[f] for f in PHASE8_FEATURES_18 if f in features_dict}
+        live_values = {
+            f: features_dict[f] for f in PHASE8_FEATURES_18 if f in features_dict
+        }
         data_gaps = list(proj_result.get("data_gaps", []))
         per_feature_freshness = {
             k: v
@@ -275,15 +291,23 @@ async def get_phase8_features(
     except Exception as exc:
         logger.warning(
             "phase8 feature projection failed for %s (%s): %s — using defaults",
-            match_id, type(exc).__name__, exc,
+            match_id,
+            type(exc).__name__,
+            exc,
         )
 
-    fv_map = _build_feature_values(live_values, data_gaps, per_feature_freshness, per_feature_source)
+    fv_map = _build_feature_values(
+        live_values, data_gaps, per_feature_freshness, per_feature_source
+    )
     groups = _build_groups(fv_map)
     available = sum(1 for fv in fv_map.values() if not fv.is_data_gap)
     deduped_gaps = sorted(set(data_gaps))
-    phase8_freshness_out = {k: v for k, v in per_feature_freshness.items() if k in PHASE8_FEATURES_18}
-    phase8_source_out = {k: v for k, v in per_feature_source.items() if k in PHASE8_FEATURES_18}
+    phase8_freshness_out = {
+        k: v for k, v in per_feature_freshness.items() if k in PHASE8_FEATURES_18
+    }
+    phase8_source_out = {
+        k: v for k, v in per_feature_source.items() if k in PHASE8_FEATURES_18
+    }
 
     response = Phase8FeaturesResponse(
         match_id=match_id,

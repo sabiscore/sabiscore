@@ -8,6 +8,7 @@
    model_registry.walk_forward_validate() expects.
 3. The production full-analysis path captures and deduplicates that log.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -37,7 +38,9 @@ async def session():
     await engine.dispose()
 
 
-def _prediction_response(match_id: str, created_at: datetime, **overrides) -> PredictionResponse:
+def _prediction_response(
+    match_id: str, created_at: datetime, **overrides
+) -> PredictionResponse:
     payload = dict(
         match_id=match_id,
         home_team="Home FC",
@@ -58,7 +61,9 @@ def _prediction_response(match_id: str, created_at: datetime, **overrides) -> Pr
 # ---------------------------------------------------------------------------
 
 
-async def test_save_prediction_writes_match_prediction_log(session: AsyncSession) -> None:
+async def test_save_prediction_writes_match_prediction_log(
+    session: AsyncSession,
+) -> None:
     created_at = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
     result = _prediction_response("match-1", created_at)
 
@@ -105,9 +110,13 @@ async def _seed_settled_match(
     await session.commit()
 
 
-async def test_get_settled_predictions_joins_latest_log_to_result(session: AsyncSession) -> None:
+async def test_get_settled_predictions_joins_latest_log_to_result(
+    session: AsyncSession,
+) -> None:
     match_date = datetime(2026, 8, 1, 15, 0)
-    await _seed_settled_match(session, "match-1", home_score=2, away_score=1, match_date=match_date)
+    await _seed_settled_match(
+        session, "match-1", home_score=2, away_score=1, match_date=match_date
+    )
 
     # Two prediction logs for the same match — the join must pick the latest.
     session.add(
@@ -223,15 +232,15 @@ async def test_get_settled_predictions_breaks_equal_timestamps_by_latest_id(
     )
     await session.commit()
 
-    records = await get_settled_predictions(
-        session, model_version="v5_phase7"
-    )
+    records = await get_settled_predictions(session, model_version="v5_phase7")
 
     assert len(records) == 1
     assert records[0]["probs"] == pytest.approx([0.60, 0.25, 0.15])
 
 
-async def test_get_settled_predictions_excludes_unsettled_matches(session: AsyncSession) -> None:
+async def test_get_settled_predictions_excludes_unsettled_matches(
+    session: AsyncSession,
+) -> None:
     match_date = datetime(2026, 8, 10, 15, 0)
     session.add(
         Match(
@@ -275,7 +284,11 @@ async def test_get_settled_predictions_outcome_encoding(session: AsyncSession) -
     ]
     for match_id, home_score, away_score, _expected in cases:
         await _seed_settled_match(
-            session, match_id, home_score=home_score, away_score=away_score, match_date=match_date
+            session,
+            match_id,
+            home_score=home_score,
+            away_score=away_score,
+            match_date=match_date,
         )
         session.add(
             MatchPredictionLog(
@@ -381,20 +394,22 @@ async def test_full_analysis_capture_flows_into_settlement_join(
     )
 
     logs = (
-        await session.execute(
-            select(MatchPredictionLog).where(
-                MatchPredictionLog.match_id == "match-full-analysis"
+        (
+            await session.execute(
+                select(MatchPredictionLog).where(
+                    MatchPredictionLog.match_id == "match-full-analysis"
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(logs) == 1
     assert logs[0].input_hash
     assert logs[0].payload["capture_trigger"] == "interactive_full_analysis"
 
     fixture = (
-        await session.execute(
-            select(Match).where(Match.id == "match-full-analysis")
-        )
+        await session.execute(select(Match).where(Match.id == "match-full-analysis"))
     ).scalar_one()
     fixture.status = "finished"
     fixture.home_score = 2

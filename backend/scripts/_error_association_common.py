@@ -16,6 +16,7 @@ ties and do NOT reproduce the published per-league numbers — that exact
 reproduction is the control which proves a diagnostic is measuring the gate's
 quantity and not a lookalike.
 """
+
 from __future__ import annotations
 
 import gc

@@ -59,7 +59,9 @@ class UncertaintyService:
         model_path = Path(settings.bnn_model_path)
         if not model_path.exists():
             self._bnn_load_error = f"model not found: {model_path}"
-            logger.warning("BNN uncertainty disabled: model file not found at %s", model_path)
+            logger.warning(
+                "BNN uncertainty disabled: model file not found at %s", model_path
+            )
             return
 
         try:
@@ -83,7 +85,9 @@ class UncertaintyService:
             self._bnn_load_error = None
             logger.info(
                 "BNN uncertainty model loaded from %s (in_features=%d, hidden=%d, feature_cols=%s)",
-                model_path, in_features, hidden,
+                model_path,
+                in_features,
+                hidden,
                 f"{len(feature_cols)} cols" if feature_cols else "legacy/none",
             )
         except Exception as exc:
@@ -104,13 +108,22 @@ class UncertaintyService:
         as model evidence.
         """
         if self._bnn_feature_cols is not None:
-            missing = [column for column in self._bnn_feature_cols if column not in feature_frame.columns]
+            missing = [
+                column
+                for column in self._bnn_feature_cols
+                if column not in feature_frame.columns
+            ]
             if strict and missing:
-                raise ValueError(f"BNN feature schema incomplete ({len(missing)} missing columns)")
+                raise ValueError(
+                    f"BNN feature schema incomplete ({len(missing)} missing columns)"
+                )
             rows = []
             for _, row in feature_frame.iterrows():
                 vec = np.array(
-                    [float(row[c]) if c in row.index else 0.0 for c in self._bnn_feature_cols],
+                    [
+                        float(row[c]) if c in row.index else 0.0
+                        for c in self._bnn_feature_cols
+                    ],
                     dtype=np.float32,
                 )
                 rows.append(vec)
@@ -164,7 +177,9 @@ class UncertaintyService:
                 confidence_tier="LOW_EVIDENCE" if out.low_evidence else "OK",
             )
         except Exception as exc:
-            logger.warning("Measured BNN uncertainty unavailable: %s", type(exc).__name__)
+            logger.warning(
+                "Measured BNN uncertainty unavailable: %s", type(exc).__name__
+            )
             return None
 
     def decompose(
@@ -205,7 +220,9 @@ class UncertaintyService:
                 confidence_tier="LOW_EVIDENCE" if out.low_evidence else "OK",
             )
         except Exception as exc:
-            logger.warning("BNN uncertainty decomposition failed; using proxy fallback: %s", exc)
+            logger.warning(
+                "BNN uncertainty decomposition failed; using proxy fallback: %s", exc
+            )
             return self.decompose_from_probabilities(probabilities, confidence)
 
     def decompose_from_probabilities(
@@ -241,7 +258,9 @@ class UncertaintyService:
             aleatoric_unc=aleatoric_unc,
             concentration=concentration,
             credible_interval=(lower, upper),
-            confidence_tier="LOW_EVIDENCE" if epistemic_unc > float(settings.epistemic_threshold) else "OK",
+            confidence_tier="LOW_EVIDENCE"
+            if epistemic_unc > float(settings.epistemic_threshold)
+            else "OK",
         )
 
     def compute_from_defaults(
@@ -251,7 +270,11 @@ class UncertaintyService:
         away_win_prob: float = 0.32,
     ) -> UncertaintyBreakdown:
         """Convenience wrapper used when only market probabilities are available."""
-        probs = {"home_win": home_win_prob, "draw": draw_prob, "away_win": away_win_prob}
+        probs = {
+            "home_win": home_win_prob,
+            "draw": draw_prob,
+            "away_win": away_win_prob,
+        }
         confidence = max(home_win_prob, draw_prob, away_win_prob)
         return self.decompose_from_probabilities(probs, confidence)
 

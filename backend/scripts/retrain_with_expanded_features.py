@@ -28,6 +28,7 @@ Two-stage draw model
   Enabled only when: --use-two-stage-draw flag is set AND walk-forward
   per-league draw-F1 improvement ≥ 0.03 vs. the base 3-class model.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -85,6 +86,7 @@ from models.evaluation.temporal_splits import walk_forward_splits  # noqa: E402
 _CATBOOST_AVAILABLE = False
 try:
     from catboost import CatBoostClassifier  # type: ignore[import]
+
     _CATBOOST_AVAILABLE = True
 except ImportError:
     pass
@@ -94,11 +96,21 @@ LEAGUES_DEFAULT = ["EPL", "Bundesliga", "La_Liga", "Serie_A", "Ligue_1"]
 TARGET_COL = "result"
 DATE_COL = "match_date"
 LEAGUE_COL = "league"
-DROP_COLS = {TARGET_COL, DATE_COL, LEAGUE_COL, "match_id", "home_team", "away_team",
-             "home_team_id", "away_team_id"}
+DROP_COLS = {
+    TARGET_COL,
+    DATE_COL,
+    LEAGUE_COL,
+    "match_id",
+    "home_team",
+    "away_team",
+    "home_team_id",
+    "away_team_id",
+}
 
-RPS_GATE = 0.210            # aggregate RPS must be at or below this value
-DRAW_F1_IMPROVEMENT_MIN = 0.03  # two-stage draw model only enabled if draw-F1 improves by this much
+RPS_GATE = 0.210  # aggregate RPS must be at or below this value
+DRAW_F1_IMPROVEMENT_MIN = (
+    0.03  # two-stage draw model only enabled if draw-F1 improves by this much
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,6 +120,7 @@ logger = logging.getLogger("retrain_phase8")
 
 
 # ── data classes ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class LeagueMetrics:
@@ -186,13 +199,16 @@ def _compute_rps(y_true: np.ndarray, y_proba: np.ndarray) -> float:
 def _multiclass_brier(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     return float(
         np.mean(
-            [brier_score_loss((y_true == c).astype(float), y_proba[:, c])
-             for c in range(y_proba.shape[1])]
+            [
+                brier_score_loss((y_true == c).astype(float), y_proba[:, c])
+                for c in range(y_proba.shape[1])
+            ]
         )
     )
 
 
 # ── feature helpers ───────────────────────────────────────────────────────────
+
 
 def _load_feature_registry_phase8() -> List[str]:
     """Return the legacy CANONICAL_FEATURES_86 alias for the full 89-feature Phase 8 training schema."""
@@ -209,7 +225,11 @@ def _inject_phase8_proxies(frame: pd.DataFrame, feature_set: str) -> pd.DataFram
     Also ensures PHASE7_FEATURES_ALWAYS_DATA_GAP columns ("shot_quality_diff")
     always carry their default value — never a computed proxy.
     """
-    defaults = DEFAULT_FEATURE_VALUES_86 if feature_set == "phase8" else DEFAULT_FEATURE_VALUES_68
+    defaults = (
+        DEFAULT_FEATURE_VALUES_86
+        if feature_set == "phase8"
+        else DEFAULT_FEATURE_VALUES_68
+    )
     phase8_cols = (
         PHASE8_FEATURES_PI
         + PHASE8_FEATURES_BERRAR
@@ -233,7 +253,9 @@ def _select_feature_columns(df: pd.DataFrame, feature_list: List[str]) -> List[s
     present = [c for c in feature_list if c in df.columns]
     missing = [c for c in feature_list if c not in df.columns]
     if missing:
-        logger.warning("Feature columns absent from dataset (will be absent in model): %s", missing)
+        logger.warning(
+            "Feature columns absent from dataset (will be absent in model): %s", missing
+        )
     return present
 
 
@@ -259,13 +281,20 @@ def _compute_recency_weights(
 
 # ── target normalisation ──────────────────────────────────────────────────────
 
+
 def _normalize_target(y: pd.Series) -> np.ndarray:
     if y.dtype.kind in {"i", "u", "f"}:
         return y.astype(int).to_numpy()
     mapping = {
-        "home_win": 0, "h": 0, "0": 0,
-        "draw": 1, "d": 1, "1": 1,
-        "away_win": 2, "a": 2, "2": 2,
+        "home_win": 0,
+        "h": 0,
+        "0": 0,
+        "draw": 1,
+        "d": 1,
+        "1": 1,
+        "away_win": 2,
+        "a": 2,
+        "2": 2,
     }
     mapped = y.astype(str).str.strip().str.lower().map(mapping)
     if mapped.isna().any():
@@ -275,6 +304,7 @@ def _normalize_target(y: pd.Series) -> np.ndarray:
 
 
 # ── base learners ─────────────────────────────────────────────────────────────
+
 
 def _build_base_learners(use_catboost: bool) -> dict:
     """Return a dict of base learner instances."""
@@ -329,11 +359,15 @@ def _build_base_learners(use_catboost: bool) -> dict:
             auto_class_weights="Balanced",
         )
     elif use_catboost and not _CATBOOST_AVAILABLE:
-        logger.warning("CatBoost requested but not installed — skipping. pip install catboost")
+        logger.warning(
+            "CatBoost requested but not installed — skipping. pip install catboost"
+        )
     return learners
 
 
-def _fit_meta_learner(base_preds_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
+def _fit_meta_learner(
+    base_preds_train: np.ndarray, y_train: np.ndarray
+) -> LogisticRegression:
     meta = LogisticRegression(
         max_iter=1000,
         C=1.0,
@@ -355,6 +389,7 @@ def _get_base_predictions(
 
 
 # ── two-stage draw model ──────────────────────────────────────────────────────
+
 
 def _build_draw_stage_model(
     X_train: pd.DataFrame,
@@ -397,6 +432,7 @@ def _apply_draw_stage(
 
 
 # ── walk-forward evaluation ───────────────────────────────────────────────────
+
 
 def _run_walk_forward_eval(
     df: pd.DataFrame,
@@ -446,7 +482,9 @@ def _run_walk_forward_eval(
                 elif name == "catboost":
                     learner.fit(X_train, y_train, sample_weight=weights_train)
             except Exception as exc:
-                logger.warning("Learner %s failed on split %s: %s", name, split.season_label, exc)
+                logger.warning(
+                    "Learner %s failed on split %s: %s", name, split.season_label, exc
+                )
 
         base_train = _get_base_predictions(learners, X_train)
         base_val = _get_base_predictions(learners, X_val)
@@ -459,7 +497,11 @@ def _run_walk_forward_eval(
             diversity_corr_vals.append(fold_corr)
             diversity_disagree_vals.append(fold_disagree)
         except Exception as _div_exc:
-            logger.debug("Diversity computation failed for split %s: %s", split.season_label, _div_exc)
+            logger.debug(
+                "Diversity computation failed for split %s: %s",
+                split.season_label,
+                _div_exc,
+            )
 
         proba_final = proba_base
         if use_two_stage_draw:
@@ -467,8 +509,14 @@ def _run_walk_forward_eval(
             proba_ts = _apply_draw_stage(proba_base, draw_model, X_val)
             y_pred_base = np.argmax(proba_base, axis=1)
             y_pred_ts = np.argmax(proba_ts, axis=1)
-            f1_base = float(f1_score(y_val, y_pred_base, labels=[1], average="micro", zero_division=0))
-            f1_ts = float(f1_score(y_val, y_pred_ts, labels=[1], average="micro", zero_division=0))
+            f1_base = float(
+                f1_score(
+                    y_val, y_pred_base, labels=[1], average="micro", zero_division=0
+                )
+            )
+            f1_ts = float(
+                f1_score(y_val, y_pred_ts, labels=[1], average="micro", zero_division=0)
+            )
             draw_f1_base_vals.append(f1_base)
             draw_f1_ts_vals.append(f1_ts)
             proba_final = proba_ts
@@ -484,15 +532,28 @@ def _run_walk_forward_eval(
         draw_f1_improvement = mean_ts - mean_base
         logger.info(
             "Two-stage draw F1: base=%.4f ts=%.4f improvement=%.4f (gate=%.2f)",
-            mean_base, mean_ts, draw_f1_improvement, DRAW_F1_IMPROVEMENT_MIN,
+            mean_base,
+            mean_ts,
+            draw_f1_improvement,
+            DRAW_F1_IMPROVEMENT_MIN,
         )
 
     mean_corr = float(np.mean(diversity_corr_vals)) if diversity_corr_vals else 0.0
-    mean_disagree = float(np.mean(diversity_disagree_vals)) if diversity_disagree_vals else 0.0
-    return all_preds, all_true, season_labels, draw_f1_improvement, mean_corr, mean_disagree
+    mean_disagree = (
+        float(np.mean(diversity_disagree_vals)) if diversity_disagree_vals else 0.0
+    )
+    return (
+        all_preds,
+        all_true,
+        season_labels,
+        draw_f1_improvement,
+        mean_corr,
+        mean_disagree,
+    )
 
 
 # ── final model training ──────────────────────────────────────────────────────
+
 
 def _train_final_model(
     X: pd.DataFrame,
@@ -536,6 +597,7 @@ def _predict_with_artifact(artifact: dict, X: pd.DataFrame) -> np.ndarray:
 
 # ── gate check ────────────────────────────────────────────────────────────────
 
+
 def _global_gate_check(metrics_by_league: Dict[str, LeagueMetrics]) -> bool:
     """Return True iff the aggregate RPS across all leagues is at or below RPS_GATE."""
     rps_vals = [m.rps for m in metrics_by_league.values()]
@@ -555,15 +617,26 @@ def _global_gate_check(metrics_by_league: Dict[str, LeagueMetrics]) -> bool:
 
 # ── dataset loading ───────────────────────────────────────────────────────────
 
+
 def _load_league_dataset(data_dir: Path, league: str) -> pd.DataFrame:
     slug = league.lower().replace(" ", "_")
-    for suffix in ("_training.parquet", "_training.csv", f"_{slug}.parquet", f"_{slug}.csv"):
+    for suffix in (
+        "_training.parquet",
+        "_training.csv",
+        f"_{slug}.parquet",
+        f"_{slug}.csv",
+    ):
         candidate = data_dir / f"{slug}{suffix}"
         if candidate.exists():
-            return (pd.read_parquet(candidate) if candidate.suffix == ".parquet"
-                    else pd.read_csv(candidate))
+            return (
+                pd.read_parquet(candidate)
+                if candidate.suffix == ".parquet"
+                else pd.read_csv(candidate)
+            )
     # Try a glob for any file containing the league slug
-    matches = list(data_dir.glob(f"*{slug}*.parquet")) + list(data_dir.glob(f"*{slug}*.csv"))
+    matches = list(data_dir.glob(f"*{slug}*.parquet")) + list(
+        data_dir.glob(f"*{slug}*.csv")
+    )
     if matches:
         f = matches[0]
         return pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f)
@@ -573,6 +646,7 @@ def _load_league_dataset(data_dir: Path, league: str) -> pd.DataFrame:
 
 
 # ── artifact persistence ──────────────────────────────────────────────────────
+
 
 def _save_league_artifact(
     artifact: dict,
@@ -600,6 +674,7 @@ def _save_league_artifact(
 
 # ── per-league pipeline ───────────────────────────────────────────────────────
 
+
 def _retrain_league(
     league: str,
     data_dir: Path,
@@ -620,7 +695,9 @@ def _retrain_league(
         return None
 
     if TARGET_COL not in df.columns or DATE_COL not in df.columns:
-        logger.error("%s — dataset missing '%s' or '%s' columns", league, TARGET_COL, DATE_COL)
+        logger.error(
+            "%s — dataset missing '%s' or '%s' columns", league, TARGET_COL, DATE_COL
+        )
         return None
 
     df = df.dropna(subset=[TARGET_COL, DATE_COL]).reset_index(drop=True)
@@ -628,7 +705,8 @@ def _retrain_league(
     df = df.dropna(subset=[DATE_COL]).reset_index(drop=True)
 
     feature_list = (
-        _load_feature_registry_phase8() if feature_set == "phase8"
+        _load_feature_registry_phase8()
+        if feature_set == "phase8"
         else list(CANONICAL_FEATURES_65)
     )
 
@@ -640,7 +718,11 @@ def _retrain_league(
         return None
 
     # Impute any remaining NaN with default values
-    defaults = DEFAULT_FEATURE_VALUES_86 if feature_set == "phase8" else DEFAULT_FEATURE_VALUES_68
+    defaults = (
+        DEFAULT_FEATURE_VALUES_86
+        if feature_set == "phase8"
+        else DEFAULT_FEATURE_VALUES_68
+    )
     for col in feature_cols:
         if df[col].isna().any():
             df[col] = df[col].fillna(defaults.get(col, 0.0))
@@ -650,8 +732,12 @@ def _retrain_league(
     # ── walk-forward evaluation ────────────────────────────────────────────
     logger.info("%s — running walk-forward evaluation (%d rows)", league, len(df))
     (
-        all_preds, all_true, season_labels,
-        draw_f1_improvement, learner_max_corr, learner_mean_disagree,
+        all_preds,
+        all_true,
+        season_labels,
+        draw_f1_improvement,
+        learner_max_corr,
+        learner_mean_disagree,
     ) = _run_walk_forward_eval(
         df=df,
         feature_cols=feature_cols,
@@ -674,13 +760,20 @@ def _retrain_league(
     ece = expected_calibration_error(y_eval, p_all)
     macro_f1 = float(f1_score(y_eval, y_pred, average="macro", zero_division=0))
     bal_acc = float(balanced_accuracy_score(y_eval, y_pred))
-    draw_prec = float(precision_score(y_eval, y_pred, labels=[1], average="micro", zero_division=0))
-    draw_rec = float(recall_score(y_eval, y_pred, labels=[1], average="micro", zero_division=0))
+    draw_prec = float(
+        precision_score(y_eval, y_pred, labels=[1], average="micro", zero_division=0)
+    )
+    draw_rec = float(
+        recall_score(y_eval, y_pred, labels=[1], average="micro", zero_division=0)
+    )
     draw_f1_val = (
         2 * draw_prec * draw_rec / (draw_prec + draw_rec)
-        if (draw_prec + draw_rec) > 0 else 0.0
+        if (draw_prec + draw_rec) > 0
+        else 0.0
     )
-    apply_two_stage = use_two_stage_draw and (draw_f1_improvement >= DRAW_F1_IMPROVEMENT_MIN)
+    apply_two_stage = use_two_stage_draw and (
+        draw_f1_improvement >= DRAW_F1_IMPROVEMENT_MIN
+    )
 
     logger.info(
         "%s eval — accuracy=%.4f ll=%.4f brier=%.4f ece=%.4f rps=%.4f "
@@ -688,18 +781,27 @@ def _retrain_league(
         league,
         float((y_pred == y_eval).mean()),
         float(log_loss(y_eval, p_all)),
-        brier, ece["mean"], rps, macro_f1, bal_acc, draw_f1_val,
+        brier,
+        ece["mean"],
+        rps,
+        macro_f1,
+        bal_acc,
+        draw_f1_val,
         len(season_labels),
     )
 
     if use_two_stage_draw and not apply_two_stage:
         logger.info(
             "%s — two-stage draw not applied: improvement=%.4f < gate=%.2f",
-            league, draw_f1_improvement, DRAW_F1_IMPROVEMENT_MIN,
+            league,
+            draw_f1_improvement,
+            DRAW_F1_IMPROVEMENT_MIN,
         )
 
     # Diversity advisory
-    _prune_threshold = float(os.environ.get("ENSEMBLE_CORRELATION_PRUNE_THRESHOLD", "0.92"))
+    _prune_threshold = float(
+        os.environ.get("ENSEMBLE_CORRELATION_PRUNE_THRESHOLD", "0.92")
+    )
     diversity_advisory = ""
     if learner_max_corr >= _prune_threshold:
         diversity_advisory = (
@@ -710,7 +812,9 @@ def _retrain_league(
     else:
         logger.info(
             "%s diversity: max_pairwise_corr=%.4f mean_disagree=%.4f",
-            league, learner_max_corr, learner_mean_disagree,
+            league,
+            learner_max_corr,
+            learner_mean_disagree,
         )
 
     metrics = LeagueMetrics(
@@ -765,8 +869,11 @@ def _retrain_league(
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 8 SabiScore retraining pipeline")
+    parser = argparse.ArgumentParser(
+        description="Phase 8 SabiScore retraining pipeline"
+    )
     parser.add_argument(
         "--feature-set",
         choices=["phase7", "phase8"],
@@ -825,7 +932,11 @@ def main() -> None:
     date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     logger.info(
         "Phase 8 retraining — feature_set=%s halflife=%.1f catboost=%s two_stage_draw=%s date=%s",
-        args.feature_set, args.halflife, args.use_catboost, args.use_two_stage_draw, date_str,
+        args.feature_set,
+        args.halflife,
+        args.use_catboost,
+        args.use_two_stage_draw,
+        date_str,
     )
 
     metrics_by_league: Dict[str, LeagueMetrics] = {}
@@ -861,7 +972,9 @@ def main() -> None:
         "recency_halflife_seasons": args.halflife,
         "global_gate_rps_threshold": RPS_GATE,
         "global_gate_passed": gate_passed,
-        "aggregate_rps": round(float(np.mean([m.rps for m in metrics_by_league.values()])), 4),
+        "aggregate_rps": round(
+            float(np.mean([m.rps for m in metrics_by_league.values()])), 4
+        ),
         "aggregate_macro_f1": round(
             float(np.mean([m.macro_f1 for m in metrics_by_league.values()])), 4
         ),

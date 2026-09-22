@@ -1,4 +1,5 @@
 """Deterministic transport semantics for the canonical provider gateway."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,9 @@ def _provider(handler) -> BaseProvider:
     return BaseProvider(enabled=True, http_client=client)
 
 
-async def test_timeout_is_retried_with_bounded_attempts_and_recovers(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_timeout_is_retried_with_bounded_attempts_and_recovers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -53,7 +56,9 @@ async def test_timeout_is_retried_with_bounded_attempts_and_recovers(monkeypatch
     assert provider.breaker.open is False
 
 
-async def test_5xx_is_retried_but_client_4xx_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_5xx_is_retried_but_client_4xx_is_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     server_calls = 0
 
     def server_handler(request: httpx.Request) -> httpx.Response:
@@ -110,7 +115,9 @@ async def test_authentication_failures_are_typed_and_never_retried(
     monkeypatch.setattr(provider, "_sleep_with_jitter", sleeper)
     try:
         with pytest.raises(ProviderTransportError) as caught:
-            await provider._get_json("https://provider.test/private?apiKey=do-not-persist")
+            await provider._get_json(
+                "https://provider.test/private?apiKey=do-not-persist"
+            )
     finally:
         await _close(provider)
 
@@ -124,14 +131,18 @@ async def test_authentication_failures_are_typed_and_never_retried(
     sleeper.assert_not_awaited()
 
 
-async def test_429_honors_retry_after_once_without_double_counting(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_429_honors_retry_after_once_without_double_counting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
         if calls == 1:
-            return httpx.Response(429, headers={"Retry-After": "2"}, json={}, request=request)
+            return httpx.Response(
+                429, headers={"Retry-After": "2"}, json={}, request=request
+            )
         return httpx.Response(200, json={"ok": True}, request=request)
 
     provider = _provider(handler)
@@ -162,13 +173,17 @@ async def test_429_honors_retry_after_once_without_double_counting(monkeypatch: 
     assert provider.breaker.failures == 0
 
 
-async def test_429_without_bounded_retry_after_fails_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_429_without_bounded_retry_after_fails_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
-        return httpx.Response(429, headers={"Retry-After": "120"}, json={}, request=request)
+        return httpx.Response(
+            429, headers={"Retry-After": "120"}, json={}, request=request
+        )
 
     provider = _provider(handler)
     sleeper = AsyncMock()
@@ -191,7 +206,9 @@ def test_retry_after_parser_supports_delta_seconds_and_http_date() -> None:
     retry_at = now + timedelta(seconds=45)
 
     assert parse_retry_after_seconds("3.5", now=now) == pytest.approx(3.5)
-    assert parse_retry_after_seconds(format_datetime(retry_at, usegmt=True), now=now) == pytest.approx(45.0)
+    assert parse_retry_after_seconds(
+        format_datetime(retry_at, usegmt=True), now=now
+    ) == pytest.approx(45.0)
     assert parse_retry_after_seconds("not-a-date", now=now) is None
     assert parse_retry_after_seconds("-1", now=now) is None
 
@@ -222,7 +239,9 @@ async def test_breaker_opens_at_threshold_and_short_circuits_next_request() -> N
     assert calls == provider.breaker.failure_threshold
 
 
-async def test_odds_adapter_preserves_rate_limited_status_without_string_matching() -> None:
+async def test_odds_adapter_preserves_rate_limited_status_without_string_matching() -> (
+    None
+):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={}, request=request)
 
@@ -239,7 +258,9 @@ async def test_odds_adapter_preserves_rate_limited_status_without_string_matchin
     assert "http_status:429" in result.warnings
 
 
-async def test_exception_recorder_uses_typed_transport_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_exception_recorder_uses_typed_transport_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     recorder = ProviderEvidenceRecorder()
     persist = AsyncMock(return_value=True)
     monkeypatch.setattr(recorder, "_persist", persist)

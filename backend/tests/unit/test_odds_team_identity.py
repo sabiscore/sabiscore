@@ -72,7 +72,9 @@ def test_affix_letters_are_not_stripped_from_an_unrelated_name() -> None:
 def test_a_bare_designator_yields_no_identity_and_fails_closed() -> None:
     """``AFC`` alone names no club, so it must never match one."""
     assert identity_key("AFC") == ""
-    match, ambiguous = _resolve([_Fixture("AFC Bournemouth", "Everton FC")], "AFC", "AFC", "EPL")
+    match, ambiguous = _resolve(
+        [_Fixture("AFC Bournemouth", "Everton FC")], "AFC", "AFC", "EPL"
+    )
     assert match is None
     assert ambiguous is False
 
@@ -84,18 +86,48 @@ def test_a_bare_designator_yields_no_identity_and_fails_closed() -> None:
     ("league", "provider_home", "provider_away", "stored_home", "stored_away"),
     [
         # Diacritics: the old normalizer split "Munchen" on the umlaut.
-        ("BUNDESLIGA", "Bayern Munich", "Mainz", "FC Bayern München", "1. FSV Mainz 05"),
-        ("LA_LIGA", "Atlético Madrid", "Sevilla", "Club Atlético de Madrid", "Sevilla FC"),
+        (
+            "BUNDESLIGA",
+            "Bayern Munich",
+            "Mainz",
+            "FC Bayern München",
+            "1. FSV Mainz 05",
+        ),
+        (
+            "LA_LIGA",
+            "Atlético Madrid",
+            "Sevilla",
+            "Club Atlético de Madrid",
+            "Sevilla FC",
+        ),
         # Provider trade name vs stored full legal name.
         ("SERIE_A", "Udinese", "Lazio", "Udinese Calcio", "Lazio"),
         ("SERIE_A", "Genoa", "Como", "Genoa CFC", "Como 1907"),
-        ("LA_LIGA", "Real Sociedad", "Espanyol", "Real Sociedad de Fútbol", "RCD Espanyol de Barcelona"),
+        (
+            "LA_LIGA",
+            "Real Sociedad",
+            "Espanyol",
+            "Real Sociedad de Fútbol",
+            "RCD Espanyol de Barcelona",
+        ),
         # Legal form inserts tokens, so substring containment is not enough.
         ("LA_LIGA", "Celta Vigo", "Barcelona", "RC Celta de Vigo", "FC Barcelona"),
-        ("LIGUE_1", "Strasbourg", "RC Lens", "RC Strasbourg Alsace", "Racing Club de Lens"),
+        (
+            "LIGUE_1",
+            "Strasbourg",
+            "RC Lens",
+            "RC Strasbourg Alsace",
+            "Racing Club de Lens",
+        ),
         ("EREDIVISIE", "AZ Alkmaar", "PSV Eindhoven", "AZ", "PSV"),
         ("EREDIVISIE", "FC Zwolle", "NEC Nijmegen", "PEC Zwolle", "NEC"),
-        ("EPL", "Newcastle United", "Brighton and Hove Albion", "Newcastle", "Brighton"),
+        (
+            "EPL",
+            "Newcastle United",
+            "Brighton and Hove Albion",
+            "Newcastle",
+            "Brighton",
+        ),
         # Endonym/exonym differences that only an identity assertion can bridge.
         ("LIGUE_1", "Lyon", "Le Havre", "Olympique Lyonnais", "Le Havre"),
         ("LIGUE_1", "Brest", "Toulouse", "Stade Brestois 29", "Toulouse FC"),
@@ -103,11 +135,21 @@ def test_a_bare_designator_yields_no_identity_and_fails_closed() -> None:
         # Bundesliga fixtures point at Elo-corpus rows, so the stored side is
         # the abbreviated corpus spelling the audited alias table already knows.
         ("BUNDESLIGA", "Eintracht Frankfurt", "Augsburg", "Ein Frankfurt", "Augsburg"),
-        ("BUNDESLIGA", "Borussia Monchengladbach", "Elversberg", "M'gladbach", "SV 07 Elversberg"),
+        (
+            "BUNDESLIGA",
+            "Borussia Monchengladbach",
+            "Elversberg",
+            "M'gladbach",
+            "SV 07 Elversberg",
+        ),
     ],
 )
 def test_real_provider_names_resolve_to_the_stored_fixture(
-    league: str, provider_home: str, provider_away: str, stored_home: str, stored_away: str
+    league: str,
+    provider_home: str,
+    provider_away: str,
+    stored_home: str,
+    stored_away: str,
 ) -> None:
     target = _Fixture(stored_home, stored_away)
     decoys = [

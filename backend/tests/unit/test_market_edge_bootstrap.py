@@ -23,7 +23,9 @@ from typing import Any
 import numpy as np
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "bootstrap_market_edge_ci.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts" / "bootstrap_market_edge_ci.py"
+)
 
 
 def _load_module() -> Any:
@@ -76,7 +78,9 @@ def test_identical_heads_give_exactly_zero(mod: Any, fixture_data) -> None:
     assert result["n_bootstrap"] == 2000, "replicates are being silently dropped"
 
 
-def test_a_head_with_real_skill_produces_a_ci_below_zero(mod: Any, fixture_data) -> None:
+def test_a_head_with_real_skill_produces_a_ci_below_zero(
+    mod: Any, fixture_data
+) -> None:
     """RPS is lower-is-better, so a real edge is a negative difference."""
     y, market, truth = fixture_data
     result = _ci(mod, y, 0.7 * market + 0.3 * truth, market)
@@ -106,10 +110,16 @@ def test_pairing_is_preserved_under_resampling(mod: Any, fixture_data) -> None:
     def mean_rps(y_true: np.ndarray, probs: np.ndarray) -> float:
         return mod._mean_rps(y_true, probs)
 
-    a = mod.block_bootstrap_ci(y, head, mean_rps, n_bootstrap=2000, block_size=10, rng_seed=1)
-    b = mod.block_bootstrap_ci(y, market, mean_rps, n_bootstrap=2000, block_size=10, rng_seed=2)
+    a = mod.block_bootstrap_ci(
+        y, head, mean_rps, n_bootstrap=2000, block_size=10, rng_seed=1
+    )
+    b = mod.block_bootstrap_ci(
+        y, market, mean_rps, n_bootstrap=2000, block_size=10, rng_seed=2
+    )
     unpaired_half = float(
-        np.hypot((a["ci_upper"] - a["ci_lower"]) / 2.0, (b["ci_upper"] - b["ci_lower"]) / 2.0)
+        np.hypot(
+            (a["ci_upper"] - a["ci_lower"]) / 2.0, (b["ci_upper"] - b["ci_lower"]) / 2.0
+        )
     )
 
     assert paired_half * 5 < unpaired_half, (

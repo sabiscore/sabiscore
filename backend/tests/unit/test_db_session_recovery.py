@@ -1,4 +1,5 @@
 """Regression tests for caught DB failures and session finalization."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -7,7 +8,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_get_db_session_rolls_back_partial_transaction_instead_of_committing() -> None:
+async def test_get_db_session_rolls_back_partial_transaction_instead_of_committing() -> (
+    None
+):
     from src.db import session as session_module
 
     class FakeSession:

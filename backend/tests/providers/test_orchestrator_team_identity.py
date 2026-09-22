@@ -25,31 +25,57 @@ class _FakeRegistry:
 
 
 class _FakeAPIFootball:
-    def __init__(self, teams_result: ProviderResult, stats_by_team_id: dict[int, ProviderResult]) -> None:
+    def __init__(
+        self, teams_result: ProviderResult, stats_by_team_id: dict[int, ProviderResult]
+    ) -> None:
         self._teams_result = teams_result
         self._stats_by_team_id = stats_by_team_id
         self.team_statistics_calls: list[int] = []
 
     async def injuries(self, *, competition: str) -> ProviderResult:
-        return ProviderResult(provider="api_football", operation="injuries", status=ProviderStatus.PARTIAL, trust_tier=TrustTier.OFFICIAL_AUTHENTICATED)
+        return ProviderResult(
+            provider="api_football",
+            operation="injuries",
+            status=ProviderStatus.PARTIAL,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        )
 
-    async def lineups(self, *, fixture_id: Any, competition: str | None = None) -> ProviderResult:
-        return ProviderResult(provider="api_football", operation="lineups", status=ProviderStatus.PARTIAL, trust_tier=TrustTier.OFFICIAL_AUTHENTICATED)
+    async def lineups(
+        self, *, fixture_id: Any, competition: str | None = None
+    ) -> ProviderResult:
+        return ProviderResult(
+            provider="api_football",
+            operation="lineups",
+            status=ProviderStatus.PARTIAL,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        )
 
     async def teams(self, *, competition: str) -> ProviderResult:
         return self._teams_result
 
-    async def team_statistics(self, *, team_id: int, competition: str) -> ProviderResult:
+    async def team_statistics(
+        self, *, team_id: int, competition: str
+    ) -> ProviderResult:
         self.team_statistics_calls.append(team_id)
         return self._stats_by_team_id.get(
             team_id,
-            ProviderResult(provider="api_football", operation="team_statistics", status=ProviderStatus.PARTIAL, trust_tier=TrustTier.OFFICIAL_AUTHENTICATED),
+            ProviderResult(
+                provider="api_football",
+                operation="team_statistics",
+                status=ProviderStatus.PARTIAL,
+                trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+            ),
         )
 
 
 class _FakeSportmonks:
     async def injuries(self, *, competition: str) -> ProviderResult:
-        return ProviderResult(provider="sportmonks", operation="injuries", status=ProviderStatus.PARTIAL, trust_tier=TrustTier.OFFICIAL_AUTHENTICATED)
+        return ProviderResult(
+            provider="sportmonks",
+            operation="injuries",
+            status=ProviderStatus.PARTIAL,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+        )
 
 
 def _teams_result(records: list[dict[str, Any]]) -> ProviderResult:
@@ -82,12 +108,22 @@ async def test_prematch_enriched_resolves_team_ids_and_fetches_statistics():
     )
     apif = _FakeAPIFootball(
         teams,
-        stats_by_team_id={57: _verified_stats(57, "Arsenal FC"), 49: _verified_stats(49, "Chelsea FC")},
+        stats_by_team_id={
+            57: _verified_stats(57, "Arsenal FC"),
+            49: _verified_stats(49, "Chelsea FC"),
+        },
     )
-    orchestrator = EvidenceOrchestrator(_FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()}))
+    orchestrator = EvidenceOrchestrator(
+        _FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()})
+    )
 
     results = await orchestrator.collect(
-        {"competition": "EPL", "home_team": "Arsenal FC", "away_team": "Chelsea FC", "provider_event_id": "12345"},
+        {
+            "competition": "EPL",
+            "home_team": "Arsenal FC",
+            "away_team": "Chelsea FC",
+            "provider_event_id": "12345",
+        },
         EvidenceProfile.PREMATCH_ENRICHED,
     )
 
@@ -102,10 +138,17 @@ async def test_prematch_enriched_yields_partial_when_team_name_unresolved():
     """A team name with no plausible candidate must not guess a team_id."""
     teams = _teams_result([{"team_id": 57, "name": "Arsenal FC", "coherent": True}])
     apif = _FakeAPIFootball(teams, stats_by_team_id={})
-    orchestrator = EvidenceOrchestrator(_FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()}))
+    orchestrator = EvidenceOrchestrator(
+        _FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()})
+    )
 
     results = await orchestrator.collect(
-        {"competition": "EPL", "home_team": "Arsenal FC", "away_team": "Watford", "provider_event_id": "12345"},
+        {
+            "competition": "EPL",
+            "home_team": "Arsenal FC",
+            "away_team": "Watford",
+            "provider_event_id": "12345",
+        },
         EvidenceProfile.PREMATCH_ENRICHED,
     )
 
@@ -125,7 +168,9 @@ async def test_prematch_enriched_yields_partial_when_team_list_unavailable():
         records=[],
     )
     apif = _FakeAPIFootball(teams, stats_by_team_id={})
-    orchestrator = EvidenceOrchestrator(_FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()}))
+    orchestrator = EvidenceOrchestrator(
+        _FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()})
+    )
 
     results = await orchestrator.collect(
         {"competition": "EPL", "home_team": "Arsenal", "away_team": "Chelsea"},
@@ -142,9 +187,13 @@ async def test_prematch_enriched_yields_partial_when_team_list_unavailable():
 async def test_prematch_enriched_yields_partial_when_fixture_missing_team_names():
     teams = _teams_result([{"team_id": 57, "name": "Arsenal FC", "coherent": True}])
     apif = _FakeAPIFootball(teams, stats_by_team_id={})
-    orchestrator = EvidenceOrchestrator(_FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()}))
+    orchestrator = EvidenceOrchestrator(
+        _FakeRegistry({"api_football": apif, "sportmonks": _FakeSportmonks()})
+    )
 
-    results = await orchestrator.collect({"competition": "EPL"}, EvidenceProfile.PREMATCH_ENRICHED)
+    results = await orchestrator.collect(
+        {"competition": "EPL"}, EvidenceProfile.PREMATCH_ENRICHED
+    )
 
     stat_results = [r for r in results if r.operation.startswith("team_statistics")]
     assert len(stat_results) == 2

@@ -55,7 +55,9 @@ def test_prohibited_production_patterns_are_absent() -> None:
     assert "NEXT_PUBLIC_KELLY_FRACTION" not in env_text
 
     # INV-19: verification predicates must be computed, never asserted as a bare literal.
-    verified_literal = re.compile(r'"[a-zA-Z_]*(_verified|_validated|_certified)"\s*:\s*(True|False)')
+    verified_literal = re.compile(
+        r'"[a-zA-Z_]*(_verified|_validated|_certified)"\s*:\s*(True|False)'
+    )
     match = verified_literal.search(backend_source_text)
     assert match is None, (
         f"Bare True/False literal bound to a *_verified/*_validated/*_certified "
@@ -215,7 +217,9 @@ def test_fabricating_predictors_stay_off_the_serving_path() -> None:
                 path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1
             ):
                 if needle in line:
-                    hits.append(f"{path.relative_to(backend_root)}:{lineno}: {line.strip()}")
+                    hits.append(
+                        f"{path.relative_to(backend_root)}:{lineno}: {line.strip()}"
+                    )
         return hits
 
     # The mock orchestrator must not be constructed anywhere but its own module.

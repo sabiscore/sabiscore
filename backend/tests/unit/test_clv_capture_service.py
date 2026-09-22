@@ -1,4 +1,5 @@
 """Unit tests for the CLV scheduler + market lifecycle integration."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -33,7 +34,9 @@ async def factory():
 
 
 def _due_kickoff(minutes_from_now: int = 4) -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=minutes_from_now)
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        minutes=minutes_from_now
+    )
 
 
 async def _seed_match(
@@ -114,7 +117,9 @@ async def test_capture_writes_closing_and_odds_history_for_due_fixture(factory) 
     from src.services.clv_capture_service import run_clv_capture_pass
 
     kickoff = _due_kickoff(4)
-    await _seed_match(factory, match_id="fd-ded-1", league_id="EREDIVISIE", kickoff=kickoff)
+    await _seed_match(
+        factory, match_id="fd-ded-1", league_id="EREDIVISIE", kickoff=kickoff
+    )
     records = [_odds_record("evt-1", kickoff)]
 
     mock_provider = AsyncMock()
@@ -167,12 +172,18 @@ async def test_capture_skips_fixture_outside_network_trigger_window(factory) -> 
     mock_provider.odds.assert_not_called()
 
 
-async def test_current_closing_keeps_triggering_final_pre_kickoff_refresh(factory) -> None:
+async def test_current_closing_keeps_triggering_final_pre_kickoff_refresh(
+    factory,
+) -> None:
     from src.services.clv_capture_service import run_clv_capture_pass
 
     kickoff = _due_kickoff(4)
-    await _seed_match(factory, match_id="fd-ded-3", league_id="EREDIVISIE", kickoff=kickoff)
-    first_captured_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=30)
+    await _seed_match(
+        factory, match_id="fd-ded-3", league_id="EREDIVISIE", kickoff=kickoff
+    )
+    first_captured_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        seconds=30
+    )
     async with factory() as session:
         session.add(
             MarketSnapshot(
@@ -193,7 +204,9 @@ async def test_current_closing_keeps_triggering_final_pre_kickoff_refresh(factor
         await session.commit()
 
     mock_provider = AsyncMock()
-    mock_provider.odds.return_value = _provider_result([_odds_record("evt-refresh", kickoff)])
+    mock_provider.odds.return_value = _provider_result(
+        [_odds_record("evt-refresh", kickoff)]
+    )
     with patch("src.db.session.AsyncSessionLocal", new=factory):
         result = await run_clv_capture_pass(provider=mock_provider)
 
@@ -222,7 +235,9 @@ async def test_current_closing_keeps_triggering_final_pre_kickoff_refresh(factor
 async def test_capture_skips_unsupported_league_without_provider_call(factory) -> None:
     from src.services.clv_capture_service import run_clv_capture_pass
 
-    await _seed_match(factory, match_id="fd-xx-1", league_id="XX", kickoff=_due_kickoff(4))
+    await _seed_match(
+        factory, match_id="fd-xx-1", league_id="XX", kickoff=_due_kickoff(4)
+    )
     mock_provider = AsyncMock()
 
     with patch("src.db.session.AsyncSessionLocal", new=factory):
@@ -237,7 +252,9 @@ async def test_capture_uses_team_identity_to_disambiguate_same_kickoff(factory) 
     from src.services.clv_capture_service import run_clv_capture_pass
 
     kickoff = _due_kickoff(4)
-    await _seed_match(factory, match_id="fd-ded-4a", league_id="EREDIVISIE", kickoff=kickoff)
+    await _seed_match(
+        factory, match_id="fd-ded-4a", league_id="EREDIVISIE", kickoff=kickoff
+    )
     await _seed_match(
         factory,
         match_id="fd-ded-4b",
@@ -268,7 +285,9 @@ async def test_capture_fails_closed_on_same_team_identity_ambiguity(factory) -> 
     from src.services.clv_capture_service import run_clv_capture_pass
 
     kickoff = _due_kickoff(4)
-    await _seed_match(factory, match_id="fd-ded-5a", league_id="EREDIVISIE", kickoff=kickoff)
+    await _seed_match(
+        factory, match_id="fd-ded-5a", league_id="EREDIVISIE", kickoff=kickoff
+    )
     await _seed_match(
         factory,
         match_id="fd-ded-5b",
@@ -294,7 +313,9 @@ async def test_capture_fails_closed_on_same_team_identity_ambiguity(factory) -> 
 async def test_capture_provider_returns_no_records_is_graceful(factory) -> None:
     from src.services.clv_capture_service import run_clv_capture_pass
 
-    await _seed_match(factory, match_id="fd-ded-6", league_id="EREDIVISIE", kickoff=_due_kickoff(4))
+    await _seed_match(
+        factory, match_id="fd-ded-6", league_id="EREDIVISIE", kickoff=_due_kickoff(4)
+    )
 
     mock_provider = AsyncMock()
     mock_provider.odds.return_value = _provider_result([])
@@ -318,12 +339,16 @@ async def test_run_clv_capture_pass_db_not_ready() -> None:
 async def test_run_clv_capture_pass_genuine_exception_yields_error(factory) -> None:
     from src.services import clv_capture_service
 
-    await _seed_match(factory, match_id="fd-ded-7", league_id="EREDIVISIE", kickoff=_due_kickoff(4))
+    await _seed_match(
+        factory, match_id="fd-ded-7", league_id="EREDIVISIE", kickoff=_due_kickoff(4)
+    )
     exploding_provider = AsyncMock()
     exploding_provider.odds.side_effect = RuntimeError("boom")
 
     with patch("src.db.session.AsyncSessionLocal", new=factory):
-        result = await clv_capture_service.run_clv_capture_pass(provider=exploding_provider)
+        result = await clv_capture_service.run_clv_capture_pass(
+            provider=exploding_provider
+        )
 
     assert result["outcome"] == "error"
 
@@ -363,10 +388,13 @@ async def test_capture_pass_explicitly_rolls_back_failed_transaction() -> None:
     def factory():
         return fake_session
 
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch.object(
-        clv_capture_service,
-        "_capture_due_fixtures",
-        new=AsyncMock(side_effect=RuntimeError("database write failed")),
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch.object(
+            clv_capture_service,
+            "_capture_due_fixtures",
+            new=AsyncMock(side_effect=RuntimeError("database write failed")),
+        ),
     ):
         result = await clv_capture_service.run_clv_capture_pass()
 

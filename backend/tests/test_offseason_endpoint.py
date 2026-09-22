@@ -172,8 +172,16 @@ class TestOffseasonRouteShape:
 
     def test_all_registered_leagues_return_valid_status(self):
         known_slugs = [
-            "epl", "la_liga", "bundesliga", "serie_a", "ligue_1",
-            "eredivisie", "ucl", "eul", "championship", "primeira_liga",
+            "epl",
+            "la_liga",
+            "bundesliga",
+            "serie_a",
+            "ligue_1",
+            "eredivisie",
+            "ucl",
+            "eul",
+            "championship",
+            "primeira_liga",
         ]
         for slug in known_slugs:
             result = self._call_handler(slug)

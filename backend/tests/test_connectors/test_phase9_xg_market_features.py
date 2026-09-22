@@ -274,7 +274,10 @@ class TestBuildMarketEfficiencyReport:
         assert vb["kelly_fraction"] == pytest.approx(expected)
 
     def test_recommended_kelly_matches_top_bet(self, report):
-        assert report["recommended_kelly_fraction"] == report["value_bets"][0]["kelly_fraction"]
+        assert (
+            report["recommended_kelly_fraction"]
+            == report["value_bets"][0]["kelly_fraction"]
+        )
 
     def test_recommended_kelly_none_without_value(self):
         report = build_market_efficiency_report(

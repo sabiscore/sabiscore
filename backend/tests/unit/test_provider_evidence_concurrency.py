@@ -1,4 +1,5 @@
 """Concurrency regressions for shared provider transport evidence."""
+
 from __future__ import annotations
 
 import asyncio
@@ -44,12 +45,16 @@ async def test_shared_provider_keeps_success_status_task_local() -> None:
         record_exception=AsyncMock(return_value=True),
     )
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = _ConcurrentHTTPProvider(enabled=True, http_client=client, observation_sink=sink)
+    provider = _ConcurrentHTTPProvider(
+        enabled=True, http_client=client, observation_sink=sink
+    )
     registry = ProviderRegistry([provider])
     assert registry.get("concurrent_http_dummy") is provider
 
     try:
-        slow, fast = await asyncio.gather(provider.fetch("slow"), provider.fetch("fast"))
+        slow, fast = await asyncio.gather(
+            provider.fetch("slow"), provider.fetch("fast")
+        )
     finally:
         await client.aclose()
 

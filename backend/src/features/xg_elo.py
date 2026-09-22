@@ -36,8 +36,12 @@ class XGEloUpdater:
     def _get(self, team: object, ratings: dict[object, float]) -> float:
         return float(ratings.get(team, self.initial_rating))
 
-    def _expected_xg(self, offense: float, opponent_defense: float, *, home: bool) -> float:
-        home_multiplier = 1.0 + self.home_advantage if home else 1.0 - self.home_advantage
+    def _expected_xg(
+        self, offense: float, opponent_defense: float, *, home: bool
+    ) -> float:
+        home_multiplier = (
+            1.0 + self.home_advantage if home else 1.0 - self.home_advantage
+        )
         return max(0.0, self.league_xg * offense * opponent_defense * home_multiplier)
 
     def calculate_ratings(
@@ -99,11 +103,19 @@ class XGEloUpdater:
             home_residual = actual_home - expected_home
             away_residual = actual_away - expected_away
 
-            self.offense_ratings[home] = max(self.min_rating, home_off + self.k_factor * home_residual)
-            self.offense_ratings[away] = max(self.min_rating, away_off + self.k_factor * away_residual)
+            self.offense_ratings[home] = max(
+                self.min_rating, home_off + self.k_factor * home_residual
+            )
+            self.offense_ratings[away] = max(
+                self.min_rating, away_off + self.k_factor * away_residual
+            )
             # Higher defense rating means more xG conceded (weaker defense).
-            self.defense_ratings[away] = max(self.min_rating, away_def + self.k_factor * home_residual)
-            self.defense_ratings[home] = max(self.min_rating, home_def + self.k_factor * away_residual)
+            self.defense_ratings[away] = max(
+                self.min_rating, away_def + self.k_factor * home_residual
+            )
+            self.defense_ratings[home] = max(
+                self.min_rating, home_def + self.k_factor * away_residual
+            )
 
         for name, values in columns.items():
             out[name] = values

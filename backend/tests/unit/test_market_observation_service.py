@@ -114,7 +114,10 @@ async def test_first_real_pre_match_observation_is_opening(factory) -> None:
 
     async with factory() as session:
         result = await persist_market_board(
-            session, league="EPL", records=[_record(kickoff=kickoff)], observed_at=observed
+            session,
+            league="EPL",
+            records=[_record(kickoff=kickoff)],
+            observed_at=observed,
         )
         await session.commit()
 
@@ -129,7 +132,9 @@ async def test_first_real_pre_match_observation_is_opening(factory) -> None:
     assert snapshots[0].provenance["opening_semantics"] == "first_observed_by_sabiscore"
 
 
-async def test_changed_observation_is_intermediate_and_identical_repeat_dedupes(factory) -> None:
+async def test_changed_observation_is_intermediate_and_identical_repeat_dedupes(
+    factory,
+) -> None:
     kickoff = datetime(2026, 8, 20, 18, 0)
     await _seed_fixture(factory, kickoff=kickoff)
 
@@ -162,7 +167,9 @@ async def test_changed_observation_is_intermediate_and_identical_repeat_dedupes(
     assert snapshots[-1].provenance["evidence_class"] == PRE_MATCH_INTERMEDIATE
 
 
-async def test_unchanged_price_inside_closing_window_still_writes_fresh_close(factory) -> None:
+async def test_unchanged_price_inside_closing_window_still_writes_fresh_close(
+    factory,
+) -> None:
     kickoff = datetime(2026, 8, 20, 18, 0)
     await _seed_fixture(factory, kickoff=kickoff)
 
@@ -214,7 +221,8 @@ async def test_later_closing_supersedes_all_earlier_current_closings(factory) ->
     superseded = [
         row
         for row in snapshots
-        if (row.provenance or {}).get("evidence_class") == "PRE_MATCH_CLOSING_SUPERSEDED"
+        if (row.provenance or {}).get("evidence_class")
+        == "PRE_MATCH_CLOSING_SUPERSEDED"
     ]
     assert len(current) == 1
     assert current[0].captured_at == kickoff - timedelta(minutes=1)
@@ -222,7 +230,9 @@ async def test_later_closing_supersedes_all_earlier_current_closings(factory) ->
     assert len(superseded) == 1
 
 
-async def test_first_observation_inside_closing_window_does_not_fabricate_opening(factory) -> None:
+async def test_first_observation_inside_closing_window_does_not_fabricate_opening(
+    factory,
+) -> None:
     kickoff = datetime(2026, 8, 20, 18, 0)
     await _seed_fixture(factory, kickoff=kickoff)
 
@@ -278,7 +288,9 @@ async def test_swapped_team_orientation_fails_closed(factory) -> None:
         result = await persist_market_board(
             session,
             league="EPL",
-            records=[_record(kickoff=kickoff, home_team="Liverpool", away_team="Arsenal")],
+            records=[
+                _record(kickoff=kickoff, home_team="Liverpool", away_team="Arsenal")
+            ],
             observed_at=kickoff - timedelta(minutes=30),
         )
         await session.commit()

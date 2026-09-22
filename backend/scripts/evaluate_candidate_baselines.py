@@ -45,6 +45,7 @@ Usage:
     PYTHONPATH=. python scripts/evaluate_candidate_baselines.py \\
         --league EPL --split-date 2026-06-01 --save-candidate
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,16 +63,22 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 
-async def _evaluate(*, model_version: str, league: str | None, split_date: datetime | None) -> dict[str, Any]:
+async def _evaluate(
+    *, model_version: str, league: str | None, split_date: datetime | None
+) -> dict[str, Any]:
     from src.db.session import AsyncSessionLocal
     from src.repositories.fixtures import get_settled_predictions
     from src.services.settlement_service import get_walk_forward_registry
 
     if AsyncSessionLocal is None:
-        raise RuntimeError("DATABASE_URL is not configured / DB session factory unavailable -- failing closed per INV-02.")
+        raise RuntimeError(
+            "DATABASE_URL is not configured / DB session factory unavailable -- failing closed per INV-02."
+        )
 
     async with AsyncSessionLocal() as session:
-        records = await get_settled_predictions(session, model_version=model_version, league=league, ended_at=split_date)
+        records = await get_settled_predictions(
+            session, model_version=model_version, league=league, ended_at=split_date
+        )
 
     return get_walk_forward_registry().walk_forward_validate(records)
 
@@ -97,16 +104,41 @@ def _no_calibrator_binding_note(validation: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Walk-forward baseline evaluation for a served model generation (reporting only -- never fits/binds a calibrator)")
-    ap.add_argument("--model-version", required=True, help="e.g. v5_phase7. Required: pooling generations is a zero-fabrication violation (see repositories.fixtures.build_settled_predictions_query docstring).")
-    ap.add_argument("--league", default=None, help="Canonical league id filter, e.g. EPL. Omit for all leagues.")
-    ap.add_argument("--split-date", type=lambda s: datetime.strptime(s, "%Y-%m-%d"), default=None, help="YYYY-MM-DD. Evaluate only on settled predictions up to this date (get_settled_predictions(ended_at=...)).")
-    ap.add_argument("--save-candidate", action="store_true", help="Write the evaluation report to backend/models/candidate/ (report only -- never writes a .pkl).")
+    ap = argparse.ArgumentParser(
+        description="Walk-forward baseline evaluation for a served model generation (reporting only -- never fits/binds a calibrator)"
+    )
+    ap.add_argument(
+        "--model-version",
+        required=True,
+        help="e.g. v5_phase7. Required: pooling generations is a zero-fabrication violation (see repositories.fixtures.build_settled_predictions_query docstring).",
+    )
+    ap.add_argument(
+        "--league",
+        default=None,
+        help="Canonical league id filter, e.g. EPL. Omit for all leagues.",
+    )
+    ap.add_argument(
+        "--split-date",
+        type=lambda s: datetime.strptime(s, "%Y-%m-%d"),
+        default=None,
+        help="YYYY-MM-DD. Evaluate only on settled predictions up to this date (get_settled_predictions(ended_at=...)).",
+    )
+    ap.add_argument(
+        "--save-candidate",
+        action="store_true",
+        help="Write the evaluation report to backend/models/candidate/ (report only -- never writes a .pkl).",
+    )
     args = ap.parse_args()
 
     generated_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        validation = asyncio.run(_evaluate(model_version=args.model_version, league=args.league, split_date=args.split_date))
+        validation = asyncio.run(
+            _evaluate(
+                model_version=args.model_version,
+                league=args.league,
+                split_date=args.split_date,
+            )
+        )
         status = "EVALUATED"
     except Exception as exc:
         validation = {"skipped": True, "reason": str(exc)}
@@ -126,8 +158,13 @@ def main() -> int:
 
     if args.save_candidate:
         CANDIDATE_DIR.mkdir(parents=True, exist_ok=True)
-        out = CANDIDATE_DIR / f"candidate_baseline_evaluation_{args.model_version}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
-        out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        out = (
+            CANDIDATE_DIR
+            / f"candidate_baseline_evaluation_{args.model_version}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
+        out.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         print(f"Saved: {out.relative_to(REPO_ROOT)}", file=sys.stderr)
 
     return 0 if status == "EVALUATED" else 1

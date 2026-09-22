@@ -10,6 +10,7 @@ caller even when the observation database path is temporarily unavailable.
 Absence of rows is represented as UNKNOWN by ``latest_provider_evidence`` and is
 never interpreted as provider health.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,11 @@ from typing import Any, Iterable, Mapping
 from sqlalchemy import func, select
 
 from ..core.redaction import redact_text
-from ..db.models import ProviderHealthLog, ProviderQuotaObservation, ProviderRequestSummary
+from ..db.models import (
+    ProviderHealthLog,
+    ProviderQuotaObservation,
+    ProviderRequestSummary,
+)
 from ..providers.base import (
     ProviderResult,
     ProviderStatus,
@@ -136,7 +141,9 @@ def _record_identity(record: dict[str, Any]) -> str | None:
 
 
 def _distinct_events(records: Iterable[dict[str, Any]]) -> int:
-    identities = {identity for record in records if (identity := _record_identity(record))}
+    identities = {
+        identity for record in records if (identity := _record_identity(record))
+    }
     return len(identities)
 
 
@@ -249,7 +256,9 @@ def _transport_summary(result: ProviderResult) -> dict[str, Any]:
     }
 
 
-def _quota_summary(result: ProviderResult, quota_reset_at: datetime | None) -> dict[str, Any]:
+def _quota_summary(
+    result: ProviderResult, quota_reset_at: datetime | None
+) -> dict[str, Any]:
     observed = any(
         value is not None
         for value in (
@@ -320,7 +329,9 @@ def _materialize_evidence_row(
     details_raw = row.get("details")
     details = details_raw if isinstance(details_raw, dict) else {}
     transport_raw = details.get("transport")
-    transport = transport_raw if isinstance(transport_raw, dict) else _default_transport()
+    transport = (
+        transport_raw if isinstance(transport_raw, dict) else _default_transport()
+    )
     coverage_raw = details.get("coverage")
     coverage = (
         coverage_raw
@@ -410,7 +421,9 @@ def _aggregate_context_state(contexts: Iterable[Mapping[str, Any]]) -> str:
     return "DEGRADED"
 
 
-def _aggregate_context_coverage(contexts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def _aggregate_context_coverage(
+    contexts: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
     rows = list(contexts)
     coverage_states = [
         str((row.get("coverage") or {}).get("state") or "UNKNOWN")
@@ -475,7 +488,11 @@ class ProviderEvidenceRecorder:
             http_status_code = error.status_code
         else:
             safe_error = redact_text(error)
-            status = ProviderStatus.CIRCUIT_OPEN if circuit_open else ProviderStatus.UNAVAILABLE
+            status = (
+                ProviderStatus.CIRCUIT_OPEN
+                if circuit_open
+                else ProviderStatus.UNAVAILABLE
+            )
             warnings = [safe_error]
             error_code = type(error).__name__
             http_status_code = None
@@ -489,7 +506,9 @@ class ProviderEvidenceRecorder:
             error_code=error_code,
             http_status_code=http_status_code,
             http_status_category=(
-                _http_status_category(http_status_code) if http_status_code is not None else None
+                _http_status_category(http_status_code)
+                if http_status_code is not None
+                else None
             ),
         )
         return await self._persist(
@@ -525,9 +544,9 @@ class ProviderEvidenceRecorder:
             if result.raw_snapshot_id
             else None
         )
-        acquired_at = _utc_naive(result.acquired_at) or datetime.now(timezone.utc).replace(
-            tzinfo=None
-        )
+        acquired_at = _utc_naive(result.acquired_at) or datetime.now(
+            timezone.utc
+        ).replace(tzinfo=None)
         provider_timestamp = _utc_naive(result.provider_timestamp)
         quota_reset_at = _utc_naive(result.quota.reset_at)
         coverage = _coverage_summary(result)
@@ -583,7 +602,9 @@ class ProviderEvidenceRecorder:
                 "transport": transport,
                 "quota": quota_details,
                 "source_latest_at": (
-                    source_latest_at.isoformat() if source_latest_at is not None else None
+                    source_latest_at.isoformat()
+                    if source_latest_at is not None
+                    else None
                 ),
                 "circuit_open": circuit_open,
                 "raw_snapshot_present": bool(raw_snapshot_id),
@@ -707,7 +728,10 @@ async def latest_provider_evidence(
             func.row_number()
             .over(
                 partition_by=ProviderHealthLog.provider,
-                order_by=[ProviderHealthLog.checked_at.desc(), ProviderHealthLog.id.desc()],
+                order_by=[
+                    ProviderHealthLog.checked_at.desc(),
+                    ProviderHealthLog.id.desc(),
+                ],
             )
             .label("rn"),
         )

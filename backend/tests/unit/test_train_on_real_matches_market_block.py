@@ -5,6 +5,7 @@ Not a package (pytest.ini excludes scripts/ from collection and pythonpath
 only covers src/), so the module is loaded by inserting its directory onto
 sys.path directly — same pattern as test_train_on_real_matches_odds.py.
 """
+
 from __future__ import annotations
 
 import sys

@@ -18,7 +18,12 @@ VALID_INJURY = {
     # scoping Portfolio B Phase 3 (docs/DEBT.md item 65) — `type`/`reason`
     # live under `player`, not at the record's top level; `fixture.date` is
     # present and needed for point-in-time reconstruction.
-    "player": {"id": 1, "name": "Bukayo Saka", "type": "Muscle Injury", "reason": "Hamstring"},
+    "player": {
+        "id": 1,
+        "name": "Bukayo Saka",
+        "type": "Muscle Injury",
+        "reason": "Hamstring",
+    },
     "team": {"id": 57, "name": "Arsenal FC"},
     "fixture": {"id": 12345, "date": "2024-08-16T19:00:00+00:00"},
 }
@@ -37,9 +42,13 @@ async def test_injuries_happy_path(mock_client_factory):
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(200, json={"response": [VALID_INJURY], "errors": {}, "results": 1})
+        return httpx.Response(
+            200, json={"response": [VALID_INJURY], "errors": {}, "results": 1}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL")
 
     assert result.status == ProviderStatus.VERIFIED
@@ -66,9 +75,13 @@ async def test_injuries_scoped_to_fixture_uses_fixture_param_only(mock_client_fa
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(200, json={"response": [VALID_INJURY], "errors": {}, "results": 1})
+        return httpx.Response(
+            200, json={"response": [VALID_INJURY], "errors": {}, "results": 1}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL", fixture_id=12345)
 
     assert result.status == ProviderStatus.VERIFIED
@@ -79,7 +92,9 @@ async def test_injuries_scoped_to_fixture_uses_fixture_param_only(mock_client_fa
 
 
 @pytest.mark.asyncio
-async def test_injuries_without_fixture_id_is_unchanged_from_before(mock_client_factory):
+async def test_injuries_without_fixture_id_is_unchanged_from_before(
+    mock_client_factory,
+):
     """Regression guard: adding the optional `fixture_id` parameter must not
     alter the request for every existing caller that omits it
     (orchestrator.py's _collect_prematch_enriched calls injuries(competition=c)
@@ -89,9 +104,13 @@ async def test_injuries_without_fixture_id_is_unchanged_from_before(mock_client_
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(200, json={"response": [VALID_INJURY], "errors": {}, "results": 1})
+        return httpx.Response(
+            200, json={"response": [VALID_INJURY], "errors": {}, "results": 1}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL")
 
     assert result.status == ProviderStatus.VERIFIED
@@ -112,9 +131,13 @@ async def test_injuries_explicit_season_overrides_current_season(mock_client_fac
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(200, json={"response": [VALID_INJURY], "errors": {}, "results": 1})
+        return httpx.Response(
+            200, json={"response": [VALID_INJURY], "errors": {}, "results": 1}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL", season=2024)
 
     assert result.status == ProviderStatus.VERIFIED
@@ -124,9 +147,14 @@ async def test_injuries_explicit_season_overrides_current_season(mock_client_fac
 @pytest.mark.asyncio
 async def test_injuries_logical_error_in_200_response(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": [], "errors": {"league": "Invalid league"}, "results": 0})
+        return httpx.Response(
+            200,
+            json={"response": [], "errors": {"league": "Invalid league"}, "results": 0},
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL")
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -136,9 +164,13 @@ async def test_injuries_logical_error_in_200_response(mock_client_factory):
 @pytest.mark.asyncio
 async def test_injuries_malformed_record_is_rejected_not_raised(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": [{"team": {"name": "Arsenal"}}], "errors": {}})
+        return httpx.Response(
+            200, json={"response": [{"team": {"name": "Arsenal"}}], "errors": {}}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL")
 
     assert result.records[0]["coherent"] is False
@@ -150,7 +182,9 @@ async def test_injuries_rate_limited(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     provider.max_retries = 0
     result = await provider.injuries(competition="EPL")
 
@@ -165,7 +199,9 @@ async def test_injuries_disabled_makes_no_network_call(mock_client_factory):
         calls.append(request)
         return httpx.Response(200, json={"response": []})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=False, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=False, http_client=mock_client_factory(handler)
+    )
     result = await provider.injuries(competition="EPL")
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -177,7 +213,9 @@ async def test_lineups_happy_path_splits_starting_and_substitute(mock_client_fac
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"response": [VALID_LINEUP_TEAM], "errors": {}})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.lineups(fixture_id=12345, competition="EPL")
 
     assert result.status == ProviderStatus.VERIFIED
@@ -191,7 +229,9 @@ async def test_lineups_requires_fixture_id(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"response": []})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.lineups(fixture_id=None)
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -199,11 +239,17 @@ async def test_lineups_requires_fixture_id(mock_client_factory):
 
 
 @pytest.mark.asyncio
-async def test_team_statistics_requires_team_id_makes_no_network_call(mock_client_factory):
+async def test_team_statistics_requires_team_id_makes_no_network_call(
+    mock_client_factory,
+):
     def handler(_request: httpx.Request) -> httpx.Response:
-        raise AssertionError("team_statistics must not call out without a resolved team_id")
+        raise AssertionError(
+            "team_statistics must not call out without a resolved team_id"
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.team_statistics(team_id=None, competition="EPL")
 
     assert result.status == ProviderStatus.PARTIAL
@@ -238,7 +284,9 @@ async def test_team_statistics_happy_path(mock_client_factory):
             },
         )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.team_statistics(team_id=57, competition="EPL")
 
     assert result.status == ProviderStatus.VERIFIED
@@ -257,9 +305,13 @@ async def test_team_statistics_happy_path(mock_client_factory):
 @pytest.mark.asyncio
 async def test_team_statistics_logical_error_in_200_response(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": {}, "errors": {"team": "Invalid team"}})
+        return httpx.Response(
+            200, json={"response": {}, "errors": {"team": "Invalid team"}}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.team_statistics(team_id=57, competition="EPL")
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -267,11 +319,15 @@ async def test_team_statistics_logical_error_in_200_response(mock_client_factory
 
 
 @pytest.mark.asyncio
-async def test_team_statistics_malformed_record_is_rejected_not_raised(mock_client_factory):
+async def test_team_statistics_malformed_record_is_rejected_not_raised(
+    mock_client_factory,
+):
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"response": {"fixtures": {}}, "errors": {}})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.team_statistics(team_id=57, competition="EPL")
 
     assert result.status == ProviderStatus.PARTIAL
@@ -293,7 +349,9 @@ async def test_teams_happy_path(mock_client_factory):
             },
         )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.teams(competition="EPL")
 
     assert result.status == ProviderStatus.VERIFIED
@@ -309,7 +367,9 @@ async def test_teams_disabled_makes_no_network_call(mock_client_factory):
         calls.append(request)
         return httpx.Response(200, json={"response": []})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=False, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=False, http_client=mock_client_factory(handler)
+    )
     result = await provider.teams(competition="EPL")
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -319,9 +379,13 @@ async def test_teams_disabled_makes_no_network_call(mock_client_factory):
 @pytest.mark.asyncio
 async def test_probe_verified_on_success(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": {"requests": {"current": 1, "limit_day": 100}}})
+        return httpx.Response(
+            200, json={"response": {"requests": {"current": 1, "limit_day": 100}}}
+        )
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     assert await provider.probe() == ProviderStatus.VERIFIED
 
 
@@ -330,6 +394,8 @@ async def test_probe_unavailable_on_failure(mock_client_factory):
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={})
 
-    provider = APIFootballProvider(api_key="test-key", enabled=True, http_client=mock_client_factory(handler))
+    provider = APIFootballProvider(
+        api_key="test-key", enabled=True, http_client=mock_client_factory(handler)
+    )
     provider.max_retries = 0
     assert await provider.probe() == ProviderStatus.UNAVAILABLE

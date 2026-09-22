@@ -20,6 +20,7 @@ Safe to run on a DB that:
   - Has no rows for a given code yet (EPL: PL) — steps are no-ops
   - Has already been partially fixed — NOT EXISTS guard prevents duplicate inserts
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -32,13 +33,13 @@ depends_on = None
 
 # fd.org code → canonical SabiScore league ID
 _REMAP: list[tuple[str, str]] = [
-    ("PL",  "EPL"),
-    ("PD",  "LA_LIGA"),
+    ("PL", "EPL"),
+    ("PD", "LA_LIGA"),
     ("BL1", "BUNDESLIGA"),
-    ("SA",  "SERIE_A"),
+    ("SA", "SERIE_A"),
     ("FL1", "LIGUE_1"),
     ("DED", "EREDIVISIE"),
-    ("CL",  "UCL"),
+    ("CL", "UCL"),
 ]
 
 
@@ -68,7 +69,9 @@ def upgrade() -> None:
             {"new_id": new_id, "old_id": old_id},
         )
         conn.execute(
-            sa.text("UPDATE league_standings SET league = :new_id WHERE league = :old_id"),
+            sa.text(
+                "UPDATE league_standings SET league = :new_id WHERE league = :old_id"
+            ),
             {"new_id": new_id, "old_id": old_id},
         )
 
@@ -105,7 +108,9 @@ def downgrade() -> None:
             {"old_id": old_id, "new_id": new_id},
         )
         conn.execute(
-            sa.text("UPDATE league_standings SET league = :old_id WHERE league = :new_id"),
+            sa.text(
+                "UPDATE league_standings SET league = :old_id WHERE league = :new_id"
+            ),
             {"old_id": old_id, "new_id": new_id},
         )
 

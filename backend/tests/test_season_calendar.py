@@ -6,6 +6,7 @@ up to 14 days early against football-data.org's ``currentSeason.startDate``
 values and the single-source-of-truth wiring so the three surfaces cannot
 disagree again.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -52,7 +53,9 @@ def test_matches_provider_current_season_start(league: str, expected: str) -> No
         ("champions_league", "UCL"),
     ],
 )
-def test_every_league_vocabulary_folds_to_one_key(spelling: str, canonical: str) -> None:
+def test_every_league_vocabulary_folds_to_one_key(
+    spelling: str, canonical: str
+) -> None:
     """Canonical, display, and slug spellings must all resolve identically."""
     assert canonical_key(spelling) == canonical
     assert next_season_start(spelling) == next_season_start(canonical)

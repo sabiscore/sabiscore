@@ -222,7 +222,9 @@ def main() -> None:
     all_leagues = []
     per_season = {}
 
-    for split in walk_forward_splits(df[[DATE_COL]].join(X).join(df[[TARGET_COL]]), date_col=DATE_COL):
+    for split in walk_forward_splits(
+        df[[DATE_COL]].join(X).join(df[[TARGET_COL]]), date_col=DATE_COL
+    ):
         X_val = X.loc[split.val_idx]
         y_val = y_all[split.val_idx]
 
@@ -248,10 +250,14 @@ def main() -> None:
     y_pred = np.argmax(p_all, axis=1)
 
     draw_prec = float(
-        precision_score(y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0)
+        precision_score(
+            y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0
+        )
     )
     draw_rec = float(
-        recall_score(y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0)
+        recall_score(
+            y_eval, y_pred, labels=[draw_class], average="micro", zero_division=0
+        )
     )
     draw_f1 = (
         2 * draw_prec * draw_rec / (draw_prec + draw_rec)
@@ -292,7 +298,9 @@ def main() -> None:
         f"draw_recall={results['draw_recall']:.4f} "
         f"draw_f1={results['draw_f1']:.4f}"
     )
-    print("[baseline] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV")
+    print(
+        "[baseline] NOTE: evaluation used walk-forward temporal splits only — no random k-fold CV"
+    )
     print(f"[baseline] report written to {output_path}")
 
 

@@ -9,6 +9,7 @@ Contracts verified:
      Match.league_id stores football-data.org codes ("DED") — the two-league-
      vocabulary trap this codebase has hit before (CLAUDE.md vΩ.26).
 """
+
 from __future__ import annotations
 
 import json
@@ -41,7 +42,13 @@ async def session():
     await engine.dispose()
 
 
-async def _seed(session: AsyncSession, n: int, *, league_id: str = "DED", base_date: datetime | None = None) -> None:
+async def _seed(
+    session: AsyncSession,
+    n: int,
+    *,
+    league_id: str = "DED",
+    base_date: datetime | None = None,
+) -> None:
     base_date = base_date or datetime(2026, 8, 1, 15, 0)
     for i in range(n):
         match_id = f"fd-{league_id}-{i}"
@@ -166,7 +173,9 @@ async def test_model_performance_200_once_seeded(session: AsyncSession) -> None:
     assert body["walk_forward"]["skipped"] is False
 
 
-async def test_model_performance_series_matches_the_chart_contract(session: AsyncSession) -> None:
+async def test_model_performance_series_matches_the_chart_contract(
+    session: AsyncSession,
+) -> None:
     """The chart reads series[].{date,accuracy,rps,n_matches} plus current_accuracy
     and baseline_accuracy. Pin every one — an earlier revision returned a payload
     with none of them and the chart silently rendered an empty state forever."""
@@ -189,7 +198,9 @@ async def test_model_performance_series_matches_the_chart_contract(session: Asyn
     assert len(body["series"]) == body["walk_forward"]["n_splits"]
 
 
-async def test_model_performance_league_filter_accepts_canonical_form(session: AsyncSession) -> None:
+async def test_model_performance_league_filter_accepts_canonical_form(
+    session: AsyncSession,
+) -> None:
     from src.api.endpoints.performance import model_performance
 
     await _seed(session, n=10, league_id="EREDIVISIE")
@@ -202,7 +213,9 @@ async def test_model_performance_league_filter_accepts_canonical_form(session: A
     assert body["settled_predictions"] == 10  # only the EREDIVISIE rows counted
 
 
-async def test_model_performance_league_filter_accepts_legacy_code_alias(session: AsyncSession) -> None:
+async def test_model_performance_league_filter_accepts_legacy_code_alias(
+    session: AsyncSession,
+) -> None:
     from src.api.endpoints.performance import model_performance
 
     await _seed(session, n=10, league_id="EREDIVISIE")
@@ -215,7 +228,9 @@ async def test_model_performance_league_filter_accepts_legacy_code_alias(session
     assert body["settled_predictions"] == 10
 
 
-async def test_model_performance_clv_skipped_when_no_closing_lines(session: AsyncSession) -> None:
+async def test_model_performance_clv_skipped_when_no_closing_lines(
+    session: AsyncSession,
+) -> None:
     from src.api.endpoints.performance import model_performance
 
     await _seed(session, n=10)  # predictions + finished matches, zero closing lines
@@ -227,7 +242,9 @@ async def test_model_performance_clv_skipped_when_no_closing_lines(session: Asyn
     assert body["clv"]["n"] == 0
 
 
-async def test_model_performance_clv_computed_once_enough_closing_lines(session: AsyncSession) -> None:
+async def test_model_performance_clv_computed_once_enough_closing_lines(
+    session: AsyncSession,
+) -> None:
     from src.api.endpoints.performance import model_performance
 
     await _seed_with_closing_lines(session, n=10, finished=True)
@@ -239,7 +256,9 @@ async def test_model_performance_clv_computed_once_enough_closing_lines(session:
     assert body["clv"]["n"] == 10
 
 
-async def test_model_performance_clv_not_gated_by_walk_forward_floor(session: AsyncSession) -> None:
+async def test_model_performance_clv_not_gated_by_walk_forward_floor(
+    session: AsyncSession,
+) -> None:
     """clv and walk_forward are independent data floors in the same response:
     enough captured closing lines but zero finished matches must still 503
     on walk-forward while clv itself reports a real, non-skipped result."""

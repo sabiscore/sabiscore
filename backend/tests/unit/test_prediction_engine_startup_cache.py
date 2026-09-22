@@ -6,6 +6,7 @@ estimators instead of deserializing the same artifact again, while preserving
 manifest provenance and retaining a safe raw-loader fallback for future model
 generations that may carry extra calibration/overlay payloads.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -144,7 +145,6 @@ def test_startup_priming_preserves_the_meta_model_for_calibrated_serving() -> No
     assert result.calibration_applied is False
 
     PredictionEngine.clear_cache()
-
 
 
 def test_future_generation_refuses_lossy_startup_priming() -> None:

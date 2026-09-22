@@ -33,7 +33,10 @@ import numpy as np
 import pytest
 
 from src.models.calibration import _compute_brier_multiclass
-from src.models.evaluation.metrics import brier_score_decomposition, expected_brier_score
+from src.models.evaluation.metrics import (
+    brier_score_decomposition,
+    expected_brier_score,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SRC = BACKEND_ROOT / "src"
@@ -76,7 +79,7 @@ def test_expected_brier_stays_inside_the_published_field_range():
 @pytest.mark.parametrize(
     "bad",
     [
-        {"home_win": 0.5, "draw": 0.2, "away_win": 0.1},   # sums to 0.8
+        {"home_win": 0.5, "draw": 0.2, "away_win": 0.1},  # sums to 0.8
         {"home_win": 1.2, "draw": -0.1, "away_win": -0.1},  # out of [0,1]
         {"home_win": float("nan"), "draw": 0.5, "away_win": 0.5},
         {},
@@ -119,8 +122,8 @@ _SERVICES_THAT_PUBLISH_BRIER = (
 # Inline arithmetic that indicates a re-implemented Brier rather than a delegation.
 _INLINE_BRIER_PATTERNS = (
     re.compile(r"1\s*-\s*max\("),
-    re.compile(r"sum\([^)]*\*\s*\(\s*1(\.0)?\s*-"),          # sum(p * (1 - p) ...)
-    re.compile(r"1\.?0?\s*-\s*sum\([^)]*\*\*\s*2"),           # 1 - sum(p ** 2)
+    re.compile(r"sum\([^)]*\*\s*\(\s*1(\.0)?\s*-"),  # sum(p * (1 - p) ...)
+    re.compile(r"1\.?0?\s*-\s*sum\([^)]*\*\*\s*2"),  # 1 - sum(p ** 2)
 )
 
 

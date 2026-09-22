@@ -291,7 +291,9 @@ class DeveloperPlatformService:
             "daily_requests_used": day_count,
             "daily_requests_remaining": max(0, daily_limit - day_count),
             "is_active": api_key.is_active,
-            "last_used_at": api_key.last_used_at.isoformat() if api_key.last_used_at else None,
+            "last_used_at": api_key.last_used_at.isoformat()
+            if api_key.last_used_at
+            else None,
             "created_at": api_key.created_at.isoformat(),
         }
 

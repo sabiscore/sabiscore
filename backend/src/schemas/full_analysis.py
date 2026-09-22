@@ -54,9 +54,13 @@ class FullMatchEnsembleResponse(BaseModel):
             raise ValueError("available probabilities must sum to 1")
         expected_top = max(self.home_win_prob, self.draw_prob, self.away_win_prob)
         if abs(self.top_outcome_probability - expected_top) > 1e-4:
-            raise ValueError("top_outcome_probability must equal the largest class probability")
+            raise ValueError(
+                "top_outcome_probability must equal the largest class probability"
+            )
         if abs(self.confidence - self.top_outcome_probability) > 1e-4:
-            raise ValueError("confidence compatibility alias must equal top_outcome_probability")
+            raise ValueError(
+                "confidence compatibility alias must equal top_outcome_probability"
+            )
         return self
 
 
@@ -119,7 +123,9 @@ class EvidenceQualityResponse(BaseModel):
         groups = (self.critical_gaps, self.advisory_gaps, self.conflicts)
         if any(len(values) != len(dict.fromkeys(values)) for values in groups):
             raise ValueError("evidence categories must be deduplicated")
-        expected_all = list(dict.fromkeys([*self.critical_gaps, *self.advisory_gaps, *self.conflicts]))
+        expected_all = list(
+            dict.fromkeys([*self.critical_gaps, *self.advisory_gaps, *self.conflicts])
+        )
         if self.all_gaps != expected_all:
             raise ValueError("all_gaps must be the normalized evidence union")
         expected_counts = (
@@ -192,10 +198,14 @@ class FullMatchAnalysisResponseSchema(BaseModel):
     @model_validator(mode="after")
     def validate_availability_and_staking(self) -> "FullMatchAnalysisResponseSchema":
         if self.data_gaps != self.evidence_quality.all_gaps:
-            raise ValueError("data_gaps must remain an alias of evidence_quality.all_gaps")
+            raise ValueError(
+                "data_gaps must remain an alias of evidence_quality.all_gaps"
+            )
         if self.probabilities_available != self.ensemble.probabilities_available:
             raise ValueError("probability availability fields must agree")
-        if self.probabilities_available != (self.prediction_status == PredictionStatus.AVAILABLE):
+        if self.probabilities_available != (
+            self.prediction_status == PredictionStatus.AVAILABLE
+        ):
             raise ValueError("prediction_status and probabilities_available must agree")
         expected_source = {
             PredictionStatus.AVAILABLE: (
@@ -212,13 +222,18 @@ class FullMatchAnalysisResponseSchema(BaseModel):
             self.prediction_status == PredictionStatus.REDUCED_EVIDENCE_BASELINE
         ):
             raise ValueError("reduced-evidence flag must agree with prediction_status")
-        if abs(self.top_outcome_probability - self.ensemble.top_outcome_probability) > 0.0001:
+        if (
+            abs(self.top_outcome_probability - self.ensemble.top_outcome_probability)
+            > 0.0001
+        ):
             raise ValueError("top_outcome_probability fields must agree")
         expected_partial = bool(
             self.evidence_quality.critical_gaps or self.evidence_quality.conflicts
         )
         if self.partial_intelligence != expected_partial:
-            raise ValueError("partial_intelligence must derive only from critical gaps or conflicts")
+            raise ValueError(
+                "partial_intelligence must derive only from critical gaps or conflicts"
+            )
         if self.stake_permitted and (
             self.partial_intelligence
             or self.verdict not in {"ACTIONABLE", "HIGH_CONVICTION"}
@@ -237,7 +252,9 @@ class FullMatchAnalysisResponseSchema(BaseModel):
                 self.actionability is not None
                 and self.actionability.suggested_stake_pct > 0
             ):
-                raise ValueError("non-permitted states must expose zero suggested stake")
+                raise ValueError(
+                    "non-permitted states must expose zero suggested stake"
+                )
         return self
 
 

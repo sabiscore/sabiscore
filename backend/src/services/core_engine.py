@@ -35,8 +35,8 @@ OUTCOMES = (
 )
 
 CORE_MIN_ACTIONABLE_EDGE = 0.042
-CORE_KELLY_FRACTION = 0.25   # quarter-Kelly (directive §12)
-CORE_MAX_KELLY_CAP = 0.05    # 5% of bankroll hard cap (directive §12)
+CORE_KELLY_FRACTION = 0.25  # quarter-Kelly (directive §12)
+CORE_MAX_KELLY_CAP = 0.05  # 5% of bankroll hard cap (directive §12)
 CORE_MIN_MARKET_OVERROUND = 1.0
 CORE_MAX_MARKET_OVERROUND = 1.25
 PROBABILITY_TOLERANCE = 0.005
@@ -107,8 +107,12 @@ def analyze_core_matches(matches: Iterable[CoreMatchInput]) -> CoreEngineRespons
 
     return CoreEngineResponse(
         generated_at=generated_at,
-        top_opportunities=[output.match_id for _, output in top_pairs[:3] if output.match_id],
-        batch_watchlist=[output.match_id for _, output in watchlist_pairs if output.match_id],
+        top_opportunities=[
+            output.match_id for _, output in top_pairs[:3] if output.match_id
+        ],
+        batch_watchlist=[
+            output.match_id for _, output in watchlist_pairs if output.match_id
+        ],
         matches=evaluated,
     )
 
@@ -286,7 +290,9 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
             candidate=best,
             confidence="LOW",
             drivers=drivers,
-            risks=["Single-provider evidence: a second independent source is required before execution."],
+            risks=[
+                "Single-provider evidence: a second independent source is required before execution."
+            ],
             invalidation_conditions=invalidation_conditions,
             explanation="Only one independent evidence provider contributed to this analysis. Minimum two providers required for SPECULATIVE or above.",
         )
@@ -319,7 +325,8 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
             confidence="LOW",
             stake_fraction=0.0,
             drivers=drivers,
-            risks=risks or ["Speculative position remains below the actionable edge threshold."],
+            risks=risks
+            or ["Speculative position remains below the actionable edge threshold."],
             invalidation_conditions=invalidation_conditions,
             explanation="Positive EV exists below the actionable threshold with confirming market signal; this remains watchlist-only with no public stake.",
         )
@@ -354,7 +361,9 @@ def _evaluate_match(match: CoreMatchInput) -> CoreMatchOutput:
     elif match.competition == "UCL":
         risks.append("UCL soft coverage caps the verdict at ACTIONABLE.")
     elif provider_count is not None and provider_count < 4 and provider_count >= 2:
-        risks.append(f"Provider ceiling: {provider_count}/4 independent sources. Four required for HIGH_CONVICTION.")
+        risks.append(
+            f"Provider ceiling: {provider_count}/4 independent sources. Four required for HIGH_CONVICTION."
+        )
 
     return _build_output(
         match=match,
@@ -568,6 +577,7 @@ def _build_candidates(
     effective_kelly_cap = CORE_MAX_KELLY_CAP
     try:
         from ..core.league_policy import get_league_policy
+
         if match.competition:
             _lp = get_league_policy(match.competition)
             effective_kelly_cap = _lp.kelly_cap
@@ -594,7 +604,9 @@ def _build_candidates(
         edge = model_probability - fair_probabilities[key]
         expected_value = (model_probability * odds) - 1.0
         kelly_full = expected_value / (odds - 1.0) if odds > 1.0 else 0.0
-        kelly_fraction = min(max(kelly_full, 0.0) * CORE_KELLY_FRACTION, effective_kelly_cap)
+        kelly_fraction = min(
+            max(kelly_full, 0.0) * CORE_KELLY_FRACTION, effective_kelly_cap
+        )
         score = (
             max(expected_value, 0.0)
             * uncertainty_factor
@@ -672,7 +684,9 @@ def _drivers(match: CoreMatchInput, candidate: Candidate) -> list[str]:
     if signals and signals.sharp_market_signal == "CONFIRMING":
         drivers.append("Sharp market signal is confirming.")
     if signals and signals.club_elo_difference is not None:
-        drivers.append(f"Club Elo differential supplied: {signals.club_elo_difference:.2f}.")
+        drivers.append(
+            f"Club Elo differential supplied: {signals.club_elo_difference:.2f}."
+        )
     return drivers
 
 
@@ -698,8 +712,12 @@ def _invalidation_conditions(match: CoreMatchInput, candidate: Candidate) -> lis
             f"Invalidate if {candidate.market} odds fall below {candidate.minimum_acceptable_odds:.4f}."
         )
     if match.signals and match.signals.lineup_status != "CONFIRMED":
-        conditions.append("Invalidate or re-run if starting lineup status changes materially.")
-    conditions.append("Invalidate if any critical source status becomes STALE, CONFLICTING, or DATA_GAP.")
+        conditions.append(
+            "Invalidate or re-run if starting lineup status changes materially."
+        )
+    conditions.append(
+        "Invalidate if any critical source status becomes STALE, CONFLICTING, or DATA_GAP."
+    )
     return conditions
 
 
@@ -762,7 +780,9 @@ def _build_output(
         fair_market_probability=_round_or_none(
             candidate.fair_market_probability if candidate else None
         ),
-        edge=None if verdict == "PARTIAL" else _round_or_none(candidate.edge if candidate else None),
+        edge=None
+        if verdict == "PARTIAL"
+        else _round_or_none(candidate.edge if candidate else None),
         edge_percentage_points=None
         if verdict == "PARTIAL"
         else _round_or_none((candidate.edge * 100.0) if candidate else None),

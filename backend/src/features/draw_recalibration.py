@@ -15,6 +15,7 @@ alongside the existing per-league draw threshold.
 B13 compliance: no synthetic injection — if calibration set is empty,
 factor defaults to 1.0 (no adjustment) and the caller surfaces DATA_GAP.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

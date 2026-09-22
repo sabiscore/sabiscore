@@ -25,7 +25,9 @@ def _parse_date(value: Any) -> datetime | None:
     for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S%z"):
         try:
             parsed = datetime.strptime(raw, fmt)
-            return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+            return (
+                parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+            )
         except ValueError:
             continue
     try:
@@ -75,12 +77,22 @@ class ScrapedTeamForm:
 class ScrapedTeamFormStore:
     def __init__(self, root: str | Path | None = None) -> None:
         configured = root or os.getenv("SCRAPER_PROCESSED_ROOT")
-        self.root = Path(configured).expanduser().resolve() if configured else _DEFAULT_ROOT.resolve()
+        self.root = (
+            Path(configured).expanduser().resolve()
+            if configured
+            else _DEFAULT_ROOT.resolve()
+        )
 
-    def get_team_form(self, *, competition: str, team: str, information_cutoff: datetime | None = None) -> ScrapedTeamForm | None:
+    def get_team_form(
+        self, *, competition: str, team: str, information_cutoff: datetime | None = None
+    ) -> ScrapedTeamForm | None:
         if not self.root.exists():
             return None
-        files = sorted(self.root.glob(f"team-form-{competition.upper()}-*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+        files = sorted(
+            self.root.glob(f"team-form-{competition.upper()}-*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
         target = _norm(team)
         cutoff = information_cutoff
         if cutoff is not None and cutoff.tzinfo is None:
@@ -93,28 +105,55 @@ class ScrapedTeamFormStore:
             if not isinstance(payload, list):
                 continue
             for item in payload:
-                if not isinstance(item, dict) or _norm(str(item.get("team") or "")) != target:
+                if (
+                    not isinstance(item, dict)
+                    or _norm(str(item.get("team") or "")) != target
+                ):
                     continue
                 record = self._parse_record(item, path)
                 if record is None:
                     continue
-                if cutoff and record.latest_match_date and record.latest_match_date >= cutoff:
+                if (
+                    cutoff
+                    and record.latest_match_date
+                    and record.latest_match_date >= cutoff
+                ):
                     continue
                 return record
         return None
 
     @staticmethod
     def _parse_record(item: dict[str, Any], path: Path) -> ScrapedTeamForm | None:
-        numeric_fields = ("matches_sampled", "ppg", "wins", "draws", "losses", "goals_for_avg", "goals_against_avg", "goal_difference_avg")
-        if any(not isinstance(item.get(field), (int, float)) for field in numeric_fields):
+        numeric_fields = (
+            "matches_sampled",
+            "ppg",
+            "wins",
+            "draws",
+            "losses",
+            "goals_for_avg",
+            "goals_against_avg",
+            "goal_difference_avg",
+        )
+        if any(
+            not isinstance(item.get(field), (int, float)) for field in numeric_fields
+        ):
             return None
         matches = int(item["matches_sampled"])
-        if matches <= 0 or int(item["wins"]) + int(item["draws"]) + int(item["losses"]) != matches:
+        if (
+            matches <= 0
+            or int(item["wins"]) + int(item["draws"]) + int(item["losses"]) != matches
+        ):
             return None
         return ScrapedTeamForm(
-            team=str(item.get("team") or ""), matches_sampled=matches, ppg=float(item["ppg"]),
-            wins=int(item["wins"]), draws=int(item["draws"]), losses=int(item["losses"]),
-            goals_for_avg=float(item["goals_for_avg"]), goals_against_avg=float(item["goals_against_avg"]),
-            goal_difference_avg=float(item["goal_difference_avg"]), latest_match_date=_parse_date(item.get("latest_match_date")),
+            team=str(item.get("team") or ""),
+            matches_sampled=matches,
+            ppg=float(item["ppg"]),
+            wins=int(item["wins"]),
+            draws=int(item["draws"]),
+            losses=int(item["losses"]),
+            goals_for_avg=float(item["goals_for_avg"]),
+            goals_against_avg=float(item["goals_against_avg"]),
+            goal_difference_avg=float(item["goal_difference_avg"]),
+            latest_match_date=_parse_date(item.get("latest_match_date")),
             source_file=path,
         )

@@ -26,6 +26,7 @@ always holdout-measured; the fitted-on-rows figures are kept beside them under
 Pass ``--force`` to re-fit an artifact that already carries a calibrator;
 without it such artifacts are skipped, which is how stale ones persist.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -97,13 +98,22 @@ def _load_csv_rows(cache_dir: Path, league: str) -> List[dict]:
                 if not (d and hg_raw != "" and ag_raw != ""):
                     continue
                 try:
-                    rows.append({"date": d, "hg": int(float(hg_raw)), "ag": int(float(ag_raw)), "_row": row})
+                    rows.append(
+                        {
+                            "date": d,
+                            "hg": int(float(hg_raw)),
+                            "ag": int(float(ag_raw)),
+                            "_row": row,
+                        }
+                    )
                 except (ValueError, TypeError):
                     continue
     return sorted(rows, key=lambda r: r["date"])
 
 
-def _build_X_y(rows: List[dict], feature_columns: List[str]) -> Tuple[np.ndarray, np.ndarray, List[date]]:
+def _build_X_y(
+    rows: List[dict], feature_columns: List[str]
+) -> Tuple[np.ndarray, np.ndarray, List[date]]:
     X_rows, y_rows, dates = [], [], []
     for r in rows:
         raw = r["_row"]
@@ -118,16 +128,22 @@ def _build_X_y(rows: List[dict], feature_columns: List[str]) -> Tuple[np.ndarray
         y_rows.append(_outcome(r["hg"], r["ag"]))
         dates.append(r["date"])
     if not X_rows:
-        return np.empty((0, len(feature_columns)), dtype=np.float32), np.empty(0, dtype=np.int64), []
+        return (
+            np.empty((0, len(feature_columns)), dtype=np.float32),
+            np.empty(0, dtype=np.int64),
+            [],
+        )
     return np.array(X_rows, dtype=np.float32), np.array(y_rows, dtype=np.int64), dates
 
 
 def _season_of(d: date) -> str:
     yr = d.year
-    return f"{yr}-{yr+1}" if d.month >= 8 else f"{yr-1}-{yr}"
+    return f"{yr}-{yr + 1}" if d.month >= 8 else f"{yr - 1}-{yr}"
 
 
-def _chronological_masks(dates: List[date], holdout_season: str) -> Tuple[np.ndarray, np.ndarray]:
+def _chronological_masks(
+    dates: List[date], holdout_season: str
+) -> Tuple[np.ndarray, np.ndarray]:
     seasons = np.array([_season_of(d) for d in dates])
     all_seasons = sorted(set(seasons.tolist()))
     if holdout_season not in all_seasons or len(all_seasons) < 2:
@@ -167,7 +183,9 @@ def _build_meta_features(models: Dict[str, Any], X: np.ndarray) -> np.ndarray:
     return np.hstack(columns)
 
 
-def _served_probabilities(bundle: Dict[str, Any], X: np.ndarray) -> Tuple[np.ndarray, str, str]:
+def _served_probabilities(
+    bundle: Dict[str, Any], X: np.ndarray
+) -> Tuple[np.ndarray, str, str]:
     """Return the exact probability domain used by PredictionEngine.
 
     Returns ``(probabilities, serving_head, feature_domain)``.  The serving
@@ -185,10 +203,15 @@ def _served_probabilities(bundle: Dict[str, Any], X: np.ndarray) -> Tuple[np.nda
         proba = np.asarray(meta_model.predict_proba(meta_features), dtype=np.float64)
         head = type(meta_model).__name__
         if not _valid_probability_matrix(proba):
-            raise ValueError(f"meta_model {head} returned an invalid probability simplex")
+            raise ValueError(
+                f"meta_model {head} returned an invalid probability simplex"
+            )
         return proba, "meta_model", head
 
-    probabilities = [np.asarray(model.predict_proba(X), dtype=np.float64) for model in models.values()]
+    probabilities = [
+        np.asarray(model.predict_proba(X), dtype=np.float64)
+        for model in models.values()
+    ]
     if any(not _valid_probability_matrix(p) for p in probabilities):
         raise ValueError("base learner returned an invalid probability simplex")
     proba = np.mean(probabilities, axis=0)
@@ -216,7 +239,12 @@ def _fit_platt(
     ``declined`` (fit succeeded but the holdout says it does not help), or
     ``error``.
     """
-    from src.models.calibration import FittedCalibrator, apply_calibrator, compute_ece, fit_calibrator
+    from src.models.calibration import (
+        FittedCalibrator,
+        apply_calibrator,
+        compute_ece,
+        fit_calibrator,
+    )
 
     try:
         proba_cal, serving_head, serving_domain = _served_probabilities(bundle, X_cal)
@@ -234,7 +262,9 @@ def _fit_platt(
         proba_cal_after = apply_calibrator(method, calibrators, proba_cal)
         proba_hold_after = apply_calibrator(method, calibrators, proba_hold)
 
-        if not _valid_probability_matrix(proba_cal_after) or not _valid_probability_matrix(proba_hold_after):
+        if not _valid_probability_matrix(
+            proba_cal_after
+        ) or not _valid_probability_matrix(proba_hold_after):
             raise ValueError("calibrator returned an invalid probability simplex")
 
         def _brier(yy: np.ndarray, pp: np.ndarray) -> float:
@@ -265,9 +295,17 @@ def _fit_platt(
             "[DEBT-83] %-12s head=%s method=%s n_cal=%d n_hold=%d "
             "holdout ece %.4f→%.4f brier %.4f→%.4f "
             "(in-sample diagnostic ece %.4f→%.4f)",
-            league, serving_domain, method, len(y_cal), len(y_hold),
-            ece_before["mean"], ece_after["mean"], brier_before, brier_after,
-            ece_insample_before["mean"], ece_insample_after["mean"],
+            league,
+            serving_domain,
+            method,
+            len(y_cal),
+            len(y_hold),
+            ece_before["mean"],
+            ece_after["mean"],
+            brier_before,
+            brier_after,
+            ece_insample_before["mean"],
+            ece_insample_after["mean"],
         )
 
         # Directive §19: "Do not force a calibrator into production."  Acceptance
@@ -280,8 +318,12 @@ def _fit_platt(
             logger.warning(
                 "[DEBT-83] %-12s calibrator DECLINED on holdout evidence: "
                 "ece %.4f→%.4f brier %.4f→%.4f — leaving %s uncalibrated",
-                league, ece_before["mean"], ece_after["mean"],
-                brier_before, brier_after, serving_domain,
+                league,
+                ece_before["mean"],
+                ece_after["mean"],
+                brier_before,
+                brier_after,
+                serving_domain,
             )
             return None, "declined"
 
@@ -314,7 +356,10 @@ def _fit_platt(
                 "class_order": ["home", "draw", "away"],
                 "calibration_rows": int(len(y_cal)),
                 "holdout_rows": int(len(y_hold)),
-                "calibration_period": [calibration_start.isoformat(), calibration_end.isoformat()],
+                "calibration_period": [
+                    calibration_start.isoformat(),
+                    calibration_end.isoformat(),
+                ],
                 "holdout_period": [holdout_start.isoformat(), holdout_end.isoformat()],
                 "evidence_basis": "holdout",
                 "holdout_ece_before": ece_before,
@@ -364,7 +409,9 @@ def inject(
                 artifact_path.name,
             )
             return False
-        logger.info("%s already has calibrator — re-fitting (--force)", artifact_path.name)
+        logger.info(
+            "%s already has calibrator — re-fitting (--force)", artifact_path.name
+        )
         bundle["calibrator"] = None
 
     feature_columns: List[str] = list(bundle.get("feature_columns") or [])
@@ -374,19 +421,28 @@ def inject(
 
     rows = _load_csv_rows(cache_dir, league)
     if len(rows) < 200:
-        logger.warning("%s has insufficient CSV rows (%d) — skipping", league, len(rows))
+        logger.warning(
+            "%s has insufficient CSV rows (%d) — skipping", league, len(rows)
+        )
         return False
     X, y, dates = _build_X_y(rows, feature_columns)
     del rows
     gc.collect()
     if len(y) < 100:
-        logger.warning("%s has insufficient feature rows (%d) — skipping", league, len(y))
+        logger.warning(
+            "%s has insufficient feature rows (%d) — skipping", league, len(y)
+        )
         return False
 
     cal_mask, hold_mask = _chronological_masks(dates, holdout_season)
     n_cal, n_hold = int(cal_mask.sum()), int(hold_mask.sum())
     if n_cal < 30 or n_hold < 10:
-        logger.warning("%s has too few calibration/holdout rows (%d/%d) — skipping", league, n_cal, n_hold)
+        logger.warning(
+            "%s has too few calibration/holdout rows (%d/%d) — skipping",
+            league,
+            n_cal,
+            n_hold,
+        )
         return False
 
     cal_dates = [d for d, flag in zip(dates, cal_mask) if flag]
@@ -429,10 +485,14 @@ def inject(
             }
         )
         if dry_run:
-            logger.info("[DRY RUN] would strip declined calibrator from %s", artifact_path.name)
+            logger.info(
+                "[DRY RUN] would strip declined calibrator from %s", artifact_path.name
+            )
             return True
         joblib.dump(bundle, artifact_path, compress=3)
-        logger.info("%s: removed calibrator declined by holdout evidence", artifact_path.name)
+        logger.info(
+            "%s: removed calibrator declined by holdout evidence", artifact_path.name
+        )
         return True
 
     bundle["calibrator"] = calibrator
@@ -462,7 +522,9 @@ def inject(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="DEBT-83: inject canonical served-domain Platt calibrators")
+    ap = argparse.ArgumentParser(
+        description="DEBT-83: inject canonical served-domain Platt calibrators"
+    )
     ap.add_argument("--models-dir", type=Path, default=Path("models"))
     ap.add_argument("--cache-dir", type=Path, default=Path("data/cache"))
     ap.add_argument("--holdout-season", default="2024-2025")
@@ -481,11 +543,13 @@ def main() -> int:
         return 1
 
     pkls = [
-        p for p in sorted(models_dir.glob("*_ensemble_*.pkl"))
+        p
+        for p in sorted(models_dir.glob("*_ensemble_*.pkl"))
         if ".pre_debt83_bak" not in p.name
     ]
     pkls += [
-        p for p in sorted(models_dir.glob("*_ensemble_*.joblib"))
+        p
+        for p in sorted(models_dir.glob("*_ensemble_*.joblib"))
         if ".pre_debt83_bak" not in p.name
     ]
     if not pkls:

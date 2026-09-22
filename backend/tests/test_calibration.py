@@ -73,6 +73,7 @@ def _perfect_proba(y: np.ndarray) -> np.ndarray:
 
 # ── select_calibration_method ─────────────────────────────────────────────────
 
+
 class TestSelectCalibrationMethod:
     def test_isotonic_above_threshold(self):
         assert select_calibration_method(2000) == "isotonic"
@@ -97,6 +98,7 @@ class TestSelectCalibrationMethod:
 
 # ── compute_ece ───────────────────────────────────────────────────────────────
 
+
 class TestComputeEce:
     def test_perfect_calibration_near_zero(self):
         y, _ = _make_data(200)
@@ -113,9 +115,7 @@ class TestComputeEce:
     def test_mean_equals_average_of_classes(self):
         y, p = _make_data(100)
         ece = compute_ece(y, p)
-        expected_mean = round(
-            (ece["class_0"] + ece["class_1"] + ece["class_2"]) / 3, 4
-        )
+        expected_mean = round((ece["class_0"] + ece["class_1"] + ece["class_2"]) / 3, 4)
         assert ece["mean"] == expected_mean
 
     def test_empty_safe(self):
@@ -126,6 +126,7 @@ class TestComputeEce:
 
 
 # ── _compute_brier_multiclass ────────────────────────────────────────────────
+
 
 class TestComputeBrierMulticlass:
     def test_perfect_prediction_is_zero(self):
@@ -153,6 +154,7 @@ class TestComputeBrierMulticlass:
 
 
 # ── fit_calibrator / apply_calibrator ────────────────────────────────────────
+
 
 class TestFitApplyCalibrator:
     @pytest.mark.parametrize("method", ["isotonic", "sigmoid", "temperature"])
@@ -184,6 +186,7 @@ class TestFitApplyCalibrator:
 
 
 # ── run_league_calibration ────────────────────────────────────────────────────
+
 
 class TestRunLeagueCalibration:
     def test_returns_fitted_calibrator(self):
@@ -229,13 +232,13 @@ class TestRunLeagueCalibration:
     def test_force_method_respected(self):
         y, p = _make_data(3000, seed=3)
         fc = run_league_calibration(
-            "epl", y[:2500], p[:2500], y[2500:], p[2500:],
-            force_method="temperature"
+            "epl", y[:2500], p[:2500], y[2500:], p[2500:], force_method="temperature"
         )
         assert fc.method == "temperature"
 
 
 # ── compare_calibration_methods ───────────────────────────────────────────────
+
 
 class TestCompareCalibrationMethods:
     def test_returns_fitted_calibrator(self):
@@ -247,13 +250,23 @@ class TestCompareCalibrationMethods:
         y, p = _make_data(300)
         fc = compare_calibration_methods("epl", y[:200], p[:200], y[200:], p[200:])
         assert fc.method_comparison is not None
-        assert set(fc.method_comparison.keys()) == {"isotonic", "sigmoid", "temperature"}
+        assert set(fc.method_comparison.keys()) == {
+            "isotonic",
+            "sigmoid",
+            "temperature",
+        }
 
     def test_comparison_table_has_expected_keys(self):
         y, p = _make_data(300)
         fc = compare_calibration_methods("epl", y[:200], p[:200], y[200:], p[200:])
         for method_info in fc.method_comparison.values():
-            for k in ("ece_delta_mean", "brier_delta", "draw_f1_delta", "brier_after", "draw_f1_after"):
+            for k in (
+                "ece_delta_mean",
+                "brier_delta",
+                "draw_f1_delta",
+                "brier_after",
+                "draw_f1_after",
+            ):
                 assert k in method_info, f"missing key {k}"
 
     def test_selected_method_is_valid(self):
@@ -277,6 +290,7 @@ class TestCompareCalibrationMethods:
 
 # ── write_calibration_report ──────────────────────────────────────────────────
 
+
 class TestWriteCalibrationReport:
     def test_creates_json_file(self, tmp_path):
         y, p = _make_data(300)
@@ -291,17 +305,29 @@ class TestWriteCalibrationReport:
         path = write_calibration_report(fc, tmp_path)
         report = json.loads(path.read_text())
         for key in (
-            "league", "method", "n_training_rows", "selection_rationale",
-            "ece_before", "ece_after", "ece_delta_mean",
-            "brier_before", "brier_after", "brier_delta",
-            "draw_f1_before", "draw_f1_after", "draw_f1_delta",
-            "generated_at", "generated_date",
+            "league",
+            "method",
+            "n_training_rows",
+            "selection_rationale",
+            "ece_before",
+            "ece_after",
+            "ece_delta_mean",
+            "brier_before",
+            "brier_after",
+            "brier_delta",
+            "draw_f1_before",
+            "draw_f1_after",
+            "draw_f1_delta",
+            "generated_at",
+            "generated_date",
         ):
             assert key in report, f"missing key {key}"
 
     def test_method_comparison_included_when_present(self, tmp_path):
         y, p = _make_data(300)
-        fc = compare_calibration_methods("bundesliga", y[:200], p[:200], y[200:], p[200:])
+        fc = compare_calibration_methods(
+            "bundesliga", y[:200], p[:200], y[200:], p[200:]
+        )
         path = write_calibration_report(fc, tmp_path)
         report = json.loads(path.read_text())
         assert "method_comparison" in report
@@ -316,6 +342,7 @@ class TestWriteCalibrationReport:
 
 
 # ── BivariatePoissonDrawOverlay ───────────────────────────────────────────────
+
 
 class TestBivariatePoissonSkellam:
     def test_skellam_draw_proba_shape(self):
@@ -338,31 +365,41 @@ class TestBivariatePoissonSkellam:
 
     def test_fit_returns_instance(self):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         assert isinstance(overlay, BivariatePoissonDrawOverlay)
 
     def test_alpha_in_valid_range(self):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         assert 0.0 <= overlay.alpha <= 1.0
 
     def test_gate_false_resets_alpha_to_zero(self):
         # Random noise data → gate should rarely pass; if it does pass we just
         # verify alpha is still in range. The key invariant: alpha==0 ↔ gate_passed==False.
         y, p = _make_data(200, seed=99)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         if not overlay.gate_passed:
             assert overlay.alpha == 0.0
 
     def test_apply_output_shape(self):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         out = overlay.apply(p[150:])
         assert out.shape == p[150:].shape
 
     def test_apply_rows_sum_to_one(self):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         out = overlay.apply(p[150:])
         np.testing.assert_allclose(out.sum(axis=1), np.ones(50), atol=1e-6)
 
@@ -374,7 +411,9 @@ class TestBivariatePoissonSkellam:
 
     def test_brier_fields_populated(self):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         assert 0.0 <= overlay.calibration_brier_before <= 2.0
         assert 0.0 <= overlay.calibration_brier_after <= 2.0
         assert 0.0 <= overlay.holdout_brier_before <= 2.0
@@ -405,19 +444,25 @@ class TestBivariatePoissonSkellam:
                 return 0.10  # calibration "before"
             if p is p_hold:
                 return 0.50  # holdout "before" -- already better than its own "after"
-            return 0.90 if len(y) == len(y_cal) else 0.20  # "after": calibration vs holdout
+            return (
+                0.90 if len(y) == len(y_cal) else 0.20
+            )  # "after": calibration vs holdout
 
         def fake_brier(y, p):
             if p is p_cal:
                 return 0.60  # calibration "before"
             if p is p_hold:
                 return 0.30  # holdout "before" -- already better than its own "after"
-            return 0.20 if len(y) == len(y_cal) else 0.70  # "after": calibration vs holdout
+            return (
+                0.20 if len(y) == len(y_cal) else 0.70
+            )  # "after": calibration vs holdout
 
         monkeypatch.setattr(calibration_module, "_draw_f1", fake_draw_f1)
         monkeypatch.setattr(calibration_module, "_compute_brier_multiclass", fake_brier)
 
-        overlay = BivariatePoissonDrawOverlay.fit(y_cal, p_cal, y_holdout=y_hold, proba_holdout=p_hold)
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y_cal, p_cal, y_holdout=y_hold, proba_holdout=p_hold
+        )
 
         # The calibration set alone would call this a clean win: f1 0.10->0.90, brier 0.60->0.20.
         assert overlay.calibration_draw_f1_before == 0.10
@@ -439,28 +484,42 @@ class TestBivariatePoissonSkellam:
 class TestWriteBivariatePoissonReport:
     def test_creates_json_file(self, tmp_path):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         path = write_bivariate_poisson_report(overlay, "serie_a", tmp_path)
         assert path.exists()
         assert path.name == "bivariate_poisson_serie_a.json"
 
     def test_json_schema_complete(self, tmp_path):
         y, p = _make_data(200)
-        overlay = BivariatePoissonDrawOverlay.fit(y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:])
+        overlay = BivariatePoissonDrawOverlay.fit(
+            y[:150], p[:150], y_holdout=y[150:], proba_holdout=p[150:]
+        )
         path = write_bivariate_poisson_report(overlay, "ligue_1", tmp_path)
         report = json.loads(path.read_text())
         for key in (
-            "league", "alpha", "league_avg_goals",
-            "calibration_draw_f1_before", "calibration_draw_f1_after",
-            "calibration_brier_before", "calibration_brier_after",
-            "holdout_draw_f1_before", "holdout_draw_f1_after", "holdout_draw_f1_delta",
-            "holdout_brier_before", "holdout_brier_after", "holdout_brier_delta",
-            "gate_passed", "generated_at",
+            "league",
+            "alpha",
+            "league_avg_goals",
+            "calibration_draw_f1_before",
+            "calibration_draw_f1_after",
+            "calibration_brier_before",
+            "calibration_brier_after",
+            "holdout_draw_f1_before",
+            "holdout_draw_f1_after",
+            "holdout_draw_f1_delta",
+            "holdout_brier_before",
+            "holdout_brier_after",
+            "holdout_brier_delta",
+            "gate_passed",
+            "generated_at",
         ):
             assert key in report, f"missing key {key}"
 
 
 # ── EnsembleDiversityDiagnostics ──────────────────────────────────────────────
+
 
 def _mock_model(proba: np.ndarray) -> MagicMock:
     m = MagicMock()
@@ -556,9 +615,15 @@ class TestWriteDiversityReport:
         path = write_diversity_report(report, tmp_path)
         data = json.loads(path.read_text())
         for key in (
-            "league", "member_names", "correlation_matrix",
-            "mean_off_diagonal_correlation", "pruning_threshold",
-            "flagged_members", "pruned_members", "retained_members",
-            "pruning_rationale", "generated_at",
+            "league",
+            "member_names",
+            "correlation_matrix",
+            "mean_off_diagonal_correlation",
+            "pruning_threshold",
+            "flagged_members",
+            "pruned_members",
+            "retained_members",
+            "pruning_rationale",
+            "generated_at",
         ):
             assert key in data, f"missing key {key}"

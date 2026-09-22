@@ -14,6 +14,7 @@ carry more weight than distant history.
 
 Persistence mirrors elo_engine.py: parquet at settings.berrar_ratings_parquet_path.
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,7 +50,9 @@ class BerrarRatingSystem:
         "match_date",
     ]
 
-    def __init__(self, parquet_path: Optional[Path] = None, decay: float = 0.98) -> None:
+    def __init__(
+        self, parquet_path: Optional[Path] = None, decay: float = 0.98
+    ) -> None:
         self.decay = decay
         self._parquet_path = parquet_path
         self._ratings: Dict[str, float] = defaultdict(lambda: _DEFAULT_RATING)
@@ -96,7 +99,9 @@ class BerrarRatingSystem:
         k = 32.0
 
         self._ratings[home] = rh_pre + k * (score_h - exp_h) * self.decay
-        self._ratings[away] = ra_pre + k * ((1.0 - score_h) - (1.0 - exp_h)) * self.decay
+        self._ratings[away] = (
+            ra_pre + k * ((1.0 - score_h) - (1.0 - exp_h)) * self.decay
+        )
 
         rows = [
             {
@@ -141,7 +146,9 @@ class BerrarRatingSystem:
             self._replay_to_current(table)
             self._cache = table
         except Exception:
-            logger.warning("Could not load berrar_ratings parquet at %s; starting fresh.", path)
+            logger.warning(
+                "Could not load berrar_ratings parquet at %s; starting fresh.", path
+            )
 
     def _persist(self, table: pd.DataFrame) -> None:
         if not self._parquet_path:

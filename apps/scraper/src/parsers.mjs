@@ -37,7 +37,45 @@ function splitCsvLine(line) {
   return values;
 }
 
-export function normalizeFootballDataRows(rows, league) {
+import { createHash } from "node:crypto";
+
+export function canonicalTeamKey(name) {
+  return String(name ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function isCorruptOrMojibake(name) {
+  if (name === null || name === undefined) return true;
+  const str = String(name).trim();
+  if (str.length === 0) return true;
+  // Unicode replacement character \uFFFD indicates decoded corruption
+  if (str.includes("\uFFFD")) return true;
+  // Unprintable control characters (except common whitespace)
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(str)) return true;
+  // Common double-encoded UTF-8 / Latin1 mojibake markers
+  if (/(?:Ã[¡-ÿ]|Â[^\s]|â€)/.test(str)) return true;
+  return false;
+}
+
+export function canonicalFixtureKey({ competition, season, homeTeam, awayTeam }) {
+  const comp = String(competition ?? "").toUpperCase().trim();
+  const seas = String(season ?? "unknown").trim();
+  const home = canonicalTeamKey(homeTeam);
+  const away = canonicalTeamKey(awayTeam);
+  return `${comp}:${seas}:${home}:vs:${away}`;
+}
+
+export function canonicalFixtureId({ competition, season, homeTeam, awayTeam }) {
+  const key = canonicalFixtureKey({ competition, season, homeTeam, awayTeam });
+  const hash = createHash("sha256").update(Buffer.from(key, "utf8")).digest("hex");
+  return `cfx-${hash.slice(0, 24)}`;
+}
+
+export function normalizeFootballDataRows(rows, league, { season = "unknown" } = {}) {
   if (rows.length > 0) {
     const required = ["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"];
     const missing = required.filter((field) => !(field in rows[0]));
@@ -57,10 +95,31 @@ export function normalizeFootballDataRows(rows, league) {
   return rows
     .filter((row) => row.Date && row.HomeTeam && row.AwayTeam)
     .map((row, sourceRowIndex) => {
+      if (isCorruptOrMojibake(row.HomeTeam)) {
+        throw new Error(`poison_payload_corrupt_entity:home_team="${row.HomeTeam}"`);
+      }
+      if (isCorruptOrMojibake(row.AwayTeam)) {
+        throw new Error(`poison_payload_corrupt_entity:away_team="${row.AwayTeam}"`);
+      }
+      const cfxKey = canonicalFixtureKey({
+        competition: league,
+        season,
+        homeTeam: row.HomeTeam,
+        awayTeam: row.AwayTeam,
+      });
+      const cfxId = canonicalFixtureId({
+        competition: league,
+        season,
+        homeTeam: row.HomeTeam,
+        awayTeam: row.AwayTeam,
+      });
       const market = coherentBook(row);
       return {
         source: "football-data-csv",
-        source_native_id: null,
+        source_native_id: cfxId,
+        canonical_fixture_id: cfxId,
+        canonical_fixture_key: cfxKey,
+        season,
         source_row_index: sourceRowIndex + 2,
         league,
         match_date: row.Date,

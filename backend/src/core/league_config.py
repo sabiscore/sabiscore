@@ -8,6 +8,7 @@ UCL is intentionally SOFT: the training corpus is smaller than domestic leagues,
 so epistemic uncertainty is higher for knockout-stage fixtures. Predictions are
 allowed but surface an explicit ``caveat_text`` in the actionability block.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -100,7 +101,9 @@ ACTIVE_LEAGUES: FrozenSet[LeagueProfile] = frozenset(
 )
 
 # O(1) lookup by league ID
-LEAGUE_BY_ID: Dict[str, LeagueProfile] = {league.id: league for league in ACTIVE_LEAGUES}
+LEAGUE_BY_ID: Dict[str, LeagueProfile] = {
+    league.id: league for league in ACTIVE_LEAGUES
+}
 
 
 def get_league_profile(league_id: str) -> Optional[LeagueProfile]:

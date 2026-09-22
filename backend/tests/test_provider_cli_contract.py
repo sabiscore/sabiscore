@@ -80,7 +80,9 @@ def test_provider_cli_status_mapping() -> None:
 
 def test_provider_doctor_uses_only_public_status_contract(monkeypatch) -> None:
     fake = _FakeProvider(_health(ProviderStatus.CONFIGURED_UNVERIFIED))
-    monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
+    monkeypatch.setattr(
+        provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake])
+    )
 
     payload = _payload(CliRunner().invoke(providers_cli, ["doctor"]))
 
@@ -98,16 +100,22 @@ def test_provider_doctor_uses_only_public_status_contract(monkeypatch) -> None:
 
 def test_provider_status_uses_same_public_status_contract(monkeypatch) -> None:
     fake = _FakeProvider(_health(ProviderStatus.RATE_LIMITED))
-    monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
+    monkeypatch.setattr(
+        provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake])
+    )
 
-    payload = _payload(CliRunner().invoke(providers_cli, ["status", "--provider", "fake"]))
+    payload = _payload(
+        CliRunner().invoke(providers_cli, ["status", "--provider", "fake"])
+    )
 
     assert payload == {"providers": [{"provider": "fake", "status": "quota_exhausted"}]}
 
 
 def test_provider_doctor_live_validation_is_explicit(monkeypatch) -> None:
     fake = _FakeProvider(_health(ProviderStatus.CONFIGURED_UNVERIFIED))
-    monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
+    monkeypatch.setattr(
+        provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake])
+    )
 
     payload = _payload(
         CliRunner().invoke(
@@ -125,7 +133,9 @@ def test_provider_doctor_live_validation_passes_only_after_verified_probe(
     monkeypatch,
 ) -> None:
     fake = _FakeProvider(_health(ProviderStatus.VERIFIED))
-    monkeypatch.setattr(provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake]))
+    monkeypatch.setattr(
+        provider_cli, "build_provider_registry", lambda: _FakeRegistry([fake])
+    )
 
     payload = _payload(
         CliRunner().invoke(

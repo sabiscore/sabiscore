@@ -11,6 +11,7 @@ Contracts verified:
   4. AsyncSessionLocal is None -> outcome="db_not_ready", no raise.
   5. get_walk_forward_registry() is memoized (same instance across calls).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -34,7 +35,10 @@ def _reset_settlement_module_state():
     every test so results don't leak across tests in the same process."""
     from src.services import settlement_service
 
-    settlement_service._last_result = {"outcome": "never_run", "consecutive_failures": 0}
+    settlement_service._last_result = {
+        "outcome": "never_run",
+        "consecutive_failures": 0,
+    }
     settlement_service._registry_instance = None
     yield
 
@@ -100,8 +104,12 @@ async def test_run_settlement_pass_composes_sync_and_validation(factory) -> None
 
     empty_provider = AsyncMock()
     empty_provider.get_recent_results.return_value = []
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch(
-        "src.data.loaders.football_data_api.FootballDataAPIClient", return_value=empty_provider
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch(
+            "src.data.loaders.football_data_api.FootballDataAPIClient",
+            return_value=empty_provider,
+        ),
     ):
         result = await run_settlement_pass()
 
@@ -113,15 +121,23 @@ async def test_run_settlement_pass_composes_sync_and_validation(factory) -> None
     assert result["consecutive_failures"] == 0
 
 
-async def test_run_settlement_pass_provider_outage_is_graceful_degradation(factory) -> None:
+async def test_run_settlement_pass_provider_outage_is_graceful_degradation(
+    factory,
+) -> None:
     from src.services.settlement_service import run_settlement_pass
 
     await _seed_settled_predictions(factory, n=10)
 
     failing_provider = AsyncMock()
-    failing_provider.get_recent_results.side_effect = FootballDataAPIError("rate limited")
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch(
-        "src.data.loaders.football_data_api.FootballDataAPIClient", return_value=failing_provider
+    failing_provider.get_recent_results.side_effect = FootballDataAPIError(
+        "rate limited"
+    )
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch(
+            "src.data.loaders.football_data_api.FootballDataAPIClient",
+            return_value=failing_provider,
+        ),
     ):
         result = await run_settlement_pass()
 
@@ -136,19 +152,28 @@ async def test_run_settlement_pass_genuine_exception_then_recovers(factory) -> N
     empty_provider = AsyncMock()
     empty_provider.get_recent_results.return_value = []
 
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch(
-        "src.data.loaders.football_data_api.FootballDataAPIClient", return_value=empty_provider
-    ), patch(
-        "src.repositories.fixtures.get_settled_predictions",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch(
+            "src.data.loaders.football_data_api.FootballDataAPIClient",
+            return_value=empty_provider,
+        ),
+        patch(
+            "src.repositories.fixtures.get_settled_predictions",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ),
     ):
         failed = await settlement_service.run_settlement_pass()
 
     assert failed["outcome"] == "error"
     assert failed["consecutive_failures"] == 1
 
-    with patch("src.db.session.AsyncSessionLocal", new=factory), patch(
-        "src.data.loaders.football_data_api.FootballDataAPIClient", return_value=empty_provider
+    with (
+        patch("src.db.session.AsyncSessionLocal", new=factory),
+        patch(
+            "src.data.loaders.football_data_api.FootballDataAPIClient",
+            return_value=empty_provider,
+        ),
     ):
         recovered = await settlement_service.run_settlement_pass()
 

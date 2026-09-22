@@ -171,7 +171,10 @@ class RedisCache:
 
         if self._enabled:
             try:
-                if settings.app_env == "production" and not settings.redis_url.startswith("rediss://"):
+                if (
+                    settings.app_env == "production"
+                    and not settings.redis_url.startswith("rediss://")
+                ):
                     raise ValueError("production Redis requires a rediss:// URL")
                 client = redis.Redis.from_url(
                     settings.redis_url,
@@ -181,7 +184,7 @@ class RedisCache:
                     socket_timeout=5,
                     socket_connect_timeout=5,
                     retry_on_timeout=True,
-                    retry_on_error=[ConnectionError]
+                    retry_on_error=[ConnectionError],
                 )
                 client.ping()
                 self.redis_client = client
@@ -196,7 +199,7 @@ class RedisCache:
                 logger.info(
                     "In-memory cache active with %d entry limit. "
                     "Set REDIS_ENABLED=false to suppress Redis connection attempts.",
-                    self._max_memory_entries
+                    self._max_memory_entries,
                 )
                 self.metrics.record_error()
                 self.redis_client = None
@@ -399,25 +402,25 @@ class RedisCache:
         with self._lock:
             memory_entries = len(self._memory_cache)
         snapshot = self.metrics.as_dict()
-        snapshot.update({
-            # Tier-1: Redis Labs
-            "tier1_redis_enabled": self._enabled,
-            "tier1_redis_available": self._redis_available,
-            "tier1_circuit_open": bool(self._is_circuit_open()),
-            # Tier-2: Upstash
-            "tier2_upstash_active": self._upstash.is_active,
-            "tier2_upstash_configured": (
-                self._upstash._client is not None
-            ),
-            # Tier-3: in-memory
-            "tier3_memory_entries": memory_entries,
-            "tier3_memory_limit": self._max_memory_entries,
-            # Legacy aliases (backwards-compat for health endpoint)
-            "circuit_open": bool(self._is_circuit_open()),
-            "memory_entries": memory_entries,
-            "backend_enabled": self._enabled,
-            "backend_available": self._redis_available,
-        })
+        snapshot.update(
+            {
+                # Tier-1: Redis Labs
+                "tier1_redis_enabled": self._enabled,
+                "tier1_redis_available": self._redis_available,
+                "tier1_circuit_open": bool(self._is_circuit_open()),
+                # Tier-2: Upstash
+                "tier2_upstash_active": self._upstash.is_active,
+                "tier2_upstash_configured": (self._upstash._client is not None),
+                # Tier-3: in-memory
+                "tier3_memory_entries": memory_entries,
+                "tier3_memory_limit": self._max_memory_entries,
+                # Legacy aliases (backwards-compat for health endpoint)
+                "circuit_open": bool(self._is_circuit_open()),
+                "memory_entries": memory_entries,
+                "backend_enabled": self._enabled,
+                "backend_available": self._redis_available,
+            }
+        )
         return snapshot
 
     # Memory fallback helpers ------------------------------------------
@@ -465,7 +468,7 @@ class RedisCache:
                     first_key = next(iter(self._memory_cache))
                     self._memory_cache.pop(first_key)
                     logger.debug(f"Memory cache full, evicted: {first_key}")
-            
+
             self._memory_cache[key] = (value, expires_at)
         return True
 
@@ -542,5 +545,7 @@ def _make_cache_key(prefix: str, args: tuple, kwargs: dict) -> str:
         "kwargs": _normalize(kwargs),
     }
 
-    digest = hashlib.sha1(json.dumps(normalized, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    digest = hashlib.sha1(
+        json.dumps(normalized, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
     return f"cache:{prefix}:{digest}"

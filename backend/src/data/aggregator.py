@@ -14,7 +14,10 @@ from ..core.config import settings
 from .team_database import get_team_stats
 
 try:
-    from ..features.phase9_xg_market_features import build_hybrid_xg_features as _build_hybrid_xg
+    from ..features.phase9_xg_market_features import (
+        build_hybrid_xg_features as _build_hybrid_xg,
+    )
+
     _PHASE9_FEATURES_AVAILABLE = True
 except ImportError:
     _build_hybrid_xg = None  # type: ignore[assignment]
@@ -124,7 +127,9 @@ class DataAggregator:
 
         # Phase 9 / V4 candidate features — shadow mode, metadata-only
         phase9_candidate_features: Dict[str, Any] = {}
-        if _PHASE9_FEATURES_AVAILABLE and getattr(settings, "use_phase9_candidate_features", False):
+        if _PHASE9_FEATURES_AVAILABLE and getattr(
+            settings, "use_phase9_candidate_features", False
+        ):
             try:
                 phase9_candidate_features = {
                     "hybrid_xg": _build_hybrid_xg(
@@ -134,7 +139,9 @@ class DataAggregator:
                     )
                 }
             except Exception as _p9_exc:
-                logger.warning("Phase 9 candidate feature computation failed: %s", _p9_exc)
+                logger.warning(
+                    "Phase 9 candidate feature computation failed: %s", _p9_exc
+                )
 
         data = {
             "historical_stats": historical_stats,
@@ -150,16 +157,26 @@ class DataAggregator:
                 "away_team": self.teams["away"],
                 "generated_at": datetime.now(UTC).isoformat(),
                 "freshness": {
-                    "historical_stats": getattr(self.flashscore, 'last_scrape_at', datetime.now(UTC).isoformat()),
-                    "odds": getattr(self.oddsportal, 'last_scrape_at', datetime.now(UTC).isoformat()),
-                    "injuries": getattr(self.transfermarkt, 'last_scrape_at', datetime.now(UTC).isoformat()),
+                    "historical_stats": getattr(
+                        self.flashscore, "last_scrape_at", datetime.now(UTC).isoformat()
+                    ),
+                    "odds": getattr(
+                        self.oddsportal, "last_scrape_at", datetime.now(UTC).isoformat()
+                    ),
+                    "injuries": getattr(
+                        self.transfermarkt,
+                        "last_scrape_at",
+                        datetime.now(UTC).isoformat(),
+                    ),
                 },
             },
         }
 
         if phase9_candidate_features:
             data["metadata"]["phase9_candidate_features"] = phase9_candidate_features
-            data["metadata"]["phase9_shadow_only"] = getattr(settings, "phase9_shadow_only", True)
+            data["metadata"]["phase9_shadow_only"] = getattr(
+                settings, "phase9_shadow_only", True
+            )
 
         # Ensure consistent structure even if scrapers return empty
         data.setdefault("odds", {})
@@ -178,7 +195,7 @@ class DataAggregator:
 
     def _create_mock_team_stats(self) -> Dict[str, Any]:
         """Create mock team statistics when scraping fails.
-        
+
         Uses team database to return differentiated stats for each team.
         Returns all fields expected by FeatureTransformer including:
         - squad_value, elo, missing_value (for _add_team_stats_features)
@@ -186,32 +203,30 @@ class DataAggregator:
         - Form/momentum features (for other methods)
         """
         from .team_database import get_team_elo, get_team_squad_value
-        
+
         home_team = self.teams.get("home", "")
         away_team = self.teams.get("away", "")
-        
+
         home_stats = get_team_stats(home_team, is_home=True)
         away_stats = get_team_stats(away_team, is_home=False)
-        
+
         home_elo = get_team_elo(home_team)
         away_elo = get_team_elo(away_team)
         home_value = get_team_squad_value(home_team)
         away_value = get_team_squad_value(away_team)
-        
+
         return {
             "home": {
                 # Required by _add_team_stats_features
                 "squad_value": home_value,
                 "elo": home_elo,
                 "missing_value": home_value * 0.05,  # Assume 5% of squad injured
-                
                 # Required by _add_advanced_team_features (xG)
                 "xg_avg_5": home_stats["xg_avg"],
                 "xg_conceded_avg_5": home_stats["xg_conceded_avg"],
                 "xg_diff_5": home_stats["xg_avg"] - home_stats["xg_conceded_avg"],
                 "xg_overperformance": 0.05 + (home_elo - 1500) / 5000,
                 "xg_consistency": home_stats["scoring_consistency"],
-                
                 # Required by _add_advanced_team_features (tactical), EXCEPT
                 # pressing_intensity: previously derived from Elo here — a
                 # fabrication with no causal basis. Removed 2026-09-04 (crosswalk
@@ -230,7 +245,6 @@ class DataAggregator:
                 "setpiece_goals_rate": 0.22 + (home_elo - 1500) / 8000,
                 "gd_trend": 0.05 if home_elo > 1600 else -0.02,
                 "scoring_consistency": home_stats["scoring_consistency"],
-                
                 # Legacy fields for compatibility
                 "attacking_strength": home_stats["attacking_strength"],
                 "defensive_strength": home_stats["defensive_strength"],
@@ -243,14 +257,12 @@ class DataAggregator:
                 "squad_value": away_value,
                 "elo": away_elo,
                 "missing_value": away_value * 0.05,  # Assume 5% of squad injured
-                
                 # Required by _add_advanced_team_features (xG)
                 "xg_avg_5": away_stats["xg_avg"],
                 "xg_conceded_avg_5": away_stats["xg_conceded_avg"],
                 "xg_diff_5": away_stats["xg_avg"] - away_stats["xg_conceded_avg"],
                 "xg_overperformance": 0.05 + (away_elo - 1500) / 5000,
                 "xg_consistency": away_stats["scoring_consistency"],
-                
                 # Required by _add_advanced_team_features (tactical), except
                 # pressing_intensity — fabrication removed, see home block above.
                 "possession_style": 0.48 + (away_elo - 1500) / 3000,
@@ -259,14 +271,13 @@ class DataAggregator:
                 "setpiece_goals_rate": 0.20 + (away_elo - 1500) / 8000,
                 "gd_trend": 0.05 if away_elo > 1600 else -0.02,
                 "scoring_consistency": away_stats["scoring_consistency"],
-                
                 # Legacy fields for compatibility
                 "attacking_strength": away_stats["attacking_strength"],
                 "defensive_strength": away_stats["defensive_strength"],
                 "win_rate": away_stats["win_rate"],
                 "goals_per_game": away_stats["goals_per_game"],
                 "clean_sheet_rate": away_stats["clean_sheet_rate"],
-            }
+            },
         }
 
     # ------------------------------------------------------------------
@@ -275,12 +286,19 @@ class DataAggregator:
             return self._history_cache.copy()
 
         try:
-            home_df = self.flashscore.scrape_match_results(self.teams["home"], self.league)
-            away_df = self.flashscore.scrape_match_results(self.teams["away"], self.league)
+            home_df = self.flashscore.scrape_match_results(
+                self.teams["home"], self.league
+            )
+            away_df = self.flashscore.scrape_match_results(
+                self.teams["away"], self.league
+            )
 
             combined = pd.concat([home_df, away_df])
             if combined.empty:
-                logger.warning("Historical stats empty for %s, attempting local fallback", self.matchup)
+                logger.warning(
+                    "Historical stats empty for %s, attempting local fallback",
+                    self.matchup,
+                )
                 fallback_df = self._load_local_history()
                 self._history_cache = fallback_df
                 return fallback_df
@@ -310,15 +328,20 @@ class DataAggregator:
                 return {"home": {}, "away": {}}
 
             def form_for(team: str) -> Dict[str, Any]:
-                if "home_team" not in history.columns or "away_team" not in history.columns:
+                if (
+                    "home_team" not in history.columns
+                    or "away_team" not in history.columns
+                ):
                     return {}
-                team_games = history["home_team"].eq(team) | history["away_team"].eq(team)
+                team_games = history["home_team"].eq(team) | history["away_team"].eq(
+                    team
+                )
                 recent = history[team_games].head(5)
                 results = []
                 goals_scored = 0
                 goals_conceded = 0
                 clean_sheets = 0
-                
+
                 for _, row in recent.iterrows():
                     is_home = row["home_team"] == team
                     team_goals = row["home_score"] if is_home else row["away_score"]
@@ -384,54 +407,75 @@ class DataAggregator:
             if history.empty:
                 return history
             mask = (
-                (history["home_team"].eq(self.teams["home"]) & history["away_team"].eq(self.teams["away"]))
-                | (history["home_team"].eq(self.teams["away"]) & history["away_team"].eq(self.teams["home"]))
+                history["home_team"].eq(self.teams["home"])
+                & history["away_team"].eq(self.teams["away"])
+            ) | (
+                history["home_team"].eq(self.teams["away"])
+                & history["away_team"].eq(self.teams["home"])
             )
             return history[mask]
         except Exception as e:
-            logger.warning(f"Failed to fetch head-to-head stats for {self.matchup}: {e}")
+            logger.warning(
+                f"Failed to fetch head-to-head stats for {self.matchup}: {e}"
+            )
             return pd.DataFrame()
 
     def fetch_team_stats(self) -> Dict[str, Dict[str, Any]]:
         """Fetch team statistics from Transfermarkt and enrich with team database values."""
-        
+
         # Start with mock stats as base (has all required fields)
         base_stats = self._create_mock_team_stats()
-        
-        try:
-            player_values_home = self.transfermarkt.scrape_player_values(self.teams["home"])
-            player_values_away = self.transfermarkt.scrape_player_values(self.teams["away"])
 
-            def enrich_with_scraped(team: str, values: pd.DataFrame, base: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            player_values_home = self.transfermarkt.scrape_player_values(
+                self.teams["home"]
+            )
+            player_values_away = self.transfermarkt.scrape_player_values(
+                self.teams["away"]
+            )
+
+            def enrich_with_scraped(
+                team: str, values: pd.DataFrame, base: Dict[str, Any]
+            ) -> Dict[str, Any]:
                 """Merge scraped data into base stats."""
                 result = dict(base)  # Start with all base fields
-                
+
                 if not values.empty:
                     try:
-                        avg_value = values["value"].str.replace("€", "").str.replace("m", "").astype(float, errors="ignore")
+                        avg_value = (
+                            values["value"]
+                            .str.replace("€", "")
+                            .str.replace("m", "")
+                            .astype(float, errors="ignore")
+                        )
                         avg_value = pd.to_numeric(avg_value, errors="coerce")
-                        
+
                         if not avg_value.empty and avg_value.mean() > 0:
                             # Override with real scraped value
-                            result["squad_value"] = float(avg_value.sum())  # Total squad value
-                            
+                            result["squad_value"] = float(
+                                avg_value.sum()
+                            )  # Total squad value
+
                         if "age" in values:
                             result["average_age"] = float(values["age"].mean())
-                            
+
                         result["squad_size"] = int(len(values))
                     except Exception as e:
                         logger.debug(f"Error processing scraped values for {team}: {e}")
-                
+
                 return result
 
             return {
-                "home": enrich_with_scraped(self.teams["home"], player_values_home, base_stats["home"]),
-                "away": enrich_with_scraped(self.teams["away"], player_values_away, base_stats["away"]),
+                "home": enrich_with_scraped(
+                    self.teams["home"], player_values_home, base_stats["home"]
+                ),
+                "away": enrich_with_scraped(
+                    self.teams["away"], player_values_away, base_stats["away"]
+                ),
             }
         except Exception as e:
             logger.warning(f"Failed to fetch team stats for {self.matchup}: {e}")
             return base_stats
-
 
     def _load_local_history(self) -> pd.DataFrame:
         """Load fallback historical matches from processed data."""
@@ -471,9 +515,15 @@ class DataAggregator:
             away = match.get("team2")
             if not home or not away:
                 continue
-            if normalized_home not in home.lower() and normalized_home not in away.lower():
+            if (
+                normalized_home not in home.lower()
+                and normalized_home not in away.lower()
+            ):
                 continue
-            if normalized_away not in home.lower() and normalized_away not in away.lower():
+            if (
+                normalized_away not in home.lower()
+                and normalized_away not in away.lower()
+            ):
                 continue
 
             score = match.get("score", {})
@@ -542,10 +592,11 @@ def _deserialize_from_cache(data: Dict[str, Any]) -> Dict[str, Any]:
 # Enhanced Data Aggregator with New Scrapers
 # ============================================================================
 
+
 class EnhancedDataAggregator:
     """
     Enhanced aggregator using new scraper infrastructure.
-    
+
     Combines data from:
     - football-data.co.uk (historical matches with Pinnacle odds)
     - Betfair (exchange odds with back/lay spreads)
@@ -555,7 +606,7 @@ class EnhancedDataAggregator:
     - OddsPortal (historical closing lines)
     - Flashscore (live scores, H2H)
     """
-    
+
     def __init__(self):
         """Initialize all enhanced scrapers."""
         self.football_data = FootballDataEnhancedScraper()
@@ -579,41 +630,37 @@ class EnhancedDataAggregator:
             "value": 0.10,
         }
         self.total_timeout_s = 6.0
-        
+
         # Also keep references to old scrapers for compatibility
         self.flashscore = FlashscoreScraper()
         self.oddsportal = OddsPortalScraper()
         self.transfermarkt = TransfermarktScraper()
-        
+
         logger.info("EnhancedDataAggregator initialized")
-    
+
     def get_comprehensive_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, Any]:
         """
         Get comprehensive feature set for ML prediction.
-        
+
         Aggregates features from all sources with proper prefixing
         to avoid name collisions.
-        
+
         Args:
             home_team: Home team name
-            away_team: Away team name  
+            away_team: Away team name
             league: League identifier
-            
+
         Returns:
             Dict with all aggregated features
         """
-        return self._collect_features_with_budget(home_team, away_team, league, parallel=True)
-    
+        return self._collect_features_with_budget(
+            home_team, away_team, league, parallel=True
+        )
+
     def _get_odds_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Get odds from Betfair exchange."""
         features = {}
@@ -626,12 +673,9 @@ class EnhancedDataAggregator:
         except Exception as e:
             logger.warning(f"Betfair odds error: {e}")
         return features
-    
+
     def _get_form_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Build recent form metrics from Soccerway and Understat."""
         features = {}
@@ -641,12 +685,9 @@ class EnhancedDataAggregator:
         except Exception as e:
             logger.warning(f"Form snapshot error: {e}")
         return features
-    
+
     def _get_position_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Get standings from Soccerway."""
         features = {}
@@ -659,35 +700,29 @@ class EnhancedDataAggregator:
         except Exception as e:
             logger.warning(f"Soccerway position error: {e}")
         return features
-    
+
     def _get_xg_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Get xG from Understat."""
         features = {}
         try:
-            us_data = self.understat.calculate_xg_features(
-                home_team, away_team, league
-            )
+            us_data = self.understat.calculate_xg_features(home_team, away_team, league)
             for k, v in us_data.items():
                 features[f"us_{k}"] = v
         except Exception as e:
             logger.warning(f"Understat xG error: {e}")
         return features
-    
+
     def _get_value_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Get market values from Transfermarkt."""
         features = {}
         try:
-            tm_data = self.transfermarkt.calculate_value_features(home_team, away_team, league)
+            tm_data = self.transfermarkt.calculate_value_features(
+                home_team, away_team, league
+            )
             for k, v in tm_data.items():
                 features[f"tm_{k}"] = v
         except Exception as e:
@@ -695,10 +730,7 @@ class EnhancedDataAggregator:
         return features
 
     def _build_form_snapshot(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str
+        self, home_team: str, away_team: str, league: str
     ) -> Dict[str, float]:
         """Compose numeric form metrics for both clubs."""
         try:
@@ -717,14 +749,13 @@ class EnhancedDataAggregator:
         return snapshot
 
     def _extract_team_form(
-        self,
-        team: str,
-        all_results: List[Dict[str, Any]]
+        self, team: str, all_results: List[Dict[str, Any]]
     ) -> Dict[str, float]:
         """Summarize last five results for a given team."""
         normalized_team = team.lower()
         relevant_matches = [
-            match for match in all_results
+            match
+            for match in all_results
             if normalized_team in match.get("home_team", "").lower()
             or normalized_team in match.get("away_team", "").lower()
         ]
@@ -767,8 +798,16 @@ class EnhancedDataAggregator:
             home_name = match.get("home_team", "")
             match.get("away_team", "")
             is_home = normalized_team in home_name.lower()
-            team_goals = _safe_int(match.get("home_goals")) if is_home else _safe_int(match.get("away_goals"))
-            opp_goals = _safe_int(match.get("away_goals")) if is_home else _safe_int(match.get("home_goals"))
+            team_goals = (
+                _safe_int(match.get("home_goals"))
+                if is_home
+                else _safe_int(match.get("away_goals"))
+            )
+            opp_goals = (
+                _safe_int(match.get("away_goals"))
+                if is_home
+                else _safe_int(match.get("home_goals"))
+            )
 
             goals_for += team_goals
             goals_against += opp_goals
@@ -849,7 +888,9 @@ class EnhancedDataAggregator:
 
         Falls back gracefully if any single source times out or fails.
         """
-        return self._collect_features_with_budget(home_team, away_team, league, parallel=True)
+        return self._collect_features_with_budget(
+            home_team, away_team, league, parallel=True
+        )
 
     async def get_comprehensive_features_async(
         self,
@@ -872,15 +913,25 @@ class EnhancedDataAggregator:
 
         loop = asyncio.get_running_loop()
 
-        async def _run_in_thread(func: Callable[[], Dict[str, float]]) -> Dict[str, float]:
+        async def _run_in_thread(
+            func: Callable[[], Dict[str, float]],
+        ) -> Dict[str, float]:
             return await loop.run_in_executor(None, func)
 
         results = await asyncio.gather(
-            _run_in_thread(lambda: self._get_odds_features(home_team, away_team, league)),
-            _run_in_thread(lambda: self._get_form_features(home_team, away_team, league)),
-            _run_in_thread(lambda: self._get_position_features(home_team, away_team, league)),
+            _run_in_thread(
+                lambda: self._get_odds_features(home_team, away_team, league)
+            ),
+            _run_in_thread(
+                lambda: self._get_form_features(home_team, away_team, league)
+            ),
+            _run_in_thread(
+                lambda: self._get_position_features(home_team, away_team, league)
+            ),
             _run_in_thread(lambda: self._get_xg_features(home_team, away_team, league)),
-            _run_in_thread(lambda: self._get_value_features(home_team, away_team, league)),
+            _run_in_thread(
+                lambda: self._get_value_features(home_team, away_team, league)
+            ),
             return_exceptions=True,
         )
 
@@ -913,14 +964,19 @@ class EnhancedDataAggregator:
         tasks: List[Tuple[str, Callable[[], Dict[str, float]]]] = [
             ("odds", lambda: self._get_odds_features(home_team, away_team, league)),
             ("form", lambda: self._get_form_features(home_team, away_team, league)),
-            ("position", lambda: self._get_position_features(home_team, away_team, league)),
+            (
+                "position",
+                lambda: self._get_position_features(home_team, away_team, league),
+            ),
             ("xg", lambda: self._get_xg_features(home_team, away_team, league)),
             ("value", lambda: self._get_value_features(home_team, away_team, league)),
         ]
 
         latencies_ms: Dict[str, float] = {}
 
-        def _timed_call(fn: Callable[[], Dict[str, float]]) -> tuple[Dict[str, float], int]:
+        def _timed_call(
+            fn: Callable[[], Dict[str, float]],
+        ) -> tuple[Dict[str, float], int]:
             started = time.time()
             result = fn() or {}
             return result, int((time.time() - started) * 1000)
@@ -936,28 +992,44 @@ class EnhancedDataAggregator:
                 latencies_ms[f"{name}_ms"] = int((time.time() - start) * 1000)
         else:
             start = time.time()
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=len(tasks)
+            ) as executor:
                 future_map = {}
                 for name, fn in tasks:
                     future = executor.submit(_timed_call, fn)
                     future_map[future] = (name, self.source_timeouts.get(name, budget))
 
                 try:
-                    for future in concurrent.futures.as_completed(future_map, timeout=budget):
+                    for future in concurrent.futures.as_completed(
+                        future_map, timeout=budget
+                    ):
                         name, source_timeout = future_map[future]
                         remaining = max(0.1, budget - (time.time() - start))
                         try:
-                            result, duration_ms = future.result(timeout=min(source_timeout, remaining))
+                            result, duration_ms = future.result(
+                                timeout=min(source_timeout, remaining)
+                            )
                             features.update(result)
                             latencies_ms[f"{name}_ms"] = duration_ms
                         except concurrent.futures.TimeoutError:
-                            latencies_ms[f"{name}_ms"] = int((budget - (time.time() - start)) * 1000)
-                            logger.warning("%s feature fetch timed out after %.1fs", name, min(source_timeout, remaining))
+                            latencies_ms[f"{name}_ms"] = int(
+                                (budget - (time.time() - start)) * 1000
+                            )
+                            logger.warning(
+                                "%s feature fetch timed out after %.1fs",
+                                name,
+                                min(source_timeout, remaining),
+                            )
                         except Exception as exc:
-                            latencies_ms[f"{name}_ms"] = int((time.time() - start) * 1000)
+                            latencies_ms[f"{name}_ms"] = int(
+                                (time.time() - start) * 1000
+                            )
                             logger.warning("%s feature fetch failed: %s", name, exc)
                 except concurrent.futures.TimeoutError:
-                    logger.warning("Feature gathering exceeded total budget of %.1fs", budget)
+                    logger.warning(
+                        "Feature gathering exceeded total budget of %.1fs", budget
+                    )
 
         # Add metadata so downstream can reason about source quality/latency
         features["meta_source_latency_ms"] = latencies_ms
@@ -965,25 +1037,23 @@ class EnhancedDataAggregator:
         return features
 
     def get_historical_training_data(
-        self,
-        league: str = "EPL",
-        seasons: list = None
+        self, league: str = "EPL", seasons: list = None
     ) -> pd.DataFrame:
         """
         Get historical data for model training.
-        
+
         Uses football-data.co.uk CSVs with Pinnacle odds.
         """
         if seasons is None:
             seasons = ["2324", "2223", "2122", "2021", "1920"]
-        
+
         try:
             data = self.football_data.get_historical_odds(league, seasons)
             if data:
                 return pd.DataFrame(data)
         except Exception as e:
             logger.error(f"Error fetching training data: {e}")
-        
+
         return pd.DataFrame()
 
 
@@ -1000,18 +1070,16 @@ def get_enhanced_aggregator() -> EnhancedDataAggregator:
 
 
 def get_match_features(
-    home_team: str,
-    away_team: str,
-    league: str = "EPL"
+    home_team: str, away_team: str, league: str = "EPL"
 ) -> Dict[str, Any]:
     """
     Convenience function to get comprehensive match features.
-    
+
     Args:
         home_team: Home team name
         away_team: Away team name
         league: League identifier
-        
+
     Returns:
         Dict with aggregated features from all sources
     """

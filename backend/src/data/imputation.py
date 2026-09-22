@@ -50,7 +50,8 @@ class LeagueTransitionDiscount:
             for team in self._teams_in_season(prior, season):
                 history_counts[team] = history_counts.get(team, 0) + 1
         return {
-            team for team in current_teams
+            team
+            for team in current_teams
             if history_counts.get(team, 0) < self.minimum_history_seasons
         }
 
@@ -65,7 +66,9 @@ class LeagueTransitionDiscount:
         home_mean = pd.to_numeric(history["home_xg"], errors="coerce").mean()
         away_mean = pd.to_numeric(history["away_xg"], errors="coerce").mean()
         if not np.isfinite(home_mean) or not np.isfinite(away_mean):
-            raise ValueError("Prior-season xG history is required for cold-start baselines")
+            raise ValueError(
+                "Prior-season xG history is required for cold-start baselines"
+            )
         return {
             "home_xg": float(home_mean * self.offensive_discount),
             "away_xg": float(away_mean * self.offensive_discount),

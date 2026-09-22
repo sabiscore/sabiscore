@@ -8,6 +8,7 @@ degradation. These tests pin the refusal.
 
 No network, no database, no model artifacts.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,9 @@ from harvest_epl_e2_lineups import (  # noqa: E402
 import numpy as np  # noqa: E402
 
 
-def _frame(rows_per_season: dict[str, tuple[int, float]], declared: str) -> pl.DataFrame:
+def _frame(
+    rows_per_season: dict[str, tuple[int, float]], declared: str
+) -> pl.DataFrame:
     """Build a prediction table whose per-season RPS is controlled.
 
     `conf` is the probability placed on the true class; higher conf => lower
@@ -68,12 +71,18 @@ class TestTemporalIntegrity:
 
     def test_the_declared_holdout_is_never_flagged_against_itself(self) -> None:
         df = _frame({"2425": (200, 0.45), "2526": (200, 0.95)}, declared="2425")
-        assert "2425" in assess_temporal_integrity(df, "EPL")["seasons_usable_as_out_of_sample"]
+        assert (
+            "2425"
+            in assess_temporal_integrity(df, "EPL")["seasons_usable_as_out_of_sample"]
+        )
 
     def test_comparable_seasons_are_not_flagged(self) -> None:
         """A season merely a little easier is not contamination."""
         df = _frame({"2425": (200, 0.45), "2526": (200, 0.46)}, declared="2425")
-        assert assess_temporal_integrity(df, "EPL")["seasons_with_in_sample_signature"] == []
+        assert (
+            assess_temporal_integrity(df, "EPL")["seasons_with_in_sample_signature"]
+            == []
+        )
 
 
 class TestEvaluationRefusesContaminatedSplits:
@@ -94,10 +103,13 @@ class TestEvaluationRefusesContaminatedSplits:
                 p = rng.dirichlet([4.0, 3.0, 3.0])
                 rows.append(
                     {
-                        "league": "EPL", "season": season,
+                        "league": "EPL",
+                        "season": season,
                         "declared_holdout_season": "2425",
-                        "prob_home": float(p[0]), "prob_draw": float(p[1]),
-                        "prob_away": float(p[2]), "y": int(rng.integers(0, 3)),
+                        "prob_home": float(p[0]),
+                        "prob_draw": float(p[1]),
+                        "prob_away": float(p[2]),
+                        "y": int(rng.integers(0, 3)),
                     }
                 )
         result = evaluate_league(pl.DataFrame(rows), "EPL")
@@ -135,10 +147,14 @@ class TestHarvestCheckpoint:
         assert state.harvested == {1, 2, 3}
         assert fixtures_to_harvest(state, [1, 2, 3, 4, 5], batch=95) == [4, 5]
 
-    def test_a_truncated_final_line_does_not_abort_the_resume(self, tmp_path: Path) -> None:
+    def test_a_truncated_final_line_does_not_abort_the_resume(
+        self, tmp_path: Path
+    ) -> None:
         """A process killed mid-write must not make the checkpoint unreadable."""
         path = tmp_path / "harvest.jsonl"
-        path.write_text('{"fixture_id":1}\n{"fixture_id":2}\n{"fixture_i', encoding="utf-8")
+        path.write_text(
+            '{"fixture_id":1}\n{"fixture_id":2}\n{"fixture_i', encoding="utf-8"
+        )
         state = HarvestState.load(path)
         assert state.harvested == {1, 2}
 
@@ -148,8 +164,12 @@ class TestHarvestCheckpoint:
 
 
 class TestHarvestNeverFabricatesLeadTime:
-    @pytest.mark.parametrize("records", [[], [{"team_id": 33, "role": "starting", "player_id": 1}]])
-    def test_announcement_fields_stay_null_and_cutoff_stays_unknown(self, records: list) -> None:
+    @pytest.mark.parametrize(
+        "records", [[], [{"team_id": 33, "role": "starting", "player_id": 1}]]
+    )
+    def test_announcement_fields_stay_null_and_cutoff_stays_unknown(
+        self, records: list
+    ) -> None:
         row = _normalise_lineup(99, "2025-01-01T15:00:00Z", records)
         assert row["lineup_announced_utc"] is None
         assert row["lead_time_minutes"] is None
@@ -157,9 +177,15 @@ class TestHarvestNeverFabricatesLeadTime:
 
     def test_confirmed_requires_two_complete_elevens(self) -> None:
         full = [
-            {"team_id": t, "team_name": f"T{t}", "formation": "4-3-3",
-             "role": "starting", "player_id": t * 100 + i}
-            for t in (1, 2) for i in range(11)
+            {
+                "team_id": t,
+                "team_name": f"T{t}",
+                "formation": "4-3-3",
+                "role": "starting",
+                "player_id": t * 100 + i,
+            }
+            for t in (1, 2)
+            for i in range(11)
         ]
         assert _normalise_lineup(1, None, full)["is_confirmed"] is True
         assert _normalise_lineup(1, None, full[:-1])["is_confirmed"] is False
@@ -189,11 +215,11 @@ class TestCutoffWindow:
     @pytest.mark.parametrize(
         ("minutes_to_kickoff", "expected"),
         [
-            (90, "WAIT"),           # far out
-            (21, "WAIT"),           # not yet at the cutoff
-            (20, "POLL"),           # exactly T-20m
-            (17, "POLL"),           # a late sweep still counts
-            (15, "POLL"),           # lower edge inclusive
+            (90, "WAIT"),  # far out
+            (21, "WAIT"),  # not yet at the cutoff
+            (20, "POLL"),  # exactly T-20m
+            (17, "POLL"),  # a late sweep still counts
+            (15, "POLL"),  # lower edge inclusive
             (14, "MISSED_WINDOW"),  # past the fail-closed threshold
             (-5, "MISSED_WINDOW"),  # kickoff already happened
         ],
@@ -221,7 +247,9 @@ class TestResultClassificationNeverFabricatesAbsence:
         """A provider that answered and published nothing IS G5 evidence."""
         assert classify_result("VERIFIED", [], None) == STATE_FALSE
 
-    @pytest.mark.parametrize("status", ["UNAVAILABLE", "CIRCUIT_OPEN", "INVALID", "PARTIAL"])
+    @pytest.mark.parametrize(
+        "status", ["UNAVAILABLE", "CIRCUIT_OPEN", "INVALID", "PARTIAL"]
+    )
     def test_a_non_verified_status_is_poll_failed_not_false(self, status: str) -> None:
         """Our outage must never be recorded as the provider's absence."""
         assert classify_result(status, [], None) == STATE_POLL_FAILED
@@ -234,13 +262,18 @@ class TestG5RateExcludesOperationalStates:
     def test_rate_uses_only_true_and_false(self, tmp_path: Path) -> None:
         log = tmp_path / "g5.jsonl"
         rows = [
-            (1, STATE_TRUE), (2, STATE_TRUE), (3, STATE_FALSE),
-            (4, STATE_POLL_FAILED), (5, STATE_MISSED_WINDOW),
+            (1, STATE_TRUE),
+            (2, STATE_TRUE),
+            (3, STATE_FALSE),
+            (4, STATE_POLL_FAILED),
+            (5, STATE_MISSED_WINDOW),
         ]
         log.write_text(
             "\n".join(
-                json.dumps({"fixture_id": i, "servable_at_20m_cutoff": s}) for i, s in rows
-            ) + "\n",
+                json.dumps({"fixture_id": i, "servable_at_20m_cutoff": s})
+                for i, s in rows
+            )
+            + "\n",
             encoding="utf-8",
         )
         result = summarise(log)
@@ -252,7 +285,8 @@ class TestG5RateExcludesOperationalStates:
     def test_no_evidence_yields_null_rate_not_zero(self, tmp_path: Path) -> None:
         log = tmp_path / "g5.jsonl"
         log.write_text(
-            json.dumps({"fixture_id": 1, "servable_at_20m_cutoff": STATE_POLL_FAILED}) + "\n",
+            json.dumps({"fixture_id": 1, "servable_at_20m_cutoff": STATE_POLL_FAILED})
+            + "\n",
             encoding="utf-8",
         )
         assert summarise(log)["g5_servable_at_cutoff_pct"] is None

@@ -7,6 +7,7 @@ suppress the safest fixtures and stake the worst ones while looking entirely
 plausible in review — so the direction is asserted explicitly here rather than
 left implied by a single happy-path case.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,9 +60,12 @@ def test_breaker_is_not_inverted() -> None:
 
 def test_threshold_boundary_is_inclusive() -> None:
     """Exactly at the measured p25 is inside the danger zone."""
-    assert evaluate_staking_risk(
-        league="EPL", epistemic=EPL_THRESHOLD, is_override=True
-    ).tripped is True
+    assert (
+        evaluate_staking_risk(
+            league="EPL", epistemic=EPL_THRESHOLD, is_override=True
+        ).tripped
+        is True
+    )
 
 
 # ── fail-closed behaviour ────────────────────────────────────────────────────
@@ -78,7 +82,7 @@ def test_threshold_boundary_is_inclusive() -> None:
     ],
 )
 def test_unmeasurable_epistemic_fails_closed(bad: object, reason: str) -> None:
-    """"We could not measure the risk" is not "there is no risk"."""
+    """ "We could not measure the risk" is not "there is no risk"."""
     decision = evaluate_staking_risk(league="EPL", epistemic=bad, is_override=True)  # type: ignore[arg-type]
 
     assert decision.tripped is True
@@ -91,9 +95,7 @@ def test_unmeasurable_epistemic_fails_closed(bad: object, reason: str) -> None:
 def test_breaker_is_inert_without_an_override() -> None:
     """A CERTIFIED generation passed error_association, so the danger zone this
     breaker exists for was not demonstrated for it."""
-    decision = evaluate_staking_risk(
-        league="EPL", epistemic=0.001, is_override=False
-    )
+    decision = evaluate_staking_risk(league="EPL", epistemic=0.001, is_override=False)
 
     assert decision.tripped is False
 
@@ -125,9 +127,12 @@ def test_unmeasured_league_gets_the_most_protective_threshold() -> None:
 
 
 def test_unknown_league_is_protected_not_ignored() -> None:
-    assert evaluate_staking_risk(
-        league="NOT_A_LEAGUE", epistemic=0.01, is_override=True
-    ).tripped is True
+    assert (
+        evaluate_staking_risk(
+            league="NOT_A_LEAGUE", epistemic=0.01, is_override=True
+        ).tripped
+        is True
+    )
 
 
 def test_league_lookup_is_case_insensitive() -> None:
@@ -137,7 +142,9 @@ def test_league_lookup_is_case_insensitive() -> None:
 # ── telemetry ────────────────────────────────────────────────────────────────
 
 
-def test_trip_emits_the_structured_warning_event(caplog: pytest.LogCaptureFixture) -> None:
+def test_trip_emits_the_structured_warning_event(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """The dashboard queries on this event name; the emitting code and the
     query must not drift."""
     with caplog.at_level(logging.WARNING, logger="src.services.risk_guard"):
@@ -145,7 +152,9 @@ def test_trip_emits_the_structured_warning_event(caplog: pytest.LogCaptureFixtur
             league="EPL", epistemic=0.01, is_override=True, match_id="fd-1"
         )
 
-    records = [r for r in caplog.records if getattr(r, "event", None) == CIRCUIT_BREAKER_EVENT]
+    records = [
+        r for r in caplog.records if getattr(r, "event", None) == CIRCUIT_BREAKER_EVENT
+    ]
     assert len(records) == 1
     record = records[0]
     assert record.levelno == logging.WARNING
@@ -154,7 +163,9 @@ def test_trip_emits_the_structured_warning_event(caplog: pytest.LogCaptureFixtur
     assert record.reason == "epistemic_in_measured_danger_zone"  # type: ignore[attr-defined]
 
 
-def test_no_event_when_the_breaker_does_not_trip(caplog: pytest.LogCaptureFixture) -> None:
+def test_no_event_when_the_breaker_does_not_trip(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     with caplog.at_level(logging.WARNING, logger="src.services.risk_guard"):
         evaluate_staking_risk(league="EPL", epistemic=0.5, is_override=True)
 

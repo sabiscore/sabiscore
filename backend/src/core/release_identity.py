@@ -5,6 +5,7 @@ checked-out Git revision during the build.  The build manifest provides an
 independent immutable identity source when runtime metadata is unavailable and
 lets the API report ``UNVERIFIED`` rather than trusting conflicting metadata.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,7 +73,9 @@ def write_release_identity_manifest(*, strict: bool = False) -> dict[str, Any] |
     release_sha = checkout_sha or render_sha
     if release_sha is None:
         if strict:
-            raise RuntimeError("unable to prove an exact release SHA during production build")
+            raise RuntimeError(
+                "unable to prove an exact release SHA during production build"
+            )
         return None
 
     payload: dict[str, Any] = {
@@ -117,9 +120,7 @@ def resolve_release_identity() -> dict[str, Any]:
     manifest_sha = manifest["release_sha"] if manifest else None
 
     conflict = bool(
-        runtime_render_sha
-        and manifest_sha
-        and runtime_render_sha != manifest_sha
+        runtime_render_sha and manifest_sha and runtime_render_sha != manifest_sha
     )
 
     if conflict:

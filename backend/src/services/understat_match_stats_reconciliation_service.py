@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
 from ..core.league_policy import canonical_league_id
+
 # One corpus definition, shared with features.xg_replay: the write-ready set
 # here and the rows that reach training must describe the same population.
 from ..data.understat_corpus import load_corpus_matches
@@ -61,7 +62,9 @@ _STATUS_MATCH_AMBIGUOUS = "MATCH_AMBIGUOUS"
 
 
 def _canonical_sha256(payload: object) -> str:
-    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    canonical = json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -146,9 +149,13 @@ async def _load_match_index(
         return {}
     rows = (
         await session.execute(
-            select(Match.id, Match.league_id, Match.home_team_id, Match.away_team_id, Match.match_date).where(
-                Match.league_id.in_(league_ids)
-            )
+            select(
+                Match.id,
+                Match.league_id,
+                Match.home_team_id,
+                Match.away_team_id,
+                Match.match_date,
+            ).where(Match.league_id.in_(league_ids))
         )
     ).all()
     index: dict[tuple[str, str, str], list[tuple[str, datetime]]] = {}
@@ -195,7 +202,11 @@ def _resolve_match_id(
     """
     window_start, window_end = _kickoff_window(kickoff)
     candidates = match_index.get((league_id, home_team_id, away_team_id), ())
-    matches = [match_id for match_id, match_date in candidates if window_start <= match_date <= window_end]
+    matches = [
+        match_id
+        for match_id, match_date in candidates
+        if window_start <= match_date <= window_end
+    ]
 
     if not matches:
         return None, _STATUS_MATCH_UNRESOLVED
@@ -219,7 +230,9 @@ async def build_understat_match_stats_manifest(
     team_cache: dict[tuple[str, str], str | None] = {}
     entries: list[UnderstatMatchStatsEntry] = []
 
-    league_ids = {canonical_league_id(str(league)) for league in corpus["sabi_league"].unique()}
+    league_ids = {
+        canonical_league_id(str(league)) for league in corpus["sabi_league"].unique()
+    }
     match_index = await _load_match_index(session, league_ids)
 
     for row in corpus.itertuples(index=False):
@@ -228,8 +241,12 @@ async def build_understat_match_stats_manifest(
         if kickoff.tzinfo is None:
             kickoff = kickoff.replace(tzinfo=timezone.utc)
 
-        home_team_id = await _resolve_team_cached(str(row.home_team), league_id, session, team_cache)
-        away_team_id = await _resolve_team_cached(str(row.away_team), league_id, session, team_cache)
+        home_team_id = await _resolve_team_cached(
+            str(row.home_team), league_id, session, team_cache
+        )
+        away_team_id = await _resolve_team_cached(
+            str(row.away_team), league_id, session, team_cache
+        )
 
         blockers: list[str] = []
         match_id: str | None = None

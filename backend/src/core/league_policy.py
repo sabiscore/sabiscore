@@ -46,21 +46,21 @@ class LeaguePolicy:
 
     league_id: str
     version: str
-    policy_source: str          # "CALIBRATED" | "DEFAULT_PENDING_CALIBRATION"
-    artifact_hash: str | None   # SHA-256 of the calibration artefact, if available
-    calibration_artifact: str | None   # path to the calibration run record
+    policy_source: str  # "CALIBRATED" | "DEFAULT_PENDING_CALIBRATION"
+    artifact_hash: str | None  # SHA-256 of the calibration artefact, if available
+    calibration_artifact: str | None  # path to the calibration run record
 
-    draw_prior: float                       # league-specific draw base rate
-    home_advantage_coefficient: float       # multiplicative prior on home EV
-    kelly_cap: float                        # per-league Kelly fraction hard cap
+    draw_prior: float  # league-specific draw base rate
+    home_advantage_coefficient: float  # multiplicative prior on home EV
+    kelly_cap: float  # per-league Kelly fraction hard cap
 
-    market_freshness_ttl_seconds: int       # odds staleness threshold
+    market_freshness_ttl_seconds: int  # odds staleness threshold
     model_feature_freshness_ttl_seconds: int
     lineup_freshness_ttl_seconds: int
 
-    high_conviction_edge_threshold: float   # minimum de-vigged edge for HC
-    ece_recalibration_threshold: float      # ECE > this triggers recalibration
-    minimum_calibration_samples: int        # samples needed before policy valid
+    high_conviction_edge_threshold: float  # minimum de-vigged edge for HC
+    ece_recalibration_threshold: float  # ECE > this triggers recalibration
+    minimum_calibration_samples: int  # samples needed before policy valid
 
     # Class-level registry
     _registry: ClassVar[dict[str, "LeaguePolicy"]] = {}
@@ -140,7 +140,7 @@ _CALIBRATED_BASE = dict(
     version="1.0.0",
     policy_source="CALIBRATED",
     home_advantage_coefficient=1.10,
-    kelly_cap=0.04,          # up from 0.025; still hard-capped by MAX_KELLY_CAP=0.05
+    kelly_cap=0.04,  # up from 0.025; still hard-capped by MAX_KELLY_CAP=0.05
     market_freshness_ttl_seconds=900,
     model_feature_freshness_ttl_seconds=3600,
     lineup_freshness_ttl_seconds=1800,

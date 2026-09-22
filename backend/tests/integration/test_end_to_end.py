@@ -47,8 +47,24 @@ def mock_scraped_data():
     return {
         "football_data": {
             "historical_matches": [
-                {"HomeTeam": "Arsenal", "AwayTeam": "Chelsea", "FTHG": 2, "FTAG": 1, "PSH": 1.85, "PSD": 3.60, "PSA": 4.20},
-                {"HomeTeam": "Arsenal", "AwayTeam": "Liverpool", "FTHG": 3, "FTAG": 2, "PSH": 2.10, "PSD": 3.40, "PSA": 3.50},
+                {
+                    "HomeTeam": "Arsenal",
+                    "AwayTeam": "Chelsea",
+                    "FTHG": 2,
+                    "FTAG": 1,
+                    "PSH": 1.85,
+                    "PSD": 3.60,
+                    "PSA": 4.20,
+                },
+                {
+                    "HomeTeam": "Arsenal",
+                    "AwayTeam": "Liverpool",
+                    "FTHG": 3,
+                    "FTAG": 2,
+                    "PSH": 2.10,
+                    "PSD": 3.40,
+                    "PSA": 3.50,
+                },
             ],
         },
         "betfair": {
@@ -93,7 +109,7 @@ class TestScrapingToFeaturesPipeline:
     def test_aggregator_initialization(self):
         """Test DataAggregator initializes correctly."""
         aggregator = DataAggregator("Arsenal vs Chelsea", "EPL")
-        
+
         assert aggregator.matchup == "Arsenal vs Chelsea"
         assert aggregator.league == "EPL"
         assert aggregator.teams["home"] == "Arsenal"
@@ -102,7 +118,7 @@ class TestScrapingToFeaturesPipeline:
     def test_matchup_parsing(self):
         """Test matchup string parsing."""
         aggregator = DataAggregator("Liverpool vs Man City", "EPL")
-        
+
         assert aggregator.teams["home"] == "Liverpool"
         assert aggregator.teams["away"] == "Man City"
 
@@ -111,9 +127,9 @@ class TestScrapingToFeaturesPipeline:
         with pytest.raises(ValueError, match="Invalid matchup format"):
             DataAggregator("Invalid Format", "EPL")
 
-    @patch('src.data.aggregator.FlashscoreScraper')
-    @patch('src.data.aggregator.OddsPortalScraper')
-    @patch('src.data.aggregator.TransfermarktScraper')
+    @patch("src.data.aggregator.FlashscoreScraper")
+    @patch("src.data.aggregator.OddsPortalScraper")
+    @patch("src.data.aggregator.TransfermarktScraper")
     def test_fetch_match_data_structure(self, mock_tm, mock_op, mock_fs):
         """Test that fetch_match_data returns expected structure."""
         # Setup mocks
@@ -122,10 +138,10 @@ class TestScrapingToFeaturesPipeline:
         mock_tm.return_value.scrape_injuries.return_value = []
 
         aggregator = DataAggregator("Arsenal vs Chelsea", "EPL")
-        
+
         # This should not raise
         data = aggregator.fetch_match_data()
-        
+
         assert "metadata" in data
         assert data["metadata"]["home_team"] == "Arsenal"
         assert data["metadata"]["away_team"] == "Chelsea"
@@ -137,7 +153,7 @@ class TestEnhancedAggregator:
     def test_enhanced_aggregator_initialization(self):
         """Test EnhancedDataAggregator initialization."""
         from src.data.aggregator import get_enhanced_aggregator
-        
+
         aggregator = get_enhanced_aggregator()
         assert aggregator is not None
 
@@ -145,15 +161,29 @@ class TestEnhancedAggregator:
     async def test_comprehensive_feature_fetch(self, mock_scraped_data):
         """Test fetching comprehensive features from all sources."""
         from src.data.aggregator import get_enhanced_aggregator
-        
+
         aggregator = get_enhanced_aggregator()
-        
+
         # Mock the individual scraper calls
         # whoscored was replaced by soccerway (calculate_position_features) in the EnhancedDataAggregator refactor
-        with patch.object(aggregator.betfair, 'calculate_exchange_features', return_value=mock_scraped_data["betfair"]):
-            with patch.object(aggregator.soccerway, 'calculate_position_features', return_value=mock_scraped_data.get("whoscored", {})):
-                with patch.object(aggregator.understat, 'calculate_xg_features', return_value=mock_scraped_data["understat"]):
-                    features = aggregator.get_comprehensive_features("Arsenal", "Chelsea", "EPL")
+        with patch.object(
+            aggregator.betfair,
+            "calculate_exchange_features",
+            return_value=mock_scraped_data["betfair"],
+        ):
+            with patch.object(
+                aggregator.soccerway,
+                "calculate_position_features",
+                return_value=mock_scraped_data.get("whoscored", {}),
+            ):
+                with patch.object(
+                    aggregator.understat,
+                    "calculate_xg_features",
+                    return_value=mock_scraped_data["understat"],
+                ):
+                    features = aggregator.get_comprehensive_features(
+                        "Arsenal", "Chelsea", "EPL"
+                    )
 
                     assert "home_team" in features
                     assert "away_team" in features
@@ -167,7 +197,7 @@ class TestFeaturesToModelPipeline:
     async def test_prediction_service_initialization(self):
         """Test PredictionService initializes correctly."""
         service = PredictionService()
-        
+
         assert service.edge_detector is not None
         assert service.transformer is not None
 
@@ -179,12 +209,14 @@ class TestFeaturesToModelPipeline:
         service = PredictionService()
 
         with pytest.raises(DataUnavailableError):
-            service.transformer.engineer_features({
-                "home_team": "Arsenal",
-                "away_team": "Chelsea",
-                "league": "EPL",
-                "odds": {"home_win": 2.10, "draw": 3.40, "away_win": 3.60},
-            })
+            service.transformer.engineer_features(
+                {
+                    "home_team": "Arsenal",
+                    "away_team": "Chelsea",
+                    "league": "EPL",
+                    "odds": {"home_win": 2.10, "draw": 3.40, "away_win": 3.60},
+                }
+            )
 
 
 @pytest.mark.integration
@@ -195,6 +227,7 @@ class TestEndToEndAPI:
     def async_client(self):
         """Create async client for testing."""
         from httpx import ASGITransport
+
         transport = ASGITransport(app=app)
         return AsyncClient(transport=transport, base_url="http://test")
 
@@ -203,7 +236,7 @@ class TestEndToEndAPI:
         """Test health check endpoint."""
         async with async_client as client:
             response = await client.get("/health")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert "status" in data
@@ -220,9 +253,9 @@ class TestEndToEndAPI:
                         "away_team": "Chelsea",
                         "league": "epl",  # lowercase to match enum
                         "odds": sample_odds,
-                    }
+                    },
                 )
-                
+
                 # May fail if models not loaded, but structure should be valid
                 if response.status_code == 200:
                     data = response.json()
@@ -242,7 +275,7 @@ class TestEndToEndAPI:
             for _ in range(5):
                 response = await client.get("/health")
                 responses.append(response)
-            
+
             # All health checks should succeed (not rate limited)
             assert all(r.status_code == 200 for r in responses)
 
@@ -253,11 +286,9 @@ class TestDataIntegrity:
     def test_odds_consistency(self, sample_odds):
         """Test odds remain consistent through pipeline."""
         # Implied probabilities should sum to > 100% (bookmaker margin)
-        implied_probs = {
-            k: 1 / v for k, v in sample_odds.items()
-        }
+        implied_probs = {k: 1 / v for k, v in sample_odds.items()}
         total_prob = sum(implied_probs.values())
-        
+
         # Typical margin is 2-5%
         assert 1.02 <= total_prob <= 1.10
 
@@ -269,10 +300,10 @@ class TestDataIntegrity:
             "draw": 0.28,
             "away_win": 0.27,
         }
-        
+
         # Each probability should be 0-1
         assert all(0 <= p <= 1 for p in probs.values())
-        
+
         # Should sum to ~1
         assert 0.99 <= sum(probs.values()) <= 1.01
 
@@ -281,9 +312,9 @@ class TestDataIntegrity:
         # Model thinks home win is 55%, market implies ~54%
         model_prob = 0.55
         market_prob = 1 / sample_odds["home_win"]
-        
+
         edge = model_prob - market_prob
-        
+
         # Edge should be positive for a value bet
         assert edge > 0
         assert edge < 0.2  # Sanity check - edge shouldn't be too large
@@ -295,7 +326,7 @@ class TestErrorHandling:
     def test_missing_team_handling(self):
         """Test handling of missing team data."""
         from src.data.aggregator import DataAggregator
-        
+
         # Unknown team should still create aggregator
         aggregator = DataAggregator("Unknown FC vs Mystery United", "EPL")
         assert aggregator.teams["home"] == "Unknown FC"
@@ -304,19 +335,19 @@ class TestErrorHandling:
     async def test_scraper_failure_resilience(self):
         """Test resilience when scrapers fail."""
         from src.data.aggregator import DataAggregator
-        
+
         aggregator = DataAggregator("Arsenal vs Chelsea", "EPL")
-        
+
         # Should return data even if scraping fails
         data = aggregator.fetch_match_data()
-        
+
         assert data is not None
         assert "metadata" in data
 
     def test_invalid_league_handling(self):
         """Test handling of invalid league."""
         from src.data.aggregator import DataAggregator
-        
+
         # Should handle gracefully
         aggregator = DataAggregator("Arsenal vs Chelsea", "INVALID_LEAGUE")
         assert aggregator.league == "INVALID_LEAGUE"
@@ -329,15 +360,15 @@ class TestPerformance:
     async def test_aggregator_cache_hit(self):
         """Test that caching improves performance."""
         from src.data.aggregator import DataAggregator
-        
+
         aggregator = DataAggregator("Arsenal vs Chelsea", "EPL")
-        
+
         # First call - might be slow
         data1 = aggregator.fetch_match_data()
-        
+
         # Second call - should be cached
         data2 = aggregator.fetch_match_data()
-        
+
         # Cache hit should be faster
         # (This is a weak assertion since first call might also be fast)
         assert data1 is not None

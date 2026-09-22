@@ -33,8 +33,8 @@ _LEAGUE_IDS: dict[str, int] = {
     "SERIE_A": 135,
     "BUNDESLIGA": 78,
     "LIGUE_1": 61,
-    "EREDIVISIE": 88,   # Dutch Eredivisie (all comps available on free plan)
-    "UCL": 2,           # UEFA Champions League
+    "EREDIVISIE": 88,  # Dutch Eredivisie (all comps available on free plan)
+    "UCL": 2,  # UEFA Champions League
 }
 
 
@@ -171,7 +171,10 @@ class APIFootballProvider(BaseProvider):
             league_id = _LEAGUE_IDS.get(competition.upper())
             if league_id is None:
                 return self._unsupported_competition("injuries", competition)
-            params = {"league": league_id, "season": season if season is not None else _current_season()}
+            params = {
+                "league": league_id,
+                "season": season if season is not None else _current_season(),
+            }
 
         try:
             payload, headers = await self._get_json(
@@ -197,11 +200,15 @@ class APIFootballProvider(BaseProvider):
             trust_tier=self.trust_tier,
             records=[r.model_dump(mode="json") for r in records],
             quota=self._quota_from_headers(headers),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
         )
 
-    async def lineups(self, *, fixture_id: Any, competition: str | None = None) -> ProviderResult:
+    async def lineups(
+        self, *, fixture_id: Any, competition: str | None = None
+    ) -> ProviderResult:
         # `competition` is accepted-but-unused: the orchestrator's
         # PREMATCH_ENRICHED call site passes it, but /fixtures/lineups only
         # needs the fixture id.
@@ -234,7 +241,9 @@ class APIFootballProvider(BaseProvider):
         raw_teams = raw_teams if isinstance(raw_teams, list) else []
         records: list[LineupRecord] = []
         for team_entry in raw_teams:
-            records.extend(self._normalize_lineup_team(team_entry, fixture_id=fixture_id))
+            records.extend(
+                self._normalize_lineup_team(team_entry, fixture_id=fixture_id)
+            )
 
         return ProviderResult(
             provider=self.provider_id,
@@ -243,7 +252,9 @@ class APIFootballProvider(BaseProvider):
             trust_tier=self.trust_tier,
             records=[r.model_dump(mode="json") for r in records],
             quota=self._quota_from_headers(headers),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
         )
 
@@ -283,11 +294,15 @@ class APIFootballProvider(BaseProvider):
             trust_tier=self.trust_tier,
             records=[r.model_dump(mode="json") for r in records],
             quota=self._quota_from_headers(headers),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
         )
 
-    async def team_statistics(self, *, team_id: int | None, competition: str) -> ProviderResult:
+    async def team_statistics(
+        self, *, team_id: int | None, competition: str
+    ) -> ProviderResult:
         guard = self._guard("team_statistics")
         if guard is not None:
             return guard
@@ -308,7 +323,11 @@ class APIFootballProvider(BaseProvider):
             payload, headers = await self._get_json(
                 f"{self.base_url}/teams/statistics",
                 headers={"x-apisports-key": self.api_key or ""},
-                params={"league": league_id, "season": _current_season(), "team": team_id},
+                params={
+                    "league": league_id,
+                    "season": _current_season(),
+                    "team": team_id,
+                },
             )
         except Exception as exc:
             return self._network_failure("team_statistics", exc)
@@ -317,16 +336,22 @@ class APIFootballProvider(BaseProvider):
         if logical_error is not None:
             return logical_error
 
-        record = self._normalize_team_statistics(payload.get("response"), team_id=team_id)
+        record = self._normalize_team_statistics(
+            payload.get("response"), team_id=team_id
+        )
 
         return ProviderResult(
             provider=self.provider_id,
             operation="team_statistics",
-            status=ProviderStatus.VERIFIED if record.coherent else ProviderStatus.PARTIAL,
+            status=ProviderStatus.VERIFIED
+            if record.coherent
+            else ProviderStatus.PARTIAL,
             trust_tier=self.trust_tier,
             records=[record.model_dump(mode="json")],
             quota=self._quota_from_headers(headers),
-            warnings=[] if record.coherent else [f"rejected: {record.rejection_reason}"],
+            warnings=[]
+            if record.coherent
+            else [f"rejected: {record.rejection_reason}"],
             raw_snapshot_id=stable_hash(payload),
         )
 
@@ -353,18 +378,24 @@ class APIFootballProvider(BaseProvider):
                 status=ProviderStatus.UNAVAILABLE,
                 trust_tier=self.trust_tier,
                 error_code="provider_disabled_or_unconfigured",
-                warnings=["provider must be enabled and configured with a backend credential"],
+                warnings=[
+                    "provider must be enabled and configured with a backend credential"
+                ],
             )
         return None
 
-    def _unsupported_competition(self, operation: str, competition: str) -> ProviderResult:
+    def _unsupported_competition(
+        self, operation: str, competition: str
+    ) -> ProviderResult:
         return ProviderResult(
             provider=self.provider_id,
             operation=operation,
             status=ProviderStatus.UNAVAILABLE,
             trust_tier=self.trust_tier,
             error_code="unsupported_competition",
-            warnings=[f"competition {competition!r} has no API-Football league mapping"],
+            warnings=[
+                f"competition {competition!r} has no API-Football league mapping"
+            ],
         )
 
     def _network_failure(self, operation: str, exc: Exception) -> ProviderResult:
@@ -421,7 +452,9 @@ class APIFootballProvider(BaseProvider):
             coherent=True,
         )
 
-    def _normalize_lineup_team(self, raw: dict[str, Any], *, fixture_id: Any) -> list[LineupRecord]:
+    def _normalize_lineup_team(
+        self, raw: dict[str, Any], *, fixture_id: Any
+    ) -> list[LineupRecord]:
         team = raw.get("team") if isinstance(raw, dict) else None
         if not isinstance(team, dict) or not team.get("name"):
             return [
@@ -441,21 +474,36 @@ class APIFootballProvider(BaseProvider):
         for entry in raw.get("startXI") or []:
             records.append(
                 self._normalize_lineup_player(
-                    entry, fixture_id=fixture_id, team_id=team_id, team_name=team_name,
-                    formation=formation, role="starting",
+                    entry,
+                    fixture_id=fixture_id,
+                    team_id=team_id,
+                    team_name=team_name,
+                    formation=formation,
+                    role="starting",
                 )
             )
         for entry in raw.get("substitutes") or []:
             records.append(
                 self._normalize_lineup_player(
-                    entry, fixture_id=fixture_id, team_id=team_id, team_name=team_name,
-                    formation=formation, role="substitute",
+                    entry,
+                    fixture_id=fixture_id,
+                    team_id=team_id,
+                    team_name=team_name,
+                    formation=formation,
+                    role="substitute",
                 )
             )
         return records
 
     def _normalize_lineup_player(
-        self, entry: dict[str, Any], *, fixture_id: Any, team_id: Any, team_name: str, formation: Any, role: str
+        self,
+        entry: dict[str, Any],
+        *,
+        fixture_id: Any,
+        team_id: Any,
+        team_name: str,
+        formation: Any,
+        role: str,
     ) -> LineupRecord:
         player = entry.get("player") if isinstance(entry, dict) else None
         player_name = str(player.get("name") or "") if isinstance(player, dict) else ""
@@ -485,7 +533,9 @@ class APIFootballProvider(BaseProvider):
     def _normalize_team(self, raw: dict[str, Any]) -> TeamRecord:
         team = raw.get("team") if isinstance(raw, dict) else None
         if not isinstance(team, dict) or not team.get("name"):
-            return TeamRecord(name="", coherent=False, rejection_reason="missing_field_team")
+            return TeamRecord(
+                name="", coherent=False, rejection_reason="missing_field_team"
+            )
         return TeamRecord(
             team_id=team.get("id"),
             name=str(team["name"]),
@@ -493,16 +543,24 @@ class APIFootballProvider(BaseProvider):
             coherent=True,
         )
 
-    def _normalize_team_statistics(self, raw: Any, *, team_id: int) -> TeamStatisticsRecord:
+    def _normalize_team_statistics(
+        self, raw: Any, *, team_id: int
+    ) -> TeamStatisticsRecord:
         if not isinstance(raw, dict):
             return TeamStatisticsRecord(
-                team_id=team_id, team_name="", coherent=False, rejection_reason="empty_response",
+                team_id=team_id,
+                team_name="",
+                coherent=False,
+                rejection_reason="empty_response",
             )
         team = raw.get("team")
         team_name = str(team.get("name") or "") if isinstance(team, dict) else ""
         if not team_name:
             return TeamStatisticsRecord(
-                team_id=team_id, team_name="", coherent=False, rejection_reason="missing_field_team",
+                team_id=team_id,
+                team_name="",
+                coherent=False,
+                rejection_reason="missing_field_team",
             )
         fixtures = raw.get("fixtures")
         goals = raw.get("goals")
@@ -532,6 +590,8 @@ class APIFootballProvider(BaseProvider):
             int(limit_header) if limit_header and str(limit_header).isdigit() else None
         )
         return ProviderQuota(
-            remaining=int(remaining) if remaining and str(remaining).isdigit() else None,
+            remaining=int(remaining)
+            if remaining and str(remaining).isdigit()
+            else None,
             limit=limit,
         )

@@ -104,6 +104,7 @@ class EvidenceTierEnum(str, Enum):
 
 class ModelInput(BaseModel):
     """Calibrated model output for one match."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     home_probability: float = Field(..., ge=0.0, le=1.0)
@@ -158,6 +159,7 @@ class SignalsInput(BaseModel):
 
 class FreshnessInput(BaseModel):
     """Measured staleness in seconds for each evidence category."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     model_features_seconds: Optional[int] = None
@@ -240,8 +242,8 @@ class CalculationAudit(BaseModel):
     fair_market_away: Optional[float] = None
     calibration_method: Optional[str] = None
     model_version: Optional[str] = None
-    kelly_fraction: float = 0.25   # quarter-Kelly (directive §12)
-    kelly_cap: float = 0.05        # 5% hard cap
+    kelly_fraction: float = 0.25  # quarter-Kelly (directive §12)
+    kelly_cap: float = 0.05  # 5% hard cap
     breakeven_odds: Optional[float] = None
     minimum_odds_for_target_ev: Optional[float] = None
     edge_preserving_minimum_odds: Optional[float] = None
@@ -249,6 +251,7 @@ class CalculationAudit(BaseModel):
 
 class MarketEvaluation(BaseModel):
     """Edge/EV calculation for a single 1X2 outcome."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     outcome: str  # "home" | "draw" | "away"
@@ -257,8 +260,8 @@ class MarketEvaluation(BaseModel):
     market_odds: float
     raw_implied_probability: float
     fair_market_probability: float
-    edge: float          # model_prob - fair_market_prob (pp)
-    edge_pct: float      # edge Ã- 100
+    edge: float  # model_prob - fair_market_prob (pp)
+    edge_pct: float  # edge Ã- 100
     expected_value: float  # model_prob Ã- odds - 1
     stake_fraction: float  # capped Quarter-Kelly; raw Kelly math is never public
     confidence_adjusted_value: float

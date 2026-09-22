@@ -66,8 +66,12 @@ def _fd(home: str, away: str, day: int) -> dict:
 
 
 def test_the_crosswalk_folds_both_vocabularies_onto_one_key() -> None:
-    assert corpus_team_key("Manchester United", "EPL") == corpus_team_key("Man United", "EPL")
-    assert corpus_team_key("Atletico Madrid", "LA_LIGA") == corpus_team_key("Ath Madrid", "LA_LIGA")
+    assert corpus_team_key("Manchester United", "EPL") == corpus_team_key(
+        "Man United", "EPL"
+    )
+    assert corpus_team_key("Atletico Madrid", "LA_LIGA") == corpus_team_key(
+        "Ath Madrid", "LA_LIGA"
+    )
     assert corpus_team_key("Borussia M.Gladbach", "BUNDESLIGA") == corpus_team_key(
         "M'gladbach", "BUNDESLIGA"
     )
@@ -76,7 +80,9 @@ def test_the_crosswalk_folds_both_vocabularies_onto_one_key() -> None:
 def test_two_different_clubs_do_not_collapse_onto_one_key() -> None:
     """The Paris FC / Paris SG collision the production alias table exists to
     prevent must not be reintroduced by the crosswalk."""
-    assert corpus_team_key("Paris FC", "LIGUE_1") != corpus_team_key("Paris SG", "LIGUE_1")
+    assert corpus_team_key("Paris FC", "LIGUE_1") != corpus_team_key(
+        "Paris SG", "LIGUE_1"
+    )
 
 
 def test_an_unknown_name_passes_through_the_normalizer_unchanged() -> None:
@@ -165,6 +171,8 @@ def test_columns_are_the_registry_list_not_a_copy() -> None:
 
 def test_summary_reports_both_coverage_stages(tmp_path: Path) -> None:
     sources = _corpus(tmp_path, [_us_row("Arsenal", "Chelsea", 0, 2.0, 0.5)])
-    summary = compute_xg_training_columns([_fd("Arsenal", "Chelsea", 0)], sources).summary()
+    summary = compute_xg_training_columns(
+        [_fd("Arsenal", "Chelsea", 0)], sources
+    ).summary()
     assert "corpus xG observation" in summary
     assert "rolling window filled" in summary

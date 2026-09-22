@@ -10,6 +10,7 @@ contract. Fixture sync therefore resolves in this order:
 
 The resolver never treats a neutral/default Elo value as identity evidence.
 """
+
 from __future__ import annotations
 
 import re
@@ -77,7 +78,10 @@ _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     # real match/Elo history (138-520 rows) via read-only production SQL
     # before being asserted; none is a guess.
     ("BUNDESLIGA", "rasenballsport leipzig"): "rb leipzig",
-    ("BUNDESLIGA", "cologne"): "koln",  # Understat anglicizes; the corpus row is German-transliterated
+    (
+        "BUNDESLIGA",
+        "cologne",
+    ): "koln",  # Understat anglicizes; the corpus row is German-transliterated
     ("EPL", "manchester city"): "man city",
     # Same shape as Manchester City below: fdco-team-epl-newcastle carries 268
     # real matches / 267 Elo rows; fd-team-epl:newcastle_united_fc is a
@@ -88,8 +92,14 @@ _AUDITED_ALIASES: dict[tuple[str, str], str] = {
     ("EPL", "newcastle united"): "newcastle",
     ("EPL", "wolverhampton wanderers"): "wolves",
     ("EPL", "west bromwich albion"): "west brom",
-    ("LA_LIGA", "celta vigo"): "celta de vigo",  # "de" breaks containment's contiguous-substring check
-    ("LA_LIGA", "atletico madrid"): "club atletico de madrid",  # same "de"-in-the-middle shape
+    (
+        "LA_LIGA",
+        "celta vigo",
+    ): "celta de vigo",  # "de" breaks containment's contiguous-substring check
+    (
+        "LA_LIGA",
+        "atletico madrid",
+    ): "club atletico de madrid",  # same "de"-in-the-middle shape
     ("LIGUE_1", "rennais"): "rennes",
     # Paris FC and Paris SG are two genuinely different clubs that both appear
     # in the Ligue 1 corpus. `_identity_key` reduces "Paris FC" to the bare
@@ -202,7 +212,9 @@ def market_identity_key(name: str, league: str) -> str:
     which side happens to carry the decorated form.
     """
     key = _identity_key(name)
-    return _MARKET_ALIASES.get((league, key)) or _AUDITED_ALIASES.get((league, key)) or key
+    return (
+        _MARKET_ALIASES.get((league, key)) or _AUDITED_ALIASES.get((league, key)) or key
+    )
 
 
 def _keys_equivalent(left: str, right: str) -> bool:
@@ -255,7 +267,11 @@ def select_unique_by_team_names(
         return None, False
 
     keyed = [
-        (market_identity_key(pair[0], league), market_identity_key(pair[1], league), candidate)
+        (
+            market_identity_key(pair[0], league),
+            market_identity_key(pair[1], league),
+            candidate,
+        )
         for candidate in candidates
         for pair in (names(candidate),)
     ]
@@ -294,7 +310,10 @@ async def _candidate_rows(
         if league_id:
             statement = statement.where(EloRatingSnapshot.league == league_id)
         statement = statement.distinct()
-    return [(str(row_id), str(row_name)) for row_id, row_name in (await db.execute(statement)).all()]
+    return [
+        (str(row_id), str(row_name))
+        for row_id, row_name in (await db.execute(statement)).all()
+    ]
 
 
 async def resolve_provider_elo_team_id(
@@ -355,12 +374,19 @@ async def bind_provider_elo_team_id(
     Existing conflicting mappings fail closed rather than being overwritten.
     """
     normalized_id = str(provider_team_id or "").strip()
-    if not provider or not normalized_id or not provider_team_name.strip() or not competition:
+    if (
+        not provider
+        or not normalized_id
+        or not provider_team_name.strip()
+        or not competition
+    ):
         return False
 
     team = await db.get(Team, team_id)
     if team is None or team.league_id != competition:
-        raise ValueError("provider Elo mapping target is missing or in another competition")
+        raise ValueError(
+            "provider Elo mapping target is missing or in another competition"
+        )
 
     has_history = bool(
         await db.scalar(
@@ -472,7 +498,9 @@ async def resolve_team_id(
     # never "let the next heuristic guess".
     if identity_key and league_id and (league_id, identity_key) in _AUDITED_ALIASES:
         alias_target = _AUDITED_ALIASES[(league_id, identity_key)]
-        return _unique_match(rows, lambda row_name: _identity_key(row_name) == alias_target)
+        return _unique_match(
+            rows, lambda row_name: _identity_key(row_name) == alias_target
+        )
 
     normalized_affix = _strip_affixes(name).lower()
     affix = _unique_match(
@@ -483,7 +511,9 @@ async def resolve_team_id(
         return affix
 
     if identity_key:
-        deterministic = _unique_match(rows, lambda row_name: _identity_key(row_name) == identity_key)
+        deterministic = _unique_match(
+            rows, lambda row_name: _identity_key(row_name) == identity_key
+        )
         if deterministic:
             return deterministic
 
@@ -511,7 +541,9 @@ async def resolve_team_id(
             if contained:
                 return contained
 
-    candidates = [TeamCandidate(team_id=row_id, name=row_name) for row_id, row_name in rows]
+    candidates = [
+        TeamCandidate(team_id=row_id, name=row_name) for row_id, row_name in rows
+    ]
     decision = reconcile_team(name, candidates)
     if decision.status == "VERIFIED" and decision.team_id:
         return decision.team_id

@@ -81,13 +81,18 @@ async def _seed_teams(session: AsyncSession) -> None:
 
 
 async def test_matchup_path_home_pressing_advantage_is_correctly_signed(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector, monkeypatch: pytest.MonkeyPatch
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "enable_statsbomb_enrichment", True)
     await _seed_teams(session)
 
     result = await projector.build_live_feature_vector_from_matchup(
-        home_team="Arsenal", away_team="Chelsea", league="epl", db=session,
+        home_team="Arsenal",
+        away_team="Chelsea",
+        league="epl",
+        db=session,
         match_date=datetime(2026, 8, 10, 15, 0),
     )
 
@@ -98,7 +103,9 @@ async def test_matchup_path_home_pressing_advantage_is_correctly_signed(
 
 
 async def test_db_match_id_path_home_pressing_advantage_is_correctly_signed(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector, monkeypatch: pytest.MonkeyPatch
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "enable_statsbomb_enrichment", True)
     await _seed_teams(session)
@@ -114,7 +121,9 @@ async def test_db_match_id_path_home_pressing_advantage_is_correctly_signed(
     )
     await session.commit()
 
-    result = await projector.build_live_feature_vector(match_id="match-1", league="epl", db=session)
+    result = await projector.build_live_feature_vector(
+        match_id="match-1", league="epl", db=session
+    )
 
     value = result["features_dict"]["home_pressing_intensity"]
     assert value == pytest.approx(12.0 / 8.0)
@@ -122,7 +131,9 @@ async def test_db_match_id_path_home_pressing_advantage_is_correctly_signed(
 
 
 async def test_enrichment_disabled_leaves_registry_default(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector, monkeypatch: pytest.MonkeyPatch
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Default (False) production behavior is unchanged by this fix.
 
@@ -139,7 +150,10 @@ async def test_enrichment_disabled_leaves_registry_default(
     await _seed_teams(session)
 
     result = await projector.build_live_feature_vector_from_matchup(
-        home_team="Arsenal", away_team="Chelsea", league="epl", db=session,
+        home_team="Arsenal",
+        away_team="Chelsea",
+        league="epl",
+        db=session,
         match_date=datetime(2026, 8, 10, 15, 0),
     )
 

@@ -14,7 +14,10 @@ def _base_match(**overrides) -> dict:
         "competition": "EPL",
         "kickoff_utc": "2026-08-15T15:00:00Z",
         "verified_evidence_providers": [
-            "espn", "api_football", "football_data_org", "the_odds_api"
+            "espn",
+            "api_football",
+            "football_data_org",
+            "the_odds_api",
         ],
         "model": {
             "home_probability": 0.65,
@@ -114,13 +117,13 @@ def test_high_conviction_is_allowed_for_clean_tier_one_fixture():
     assert result.expected_value == pytest.approx(0.3)
     # EPL calibrated policy kelly_cap=0.04; global ceiling is 5% (directive §11/§12).
     assert result.stake_fraction == pytest.approx(0.04)
-    assert result.stake == "2.5u"  # label is hardcoded "at-cap" signal regardless of cap value
+    assert (
+        result.stake == "2.5u"
+    )  # label is hardcoded "at-cap" signal regardless of cap value
 
 
 def test_uncertified_generation_forces_partial_and_zero_stake():
-    result = _analyze(
-        _base_match(model={"generation_certified": False})
-    ).matches[0]
+    result = _analyze(_base_match(model={"generation_certified": False})).matches[0]
 
     assert result.verdict == "PARTIAL"
     assert result.stake == "pass"
@@ -203,7 +206,9 @@ def test_top_opportunities_excludes_pass_verdicts_and_limits_to_three():
         match["model"]["home_probability"] = probability
         match["model"]["draw_probability"] = round((1.0 - probability) * 0.6, 6)
         match["model"]["away_probability"] = round(
-            1.0 - match["model"]["home_probability"] - match["model"]["draw_probability"],
+            1.0
+            - match["model"]["home_probability"]
+            - match["model"]["draw_probability"],
             6,
         )
         matches.append(match)
@@ -244,7 +249,9 @@ def test_speculative_routed_to_batch_watchlist_not_top_opportunities():
     actionable = _base_match(match_id="action-1")
 
     response = _analyze(speculative, actionable)
-    speculative_result = next(m for m in response.matches if m.match_id == "speculative-1")
+    speculative_result = next(
+        m for m in response.matches if m.match_id == "speculative-1"
+    )
     actionable_result = next(m for m in response.matches if m.match_id == "action-1")
 
     assert speculative_result.verdict == "SPECULATIVE"
@@ -293,7 +300,10 @@ def test_four_providers_allows_high_conviction():
     """Four verified providers → HIGH_CONVICTION eligible when other gates pass (C-10)."""
     match = _base_match(
         verified_evidence_providers=[
-            "football_data_org", "api_football", "the_odds_api", "espn"
+            "football_data_org",
+            "api_football",
+            "the_odds_api",
+            "espn",
         ]
     )
     result = _analyze(match).matches[0]

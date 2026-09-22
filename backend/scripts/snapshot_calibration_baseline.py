@@ -17,6 +17,7 @@ so recalibration is measured against a fixed prior, not a moving target.
     (n=59, reliability=0.0326) without hitting the API.  Use this when
     you already have authoritative figures and the API is unavailable.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,7 +26,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-_BASELINES_FILE = Path(__file__).resolve().parents[1] / "models" / "calibration_baselines.json"
+_BASELINES_FILE = (
+    Path(__file__).resolve().parents[1] / "models" / "calibration_baselines.json"
+)
 
 # Live telemetry from Production Executive Directive v4 §2 (2026-09-08)
 _DIRECTIVE_V4_TELEMETRY = {
@@ -78,7 +81,9 @@ def _save_baselines(baselines: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Snapshot calibration baseline for active generation")
+    parser = argparse.ArgumentParser(
+        description="Snapshot calibration baseline for active generation"
+    )
     parser.add_argument(
         "--api-url",
         default="http://localhost:8000",
@@ -134,8 +139,10 @@ def main() -> int:
     _save_baselines(baselines)
 
     print(f"Snapshotted calibration baseline for generation '{generation}':")
-    print(f"  n={entry['n']}, reliability={entry['reliability']}, "
-          f"resolution={entry['resolution']}, ECE={entry['ece']}, Brier={entry['brier']}")
+    print(
+        f"  n={entry['n']}, reliability={entry['reliability']}, "
+        f"resolution={entry['resolution']}, ECE={entry['ece']}, Brier={entry['brier']}"
+    )
     print(f"  Written to {_BASELINES_FILE}")
     return 0
 

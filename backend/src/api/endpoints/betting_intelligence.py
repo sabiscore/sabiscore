@@ -88,7 +88,9 @@ async def analyze(
     try:
         evaluation_at = datetime.now(timezone.utc)
         governed_request = request.model_copy(
-            update={"matches": [_with_server_generation(match) for match in request.matches]}
+            update={
+                "matches": [_with_server_generation(match) for match in request.matches]
+            }
         )
         result = analyze_batch(
             request=governed_request,
@@ -102,7 +104,9 @@ async def analyze(
         )
         return result
     except Exception as exc:
-        logger.exception("Unexpected error in betting intelligence batch analysis: %s", exc)
+        logger.exception(
+            "Unexpected error in betting intelligence batch analysis: %s", exc
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

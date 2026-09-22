@@ -81,13 +81,17 @@ def _compute_edge_quality_score(match: Dict[str, Any]) -> Optional[float]:
     if data_gaps is None:
         completeness = 0.0
     else:
-        n_canonical = len(active_canonical_features(
-            use_phase7=settings.use_phase7_models,
-            use_phase8=settings.phase8_enabled,
-        ))
+        n_canonical = len(
+            active_canonical_features(
+                use_phase7=settings.use_phase7_models,
+                use_phase8=settings.phase8_enabled,
+            )
+        )
         completeness = max(0.0, 1.0 - len(data_gaps) / max(1, n_canonical))
 
-    score = 0.40 * confidence + 0.30 * market_edge + 0.20 * freshness + 0.10 * completeness
+    score = (
+        0.40 * confidence + 0.30 * market_edge + 0.20 * freshness + 0.10 * completeness
+    )
     return round(min(1.0, max(0.0, score)), 3)
 
 
@@ -330,10 +334,12 @@ async def get_upcoming_matches(
         20, ge=1, le=50, description="Maximum number of matches to return"
     ),
     include_predictions: bool = Query(
-        False, description="Include bounded ML enrichment; fixture discovery is the default"
+        False,
+        description="Include bounded ML enrichment; fixture discovery is the default",
     ),
     include_value_bets: bool = Query(
-        False, description="Include value bet calculations when predictions are requested"
+        False,
+        description="Include value bet calculations when predictions are requested",
     ),
     db: AsyncSession = Depends(get_async_session),
     odds_service: OddsService = Depends(get_odds_service),
@@ -406,7 +412,9 @@ async def get_upcoming_matches(
         # frontend's existing data_gap/generic-empty branch already covers it.
         is_offseason = len(matches) == 0 and _league_is_offseason(league)
         response["offseason"] = is_offseason
-        response["next_season_start"] = _next_season_start(league) if is_offseason else None
+        response["next_season_start"] = (
+            _next_season_start(league) if is_offseason else None
+        )
         response["next_season_start_estimated"] = (
             next_season_start_estimated(league) if is_offseason else None
         )
@@ -446,7 +454,9 @@ async def get_upcoming_matches(
             await db.rollback()
         except Exception:
             logger.exception("Failed to roll back upcoming-matches request session")
-        logger.error("Error fetching upcoming matches: %s", type(exc).__name__, exc_info=True)
+        logger.error(
+            "Error fetching upcoming matches: %s", type(exc).__name__, exc_info=True
+        )
         # Carry the exception CLASS NAME (never the message — it can contain row
         # data) into the response. Without it this handler reported every distinct
         # failure as the same three words, and a schema-validation bug served an

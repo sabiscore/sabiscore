@@ -39,12 +39,12 @@ class FBrefScoutingScraper:
     ) -> Dict[str, Any]:
         """
         Scrape team's tactical profile for season.
-        
+
         Args:
             team_name: Team name (e.g., "Arsenal")
             season: Season (e.g., "2024-2025")
             league: League name (e.g., "Premier-League")
-            
+
         Returns:
             Dict containing tactical metrics:
             {
@@ -69,24 +69,26 @@ class FBrefScoutingScraper:
                 if cached:
                     logger.info(f"FBref tactical cache HIT for {team_name}")
                     import json
+
                     return json.loads(cached)
-            
+
             # Construct URL
             url = f"{self.BASE_URL}/en/squads/{self._get_team_id(team_name)}/{season}/all_comps/{team_name}-Stats"
-            
+
             # Fetch and parse data (placeholder)
             data = await self._fetch_tactical_data(url)
-            
+
             # Process metrics
             processed = self._process_tactical_metrics(data, team_name, season)
-            
+
             # Cache result
             if self.redis:
                 import json
+
                 await self.redis.setex(cache_key, self.cache_ttl, json.dumps(processed))
-            
+
             return processed
-            
+
         except Exception as e:
             logger.error(f"Failed to scrape FBref tactical for {team_name}: {e}")
             raise
@@ -98,34 +100,34 @@ class FBrefScoutingScraper:
         """
         # Placeholder mapping
         team_ids = {
-            'Arsenal': '18bb7c10',
-            'Liverpool': '822bd0ba',
-            'Manchester City': 'b8fd03ef',
-            'Chelsea': 'cff3d9bb',
-            'Manchester United': '19538871',
-            'Tottenham': '361ca564',
+            "Arsenal": "18bb7c10",
+            "Liverpool": "822bd0ba",
+            "Manchester City": "b8fd03ef",
+            "Chelsea": "cff3d9bb",
+            "Manchester United": "19538871",
+            "Tottenham": "361ca564",
             # Add more teams...
         }
-        return team_ids.get(team_name, 'unknown')
+        return team_ids.get(team_name, "unknown")
 
     async def _fetch_tactical_data(self, url: str) -> Dict[str, Any]:
         """
         Fetch tactical data from FBref page.
-        
+
         In production, use BeautifulSoup or Playwright:
         ```python
         import aiohttp
         from bs4 import BeautifulSoup
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 html = await response.text()
                 soup = BeautifulSoup(html, 'html.parser')
-                
+
                 # Extract tables
                 possession_table = soup.find('table', {'id': 'stats_possession'})
                 defense_table = soup.find('table', {'id': 'stats_defense'})
-                
+
                 return {
                     'possession': self._parse_table(possession_table),
                     'defense': self._parse_table(defense_table),
@@ -157,12 +159,12 @@ class FBrefScoutingScraper:
         """
         Scrape individual player scouting report.
         Useful for assessing injury replacement quality.
-        
+
         Args:
             player_name: Player name (e.g., "Bukayo Saka")
             team: Team name
             season: Season
-            
+
         Returns:
             Dict with player performance metrics
         """
@@ -173,35 +175,37 @@ class FBrefScoutingScraper:
                 cached = await self.redis.get(cache_key)
                 if cached:
                     import json
+
                     return json.loads(cached)
-            
+
             # Placeholder data
             data = {
-                'player': player_name,
-                'team': team,
-                'season': season,
-                'position': 'Forward',
-                'minutes_played': 2500,
-                'goals_per_90': 0.45,
-                'assists_per_90': 0.35,
-                'xg_per_90': 0.40,
-                'xa_per_90': 0.32,
-                'shot_creating_actions_per_90': 4.5,
-                'progressive_carries_per_90': 3.2,
-                'successful_dribbles_per_90': 2.1,
-                'touches_in_box_per_90': 5.8,
-                'market_value_millions': 85.0,
-                'replacement_quality': 0.85,  # 0-1 scale
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                "player": player_name,
+                "team": team,
+                "season": season,
+                "position": "Forward",
+                "minutes_played": 2500,
+                "goals_per_90": 0.45,
+                "assists_per_90": 0.35,
+                "xg_per_90": 0.40,
+                "xa_per_90": 0.32,
+                "shot_creating_actions_per_90": 4.5,
+                "progressive_carries_per_90": 3.2,
+                "successful_dribbles_per_90": 2.1,
+                "touches_in_box_per_90": 5.8,
+                "market_value_millions": 85.0,
+                "replacement_quality": 0.85,  # 0-1 scale
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            
+
             # Cache for 6 hours
             if self.redis:
                 import json
+
                 await self.redis.setex(cache_key, 21600, json.dumps(data))
-            
+
             return data
-            
+
         except Exception as e:
             logger.error(f"Failed to scrape player {player_name}: {e}")
             raise
@@ -215,12 +219,12 @@ class FBrefScoutingScraper:
         """
         Scrape post-match tactical report.
         Useful for live model calibration.
-        
+
         Args:
             match_id: FBref match ID
             home_team: Home team name
             away_team: Away team name
-            
+
         Returns:
             Dict with match tactical stats
         """
@@ -231,48 +235,49 @@ class FBrefScoutingScraper:
                 cached = await self.redis.get(cache_key)
                 if cached:
                     import json
+
                     return json.loads(cached)
-            
-            
+
             # Placeholder data
             data = {
-                'match_id': match_id,
-                'home_team': home_team,
-                'away_team': away_team,
-                'home_stats': {
-                    'possession_pct': 58.0,
-                    'passes_completed': 450,
-                    'pass_completion_pct': 85.0,
-                    'progressive_passes': 42,
-                    'progressive_carries': 28,
-                    'pressures': 120,
-                    'pressure_success_pct': 35.0,
-                    'tackles': 15,
-                    'interceptions': 8,
-                    'aerial_duels_won': 18,
+                "match_id": match_id,
+                "home_team": home_team,
+                "away_team": away_team,
+                "home_stats": {
+                    "possession_pct": 58.0,
+                    "passes_completed": 450,
+                    "pass_completion_pct": 85.0,
+                    "progressive_passes": 42,
+                    "progressive_carries": 28,
+                    "pressures": 120,
+                    "pressure_success_pct": 35.0,
+                    "tackles": 15,
+                    "interceptions": 8,
+                    "aerial_duels_won": 18,
                 },
-                'away_stats': {
-                    'possession_pct': 42.0,
-                    'passes_completed': 320,
-                    'pass_completion_pct': 78.0,
-                    'progressive_passes': 28,
-                    'progressive_carries': 18,
-                    'pressures': 140,
-                    'pressure_success_pct': 38.0,
-                    'tackles': 22,
-                    'interceptions': 12,
-                    'aerial_duels_won': 15,
+                "away_stats": {
+                    "possession_pct": 42.0,
+                    "passes_completed": 320,
+                    "pass_completion_pct": 78.0,
+                    "progressive_passes": 28,
+                    "progressive_carries": 18,
+                    "pressures": 140,
+                    "pressure_success_pct": 38.0,
+                    "tackles": 22,
+                    "interceptions": 12,
+                    "aerial_duels_won": 15,
                 },
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
-            
+
             # Cache for 24 hours (match reports are static)
             if self.redis:
                 import json
+
                 await self.redis.setex(cache_key, 86400, json.dumps(data))
-            
+
             return data
-            
+
         except Exception as e:
             logger.error(f"Failed to scrape match {match_id}: {e}")
             raise
@@ -284,7 +289,7 @@ class FBrefScoutingScraper:
     ) -> Dict[str, float]:
         """
         Calculate tactical edges between teams.
-        
+
         Returns:
             Dict with edge factors:
             {
@@ -298,41 +303,48 @@ class FBrefScoutingScraper:
         """
         # Normalize metrics to 0-1 scale and calculate differences
         possession_edge = (
-            home_profile['touches_in_box_per_90'] - away_profile['touches_in_box_per_90']
+            home_profile["touches_in_box_per_90"]
+            - away_profile["touches_in_box_per_90"]
         ) / 50.0  # Normalize
-        
+
         pressing_edge = (
-            home_profile['pressure_success_pct'] - away_profile['pressure_success_pct']
+            home_profile["pressure_success_pct"] - away_profile["pressure_success_pct"]
         ) / 100.0
-        
+
         progressive_edge = (
-            (home_profile['progressive_passes_per_90'] + home_profile['progressive_carries_per_90']) -
-            (away_profile['progressive_passes_per_90'] + away_profile['progressive_carries_per_90'])
+            (
+                home_profile["progressive_passes_per_90"]
+                + home_profile["progressive_carries_per_90"]
+            )
+            - (
+                away_profile["progressive_passes_per_90"]
+                + away_profile["progressive_carries_per_90"]
+            )
         ) / 100.0
-        
+
         defensive_edge = (
-            (home_profile['tackles_per_90'] + home_profile['interceptions_per_90']) -
-            (away_profile['tackles_per_90'] + away_profile['interceptions_per_90'])
+            (home_profile["tackles_per_90"] + home_profile["interceptions_per_90"])
+            - (away_profile["tackles_per_90"] + away_profile["interceptions_per_90"])
         ) / 50.0
-        
+
         aerial_edge = (
-            home_profile['aerial_duel_win_pct'] - away_profile['aerial_duel_win_pct']
+            home_profile["aerial_duel_win_pct"] - away_profile["aerial_duel_win_pct"]
         ) / 100.0
-        
+
         # Overall edge (weighted average)
         overall_edge = (
-            0.25 * possession_edge +
-            0.20 * pressing_edge +
-            0.25 * progressive_edge +
-            0.20 * defensive_edge +
-            0.10 * aerial_edge
+            0.25 * possession_edge
+            + 0.20 * pressing_edge
+            + 0.25 * progressive_edge
+            + 0.20 * defensive_edge
+            + 0.10 * aerial_edge
         )
-        
+
         return {
-            'possession_edge': round(possession_edge, 3),
-            'pressing_edge': round(pressing_edge, 3),
-            'progressive_play_edge': round(progressive_edge, 3),
-            'defensive_intensity_edge': round(defensive_edge, 3),
-            'aerial_dominance_edge': round(aerial_edge, 3),
-            'overall_tactical_edge': round(overall_edge, 3),
+            "possession_edge": round(possession_edge, 3),
+            "pressing_edge": round(pressing_edge, 3),
+            "progressive_play_edge": round(progressive_edge, 3),
+            "defensive_intensity_edge": round(defensive_edge, 3),
+            "aerial_dominance_edge": round(aerial_edge, 3),
+            "overall_tactical_edge": round(overall_edge, 3),
         }

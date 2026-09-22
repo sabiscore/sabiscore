@@ -14,13 +14,16 @@ apply_python_314_compat()
 try:
     # Prefer requests if available for easier retries
     import requests
+
     _HAS_REQUESTS = True
 except Exception:
     import urllib.request as _urllib
+
     _HAS_REQUESTS = False
 
 try:
     import boto3
+
     _HAS_BOTO3 = True
 except Exception:
     _HAS_BOTO3 = False
@@ -29,7 +32,7 @@ from ..models.ensemble import SabiScoreEnsemble  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-MODEL_EXTENSIONS = ('.pkl', '.joblib')
+MODEL_EXTENSIONS = (".pkl", ".joblib")
 DEFAULT_LEAGUES: tuple[str, ...] = (
     "epl",
     "la_liga",
@@ -92,7 +95,7 @@ def _download_bytes_with_requests(
                 redact_text(exc),
             )
             if attempt < retries:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             raise
 
@@ -166,7 +169,15 @@ def _force_single_thread_inference(obj: Any, *, _seen: set[int] | None = None) -
         iterable = list(obj)
     else:
         iterable = []
-        for attr in ("models", "estimators_", "estimators", "base_estimators", "steps", "named_steps", "meta_model"):
+        for attr in (
+            "models",
+            "estimators_",
+            "estimators",
+            "base_estimators",
+            "steps",
+            "named_steps",
+            "meta_model",
+        ):
             try:
                 value = getattr(obj, attr)
             except Exception:
@@ -231,7 +242,9 @@ def load_ensemble_per_league(
         if model is None:
             local_artifact = _resolve_local_artifact(artifact_name, normalized_dirs)
             if local_artifact is None:
-                searched = ", ".join(str(path / artifact_name) for path in normalized_dirs)
+                searched = ", ".join(
+                    str(path / artifact_name) for path in normalized_dirs
+                )
                 raise FileNotFoundError(
                     f"Missing model artifact for league '{league}': {artifact_name}. "
                     f"Set MODEL_BASE_URL or ensure one of these exists: {searched}"
@@ -247,8 +260,8 @@ def load_ensemble_per_league(
     return loaded_models
 
 
-def _env_flag(name: str, default: str = 'false') -> bool:
-    return os.getenv(name, default).lower() in ('true', '1', 'yes')
+def _env_flag(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).lower() in ("true", "1", "yes")
 
 
 def _find_valid_models(models_dir: str) -> List[str]:
@@ -268,12 +281,14 @@ def _find_valid_models(models_dir: str) -> List[str]:
     return valid_models
 
 
-def _download_with_requests(url: str, dest: str, headers: dict, timeout: int = 10, retries: int = 3) -> None:
+def _download_with_requests(
+    url: str, dest: str, headers: dict, timeout: int = 10, retries: int = 3
+) -> None:
     for attempt in range(1, retries + 1):
         try:
             resp = requests.get(url, headers=headers, timeout=timeout, stream=True)
             resp.raise_for_status()
-            with open(dest, 'wb') as fh:
+            with open(dest, "wb") as fh:
                 for chunk in resp.iter_content(chunk_size=8192):
                     if chunk:
                         fh.write(chunk)
@@ -286,40 +301,48 @@ def _download_with_requests(url: str, dest: str, headers: dict, timeout: int = 1
                 redact_text(e),
             )
             if attempt < retries:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             raise
 
 
-def _download_with_urllib(url: str, dest: str, headers: dict, timeout: int = 10) -> None:
+def _download_with_urllib(
+    url: str, dest: str, headers: dict, timeout: int = 10
+) -> None:
     req = _urllib.Request(url)
     for k, v in headers.items():
         req.add_header(k, v)
     with _urllib.urlopen(req, timeout=timeout) as resp:
-        with open(dest, 'wb') as fh:
+        with open(dest, "wb") as fh:
             fh.write(resp.read())
 
 
-def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_token: Optional[str] = None) -> bool:
+def fetch_models_if_needed(
+    model_base_url: Optional[str], dest_root: str, fetch_token: Optional[str] = None
+) -> bool:
     """Ensure model artifacts exist under dest_root/models. If missing and model_base_url is provided,
     attempt to download artifacts. Returns True if artifacts exist after this call, False otherwise.
     """
-    models_dir = os.path.join(dest_root, 'models')
+    models_dir = os.path.join(dest_root, "models")
     os.makedirs(models_dir, exist_ok=True)
 
-    skip_s3 = _env_flag('SKIP_S3')
-    model_fetch_strict = _env_flag('MODEL_FETCH_STRICT')
+    skip_s3 = _env_flag("SKIP_S3")
+    model_fetch_strict = _env_flag("MODEL_FETCH_STRICT")
 
     # Check for existing .pkl files of reasonable size
     valid_models = _find_valid_models(models_dir)
 
     if valid_models:
-        logger.info(f"Found {len(valid_models)} valid local model(s): {', '.join(valid_models)}")
+        logger.info(
+            f"Found {len(valid_models)} valid local model(s): {', '.join(valid_models)}"
+        )
         logger.info("Model artifacts loaded successfully from local storage")
         return True
 
     if skip_s3:
-        logger.warning("SKIP_S3=true: Model fetching disabled, no valid local models found")
+        logger.warning(
+            "SKIP_S3=true: Model fetching disabled, no valid local models found"
+        )
         return not model_fetch_strict
 
     if not model_base_url:
@@ -331,13 +354,15 @@ def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_
         return True
 
     # Support s3:// URIs or https:// endpoints
-    if not (model_base_url.startswith('https://') or model_base_url.startswith('s3://')):
+    if not (
+        model_base_url.startswith("https://") or model_base_url.startswith("s3://")
+    ):
         logger.error("MODEL_BASE_URL must use https:// or s3://")
         return False
 
     headers = {}
     if fetch_token:
-        headers['Authorization'] = f"Bearer {fetch_token}"
+        headers["Authorization"] = f"Bearer {fetch_token}"
 
     logger.info(
         "Fetching model artifacts from %s into configured destination",
@@ -349,25 +374,25 @@ def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_
         os.makedirs(os.path.dirname(dest), exist_ok=True)
 
         # If model_base_url is an S3 URI, prefer using boto3
-        if model_base_url.startswith('s3://'):
+        if model_base_url.startswith("s3://"):
             if not _HAS_BOTO3:
                 logger.error("MODEL_BASE_URL is s3:// but boto3 is not installed")
                 return False
 
             # parse s3://bucket/path_prefix
-            _, _, bucket_and_prefix = model_base_url.partition('s3://')
-            bucket_and_prefix = bucket_and_prefix.rstrip('/')
+            _, _, bucket_and_prefix = model_base_url.partition("s3://")
+            bucket_and_prefix = bucket_and_prefix.rstrip("/")
             # bucket_and_prefix may be bucket or bucket/prefix
-            parts = bucket_and_prefix.split('/', 1)
+            parts = bucket_and_prefix.split("/", 1)
             bucket = parts[0]
-            prefix = parts[1] if len(parts) > 1 else ''
+            prefix = parts[1] if len(parts) > 1 else ""
             key = f"{prefix}/{rel}" if prefix else rel
-            key = key.lstrip('/')
+            key = key.lstrip("/")
             logger.info("Downloading S3 model artifact %s", rel)
             try:
-                s3 = boto3.client('s3')
+                s3 = boto3.client("s3")
                 # use streaming download
-                with open(dest, 'wb') as fh:
+                with open(dest, "wb") as fh:
                     s3.download_fileobj(bucket, key, fh)
             except Exception as e:
                 logger.error(
@@ -378,7 +403,7 @@ def fetch_models_if_needed(model_base_url: Optional[str], dest_root: str, fetch_
                 return False
 
         else:
-            url = urljoin(model_base_url.rstrip('/') + '/', rel)
+            url = urljoin(model_base_url.rstrip("/") + "/", rel)
             logger.info("Downloading HTTPS model artifact %s", rel)
             try:
                 if _HAS_REQUESTS:

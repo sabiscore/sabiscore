@@ -32,6 +32,7 @@ Not a package (pytest.ini excludes scripts/ from collection and pythonpath
 only covers src/), so the module is loaded by inserting its directory onto
 sys.path directly — same pattern as test_train_on_real_matches_elo.py.
 """
+
 from __future__ import annotations
 
 import sys
@@ -76,7 +77,9 @@ def test_calibration_reliability_matches_production_brier_decomposition() -> Non
     probs = rng.dirichlet([1.0, 1.0, 1.0], size=200)
     y = rng.integers(0, 3, size=200)
 
-    result = train_on_real_matches._calibration_reliability(_FakeCalibrator(probs), None, y)
+    result = train_on_real_matches._calibration_reliability(
+        _FakeCalibrator(probs), None, y
+    )
     expected = brier_score_decomposition(y, probs, n_bins=10)
 
     assert result["reliability"] == pytest.approx(expected["mean"]["reliability"])
@@ -97,16 +100,34 @@ def test_select_calibrator_picks_isotonic_when_reliability_and_resolution_both_i
     iso_probs = np.full((len(y), 3), 0.05)
     iso_probs[np.arange(len(y)), y] = 0.9
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: _FakeCalibrator(temp_probs))
-    monkeypatch.setattr(train_on_real_matches, "_fit_isotonic", lambda *a, **k: _FakeCalibrator(iso_probs))
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_temperature",
+        lambda *a, **k: _FakeCalibrator(temp_probs),
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_isotonic",
+        lambda *a, **k: _FakeCalibrator(iso_probs),
+    )
 
     model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
     )
 
     assert diagnostics["chosen"] == "isotonic"
-    assert diagnostics["isotonic"]["reliability"] < diagnostics["temperature"]["reliability"]
-    assert diagnostics["isotonic"]["resolution"] >= diagnostics["temperature"]["resolution"]
+    assert (
+        diagnostics["isotonic"]["reliability"]
+        < diagnostics["temperature"]["reliability"]
+    )
+    assert (
+        diagnostics["isotonic"]["resolution"]
+        >= diagnostics["temperature"]["resolution"]
+    )
     # Same fixed matrices scored against the same y -- the persistence check
     # is necessarily trivial here; test_..._does_not_persist below exercises
     # the genuinely informative case.
@@ -131,15 +152,32 @@ def test_select_calibrator_rejects_isotonic_that_improves_reliability_but_flatte
     temp_probs[np.arange(len(y)), y] = 0.55
     iso_probs = np.full((len(y), 3), 1.0 / 3.0)  # exactly the marginal rate, every row
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: _FakeCalibrator(temp_probs))
-    monkeypatch.setattr(train_on_real_matches, "_fit_isotonic", lambda *a, **k: _FakeCalibrator(iso_probs))
-
-    model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_temperature",
+        lambda *a, **k: _FakeCalibrator(temp_probs),
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_isotonic",
+        lambda *a, **k: _FakeCalibrator(iso_probs),
     )
 
-    assert diagnostics["isotonic"]["reliability"] < diagnostics["temperature"]["reliability"]
-    assert diagnostics["isotonic"]["resolution"] < diagnostics["temperature"]["resolution"]
+    model, diagnostics = train_on_real_matches._select_calibrator(
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
+    )
+
+    assert (
+        diagnostics["isotonic"]["reliability"]
+        < diagnostics["temperature"]["reliability"]
+    )
+    assert (
+        diagnostics["isotonic"]["resolution"] < diagnostics["temperature"]["resolution"]
+    )
     assert diagnostics["chosen"] == "temperature"
     assert diagnostics["reason"] == "isotonic_degraded_resolution"
     assert model.predict_proba(None) is temp_probs
@@ -171,25 +209,51 @@ def test_select_calibrator_rejects_isotonic_when_the_calibration_set_conclusion_
     iso_probs[np.arange(len(y_calibration)), y_calibration] = 0.9
     y_holdout = (y_calibration + 1) % 3
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: _FakeCalibrator(temp_probs))
-    monkeypatch.setattr(train_on_real_matches, "_fit_isotonic", lambda *a, **k: _FakeCalibrator(iso_probs))
-
-    model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y_calibration, meta_features_holdout=None, y_holdout=y_holdout,
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_temperature",
+        lambda *a, **k: _FakeCalibrator(temp_probs),
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_isotonic",
+        lambda *a, **k: _FakeCalibrator(iso_probs),
     )
 
-    expected_temp_holdout = brier_score_decomposition(y_holdout, temp_probs, n_bins=10)["mean"]
-    expected_iso_holdout = brier_score_decomposition(y_holdout, iso_probs, n_bins=10)["mean"]
+    model, diagnostics = train_on_real_matches._select_calibrator(
+        object(),
+        None,
+        y_calibration,
+        meta_features_holdout=None,
+        y_holdout=y_holdout,
+    )
+
+    expected_temp_holdout = brier_score_decomposition(y_holdout, temp_probs, n_bins=10)[
+        "mean"
+    ]
+    expected_iso_holdout = brier_score_decomposition(y_holdout, iso_probs, n_bins=10)[
+        "mean"
+    ]
 
     # Isotonic "won" stage 1 (the calibration set) but must be rejected
     # because it fails stage 2 (the held-out season) -- temperature ships.
     assert diagnostics["chosen"] == "temperature"
-    assert diagnostics["reason"] == "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+    assert (
+        diagnostics["reason"]
+        == "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+    )
     assert model.predict_proba(None) is temp_probs
     persistence = diagnostics["held_out_persistence"]
-    assert persistence["temperature"]["reliability"] == pytest.approx(expected_temp_holdout["reliability"])
-    assert persistence["isotonic"]["reliability"] == pytest.approx(expected_iso_holdout["reliability"])
-    assert persistence["isotonic"]["reliability"] > persistence["temperature"]["reliability"]
+    assert persistence["temperature"]["reliability"] == pytest.approx(
+        expected_temp_holdout["reliability"]
+    )
+    assert persistence["isotonic"]["reliability"] == pytest.approx(
+        expected_iso_holdout["reliability"]
+    )
+    assert (
+        persistence["isotonic"]["reliability"]
+        > persistence["temperature"]["reliability"]
+    )
     assert persistence["conclusion_persists"] is False
 
 
@@ -198,7 +262,11 @@ def test_select_calibrator_falls_back_to_temperature_when_isotonic_fit_fails(
 ) -> None:
     y = np.array([0, 1, 2] * 5)
     temp_probs = np.tile([0.4, 0.35, 0.25], (len(y), 1))
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: _FakeCalibrator(temp_probs))
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_fit_temperature",
+        lambda *a, **k: _FakeCalibrator(temp_probs),
+    )
 
     def _raise(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("boom")
@@ -206,7 +274,11 @@ def test_select_calibrator_falls_back_to_temperature_when_isotonic_fit_fails(
     monkeypatch.setattr(train_on_real_matches, "_fit_isotonic", _raise)
 
     model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
     )
 
     assert diagnostics["chosen"] == "temperature"
@@ -239,19 +311,31 @@ def test_select_calibrator_can_choose_vector_scaling_over_temperature(
         id(vector_model): {"reliability": 0.02, "resolution": 0.08},
     }
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model)
-    monkeypatch.setattr(train_on_real_matches, "_fit_vector_scaling", lambda *a, **k: vector_model)
     monkeypatch.setattr(
-        train_on_real_matches, "_calibration_reliability",
+        train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches, "_fit_vector_scaling", lambda *a, **k: vector_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_calibration_reliability",
         lambda model, *a, **k: dict(metrics[id(model)]),
     )
 
     model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
     )
 
     assert diagnostics["chosen"] == "vector"
-    assert diagnostics["reason"] == "reliability_improved_resolution_held_and_persisted_on_holdout"
+    assert (
+        diagnostics["reason"]
+        == "reliability_improved_resolution_held_and_persisted_on_holdout"
+    )
     # Real fits on `object()` raise AttributeError -- graceful degradation.
     assert diagnostics["isotonic"] is None
     assert diagnostics["beta"] is None
@@ -269,15 +353,24 @@ def test_select_calibrator_can_choose_beta_calibration_over_temperature(
         id(beta_model): {"reliability": 0.02, "resolution": 0.08},
     }
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model)
-    monkeypatch.setattr(train_on_real_matches, "_fit_beta_calibration", lambda *a, **k: beta_model)
     monkeypatch.setattr(
-        train_on_real_matches, "_calibration_reliability",
+        train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches, "_fit_beta_calibration", lambda *a, **k: beta_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_calibration_reliability",
         lambda model, *a, **k: dict(metrics[id(model)]),
     )
 
     model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
     )
 
     assert diagnostics["chosen"] == "beta"
@@ -308,22 +401,39 @@ def test_select_calibrator_only_lets_a_challenger_win_by_beating_the_current_cha
         id(iso_model): {"reliability": 0.05, "resolution": 0.09},
     }
 
-    monkeypatch.setattr(train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model)
-    monkeypatch.setattr(train_on_real_matches, "_fit_vector_scaling", lambda *a, **k: vector_model)
-    monkeypatch.setattr(train_on_real_matches, "_fit_isotonic", lambda *a, **k: iso_model)
     monkeypatch.setattr(
-        train_on_real_matches, "_calibration_reliability",
+        train_on_real_matches, "_fit_temperature", lambda *a, **k: temp_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches, "_fit_vector_scaling", lambda *a, **k: vector_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches, "_fit_isotonic", lambda *a, **k: iso_model
+    )
+    monkeypatch.setattr(
+        train_on_real_matches,
+        "_calibration_reliability",
         lambda model, *a, **k: dict(metrics[id(model)]),
     )
 
     model, diagnostics = train_on_real_matches._select_calibrator(
-        object(), None, y, meta_features_holdout=None, y_holdout=y,
+        object(),
+        None,
+        y,
+        meta_features_holdout=None,
+        y_holdout=y,
     )
 
     assert diagnostics["chosen"] == "vector"
     # Isotonic legitimately beats temperature on its own...
-    assert diagnostics["isotonic"]["reliability"] < diagnostics["temperature"]["reliability"]
-    assert diagnostics["isotonic"]["resolution"] >= diagnostics["temperature"]["resolution"]
+    assert (
+        diagnostics["isotonic"]["reliability"]
+        < diagnostics["temperature"]["reliability"]
+    )
+    assert (
+        diagnostics["isotonic"]["resolution"]
+        >= diagnostics["temperature"]["resolution"]
+    )
     # ...but the champion it actually had to beat was vector, and lost.
     assert diagnostics["isotonic"]["reliability"] > diagnostics["vector"]["reliability"]
     assert model is vector_model
@@ -355,7 +465,9 @@ def test_fit_vector_scaling_produces_a_valid_simplex_on_real_data() -> None:
     assert np.all(np.isfinite(probabilities))
 
 
-def test_evaluate_bivariate_poisson_overlay_returns_expected_keys_on_real_data() -> None:
+def test_evaluate_bivariate_poisson_overlay_returns_expected_keys_on_real_data() -> (
+    None
+):
     """`_evaluate_bivariate_poisson_overlay` (directive Experiment E7) wires
     `src/models/calibration.py::BivariatePoissonDrawOverlay` -- previously
     unwired to any producer, docs/DEBT.md item 71 -- into this pipeline.
@@ -375,15 +487,24 @@ def test_evaluate_bivariate_poisson_overlay_returns_expected_keys_on_real_data()
     y_hold = np.argmax(base.predict_proba(X_hold), axis=1)
 
     result = train_on_real_matches._evaluate_bivariate_poisson_overlay(
-        base, X_cal, y_cal, X_hold, y_hold,
+        base,
+        X_cal,
+        y_cal,
+        X_hold,
+        y_hold,
     )
 
     assert set(result) == {
-        "alpha", "gate_passed",
-        "calibration_draw_f1_before", "calibration_draw_f1_after",
-        "calibration_brier_before", "calibration_brier_after",
-        "holdout_draw_f1_before", "holdout_draw_f1_after",
-        "holdout_brier_before", "holdout_brier_after",
+        "alpha",
+        "gate_passed",
+        "calibration_draw_f1_before",
+        "calibration_draw_f1_after",
+        "calibration_brier_before",
+        "calibration_brier_after",
+        "holdout_draw_f1_before",
+        "holdout_draw_f1_after",
+        "holdout_brier_before",
+        "holdout_brier_after",
     }
     assert 0.0 <= result["alpha"] <= 1.0
     assert isinstance(result["gate_passed"], bool)

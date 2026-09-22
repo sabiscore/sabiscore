@@ -22,9 +22,13 @@ def test_compute_calibration_metrics_brier_and_ece() -> None:
             probs = [0.2, 0.55, 0.25]
         else:
             probs = [0.15, 0.25, 0.6]
-        records.append({"outcome": outcome, "probs": probs, "date": "2026-08-01T15:00:00"})
+        records.append(
+            {"outcome": outcome, "probs": probs, "date": "2026-08-01T15:00:00"}
+        )
 
-    metrics = _compute_calibration_metrics(records, n_bins=5, league="EPL", model_version="v5_phase7")
+    metrics = _compute_calibration_metrics(
+        records, n_bins=5, league="EPL", model_version="v5_phase7"
+    )
 
     assert metrics["status"] == "OK"
     assert metrics["league"] == "EPL"
@@ -52,7 +56,10 @@ async def test_calibration_endpoint_empty_fallback() -> None:
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            with patch("src.api.endpoints.performance.get_settled_predictions", new=AsyncMock(return_value=[])):
+            with patch(
+                "src.api.endpoints.performance.get_settled_predictions",
+                new=AsyncMock(return_value=[]),
+            ):
                 response = await client.get("/api/v1/model-performance/calibration")
                 assert response.status_code == 503
                 data = response.json()
@@ -84,10 +91,17 @@ async def test_calibration_endpoint_reads_serialized_cache_payloads(cached) -> N
         transport = ASGITransport(app=app)
         with (
             patch("src.api.endpoints.performance.cache", StubCache()),
-            patch("src.api.endpoints.performance.active_model_version", return_value="test"),
-            patch("src.api.endpoints.performance.get_settled_predictions", new=AsyncMock()) as get_records,
+            patch(
+                "src.api.endpoints.performance.active_model_version",
+                return_value="test",
+            ),
+            patch(
+                "src.api.endpoints.performance.get_settled_predictions", new=AsyncMock()
+            ) as get_records,
         ):
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/model-performance/calibration")
 
         assert response.status_code == 200
@@ -122,13 +136,18 @@ async def test_calibration_endpoint_caches_result_without_double_encoding() -> N
         transport = ASGITransport(app=app)
         with (
             patch("src.api.endpoints.performance.cache", cache_stub),
-            patch("src.api.endpoints.performance.active_model_version", return_value="test"),
+            patch(
+                "src.api.endpoints.performance.active_model_version",
+                return_value="test",
+            ),
             patch(
                 "src.api.endpoints.performance.get_settled_predictions",
                 new=AsyncMock(return_value=records),
             ),
         ):
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.get("/api/v1/model-performance/calibration")
 
         assert response.status_code == 200

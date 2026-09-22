@@ -33,6 +33,7 @@ fitting artifact. Fit on rows disjoint from the evaluation set — the diagnosti
 uses pre-holdout seasons — and treat an in-sample-fit number as an upper bound,
 never as evidence.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -92,11 +93,15 @@ class EpistemicResidualizer:
         if alea.size != epi.size:
             raise ValueError(f"length mismatch: u_alea={alea.size} u_epi={epi.size}")
         if alea.size < MIN_FIT_ROWS:
-            raise ValueError(f"need >= {MIN_FIT_ROWS} rows to fit a baseline, got {alea.size}")
+            raise ValueError(
+                f"need >= {MIN_FIT_ROWS} rows to fit a baseline, got {alea.size}"
+            )
         if not (np.isfinite(alea).all() and np.isfinite(epi).all()):
             raise ValueError("u_alea/u_epi contain non-finite values")
 
-        model = IsotonicRegression(increasing=self._INCREASING, out_of_bounds=self.out_of_bounds)
+        model = IsotonicRegression(
+            increasing=self._INCREASING, out_of_bounds=self.out_of_bounds
+        )
         model.fit(alea, epi)
         self._model = model
         return self
@@ -106,7 +111,9 @@ class EpistemicResidualizer:
         the fitted baseline, so it is negative for fixtures whose members agree
         more than is typical at that aleatoric level."""
         if self._model is None:
-            raise EpistemicResidualizerError("residualizer must be fitted before transform")
+            raise EpistemicResidualizerError(
+                "residualizer must be fitted before transform"
+            )
 
         alea = np.asarray(u_alea, dtype=np.float64).ravel()
         epi = np.asarray(u_epi, dtype=np.float64).ravel()
@@ -139,8 +146,12 @@ class EpistemicResidualizer:
             # Spearman test on the knots, and a reconstruction must reproduce the
             # baseline that was actually fitted, not re-decide it.
             "increasing": bool(self._model.increasing_),
-            "x_thresholds": np.asarray(self._model.X_thresholds_, dtype=np.float64).tolist(),
-            "y_thresholds": np.asarray(self._model.y_thresholds_, dtype=np.float64).tolist(),
+            "x_thresholds": np.asarray(
+                self._model.X_thresholds_, dtype=np.float64
+            ).tolist(),
+            "y_thresholds": np.asarray(
+                self._model.y_thresholds_, dtype=np.float64
+            ).tolist(),
         }
 
     @classmethod
@@ -159,7 +170,9 @@ class EpistemicResidualizer:
         x = np.asarray(data["x_thresholds"], dtype=np.float64)
         y = np.asarray(data["y_thresholds"], dtype=np.float64)
         if x.size != y.size or x.size == 0:
-            raise EpistemicResidualizerError("malformed isotonic knots in serialised state")
+            raise EpistemicResidualizerError(
+                "malformed isotonic knots in serialised state"
+            )
 
         model = IsotonicRegression(
             increasing=bool(data["increasing"]), out_of_bounds=instance.out_of_bounds

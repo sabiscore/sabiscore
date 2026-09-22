@@ -50,7 +50,9 @@ def _fetch_json(url: str, *, timeout_seconds: float) -> dict[str, Any]:
     try:
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"release parity endpoint returned invalid JSON: {url}") from exc
+        raise RuntimeError(
+            f"release parity endpoint returned invalid JSON: {url}"
+        ) from exc
     if not isinstance(payload, dict):
         raise RuntimeError(f"release parity endpoint returned non-object JSON: {url}")
     return payload
@@ -77,7 +79,9 @@ def evaluate_release_parity(
         ("frontend_observed_backend_sha", frontend_payload, "backendSha"),
     ):
         try:
-            observed[output_key] = _normalize_sha(source.get(source_key), field=source_key)
+            observed[output_key] = _normalize_sha(
+                source.get(source_key), field=source_key
+            )
         except ValueError as exc:
             errors.append(str(exc))
 
@@ -95,7 +99,9 @@ def evaluate_release_parity(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Verify exact Git SHA parity in production")
+    parser = argparse.ArgumentParser(
+        description="Verify exact Git SHA parity in production"
+    )
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--backend-ready-url", required=True)
     parser.add_argument("--frontend-health-url", required=True)
@@ -109,8 +115,12 @@ def main() -> int:
         raise SystemExit("--timeout-seconds must be > 0 and <= 60")
     try:
         expected = _normalize_sha(args.expected_sha, field="--expected-sha")
-        backend = _fetch_json(args.backend_ready_url, timeout_seconds=args.timeout_seconds)
-        frontend = _fetch_json(args.frontend_health_url, timeout_seconds=args.timeout_seconds)
+        backend = _fetch_json(
+            args.backend_ready_url, timeout_seconds=args.timeout_seconds
+        )
+        frontend = _fetch_json(
+            args.frontend_health_url, timeout_seconds=args.timeout_seconds
+        )
         result = evaluate_release_parity(
             expected_sha=expected,
             backend_payload=backend,

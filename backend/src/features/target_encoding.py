@@ -23,7 +23,9 @@ class PointInTimeTargetEncoder:
         self.fitted = False
 
     @staticmethod
-    def _validate(df: pd.DataFrame, category_col: str, target_col: str, date_col: str) -> None:
+    def _validate(
+        df: pd.DataFrame, category_col: str, target_col: str, date_col: str
+    ) -> None:
         missing = {category_col, target_col, date_col}.difference(df.columns)
         if missing:
             raise ValueError(f"Missing columns: {sorted(missing)}")
@@ -42,7 +44,9 @@ class PointInTimeTargetEncoder:
         dates = pd.to_datetime(out[date_col], errors="raise")
         target = pd.to_numeric(out[target_col], errors="coerce")
         if target.isna().any():
-            raise ValueError(f"Target column {target_col!r} contains non-numeric values")
+            raise ValueError(
+                f"Target column {target_col!r} contains non-numeric values"
+            )
 
         order = dates.argsort(kind="mergesort")
         encoded = np.empty(len(out), dtype=np.float32)
@@ -61,8 +65,14 @@ class PointInTimeTargetEncoder:
                     numerator = stats[0]
                     denominator = stats[1]
                     if self.smoothing:
-                        prior_global = self.global_sum / self.global_count if self.global_count else 0.0
-                        value = (numerator + self.smoothing * prior_global) / (denominator + self.smoothing)
+                        prior_global = (
+                            self.global_sum / self.global_count
+                            if self.global_count
+                            else 0.0
+                        )
+                        value = (numerator + self.smoothing * prior_global) / (
+                            denominator + self.smoothing
+                        )
                     else:
                         value = numerator / denominator
                 elif self.global_count:
@@ -100,7 +110,9 @@ class PointInTimeTargetEncoder:
             raise ValueError(f"Missing column: {category_col}")
         fallback = prior_global_mean
         if fallback is None:
-            fallback = self.global_sum / self.global_count if self.global_count else np.nan
+            fallback = (
+                self.global_sum / self.global_count if self.global_count else np.nan
+            )
         values = np.empty(len(df), dtype=np.float32)
         for i, category in enumerate(df[category_col].tolist()):
             stats = self.category_stats.get((category_col, category))

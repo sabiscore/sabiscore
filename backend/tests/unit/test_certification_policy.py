@@ -5,6 +5,7 @@ while enforcing nothing — the same asymmetry docs/DEBT.md item 36 recorded for
 `feature_schema_version`. These tests keep `certification_policy.py` and the
 real gate code in agreement, so changing one without the other fails the suite.
 """
+
 from __future__ import annotations
 
 import json
@@ -44,7 +45,9 @@ def test_policy_gate_keys_match_the_live_comparison_report() -> None:
     """
     report_path = (
         Path(__file__).resolve().parents[2]
-        / "models" / "candidate" / "comparison_report.json"
+        / "models"
+        / "candidate"
+        / "comparison_report.json"
     )
     if not report_path.exists():  # pragma: no cover - candidate is optional
         return
@@ -128,7 +131,11 @@ def _load_compiler():
     """
     import importlib.util
 
-    path = Path(__file__).resolve().parents[2] / "scripts" / "compile_certification_report.py"
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "scripts"
+        / "compile_certification_report.py"
+    )
     spec = importlib.util.spec_from_file_location("_ccr_under_test", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

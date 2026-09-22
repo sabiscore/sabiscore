@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.core.league_policy import LeaguePolicy, LeaguePolicyUnavailableError, get_league_policy
+from src.core.league_policy import (
+    LeaguePolicy,
+    LeaguePolicyUnavailableError,
+    get_league_policy,
+)
 from src.schemas.betting_intelligence import CompetitionEnum, VerdictEnum
 from src.services.betting_intelligence import analyze_match
 from tests.test_betting_intelligence_engine import _request

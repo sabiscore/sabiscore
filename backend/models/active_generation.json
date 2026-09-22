@@ -1,63 +1,62 @@
 {
   "schema_version": 1,
-  "generation": "v5_phase7-20260808",
+  "generation": "v5_phase7-20260922",
   "active_version": "v5_phase7",
   "feature_schema_version": "phase7_68",
-  "served_head": "SoftmaxMetaModel",
-  "certification_state": "OPERATOR_OVERRIDE_UNCERTIFIED",
-  "operator_override": {
-    "authorizing_identity": "Principal Architect - System-01",
-    "rationale": "Unblocking staging/production integration for UX and load testing. ML generalization failures accepted for this phase.",
-    "authorized_at": "2026-09-19T22:12:18Z",
-    "acknowledged_failures": [
-      "0/6 market baseline beat",
-      "Inverted epistemic-uncertainty signal (negative correlation with accuracy)"
-    ]
-  },
+  "served_head": "base_learner_average",
+  "certification_state": "UNVERIFIED",
   "certified_at": null,
   "promotion_state": "ACTIVE_FAIL_CLOSED",
   "promoted_at": null,
+  "supersedes": "v5_phase7-20260808",
+  "supersedes_reason": "v5_phase7-20260808 was trained with holdout_season 2425 while season 2526 was in its training set. 2526 is the holdout every candidate comparison scores against, so that generation memorised the test set (docs/DEBT.md item 81). This generation holds 2526 out strictly.",
+  "temporal_split": {
+    "train_seasons": "1920-2324",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "rule": "chronological; holdout is the most recent season, never random"
+  },
   "artifacts": {
     "bundesliga": {
       "artifact": "bundesliga_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "83dbcd3d42ef566e966794ad1741b68160eaa4caed572b5ed2dd39cabc67d852",
+      "artifact_sha256": "0d1a09c1a3883e751a0bdfda84eab9e975188987ee951789e382aad10621d7ad",
       "metadata": "bundesliga_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "d7a4b1ba543507bccb114debd045871d4fd39c88cb475e16bec2b9d36c280e35",
+      "metadata_sha256": "05a493e73d33ef55fc3b1b9d7e02e08576762a7faa4ab91e3dd315f005c5d0ce",
       "required": true
     },
     "epl": {
       "artifact": "epl_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "3b59285b194b87167423413f479c300d9bff5fb39e62c49b1cd65ba094c46d30",
+      "artifact_sha256": "24a59fd71e3f5a0ed8532d215e3acc232188f88073773d1b48576994dc8ac222",
       "metadata": "epl_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "c156989085543b520b79234a733a142341ca5c0337c2eede3a2d76fe6ef18ddf",
+      "metadata_sha256": "ec94593c071e2636880053efd3da33e0eb4d9397e7556ef7b1bed95f858ae2b2",
       "required": true
     },
     "eredivisie": {
       "artifact": "eredivisie_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "40ed3ef224e740e4833122343d2681ccc9d404c375625f89a661091fe3b5b76f",
+      "artifact_sha256": "2a85ec356fe9c42e54983344cb8f0633e3f56b5a1563eedfc3e1d52a29d2689a",
       "metadata": "eredivisie_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "1083da04b2b7130dc0a2816c597418a56c6948b6664d5f8785220e4d3a20f0c6",
+      "metadata_sha256": "6d172f847a891c8ff7c776107ce4adf632645ce2f6b684d3d2819ca37db4fe39",
       "required": false
     },
     "la_liga": {
       "artifact": "la_liga_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "06505ae566ec92a4a6bbe630af7425bfca3df9599909341480f4170f9f259d16",
+      "artifact_sha256": "8626f3976bec88039beb330db1da93a8bb30dc141011ec5bb28f3d5e122a374a",
       "metadata": "la_liga_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "fe60b025e27fe056c794f0fca635e9ea10d272ff132b7e2c5dea6780f9ce7b5f",
+      "metadata_sha256": "e0f3210b197e079ff592f5d13ac840cc461a53f9a3e2a2115a8d07c36bac245b",
       "required": true
     },
     "ligue_1": {
       "artifact": "ligue_1_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "0f417e4ca26043a54c7ff4d420a8afa4a56dcc8b9ea2498794ac64abf5a54bb1",
+      "artifact_sha256": "8071c831786ac375316507ec107b4e005df2748d315fc8fa60b04cfbcf193bfd",
       "metadata": "ligue_1_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "f56fde826ad55ea6f778dbbda6b5beb466040a4e1afae4f7e08c08b05c277e8a",
+      "metadata_sha256": "35ee654a41bad6ecd80c3ab0325c1976b5dc178dcc8666d4354b2e10da95d906",
       "required": true
     },
     "serie_a": {
       "artifact": "serie_a_ensemble_v5_phase7.pkl",
-      "artifact_sha256": "ad971607b72fee041c3ac8db0c3913e989eca30c40e695db023c6e32e357a736",
+      "artifact_sha256": "923b7fc4ac99624687fc8f8bc4547ecf42e770bbce1152fa79ead3a838e698ec",
       "metadata": "serie_a_ensemble_v5_phase7_metadata.json",
-      "metadata_sha256": "8a387c695bff0f7f91d2c9f0d8d21bee1c71e40144a325be95af041dbfc0f580",
+      "metadata_sha256": "e7b21e0669367ded60d875d29664a0709f141aafc2acf4a5a25095a9d78e3bc3",
       "required": true
     }
   }

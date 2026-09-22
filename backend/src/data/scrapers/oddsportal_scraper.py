@@ -16,16 +16,16 @@ logger = logging.getLogger(__name__)
 class OddsPortalScraper(BaseScraper):
     """
     Scraper for OddsPortal historical odds data.
-    
+
     Provides:
     - Opening and closing odds
     - Line movement analysis
     - Multi-bookmaker comparisons
     - Historical odds trends
     """
-    
+
     BASE_URL = "https://www.oddsportal.com"
-    
+
     # League paths on OddsPortal
     LEAGUE_PATHS = {
         "EPL": "/football/england/premier-league/",
@@ -34,44 +34,43 @@ class OddsPortalScraper(BaseScraper):
         "Bundesliga": "/football/germany/bundesliga/",
         "Ligue 1": "/football/france/ligue-1/",
     }
-    
+
     # Common bookmakers
     BOOKMAKERS = [
-        "bet365", "Pinnacle", "Betfair", "Unibet", 
-        "William Hill", "888sport", "Betway", "1xBet"
+        "bet365",
+        "Pinnacle",
+        "Betfair",
+        "Unibet",
+        "William Hill",
+        "888sport",
+        "Betway",
+        "1xBet",
     ]
-    
+
     def __init__(self):
         super().__init__(
-            base_url=self.BASE_URL,
-            rate_limit_delay=3.0,
-            max_retries=3,
-            timeout=20
+            base_url=self.BASE_URL, rate_limit_delay=3.0, max_retries=3, timeout=20
         )
-        
+
         self.cache_dir = CACHE_DIR / "oddsportal"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.local_odds_path = PROCESSED_DIR / "historical_odds.json"
-    
+
     def _fetch_remote(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Optional[Dict]:
         """
         Fetch historical odds for a match.
-        
+
         Note: OddsPortal uses JavaScript rendering.
         Full implementation requires Playwright/Selenium.
         """
         logger.info(f"Fetching OddsPortal odds for {home_team} vs {away_team}")
         # OddsPortal requires JavaScript rendering (Playwright/Selenium); not yet implemented.
         return None
-    
+
     def _find_best_odds(
-        self,
-        bookmaker_odds: Dict[str, Dict[str, float]]
+        self, bookmaker_odds: Dict[str, Dict[str, float]]
     ) -> Dict[str, Dict]:
         """Find best odds across bookmakers."""
         best = {
@@ -79,61 +78,54 @@ class OddsPortalScraper(BaseScraper):
             "draw": {"odds": 0, "bookmaker": ""},
             "away": {"odds": 0, "bookmaker": ""},
         }
-        
+
         for bookie, odds in bookmaker_odds.items():
             for outcome in ["home", "draw", "away"]:
                 if odds[outcome] > best[outcome]["odds"]:
                     best[outcome]["odds"] = odds[outcome]
                     best[outcome]["bookmaker"] = bookie
-        
+
         return best
-    
+
     def _calculate_average_odds(
-        self,
-        bookmaker_odds: Dict[str, Dict[str, float]]
+        self, bookmaker_odds: Dict[str, Dict[str, float]]
     ) -> Dict[str, float]:
         """Calculate average odds across bookmakers."""
         totals = {"home": 0, "draw": 0, "away": 0}
         count = len(bookmaker_odds)
-        
+
         for bookie_odds in bookmaker_odds.values():
             for outcome in totals:
                 totals[outcome] += bookie_odds[outcome]
-        
+
         return {k: round(v / count, 2) for k, v in totals.items()}
-    
+
     def _parse_data(self, content: Dict) -> Dict:
         """Parse odds data."""
         return content
-    
+
     def get_match_odds(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Optional[Dict]:
         """
         Get historical odds for a match.
-        
+
         Args:
             home_team: Home team name
             away_team: Away team name
             league: League identifier
-            
+
         Returns:
             Dict with opening/closing odds, movement, best odds
         """
         return self.fetch_data(home_team, away_team, league)
-    
+
     def get_odds_movement(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, float]:
         """
         Get odds movement (opening to closing).
-        
+
         Positive = odds drifted (less likely)
         Negative = odds shortened (more likely)
         """
@@ -141,16 +133,13 @@ class OddsPortalScraper(BaseScraper):
         if data:
             return data.get("movement", {})
         return {}
-    
+
     def calculate_odds_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, float]:
         """
         Calculate odds-based features for prediction.
-        
+
         Returns features like:
         - Implied probabilities
         - Odds movement signals
@@ -159,11 +148,11 @@ class OddsPortalScraper(BaseScraper):
         data = self.get_match_odds(home_team, away_team, league)
         if not data:
             return {}
-        
+
         closing = data.get("closing_odds", {})
         probs = data.get("implied_probabilities", {})
         movement = data.get("movement", {})
-        
+
         return {
             "odds_home": closing.get("home", 2.0),
             "odds_draw": closing.get("draw", 3.5),
@@ -180,9 +169,7 @@ class OddsPortalScraper(BaseScraper):
 
 # Convenience function
 def get_historical_odds(
-    home_team: str,
-    away_team: str,
-    league: str = "EPL"
+    home_team: str, away_team: str, league: str = "EPL"
 ) -> Optional[Dict]:
     """Get historical odds from OddsPortal."""
     return OddsPortalScraper().get_match_odds(home_team, away_team, league)

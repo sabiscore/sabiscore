@@ -1,11 +1,14 @@
 """Regression tests for certification evidence schema compatibility."""
+
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "compile_certification_report.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "compile_certification_report.py"
+)
 _SPEC = importlib.util.spec_from_file_location("certification_compiler", _SCRIPT)
 assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)

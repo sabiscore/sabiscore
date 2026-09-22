@@ -12,6 +12,7 @@ from measurement, not from a plausible-looking constant. This emits, per
 league, the 25th-percentile epistemic boundary and the hit-rate/RPS on each
 side of it, on each artifact's own chronological holdout.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,13 +37,18 @@ from src.models.prediction import PredictionEngine  # noqa: E402
 
 LEAGUES = ["EPL", "BUNDESLIGA", "LA_LIGA", "LIGUE_1", "SERIE_A"]
 SLUG = {
-    "EPL": "epl", "BUNDESLIGA": "bundesliga", "LA_LIGA": "la_liga",
-    "LIGUE_1": "ligue_1", "SERIE_A": "serie_a",
+    "EPL": "epl",
+    "BUNDESLIGA": "bundesliga",
+    "LA_LIGA": "la_liga",
+    "LIGUE_1": "ligue_1",
+    "SERIE_A": "serie_a",
 }
 
 dataset = build_dataset(load_matches(BACKEND / "data" / "cache"))
-print(f"{'league':<12} {'n':>5} {'p25':>8} {'p50':>8} "
-      f"{'lowQ_hit':>9} {'restHit':>8} {'lowQ_rps':>9} {'rest_rps':>9}")
+print(
+    f"{'league':<12} {'n':>5} {'p25':>8} {'p50':>8} "
+    f"{'lowQ_hit':>9} {'restHit':>8} {'lowQ_rps':>9} {'rest_rps':>9}"
+)
 print("-" * 78)
 
 all_p25 = []
@@ -75,13 +81,17 @@ for league in LEAGUES:
     p50 = float(np.percentile(epi, 50))
     low = epi <= p25
     all_p25.append(p25)
-    print(f"{league:<12} {len(epi):>5} {p25:>8.4f} {p50:>8.4f} "
-          f"{hit[low].mean():>9.4f} {hit[~low].mean():>8.4f} "
-          f"{rps[low].mean():>9.4f} {rps[~low].mean():>9.4f}")
+    print(
+        f"{league:<12} {len(epi):>5} {p25:>8.4f} {p50:>8.4f} "
+        f"{hit[low].mean():>9.4f} {hit[~low].mean():>8.4f} "
+        f"{rps[low].mean():>9.4f} {rps[~low].mean():>9.4f}"
+    )
 
 print("-" * 78)
-print(f"p25 across leagues: min={min(all_p25):.4f} max={max(all_p25):.4f} "
-      f"mean={float(np.mean(all_p25)):.4f}")
+print(
+    f"p25 across leagues: min={min(all_p25):.4f} max={max(all_p25):.4f} "
+    f"mean={float(np.mean(all_p25)):.4f}"
+)
 print()
 print("A single global threshold must be chosen so it does not UNDER-protect a")
 print("league whose p25 sits above it. The conservative choice is therefore the")

@@ -9,6 +9,7 @@ alpha=0.7 weights recent matches more heavily than distant history.
 The feature service computes this separately for home and away and merges
 into the canonical vector as home_* / away_* prefixed keys.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List
@@ -33,7 +34,6 @@ def weighted_form_features(
             "weighted_draw_rate": 0.333,
             "weighted_ppg": 1.0,
         }
-
 
     n = len(results)
     weights = [alpha ** (n - 1 - i) for i in range(n)]

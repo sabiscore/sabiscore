@@ -114,7 +114,11 @@ def doctor(provider_id: str | None, validate_live: bool) -> None:
 def capabilities(provider_id: str | None) -> None:
     async def run() -> None:
         registry = build_provider_registry()
-        rows = await registry.get(provider_id).capabilities() if provider_id else await registry.capabilities()
+        rows = (
+            await registry.get(provider_id).capabilities()
+            if provider_id
+            else await registry.capabilities()
+        )
         _print_json({"capabilities": [row.model_dump(mode="json") for row in rows]})
 
     asyncio.run(run())
@@ -129,7 +133,14 @@ def quota(provider_id: str | None) -> None:
             values = {provider_id: await registry.get(provider_id).quota()}
         else:
             values = await registry.quota()
-        _print_json({"quota": {name: value.model_dump(mode="json") for name, value in values.items()}})
+        _print_json(
+            {
+                "quota": {
+                    name: value.model_dump(mode="json")
+                    for name, value in values.items()
+                }
+            }
+        )
 
     asyncio.run(run())
 

@@ -1,4 +1,5 @@
 """Shared pytest fixtures for API tests and runtime shims."""
+
 import pytest
 import sys
 import types
@@ -11,27 +12,27 @@ from src.db import provider_elo_team_mapping as _provider_elo_team_mapping  # no
 @pytest.fixture(autouse=True)
 def _cleanup_mock_patches():
     """Clean up any mock patches that might leak between tests.
-    
+
     This helps ensure test isolation when running the full test suite.
     """
     # Run the test
     yield
-    
+
     # After each test, reset any mocked modules that might have leaked
     # This is particularly important for scrapers that get mocked in integration tests
     modules_to_check = [
-        'src.data.scrapers.football_data_scraper',
-        'src.data.scrapers.betfair_scraper',
-        'src.data.scrapers.flashscore_scraper',
-        'src.data.aggregator',
-        'src.features.transformer',
+        "src.data.scrapers.football_data_scraper",
+        "src.data.scrapers.betfair_scraper",
+        "src.data.scrapers.flashscore_scraper",
+        "src.data.aggregator",
+        "src.features.transformer",
     ]
-    
+
     for mod_name in modules_to_check:
         if mod_name in sys.modules:
             mod = sys.modules[mod_name]
             # If the module has been replaced by a mock, reimport it
-            if isinstance(mod, MagicMock) or hasattr(mod, '_mock_name'):
+            if isinstance(mod, MagicMock) or hasattr(mod, "_mock_name"):
                 del sys.modules[mod_name]
 
 
@@ -50,7 +51,10 @@ def _ensure_numpy_shim(monkeypatch):
             monkeypatch.setattr(
                 np,
                 "isscalar",
-                lambda x: isinstance(x, (int, float, bool, complex)) or getattr(x, "shape", None) in (None, (), []),
+                lambda x: (
+                    isinstance(x, (int, float, bool, complex))
+                    or getattr(x, "shape", None) in (None, (), [])
+                ),
                 raising=False,
             )
         if not hasattr(np, "nan"):

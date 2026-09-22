@@ -112,7 +112,12 @@ def test_alembic_migration_0011_script_loads() -> None:
     import importlib.util
     from pathlib import Path
 
-    migration_path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "0011_user_identity_dev_platform.py"
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "alembic"
+        / "versions"
+        / "0011_user_identity_dev_platform.py"
+    )
     assert migration_path.exists()
     spec = importlib.util.spec_from_file_location("migration_0011", str(migration_path))
     assert spec is not None and spec.loader is not None

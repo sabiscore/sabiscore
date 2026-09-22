@@ -37,7 +37,9 @@ def manifest_workspace() -> Path:
         shutil.rmtree(root, ignore_errors=True)
 
 
-def _manifest(root: Path, *, league: str = "EPL", future_finished: bool = False) -> Path:
+def _manifest(
+    root: Path, *, league: str = "EPL", future_finished: bool = False
+) -> Path:
     payload = root / "processed" / "football-data-csv" / "fixtures-EPL.json"
     payload.parent.mkdir(parents=True, exist_ok=True)
     fixture = {
@@ -68,30 +70,37 @@ def _manifest(root: Path, *, league: str = "EPL", future_finished: bool = False)
     digest = hashlib.sha256(payload.read_bytes()).hexdigest()
     manifest_path = root / "manifests" / "run.manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps({
-        "manifest_version": "2.0",
-        "run_id": "run-1",
-        "source_id": "football-data-csv",
-        "adapter_version": "2.0.0",
-        "schema_version": "2.0.0",
-        "registry_version": "2.0.0",
-        "started_at": "2026-08-10T10:00:00Z",
-        "completed_at": "2026-08-10T10:01:00Z",
-        "status": "SUCCESS",
-        "record_count": 1,
-        "raw_files": [],
-        "processed_files": [{
-            "file": str(payload),
-            "uri": str(payload),
-            "object_key": f"processed/football-data-csv/run-1/{digest}.json",
-            "hash": digest,
-        }],
-        "payload_hashes": {str(payload): digest},
-        "freshness": "FRESH",
-        "errors": [],
-        "licence": {"source_policy": "fixture"},
-        "attribution": "football-data.co.uk",
-    }), encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "manifest_version": "2.0",
+                "run_id": "run-1",
+                "source_id": "football-data-csv",
+                "adapter_version": "2.0.0",
+                "schema_version": "2.0.0",
+                "registry_version": "2.0.0",
+                "started_at": "2026-08-10T10:00:00Z",
+                "completed_at": "2026-08-10T10:01:00Z",
+                "status": "SUCCESS",
+                "record_count": 1,
+                "raw_files": [],
+                "processed_files": [
+                    {
+                        "file": str(payload),
+                        "uri": str(payload),
+                        "object_key": f"processed/football-data-csv/run-1/{digest}.json",
+                        "hash": digest,
+                    }
+                ],
+                "payload_hashes": {str(payload): digest},
+                "freshness": "FRESH",
+                "errors": [],
+                "licence": {"source_policy": "fixture"},
+                "attribution": "football-data.co.uk",
+            }
+        ),
+        encoding="utf-8",
+    )
     return manifest_path
 
 
@@ -108,7 +117,9 @@ async def test_commit_is_idempotent_and_market_is_non_executable(
             session, manifest_path=manifest, data_root=manifest_workspace, commit=True
         )
         match_count = await session.scalar(select(func.count()).select_from(Match))
-        canonical_count = await session.scalar(select(func.count()).select_from(CanonicalFixture))
+        canonical_count = await session.scalar(
+            select(func.count()).select_from(CanonicalFixture)
+        )
         snapshots = (await session.execute(select(MarketSnapshot))).scalars().all()
 
     assert first.fixtures_inserted == 1
@@ -145,3 +156,37 @@ async def test_unknown_competition_and_future_result_fail_closed(
                     data_root=manifest.parent.parent,
                     commit=True,
                 )
+
+
+def test_provider_row_id_relies_on_canonical_business_identity_not_timestamps() -> None:
+    from src.services.canonical_manifest_ingestion import _provider_row_id
+
+    # 1. Native ID from scraper takes direct precedence
+    row_with_native = {
+        "source_native_id": "cfx-test-canonical-123",
+        "league": "EPL",
+        "match_date": "10/08/2025",
+        "match_time": "15:00",
+        "home_team": "Arsenal",
+        "away_team": "Chelsea",
+    }
+    assert _provider_row_id(row_with_native) == "cfx-test-canonical-123"
+
+    # 2. Rescheduled match with season produces identical ID
+    initial = {
+        "league": "EPL",
+        "season": "2425",
+        "match_date": "10/08/2025",
+        "match_time": "15:00",
+        "home_team": "Arsenal",
+        "away_team": "Chelsea",
+    }
+    rescheduled = {
+        "league": "EPL",
+        "season": "2425",
+        "match_date": "15/08/2025",
+        "match_time": "20:00",
+        "home_team": "Arsenal",
+        "away_team": "Chelsea",
+    }
+    assert _provider_row_id(initial) == _provider_row_id(rescheduled)

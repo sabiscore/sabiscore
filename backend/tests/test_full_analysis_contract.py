@@ -111,7 +111,11 @@ def test_unknown_league_does_not_fall_back_to_global_cap() -> None:
 @pytest.mark.parametrize(
     ("uncertainty", "odds", "reason_fragment"),
     [
-        (None, {"home_win": 2.2, "draw": 3.4, "away_win": 4.0}, "uncertainty unavailable"),
+        (
+            None,
+            {"home_win": 2.2, "draw": 3.4, "away_win": 4.0},
+            "uncertainty unavailable",
+        ),
         (_uncertainty(), None, "market odds unavailable"),
     ],
 )
@@ -224,7 +228,9 @@ async def test_default_projection_fallback_is_non_actionable(monkeypatch) -> Non
     monkeypatch.setattr(endpoint, "PredictionEngine", FallbackPredictionEngine)
     monkeypatch.setattr(endpoint, "cache", None)
 
-    payload = await endpoint.get_full_analysis("missing-fixture", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "missing-fixture", league="EPL", db=object()
+    )
     parsed = FullMatchAnalysisResponseSchema.model_validate(payload)
     assert FallbackPredictionEngine.called is False
     assert parsed.prediction_status.value == "UNAVAILABLE"
@@ -289,7 +295,9 @@ class _ValidPredictionEngine:
 
 
 @pytest.mark.asyncio
-async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(monkeypatch) -> None:
+async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(
+    monkeypatch,
+) -> None:
     """A real, evenly-rated matchup can legitimately land at elo_difference==0.0 /
     home_elo==1500.0 — the old value-based heuristic would have false-positived on
     exactly this case. Gating on identity instead must not flag it."""
@@ -305,13 +313,20 @@ async def test_elo_gap_not_flagged_at_exact_parity_when_identity_verified(monkey
     monkeypatch.setattr(endpoint, "PredictionEngine", _ValidPredictionEngine)
     monkeypatch.setattr(endpoint, "cache", None)
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
     assert "elo_ratings" not in payload["data_gaps"]
-    assert "FIXTURE_IDENTITY_UNVERIFIED" not in payload["evidence_quality"]["critical_gaps"]
+    assert (
+        "FIXTURE_IDENTITY_UNVERIFIED"
+        not in payload["evidence_quality"]["critical_gaps"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_live_shape_serializes_kickoff_with_explicit_utc_offset(monkeypatch) -> None:
+async def test_live_shape_serializes_kickoff_with_explicit_utc_offset(
+    monkeypatch,
+) -> None:
     class FakeProjector:
         def __init__(self, **_kwargs):
             pass
@@ -347,7 +362,9 @@ async def test_elo_gap_flagged_when_identity_unverified(monkeypatch) -> None:
     monkeypatch.setattr(endpoint, "PredictionEngine", _ValidPredictionEngine)
     monkeypatch.setattr(endpoint, "cache", None)
 
-    payload = await endpoint.get_full_analysis("real-fixture-2", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-2", league="EPL", db=object()
+    )
     assert "elo_ratings" in payload["data_gaps"]
     assert "FIXTURE_IDENTITY_UNVERIFIED" in payload["evidence_quality"]["critical_gaps"]
 

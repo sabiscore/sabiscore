@@ -25,7 +25,7 @@ if settings.sentry_dsn:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-    
+
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         integrations=[
@@ -40,14 +40,27 @@ if settings.sentry_dsn:
     )
     logging.info("Sentry error tracking initialized")
 
+
 def _filter_sentry_event(event, hint):
     """Filter Sentry events to reduce noise and redact secrets."""
-    sensitive = ("token", "secret", "api_key", "apikey", "authorization", "password", "key")
+    sensitive = (
+        "token",
+        "secret",
+        "api_key",
+        "apikey",
+        "authorization",
+        "password",
+        "key",
+    )
 
     def _redact(value):
         if isinstance(value, dict):
             return {
-                k: ("[REDACTED]" if any(s in str(k).lower() for s in sensitive) else _redact(v))
+                k: (
+                    "[REDACTED]"
+                    if any(s in str(k).lower() for s in sensitive)
+                    else _redact(v)
+                )
                 for k, v in value.items()
             }
         if isinstance(value, list):
@@ -57,11 +70,12 @@ def _filter_sentry_event(event, hint):
         return value
 
     # Skip 404 errors
-    if event.get('exception'):
-        for exception in event['exception']['values']:
-            if '404' in str(exception.get('value', '')):
+    if event.get("exception"):
+        for exception in event["exception"]["values"]:
+            if "404" in str(exception.get("value", "")):
                 return None
     return _redact(event)
+
 
 # OpenTelemetry (ADR-0006): no-op unless enable_tracing AND an OTLP endpoint
 # are both configured. Registered before router mounts, alongside the other
@@ -71,7 +85,9 @@ from ..core.telemetry import setup_telemetry, shutdown_telemetry  # noqa: E402
 setup_telemetry()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 # httpx logs the full request URL (including query-string API keys, e.g.
 # the_odds_api's ?apiKey=...) at INFO on every request. Suppress it the same
 # way core/logging.py already suppresses uvicorn.access noise.
@@ -83,20 +99,22 @@ model_instance = None
 # Simple flag to avoid concurrent background loads
 model_load_in_progress = False
 
+
 # Custom JSON encoder that handles various non-serializable types
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
-        if hasattr(obj, 'isoformat') and callable(getattr(obj, 'isoformat')):
+        if hasattr(obj, "isoformat") and callable(getattr(obj, "isoformat")):
             return obj.isoformat()
-        if hasattr(obj, '__dict__'):
-            return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
-        if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+        if hasattr(obj, "__dict__"):
+            return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+        if hasattr(obj, "dict") and callable(getattr(obj, "dict")):
             return obj.dict()
-        if hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
+        if hasattr(obj, "model_dump") and callable(getattr(obj, "model_dump")):
             return obj.model_dump()
         return str(obj)  # Fallback to string representation
+
 
 # Fixtures enter the sync window as each league's season opens, so this must keep
 # running rather than seeding once. 7 requests per tick every 6h is ~0.008 req/min
@@ -212,7 +230,7 @@ async def _background_notification_dispatch() -> None:
 async def lifespan(app: FastAPI):
     """Modern lifespan handler for startup and shutdown events."""
     global model_instance, model_load_in_progress
-    
+
     # === STARTUP ===
     logger.info("Starting SabiScore API...")
 
@@ -243,7 +261,9 @@ async def lifespan(app: FastAPI):
         timeout=httpx.Timeout(8.0),
         limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
     )
-    app.state.provider_registry = build_provider_registry(http_client=app.state.http_client)
+    app.state.provider_registry = build_provider_registry(
+        http_client=app.state.http_client
+    )
     app.state.odds_service = OddsService(
         cache_backend=app.state.cache,
         provider=app.state.provider_registry.get("the_odds_api"),
@@ -297,18 +317,21 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.exception("Startup rollback: failed to close async database")
         raise RuntimeError("Startup aborted: model initialization failed")
-    
+
     # V4 / Phase 9 source registry — informational startup log
     try:
-        from ..connectors.source_registry import registry_summary as _v4_registry_summary
+        from ..connectors.source_registry import (
+            registry_summary as _v4_registry_summary,
+        )
+
         logger.info("V4 source registry: %s", _v4_registry_summary(settings))
     except Exception as _v4_exc:
         logger.debug("V4 source registry unavailable at startup: %s", _v4_exc)
 
     logger.info("SabiScore API startup complete")
-    
+
     yield  # Server is running
-    
+
     # === SHUTDOWN ===
     logger.info("Shutting down SabiScore API...")
 
@@ -341,16 +364,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("SabiScore API shutdown complete")
 
+
 def _resolve_active_leagues() -> tuple[str, ...]:
     raw = (os.environ.get("ACTIVE_LEAGUES") or "").strip()
     if not raw:
         return DEFAULT_LEAGUES
 
-    leagues = tuple(
-        part.strip().lower()
-        for part in raw.split(",")
-        if part.strip()
-    )
+    leagues = tuple(part.strip().lower() for part in raw.split(",") if part.strip())
     return leagues or DEFAULT_LEAGUES
 
 
@@ -405,10 +425,14 @@ def _startup_load_models_strict(app: FastAPI) -> None:
     global model_instance, model_load_in_progress
 
     app.state.model_load_in_progress = True
-    app.state.model_load_attempts = int(getattr(app.state, "model_load_attempts", 0)) + 1
+    app.state.model_load_attempts = (
+        int(getattr(app.state, "model_load_attempts", 0)) + 1
+    )
     model_load_in_progress = True
 
-    model_version = (os.environ.get("ACTIVE_BASELINE_VERSION") or "v5_phase7").strip() or "v5_phase7"
+    model_version = (
+        os.environ.get("ACTIVE_BASELINE_VERSION") or "v5_phase7"
+    ).strip() or "v5_phase7"
     leagues = _resolve_active_leagues()
 
     generation = load_active_generation()
@@ -463,6 +487,7 @@ def _startup_load_models_strict(app: FastAPI) -> None:
         ", ".join(app.state.leagues_loaded),
     )
 
+
 # Create FastAPI app with custom JSON encoder and lifespan
 app = FastAPI(
     title="SabiScore API",
@@ -470,7 +495,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Apply custom JSON encoder to the app
@@ -496,11 +521,15 @@ def load_model_if_needed(start_background: bool = True):
     if instance is not None and getattr(instance, "is_trained", False):
         return instance
 
-    logger.warning("load_model_if_needed called but strict startup model load is incomplete")
+    logger.warning(
+        "load_model_if_needed called but strict startup model load is incomplete"
+    )
     return None
+
 
 # Setup middleware
 setup_middleware(app)
+
 
 # Provide helper to access loaded model without creating circular imports
 def get_loaded_model(default=None):
@@ -515,8 +544,11 @@ def get_loaded_model(default=None):
         return model_instance
     return default
 
+
 # Include routers
-app.include_router(api_router, prefix=getattr(settings, 'API_V1_STR', '/api/v1'), tags=["API"])
+app.include_router(
+    api_router, prefix=getattr(settings, "API_V1_STR", "/api/v1"), tags=["API"]
+)
 app.include_router(ws_router, tags=["WebSocket"])
 
 # Include monitoring/health check routes at root level for container orchestration

@@ -83,40 +83,49 @@ export class FootballDataAdapter {
       runId,
       acquiredAt,
     };
-    const rawArtifact = await writeRaw(
-      `football-data-${league}-${seasonCode}.csv`, raw, artifactContext
-    );
+    let rawArtifact = null;
+    try {
+      rawArtifact = await writeRaw(
+        `football-data-${league}-${seasonCode}.csv`, raw, artifactContext
+      );
 
-    const rows = parseCsv(raw);
-    const fixtures = normalizeFootballDataRows(rows, league);
-    const teamForm = buildTeamForm(fixtures);
+      const rows = parseCsv(raw);
+      const fixtures = normalizeFootballDataRows(rows, league, { season: seasonCode });
+      const teamForm = buildTeamForm(fixtures);
 
-    const fixturesArtifact = await writeJson(
-      "fixtures", `${league}-${seasonCode}`, fixtures, artifactContext
-    );
-    const formArtifact = await writeJson(
-      "team-form", `${league}-${seasonCode}`, teamForm, artifactContext
-    );
-    return {
-      source_id: this.source.id,
-      url,
-      league,
-      season_code: seasonCode,
-      rows: rows.length,
-      fixtures: fixtures.length,
-      artifacts: {
-        raw: rawArtifact,
-        fixtures: fixturesArtifact,
-        team_form: formArtifact,
-      },
-      payload_hashes: {
-        [rawArtifact.uri]: rawArtifact.hash,
-        [fixturesArtifact.uri]: fixturesArtifact.hash,
-        [formArtifact.uri]: formArtifact.hash,
-      },
-      acquired_at: acquiredAt,
-      parser_version: this.source.parserVersion,
-      schema_version: this.source.schemaVersion,
-    };
+      const fixturesArtifact = await writeJson(
+        "fixtures", `${league}-${seasonCode}`, fixtures, artifactContext
+      );
+      const formArtifact = await writeJson(
+        "team-form", `${league}-${seasonCode}`, teamForm, artifactContext
+      );
+      return {
+        source_id: this.source.id,
+        url,
+        league,
+        season_code: seasonCode,
+        rows: rows.length,
+        fixtures: fixtures.length,
+        artifacts: {
+          raw: rawArtifact,
+          fixtures: fixturesArtifact,
+          team_form: formArtifact,
+        },
+        payload_hashes: {
+          [rawArtifact.uri]: rawArtifact.hash,
+          [fixturesArtifact.uri]: fixturesArtifact.hash,
+          [formArtifact.uri]: formArtifact.hash,
+        },
+        acquired_at: acquiredAt,
+        parser_version: this.source.parserVersion,
+        schema_version: this.source.schemaVersion,
+      };
+    } catch (error) {
+      if (error && typeof error === "object") {
+        error.rawPayload = raw;
+        error.rawArtifact = rawArtifact;
+      }
+      throw error;
+    }
   }
 }

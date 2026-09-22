@@ -1,4 +1,5 @@
 """Regression tests for canonical identity writes."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -61,6 +62,10 @@ async def test_ensure_canonical_fixture_flushes_teams_before_fixture_insert() ->
     )
 
     assert fixture_id.startswith("fixture-")
-    assert session.flush_snapshots, "expected a flush before the canonical fixture insert"
-    assert all("CanonicalFixture" not in snapshot for snapshot in session.flush_snapshots)
+    assert session.flush_snapshots, (
+        "expected a flush before the canonical fixture insert"
+    )
+    assert all(
+        "CanonicalFixture" not in snapshot for snapshot in session.flush_snapshots
+    )
     assert "CanonicalFixture" in session.added

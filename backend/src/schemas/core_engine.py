@@ -69,12 +69,12 @@ class CoreFreshnessInput(BaseModel):
 class CoreSourceStatusInput(BaseModel):
     model: Optional[Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]] = None
     market: Optional[Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]] = None
-    team_metrics: Optional[
-        Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]
-    ] = None
-    availability: Optional[
-        Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]
-    ] = None
+    team_metrics: Optional[Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]] = (
+        None
+    )
+    availability: Optional[Literal["VERIFIED", "STALE", "CONFLICTING", "DATA_GAP"]] = (
+        None
+    )
 
 
 class CoreMatchInput(BaseModel):
@@ -119,8 +119,8 @@ class CoreCalculationAuditOutput(BaseModel):
     market_overround: Optional[float]
     calibration_method: Optional[str]
     model_version: Optional[str]
-    kelly_fraction: float = 0.25   # quarter-Kelly
-    kelly_cap: float = 0.05        # 5% hard cap
+    kelly_fraction: float = 0.25  # quarter-Kelly
+    kelly_cap: float = 0.05  # 5% hard cap
 
 
 class CoreMatchOutput(BaseModel):

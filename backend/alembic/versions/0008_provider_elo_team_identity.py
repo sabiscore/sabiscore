@@ -47,6 +47,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_provider_elo_team_team_id", table_name="provider_elo_team_mappings")
-    op.drop_index("ix_provider_elo_team_provider_id", table_name="provider_elo_team_mappings")
+    op.drop_index(
+        "ix_provider_elo_team_team_id", table_name="provider_elo_team_mappings"
+    )
+    op.drop_index(
+        "ix_provider_elo_team_provider_id", table_name="provider_elo_team_mappings"
+    )
     op.drop_table("provider_elo_team_mappings")

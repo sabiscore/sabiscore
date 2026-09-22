@@ -6,6 +6,7 @@ get_settled_predictions() (repositories/fixtures.py) and walk_forward_validate()
 production callers — see docs/DEBT.md item 2. This module is that caller,
 invoked periodically from api/main.py's background task.
 """
+
 from __future__ import annotations
 
 import logging

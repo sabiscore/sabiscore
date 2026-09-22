@@ -45,8 +45,11 @@ NOT_APPLICABLE = "NOT_APPLICABLE"
 def git_sha() -> str | None:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True,
-            stderr=subprocess.DEVNULL, timeout=5,
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
         ).strip()
     except Exception:
         return os.getenv("SABISCORE_GIT_SHA")
@@ -122,19 +125,25 @@ def audit() -> dict[str, Any]:
     for path in sorted(MODELS_DIR.rglob("training_manifest*.json")):
         manifest = load_json(path) or {}
         git_block = manifest.get("git") or {}
-        candidates.append({
-            "path": str(path.relative_to(REPO_ROOT)),
-            "declares_generation_id": manifest.get("generation_id"),
-            "binds_served_generation": manifest.get("generation_id") == served and served != "",
-            "feature_schema_version": (manifest.get("features") or {}).get(
-                "feature_schema_version"
-            ),
-            "certification_policy_sha256": manifest.get("certification_policy_sha256"),
-            "artifact_hashes": manifest.get("artifact_hashes"),
-            "git_commit": git_block.get("commit"),
-            "git_dirty": git_block.get("dirty"),
-            "dataset_sha256": (manifest.get("dataset") or {}).get("dataset_sha256"),
-        })
+        candidates.append(
+            {
+                # Posix-style so a committed report doesn't churn between OSes.
+                "path": path.relative_to(REPO_ROOT).as_posix(),
+                "declares_generation_id": manifest.get("generation_id"),
+                "binds_served_generation": manifest.get("generation_id") == served
+                and served != "",
+                "feature_schema_version": (manifest.get("features") or {}).get(
+                    "feature_schema_version"
+                ),
+                "certification_policy_sha256": manifest.get(
+                    "certification_policy_sha256"
+                ),
+                "artifact_hashes": manifest.get("artifact_hashes"),
+                "git_commit": git_block.get("commit"),
+                "git_dirty": git_block.get("dirty"),
+                "dataset_sha256": (manifest.get("dataset") or {}).get("dataset_sha256"),
+            }
+        )
 
     binding = next((c for c in candidates if c["binds_served_generation"]), None)
 
@@ -152,7 +161,9 @@ def audit() -> dict[str, Any]:
     )
 
     chain["feature_contract"] = link(
-        BOUND if contract.get("feature_schema_version") == served_schema and served_schema else MISMATCH,
+        BOUND
+        if contract.get("feature_schema_version") == served_schema and served_schema
+        else MISMATCH,
         "feature_contract.json must describe the schema the serving manifest declares.",
         manifest_declares=served_schema,
         contract_declares=contract.get("feature_schema_version"),
@@ -170,7 +181,9 @@ def audit() -> dict[str, Any]:
     )
 
     chain["source_commit"] = link(
-        BOUND if binding and binding.get("git_commit") and not binding.get("git_dirty") else UNBOUND,
+        BOUND
+        if binding and binding.get("git_commit") and not binding.get("git_dirty")
+        else UNBOUND,
         "No file records the commit that produced the served artifacts. "
         "active_generation.json has no git field, and per-league metadata carries only "
         "performance figures and trained_at.",
@@ -195,7 +208,12 @@ def audit() -> dict[str, Any]:
         "No conformal layer exists in serving. Absent is the honest state, not a gap.",
     )
 
-    required = ("model_artifacts", "feature_contract", "source_commit", "dataset_snapshot")
+    required = (
+        "model_artifacts",
+        "feature_contract",
+        "source_commit",
+        "dataset_snapshot",
+    )
     unbound = [k for k in required if chain[k]["status"] != BOUND]
 
     return {
@@ -218,15 +236,17 @@ def audit() -> dict[str, Any]:
             "chain_complete": not unbound,
             "unbound_links": unbound,
             "verdict": (
-                "RELEASE_IDENTITY_INCOMPLETE" if unbound else "RELEASE_IDENTITY_COMPLETE"
+                "RELEASE_IDENTITY_INCOMPLETE"
+                if unbound
+                else "RELEASE_IDENTITY_COMPLETE"
             ),
             "interpretation": (
                 "Artifacts are hash-pinned, so it is provable they have not CHANGED. "
                 "Their ORIGIN is not recorded: no file binds the served generation to a "
                 "source commit or a dataset snapshot. Reproducing or re-deriving this "
                 "generation from the repository alone is therefore not possible."
-                if unbound else
-                "Every required link in the release identity chain is bound."
+                if unbound
+                else "Every required link in the release identity chain is bound."
             ),
         },
     }
@@ -239,7 +259,7 @@ def main() -> int:
         "--strict",
         action="store_true",
         help="Exit 1 when a required link is unbound. Off by default: this is an "
-             "audit, and a documentation-shaped finding must not fail a deploy.",
+        "audit, and a documentation-shaped finding must not fail a deploy.",
     )
     args = ap.parse_args()
 

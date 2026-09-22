@@ -112,45 +112,85 @@ class EspnProvider:
         acquired_at = self.clock()
 
         if not self.enabled:
-            return self._envelope(ProviderStatus.DISABLED, competition, acquired_at,
-                                  correlation_id, warnings=("ESPN provider disabled",))
+            return self._envelope(
+                ProviderStatus.DISABLED,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=("ESPN provider disabled",),
+            )
 
         if self.breaker.is_open():
             self._log("circuit_open", competition, correlation_id)
-            return self._envelope(ProviderStatus.CIRCUIT_OPEN, competition, acquired_at,
-                                  correlation_id, warnings=("ESPN circuit open",))
+            return self._envelope(
+                ProviderStatus.CIRCUIT_OPEN,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=("ESPN circuit open",),
+            )
 
         try:
             slug = espn_slug(competition)
         except UnsupportedCompetitionError as exc:
-            return self._envelope(ProviderStatus.UNAVAILABLE, competition, acquired_at,
-                                  correlation_id, warnings=(str(exc),))
+            return self._envelope(
+                ProviderStatus.UNAVAILABLE,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=(str(exc),),
+            )
 
         try:
             raw = await self._get_scoreboard(slug, correlation_id)
         except EspnSchemaError as exc:
             # Egress-allowlist / URL guard rejected the request. Fail closed.
             self._log("egress_blocked", competition, correlation_id)
-            return self._envelope(ProviderStatus.UNAVAILABLE, competition, acquired_at,
-                                  correlation_id, warnings=(str(exc),))
+            return self._envelope(
+                ProviderStatus.UNAVAILABLE,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=(str(exc),),
+            )
         except CircuitOpenError:
-            return self._envelope(ProviderStatus.CIRCUIT_OPEN, competition, acquired_at,
-                                  correlation_id, warnings=("ESPN circuit opened during call",))
+            return self._envelope(
+                ProviderStatus.CIRCUIT_OPEN,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=("ESPN circuit opened during call",),
+            )
         except httpx.HTTPStatusError as exc:
             status = (
                 ProviderStatus.RATE_LIMITED
                 if exc.response.status_code == 429
                 else ProviderStatus.UNAVAILABLE
             )
-            self._log("http_error", competition, correlation_id,
-                      status_code=exc.response.status_code)
-            return self._envelope(status, competition, acquired_at, correlation_id,
-                                  warnings=(f"ESPN HTTP {exc.response.status_code}",))
+            self._log(
+                "http_error",
+                competition,
+                correlation_id,
+                status_code=exc.response.status_code,
+            )
+            return self._envelope(
+                status,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=(f"ESPN HTTP {exc.response.status_code}",),
+            )
         except httpx.HTTPError as exc:
-            self._log("transport_error", competition, correlation_id,
-                      error=type(exc).__name__)
-            return self._envelope(ProviderStatus.UNAVAILABLE, competition, acquired_at,
-                                  correlation_id, warnings=("ESPN transport error",))
+            self._log(
+                "transport_error", competition, correlation_id, error=type(exc).__name__
+            )
+            return self._envelope(
+                ProviderStatus.UNAVAILABLE,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=("ESPN transport error",),
+            )
 
         # Validate the untrusted payload. Fail closed on drift.
         try:
@@ -158,12 +198,21 @@ class EspnProvider:
         except EspnSchemaError as exc:
             self.breaker.record_schema_failure()
             self._log("schema_invalid", competition, correlation_id)
-            return self._envelope(ProviderStatus.SCHEMA_INVALID, competition, acquired_at,
-                                  correlation_id, warnings=(str(exc),))
+            return self._envelope(
+                ProviderStatus.SCHEMA_INVALID,
+                competition,
+                acquired_at,
+                correlation_id,
+                warnings=(str(exc),),
+            )
 
         fixtures: list[NormalizedFixture] = []
         warnings: list[str] = []
-        comp = Competition(competition) if not isinstance(competition, Competition) else competition
+        comp = (
+            Competition(competition)
+            if not isinstance(competition, Competition)
+            else competition
+        )
 
         for event in scoreboard.events:
             try:
@@ -252,7 +301,8 @@ class EspnProvider:
         snapshot: dict[str, Any] | None = None,
     ) -> ProviderEnvelope:
         comp_value = (
-            competition.value if isinstance(competition, Competition)
+            competition.value
+            if isinstance(competition, Competition)
             else (str(competition) if competition is not None else None)
         )
         return ProviderEnvelope(
@@ -285,7 +335,9 @@ class EspnProvider:
             raise EspnSchemaError(f"egress to {parsed.host!r} blocked by allowlist")
 
     @staticmethod
-    def _log(event: str, competition: Any, correlation_id: str | None, **extra: Any) -> None:
+    def _log(
+        event: str, competition: Any, correlation_id: str | None, **extra: Any
+    ) -> None:
         """Redacted structured log. Never includes URLs, query strings, or bodies."""
         logger.info(
             "espn_provider",

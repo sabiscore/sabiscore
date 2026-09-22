@@ -8,8 +8,8 @@ from .twitter_sentiment import TwitterSentimentAnalyzer
 from .cluster_manager import ScraperClusterManager
 
 __all__ = [
-    'UnderstatXGScraper',
-    'FBrefScoutingScraper', 
-    'TwitterSentimentAnalyzer',
-    'ScraperClusterManager',
+    "UnderstatXGScraper",
+    "FBrefScoutingScraper",
+    "TwitterSentimentAnalyzer",
+    "ScraperClusterManager",
 ]

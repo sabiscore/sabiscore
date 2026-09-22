@@ -5,6 +5,7 @@ Returns the active-generation manifest metadata consumed by the
 ModelMetadataPanel on the frontend. Reads the committed JSON manifest
 and the app.state loaded-model record; does not call providers or run inference.
 """
+
 import hashlib
 import json
 import logging

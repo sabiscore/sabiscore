@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 class DataIngestionService:
     """
     Coordinates data collection from all 7 ethical scrapers and persists to database.
-    
+
     Data sources and polling intervals:
     - FlashscoreScraper: Live scores (5s polling)
     - BetfairExchangeScraper: Live odds (10s polling)
@@ -54,7 +54,7 @@ class DataIngestionService:
     - FootballDataEnhancedScraper: Historical Pinnacle odds (daily)
     - SoccerwayScraper: Standings and form (daily)
     - TransfermarktScraper: Market values, injuries (daily)
-    
+
     Note: WhoScored removed; form features rebuilt from Soccerway + Understat.
     """
 
@@ -67,10 +67,10 @@ class DataIngestionService:
         self.oddsportal = OddsPortalScraper()
         self.understat = UnderstatScraper()
         self.flashscore = FlashscoreScraper()
-        
+
         self._running = False
         self._tasks: List[asyncio.Task] = []
-        
+
         logger.info("DataIngestionService initialized with 7 ethical scrapers")
 
     async def start(self):
@@ -140,7 +140,9 @@ class DataIngestionService:
                             if score_data:
                                 await self._update_match_score(db, match.id, score_data)
                         except Exception as e:
-                            logger.warning(f"Failed to fetch score for match {match.id}: {e}")
+                            logger.warning(
+                                f"Failed to fetch score for match {match.id}: {e}"
+                            )
 
                     await db.commit()
 
@@ -172,9 +174,13 @@ class DataIngestionService:
                         try:
                             odds_data = await self._fetch_betfair_exchange_odds(match)
                             if odds_data:
-                                await self._persist_odds_snapshot(db, match.id, odds_data)
+                                await self._persist_odds_snapshot(
+                                    db, match.id, odds_data
+                                )
                         except Exception as e:
-                            logger.warning(f"Failed to fetch Betfair odds for {match.id}: {e}")
+                            logger.warning(
+                                f"Failed to fetch Betfair odds for {match.id}: {e}"
+                            )
 
                     await db.commit()
 
@@ -206,9 +212,13 @@ class DataIngestionService:
                             # Try to get closing line from OddsPortal
                             closing_odds = await self._fetch_closing_line(match)
                             if closing_odds:
-                                await self._persist_closing_line(db, match.id, closing_odds)
+                                await self._persist_closing_line(
+                                    db, match.id, closing_odds
+                                )
                         except Exception as e:
-                            logger.warning(f"Failed to fetch closing line for {match.id}: {e}")
+                            logger.warning(
+                                f"Failed to fetch closing line for {match.id}: {e}"
+                            )
 
                     await db.commit()
 
@@ -229,7 +239,8 @@ class DataIngestionService:
                     query = select(Match).where(
                         Match.status.in_(["scheduled", "live"]),
                         Match.match_date >= datetime.now(timezone.utc),
-                        Match.match_date <= datetime.now(timezone.utc) + timedelta(days=3),
+                        Match.match_date
+                        <= datetime.now(timezone.utc) + timedelta(days=3),
                     )
                     result = await db.execute(query)
                     matches = result.scalars().all()
@@ -259,16 +270,22 @@ class DataIngestionService:
 
     async def _enrich_daily_data(self):
         """Daily enrichment: standings, form (Understat), injuries, market values"""
-        logger.info("Starting daily data enrichment (Soccerway, Understat, Transfermarkt)")
+        logger.info(
+            "Starting daily data enrichment (Soccerway, Understat, Transfermarkt)"
+        )
 
         while self._running:
             try:
                 async with get_db_session() as db:
                     # Get unique leagues from upcoming matches
                     now = datetime.now(timezone.utc)
-                    query = select(Match.league_id).distinct().where(
-                        Match.match_date >= now,
-                        Match.match_date <= now + timedelta(days=7),
+                    query = (
+                        select(Match.league_id)
+                        .distinct()
+                        .where(
+                            Match.match_date >= now,
+                            Match.match_date <= now + timedelta(days=7),
+                        )
                     )
                     result = await db.execute(query)
                     league_ids = [row[0] for row in result.fetchall()]
@@ -277,18 +294,20 @@ class DataIngestionService:
                         try:
                             # Fetch standings from Soccerway
                             standings = await self._fetch_soccerway_standings(league_id)
-                            
+
                             # Fetch team form from Understat xG trends (replaces WhoScored)
                             form_data = await self._fetch_understat_form(league_id)
-                            
+
                             # Persist daily enrichment
                             if standings or form_data:
                                 await self._persist_daily_enrichment(
                                     db, league_id, standings, form_data
                                 )
-                                
+
                         except Exception as e:
-                            logger.warning(f"Failed daily enrichment for league {league_id}: {e}")
+                            logger.warning(
+                                f"Failed daily enrichment for league {league_id}: {e}"
+                            )
 
                     await db.commit()
 
@@ -309,11 +328,15 @@ class DataIngestionService:
         try:
             # Use Flashscore scraper to fetch live data
             result = self.flashscore.fetch_data(
-                home_team=match.home_team.name if hasattr(match, 'home_team') else str(match.home_team_id),
-                away_team=match.away_team.name if hasattr(match, 'away_team') else str(match.away_team_id),
-                use_cache=False  # Always get fresh data for live scores
+                home_team=match.home_team.name
+                if hasattr(match, "home_team")
+                else str(match.home_team_id),
+                away_team=match.away_team.name
+                if hasattr(match, "away_team")
+                else str(match.away_team_id),
+                use_cache=False,  # Always get fresh data for live scores
             )
-            
+
             if result and isinstance(result, dict):
                 success = True
                 return {
@@ -342,9 +365,13 @@ class DataIngestionService:
         try:
             # Use Betfair scraper to fetch exchange odds
             odds_data = self.betfair.fetch_data(
-                home_team=match.home_team.name if hasattr(match, 'home_team') else str(match.home_team_id),
-                away_team=match.away_team.name if hasattr(match, 'away_team') else str(match.away_team_id),
-                use_cache=True
+                home_team=match.home_team.name
+                if hasattr(match, "home_team")
+                else str(match.home_team_id),
+                away_team=match.away_team.name
+                if hasattr(match, "away_team")
+                else str(match.away_team_id),
+                use_cache=True,
             )
 
             if odds_data:
@@ -354,9 +381,21 @@ class DataIngestionService:
                     "status": "OPEN",
                     "inplay": match.status == "live",
                     "runners": [
-                        {"selection_id": 1, "last_price_traded": odds_data.get("home_back", 2.0), "status": "ACTIVE"},
-                        {"selection_id": 2, "last_price_traded": odds_data.get("draw_back", 3.2), "status": "ACTIVE"},
-                        {"selection_id": 3, "last_price_traded": odds_data.get("away_back", 3.5), "status": "ACTIVE"},
+                        {
+                            "selection_id": 1,
+                            "last_price_traded": odds_data.get("home_back", 2.0),
+                            "status": "ACTIVE",
+                        },
+                        {
+                            "selection_id": 2,
+                            "last_price_traded": odds_data.get("draw_back", 3.2),
+                            "status": "ACTIVE",
+                        },
+                        {
+                            "selection_id": 3,
+                            "last_price_traded": odds_data.get("away_back", 3.5),
+                            "status": "ACTIVE",
+                        },
                     ],
                     "back_lay_spread": {
                         "home": odds_data.get("home_spread", 0.02),
@@ -377,23 +416,32 @@ class DataIngestionService:
             return None
         finally:
             duration_ms = (time.time() - start_time) * 1000
-            metrics_collector.record_scraper_call("betfair_exchange", duration_ms, success)
+            metrics_collector.record_scraper_call(
+                "betfair_exchange", duration_ms, success
+            )
 
     async def _fetch_closing_line(self, match) -> Optional[Dict]:
         """Fetch closing line from OddsPortal or FootballData"""
         try:
             # Try OddsPortal first for most accurate closing lines
             closing_odds = self.oddsportal.fetch_data(
-                home_team=match.home_team.name if hasattr(match, 'home_team') else str(match.home_team_id),
-                away_team=match.away_team.name if hasattr(match, 'away_team') else str(match.away_team_id),
-                use_cache=True
+                home_team=match.home_team.name
+                if hasattr(match, "home_team")
+                else str(match.home_team_id),
+                away_team=match.away_team.name
+                if hasattr(match, "away_team")
+                else str(match.away_team_id),
+                use_cache=True,
             )
 
             if closing_odds and isinstance(closing_odds, dict):
                 return {
-                    "home": closing_odds.get("pinnacle_home") or closing_odds.get("home"),
-                    "draw": closing_odds.get("pinnacle_draw") or closing_odds.get("draw"),
-                    "away": closing_odds.get("pinnacle_away") or closing_odds.get("away"),
+                    "home": closing_odds.get("pinnacle_home")
+                    or closing_odds.get("home"),
+                    "draw": closing_odds.get("pinnacle_draw")
+                    or closing_odds.get("draw"),
+                    "away": closing_odds.get("pinnacle_away")
+                    or closing_odds.get("away"),
                     "source": "OddsPortal",
                 }
 
@@ -401,17 +449,22 @@ class DataIngestionService:
             league_code = self._get_league_code(match.league_id)
             fd_data = self.football_data.download_season_data(
                 league=league_code,
-                season=datetime.now(timezone.utc).strftime("%y") + str(int(datetime.now(timezone.utc).strftime("%y")) + 1),
-                use_cache=True
+                season=datetime.now(timezone.utc).strftime("%y")
+                + str(int(datetime.now(timezone.utc).strftime("%y")) + 1),
+                use_cache=True,
             )
 
             if not fd_data.empty:
                 # Find matching game
-                home_name = match.home_team.name if hasattr(match, 'home_team') else ""
-                away_name = match.away_team.name if hasattr(match, 'away_team') else ""
+                home_name = match.home_team.name if hasattr(match, "home_team") else ""
+                away_name = match.away_team.name if hasattr(match, "away_team") else ""
                 match_row = fd_data[
-                    (fd_data["home_team"].str.contains(home_name, case=False, na=False)) &
-                    (fd_data["away_team"].str.contains(away_name, case=False, na=False))
+                    (fd_data["home_team"].str.contains(home_name, case=False, na=False))
+                    & (
+                        fd_data["away_team"].str.contains(
+                            away_name, case=False, na=False
+                        )
+                    )
                 ]
                 if not match_row.empty:
                     row = match_row.iloc[0]
@@ -432,14 +485,20 @@ class DataIngestionService:
         """Fetch xG data from Understat scraper"""
         try:
             # Get team xG data
-            home_team = match.home_team.name if hasattr(match, 'home_team') else str(match.home_team_id)
-            away_team = match.away_team.name if hasattr(match, 'away_team') else str(match.away_team_id)
+            home_team = (
+                match.home_team.name
+                if hasattr(match, "home_team")
+                else str(match.home_team_id)
+            )
+            away_team = (
+                match.away_team.name
+                if hasattr(match, "away_team")
+                else str(match.away_team_id)
+            )
             league = self._get_understat_league(match.league_id)
 
             xg_data = self.understat.fetch_data(
-                team=home_team,
-                league=league,
-                use_cache=True
+                team=home_team, league=league, use_cache=True
             )
 
             if xg_data:
@@ -459,8 +518,7 @@ class DataIngestionService:
         """Fetch league standings from Soccerway"""
         try:
             standings = self.soccerway.fetch_data(
-                league=self._get_league_name(league_id),
-                use_cache=True
+                league=self._get_league_name(league_id), use_cache=True
             )
             return standings
         except Exception as e:
@@ -471,8 +529,7 @@ class DataIngestionService:
         """Fetch team form data from Understat xG trends (replaces WhoScored)"""
         try:
             form_data = self.understat.fetch_data(
-                league=self._get_league_name(league_id),
-                use_cache=True
+                league=self._get_league_name(league_id), use_cache=True
             )
             return form_data
         except Exception as e:
@@ -491,7 +548,9 @@ class DataIngestionService:
         """Deprecated: Use _fetch_betfair_exchange_odds instead"""
         return None
 
-    async def _update_match_score(self, db: AsyncSession, match_id: str, score_data: Dict):
+    async def _update_match_score(
+        self, db: AsyncSession, match_id: str, score_data: Dict
+    ):
         """Update match with live score"""
         stmt = (
             update(Match)
@@ -504,7 +563,9 @@ class DataIngestionService:
         )
         await db.execute(stmt)
 
-    async def _persist_odds_snapshot(self, db: AsyncSession, match_id: str, odds_data: Dict):
+    async def _persist_odds_snapshot(
+        self, db: AsyncSession, match_id: str, odds_data: Dict
+    ):
         """Save odds snapshot to database"""
         runners = odds_data.get("runners", [])
         if len(runners) < 3:
@@ -521,11 +582,13 @@ class DataIngestionService:
         )
         db.add(odds)
 
-    async def _persist_closing_line(self, db: AsyncSession, match_id: str, closing_data: Dict):
+    async def _persist_closing_line(
+        self, db: AsyncSession, match_id: str, closing_data: Dict
+    ):
         """Save Pinnacle closing line for CLV analysis"""
         if not closing_data:
             return
-            
+
         odds = Odds(
             match_id=match_id,
             bookmaker=f"Pinnacle ({closing_data.get('source', 'unknown')})",
@@ -539,15 +602,12 @@ class DataIngestionService:
         logger.info(f"Persisted closing line for match {match_id}")
 
     async def _persist_xg_enrichment(
-        self,
-        db: AsyncSession,
-        match_id: str,
-        xg_data: Dict
+        self, db: AsyncSession, match_id: str, xg_data: Dict
     ):
         """Save xG enrichment data as match stats"""
         if not xg_data:
             return
-            
+
         stats = MatchStats(
             match_id=match_id,
             team_id=xg_data.get("team_id"),
@@ -562,7 +622,7 @@ class DataIngestionService:
         db: AsyncSession,
         league_id: str,
         standings: Optional[Dict],
-        form_data: Optional[Dict]
+        form_data: Optional[Dict],
     ):
         """Save daily enrichment data (standings, form)"""
         # Cache standings and form for prediction service access
@@ -570,7 +630,7 @@ class DataIngestionService:
             cache_manager.set(f"standings:{league_id}", standings, ttl=86400)
         if form_data:
             cache_manager.set(f"form:{league_id}", form_data, ttl=86400)
-        
+
         logger.info(f"Persisted daily enrichment for league {league_id}")
 
     async def _persist_enrichment(
@@ -578,7 +638,7 @@ class DataIngestionService:
         db: AsyncSession,
         match_id: str,
         xg_data: Optional[Dict],
-        scouting_data: Optional[Dict]
+        scouting_data: Optional[Dict],
     ):
         """Legacy method - Save enrichment data as match stats"""
         stats = MatchStats(

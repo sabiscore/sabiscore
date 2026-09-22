@@ -62,11 +62,15 @@ def _require_under_root(path: Path, root: Path, label: str) -> Path:
     try:
         resolved.relative_to(root_resolved)
     except ValueError as exc:
-        raise ManifestValidationError(f"{label} path escapes configured data root: {path}") from exc
+        raise ManifestValidationError(
+            f"{label} path escapes configured data root: {path}"
+        ) from exc
     return resolved
 
 
-def _iter_payloads(manifest: dict[str, Any]) -> Iterable[tuple[str, dict[str, Any] | None]]:
+def _iter_payloads(
+    manifest: dict[str, Any],
+) -> Iterable[tuple[str, dict[str, Any] | None]]:
     for key in ("raw_files", "processed_files"):
         values = manifest.get(key)
         if not isinstance(values, list):
@@ -79,12 +83,17 @@ def _iter_payloads(manifest: dict[str, Any]) -> Iterable[tuple[str, dict[str, An
                 local_file = value.get("file")
                 object_key = value.get("object_key")
                 digest = value.get("hash")
-                if not all(isinstance(item, str) and item for item in (local_file, object_key, digest)):
+                if not all(
+                    isinstance(item, str) and item
+                    for item in (local_file, object_key, digest)
+                ):
                     raise ManifestValidationError(
                         f"{key} artifact descriptors require file, object_key, and hash"
                     )
                 if Path(object_key).is_absolute() or ".." in Path(object_key).parts:
-                    raise ManifestValidationError(f"{key} contains an unsafe object_key")
+                    raise ManifestValidationError(
+                        f"{key} contains an unsafe object_key"
+                    )
                 yield local_file, value
                 continue
             raise ManifestValidationError(f"{key} contains an invalid artifact")
@@ -116,7 +125,9 @@ def validate_manifest(
 
     missing = sorted(REQUIRED_MANIFEST_FIELDS - set(manifest))
     if missing:
-        raise ManifestValidationError(f"manifest missing required fields: {', '.join(missing)}")
+        raise ManifestValidationError(
+            f"manifest missing required fields: {', '.join(missing)}"
+        )
 
     if manifest["manifest_version"] not in SUPPORTED_MANIFEST_VERSIONS:
         raise ManifestValidationError("unsupported manifest_version")
@@ -125,9 +136,15 @@ def validate_manifest(
             if not isinstance(manifest.get(field), str) or not manifest[field].strip():
                 raise ManifestValidationError(f"manifest v2 requires {field}")
     if manifest["status"] not in INGESTIBLE_STATUSES:
-        raise ManifestValidationError(f"manifest status is not ingestible: {manifest['status']}")
-    if manifest["adapter_version"] not in (allowed_adapter_versions or DEFAULT_ALLOWED_ADAPTER_VERSIONS):
-        raise ManifestValidationError(f"adapter_version is not allowed: {manifest['adapter_version']}")
+        raise ManifestValidationError(
+            f"manifest status is not ingestible: {manifest['status']}"
+        )
+    if manifest["adapter_version"] not in (
+        allowed_adapter_versions or DEFAULT_ALLOWED_ADAPTER_VERSIONS
+    ):
+        raise ManifestValidationError(
+            f"adapter_version is not allowed: {manifest['adapter_version']}"
+        )
     if not isinstance(manifest.get("payload_hashes"), dict):
         raise ManifestValidationError("payload_hashes must be an object")
 
@@ -135,7 +152,9 @@ def validate_manifest(
     for payload, descriptor in _iter_payloads(manifest):
         payload_path = _require_under_root(Path(payload), root, "payload")
         if payload_path.name.endswith(".tmp"):
-            raise ManifestValidationError(f"payload is still a temporary file: {payload_path}")
+            raise ManifestValidationError(
+                f"payload is still a temporary file: {payload_path}"
+            )
         if not payload_path.exists():
             raise ManifestValidationError(f"payload does not exist: {payload_path}")
         expected_hash = descriptor.get("hash") if descriptor else None
@@ -155,7 +174,9 @@ def validate_manifest(
             try:
                 json.loads(payload_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
-                raise ManifestValidationError(f"processed JSON payload is invalid: {payload_path}") from exc
+                raise ManifestValidationError(
+                    f"processed JSON payload is invalid: {payload_path}"
+                ) from exc
         payload_paths.append(payload_path)
 
     return ValidatedManifest(

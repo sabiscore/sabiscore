@@ -20,7 +20,9 @@ async def analyze_core_engine(payload: CoreEngineAnalyzeRequest) -> CoreEngineRe
     governed_matches = [
         match.model_copy(
             update={
-                "model": match.model.model_copy(update={"generation_certified": certified})
+                "model": match.model.model_copy(
+                    update={"generation_certified": certified}
+                )
                 if match.model is not None
                 else None
             }

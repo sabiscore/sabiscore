@@ -44,6 +44,7 @@ research_uncertainty.aleatoric in its JSONB payload) and Match (for the
 settled outcome). The minimum useful analysis is ~50 records per quartile;
 report only prints quartile results, not stake-permitted or gate state.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,11 +52,12 @@ import json
 import os
 import sys
 
-_MIN_TOTAL_RECORDS = 20   # below this: print a warning and skip quartile analysis
-_MIN_BUCKET_RECORDS = 5   # below this: a quartile result is marked INSUFFICIENT
+_MIN_TOTAL_RECORDS = 20  # below this: print a warning and skip quartile analysis
+_MIN_BUCKET_RECORDS = 5  # below this: a quartile result is marked INSUFFICIENT
 
 
 # ── RPS formulation (M0, metric-contract.json v1.0.0) ───────────────────────
+
 
 def _ranked_probability_score(outcome_index: int, probs: list[float]) -> float:
     """Ranked probability score for a single fixture (lower = better).
@@ -133,9 +135,13 @@ def _fetch_records() -> list[dict]:
                 float(row["draw_probability"]),
                 float(row["away_probability"]),
             ]
-            outcome_idx = _actual_outcome_index(int(row["home_score"]), int(row["away_score"]))
+            outcome_idx = _actual_outcome_index(
+                int(row["home_score"]), int(row["away_score"])
+            )
             rps = _ranked_probability_score(outcome_idx, probs)
-            records.append({"match_id": row["match_id"], "aleatoric": aleatoric, "rps": rps})
+            records.append(
+                {"match_id": row["match_id"], "aleatoric": aleatoric, "rps": rps}
+            )
         except (TypeError, ValueError):
             continue  # malformed row — skip, don't crash the whole run
 
@@ -143,6 +149,7 @@ def _fetch_records() -> list[dict]:
 
 
 # ── Stratification logic ─────────────────────────────────────────────────────
+
 
 def _quartile_label(value: float, thresholds: list[float]) -> int:
     """1-indexed quartile (1=lowest aleatoric, 4=highest)."""
@@ -222,9 +229,12 @@ def _stratify(records: list[dict]) -> dict:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--json", action="store_true", help="Output JSON instead of formatted table")
+    parser.add_argument(
+        "--json", action="store_true", help="Output JSON instead of formatted table"
+    )
     args = parser.parse_args()
 
     print("Fetching settled shadow records...", file=sys.stderr)
@@ -236,7 +246,7 @@ def main() -> None:
             "status": "INSUFFICIENT_DATA",
             "n_total": len(records),
             "note": f"Need >= {_MIN_TOTAL_RECORDS} settled records with research_uncertainty.available=true. "
-                    f"Run again after more fixtures settle.",
+            f"Run again after more fixtures settle.",
             "gate_impact": "NONE",
         }
     else:
@@ -261,7 +271,9 @@ def _print_table(result: dict) -> None:
         return
 
     thresholds = result["aleatoric_quartile_thresholds"]
-    print(f"Quartile bounds : Q1≤{thresholds[0]} | Q2≤{thresholds[1]} | Q3≤{thresholds[2]} | Q4>")
+    print(
+        f"Quartile bounds : Q1≤{thresholds[0]} | Q2≤{thresholds[1]} | Q3≤{thresholds[2]} | Q4>"
+    )
     print()
     print(f"{'Quartile':>8}  {'n':>6}  {'mean_RPS':>10}  {'status'}")
     print("-" * 50)

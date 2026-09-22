@@ -232,9 +232,13 @@ async def _run(files: Sequence[Path], database_url: str) -> int:
                 await connection.exec_driver_sql("SET TRANSACTION READ ONLY")
                 for path in files:
                     sql = path.read_text(encoding="utf-8")
-                    statements = validate_read_only_statements(split_sql_statements(sql))
+                    statements = validate_read_only_statements(
+                        split_sql_statements(sql)
+                    )
                     if not statements:
-                        raise ValueError(f"Verification file has no executable read-only queries: {path}")
+                        raise ValueError(
+                            f"Verification file has no executable read-only queries: {path}"
+                        )
                     for index, statement in enumerate(statements, start=1):
                         result = await connection.exec_driver_sql(statement)
                         _print_result(path, index, statement, result)
@@ -246,7 +250,9 @@ async def _run(files: Sequence[Path], database_url: str) -> int:
 
 
 def _resolve_files(raw_files: Sequence[str]) -> list[Path]:
-    candidates = [Path(value) for value in raw_files] if raw_files else list(_DEFAULT_FILES)
+    candidates = (
+        [Path(value) for value in raw_files] if raw_files else list(_DEFAULT_FILES)
+    )
     resolved: list[Path] = []
     for candidate in candidates:
         path = candidate if candidate.is_absolute() else (Path.cwd() / candidate)
@@ -270,7 +276,9 @@ def main() -> int:
 
     database_url = os.getenv("DATABASE_URL", "").strip()
     if not database_url:
-        parser.error("DATABASE_URL is required; refusing to fall back to a local database")
+        parser.error(
+            "DATABASE_URL is required; refusing to fall back to a local database"
+        )
 
     try:
         files = _resolve_files(args.files)

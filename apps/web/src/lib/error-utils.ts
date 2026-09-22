@@ -3,13 +3,8 @@
  * Safe helpers for error message handling to prevent React child errors
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { parseApiError } from './api';
-
-interface RollbarWindow extends Window {
-  rollbar?: {
-    error: (error: unknown, context?: Record<string, unknown>) => void;
-  };
-}
 
 /**
  * Ensures the value is a primitive string suitable for rendering in React
@@ -51,6 +46,15 @@ export function safeMessage(value: unknown): string {
  * Combines parseApiError with safeMessage for complete safety
  */
 export function safeErrorMessage(error: unknown): string {
+  if (
+    typeof error === 'string' ||
+    typeof error === 'number' ||
+    typeof error === 'boolean' ||
+    error instanceof Error
+  ) {
+    return safeMessage(error);
+  }
+
   try {
     const parsed = parseApiError(error);
     return safeMessage(parsed.message);
@@ -97,12 +101,18 @@ export function logError(
     console.error('[SabiScore Error]', errorInfo);
   }
 
-  // Always send to monitoring service if available (production)
-  if (typeof window !== 'undefined') {
-    const rollbarWindow = window as RollbarWindow;
-    if (rollbarWindow.rollbar) {
-      rollbarWindow.rollbar.error(error, errorInfo);
-    }
+  const sentryError = error instanceof Error ? error : new Error(errorInfo.message);
+
+  try {
+    Sentry.captureException(sentryError, {
+      tags: {
+        component: context?.component,
+        action: context?.action,
+      },
+      extra: errorInfo,
+    });
+  } catch {
+    // Never throw from telemetry capture.
   }
 }
 

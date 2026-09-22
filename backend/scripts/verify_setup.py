@@ -2,8 +2,10 @@
 """
 Verify that the SabiScore setup is working correctly
 """
+
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.config import settings
@@ -17,6 +19,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def verify_database():
     """Verify database connection and schema"""
     try:
@@ -29,12 +32,24 @@ def verify_database():
 
         # Check tables exist
         from sqlalchemy import inspect
+
         inspector = inspect(db.bind)
 
-        required_tables = ['leagues', 'teams', 'players', 'matches', 'match_stats', 'predictions', 'odds', 'value_bets']
+        required_tables = [
+            "leagues",
+            "teams",
+            "players",
+            "matches",
+            "match_stats",
+            "predictions",
+            "odds",
+            "value_bets",
+        ]
         existing_tables = inspector.get_table_names()
 
-        missing_tables = [table for table in required_tables if table not in existing_tables]
+        missing_tables = [
+            table for table in required_tables if table not in existing_tables
+        ]
 
         if missing_tables:
             logger.error(f"Missing tables: {missing_tables}")
@@ -47,6 +62,7 @@ def verify_database():
     except Exception as e:
         logger.error(f"Database verification failed: {e}")
         return False
+
 
 def verify_cache():
     """Verify Redis cache connection"""
@@ -71,6 +87,7 @@ def verify_cache():
         logger.error(f"Cache verification failed: {e}")
         return False
 
+
 def verify_models():
     """Verify ML models can be loaded"""
     try:
@@ -90,6 +107,7 @@ def verify_models():
         logger.warning(f"Model verification failed (expected for fresh setup): {e}")
         return True  # Not a critical failure
 
+
 def verify_data_pipeline():
     """Verify data aggregation pipeline"""
     try:
@@ -101,7 +119,14 @@ def verify_data_pipeline():
         # This should not fail (even with mock data)
         data = aggregator.fetch_match_data()
 
-        required_keys = ['historical_stats', 'current_form', 'odds', 'injuries', 'head_to_head', 'team_stats']
+        required_keys = [
+            "historical_stats",
+            "current_form",
+            "odds",
+            "injuries",
+            "head_to_head",
+            "team_stats",
+        ]
         missing_keys = [key for key in required_keys if key not in data]
 
         if missing_keys:
@@ -115,6 +140,7 @@ def verify_data_pipeline():
         logger.error(f"Data pipeline verification failed: {e}")
         return False
 
+
 def verify_insights_engine():
     """Verify insights engine"""
     try:
@@ -124,21 +150,19 @@ def verify_insights_engine():
 
         # Test with mock data
         mock_match_data = {
-            'historical_stats': [],
-            'current_form': {'home': {}, 'away': {}},
-            'odds': {'home_win': 2.0, 'draw': 3.5, 'away_win': 4.0},
-            'injuries': [],
-            'head_to_head': [],
-            'team_stats': {'home': {}, 'away': {}}
+            "historical_stats": [],
+            "current_form": {"home": {}, "away": {}},
+            "odds": {"home_win": 2.0, "draw": 3.5, "away_win": 4.0},
+            "injuries": [],
+            "head_to_head": [],
+            "team_stats": {"home": {}, "away": {}},
         }
 
         insights = engine.generate_match_insights(
-            "Test vs Team",
-            "EPL",
-            mock_match_data
+            "Test vs Team", "EPL", mock_match_data
         )
 
-        required_keys = ['predictions', 'xg_analysis', 'value_analysis', 'narrative']
+        required_keys = ["predictions", "xg_analysis", "value_analysis", "narrative"]
         missing_keys = [key for key in required_keys if key not in insights]
 
         if missing_keys:
@@ -151,6 +175,7 @@ def verify_insights_engine():
     except Exception as e:
         logger.error(f"Insights engine verification failed: {e}")
         return False
+
 
 def main():
     """Run all verifications"""
@@ -186,6 +211,7 @@ def main():
         sys.exit(1)
     else:
         logger.info("🎉 All checks passed! SabiScore is ready to run")
+
 
 if __name__ == "__main__":
     main()

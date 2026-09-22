@@ -33,7 +33,9 @@ def _annotation_contains_provider_result(annotation: Any) -> bool:
     """Return whether a resolved annotation contains ProviderResult."""
     if annotation is ProviderResult:
         return True
-    return any(_annotation_contains_provider_result(arg) for arg in get_args(annotation))
+    return any(
+        _annotation_contains_provider_result(arg) for arg in get_args(annotation)
+    )
 
 
 def _returns_provider_result(method: Any) -> bool:
@@ -54,7 +56,9 @@ def _instrument_provider(provider: BaseProvider) -> BaseProvider:
         if name.startswith("_"):
             continue
         attribute = getattr(provider, name)
-        if not inspect.iscoroutinefunction(attribute) or not _returns_provider_result(attribute):
+        if not inspect.iscoroutinefunction(attribute) or not _returns_provider_result(
+            attribute
+        ):
             continue
 
         async def observed(
@@ -112,15 +116,24 @@ class ProviderRegistry:
         raise KeyError(provider_id)
 
     async def health(self) -> builtins.list[ProviderHealth]:
-        return list(await asyncio.gather(*(provider.health() for provider in self.providers)))
+        return list(
+            await asyncio.gather(*(provider.health() for provider in self.providers))
+        )
 
     async def capabilities(self) -> builtins.list[ProviderCapability]:
-        nested = await asyncio.gather(*(provider.capabilities() for provider in self.providers))
+        nested = await asyncio.gather(
+            *(provider.capabilities() for provider in self.providers)
+        )
         return [item for group in nested for item in group]
 
     async def quota(self) -> dict[str, ProviderQuota]:
-        values = await asyncio.gather(*(provider.quota() for provider in self.providers))
-        return {provider.provider_id: quota for provider, quota in zip(self.providers, values)}
+        values = await asyncio.gather(
+            *(provider.quota() for provider in self.providers)
+        )
+        return {
+            provider.provider_id: quota
+            for provider, quota in zip(self.providers, values)
+        }
 
     async def doctor(self, provider_id: str | None = None) -> dict:
         providers = [self.get(provider_id)] if provider_id else self.providers

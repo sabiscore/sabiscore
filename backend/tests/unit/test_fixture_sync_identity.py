@@ -1,4 +1,5 @@
 """Regression coverage for fixture-sync team identity integrity."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -53,7 +54,10 @@ async def test_sync_rejects_resolver_collision_before_any_fixture_write(
         ),
         patch("src.services.fixture_sync_service.resolve_team_id", new=resolve),
         patch("src.services.fixture_sync_service.bind_provider_elo_team_id", new=bind),
-        patch("src.services.canonical_identity_service.ensure_canonical_fixture", new=canonical),
+        patch(
+            "src.services.canonical_identity_service.ensure_canonical_fixture",
+            new=canonical,
+        ),
     ):
         inserted = await sync_upcoming_fixtures(session, provider=object())
 
@@ -96,7 +100,9 @@ async def test_sync_does_not_rewrite_existing_fixture_into_self_play(
     )
     await session.commit()
 
-    fetch = AsyncMock(return_value=[_collision_fixture(match_id="fd-existing-distinct")])
+    fetch = AsyncMock(
+        return_value=[_collision_fixture(match_id="fd-existing-distinct")]
+    )
     resolve = AsyncMock(return_value="fd-team-serie_a:fc_internazionale_milano")
     bind = AsyncMock(return_value=True)
     canonical = AsyncMock()
@@ -108,7 +114,10 @@ async def test_sync_does_not_rewrite_existing_fixture_into_self_play(
         ),
         patch("src.services.fixture_sync_service.resolve_team_id", new=resolve),
         patch("src.services.fixture_sync_service.bind_provider_elo_team_id", new=bind),
-        patch("src.services.canonical_identity_service.ensure_canonical_fixture", new=canonical),
+        patch(
+            "src.services.canonical_identity_service.ensure_canonical_fixture",
+            new=canonical,
+        ),
     ):
         inserted = await sync_upcoming_fixtures(session, provider=object())
 

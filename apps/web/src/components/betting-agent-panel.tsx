@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 interface BettingAgentPanelProps {
   recommendation?: RLRecommendation | null;
   premiumVisuals?: boolean;
+  stakePermitted?: boolean;
+  researchMode?: boolean;
 }
 
 const MAX_KELLY_CAP = 0.05; // mirrors settings.rl_max_kelly_cap
@@ -124,19 +126,49 @@ const REWARD_LABELS: Record<string, string> = {
   R_abs: "Abs",
 };
 
-function BettingAgentPanelInner({ recommendation, premiumVisuals = false }: BettingAgentPanelProps) {
+function BettingAgentPanelInner({
+  recommendation,
+  premiumVisuals = false,
+  stakePermitted = false,
+  researchMode = true,
+}: BettingAgentPanelProps) {
   if (!recommendation) return null;
 
   const { stake_fraction, abstain, reward_components, reason } = recommendation;
+  const isStakingAllowed = stakePermitted === true && !researchMode && !abstain;
+  const isStakeBlocked = !isStakingAllowed;
+
   const components = Object.entries(reward_components ?? {});
   const weightedTotal = components.reduce((acc, [key, val]) => {
     const w = REWARD_WEIGHTS[key] ?? 0;
     return acc + w * val;
   }, 0);
 
-  const decisionPill = abstain
+  const decisionPill = !isStakingAllowed
     ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
     : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+
+  const decisionBadgeText = abstain
+    ? "⚠ Abstain"
+    : !isStakingAllowed
+    ? "⚠ Staking Disabled"
+    : "✓ Active Stake";
+
+  const decisionLabel = abstain
+    ? "No Bet"
+    : !isStakingAllowed
+    ? "Disabled"
+    : "Place Bet";
+
+  const stakeFractionLabel = !isStakingAllowed
+    ? (abstain ? "—" : "Disabled")
+    : toPct(stake_fraction, 2);
+
+  const gaugeCaption = abstain
+    ? "No bet recommended"
+    : !isStakingAllowed
+    ? "Staking disabled in research mode"
+    : `of ${toPct(MAX_KELLY_CAP)} Kelly cap`;
 
   return (
     <section
@@ -161,36 +193,36 @@ function BettingAgentPanelInner({ recommendation, premiumVisuals = false }: Bett
           RL Betting Agent
         </h2>
         <span className={cn("text-xs px-2.5 py-1 rounded-full border font-semibold", decisionPill)}>
-          {abstain ? "⚠ Abstain" : "✓ Active Stake"}
+          {decisionBadgeText}
         </span>
       </div>
 
       {/* Gauge + stake summary */}
       <div className="flex items-center gap-6">
         <div className="flex-shrink-0 w-[130px]">
-          <StakeGauge fraction={stake_fraction} abstain={abstain} />
+          <StakeGauge fraction={isStakingAllowed ? stake_fraction : 0} abstain={isStakeBlocked} />
           <p className="text-xs text-slate-500 text-center mt-1.5">
-            {abstain ? "No bet recommended" : `of ${toPct(MAX_KELLY_CAP)} Kelly cap`}
+            {gaugeCaption}
           </p>
         </div>
         <div className="flex-1 space-y-3 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Stake fraction</span>
-            <span className="text-emerald-300 font-bold tabular-nums text-base">
-              {abstain ? "—" : toPct(stake_fraction, 2)}
+            <span className={cn("font-bold tabular-nums text-base", isStakingAllowed ? "text-emerald-300" : "text-slate-400")}>
+              {stakeFractionLabel}
             </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Decision</span>
-            <span className={cn("font-semibold", abstain ? "text-amber-300" : "text-emerald-300")}>
-              {abstain ? "No Bet" : "Place Bet"}
+            <span className={cn("font-semibold", !isStakingAllowed ? "text-amber-300" : "text-emerald-300")}>
+              {decisionLabel}
             </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-400">Kelly cap</span>
             <span className="text-slate-300 tabular-nums">{toPct(MAX_KELLY_CAP)}</span>
           </div>
-          {!abstain && (
+          {isStakingAllowed && (
             <div className="flex justify-between items-center">
               <span className="text-slate-400">Weighted reward</span>
               <span className={cn(
@@ -205,7 +237,7 @@ function BettingAgentPanelInner({ recommendation, premiumVisuals = false }: Bett
       </div>
 
       {/* Reward component breakdown */}
-      {components.length > 0 && (
+      {components.length > 0 && isStakingAllowed && (
         <div className="rounded-xl bg-slate-900/50 p-5 border border-slate-800/60 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
@@ -237,7 +269,7 @@ function BettingAgentPanelInner({ recommendation, premiumVisuals = false }: Bett
 
       {/* Disclaimer */}
       <p className="text-[10px] text-slate-600 leading-relaxed border-t border-slate-800/50 pt-3">
-        Advisory only — this recommendation does not place bets. Kelly-fraction fallback is
+        Advisory only — research mode active. This recommendation does not place bets and staking controls are disabled. Kelly-fraction fallback is
         active when no trained SAC model is present at{" "}
         <code className="text-slate-500">settings.rl_agent_path</code>.
       </p>

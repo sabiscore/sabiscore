@@ -121,7 +121,9 @@ async def test_fixtures_unconfigured_makes_no_network_call(mock_client_factory):
         calls.append(request)
         return _matches_response([])
 
-    provider = FootballDataOrgProvider(api_key=None, enabled=True, http_client=mock_client_factory(handler))
+    provider = FootballDataOrgProvider(
+        api_key=None, enabled=True, http_client=mock_client_factory(handler)
+    )
     result = await provider.fixtures(competition="EPL")
 
     assert result.status == ProviderStatus.UNAVAILABLE
@@ -177,7 +179,9 @@ async def test_standings_malformed_row_is_rejected_not_raised(mock_client_factor
     result = await provider.standings(competition="EPL")
 
     assert result.records[0]["coherent"] is False
-    assert result.records[0]["rejection_reason"] == "missing_field_position_team_or_points"
+    assert (
+        result.records[0]["rejection_reason"] == "missing_field_position_team_or_points"
+    )
 
 
 @pytest.mark.asyncio

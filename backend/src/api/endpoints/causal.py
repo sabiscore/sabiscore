@@ -52,7 +52,9 @@ async def get_causal_features(limit: int = 58):
     try:
         payload = json.loads(report_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail=f"Invalid causal feature report JSON: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Invalid causal feature report JSON: {exc}"
+        ) from exc
 
     features = payload.get("features", []) if isinstance(payload, dict) else []
     if not isinstance(features, list):
@@ -73,7 +75,9 @@ async def get_causal_features(limit: int = 58):
                     ate_draw=float(item.get("ate_draw", 0.0)),
                     ate_ci=_normalize_ci(item.get("ate_ci")),
                     p_value=float(item.get("p_value", 1.0)),
-                    classification=_normalize_classification(item.get("classification")),
+                    classification=_normalize_classification(
+                        item.get("classification")
+                    ),
                 )
             )
         except (TypeError, ValueError):

@@ -62,8 +62,12 @@ def test_the_same_game_id_in_two_season_files_is_kept_once(tmp_path: Path) -> No
     sources = tmp_path / "v4_sources"
     sources.mkdir()
     shared = _rows(game_id=13977, date=datetime(2020, 8, 21, 17, 0))
-    pd.DataFrame([shared]).to_parquet(sources / "understat_matches_ligue_1_2020.parquet")
-    pd.DataFrame([shared]).to_parquet(sources / "understat_matches_ligue_1_2021.parquet")
+    pd.DataFrame([shared]).to_parquet(
+        sources / "understat_matches_ligue_1_2020.parquet"
+    )
+    pd.DataFrame([shared]).to_parquet(
+        sources / "understat_matches_ligue_1_2021.parquet"
+    )
 
     corpus = load_corpus_matches(sources)
     assert len(corpus) == 1

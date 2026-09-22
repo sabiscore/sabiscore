@@ -52,6 +52,7 @@ a threshold after observing that it blocks promotion is not (APEX §23).
 Usage:
     cd backend && PYTHONPATH=. python scripts/diagnose_error_association_outcome_mix.py
 """
+
 from __future__ import annotations
 
 import gc

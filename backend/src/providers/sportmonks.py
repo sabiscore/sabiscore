@@ -66,7 +66,10 @@ class SportmonksProvider(BaseProvider):
                 team_statistics=True,
                 player_statistics=True,
                 odds=True,
-                notes=["subscription_gated_fields_reported_by_doctor", "provider_value_bets_excluded"],
+                notes=[
+                    "subscription_gated_fields_reported_by_doctor",
+                    "provider_value_bets_excluded",
+                ],
             )
             for competition in ESPN_LEAGUE_SLUGS
         ]
@@ -90,7 +93,9 @@ class SportmonksProvider(BaseProvider):
         raw_items = payload.get("data") if isinstance(payload, dict) else None
         raw_items = raw_items if isinstance(raw_items, list) else []
         records = [self._normalize_sidelined(raw) for raw in raw_items]
-        warnings = [f"rejected: {r.rejection_reason}" for r in records if not r.coherent]
+        warnings = [
+            f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+        ]
         if records:
             warnings.append("unfiltered_by_competition")
 
@@ -129,7 +134,9 @@ class SportmonksProvider(BaseProvider):
 
         data = payload.get("data") if isinstance(payload, dict) else None
         lineups_block = data.get("lineups") if isinstance(data, dict) else None
-        raw_entries = lineups_block.get("data") if isinstance(lineups_block, dict) else None
+        raw_entries = (
+            lineups_block.get("data") if isinstance(lineups_block, dict) else None
+        )
         if not isinstance(raw_entries, list):
             return ProviderResult(
                 provider=self.provider_id,
@@ -140,7 +147,10 @@ class SportmonksProvider(BaseProvider):
                 raw_snapshot_id=stable_hash(payload),
             )
 
-        records = [self._normalize_lineup_entry(raw, fixture_id=fixture_id) for raw in raw_entries]
+        records = [
+            self._normalize_lineup_entry(raw, fixture_id=fixture_id)
+            for raw in raw_entries
+        ]
 
         return ProviderResult(
             provider=self.provider_id,
@@ -149,7 +159,9 @@ class SportmonksProvider(BaseProvider):
             trust_tier=self.trust_tier,
             records=[r.model_dump(mode="json") for r in records],
             quota=self._quota_from_payload(payload),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
         )
 
@@ -180,7 +192,9 @@ class SportmonksProvider(BaseProvider):
                 status=ProviderStatus.UNAVAILABLE,
                 trust_tier=self.trust_tier,
                 error_code="provider_disabled_or_unconfigured",
-                warnings=["provider must be enabled and configured with a backend credential"],
+                warnings=[
+                    "provider must be enabled and configured with a backend credential"
+                ],
             )
         return None
 
@@ -190,7 +204,9 @@ class SportmonksProvider(BaseProvider):
     def _normalize_sidelined(self, raw: dict[str, Any]) -> SidelinedRecord:
         sideline = raw.get("sideline") if isinstance(raw, dict) else None
         if not isinstance(sideline, dict) or not raw.get("player_id"):
-            return SidelinedRecord(coherent=False, rejection_reason="missing_field_player_id_or_sideline")
+            return SidelinedRecord(
+                coherent=False, rejection_reason="missing_field_player_id_or_sideline"
+            )
         return SidelinedRecord(
             player_id=raw.get("player_id"),
             category=sideline.get("category"),
@@ -199,10 +215,15 @@ class SportmonksProvider(BaseProvider):
             coherent=True,
         )
 
-    def _normalize_lineup_entry(self, raw: dict[str, Any], *, fixture_id: Any) -> LineupRecord:
+    def _normalize_lineup_entry(
+        self, raw: dict[str, Any], *, fixture_id: Any
+    ) -> LineupRecord:
         if not isinstance(raw, dict) or not raw.get("player_id"):
             return LineupRecord(
-                fixture_id=fixture_id, role="lineup", coherent=False, rejection_reason="missing_field_player_id"
+                fixture_id=fixture_id,
+                role="lineup",
+                coherent=False,
+                rejection_reason="missing_field_player_id",
             )
         raw_type = str(raw.get("type") or "lineup").lower()
         role = "bench" if raw_type in ("bench", "substitute") else "lineup"
@@ -220,7 +241,11 @@ class SportmonksProvider(BaseProvider):
         if not isinstance(rate_limit, dict):
             return ProviderQuota()
         resets_in = rate_limit.get("resets_in_seconds")
-        reset_at = utc_now() + timedelta(seconds=resets_in) if isinstance(resets_in, (int, float)) else None
+        reset_at = (
+            utc_now() + timedelta(seconds=resets_in)
+            if isinstance(resets_in, (int, float))
+            else None
+        )
         return ProviderQuota(remaining=rate_limit.get("remaining"), reset_at=reset_at)
 
 

@@ -8,6 +8,7 @@ in /metrics (timers.analysis.latency.p95_ms), not a CI assertion.
 These tests construct synthetic models so no real artifacts or network access are
 required, and they run on every CI pass.
 """
+
 from __future__ import annotations
 
 import time
@@ -110,7 +111,9 @@ class TestModelInferenceLatencyBudget:
         try:
             from src.core.meta_model import IsotonicMetaModel  # noqa: PLC0415
         except ImportError:
-            pytest.skip("IsotonicMetaModel not yet available — add it to proceed with B3")
+            pytest.skip(
+                "IsotonicMetaModel not yet available — add it to proceed with B3"
+            )
 
         from sklearn.isotonic import IsotonicRegression  # noqa: PLC0415
 

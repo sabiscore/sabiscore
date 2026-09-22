@@ -29,10 +29,14 @@ def _https_url_from_env(name: str) -> str | None:
     return value
 
 
-def _safe_feature_names(features: Sequence[str], *, limit: int = 5) -> tuple[list[str], int]:
+def _safe_feature_names(
+    features: Sequence[str], *, limit: int = 5
+) -> tuple[list[str], int]:
     cleaned: list[str] = []
     for feature in features:
-        safe = "".join(char for char in str(feature) if char.isalnum() or char in "_-. ")
+        safe = "".join(
+            char for char in str(feature) if char.isalnum() or char in "_-. "
+        )
         if safe:
             cleaned.append(safe[:96])
     return cleaned[:limit], max(0, len(cleaned) - limit)
@@ -54,7 +58,9 @@ async def trigger_slack_drift_alert(
 
     webhook_url = _https_url_from_env("SLACK_DRIFT_WEBHOOK_URL")
     if webhook_url is None:
-        logger.info("Slack drift webhook is not configured; advisory retained in telemetry")
+        logger.info(
+            "Slack drift webhook is not configured; advisory retained in telemetry"
+        )
         return False
 
     dashboard_url = _https_url_from_env("SABISCORE_MONITORING_URL")
@@ -63,11 +69,15 @@ async def trigger_slack_drift_alert(
     if hidden_count:
         feature_lines.append(f"• …and {hidden_count} more")
     if not feature_lines:
-        feature_lines.append("• Dataset-level shift; no corrected column list available")
+        feature_lines.append(
+            "• Dataset-level shift; no corrected column list available"
+        )
 
     summary_parts = [f"*Batch size:* {max(0, int(batch_size))} fixtures"]
     if drift_share is not None:
-        summary_parts.append(f"*Corrected drift share:* {max(0.0, min(1.0, drift_share)):.1%}")
+        summary_parts.append(
+            f"*Corrected drift share:* {max(0.0, min(1.0, drift_share)):.1%}"
+        )
     if correlation_id:
         summary_parts.append(f"*Evaluation ID:* `{correlation_id[:64]}`")
 
@@ -96,7 +106,8 @@ async def trigger_slack_drift_alert(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Benjamini–Hochberg corrected features:*\n" + "\n".join(feature_lines),
+                "text": "*Benjamini–Hochberg corrected features:*\n"
+                + "\n".join(feature_lines),
             },
         },
     ]
@@ -123,7 +134,10 @@ async def trigger_slack_drift_alert(
         response.raise_for_status()
         logger.info(
             "Drift advisory delivered",
-            extra={"batch_size": batch_size, "affected_features": len(affected_features)},
+            extra={
+                "batch_size": batch_size,
+                "affected_features": len(affected_features),
+            },
         )
         return True
     except httpx.HTTPStatusError as exc:

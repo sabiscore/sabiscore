@@ -21,10 +21,14 @@ def upgrade() -> None:
         nullable=True,
     )
     op.add_column("users", sa.Column("username", sa.String(length=32), nullable=True))
-    op.add_column("users", sa.Column("avatar_url", sa.String(length=1000), nullable=True))
+    op.add_column(
+        "users", sa.Column("avatar_url", sa.String(length=1000), nullable=True)
+    )
     op.add_column(
         "users",
-        sa.Column("email_verified", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "email_verified", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
     )
     op.create_index("ix_users_username", "users", ["username"], unique=True)
 

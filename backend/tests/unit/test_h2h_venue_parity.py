@@ -76,23 +76,33 @@ def test_derive_h2h_features_perspective_flip_is_symmetric_and_opposite_sign() -
     # each entry's (gf, ga) flips.
     chelsea_home = derive_h2h_features([(1, 2), (0, 3)])
     assert arsenal_home == {
-        "h2h_home_wins": 2.0, "h2h_away_wins": 0.0, "h2h_draws": 0.0,
-        "h2h_matches": 2.0, "h2h_dominance": pytest.approx(1.0),
+        "h2h_home_wins": 2.0,
+        "h2h_away_wins": 0.0,
+        "h2h_draws": 0.0,
+        "h2h_matches": 2.0,
+        "h2h_dominance": pytest.approx(1.0),
     }
     assert chelsea_home == {
-        "h2h_home_wins": 0.0, "h2h_away_wins": 2.0, "h2h_draws": 0.0,
-        "h2h_matches": 2.0, "h2h_dominance": pytest.approx(-1.0),
+        "h2h_home_wins": 0.0,
+        "h2h_away_wins": 2.0,
+        "h2h_draws": 0.0,
+        "h2h_matches": 2.0,
+        "h2h_dominance": pytest.approx(-1.0),
     }
 
 
-def test_derive_home_venue_features_all_draws_gives_zero_loss_rate_and_advantage() -> None:
+def test_derive_home_venue_features_all_draws_gives_zero_loss_rate_and_advantage() -> (
+    None
+):
     # Losses computed by subtraction (total - wins - draws), matching
     # _get_home_venue_stats() exactly — an all-draw input is the case a
     # naive third counter could get wrong.
     result = derive_home_venue_features([(1, 1), (0, 0), (2, 2)])
     assert result == {
-        "home_venue_win_rate": 0.0, "home_venue_draw_rate": 1.0,
-        "home_venue_loss_rate": 0.0, "home_advantage_strength": 0.0,
+        "home_venue_win_rate": 0.0,
+        "home_venue_draw_rate": 1.0,
+        "home_venue_loss_rate": 0.0,
+        "home_advantage_strength": 0.0,
     }
 
 
@@ -114,7 +124,8 @@ def test_derive_market_interaction_features_arithmetic() -> None:
 def test_derive_market_interaction_features_gates_each_key_independently() -> None:
     # Only h2h_dominance resolved -> only h2h_market_agreement is returned.
     assert derive_market_interaction_features(
-        market_prob_home=0.5, h2h_dominance=0.4,
+        market_prob_home=0.5,
+        h2h_dominance=0.4,
     ) == {"h2h_market_agreement": pytest.approx(0.2)}
     # Nothing resolved -> no interaction keys at all, never a value computed
     # from a mix of a real signal and a registry default.
@@ -135,7 +146,9 @@ def test_team_history_h2h_window_keeps_only_the_newest_10_meetings() -> None:
         hist.record_match(home, away, i + 1, 0)  # home side of THIS meeting always wins
     result = hist.h2h("home", "away")
     assert result is not None
-    assert result["h2h_matches"] == 10.0, "an 11th meeting must not widen the window past H2H_WINDOW"
+    assert result["h2h_matches"] == 10.0, (
+        "an 11th meeting must not widen the window past H2H_WINDOW"
+    )
 
 
 def test_team_history_venue_window_keeps_only_the_newest_20_hosted_matches() -> None:
@@ -177,26 +190,52 @@ KICKOFF = datetime(2026, 1, 1, 15, 0)
 
 
 async def _seed_match(
-    session: AsyncSession, *, match_id: str, home_id: str, away_id: str,
-    days_before_kickoff: int, home_score: int, away_score: int, status: str = "finished",
+    session: AsyncSession,
+    *,
+    match_id: str,
+    home_id: str,
+    away_id: str,
+    days_before_kickoff: int,
+    home_score: int,
+    away_score: int,
+    status: str = "finished",
 ) -> None:
-    session.add(Match(
-        id=match_id, home_team_id=home_id, away_team_id=away_id,
-        match_date=KICKOFF - timedelta(days=days_before_kickoff),
-        status=status, home_score=home_score, away_score=away_score,
-    ))
+    session.add(
+        Match(
+            id=match_id,
+            home_team_id=home_id,
+            away_team_id=away_id,
+            match_date=KICKOFF - timedelta(days=days_before_kickoff),
+            status=status,
+            home_score=home_score,
+            away_score=away_score,
+        )
+    )
     await session.commit()
 
 
 async def test_get_h2h_stats_excludes_a_meeting_at_or_after_kickoff(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
-    session.add(Match(
-        id="same-instant", home_team_id="home", away_team_id="away",
-        match_date=KICKOFF, status="finished", home_score=2, away_score=0,
-    ))
+    session.add(
+        Match(
+            id="same-instant",
+            home_team_id="home",
+            away_team_id="away",
+            match_date=KICKOFF,
+            status="finished",
+            home_score=2,
+            away_score=0,
+        )
+    )
     await session.commit()
 
     result = await projector._get_h2h_stats("home", "away", session, KICKOFF)
@@ -204,14 +243,27 @@ async def test_get_h2h_stats_excludes_a_meeting_at_or_after_kickoff(
 
 
 async def test_get_home_venue_stats_excludes_a_match_at_or_after_kickoff(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
-    session.add(Match(
-        id="same-instant", home_team_id="home", away_team_id="away",
-        match_date=KICKOFF, status="finished", home_score=2, away_score=0,
-    ))
+    session.add(
+        Match(
+            id="same-instant",
+            home_team_id="home",
+            away_team_id="away",
+            match_date=KICKOFF,
+            status="finished",
+            home_score=2,
+            away_score=0,
+        )
+    )
     await session.commit()
 
     result = await projector._get_home_venue_stats("home", session, KICKOFF)
@@ -219,28 +271,47 @@ async def test_get_home_venue_stats_excludes_a_match_at_or_after_kickoff(
 
 
 async def test_get_h2h_stats_orders_most_recent_first_regardless_of_insert_order(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
     # Insert the OLDER meeting first, then the newer one — the previous xG
     # ORDER BY incident (DEBT.md item 56 Finding 5) was exactly this kind of
     # bug going undetected because nothing tested insert-order independence.
     await _seed_match(
-        session, match_id="old", home_id="home", away_id="away",
-        days_before_kickoff=20, home_score=0, away_score=3,
+        session,
+        match_id="old",
+        home_id="home",
+        away_id="away",
+        days_before_kickoff=20,
+        home_score=0,
+        away_score=3,
     )
     await _seed_match(
-        session, match_id="new", home_id="home", away_id="away",
-        days_before_kickoff=5, home_score=4, away_score=0,
+        session,
+        match_id="new",
+        home_id="home",
+        away_id="away",
+        days_before_kickoff=5,
+        home_score=4,
+        away_score=0,
     )
 
     result = await projector._get_h2h_stats("home", "away", session, KICKOFF, n=1)
     # LIMIT 1 ORDER BY match_date DESC must return only "new" (4-0), not
     # "old" (0-3) — if ordering were wrong or absent, this would flip sign.
     assert result == {
-        "h2h_home_wins": 1.0, "h2h_away_wins": 0.0, "h2h_draws": 0.0,
-        "h2h_matches": 1.0, "h2h_dominance": pytest.approx(1.0),
+        "h2h_home_wins": 1.0,
+        "h2h_away_wins": 0.0,
+        "h2h_draws": 0.0,
+        "h2h_matches": 1.0,
+        "h2h_dominance": pytest.approx(1.0),
     }
 
 
@@ -250,9 +321,15 @@ async def test_get_h2h_stats_orders_most_recent_first_regardless_of_insert_order
 
 
 async def test_h2h_parity_between_training_accumulator_and_live_serving(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([Team(id="home", name="Home", active=True), Team(id="away", name="Away", active=True)])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="away", name="Away", active=True),
+        ]
+    )
     await session.commit()
 
     hist = train_on_real_matches.TeamHistory()
@@ -266,8 +343,13 @@ async def test_h2h_parity_between_training_accumulator_and_live_serving(
     ]
     for i, (days_before, m_home, m_away, hg, ag) in enumerate(meetings):
         await _seed_match(
-            session, match_id=f"h2h-{i}", home_id=m_home, away_id=m_away,
-            days_before_kickoff=days_before, home_score=hg, away_score=ag,
+            session,
+            match_id=f"h2h-{i}",
+            home_id=m_home,
+            away_id=m_away,
+            days_before_kickoff=days_before,
+            home_score=hg,
+            away_score=ag,
         )
         hist.record_match(m_home, m_away, hg, ag)
 
@@ -278,13 +360,16 @@ async def test_h2h_parity_between_training_accumulator_and_live_serving(
 
 
 async def test_venue_parity_between_training_accumulator_and_live_serving(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([
-        Team(id="home", name="Home", active=True),
-        Team(id="opp1", name="Opp1", active=True),
-        Team(id="opp2", name="Opp2", active=True),
-    ])
+    session.add_all(
+        [
+            Team(id="home", name="Home", active=True),
+            Team(id="opp1", name="Opp1", active=True),
+            Team(id="opp2", name="Opp2", active=True),
+        ]
+    )
     await session.commit()
 
     hist = train_on_real_matches.TeamHistory()
@@ -293,8 +378,13 @@ async def test_venue_parity_between_training_accumulator_and_live_serving(
     hosted = [(30, "opp1", 2, 0), (20, "opp2", 1, 1), (10, "opp1", 0, 2)]
     for i, (days_before, opponent, hg, ag) in enumerate(hosted):
         await _seed_match(
-            session, match_id=f"venue-{i}", home_id="home", away_id=opponent,
-            days_before_kickoff=days_before, home_score=hg, away_score=ag,
+            session,
+            match_id=f"venue-{i}",
+            home_id="home",
+            away_id=opponent,
+            days_before_kickoff=days_before,
+            home_score=hg,
+            away_score=ag,
         )
         hist.record_match("home", opponent, hg, ag)
 
@@ -305,9 +395,12 @@ async def test_venue_parity_between_training_accumulator_and_live_serving(
 
 
 async def test_both_sides_agree_a_never_met_pair_is_a_gap_not_a_default(
-    session: AsyncSession, projector: UpcomingMatchFeatureProjector,
+    session: AsyncSession,
+    projector: UpcomingMatchFeatureProjector,
 ) -> None:
-    session.add_all([Team(id="x", name="X", active=True), Team(id="y", name="Y", active=True)])
+    session.add_all(
+        [Team(id="x", name="X", active=True), Team(id="y", name="Y", active=True)]
+    )
     await session.commit()
 
     hist = train_on_real_matches.TeamHistory()

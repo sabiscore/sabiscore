@@ -1,4 +1,5 @@
 """SAB-15 request-level provider evidence contract regressions."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -22,7 +23,10 @@ from src.providers.base import (
 )
 from src.providers.football_data_org import FootballDataOrgProvider
 from src.providers.registry import ProviderRegistry
-from src.services.provider_evidence_service import ProviderEvidenceRecorder, latest_provider_evidence
+from src.services.provider_evidence_service import (
+    ProviderEvidenceRecorder,
+    latest_provider_evidence,
+)
 
 
 @pytest.fixture
@@ -59,7 +63,9 @@ async def test_registry_attaches_sanitized_success_http_status() -> None:
         record_exception=AsyncMock(return_value=True),
     )
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    provider = _HTTPDummyProvider(enabled=True, http_client=client, observation_sink=sink)
+    provider = _HTTPDummyProvider(
+        enabled=True, http_client=client, observation_sink=sink
+    )
     registry = ProviderRegistry([provider])
     try:
         result = await registry.get("http_dummy").fixtures()
@@ -115,7 +121,9 @@ async def test_football_data_fixture_result_retains_request_context() -> None:
     assert observed.request_context == result.request_context
 
 
-async def test_http_200_empty_fixture_window_is_live_with_empty_coverage(factory) -> None:
+async def test_http_200_empty_fixture_window_is_live_with_empty_coverage(
+    factory,
+) -> None:
     observed_at = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
     result = ProviderResult(
         provider="football_data_org",
@@ -160,7 +168,9 @@ async def test_http_200_empty_fixture_window_is_live_with_empty_coverage(factory
     assert row["contexts"][0]["request_context"]["competition"] == "UCL"
 
 
-async def test_context_aggregation_prevents_last_empty_query_from_dominating(factory) -> None:
+async def test_context_aggregation_prevents_last_empty_query_from_dominating(
+    factory,
+) -> None:
     recorder = ProviderEvidenceRecorder()
     base = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
 
@@ -250,7 +260,9 @@ async def test_context_aggregation_prevents_last_empty_query_from_dominating(fac
     }
 
 
-async def test_rate_limited_context_remains_provider_wide_operational_signal(factory) -> None:
+async def test_rate_limited_context_remains_provider_wide_operational_signal(
+    factory,
+) -> None:
     recorder = ProviderEvidenceRecorder()
     base = datetime(2026, 8, 20, 18, 0, tzinfo=timezone.utc)
     live = ProviderResult(
@@ -322,7 +334,10 @@ async def test_http_200_with_zero_usable_odds_is_not_coverage_success(factory) -
     recorder = ProviderEvidenceRecorder()
 
     with patch("src.db.session.AsyncSessionLocal", new=factory):
-        assert await recorder.record_result(result, duration_ms=14.0, circuit_open=False) is True
+        assert (
+            await recorder.record_result(result, duration_ms=14.0, circuit_open=False)
+            is True
+        )
 
     async with factory() as session:
         health = (await session.execute(select(ProviderHealthLog))).scalar_one()
@@ -348,7 +363,9 @@ async def test_http_200_with_zero_usable_odds_is_not_coverage_success(factory) -
     assert row["coverage"]["usable_records"] == 0
 
 
-async def test_odds_coverage_counts_executable_events_without_double_counting_bookmakers(factory) -> None:
+async def test_odds_coverage_counts_executable_events_without_double_counting_bookmakers(
+    factory,
+) -> None:
     observed_at = datetime(2026, 8, 17, 18, 10, tzinfo=timezone.utc)
     source_at = observed_at - timedelta(seconds=45)
     result = ProviderResult(
@@ -379,7 +396,9 @@ async def test_odds_coverage_counts_executable_events_without_double_counting_bo
                 "bookmaker": "book-c",
                 "coherent": False,
                 "executable": False,
-                "bookmaker_last_update": (source_at - timedelta(seconds=10)).isoformat(),
+                "bookmaker_last_update": (
+                    source_at - timedelta(seconds=10)
+                ).isoformat(),
             },
         ],
     )
@@ -407,7 +426,9 @@ async def test_odds_coverage_counts_executable_events_without_double_counting_bo
     assert freshness["source_age_seconds"] == pytest.approx(105.0)
 
 
-async def test_fixture_coverage_counts_only_coherent_and_settled_records(factory) -> None:
+async def test_fixture_coverage_counts_only_coherent_and_settled_records(
+    factory,
+) -> None:
     result = ProviderResult(
         provider="football_data_org",
         operation="fixtures",
@@ -452,7 +473,9 @@ async def test_fixture_coverage_counts_only_coherent_and_settled_records(factory
     assert coverage["settled_records"] == 1
 
 
-def test_football_data_reset_header_is_delta_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_football_data_reset_header_is_delta_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fixed_now = datetime(2026, 8, 17, 18, 30, tzinfo=timezone.utc)
     monkeypatch.setattr("src.providers.football_data_org.utc_now", lambda: fixed_now)
     provider = FootballDataOrgProvider(api_key="test", enabled=True)

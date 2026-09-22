@@ -83,9 +83,16 @@ async def _safe_call(
         return await coro_factory()
     except AttributeError:
         # Provider exists but has no operational method yet (stub).
-        return _stub_result(provider, operation, f"{provider}.{operation}() not yet implemented")
+        return _stub_result(
+            provider, operation, f"{provider}.{operation}() not yet implemented"
+        )
     except Exception as exc:
-        logger.warning("orchestrator_provider_error provider=%s op=%s error=%s", provider, operation, redact_text(str(exc)))
+        logger.warning(
+            "orchestrator_provider_error provider=%s op=%s error=%s",
+            provider,
+            operation,
+            redact_text(str(exc)),
+        )
         return ProviderResult(
             provider=provider,
             operation=operation,
@@ -130,7 +137,9 @@ class EvidenceOrchestrator:
             layer's responsibility (Section 10). A PARTIAL result from a required
             source is classified as critical; from an optional source, advisory.
         """
-        competition = str(fixture.get("competition") or fixture.get("league") or "EPL").upper()
+        competition = str(
+            fixture.get("competition") or fixture.get("league") or "EPL"
+        ).upper()
 
         if profile == EvidenceProfile.DISCOVERY:
             return await self._collect_discovery(fixture, competition)
@@ -141,10 +150,14 @@ class EvidenceOrchestrator:
         if profile == EvidenceProfile.LINEUP_REFRESH:
             return await self._collect_lineup_refresh(fixture, competition)
         if profile == EvidenceProfile.MARKET_REFRESH:
-            return await self._collect_market_refresh(fixture, competition, canonical_fixture_id)
+            return await self._collect_market_refresh(
+                fixture, competition, canonical_fixture_id
+            )
         if profile == EvidenceProfile.FORECAST_ONLY:
             return await self._collect_forecast_only(fixture, competition)
-        return [_stub_result("orchestrator", profile.value, f"unknown_profile_{profile}")]
+        return [
+            _stub_result("orchestrator", profile.value, f"unknown_profile_{profile}")
+        ]
 
     # ------------------------------------------------------------------ #
     # Profile implementations                                              #
@@ -162,8 +175,14 @@ class EvidenceOrchestrator:
         fdo = self.registry.get("football_data_org")
 
         tasks = [
-            _safe_call(lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"),
-            _safe_call(lambda f=fdo, c=competition: f.fixtures(competition=c), "football_data_org", "fixtures"),
+            _safe_call(
+                lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"
+            ),
+            _safe_call(
+                lambda f=fdo, c=competition: f.fixtures(competition=c),
+                "football_data_org",
+                "fixtures",
+            ),
         ]
         results = list(await asyncio.gather(*tasks))
         return results
@@ -180,9 +199,19 @@ class EvidenceOrchestrator:
         espn = self.registry.get("espn")
 
         tasks = [
-            _safe_call(lambda f=fdo, c=competition: f.fixtures(competition=c), "football_data_org", "fixtures"),
-            _safe_call(lambda f=fdo, c=competition: f.standings(competition=c), "football_data_org", "standings"),
-            _safe_call(lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"),
+            _safe_call(
+                lambda f=fdo, c=competition: f.fixtures(competition=c),
+                "football_data_org",
+                "fixtures",
+            ),
+            _safe_call(
+                lambda f=fdo, c=competition: f.standings(competition=c),
+                "football_data_org",
+                "standings",
+            ),
+            _safe_call(
+                lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"
+            ),
         ]
         results = list(await asyncio.gather(*tasks))
         return results
@@ -201,16 +230,36 @@ class EvidenceOrchestrator:
         sm = self.registry.get("sportmonks")
 
         apif_tasks = [
-            _safe_call(lambda a=apif, c=competition: a.injuries(competition=c), "api_football", "injuries"),
-            _safe_call(lambda a=apif, c=competition: a.lineups(fixture_id=fixture.get("provider_event_id"), competition=c), "api_football", "lineups"),
-            _safe_call(lambda a=apif, c=competition: a.teams(competition=c), "api_football", "teams"),
+            _safe_call(
+                lambda a=apif, c=competition: a.injuries(competition=c),
+                "api_football",
+                "injuries",
+            ),
+            _safe_call(
+                lambda a=apif, c=competition: a.lineups(
+                    fixture_id=fixture.get("provider_event_id"), competition=c
+                ),
+                "api_football",
+                "lineups",
+            ),
+            _safe_call(
+                lambda a=apif, c=competition: a.teams(competition=c),
+                "api_football",
+                "teams",
+            ),
         ]
         sm_tasks = [
-            _safe_call(lambda s=sm, c=competition: s.injuries(competition=c), "sportmonks", "injuries"),
+            _safe_call(
+                lambda s=sm, c=competition: s.injuries(competition=c),
+                "sportmonks",
+                "injuries",
+            ),
         ]
 
         results = list(await asyncio.gather(*(apif_tasks + sm_tasks)))
-        results.extend(await self._resolve_team_statistics(apif, results[2], fixture, competition))
+        results.extend(
+            await self._resolve_team_statistics(apif, results[2], fixture, competition)
+        )
         return results
 
     async def _resolve_team_statistics(
@@ -232,24 +281,37 @@ class EvidenceOrchestrator:
         ]
 
         outcomes: list[ProviderResult] = []
-        for label, team_name in (("home", fixture.get("home_team")), ("away", fixture.get("away_team"))):
+        for label, team_name in (
+            ("home", fixture.get("home_team")),
+            ("away", fixture.get("away_team")),
+        ):
             operation = f"team_statistics:{label}"
             if not team_name:
-                outcomes.append(_stub_result("api_football", operation, "fixture_missing_team_name"))
+                outcomes.append(
+                    _stub_result("api_football", operation, "fixture_missing_team_name")
+                )
                 continue
             if not candidates:
-                outcomes.append(_stub_result("api_football", operation, "team_list_unavailable"))
+                outcomes.append(
+                    _stub_result("api_football", operation, "team_list_unavailable")
+                )
                 continue
 
             decision = reconcile_team(str(team_name), candidates)
             if decision.status != "VERIFIED" or not decision.team_id:
                 outcomes.append(
-                    _stub_result("api_football", operation, f"team_identity_{decision.status.lower()}")
+                    _stub_result(
+                        "api_football",
+                        operation,
+                        f"team_identity_{decision.status.lower()}",
+                    )
                 )
                 continue
 
             result = await _safe_call(
-                lambda a=apif, tid=int(decision.team_id), c=competition: a.team_statistics(team_id=tid, competition=c),
+                lambda a=apif, tid=int(decision.team_id), c=competition: (
+                    a.team_statistics(team_id=tid, competition=c)
+                ),
                 "api_football",
                 operation,
             )
@@ -270,8 +332,16 @@ class EvidenceOrchestrator:
         fixture_id = fixture.get("provider_event_id") or fixture.get("fixture_id")
 
         tasks = [
-            _safe_call(lambda a=apif, fid=fixture_id: a.lineups(fixture_id=fid), "api_football", "lineups"),
-            _safe_call(lambda s=sm, fid=fixture_id: s.lineups(fixture_id=fid), "sportmonks", "lineups"),
+            _safe_call(
+                lambda a=apif, fid=fixture_id: a.lineups(fixture_id=fid),
+                "api_football",
+                "lineups",
+            ),
+            _safe_call(
+                lambda s=sm, fid=fixture_id: s.lineups(fixture_id=fid),
+                "sportmonks",
+                "lineups",
+            ),
         ]
         results = list(await asyncio.gather(*tasks))
         return results
@@ -316,8 +386,14 @@ class EvidenceOrchestrator:
         espn = self.registry.get("espn")
 
         tasks = [
-            _safe_call(lambda f=fdo, c=competition: f.fixtures(competition=c), "football_data_org", "fixtures"),
-            _safe_call(lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"),
+            _safe_call(
+                lambda f=fdo, c=competition: f.fixtures(competition=c),
+                "football_data_org",
+                "fixtures",
+            ),
+            _safe_call(
+                lambda e=espn, c=competition: e.scoreboard(c), "espn", "scoreboard"
+            ),
         ]
         results = list(await asyncio.gather(*tasks))
         return results

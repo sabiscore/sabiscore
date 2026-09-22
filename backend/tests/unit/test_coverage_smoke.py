@@ -1,4 +1,5 @@
 """Lightweight smoke tests to bump coverage of import-only modules and simple endpoints."""
+
 from fastapi.testclient import TestClient
 import types
 import sys
@@ -34,44 +35,47 @@ def test_cache_in_memory_roundtrip():
 
 def test_import_modules_with_numpy_stub(monkeypatch):
     """Ensure module imports succeed even when a minimal numpy stub is present.
-    
+
     NOTE: This test intentionally isolates numpy manipulation to avoid polluting
     other tests. We save and restore module state explicitly.
     """
     import importlib
     import numpy as real_numpy  # Get reference to real numpy FIRST
-    
+
     # Save modules that will be affected
     saved_modules = {}
-    modules_to_save = ['src', 'src.insights.engine', 'src.data.transformers', 'pandas']
+    modules_to_save = ["src", "src.insights.engine", "src.data.transformers", "pandas"]
     for mod_name in modules_to_save:
         if mod_name in sys.modules:
             saved_modules[mod_name] = sys.modules[mod_name]
-    
+
     try:
         # Create a minimal numpy stub lacking many attributes
         numpy_stub = types.ModuleType("numpy")
         numpy_stub.__version__ = "0.0"
-        numpy_stub.random = types.SimpleNamespace(seed=lambda *_: None, random=lambda: 0.1)
+        numpy_stub.random = types.SimpleNamespace(
+            seed=lambda *_: None, random=lambda: 0.1
+        )
         # Intentionally omit isscalar and nan to trigger our shim code
         monkeypatch.setitem(sys.modules, "numpy", numpy_stub)
 
         # Re-import a couple modules that depend on numpy to execute shim paths
         import src
+
         importlib.reload(src)
         import src.insights.engine as _engine  # noqa: F401
         import src.data.transformers as _transformers  # noqa: F401
     finally:
         # Restore real numpy to sys.modules
         sys.modules["numpy"] = real_numpy
-        
+
         # Restore affected modules
         for mod_name, mod in saved_modules.items():
             sys.modules[mod_name] = mod
-        
+
         # Force reload of pandas to ensure it has real numpy
-        if 'pandas' in sys.modules:
+        if "pandas" in sys.modules:
             try:
-                importlib.reload(sys.modules['pandas'])
+                importlib.reload(sys.modules["pandas"])
             except Exception:
                 pass  # Best effort

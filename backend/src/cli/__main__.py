@@ -29,7 +29,9 @@ def data_cli_proxy(ctx: click.Context) -> None:
 
     from .data_pipeline import cli as data_cli
 
-    data_cli.main(args=list(ctx.args), prog_name="python -m src.cli data", standalone_mode=True)
+    data_cli.main(
+        args=list(ctx.args), prog_name="python -m src.cli data", standalone_mode=True
+    )
 
 
 if __name__ == "__main__":

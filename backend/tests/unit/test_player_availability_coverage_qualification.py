@@ -8,6 +8,7 @@ module opens a database connection at import time, docs/DEBT.md item 7);
 these tests pin that the copy behaves as documented, not that it is
 byte-identical to the original.
 """
+
 import sys
 from pathlib import Path
 

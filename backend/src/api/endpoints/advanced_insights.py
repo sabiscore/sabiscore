@@ -4,6 +4,7 @@ Route: GET /api/v1/matches/{match_id}/advanced-insights
 Provides an aggregation and read layer composing tactical metrics, match context,
 market intelligence provenance, and certification invariants.
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,7 +44,9 @@ async def get_match_advanced_insights(
     try:
         insights = await service.get_advanced_insights(match_id=match_id, db=db)
     except Exception as exc:
-        logger.exception("Failed to retrieve advanced insights for match %s: %s", match_id, exc)
+        logger.exception(
+            "Failed to retrieve advanced insights for match %s: %s", match_id, exc
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate advanced insights",

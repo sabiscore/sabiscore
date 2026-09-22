@@ -18,6 +18,7 @@ path while the strict startup check rejected all six. These tests exercise the
 real committed artifacts through both paths, using the same smoke test the
 startup code runs.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -85,8 +86,10 @@ def test_request_path_still_serves_the_same_artifact(league: str):
     vector = np.array(
         [DEFAULT_FEATURE_VALUES_68[f] for f in CANONICAL_FEATURES_68], dtype=np.float32
     )
-    result = asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        PredictionEngine().predict(features=vector, league=league)
+    result = (
+        asyncio.get_event_loop_policy()
+        .new_event_loop()
+        .run_until_complete(PredictionEngine().predict(features=vector, league=league))
     )
     assert result.model_version != "fallback"
     assert abs((result.home_win + result.draw + result.away_win) - 1.0) < 1e-3
@@ -111,10 +114,28 @@ def test_meta_head_carries_no_sklearn_version_coupling(league: str):
     if not path.exists():
         pytest.skip("artifact not present in this checkout")
 
-    from src.core.meta_model import SoftmaxMetaModel
+    from src.core.meta_model import (
+        SoftmaxMetaModel,
+        TemperatureScaledMetaModel,
+        VectorScaledMetaModel,
+        IsotonicMetaModel,
+        BetaCalibratedMetaModel,
+    )
+
+    # All repository-owned meta-head types satisfy the cross-version-coupling invariant.
+    # TemperatureScaledMetaModel and its siblings wrap SoftmaxMetaModel internally
+    # and are safe to deserialise under any scikit-learn version, unlike a bare
+    # LogisticRegression which reads `self.multi_class` on first predict (DEBT 87).
+    _SAFE_META_TYPES = (
+        SoftmaxMetaModel,
+        TemperatureScaledMetaModel,
+        VectorScaledMetaModel,
+        IsotonicMetaModel,
+        BetaCalibratedMetaModel,
+    )
 
     meta = SabiScoreEnsemble.load_model(str(path)).meta_model
-    assert isinstance(meta, SoftmaxMetaModel), (
+    assert isinstance(meta, _SAFE_META_TYPES), (
         f"{path.name} meta_model is {type(meta).__module__}.{type(meta).__name__}; "
         "an sklearn estimator here re-introduces the cross-version unpickle failure"
     )

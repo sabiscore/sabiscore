@@ -24,6 +24,7 @@ authorized decision recorded in docs/DEBT.md, not an edit made here in passing.
 ``test_certification_policy.py`` asserts this file and the gate code agree, so
 the two cannot drift: change one without the other and the suite fails.
 """
+
 from __future__ import annotations
 
 import copy

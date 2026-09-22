@@ -50,6 +50,7 @@ Thresholds are per-league rather than one global constant because the measured
 p25 spans 0.0776–0.0879; a single value would over-suppress the low end and
 under-protect the high end, and we have the real numbers for each.
 """
+
 from __future__ import annotations
 
 import logging
@@ -156,7 +157,9 @@ def evaluate_staking_risk(
     # THE DIRECTION: low epistemic == high tree agreement == the measured
     # danger zone. Inverting this comparison inverts the breaker.
     if value <= threshold:
-        return _trip("epistemic_in_measured_danger_zone", league, value, threshold, match_id)
+        return _trip(
+            "epistemic_in_measured_danger_zone", league, value, threshold, match_id
+        )
 
     return RiskDecision(False, None, league, value, threshold)
 
