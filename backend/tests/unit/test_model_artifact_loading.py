@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.models.feature_registry import CANONICAL_FEATURES_68, DEFAULT_FEATURE_VALUES_68
+from src.models.feature_registry import APEX_FEATURES_68, active_default_feature_values
 from src.models.prediction import PredictionEngine
 
 _MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
@@ -29,12 +29,14 @@ _LEAGUES = ["epl", "la_liga", "bundesliga", "serie_a", "ligue_1", "eredivisie"]
 
 
 def _artifact(league: str) -> Path:
-    return _MODELS_DIR / f"{league}_ensemble_v5_phase7.pkl"
+    name = f"{league}_ensemble_v5_phase7.pkl"
+    return Path(__file__).resolve().parents[3] / "models" / name
 
 
 def _neutral_vector() -> np.ndarray:
+    defaults = active_default_feature_values(use_phase7=True, apex=True)
     return np.array(
-        [DEFAULT_FEATURE_VALUES_68[f] for f in CANONICAL_FEATURES_68], dtype=np.float32
+        [defaults[f] for f in APEX_FEATURES_68], dtype=np.float32
     )
 
 
@@ -64,8 +66,8 @@ def test_artifact_expects_the_registry_vector_width(league: str):
     bundle = engine._load_from_disk(league)
     assert bundle is not None
     assert bundle.feature_columns is not None
-    assert list(bundle.feature_columns) == list(CANONICAL_FEATURES_68), (
-        "artifact feature_columns diverged from CANONICAL_FEATURES_68 — inference "
+    assert list(bundle.feature_columns) == list(APEX_FEATURES_68), (
+        "artifact feature_columns diverged from APEX_FEATURES_68 — inference "
         "indexes positionally, so order matters as much as length"
     )
 
