@@ -46,13 +46,17 @@ def _canonical_season(match_date: datetime) -> str:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    rows = bind.execute(sa.select(_matches.c.id, _matches.c.match_date, _matches.c.season)).fetchall()
+    rows = bind.execute(
+        sa.select(_matches.c.id, _matches.c.match_date, _matches.c.season)
+    ).fetchall()
     for row in rows:
         if row.match_date is None:
             continue
         expected = _canonical_season(row.match_date)
         if row.season != expected:
-            bind.execute(_matches.update().where(_matches.c.id == row.id).values(season=expected))
+            bind.execute(
+                _matches.update().where(_matches.c.id == row.id).values(season=expected)
+            )
 
 
 def downgrade() -> None:

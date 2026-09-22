@@ -4,6 +4,7 @@ These tests deliberately avoid loading model artifacts, Redis, Render or Vercel.
 They are safe to run on the 8GB Windows workstation before the expensive evidence
 jobs.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -35,7 +36,10 @@ def test_g11_equal_mass_bins_are_balanced_and_deterministic() -> None:
 
 def test_g11_murphy_decomposition_identity() -> None:
     mod = _load("evaluate_g11_ece.py")
-    probs = np.asarray([[0.7, 0.2, 0.1], [0.2, 0.5, 0.3], [0.1, 0.2, 0.7], [0.4, 0.3, 0.3]], dtype=np.float32)
+    probs = np.asarray(
+        [[0.7, 0.2, 0.1], [0.2, 0.5, 0.3], [0.1, 0.2, 0.7], [0.4, 0.3, 0.3]],
+        dtype=np.float32,
+    )
     y = np.asarray([0, 1, 2, 0], dtype=np.int8)
     _, bins = mod.adaptive_confidence_ece(probs, y, 2)
     result = mod.murphy_brier(probs, y, bins)

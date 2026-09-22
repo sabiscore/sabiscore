@@ -18,16 +18,16 @@ logger = logging.getLogger(__name__)
 class TransfermarktScraper(BaseScraper):
     """
     Scraper for Transfermarkt market value data.
-    
+
     Provides:
     - Player market values
     - Squad total valuations
     - Value trends
     - Transfer activity indicators
     """
-    
+
     BASE_URL = "https://www.transfermarkt.com"
-    
+
     # League competition IDs on Transfermarkt
     LEAGUE_IDS = {
         "EPL": "GB1",
@@ -38,22 +38,22 @@ class TransfermarktScraper(BaseScraper):
         "Eredivisie": "NL1",
         "Primeira Liga": "PO1",
     }
-    
+
     def __init__(self):
         super().__init__(
             base_url=self.BASE_URL,
             rate_limit_delay=3.0,  # Conservative for Transfermarkt
             max_retries=2,
-            timeout=15
+            timeout=15,
         )
-        
+
         self.cache_dir = CACHE_DIR / "transfermarkt"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.local_values_path = PROCESSED_DIR / "market_values.json"
-        
+
         # Load any existing market value data
         self.market_values = self._load_local_values()
-    
+
     def _load_local_values(self) -> Dict:
         """Load cached market value data."""
         if self.local_values_path.exists():
@@ -63,7 +63,7 @@ class TransfermarktScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error loading market values: {e}")
         return {}
-    
+
     def _save_local_values(self, data: Dict):
         """Save market value data locally."""
         try:
@@ -71,20 +71,16 @@ class TransfermarktScraper(BaseScraper):
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Error saving market values: {e}")
-    
-    def _fetch_remote(
-        self,
-        team: str,
-        league: str = "EPL"
-    ) -> Optional[Dict]:
+
+    def _fetch_remote(self, team: str, league: str = "EPL") -> Optional[Dict]:
         """
         Fetch team valuation data.
-        
+
         Note: Full implementation requires handling Transfermarkt's
         anti-bot measures. Uses simulated data for development.
         """
         logger.info(f"Fetching Transfermarkt data for {team}")
-        
+
         # Check if we have cached data
         cache_key = f"{team}_{league}".lower().replace(" ", "_")
         if cache_key in self.market_values:
@@ -94,40 +90,33 @@ class TransfermarktScraper(BaseScraper):
                 cache_time = datetime.fromisoformat(cached["timestamp"])
                 if (datetime.now() - cache_time).days < 7:
                     return cached
-        
+
         # Transfermarkt requires anti-bot bypass; real scraping not yet implemented.
         return None
-    
+
     def _parse_data(self, content: Dict) -> Dict:
         """Parse valuation data."""
         return content
-    
-    def get_team_valuation(
-        self,
-        team: str,
-        league: str = "EPL"
-    ) -> Optional[Dict]:
+
+    def get_team_valuation(self, team: str, league: str = "EPL") -> Optional[Dict]:
         """
         Get team's total squad valuation.
-        
+
         Args:
             team: Team name
             league: League identifier
-            
+
         Returns:
             Dict with squad value, player details, trends
         """
         return self.fetch_data(team, league)
-    
+
     def get_squad_comparison(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, Any]:
         """
         Compare squad valuations between two teams.
-        
+
         Returns:
         - Value difference
         - Average player value comparison
@@ -135,13 +124,13 @@ class TransfermarktScraper(BaseScraper):
         """
         home_data = self.get_team_valuation(home_team, league)
         away_data = self.get_team_valuation(away_team, league)
-        
+
         if not home_data or not away_data:
             return {}
-        
+
         home_value = home_data.get("total_squad_value", 0)
         away_value = away_data.get("total_squad_value", 0)
-        
+
         return {
             "home_squad_value": home_value,
             "away_squad_value": away_value,
@@ -152,32 +141,29 @@ class TransfermarktScraper(BaseScraper):
             "home_mvp": home_data.get("most_valuable_player", {}),
             "away_mvp": away_data.get("most_valuable_player", {}),
         }
-    
+
     def calculate_value_features(
-        self,
-        home_team: str,
-        away_team: str,
-        league: str = "EPL"
+        self, home_team: str, away_team: str, league: str = "EPL"
     ) -> Dict[str, float]:
         """
         Calculate market value features for prediction.
-        
+
         Returns features like:
         - Squad value ratio
         - Average player value difference
         - Star player impact
         """
         comparison = self.get_squad_comparison(home_team, away_team, league)
-        
+
         if not comparison:
             return {}
-        
+
         home_value = comparison.get("home_squad_value", 100)
         away_value = comparison.get("away_squad_value", 100)
-        
+
         # Normalize to 0-1 scale
         total = home_value + away_value
-        
+
         return {
             "home_value_share": round(home_value / total, 3),
             "away_value_share": round(away_value / total, 3),

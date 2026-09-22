@@ -10,12 +10,22 @@ Rows are created only when the target Team has real durable Elo history in the
 same competition. Genuinely new/history-free clubs therefore remain unbridged
 instead of being treated as resolved through a neutral/default rating.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.database import Base

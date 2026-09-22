@@ -145,7 +145,10 @@ class FootballDataAPIClient:
                 limit=limit,
             )
 
-            if result.status in {ProviderStatus.RATE_LIMITED, ProviderStatus.CIRCUIT_OPEN}:
+            if result.status in {
+                ProviderStatus.RATE_LIMITED,
+                ProviderStatus.CIRCUIT_OPEN,
+            }:
                 failures.append(f"{competition_code}: {result.status.value.lower()}")
                 logger.warning(
                     "football_data: %s at %s — keeping %d match(es) from %d competition(s)",
@@ -176,7 +179,9 @@ class FootballDataAPIClient:
                 item = (
                     self._normalize_result(record)
                     if settled
-                    else self._normalize_match(record, competition_code=competition_code)
+                    else self._normalize_match(
+                        record, competition_code=competition_code
+                    )
                 )
                 if item is not None:
                     normalized.append(item)
@@ -272,7 +277,7 @@ class FootballDataAPIClient:
                 continue
             result.append(
                 {
-                    "id": f"mock-fd-{idx+1}",
+                    "id": f"mock-fd-{idx + 1}",
                     "match_date": kickoff.isoformat(),
                     "home_score": home_score,
                     "away_score": away_score,
@@ -307,7 +312,7 @@ class FootballDataAPIClient:
                 continue
             result.append(
                 {
-                    "id": f"mock-fd-{idx+1}",
+                    "id": f"mock-fd-{idx + 1}",
                     "home_team": home,
                     "away_team": away,
                     "league": lg,

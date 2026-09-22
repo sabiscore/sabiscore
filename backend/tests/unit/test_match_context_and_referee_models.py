@@ -1,4 +1,5 @@
 """Unit tests for RefereeProfile and MatchContext models (R3 of v5 directive)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -50,9 +51,17 @@ class TestRefereeProfileModel:
         assert RefereeProfile.__tablename__ == "referee_profiles"
         cols = {c.name for c in RefereeProfile.__table__.columns}
         expected = {
-            "id", "name", "avg_yellow_cards", "avg_red_cards",
-            "penalties_awarded", "strictness_index", "sample_size",
-            "source", "observed_at", "created_at", "updated_at"
+            "id",
+            "name",
+            "avg_yellow_cards",
+            "avg_red_cards",
+            "penalties_awarded",
+            "strictness_index",
+            "sample_size",
+            "source",
+            "observed_at",
+            "created_at",
+            "updated_at",
         }
         assert expected.issubset(cols)
 
@@ -86,9 +95,19 @@ class TestMatchContextModel:
         assert MatchContext.__tablename__ == "match_contexts"
         cols = {c.name for c in MatchContext.__table__.columns}
         expected = {
-            "id", "match_id", "weather_condition", "weather_source",
-            "weather_observed_at", "fatigue_index_home", "fatigue_index_away",
-            "ppda_home", "ppda_away", "psxg_home", "psxg_away",
-            "source_metadata", "created_at", "updated_at"
+            "id",
+            "match_id",
+            "weather_condition",
+            "weather_source",
+            "weather_observed_at",
+            "fatigue_index_home",
+            "fatigue_index_away",
+            "ppda_home",
+            "ppda_away",
+            "psxg_home",
+            "psxg_away",
+            "source_metadata",
+            "created_at",
+            "updated_at",
         }
         assert expected.issubset(cols)

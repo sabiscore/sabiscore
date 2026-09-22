@@ -44,7 +44,9 @@ def _to_item(profile: LeagueProfile) -> LeagueListItem:
         coverage=profile.coverage,
         low_evidence_allowed=profile.low_evidence_allowed,
         caveat_text=profile.caveat_text,
-        model_artifact=_MODEL_ARTIFACT.get(profile.id, f"{profile.id.lower()}_ensemble.pkl"),
+        model_artifact=_MODEL_ARTIFACT.get(
+            profile.id, f"{profile.id.lower()}_ensemble.pkl"
+        ),
         next_season_start=next_season_start(profile.id, default=None),
         generated_at=datetime.now(timezone.utc).isoformat(),
     )

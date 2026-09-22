@@ -14,6 +14,7 @@ was ever publishable. The certified model had never run in production.
 These tests exercise the real artifacts rather than a mock, because the defect was
 in deserialising those specific files — a mocked bundle would have passed throughout.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,9 +36,7 @@ def _artifact(league: str) -> Path:
 
 def _neutral_vector() -> np.ndarray:
     defaults = active_default_feature_values(use_phase7=True, apex=True)
-    return np.array(
-        [defaults[f] for f in APEX_FEATURES_68], dtype=np.float32
-    )
+    return np.array([defaults[f] for f in APEX_FEATURES_68], dtype=np.float32)
 
 
 @pytest.mark.parametrize("league", _LEAGUES)

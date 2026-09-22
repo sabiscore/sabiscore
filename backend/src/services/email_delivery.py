@@ -7,6 +7,7 @@ until an operator supplies real SMTP credentials, `send_notification_email`
 is a no-op that reports "not configured" rather than raising or crashing the
 dispatch loop.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,7 +35,9 @@ def is_email_configured() -> bool:
     )
 
 
-def send_notification_email(*, to_address: str, subject: str, body: str) -> EmailSendResult:
+def send_notification_email(
+    *, to_address: str, subject: str, body: str
+) -> EmailSendResult:
     """Best-effort SMTP send. Never raises — callers must not let a transport
     failure block writing the in-app notification log row."""
     host = settings.smtp_host

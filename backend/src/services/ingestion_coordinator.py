@@ -40,10 +40,18 @@ class IngestionCoordinatorService:
     """Coordinates enrichment tasks across provider adapters while respecting rate/quota budgets."""
 
     DEFAULT_BUDGETS = {
-        "football-data.org": ProviderQuotaBudget("football-data.org", daily_limit=1000, minute_limit=10),
-        "the_odds_api": ProviderQuotaBudget("the_odds_api", daily_limit=500, minute_limit=30),
-        "sportmonks": ProviderQuotaBudget("sportmonks", daily_limit=2000, minute_limit=60),
-        "api-football": ProviderQuotaBudget("api-football", daily_limit=100, minute_limit=10),
+        "football-data.org": ProviderQuotaBudget(
+            "football-data.org", daily_limit=1000, minute_limit=10
+        ),
+        "the_odds_api": ProviderQuotaBudget(
+            "the_odds_api", daily_limit=500, minute_limit=30
+        ),
+        "sportmonks": ProviderQuotaBudget(
+            "sportmonks", daily_limit=2000, minute_limit=60
+        ),
+        "api-football": ProviderQuotaBudget(
+            "api-football", daily_limit=100, minute_limit=10
+        ),
         "espn": ProviderQuotaBudget("espn", daily_limit=10000, minute_limit=120),
     }
 

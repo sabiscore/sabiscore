@@ -250,7 +250,10 @@ class TestTopEvidenceConstruction:
             uncertainty=_uncertainty(),
             canonical_feature_count=86,
         )
-        assert any("Home Form Diff" in e or "home_form_diff" in e.lower() for e in act.top_evidence)
+        assert any(
+            "Home Form Diff" in e or "home_form_diff" in e.lower()
+            for e in act.top_evidence
+        )
 
     def test_market_edge_appended_when_no_causal_drivers(self):
         act = _build_actionability(
@@ -263,7 +266,9 @@ class TestTopEvidenceConstruction:
             uncertainty=_uncertainty(),
             canonical_feature_count=86,
         )
-        assert any("edge" in e.lower() or "market" in e.lower() for e in act.top_evidence)
+        assert any(
+            "edge" in e.lower() or "market" in e.lower() for e in act.top_evidence
+        )
 
     def test_top_evidence_max_3_items(self):
         act = _build_actionability(
@@ -309,7 +314,9 @@ class TestCaveats:
             uncertainty=_uncertainty(tier="LOW_EVIDENCE"),
             canonical_feature_count=86,
         )
-        assert any("evidence" in c.lower() or "epistemic" in c.lower() for c in act.caveats)
+        assert any(
+            "evidence" in c.lower() or "epistemic" in c.lower() for c in act.caveats
+        )
 
     def test_no_caveats_on_clean_high_quality_signal(self):
         act = _build_actionability(
@@ -399,7 +406,9 @@ class TestClosingLineConvergenceDelta:
 
 
 class TestToDict:
-    def _synthesize_with_actionability(self, actionability: MatchActionability | None) -> dict:
+    def _synthesize_with_actionability(
+        self, actionability: MatchActionability | None
+    ) -> dict:
         synth = IntelligenceSynthesizer()
         ensemble = _ens()
         resp = synth.synthesize(
@@ -439,7 +448,9 @@ class TestToDict:
         assert d["actionability"] is not None
         assert d["actionability"]["edge_quality_score"] == pytest.approx(0.72)
         assert d["actionability"]["clv_pct"] is None
-        assert d["actionability"]["closing_line_convergence_delta"] == pytest.approx(0.025)
+        assert d["actionability"]["closing_line_convergence_delta"] == pytest.approx(
+            0.025
+        )
         # No causal driver produces SPECULATIVE, which is watchlist-only and
         # must serialize a closed public stake gate across compatibility fields.
         assert d["verdict"] == "SPECULATIVE"

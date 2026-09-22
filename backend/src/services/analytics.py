@@ -91,7 +91,9 @@ class CertifiedAnalyticsService:
             "confidence_tier",
         )
         model = None
-        if all(model_payload.get(field) is not None for field in required_model_metadata):
+        if all(
+            model_payload.get(field) is not None for field in required_model_metadata
+        ):
             model = ModelInput(
                 home_probability=float(model_payload["home_probability"]),
                 draw_probability=float(model_payload["draw_probability"]),
@@ -123,10 +125,20 @@ class CertifiedAnalyticsService:
 
         if trusted_backend:
             source_status = SourceStatusInput(
-                model=SourceStatusEnum(source_payload.get("model") or SourceStatusEnum.DATA_GAP.value),
-                market=SourceStatusEnum(source_payload.get("market") or SourceStatusEnum.DATA_GAP.value),
-                team_metrics=SourceStatusEnum(source_payload.get("team_metrics") or SourceStatusEnum.DATA_GAP.value),
-                availability=SourceStatusEnum(source_payload.get("availability") or SourceStatusEnum.DATA_GAP.value),
+                model=SourceStatusEnum(
+                    source_payload.get("model") or SourceStatusEnum.DATA_GAP.value
+                ),
+                market=SourceStatusEnum(
+                    source_payload.get("market") or SourceStatusEnum.DATA_GAP.value
+                ),
+                team_metrics=SourceStatusEnum(
+                    source_payload.get("team_metrics")
+                    or SourceStatusEnum.DATA_GAP.value
+                ),
+                availability=SourceStatusEnum(
+                    source_payload.get("availability")
+                    or SourceStatusEnum.DATA_GAP.value
+                ),
             )
             declared_gaps = list(payload.get("data_gaps") or [])
             verified_providers = payload.get("verified_evidence_providers")
@@ -142,7 +154,9 @@ class CertifiedAnalyticsService:
             match_id=str(payload["match_id"]),
             home_team=str(payload["home_team"]),
             away_team=str(payload["away_team"]),
-            competition=_competition(str(payload.get("competition") or payload.get("league") or "EPL")),
+            competition=_competition(
+                str(payload.get("competition") or payload.get("league") or "EPL")
+            ),
             kickoff_utc=payload["kickoff_utc"],
             model=model,
             market=market,
@@ -153,9 +167,17 @@ class CertifiedAnalyticsService:
                 club_elo_difference=signals_payload.get("club_elo_difference"),
                 schedule_congestion=signals_payload.get("schedule_congestion"),
                 travel_load=signals_payload.get("travel_load"),
-                confirmed_absences=list(signals_payload.get("confirmed_absences") or []),
-                lineup_status=LineupStatusEnum(signals_payload.get("lineup_status") or LineupStatusEnum.UNKNOWN.value),
-                sharp_market_signal=SharpSignalEnum(signals_payload.get("sharp_market_signal") or SharpSignalEnum.UNKNOWN.value),
+                confirmed_absences=list(
+                    signals_payload.get("confirmed_absences") or []
+                ),
+                lineup_status=LineupStatusEnum(
+                    signals_payload.get("lineup_status")
+                    or LineupStatusEnum.UNKNOWN.value
+                ),
+                sharp_market_signal=SharpSignalEnum(
+                    signals_payload.get("sharp_market_signal")
+                    or SharpSignalEnum.UNKNOWN.value
+                ),
             ),
             freshness=FreshnessInput(
                 model_features_seconds=freshness_payload.get("model_features_seconds"),

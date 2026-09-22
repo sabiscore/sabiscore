@@ -33,22 +33,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/teams", tags=["team-intelligence"])
 
-_VERDICT_EDGE = 0.30          # PPG delta required to call IMPROVING / DECLINING
-_VOLATILE_STD = 1.20          # stddev above which form is VOLATILE
+_VERDICT_EDGE = 0.30  # PPG delta required to call IMPROVING / DECLINING
+_VOLATILE_STD = 1.20  # stddev above which form is VOLATILE
 _FORM_WINDOW_SHORT = 5
 _FORM_WINDOW_LONG = 10
-_H2H_LIMIT = 5                # top opponents by encounter count
+_H2H_LIMIT = 5  # top opponents by encounter count
 
 
 # ── Response schemas ─────────────────────────────────────────────────────────
 
+
 class FormResultSchema(BaseModel):
     match_date: str
     opponent: str
-    home_or_away: str          # "home" | "away"
+    home_or_away: str  # "home" | "away"
     goals_for: Optional[int]
     goals_against: Optional[int]
-    result: str                # "W" | "D" | "L"
+    result: str  # "W" | "D" | "L"
     points: int
 
 
@@ -76,7 +77,7 @@ class TeamIntelligenceResponse(BaseModel):
     team_slug: str
     team_name: str
     league: Optional[str] = None
-    form_verdict: str          # IMPROVING | STABLE | DECLINING | VOLATILE
+    form_verdict: str  # IMPROVING | STABLE | DECLINING | VOLATILE
     ppg_last5: Optional[float] = None
     ppg_last10: Optional[float] = None
     recent_form: List[FormResultSchema]
@@ -86,6 +87,7 @@ class TeamIntelligenceResponse(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _slug_to_search(slug: str) -> str:
     """Convert URL slug to a fuzzy display-name fragment for DB ILIKE search."""
@@ -112,10 +114,12 @@ def _compute_std(points: List[int]) -> float:
     n = len(points)
     mean = sum(points) / n
     variance = sum((p - mean) ** 2 for p in points) / n
-    return variance ** 0.5
+    return variance**0.5
 
 
-def _form_verdict(ppg5: Optional[float], ppg10: Optional[float], pts_list: List[int]) -> str:
+def _form_verdict(
+    ppg5: Optional[float], ppg10: Optional[float], pts_list: List[int]
+) -> str:
     std = _compute_std(pts_list[-_FORM_WINDOW_LONG:]) if pts_list else 0.0
     if std > _VOLATILE_STD:
         return "VOLATILE"
@@ -129,6 +133,7 @@ def _form_verdict(ppg5: Optional[float], ppg10: Optional[float], pts_list: List[
 
 
 # ── Endpoint ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/{slug}/intelligence", response_model=TeamIntelligenceResponse)
 async def get_team_intelligence(
@@ -197,11 +202,15 @@ async def get_team_intelligence(
         result, gf, ga, pts = _match_result(team.id, m)
         is_home = m.home_team_id == team.id
         opponent_rel = m.home_team if not is_home else m.away_team
-        opponent_name = getattr(opponent_rel, "name", "Unknown") if opponent_rel else "Unknown"
+        opponent_name = (
+            getattr(opponent_rel, "name", "Unknown") if opponent_rel else "Unknown"
+        )
 
         form_rows.append(
             FormResultSchema(
-                match_date=m.match_date.isoformat() if isinstance(m.match_date, datetime) else str(m.match_date),
+                match_date=m.match_date.isoformat()
+                if isinstance(m.match_date, datetime)
+                else str(m.match_date),
                 opponent=opponent_name,
                 home_or_away="home" if is_home else "away",
                 goals_for=gf,
@@ -215,7 +224,15 @@ async def get_team_intelligence(
         # H2H accumulation
         opp_key = opponent_name.lower()
         if opp_key not in h2h_map:
-            h2h_map[opp_key] = {"name": opponent_name, "played": 0, "W": 0, "D": 0, "L": 0, "gf": 0, "ga": 0}
+            h2h_map[opp_key] = {
+                "name": opponent_name,
+                "played": 0,
+                "W": 0,
+                "D": 0,
+                "L": 0,
+                "gf": 0,
+                "ga": 0,
+            }
         h2h_map[opp_key]["played"] += 1
         h2h_map[opp_key][result] = h2h_map[opp_key].get(result, 0) + 1
         h2h_map[opp_key]["gf"] += gf or 0
@@ -232,7 +249,9 @@ async def get_team_intelligence(
     verdict = _form_verdict(ppg5, ppg10, pts_list)
 
     # ── H2H summary (top opponents by encounter count) ────────────────────────
-    h2h_summary = sorted(h2h_map.values(), key=lambda x: x["played"], reverse=True)[:_H2H_LIMIT]
+    h2h_summary = sorted(h2h_map.values(), key=lambda x: x["played"], reverse=True)[
+        :_H2H_LIMIT
+    ]
     h2h_out = [
         H2HEntrySchema(
             opponent=h["name"],
@@ -253,7 +272,11 @@ async def get_team_intelligence(
             odds_service=odds_service if isinstance(odds_service, OddsService) else None
         )
         payload = await svc.get_upcoming_matches_with_predictions(
-            db, league=league_name, days_ahead=upcoming_days, limit=50, include_value_bets=False
+            db,
+            league=league_name,
+            days_ahead=upcoming_days,
+            limit=50,
+            include_value_bets=False,
         )
         team_name_lower = team.name.lower()
         for match in payload.get("upcoming_matches", []):
@@ -274,7 +297,11 @@ async def get_team_intelligence(
             preds = match.get("predictions")
             conf = float(preds.get("confidence", 0.0)) if preds else 0.0
             market_edge = min(1.0, (best_edge or 0.0) / 10.0)
-            edge_qs = round(0.40 * conf + 0.60 * market_edge, 3) if (preds or best_edge) else None
+            edge_qs = (
+                round(0.40 * conf + 0.60 * market_edge, 3)
+                if (preds or best_edge)
+                else None
+            )
 
             upcoming_fixtures.append(
                 UpcomingFixtureSchema(
@@ -288,7 +315,9 @@ async def get_team_intelligence(
                 )
             )
     except Exception as exc:
-        logger.warning(f"[team_intelligence] upcoming fixture fetch failed for {slug}: {exc}")
+        logger.warning(
+            f"[team_intelligence] upcoming fixture fetch failed for {slug}: {exc}"
+        )
 
     return TeamIntelligenceResponse(
         team_slug=slug,
@@ -307,34 +336,82 @@ async def get_team_intelligence(
 # ── Static league→team index (derived from team_database.TEAM_ELO_RATINGS) ──
 
 _LEAGUE_TEAM_INDEX: Dict[str, str] = {
-    "Manchester City": "EPL", "Arsenal": "EPL", "Liverpool": "EPL",
-    "Chelsea": "EPL", "Manchester United": "EPL", "Newcastle United": "EPL",
-    "Tottenham": "EPL", "Tottenham Hotspur": "EPL", "Brighton": "EPL",
-    "Brighton & Hove Albion": "EPL", "Aston Villa": "EPL", "West Ham": "EPL",
-    "West Ham United": "EPL", "Brentford": "EPL", "Crystal Palace": "EPL",
-    "Fulham": "EPL", "Wolverhampton": "EPL", "Wolves": "EPL",
-    "Bournemouth": "EPL", "Nottingham Forest": "EPL", "Everton": "EPL",
-    "Real Madrid": "La Liga", "Barcelona": "La Liga", "Atletico Madrid": "La Liga",
-    "Athletic Bilbao": "La Liga", "Real Sociedad": "La Liga", "Villarreal": "La Liga",
-    "Real Betis": "La Liga", "Sevilla": "La Liga", "Girona": "La Liga",
-    "Valencia": "La Liga", "Osasuna": "La Liga", "Celta Vigo": "La Liga",
-    "Bayern Munich": "Bundesliga", "Bayer Leverkusen": "Bundesliga",
-    "Borussia Dortmund": "Bundesliga", "RB Leipzig": "Bundesliga",
-    "Union Berlin": "Bundesliga", "SC Freiburg": "Bundesliga",
-    "Freiburg": "Bundesliga", "Eintracht Frankfurt": "Bundesliga",
-    "VfB Stuttgart": "Bundesliga", "Stuttgart": "Bundesliga",
-    "Werder Bremen": "Bundesliga", "Hoffenheim": "Bundesliga",
-    "Inter Milan": "Serie A", "Napoli": "Serie A", "AC Milan": "Serie A",
-    "Juventus": "Serie A", "Atalanta": "Serie A", "Roma": "Serie A",
-    "AS Roma": "Serie A", "Lazio": "Serie A", "Fiorentina": "Serie A",
-    "Paris Saint-Germain": "Ligue 1", "PSG": "Ligue 1", "Monaco": "Ligue 1",
-    "AS Monaco": "Ligue 1", "Marseille": "Ligue 1", "Olympique Marseille": "Ligue 1",
-    "Lyon": "Ligue 1", "Olympique Lyon": "Ligue 1", "Lille": "Ligue 1",
-    "LOSC Lille": "Ligue 1", "Nice": "Ligue 1", "Rennes": "Ligue 1",
-    "Ajax": "Eredivisie", "PSV Eindhoven": "Eredivisie", "PSV": "Eredivisie",
-    "Feyenoord": "Eredivisie", "AZ Alkmaar": "Eredivisie", "AZ": "Eredivisie",
-    "Twente": "Eredivisie", "FC Twente": "Eredivisie",
-    "Utrecht": "Eredivisie", "Vitesse": "Eredivisie",
+    "Manchester City": "EPL",
+    "Arsenal": "EPL",
+    "Liverpool": "EPL",
+    "Chelsea": "EPL",
+    "Manchester United": "EPL",
+    "Newcastle United": "EPL",
+    "Tottenham": "EPL",
+    "Tottenham Hotspur": "EPL",
+    "Brighton": "EPL",
+    "Brighton & Hove Albion": "EPL",
+    "Aston Villa": "EPL",
+    "West Ham": "EPL",
+    "West Ham United": "EPL",
+    "Brentford": "EPL",
+    "Crystal Palace": "EPL",
+    "Fulham": "EPL",
+    "Wolverhampton": "EPL",
+    "Wolves": "EPL",
+    "Bournemouth": "EPL",
+    "Nottingham Forest": "EPL",
+    "Everton": "EPL",
+    "Real Madrid": "La Liga",
+    "Barcelona": "La Liga",
+    "Atletico Madrid": "La Liga",
+    "Athletic Bilbao": "La Liga",
+    "Real Sociedad": "La Liga",
+    "Villarreal": "La Liga",
+    "Real Betis": "La Liga",
+    "Sevilla": "La Liga",
+    "Girona": "La Liga",
+    "Valencia": "La Liga",
+    "Osasuna": "La Liga",
+    "Celta Vigo": "La Liga",
+    "Bayern Munich": "Bundesliga",
+    "Bayer Leverkusen": "Bundesliga",
+    "Borussia Dortmund": "Bundesliga",
+    "RB Leipzig": "Bundesliga",
+    "Union Berlin": "Bundesliga",
+    "SC Freiburg": "Bundesliga",
+    "Freiburg": "Bundesliga",
+    "Eintracht Frankfurt": "Bundesliga",
+    "VfB Stuttgart": "Bundesliga",
+    "Stuttgart": "Bundesliga",
+    "Werder Bremen": "Bundesliga",
+    "Hoffenheim": "Bundesliga",
+    "Inter Milan": "Serie A",
+    "Napoli": "Serie A",
+    "AC Milan": "Serie A",
+    "Juventus": "Serie A",
+    "Atalanta": "Serie A",
+    "Roma": "Serie A",
+    "AS Roma": "Serie A",
+    "Lazio": "Serie A",
+    "Fiorentina": "Serie A",
+    "Paris Saint-Germain": "Ligue 1",
+    "PSG": "Ligue 1",
+    "Monaco": "Ligue 1",
+    "AS Monaco": "Ligue 1",
+    "Marseille": "Ligue 1",
+    "Olympique Marseille": "Ligue 1",
+    "Lyon": "Ligue 1",
+    "Olympique Lyon": "Ligue 1",
+    "Lille": "Ligue 1",
+    "LOSC Lille": "Ligue 1",
+    "Nice": "Ligue 1",
+    "Rennes": "Ligue 1",
+    "Ajax": "Eredivisie",
+    "PSV Eindhoven": "Eredivisie",
+    "PSV": "Eredivisie",
+    "Feyenoord": "Eredivisie",
+    "AZ Alkmaar": "Eredivisie",
+    "AZ": "Eredivisie",
+    "Twente": "Eredivisie",
+    "FC Twente": "Eredivisie",
+    "Utrecht": "Eredivisie",
+    "Vitesse": "Eredivisie",
 }
 
 
@@ -347,7 +424,9 @@ class TeamSearchResult(BaseModel):
 @router.get("/search", response_model=List[TeamSearchResult])
 async def search_teams(
     q: str = Query(..., min_length=2, description="Team name fragment to search"),
-    league: Optional[str] = Query(None, description="Filter by league identifier (e.g. EPL)"),
+    league: Optional[str] = Query(
+        None, description="Filter by league identifier (e.g. EPL)"
+    ),
 ) -> List[TeamSearchResult]:
     """
     In-memory team name search. Queries the known team roster from team_database.

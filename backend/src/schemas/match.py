@@ -93,6 +93,7 @@ MatchInDB = MatchInDBBase
 
 # Lightweight API response models used by list/detail endpoints
 
+
 class MatchListResponse(BaseModel):
     """Container for a list of matches with simple summary items."""
 

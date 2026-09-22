@@ -38,7 +38,7 @@ findings = {
     "real_data_sources": [],
     "mock_fallbacks": [],
     "training_data": [],
-    "critical_issues": []
+    "critical_issues": [],
 }
 
 # 1. Check training data
@@ -51,16 +51,16 @@ if training_data_dir.exists():
     print(f"✅ Found {len(csv_files)} training CSV files:")
     for csv in csv_files:
         size = csv.stat().st_size / 1024  # KB
-        lines = sum(1 for _ in open(csv, encoding='utf-8'))
+        lines = sum(1 for _ in open(csv, encoding="utf-8"))
         print(f"   • {csv.name}: {lines:,} rows, {size:.1f} KB")
-        findings["training_data"].append({
-            "file": csv.name,
-            "rows": lines,
-            "size_kb": size
-        })
-        
+        findings["training_data"].append(
+            {"file": csv.name, "rows": lines, "size_kb": size}
+        )
+
         if lines < 100:
-            findings["critical_issues"].append(f"⚠ {csv.name} has only {lines} rows - insufficient training data")
+            findings["critical_issues"].append(
+                f"⚠ {csv.name} has only {lines} rows - insufficient training data"
+            )
 else:
     findings["critical_issues"].append("❌ Training data directory not found!")
 
@@ -75,10 +75,14 @@ if models_dir.exists():
     for model in model_files:
         size = model.stat().st_size / (1024 * 1024)  # MB
         modified = model.stat().st_mtime
-        print(f"   • {model.name}: {size:.2f} MB (modified: {datetime.fromtimestamp(modified).strftime('%Y-%m-%d')})")
-        
+        print(
+            f"   • {model.name}: {size:.2f} MB (modified: {datetime.fromtimestamp(modified).strftime('%Y-%m-%d')})"
+        )
+
         if size < 0.1:
-            findings["critical_issues"].append(f"⚠ {model.name} is suspiciously small ({size:.2f} MB)")
+            findings["critical_issues"].append(
+                f"⚠ {model.name} is suspiciously small ({size:.2f} MB)"
+            )
 else:
     findings["critical_issues"].append("❌ Models directory not found!")
 
@@ -88,33 +92,35 @@ print("-" * 100)
 
 engine_file = root / "backend" / "src" / "insights" / "engine.py"
 if engine_file.exists():
-    content = engine_file.read_text(encoding='utf-8')
-    
+    content = engine_file.read_text(encoding="utf-8")
+
     # Check for model loading
     if "self.model = model" in content:
         print("✅ Engine accepts external trained model")
         findings["real_data_sources"].append("Engine uses injected trained model")
-    
+
     # Check for real data aggregation
     if "DataAggregator" in content:
         print("✅ Engine uses DataAggregator for real data")
-        findings["real_data_sources"].append("Engine calls DataAggregator.fetch_match_data()")
-    
+        findings["real_data_sources"].append(
+            "Engine calls DataAggregator.fetch_match_data()"
+        )
+
     # Check mock fallbacks
-    mock_functions = re.findall(r'def (_mock_\w+|_create_mock_\w+)', content)
+    mock_functions = re.findall(r"def (_mock_\w+|_create_mock_\w+)", content)
     if mock_functions:
         print(f"⚠ Found {len(mock_functions)} mock fallback functions:")
         for func in mock_functions:
             print(f"   • {func}")
             findings["mock_fallbacks"].append(f"engine.py: {func}")
-    
+
     # Check when mocks are used
     mock_triggers = [
-        (r'if not self\.model', "Model not available"),
-        (r'except.*:.*mock', "Exception handling"),
-        (r'logger\.warning.*mock', "Data aggregation failure")
+        (r"if not self\.model", "Model not available"),
+        (r"except.*:.*mock", "Exception handling"),
+        (r"logger\.warning.*mock", "Data aggregation failure"),
     ]
-    
+
     print("\n   Mock data triggers (when real data fails):")
     for pattern, desc in mock_triggers:
         if re.search(pattern, content, re.DOTALL):
@@ -129,23 +135,23 @@ print("-" * 100)
 
 aggregator_file = root / "backend" / "src" / "data" / "aggregator.py"
 if aggregator_file.exists():
-    content = aggregator_file.read_text(encoding='utf-8')
-    
+    content = aggregator_file.read_text(encoding="utf-8")
+
     # Check for real data sources
     real_sources = [
         ("FlashscoreScraper", "Live scores"),
         ("OddsPortalScraper", "Betting odds"),
         ("TransfermarktScraper", "Team/player stats"),
         ("fetch_historical_stats", "Historical data"),
-        ("fetch_current_form", "Current form")
+        ("fetch_current_form", "Current form"),
     ]
-    
+
     print("✅ Real data sources:")
     for source, desc in real_sources:
         if source in content:
             print(f"   • {desc}: {source}")
             findings["real_data_sources"].append(f"aggregator.py: {source}")
-    
+
     # Check fallback strategy
     if "json.load" in content and "fallback" in content.lower():
         print("\n⚠ Fallback mechanism: Uses local JSON when external APIs fail")
@@ -160,13 +166,15 @@ print("-" * 100)
 
 api_file = root / "backend" / "src" / "api" / "endpoints.py"
 if api_file.exists():
-    content = api_file.read_text(encoding='utf-8')
-    
+    content = api_file.read_text(encoding="utf-8")
+
     # Check model loading
     if "load_model" in content or "joblib.load" in content:
         print("✅ API loads trained models from disk")
-        findings["real_data_sources"].append("api/endpoints.py: Loads trained .pkl models")
-    
+        findings["real_data_sources"].append(
+            "api/endpoints.py: Loads trained .pkl models"
+        )
+
     # Check if insights engine is called
     if "InsightsEngine" in content and "generate_match_insights" in content:
         print("✅ API uses InsightsEngine for predictions")
@@ -189,7 +197,7 @@ for item in findings["mock_fallbacks"]:
     print(f"   • {item}")
 
 print(f"\n📊 TRAINING DATA ({len(findings['training_data'])})")
-total_rows = sum(d['rows'] for d in findings["training_data"])
+total_rows = sum(d["rows"] for d in findings["training_data"])
 print(f"   • Total training samples: {total_rows:,}")
 for item in findings["training_data"]:
     print(f"   • {item['file']}: {item['rows']:,} rows")
@@ -212,11 +220,17 @@ has_fallbacks = len(findings["mock_fallbacks"]) > 0
 if has_training_data and has_models and has_real_sources:
     print("✅ VERDICT: PRODUCTION CODE USES REAL DATA")
     print("\nEvidence:")
-    print(f"   ✓ {total_rows:,} training samples across {len(findings['training_data'])} leagues")
-    print(f"   ✓ {len(list((root / 'models').glob('*.pkl')))} trained ensemble models (4.96 MB each)")
+    print(
+        f"   ✓ {total_rows:,} training samples across {len(findings['training_data'])} leagues"
+    )
+    print(
+        f"   ✓ {len(list((root / 'models').glob('*.pkl')))} trained ensemble models (4.96 MB each)"
+    )
     print(f"   ✓ {len(findings['real_data_sources'])} real data sources verified")
-    print(f"   ✓ Mock data used ONLY as emergency fallback ({len(findings['mock_fallbacks'])} fallback functions)")
-    
+    print(
+        f"   ✓ Mock data used ONLY as emergency fallback ({len(findings['mock_fallbacks'])} fallback functions)"
+    )
+
     print("\n🎯 DATA FLOW (Production):")
     print("   1. API receives request → loads trained .pkl model")
     print("   2. InsightsEngine → calls DataAggregator")
@@ -225,7 +239,7 @@ if has_training_data and has_models and has_real_sources:
     print("   5. Features engineered → fed to TRAINED model")
     print("   6. Model predicts → returns probabilities + confidence")
     print("   7. If model unavailable → ONLY THEN use mock predictions")
-    
+
 else:
     print("⚠ VERDICT: POTENTIAL ISSUES DETECTED")
     if not has_training_data:

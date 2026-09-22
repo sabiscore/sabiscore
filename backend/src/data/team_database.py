@@ -50,7 +50,6 @@ TEAM_ELO_RATINGS: Dict[str, float] = {
     "Luton Town": 1510,
     "Burnley": 1530,
     "Sheffield United": 1520,
-    
     # La Liga
     "Real Madrid": 1970,
     "Barcelona": 1940,
@@ -72,7 +71,6 @@ TEAM_ELO_RATINGS: Dict[str, float] = {
     "Cadiz": 1520,
     "Granada": 1510,
     "Almeria": 1500,
-    
     # Bundesliga
     "Bayern Munich": 1960,
     "Bayer Leverkusen": 1900,
@@ -98,7 +96,6 @@ TEAM_ELO_RATINGS: Dict[str, float] = {
     "Cologne": 1590,
     "Heidenheim": 1560,
     "Darmstadt": 1520,
-    
     # Serie A
     "Inter Milan": 1920,
     "Napoli": 1880,
@@ -122,7 +119,6 @@ TEAM_ELO_RATINGS: Dict[str, float] = {
     "Hellas Verona": 1550,
     "Frosinone": 1530,
     "Salernitana": 1510,
-    
     # Ligue 1
     "Paris Saint-Germain": 1920,
     "PSG": 1920,
@@ -193,7 +189,7 @@ TEAM_SQUAD_VALUES: Dict[str, float] = {
 def get_team_elo(team_name: str) -> float:
     """
     Get ELO rating for a team.
-    
+
     Returns the team's ELO if known, otherwise generates a consistent
     hash-based rating between 1500-1650 to ensure different teams
     get different (but stable) ratings.
@@ -201,18 +197,18 @@ def get_team_elo(team_name: str) -> float:
     # Direct lookup
     if team_name in TEAM_ELO_RATINGS:
         return TEAM_ELO_RATINGS[team_name]
-    
+
     # Try case-insensitive lookup
     for name, elo in TEAM_ELO_RATINGS.items():
         if name.lower() == team_name.lower():
             return elo
-    
+
     # Try partial match (for variations like "FC Barcelona" -> "Barcelona")
     team_lower = team_name.lower()
     for name, elo in TEAM_ELO_RATINGS.items():
         if name.lower() in team_lower or team_lower in name.lower():
             return elo
-    
+
     # Generate a stable hash-based rating for unknown teams
     # This ensures different teams always get different ratings
     hash_val = int(hashlib.md5(team_name.encode()).hexdigest()[:8], 16)
@@ -223,25 +219,25 @@ def get_team_elo(team_name: str) -> float:
 def get_team_squad_value(team_name: str) -> float:
     """
     Get squad value for a team in millions EUR.
-    
+
     Returns the team's value if known, otherwise generates a consistent
     hash-based value between 150-300 million.
     """
     # Direct lookup
     if team_name in TEAM_SQUAD_VALUES:
         return TEAM_SQUAD_VALUES[team_name]
-    
+
     # Try case-insensitive lookup
     for name, value in TEAM_SQUAD_VALUES.items():
         if name.lower() == team_name.lower():
             return value
-    
+
     # Try partial match
     team_lower = team_name.lower()
     for name, value in TEAM_SQUAD_VALUES.items():
         if name.lower() in team_lower or team_lower in name.lower():
             return value
-    
+
     # Generate stable hash-based value for unknown teams
     hash_val = int(hashlib.md5(team_name.encode()).hexdigest()[:8], 16)
     # Range: 150 to 300 million (average team range)
@@ -251,86 +247,81 @@ def get_team_squad_value(team_name: str) -> float:
 def get_team_stats(team_name: str, is_home: bool = True) -> Dict[str, float]:
     """
     Generate team statistics based on ELO rating and squad value.
-    
+
     This provides realistic stats differentiation between teams
     even when live data is unavailable.
-    
+
     Args:
         team_name: Name of the team
         is_home: Whether this team is playing at home
-        
+
     Returns:
         Dict with team statistics for feature generation
     """
     elo = get_team_elo(team_name)
     squad_value = get_team_squad_value(team_name)
-    
+
     # Normalize ELO to 0-1 scale (1300-2000 range)
     elo_norm = (elo - 1300) / 700  # 0 = weakest, 1 = strongest
     elo_norm = max(0, min(1, elo_norm))  # Clamp to 0-1
-    
+
     # Home advantage boost
     home_boost = 0.05 if is_home else 0
-    
+
     # Generate differentiated statistics based on team strength
     return {
         # Form features (0-1 scale) - stronger teams have better form
         "win_rate": min(0.7, 0.35 + elo_norm * 0.35 + home_boost),
         "goals_per_game": 1.0 + elo_norm * 1.2,  # Range: 1.0 - 2.2
         "goals_conceded_per_game": 1.8 - elo_norm * 0.8,  # Range: 1.0 - 1.8 (inverted)
-        
         # Attacking/defensive strength
         "attacking_strength": 0.5 + elo_norm * 0.4 + home_boost,
         "defensive_strength": 0.5 + elo_norm * 0.35,
-        
         # xG-related
         "xg_avg": 1.0 + elo_norm * 1.0 + (0.15 if is_home else 0),
         "xg_conceded_avg": 1.6 - elo_norm * 0.6,
-        
         # Squad value (for model features)
         "squad_value": squad_value,
-        
         # Momentum/form (slight variation based on position)
         "form_5": 0.4 + elo_norm * 0.3 + home_boost,
         "form_10": 0.42 + elo_norm * 0.28,
         "form_20": 0.44 + elo_norm * 0.26,
-        
         # Streaks (stronger teams maintain longer streaks)
         "win_streak": int(elo_norm * 4),
         "unbeaten_streak": int(2 + elo_norm * 6),
-        
         # Clean sheets (better teams keep more)
         "clean_sheet_rate": 0.15 + elo_norm * 0.25,
-        
         # Consistency
         "scoring_consistency": 0.55 + elo_norm * 0.25,
     }
 
 
-def get_matchup_features(home_team: str, away_team: str, league: str = "EPL") -> Dict[str, float]:
+def get_matchup_features(
+    home_team: str, away_team: str, league: str = "EPL"
+) -> Dict[str, float]:
     """
     Generate complete feature set for a matchup based on team strengths.
-    
+
     This is used as a fallback when live data is unavailable, ensuring
     that different matchups produce different predictions.
-    
+
     Args:
         home_team: Name of home team
         away_team: Name of away team
         league: League name (for context)
-        
+
     Returns:
         Dict with all features needed for prediction
     """
     home_stats = get_team_stats(home_team, is_home=True)
     away_stats = get_team_stats(away_team, is_home=False)
-    
+
     home_elo = get_team_elo(home_team)
     away_elo = get_team_elo(away_team)
-    
+
     home_value = get_team_squad_value(home_team)
     away_value = get_team_squad_value(away_team)
-    
+
     return {
         # Home team form features
         "home_form_5": home_stats["form_5"],
@@ -338,63 +329,54 @@ def get_matchup_features(home_team: str, away_team: str, league: str = "EPL") ->
         "home_form_20": home_stats["form_20"],
         "home_win_rate_5": home_stats["win_rate"],
         "home_goals_per_match_5": home_stats["goals_per_game"],
-        
         # Away team form features
         "away_form_5": away_stats["form_5"],
         "away_form_10": away_stats["form_10"],
         "away_form_20": away_stats["form_20"],
         "away_win_rate_5": away_stats["win_rate"],
         "away_goals_per_match_5": away_stats["goals_per_game"],
-        
         # xG features
         "home_xg_avg_5": home_stats["xg_avg"],
         "home_xg_conceded_avg_5": home_stats["xg_conceded_avg"],
         "home_xg_diff_5": home_stats["xg_avg"] - home_stats["xg_conceded_avg"],
         "home_xg_overperformance": 0.05 + (home_elo - 1500) / 5000,
         "home_xg_consistency": home_stats["scoring_consistency"],
-        
         "away_xg_avg_5": away_stats["xg_avg"],
         "away_xg_conceded_avg_5": away_stats["xg_conceded_avg"],
         "away_xg_diff_5": away_stats["xg_avg"] - away_stats["xg_conceded_avg"],
         "away_xg_overperformance": 0.05 + (away_elo - 1500) / 5000,
         "away_xg_consistency": away_stats["scoring_consistency"],
-        
         "xg_differential": home_stats["xg_avg"] - away_stats["xg_avg"],
-        
         # ELO ratings
         "home_elo": home_elo,
         "away_elo": away_elo,
         "elo_difference": home_elo - away_elo,
-        
         # Squad values
         "home_squad_value": home_value,
         "away_squad_value": away_value,
         "squad_value_diff": home_value - away_value,
-        
         # Momentum features
         "home_momentum_lambda": 0.5 + home_stats["win_rate"] * 0.3,
         "home_momentum_weighted": home_stats["form_5"],
         "home_win_streak": home_stats["win_streak"],
         "home_unbeaten_streak": home_stats["unbeaten_streak"],
-        
         "away_momentum_lambda": 0.5 + away_stats["win_rate"] * 0.3,
         "away_momentum_weighted": away_stats["form_5"],
         "away_win_streak": away_stats["win_streak"],
         "away_unbeaten_streak": away_stats["unbeaten_streak"],
-        
         # Goal/GD features
         "home_goals_conceded_per_match_5": home_stats["goals_conceded_per_game"],
-        "home_gd_avg_5": home_stats["goals_per_game"] - home_stats["goals_conceded_per_game"],
+        "home_gd_avg_5": home_stats["goals_per_game"]
+        - home_stats["goals_conceded_per_game"],
         "home_gd_trend": 0.05 if home_elo > 1600 else -0.02,
         "home_clean_sheets_5": home_stats["clean_sheet_rate"],
         "home_scoring_consistency": home_stats["scoring_consistency"],
-        
         "away_goals_conceded_per_match_5": away_stats["goals_conceded_per_game"],
-        "away_gd_avg_5": away_stats["goals_per_game"] - away_stats["goals_conceded_per_game"],
+        "away_gd_avg_5": away_stats["goals_per_game"]
+        - away_stats["goals_conceded_per_game"],
         "away_gd_trend": 0.05 if away_elo > 1600 else -0.02,
         "away_clean_sheets_5": away_stats["clean_sheet_rate"],
         "away_scoring_consistency": away_stats["scoring_consistency"],
-        
         # Home advantage
         "home_advantage_win_rate": 0.50 + (home_elo - away_elo) / 2000,
         "home_goals_advantage": 0.25 + (home_elo - away_elo) / 3000,

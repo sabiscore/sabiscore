@@ -184,12 +184,22 @@ async def apply_fixture_identity_rebind(
         if entry.stored_home_team_id != entry.verified_home_team_id:
             match.home_team_id = entry.verified_home_team_id
             reversals.append(
-                (entry.match_id, "home_team_id", entry.stored_home_team_id, entry.verified_home_team_id)
+                (
+                    entry.match_id,
+                    "home_team_id",
+                    entry.stored_home_team_id,
+                    entry.verified_home_team_id,
+                )
             )
         if entry.stored_away_team_id != entry.verified_away_team_id:
             match.away_team_id = entry.verified_away_team_id
             reversals.append(
-                (entry.match_id, "away_team_id", entry.stored_away_team_id, entry.verified_away_team_id)
+                (
+                    entry.match_id,
+                    "away_team_id",
+                    entry.stored_away_team_id,
+                    entry.verified_away_team_id,
+                )
             )
 
     await session.flush()
@@ -223,7 +233,9 @@ async def apply_fixture_identity_rebind(
     # agree, so they must drop out of the mismatch list entirely.
     residual_manifest = await build_fixture_identity_rebind_manifest(session)
     residual = [
-        entry.match_id for entry in residual_manifest.entries if entry.match_id in set(affected)
+        entry.match_id
+        for entry in residual_manifest.entries
+        if entry.match_id in set(affected)
     ]
     if residual:
         raise RuntimeError(

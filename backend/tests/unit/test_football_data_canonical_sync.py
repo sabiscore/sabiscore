@@ -1,4 +1,5 @@
 """SAB-14 regressions for canonical football-data.org background acquisition."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -58,8 +59,9 @@ async def test_runtime_adapter_reuses_exact_lifespan_provider_instance() -> None
         record_exception=AsyncMock(return_value=True),
     )
     try:
-        with patch.object(settings, "football_data_api_key", "test-key"), patch.object(
-            settings, "enable_football_data_provider", True
+        with (
+            patch.object(settings, "football_data_api_key", "test-key"),
+            patch.object(settings, "enable_football_data_provider", True),
         ):
             registry = build_provider_registry(
                 http_client=http_client,
@@ -112,16 +114,22 @@ async def test_upcoming_sync_keeps_seven_request_budget_and_persists_each_observ
     assert all(request.url.params.get("limit") == "50" for request in requests)
     assert all(request.url.params.get("dateFrom") for request in requests)
     assert all(request.url.params.get("dateTo") for request in requests)
-    assert all(request.headers.get("X-Auth-Token") == "test-key" for request in requests)
+    assert all(
+        request.headers.get("X-Auth-Token") == "test-key" for request in requests
+    )
 
     async with evidence_factory() as session:
         evidence = (
-            await session.execute(
-                select(ProviderRequestSummary).where(
-                    ProviderRequestSummary.provider == "football_data_org"
+            (
+                await session.execute(
+                    select(ProviderRequestSummary).where(
+                        ProviderRequestSummary.provider == "football_data_org"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert len(evidence) == 7
     assert {row.operation for row in evidence} == {"fixtures"}
@@ -174,7 +182,9 @@ async def test_recent_results_preserve_finished_filter_scores_and_telemetry(
     ]
 
     async with evidence_factory() as session:
-        evidence = (await session.execute(select(ProviderRequestSummary))).scalars().all()
+        evidence = (
+            (await session.execute(select(ProviderRequestSummary))).scalars().all()
+        )
     assert len(evidence) == 1
     assert evidence[0].provider == "football_data_org"
     assert evidence[0].operation == "fixtures"

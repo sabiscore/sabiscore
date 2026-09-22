@@ -56,11 +56,13 @@ _GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search"
 
 # Egress allowlist, matching ESPN's per-provider `_ALLOWED_HOST` convention:
 # this adapter may reach these three hosts over HTTPS and nothing else.
-_ALLOWED_HOSTS = frozenset({
-    "archive-api.open-meteo.com",
-    "api.open-meteo.com",
-    "geocoding-api.open-meteo.com",
-})
+_ALLOWED_HOSTS = frozenset(
+    {
+        "archive-api.open-meteo.com",
+        "api.open-meteo.com",
+        "geocoding-api.open-meteo.com",
+    }
+)
 
 # The forecast horizon the upstream free tier serves. A kickoff beyond this
 # has no forecast yet; that is an absence to report, never one to interpolate.
@@ -121,7 +123,9 @@ class OpenMeteoProvider(BaseProvider):
         """Enforce HTTPS + the host allowlist before any request leaves."""
         parsed = urlsplit(url)
         if parsed.scheme != "https" or parsed.hostname not in _ALLOWED_HOSTS:
-            raise ValueError(f"open_meteo: egress denied for {parsed.scheme}://{parsed.hostname}")
+            raise ValueError(
+                f"open_meteo: egress denied for {parsed.scheme}://{parsed.hostname}"
+            )
         return await super()._get_json(url, headers=headers, params=params)
 
     async def probe(self) -> ProviderStatus:
@@ -137,19 +141,25 @@ class OpenMeteoProvider(BaseProvider):
             return ProviderStatus.UNAVAILABLE
         return ProviderStatus.VERIFIED
 
-    async def geocode(self, name: str, *, country_code: str | None = None) -> Optional[GeoPoint]:
+    async def geocode(
+        self, name: str, *, country_code: str | None = None
+    ) -> Optional[GeoPoint]:
         """Resolve a place name to coordinates, or None. Never guesses."""
         if not name or not name.strip():
             return None
         params: dict[str, Any] = {"name": name.strip(), "count": 10, "format": "json"}
         payload, _ = await self._get_json(_GEOCODING_BASE, params=params)
-        results = _require_list(payload, "results") if isinstance(payload, dict) else None
+        results = (
+            _require_list(payload, "results") if isinstance(payload, dict) else None
+        )
         if not results:
             return None
 
         if country_code:
             wanted = country_code.upper()
-            results = [r for r in results if str(r.get("country_code", "")).upper() == wanted]
+            results = [
+                r for r in results if str(r.get("country_code", "")).upper() == wanted
+            ]
             if not results:
                 # A country filter that matches nothing is an unresolved
                 # location, not a licence to fall back to another country.
@@ -163,7 +173,9 @@ class OpenMeteoProvider(BaseProvider):
             latitude=float(lat),
             longitude=float(lon),
             name=str(top.get("name") or name),
-            country_code=(str(top["country_code"]) if top.get("country_code") else None),
+            country_code=(
+                str(top["country_code"]) if top.get("country_code") else None
+            ),
         )
 
     async def weather_at_kickoff(
@@ -264,7 +276,11 @@ def _parse_hourly(
 
 def _require_list(container: Mapping[str, Any], key: str) -> Optional[list]:
     value = container.get(key)
-    return list(value) if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else None
+    return (
+        list(value)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+        else None
+    )
 
 
 def _is_finite_number(value: Any) -> bool:
@@ -283,4 +299,8 @@ def _is_finite_number(value: Any) -> bool:
 
 def _as_utc(value: datetime) -> datetime:
     """Repo convention: DB timestamps are naive UTC, provider input is aware."""
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )

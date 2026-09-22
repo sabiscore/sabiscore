@@ -15,6 +15,7 @@ Contracts verified:
      warning + metrics path fires rather than silently returning empty.
   4. get_recent_results() shares the same isolation (same helper, one fix).
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock

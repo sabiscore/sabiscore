@@ -78,8 +78,12 @@ def upgrade() -> None:
         "matches",
         sa.Column("id", sa.String(), primary_key=True),
         sa.Column("league_id", sa.String(), sa.ForeignKey("leagues.id"), nullable=True),
-        sa.Column("home_team_id", sa.String(), sa.ForeignKey("teams.id"), nullable=True),
-        sa.Column("away_team_id", sa.String(), sa.ForeignKey("teams.id"), nullable=True),
+        sa.Column(
+            "home_team_id", sa.String(), sa.ForeignKey("teams.id"), nullable=True
+        ),
+        sa.Column(
+            "away_team_id", sa.String(), sa.ForeignKey("teams.id"), nullable=True
+        ),
         sa.Column("match_date", sa.DateTime(), nullable=False),
         sa.Column("season", sa.String(), nullable=True),
         sa.Column("status", sa.String(), nullable=True),
@@ -148,7 +152,12 @@ def upgrade() -> None:
         "value_bets",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("match_id", sa.String(), sa.ForeignKey("matches.id"), nullable=True),
-        sa.Column("prediction_id", sa.Integer(), sa.ForeignKey("predictions.id"), nullable=True),
+        sa.Column(
+            "prediction_id",
+            sa.Integer(),
+            sa.ForeignKey("predictions.id"),
+            nullable=True,
+        ),
         sa.Column("bet_type", sa.String(), nullable=True),
         sa.Column("bookmaker", sa.String(), nullable=True),
         sa.Column("market_odds", sa.Float(), nullable=True),
@@ -176,7 +185,9 @@ def upgrade() -> None:
         sa.Column("goal_difference", sa.Integer(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
-    op.create_index("ix_league_standings_league_team", "league_standings", ["league", "team_id"])
+    op.create_index(
+        "ix_league_standings_league_team", "league_standings", ["league", "team_id"]
+    )
 
     op.create_table(
         "match_events",
@@ -192,7 +203,9 @@ def upgrade() -> None:
         sa.Column("source", sa.String(), nullable=True),
         sa.Column("timestamp", sa.DateTime(), nullable=True),
     )
-    op.create_index("ix_match_events_match_time", "match_events", ["match_id", "event_time"])
+    op.create_index(
+        "ix_match_events_match_time", "match_events", ["match_id", "event_time"]
+    )
     op.create_index("ix_match_events_type", "match_events", ["event_type"])
 
     op.create_table(
@@ -222,7 +235,9 @@ def upgrade() -> None:
         sa.Column("timestamp", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
     )
-    op.create_index("ix_odds_history_match_timestamp", "odds_history", ["match_id", "timestamp"])
+    op.create_index(
+        "ix_odds_history_match_timestamp", "odds_history", ["match_id", "timestamp"]
+    )
     op.create_index("ix_odds_history_bookmaker", "odds_history", ["bookmaker"])
 
     op.create_table(
@@ -283,7 +298,11 @@ def upgrade() -> None:
         sa.Column("source", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
     )
-    op.create_index("ix_player_valuations_player_date", "player_valuations", ["player_id", "valuation_date"])
+    op.create_index(
+        "ix_player_valuations_player_date",
+        "player_valuations",
+        ["player_id", "valuation_date"],
+    )
 
     op.create_table(
         "scraping_logs",
@@ -298,7 +317,9 @@ def upgrade() -> None:
         sa.Column("timestamp", sa.DateTime(), nullable=True),
         sa.Column("job_metadata", sa.JSON(), nullable=True),
     )
-    op.create_index("ix_scraping_logs_source_status", "scraping_logs", ["source", "status"])
+    op.create_index(
+        "ix_scraping_logs_source_status", "scraping_logs", ["source", "status"]
+    )
     op.create_index("ix_scraping_logs_timestamp", "scraping_logs", ["timestamp"])
 
 

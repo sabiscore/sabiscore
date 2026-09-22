@@ -25,7 +25,7 @@ class RedisClient:
         decode_responses: bool = True,
     ):
         """Initialize Redis client
-        
+
         Args:
             host: Redis host
             port: Redis port
@@ -43,7 +43,7 @@ class RedisClient:
 
     async def connect(self) -> redis.Redis:
         """Establish Redis connection with pool
-        
+
         Returns:
             Redis client instance
         """
@@ -59,17 +59,17 @@ class RedisClient:
                     socket_connect_timeout=5,
                     socket_keepalive=True,
                 )
-                
+
                 self._client = redis.Redis(connection_pool=self._pool)
-                
+
                 # Test connection
                 await self._client.ping()
                 logger.info(f"Redis connected: {self.host}:{self.port}/{self.db}")
-                
+
             except Exception as e:
                 logger.error(f"Redis connection failed: {e}")
                 raise
-        
+
         return self._client
 
     async def disconnect(self):
@@ -77,16 +77,16 @@ class RedisClient:
         if self._client:
             await self._client.aclose()
             self._client = None
-        
+
         if self._pool:
             await self._pool.aclose()
             self._pool = None
-        
+
         logger.info("Redis disconnected")
 
     async def get_client(self) -> redis.Redis:
         """Get connected Redis client
-        
+
         Returns:
             Redis client (connects if needed)
         """
@@ -94,19 +94,14 @@ class RedisClient:
             await self.connect()
         return self._client
 
-    async def set_with_ttl(
-        self,
-        key: str,
-        value: str,
-        ttl_seconds: int
-    ) -> bool:
+    async def set_with_ttl(self, key: str, value: str, ttl_seconds: int) -> bool:
         """Set key with TTL
-        
+
         Args:
             key: Redis key
             value: Value to store
             ttl_seconds: Time-to-live in seconds
-            
+
         Returns:
             True if successful
         """
@@ -120,10 +115,10 @@ class RedisClient:
 
     async def get(self, key: str) -> Optional[str]:
         """Get value by key
-        
+
         Args:
             key: Redis key
-            
+
         Returns:
             Value or None if not found
         """
@@ -136,10 +131,10 @@ class RedisClient:
 
     async def delete(self, key: str) -> bool:
         """Delete key
-        
+
         Args:
             key: Redis key
-            
+
         Returns:
             True if deleted
         """
@@ -153,10 +148,10 @@ class RedisClient:
 
     async def exists(self, key: str) -> bool:
         """Check if key exists
-        
+
         Args:
             key: Redis key
-            
+
         Returns:
             True if exists
         """
@@ -169,28 +164,25 @@ class RedisClient:
             return False
 
     async def set_hash(
-        self,
-        key: str,
-        mapping: dict,
-        ttl_seconds: Optional[int] = None
+        self, key: str, mapping: dict, ttl_seconds: Optional[int] = None
     ) -> bool:
         """Set hash with optional TTL
-        
+
         Args:
             key: Redis key
             mapping: Dictionary to store
             ttl_seconds: Optional TTL
-            
+
         Returns:
             True if successful
         """
         try:
             client = await self.get_client()
             await client.hset(key, mapping=mapping)
-            
+
             if ttl_seconds:
                 await client.expire(key, ttl_seconds)
-            
+
             return True
         except Exception as e:
             logger.error(f"Redis HSET error: {e}")
@@ -198,10 +190,10 @@ class RedisClient:
 
     async def get_hash(self, key: str) -> Optional[dict]:
         """Get hash by key
-        
+
         Args:
             key: Redis key
-            
+
         Returns:
             Dictionary or None
         """
@@ -219,12 +211,12 @@ _redis_client: Optional[RedisClient] = None
 
 def get_redis_client() -> RedisClient:
     """Get global Redis client instance
-    
+
     Returns:
         RedisClient singleton
     """
     global _redis_client
-    
+
     if _redis_client is None:
         redis_config = getattr(settings, "redis", {})
         _redis_client = RedisClient(
@@ -233,14 +225,14 @@ def get_redis_client() -> RedisClient:
             db=redis_config.get("db", 0),
             password=redis_config.get("password"),
         )
-    
+
     return _redis_client
 
 
 @asynccontextmanager
 async def redis_session():
     """Async context manager for Redis operations
-    
+
     Usage:
         async with redis_session() as client:
             await client.set("key", "value")
@@ -257,32 +249,32 @@ async def redis_session():
 # Cache key builders for consistent naming
 class CacheKeys:
     """Redis cache key builders"""
-    
+
     @staticmethod
     def xg_chain(match_id: str) -> str:
         """xG chain cache key"""
         return f"xg:{match_id}"
-    
+
     @staticmethod
     def features(match_id: str) -> str:
         """Features cache key"""
         return f"features:{match_id}"
-    
+
     @staticmethod
     def hot_match(match_id: str) -> str:
         """Hot match data cache key"""
         return f"hot:match:{match_id}"
-    
+
     @staticmethod
     def live_prediction(match_id: str) -> str:
         """Live prediction cache key"""
         return f"live:prediction:{match_id}"
-    
+
     @staticmethod
     def odds_snapshot(match_id: str, bookmaker: str) -> str:
         """Odds snapshot cache key"""
         return f"odds:{match_id}:{bookmaker}"
-    
+
     @staticmethod
     def calibration_params() -> str:
         """Calibration parameters cache key"""
@@ -292,7 +284,7 @@ class CacheKeys:
 # TTL constants (in seconds)
 class CacheTTL:
     """Cache TTL policies"""
-    
+
     XG_CHAIN = 30  # 30 seconds for live xG
     FEATURES = 60  # 1 minute for features
     HOT_MATCH = 5  # 5 seconds for hot data
@@ -303,27 +295,27 @@ class CacheTTL:
 
 if __name__ == "__main__":
     import asyncio
-    
+
     async def test():
         # Test Redis connection
         async with redis_session() as client:
             # Set test key
             await client.set("test:key", "test_value", ex=60)
-            
+
             # Get test key
             value = await client.get("test:key")
             print(f"Retrieved: {value}")
-            
+
             # Set hash
             redis_client = get_redis_client()
             await redis_client.set_hash(
                 CacheKeys.hot_match("test_123"),
                 {"home_score": "2", "away_score": "1"},
-                ttl_seconds=CacheTTL.HOT_MATCH
+                ttl_seconds=CacheTTL.HOT_MATCH,
             )
-            
+
             # Get hash
             match_data = await redis_client.get_hash(CacheKeys.hot_match("test_123"))
             print(f"Match data: {match_data}")
-    
+
     asyncio.run(test())

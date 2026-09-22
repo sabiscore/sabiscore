@@ -8,6 +8,7 @@ Loaders:
 - TransfermarktLoader: Player valuations and squad data
 """
 
+
 def _missing_loader(exc: Exception, message: str):
     class _MissingLoader:  # type: ignore[override]
         def __init__(self, *args, **kwargs):
@@ -19,22 +20,30 @@ def _missing_loader(exc: Exception, message: str):
 try:
     from .football_data import FootballDataLoader
 except Exception as exc:  # pragma: no cover - optional dependency path
-    FootballDataLoader = _missing_loader(exc, "FootballDataLoader unavailable: install optional dependency 'aiohttp'")
+    FootballDataLoader = _missing_loader(
+        exc, "FootballDataLoader unavailable: install optional dependency 'aiohttp'"
+    )
 
 try:
     from .understat import UnderstatLoader
 except Exception as exc:  # pragma: no cover - optional dependency path
-    UnderstatLoader = _missing_loader(exc, "UnderstatLoader unavailable: install optional dependency 'tenacity'")
+    UnderstatLoader = _missing_loader(
+        exc, "UnderstatLoader unavailable: install optional dependency 'tenacity'"
+    )
 
 try:
     from .fbref import FBrefLoader
 except Exception as exc:  # pragma: no cover - optional dependency path
-    FBrefLoader = _missing_loader(exc, "FBrefLoader unavailable: install optional scraper dependencies")
+    FBrefLoader = _missing_loader(
+        exc, "FBrefLoader unavailable: install optional scraper dependencies"
+    )
 
 try:
     from .transfermarkt import TransfermarktLoader
 except Exception as exc:  # pragma: no cover - optional dependency path
-    TransfermarktLoader = _missing_loader(exc, "TransfermarktLoader unavailable: install optional scraper dependencies")
+    TransfermarktLoader = _missing_loader(
+        exc, "TransfermarktLoader unavailable: install optional scraper dependencies"
+    )
 
 from .football_data_api import FootballDataAPIClient  # noqa: E402
 

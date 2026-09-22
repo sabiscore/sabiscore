@@ -10,6 +10,7 @@ from src.data.utils.deduplication import calculate_season_string, normalize_team
 
 # ── normalize_team_name ───────────────────────────────────────────────────────
 
+
 def test_normalize_known_replacements():
     assert normalize_team_name("Manchester United") == "man united"
     assert normalize_team_name("Manchester City") == "man city"
@@ -37,6 +38,7 @@ def test_normalize_already_lowercase():
 
 
 # ── calculate_season_string ───────────────────────────────────────────────────
+
 
 def test_season_august_starts_current_season():
     d = datetime(2024, 8, 1)

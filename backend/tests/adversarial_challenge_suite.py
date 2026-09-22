@@ -66,34 +66,54 @@ from src.core.league_policy import get_league_policy
 # DOMAIN 1: CANDIDATE MODEL QUARANTINE & ZERO-STAKE ENFORCEMENT
 # ============================================================================
 
+
 class TestCandidateModelQuarantine:
     """Adversarial stress-testing of candidate model quarantine and active generation."""
 
     def test_candidate_manifest_is_strictly_quarantined(self):
-        candidate_manifest_path = Path(__file__).resolve().parents[1] / "models" / "candidate" / "candidate_manifest.json"
+        candidate_manifest_path = (
+            Path(__file__).resolve().parents[1]
+            / "models"
+            / "candidate"
+            / "candidate_manifest.json"
+        )
         assert candidate_manifest_path.is_file(), "candidate_manifest.json must exist"
         data = json.loads(candidate_manifest_path.read_text(encoding="utf-8"))
-        
-        assert data.get("status") == "UNVERIFIED_CANDIDATE", "Candidate status must be UNVERIFIED_CANDIDATE"
-        assert data.get("promotion_permitted") is False, "promotion_permitted must be False"
+
+        assert data.get("status") == "UNVERIFIED_CANDIDATE", (
+            "Candidate status must be UNVERIFIED_CANDIDATE"
+        )
+        assert data.get("promotion_permitted") is False, (
+            "promotion_permitted must be False"
+        )
         assert "failed_gates" in data, "Must record failed gates"
         failed_gates = set(data["failed_gates"])
-        assert {"serving_feature_availability", "no_league_regression", "market_baseline"}.issubset(failed_gates)
+        assert {
+            "serving_feature_availability",
+            "no_league_regression",
+            "market_baseline",
+        }.issubset(failed_gates)
 
     def test_active_generation_is_unverified_and_fail_closed(self):
-        active_gen_path = Path(__file__).resolve().parents[1] / "models" / "active_generation.json"
+        active_gen_path = (
+            Path(__file__).resolve().parents[1] / "models" / "active_generation.json"
+        )
         data = json.loads(active_gen_path.read_text(encoding="utf-8"))
-        
+
         assert data.get("certification_state") == "UNVERIFIED"
         assert data.get("promotion_state") == "ACTIVE_FAIL_CLOSED"
         assert data.get("certified_at") is None
-        assert active_generation_is_certified() is False, "Production active generation must NOT report certified"
+        assert active_generation_is_certified() is False, (
+            "Production active generation must NOT report certified"
+        )
 
     def test_tamper_attempt_certified_without_evidence_fails_closed(self, tmp_path):
         """Simulate an attacker editing active_generation.json to claim CERTIFIED without valid evidence."""
         models_dir = Path(__file__).resolve().parents[1] / "models"
-        real_manifest = json.loads((models_dir / "active_generation.json").read_text(encoding="utf-8"))
-        
+        real_manifest = json.loads(
+            (models_dir / "active_generation.json").read_text(encoding="utf-8")
+        )
+
         # Copy real artifact files to tmp_path so artifact existence and hash checks pass
         for league, entry in real_manifest["artifacts"].items():
             for key in ("artifact", "metadata"):
@@ -103,17 +123,21 @@ class TestCandidateModelQuarantine:
         # Attack 1: claim CERTIFIED with no certification_evidence
         tampered = dict(real_manifest)
         tampered["certification_state"] = "CERTIFIED"
-        
+
         fake_manifest = tmp_path / "active_generation.json"
         fake_manifest.write_text(json.dumps(tampered), encoding="utf-8")
-        
-        with pytest.raises(ActiveGenerationError, match="no certification_evidence is declared"):
+
+        with pytest.raises(
+            ActiveGenerationError, match="no certification_evidence is declared"
+        ):
             load_active_generation(models_dir=tmp_path)
 
-    def test_tamper_attempt_certified_with_failed_gates_evidence_fails_closed(self, tmp_path):
+    def test_tamper_attempt_certified_with_failed_gates_evidence_fails_closed(
+        self, tmp_path
+    ):
         """Simulate an attacker pointing certification_evidence to a report with failing gates."""
         models_dir = Path(__file__).resolve().parents[1] / "models"
-        
+
         # Create a report with failing gates
         fake_report = tmp_path / "fake_report.json"
         fake_report_content = {
@@ -121,35 +145,42 @@ class TestCandidateModelQuarantine:
             "gates": {
                 "serving_feature_availability": {"status": "FAIL"},
                 "market_baseline": {"status": "PASS"},
-            }
+            },
         }
         fake_report.write_text(json.dumps(fake_report_content), encoding="utf-8")
         import hashlib
+
         report_hash = hashlib.sha256(fake_report.read_bytes()).hexdigest()
-        
-        real_manifest = json.loads((models_dir / "active_generation.json").read_text(encoding="utf-8"))
+
+        real_manifest = json.loads(
+            (models_dir / "active_generation.json").read_text(encoding="utf-8")
+        )
         tampered = dict(real_manifest)
         tampered["certification_state"] = "CERTIFIED"
         tampered["certification_evidence"] = {
             "report": "fake_report.json",
             "report_sha256": report_hash,
         }
-        
+
         # Copy real artifact files to tmp_path so artifact checks pass
         for league, entry in real_manifest["artifacts"].items():
             for key in ("artifact", "metadata"):
                 fname = entry[key]
                 (tmp_path / fname).write_bytes((models_dir / fname).read_bytes())
-                
-        (tmp_path / "active_generation.json").write_text(json.dumps(tampered), encoding="utf-8")
-        
-        with pytest.raises(ActiveGenerationError, match="Certification evidence has failing gates"):
+
+        (tmp_path / "active_generation.json").write_text(
+            json.dumps(tampered), encoding="utf-8"
+        )
+
+        with pytest.raises(
+            ActiveGenerationError, match="Certification evidence has failing gates"
+        ):
             load_active_generation(models_dir=tmp_path)
 
     def test_uncertified_state_strips_public_stakes_in_predictions_endpoint(self):
         """_fail_closed_if_uncertified must strictly zero out all value bets and stakes."""
         assert not active_generation_is_certified()
-        
+
         response = PredictionResponse(
             match_id="test_match_123",
             home_team="Arsenal",
@@ -183,9 +214,9 @@ class TestCandidateModelQuarantine:
             metadata={"model_version": "v5_phase7", "stake_permitted": True},
             created_at=datetime.now(timezone.utc),
         )
-        
+
         guarded = _fail_closed_if_uncertified(response)
-        
+
         assert guarded.value_bets == [], "value_bets must be empty list"
         assert guarded.metadata["certification_state"] == "UNVERIFIED"
         assert guarded.metadata["stake_permitted"] is False
@@ -239,7 +270,7 @@ class TestCandidateModelQuarantine:
             ),
             verified_evidence_providers=["provider_a", "provider_b"],
         )
-        
+
         res = analyze_match(req)
         assert res.verdict == VerdictEnum.PARTIAL
         assert res.stake_fraction == 0.0 or res.stake_fraction is None
@@ -289,7 +320,7 @@ class TestCandidateModelQuarantine:
             signals=CoreSignalsInput(lineup_status="CONFIRMED"),
             verified_evidence_providers=["p1", "p2"],
         )
-        
+
         output = _evaluate_match(match_input)
         assert output.verdict == "PARTIAL"
         assert output.stake_fraction == 0.0 or output.stake_fraction is None
@@ -301,6 +332,7 @@ class TestCandidateModelQuarantine:
 # DOMAIN 2: PROBABILITY SIMPLEX VIOLATIONS
 # ============================================================================
 
+
 class TestProbabilitySimplexViolations:
     """Stress-test non-simplex probability rejection across all analytical boundaries."""
 
@@ -310,16 +342,18 @@ class TestProbabilitySimplexViolations:
             (0.50, 0.30, 0.20, True),
             (1.00, 0.00, 0.00, True),
             (0.333333, 0.333333, 0.333334, True),
-            (-0.05, 0.55, 0.50, False),   # negative probability
-            (1.10, -0.10, 0.00, False),   # out of range > 1 and < 0
-            (0.50, 0.50, 0.50, False),    # sum = 1.5
-            (0.20, 0.20, 0.20, False),    # sum = 0.6
-            (0.00, 0.00, 0.00, False),    # sum = 0.0
+            (-0.05, 0.55, 0.50, False),  # negative probability
+            (1.10, -0.10, 0.00, False),  # out of range > 1 and < 0
+            (0.50, 0.50, 0.50, False),  # sum = 1.5
+            (0.20, 0.20, 0.20, False),  # sum = 0.6
+            (0.00, 0.00, 0.00, False),  # sum = 0.0
             (float("nan"), 0.5, 0.5, False),  # NaN
             (float("inf"), 0.0, 0.0, False),  # Inf
         ],
     )
-    def test_core_engine_probability_simplex_check(self, p_home, p_draw, p_away, expected_valid):
+    def test_core_engine_probability_simplex_check(
+        self, p_home, p_draw, p_away, expected_valid
+    ):
         match_input = CoreMatchInput(
             match_id="simplex_test",
             competition="EPL",
@@ -361,16 +395,24 @@ class TestProbabilitySimplexViolations:
             signals=CoreSignalsInput(lineup_status="CONFIRMED"),
             verified_evidence_providers=["p1", "p2", "p3", "p4"],
         )
-        
+
         output = _evaluate_match(match_input)
         if not expected_valid:
-            has_simplex_gap = any("INVALID_MODEL_PROBABILITY" in g for g in output.data_gaps)
-            assert has_simplex_gap, f"Expected simplex data gap, got: {output.data_gaps}"
+            has_simplex_gap = any(
+                "INVALID_MODEL_PROBABILITY" in g for g in output.data_gaps
+            )
+            assert has_simplex_gap, (
+                f"Expected simplex data gap, got: {output.data_gaps}"
+            )
             assert output.verdict == "PARTIAL"
             assert output.stake == "pass"
         else:
-            simplex_gaps = [g for g in output.data_gaps if "INVALID_MODEL_PROBABILITY" in g]
-            assert simplex_gaps == [], f"Unexpected simplex gaps on valid input: {simplex_gaps}"
+            simplex_gaps = [
+                g for g in output.data_gaps if "INVALID_MODEL_PROBABILITY" in g
+            ]
+            assert simplex_gaps == [], (
+                f"Unexpected simplex gaps on valid input: {simplex_gaps}"
+            )
 
     def test_betting_intelligence_probability_simplex_schema_validation(self):
         """Pydantic model input validation should catch non-simplex probabilities."""
@@ -409,74 +451,116 @@ class TestProbabilitySimplexViolations:
 # DOMAIN 3: PROHIBITED COPY LEAKS SCANNER
 # ============================================================================
 
+
 class TestProhibitedCopyLeaks:
     """Exhaustive scan of code and templates for prohibited certainty/gambling marketing copy."""
 
     def test_no_prohibited_copy_in_frontend_source(self):
         import re
+
         web_src = Path(__file__).resolve().parents[2] / "apps" / "web" / "src"
         assert web_src.is_dir()
-        
-        regex = re.compile(r"\b(banker|guaranteed|sure bet|free money|execute immediately)\b", re.IGNORECASE)
+
+        regex = re.compile(
+            r"\b(banker|guaranteed|sure bet|free money|execute immediately)\b",
+            re.IGNORECASE,
+        )
         lock_regex = re.compile(r"(?<![a-zA-Z])lock(s)?(?![a-zA-Z])", re.IGNORECASE)
-        
+
         violations = []
         for p in web_src.rglob("*"):
-            if not p.is_file() or p.suffix not in (".ts", ".tsx", ".js", ".jsx", ".json", ".mdx", ".html"):
+            if not p.is_file() or p.suffix not in (
+                ".ts",
+                ".tsx",
+                ".js",
+                ".jsx",
+                ".json",
+                ".mdx",
+                ".html",
+            ):
                 continue
             if ".test." in p.name or ".spec." in p.name:
                 continue  # skip test suites that explicitly assert against banned terms
-                
+
             text = p.read_text(encoding="utf-8", errors="ignore")
-            
+
             if regex.search(text):
                 for match in regex.finditer(text):
-                    violations.append(f"{p.relative_to(web_src)}: matched '{match.group(0)}'")
-            
+                    violations.append(
+                        f"{p.relative_to(web_src)}: matched '{match.group(0)}'"
+                    )
+
             # Check for standalone 'lock'
             for match in lock_regex.finditer(text):
-                line = text[max(0, match.start() - 30):min(len(text), match.end() + 30)]
-                violations.append(f"{p.relative_to(web_src)}: matched 'lock' in line: '{line.strip()}'")
+                line = text[
+                    max(0, match.start() - 30) : min(len(text), match.end() + 30)
+                ]
+                violations.append(
+                    f"{p.relative_to(web_src)}: matched 'lock' in line: '{line.strip()}'"
+                )
 
-        assert violations == [], f"Found prohibited copy leaks in frontend: {violations}"
+        assert violations == [], (
+            f"Found prohibited copy leaks in frontend: {violations}"
+        )
 
 
 # ============================================================================
 # DOMAIN 4: STAKING GUARDRAILS (QUARTER-KELLY 0.25 & 5% CAP)
 # ============================================================================
 
+
 class TestStakingGuardrails:
     """Stress-test Quarter-Kelly and 5% hard cap enforcement across all engines."""
 
     def test_constants_conform_to_apex_directive(self):
-        assert KELLY_FRACTION == 0.25, "betting_intelligence KELLY_FRACTION must be exactly 0.25 (Quarter-Kelly)"
-        assert MAX_KELLY_CAP == 0.05, "betting_intelligence MAX_KELLY_CAP must be exactly 0.05 (5%)"
-        assert CORE_KELLY_FRACTION == 0.25, "core_engine CORE_KELLY_FRACTION must be exactly 0.25 (Quarter-Kelly)"
-        assert CORE_MAX_KELLY_CAP == 0.05, "core_engine CORE_MAX_KELLY_CAP must be exactly 0.05 (5%)"
-        assert SPECULATIVE_STAKE_CAP == 0.0, "SPECULATIVE must have 0.0 stake cap (watchlist only)"
+        assert KELLY_FRACTION == 0.25, (
+            "betting_intelligence KELLY_FRACTION must be exactly 0.25 (Quarter-Kelly)"
+        )
+        assert MAX_KELLY_CAP == 0.05, (
+            "betting_intelligence MAX_KELLY_CAP must be exactly 0.05 (5%)"
+        )
+        assert CORE_KELLY_FRACTION == 0.25, (
+            "core_engine CORE_KELLY_FRACTION must be exactly 0.25 (Quarter-Kelly)"
+        )
+        assert CORE_MAX_KELLY_CAP == 0.05, (
+            "core_engine CORE_MAX_KELLY_CAP must be exactly 0.05 (5%)"
+        )
+        assert SPECULATIVE_STAKE_CAP == 0.0, (
+            "SPECULATIVE must have 0.0 stake cap (watchlist only)"
+        )
 
     def test_all_league_policies_do_not_exceed_5pct_cap(self):
-        leagues = ["EPL", "LA_LIGA", "BUNDESLIGA", "SERIE_A", "LIGUE_1", "EREDIVISIE", "UCL"]
+        leagues = [
+            "EPL",
+            "LA_LIGA",
+            "BUNDESLIGA",
+            "SERIE_A",
+            "LIGUE_1",
+            "EREDIVISIE",
+            "UCL",
+        ]
         for league_id in leagues:
             policy = get_league_policy(league_id)
-            assert policy.kelly_cap <= 0.05, f"League {league_id} kelly_cap {policy.kelly_cap} exceeds 5% cap"
+            assert policy.kelly_cap <= 0.05, (
+                f"League {league_id} kelly_cap {policy.kelly_cap} exceeds 5% cap"
+            )
 
     def test_full_kelly_calculation_mathematical_oracle(self):
         """Verify _full_kelly and Quarter-Kelly under extreme boundary conditions."""
         # Case 1: Negative EV -> 0.0
         assert _full_kelly(ev=-0.10, decimal_odds=2.0) == 0.0
         assert _full_kelly(ev=0.0, decimal_odds=2.0) == 0.0
-        
+
         # Case 2: Odds <= 1.0 -> 0.0
         assert _full_kelly(ev=0.50, decimal_odds=1.0) == 0.0
         assert _full_kelly(ev=0.50, decimal_odds=0.9) == 0.0
-        
+
         # Case 3: Standard 10% edge: p = 0.55, odds = 2.0 -> EV = 0.10, Full Kelly = 0.10 / 1.0 = 0.10
         fk = _full_kelly(ev=0.10, decimal_odds=2.0)
         assert math.isclose(fk, 0.10, rel_tol=1e-5)
         qk = min(fk * KELLY_FRACTION, MAX_KELLY_CAP)
         assert math.isclose(qk, 0.025, rel_tol=1e-5)
-        
+
         # Case 4: Extreme edge: p = 0.90, odds = 5.0 -> EV = 3.50, Full Kelly = 3.50 / 4.0 = 0.875
         # Quarter-Kelly = 0.875 * 0.25 = 0.21875 -> Must be capped at 0.05!
         fk_extreme = _full_kelly(ev=3.50, decimal_odds=5.0)
@@ -486,38 +570,41 @@ class TestStakingGuardrails:
     def test_rl_betting_agent_strictly_enforces_max_kelly_cap(self):
         """RLBettingAgent must clamp continuous actions and Kelly fallbacks to max_kelly_cap."""
         agent = RLBettingAgent(max_kelly_cap=0.05)
-        
+
         # Test extreme input values
         probs = {"home_win": 0.99, "draw": 0.005, "away_win": 0.005}
         odds = {"home_win": 10.0, "draw": 10.0, "away_win": 10.0}
-        
+
         rec = agent.recommend(
             probabilities=probs,
             odds=odds,
             confidence=0.99,
             epistemic_unc=0.01,
         )
-        assert 0.0 <= rec.stake_fraction <= 0.05, f"RL stake {rec.stake_fraction} exceeded 5% cap"
+        assert 0.0 <= rec.stake_fraction <= 0.05, (
+            f"RL stake {rec.stake_fraction} exceeded 5% cap"
+        )
 
     def test_adversarial_monte_carlo_sweep_over_all_odds_and_probs(self):
         """Generate 5,000 random adversarial (probability, odds) pairs and verify invariants."""
         import random
+
         random.seed(42)
-        
+
         for _ in range(5000):
             p = random.uniform(0.001, 0.999)
             odds = random.uniform(1.01, 50.0)
-            
+
             ev = _expected_value(p, odds)
             fk = _full_kelly(ev, odds)
             qk = min(fk * 0.25, 0.05) if ev > 0 else 0.0
-            
+
             # INVARIANT 1: Stake is never negative
             assert qk >= 0.0, f"Negative stake: {qk} for p={p}, odds={odds}"
-            
+
             # INVARIANT 2: Stake never exceeds 5% hard cap
             assert qk <= 0.05, f"Stake exceeded 5% cap: {qk} for p={p}, odds={odds}"
-            
+
             # INVARIANT 3: If EV <= 0, stake is strictly 0.0
             if ev <= 0:
                 assert qk == 0.0, f"Non-zero stake for non-positive EV: {qk} (ev={ev})"

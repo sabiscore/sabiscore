@@ -23,6 +23,7 @@ every analysis (docs/DEBT.md item 42), and the `partial` branch is checked
 first. It is one gate-flip away from being the most-rendered string in the
 product, which is precisely why it is worth pinning now rather than after.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -49,9 +50,9 @@ SCANNED_SUFFIXES = {".py", ".ts", ".tsx"}
 #: accented character (`Málaga`, `München`) and get disabled within a week.
 MOJIBAKE_SIGNATURES: tuple[bytes, ...] = (
     b"\xc3\xa2\xe2\x82\xac",  # â€  — em/en dash, quotes, ellipsis family
-    b"\xc3\xa2\xe2\x80",      # â€  (alternate continuation)
-    b"\xc3\xaf\xc2\xbf",      # ï¿  — replacement-character family
-    b"\xc3\x83\xc2",          # ÃƒÂ — doubly-doubled encoding
+    b"\xc3\xa2\xe2\x80",  # â€  (alternate continuation)
+    b"\xc3\xaf\xc2\xbf",  # ï¿  — replacement-character family
+    b"\xc3\x83\xc2",  # ÃƒÂ — doubly-doubled encoding
 )
 
 
@@ -64,7 +65,9 @@ def _scanned_files() -> list[Path]:
             if path.suffix not in SCANNED_SUFFIXES:
                 continue
             # Stale bytecode/build output is not source and is gitignored.
-            if any(part in {"__pycache__", "node_modules", ".next"} for part in path.parts):
+            if any(
+                part in {"__pycache__", "node_modules", ".next"} for part in path.parts
+            ):
                 continue
             if path.name.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")):
                 continue
@@ -75,7 +78,9 @@ def _scanned_files() -> list[Path]:
 def test_scan_covers_a_meaningful_surface() -> None:
     """Guard the guard: every assertion below is vacuous on an empty file list."""
     files = _scanned_files()
-    assert len(files) > 200, f"expected to scan the real source tree, found {len(files)} files"
+    assert len(files) > 200, (
+        f"expected to scan the real source tree, found {len(files)} files"
+    )
 
 
 def test_no_double_encoded_utf8_in_source_literals() -> None:
@@ -85,7 +90,9 @@ def test_no_double_encoded_utf8_in_source_literals() -> None:
         for signature in MOJIBAKE_SIGNATURES:
             if signature in blob:
                 line_no = blob[: blob.index(signature)].count(b"\n") + 1
-                offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_no}  {signature!r}")
+                offenders.append(
+                    f"{path.relative_to(REPO_ROOT)}:{line_no}  {signature!r}"
+                )
                 break
 
     assert not offenders, (

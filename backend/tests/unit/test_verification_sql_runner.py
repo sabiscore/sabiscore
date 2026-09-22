@@ -124,11 +124,15 @@ def test_semantic_identity_audit_has_fail_closed_gate() -> None:
 
 def test_clv_audits_select_one_chain_per_match_and_generation() -> None:
     generation_sql = (
-        _BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql"
-    ).read_text(encoding="utf-8").lower()
+        (_BACKEND_DIR / "scripts" / "verify_clv_by_generation.sql")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
     settlement_sql = (
-        _BACKEND_DIR / "scripts" / "verify_clv_settlement.sql"
-    ).read_text(encoding="utf-8").lower()
+        (_BACKEND_DIR / "scripts" / "verify_clv_settlement.sql")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
 
     assert "partition by p.match_id, p.model_version" in generation_sql
     assert "where prediction_rank = 1" in generation_sql

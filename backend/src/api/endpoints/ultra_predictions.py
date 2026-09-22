@@ -27,14 +27,16 @@ router = APIRouter(prefix="/ultra", tags=["ultra-predictions"])
 # Request/Response Models
 # ============================================================================
 
+
 class UltraMatchFeatures(BaseModel):
     """Features for Ultra prediction model"""
+
     match_id: str = Field(..., description="Unique match identifier")
     home_team_id: int = Field(..., description="Home team ID")
     away_team_id: int = Field(..., description="Away team ID")
     league_id: int = Field(..., description="League ID")
     match_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # Team form
     home_last_5_wins: int = Field(default=2, ge=0, le=5)
     home_last_5_draws: int = Field(default=1, ge=0, le=5)
@@ -42,51 +44,55 @@ class UltraMatchFeatures(BaseModel):
     away_last_5_wins: int = Field(default=2, ge=0, le=5)
     away_last_5_draws: int = Field(default=1, ge=0, le=5)
     away_last_5_losses: int = Field(default=2, ge=0, le=5)
-    
+
     # Goals statistics
     home_goals_scored_avg: float = Field(default=1.5, ge=0)
     home_goals_conceded_avg: float = Field(default=1.2, ge=0)
     away_goals_scored_avg: float = Field(default=1.3, ge=0)
     away_goals_conceded_avg: float = Field(default=1.4, ge=0)
-    
+
     # H2H
     h2h_home_wins: int = Field(default=3, ge=0)
     h2h_draws: int = Field(default=2, ge=0)
     h2h_away_wins: int = Field(default=3, ge=0)
-    
+
     # Odds (optional)
     home_odds: Optional[float] = Field(default=None, gt=1.0)
     draw_odds: Optional[float] = Field(default=None, gt=1.0)
     away_odds: Optional[float] = Field(default=None, gt=1.0)
 
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "match_id": "arsenal_chelsea_2024",
-            "home_team_id": 42,
-            "away_team_id": 49,
-            "league_id": 1,
-            "match_date": "2024-01-15T15:00:00Z",
-            "home_last_5_wins": 3,
-            "home_last_5_draws": 1,
-            "home_last_5_losses": 1,
-            "away_last_5_wins": 2,
-            "away_last_5_draws": 2,
-            "away_last_5_losses": 1,
-            "home_goals_scored_avg": 2.1,
-            "home_goals_conceded_avg": 0.9,
-            "away_goals_scored_avg": 1.8,
-            "away_goals_conceded_avg": 1.1,
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "match_id": "arsenal_chelsea_2024",
+                "home_team_id": 42,
+                "away_team_id": 49,
+                "league_id": 1,
+                "match_date": "2024-01-15T15:00:00Z",
+                "home_last_5_wins": 3,
+                "home_last_5_draws": 1,
+                "home_last_5_losses": 1,
+                "away_last_5_wins": 2,
+                "away_last_5_draws": 2,
+                "away_last_5_losses": 1,
+                "home_goals_scored_avg": 2.1,
+                "home_goals_conceded_avg": 0.9,
+                "away_goals_scored_avg": 1.8,
+                "away_goals_conceded_avg": 1.1,
+            }
         }
-    })
+    )
 
 
 class UltraPredictRequest(BaseModel):
     """Request for Ultra prediction"""
+
     features: UltraMatchFeatures
 
 
 class UltraPredictResponse(BaseModel):
     """Response from Ultra prediction"""
+
     match_id: str
     home_win_prob: float = Field(..., ge=0, le=1)
     draw_prob: float = Field(..., ge=0, le=1)
@@ -101,11 +107,13 @@ class UltraPredictResponse(BaseModel):
 
 class UltraBatchPredictRequest(BaseModel):
     """Batch prediction request"""
+
     matches: List[UltraMatchFeatures] = Field(..., max_length=50)
 
 
 class UltraBatchPredictResponse(BaseModel):
     """Batch prediction response"""
+
     predictions: List[UltraPredictResponse]
     total_latency_ms: int
     avg_latency_ms: float
@@ -113,6 +121,7 @@ class UltraBatchPredictResponse(BaseModel):
 
 class UltraHealthResponse(BaseModel):
     """Ultra service health status"""
+
     status: str
     model_loaded: bool
     model_version: str
@@ -124,6 +133,7 @@ class UltraHealthResponse(BaseModel):
 
 class UltraStatusResponse(BaseModel):
     """Ultra service status details"""
+
     service: str
     version: str
     ultra_model_loaded: bool
@@ -142,6 +152,7 @@ _service_start_time = datetime.now(timezone.utc)
 # Endpoints
 # ============================================================================
 
+
 @router.post("/predict", response_model=UltraPredictResponse)
 async def ultra_predict(
     request: UltraPredictRequest,
@@ -151,29 +162,31 @@ async def ultra_predict(
 ):
     """
     Generate prediction using Ultra ML ensemble
-    
+
     Features:
     - Meta-learning ensemble (XGBoost + LightGBM + CatBoost)
     - 120+ engineered features
     - Redis caching (<5ms cache hits)
     - Automatic fallback to legacy model
-    
+
     Target: <30ms latency with cache, <100ms without
     """
     start_time = datetime.now(timezone.utc)
-    
+
     try:
         # Get service
         service = get_ultra_prediction_service(db)
-        
+
         features = request.features
-        
+
         # Check cache first
         cache_key = f"ultra:{features.match_id}"
         cached = cache_manager.get(cache_key)
-        
+
         if cached is not None:
-            latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            latency_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
             logger.debug(f"Cache hit for {features.match_id} in {latency_ms}ms")
             return UltraPredictResponse(
                 match_id=features.match_id,
@@ -187,17 +200,17 @@ async def ultra_predict(
                 latency_ms=latency_ms,
                 cached=True,
             )
-        
+
         # Map league_id to LeagueCode enum
         league_map = {
             1: "epl",
-            2: "bundesliga", 
+            2: "bundesliga",
             3: "la_liga",
             4: "serie_a",
             5: "ligue_1",
         }
         league_code = league_map.get(features.league_id, "epl")
-        
+
         # Convert request to legacy format for service compatibility
         legacy_request = MatchPredictionRequest(
             home_team=f"Team_{features.home_team_id}",
@@ -205,7 +218,7 @@ async def ultra_predict(
             league=league_code,
             match_id=features.match_id,
         )
-        
+
         # Generate prediction with timeout
         try:
             result = await asyncio.wait_for(
@@ -213,24 +226,28 @@ async def ultra_predict(
                     match_id=features.match_id,
                     request=legacy_request,
                 ),
-                timeout=5.0
+                timeout=5.0,
             )
         except asyncio.TimeoutError:
             logger.error(f"Ultra prediction timed out for {features.match_id}")
             raise HTTPException(
                 status_code=504,
-                detail="Prediction request timed out. Please try again."
+                detail="Prediction request timed out. Please try again.",
             )
-        
-        latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-        
+
+        latency_ms = int(
+            (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        )
+
         # Determine predicted outcome
         probs = result.predictions
-        outcomes = [("home_win", probs.get("home_win", 0)), 
-                   ("draw", probs.get("draw", 0)), 
-                   ("away_win", probs.get("away_win", 0))]
+        outcomes = [
+            ("home_win", probs.get("home_win", 0)),
+            ("draw", probs.get("draw", 0)),
+            ("away_win", probs.get("away_win", 0)),
+        ]
         predicted_outcome = max(outcomes, key=lambda x: x[1])[0]
-        
+
         # Build response
         response = UltraPredictResponse(
             match_id=result.match_id,
@@ -244,25 +261,22 @@ async def ultra_predict(
             latency_ms=latency_ms,
             cached=False,
         )
-        
+
         # Cache result
         cache_manager.set(cache_key, response.model_dump(), ttl=300)
-        
+
         logger.info(
             f"Ultra prediction: {features.match_id} -> {predicted_outcome} "
             f"(conf={result.confidence:.2f}, latency={latency_ms}ms)"
         )
-        
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Ultra prediction error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
 @router.post("/predict/batch", response_model=UltraBatchPredictResponse)
@@ -274,26 +288,23 @@ async def ultra_predict_batch(
 ):
     """
     Batch prediction for multiple matches
-    
+
     More efficient for bulk operations (up to 50 matches)
     """
     start_time = datetime.now(timezone.utc)
-    
+
     if len(request.matches) == 0:
         return UltraBatchPredictResponse(
-            predictions=[],
-            total_latency_ms=0,
-            avg_latency_ms=0.0
+            predictions=[], total_latency_ms=0, avg_latency_ms=0.0
         )
-    
+
     if len(request.matches) > 50:
         raise HTTPException(
-            status_code=400,
-            detail="Batch size exceeds maximum of 50 matches"
+            status_code=400, detail="Batch size exceeds maximum of 50 matches"
         )
-    
+
     predictions: List[UltraPredictResponse] = []
-    
+
     try:
         # Process matches in parallel
         tasks = [
@@ -301,33 +312,36 @@ async def ultra_predict_batch(
                 UltraPredictRequest(features=match),
                 background_tasks,
                 request_context,
-                db
+                db,
             )
             for match in request.matches
         ]
-        
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for result in results:
             if isinstance(result, Exception):
                 logger.warning(f"Batch prediction error: {result}")
                 continue
             predictions.append(result)
-        
-        total_latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-        avg_latency_ms = total_latency_ms / len(request.matches) if request.matches else 0.0
-        
+
+        total_latency_ms = int(
+            (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        )
+        avg_latency_ms = (
+            total_latency_ms / len(request.matches) if request.matches else 0.0
+        )
+
         return UltraBatchPredictResponse(
             predictions=predictions,
             total_latency_ms=total_latency_ms,
-            avg_latency_ms=avg_latency_ms
+            avg_latency_ms=avg_latency_ms,
         )
-        
+
     except Exception as e:
         logger.error(f"Batch prediction error: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Batch prediction failed: {str(e)}"
+            status_code=500, detail=f"Batch prediction failed: {str(e)}"
         )
 
 
@@ -335,13 +349,13 @@ async def ultra_predict_batch(
 async def ultra_health():
     """
     Ultra service health check
-    
+
     Returns model status, cache connectivity, and performance metrics
     """
     try:
         service = get_ultra_prediction_service()
         status_data = service.get_service_status()
-        
+
         # Check Redis
         redis_connected = False
         try:
@@ -349,18 +363,23 @@ async def ultra_health():
             redis_connected = cache_manager.get("health_check") == "ok"
         except Exception:
             pass
-        
+
         # Calculate uptime
-        uptime_seconds = (datetime.now(timezone.utc) - _service_start_time).total_seconds()
-        
+        uptime_seconds = (
+            datetime.now(timezone.utc) - _service_start_time
+        ).total_seconds()
+
         # Determine status
         if status_data["ultra_model_loaded"] and redis_connected:
             status = "healthy"
-        elif status_data["ultra_model_loaded"] or status_data["legacy_fallback_available"]:
+        elif (
+            status_data["ultra_model_loaded"]
+            or status_data["legacy_fallback_available"]
+        ):
             status = "degraded"
         else:
             status = "unhealthy"
-        
+
         return UltraHealthResponse(
             status=status,
             model_loaded=status_data["ultra_model_loaded"],
@@ -370,7 +389,7 @@ async def ultra_health():
             total_requests=int(status_data["metrics"]["predictions_count"]),
             cache_hit_rate=status_data["metrics"]["cache_hit_rate"],
         )
-        
+
     except Exception as e:
         logger.error(f"Health check error: {e}")
         return UltraHealthResponse(
@@ -394,15 +413,14 @@ async def ultra_status():
         return UltraStatusResponse(**service.get_service_status())
     except Exception as e:
         logger.error(f"Status check error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Status check failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
 
 
 @router.delete("/cache/clear")
 async def clear_cache(
-    pattern: Optional[str] = Query(default="ultra:*", description="Cache key pattern to clear")
+    pattern: Optional[str] = Query(
+        default="ultra:*", description="Cache key pattern to clear"
+    ),
 ):
     """
     Clear prediction cache (admin operation)
@@ -414,10 +432,7 @@ async def clear_cache(
         return {"message": "Cache cleared successfully", "pattern": pattern}
     except Exception as e:
         logger.error(f"Cache clear error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Cache clear failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
 
 
 @router.get("/metrics")
@@ -428,7 +443,7 @@ async def get_metrics():
     try:
         service = get_ultra_prediction_service()
         status = service.get_service_status()
-        
+
         return {
             "predictions": {
                 "total": status["metrics"]["predictions_count"],
@@ -449,6 +464,5 @@ async def get_metrics():
     except Exception as e:
         logger.error(f"Metrics error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Metrics retrieval failed: {str(e)}"
+            status_code=500, detail=f"Metrics retrieval failed: {str(e)}"
         )

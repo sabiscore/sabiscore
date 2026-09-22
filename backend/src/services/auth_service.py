@@ -36,7 +36,9 @@ def _naive_utc_now() -> datetime:
 
 def get_anon_id_from_request(request: Request) -> Optional[str]:
     """Extract anonymous session ID from header or cookie."""
-    header_val = request.headers.get("X-Anonymous-Session") or request.headers.get("X-Anon-Id")
+    header_val = request.headers.get("X-Anonymous-Session") or request.headers.get(
+        "X-Anon-Id"
+    )
     if header_val:
         return header_val.strip()
     cookie_val = request.cookies.get("sabi_anon_id")
@@ -466,7 +468,8 @@ class UserStateService:
         await db.execute(
             update(UserNotificationSubscription)
             .where(
-                UserNotificationSubscription.anonymous_session_id == anonymous_session_id
+                UserNotificationSubscription.anonymous_session_id
+                == anonymous_session_id
             )
             .values(user_id=user_id, anonymous_session_id=None)
         )

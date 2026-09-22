@@ -212,9 +212,10 @@ def validate(registry: dict[str, Any]) -> tuple[list[str], list[str]]:
         # A retrospectively migrated study is expected to have gaps. A NEW
         # experiment declaring half its fields UNDECLARED is a process failure,
         # because it could have recorded them at run time.
-        if not entry.get("migrated_retrospectively") and undeclared > len(
-            REQUIRED_FIELDS
-        ) // 3:
+        if (
+            not entry.get("migrated_retrospectively")
+            and undeclared > len(REQUIRED_FIELDS) // 3
+        ):
             warnings.append(
                 f"{entry_id}: {undeclared} UNDECLARED fields on an experiment "
                 "not marked migrated_retrospectively — record these at run time"
@@ -246,10 +247,7 @@ def main() -> int:
     if errors or (args.strict and warnings):
         print(f"\nFAIL: {len(errors)} error(s), {len(warnings)} warning(s)")
         return 1
-    print(
-        f"OK: {count} experiment(s) valid against §38 "
-        f"({len(warnings)} warning(s))"
-    )
+    print(f"OK: {count} experiment(s) valid against §38 ({len(warnings)} warning(s))")
     return 0
 
 

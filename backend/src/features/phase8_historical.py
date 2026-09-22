@@ -63,6 +63,7 @@ the hard way (``docs/DEBT.md`` items 23/24): a malformed or self-play record is
 skipped, counted, and the loop continues. It never raises, and it never
 poisons the rows around it.
 """
+
 from __future__ import annotations
 
 import logging
@@ -236,7 +237,9 @@ def compute_phase8_training_columns(
             league, date, home, away, home_goals, away_goals = _coerce_match(record)
         except (KeyError, TypeError, ValueError) as exc:
             skipped_malformed += 1
-            logger.warning("phase8 replay: skipping malformed match at index %d (%s)", index, exc)
+            logger.warning(
+                "phase8 replay: skipping malformed match at index %d (%s)", index, exc
+            )
             continue
 
         # A team cannot play itself. Elo hit exactly this in production (26 rows,
@@ -245,7 +248,9 @@ def compute_phase8_training_columns(
         if home == away:
             skipped_self_play += 1
             logger.warning(
-                "phase8 replay: skipping self-play match at index %d (%s vs itself)", index, home
+                "phase8 replay: skipping self-play match at index %d (%s vs itself)",
+                index,
+                home,
             )
             continue
 
@@ -290,7 +295,8 @@ def compute_phase8_training_columns(
         except Exception:  # noqa: BLE001 - one bad record must not wedge the batch
             skipped_malformed += 1
             logger.warning(
-                "phase8 replay: rating update failed at index %d; ratings unchanged", index,
+                "phase8 replay: rating update failed at index %d; ratings unchanged",
+                index,
                 exc_info=True,
             )
 

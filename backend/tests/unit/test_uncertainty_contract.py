@@ -20,6 +20,7 @@ intended evidence. Two tiers:
     certification directive's Stage 7 mandate against evaluating on in-sample
     or randomly-split data.
 """
+
 from __future__ import annotations
 
 import sys
@@ -37,7 +38,11 @@ from src.models.ensemble_uncertainty import (
     member_probabilities,
 )
 from src.models.evaluation.metrics import ranked_probability_score
-from src.models.uncertainty_policy import UNCERTAINTY_EVIDENCE_FLOORS, UNCERTAINTY_GATES, UNCERTAINTY_METHOD
+from src.models.uncertainty_policy import (
+    UNCERTAINTY_EVIDENCE_FLOORS,
+    UNCERTAINTY_GATES,
+    UNCERTAINTY_METHOD,
+)
 
 # Not a package (pytest.ini excludes scripts/ from collection) — same
 # sys.path pattern test_train_on_real_matches_elo.py already established.
@@ -97,7 +102,10 @@ def _batched_member_probabilities(models_dict, X: np.ndarray) -> list:
 
 
 def test_min_members_matches_the_frozen_policy():
-    assert MIN_MEMBERS == UNCERTAINTY_GATES["sufficient_members"]["threshold"]["min_members"]
+    assert (
+        MIN_MEMBERS
+        == UNCERTAINTY_GATES["sufficient_members"]["threshold"]["min_members"]
+    )
 
 
 def test_contract_version_matches_stage_10_example():
@@ -105,7 +113,10 @@ def test_contract_version_matches_stage_10_example():
 
 
 def test_below_min_members_is_unavailable():
-    members = [np.array([0.6, 0.3, 0.1]), np.array([0.5, 0.3, 0.2])]  # only 2 < MIN_MEMBERS
+    members = [
+        np.array([0.6, 0.3, 0.1]),
+        np.array([0.5, 0.3, 0.2]),
+    ]  # only 2 < MIN_MEMBERS
     result = dispersion_from_members(members)
     assert result == UNAVAILABLE
     assert result.available is False
@@ -179,8 +190,12 @@ def test_epistemic_is_not_a_hidden_function_of_the_aggregate_vector():
     members = [np.array([0.5, 0.3, 0.2])] * 8
     result = dispersion_from_members(members)
     assert result.epistemic == pytest.approx(0.0, abs=1e-9)
-    assert 1.0 - max(0.5, 0.3, 0.2) > 0.1  # the forbidden proxy is clearly non-zero here
-    assert result.total > 0.5  # aleatoric/total are legitimately non-zero — only epistemic must vanish
+    assert (
+        1.0 - max(0.5, 0.3, 0.2) > 0.1
+    )  # the forbidden proxy is clearly non-zero here
+    assert (
+        result.total > 0.5
+    )  # aleatoric/total are legitimately non-zero — only epistemic must vanish
 
 
 def test_member_probabilities_skips_non_finite_or_malformed_trees():
@@ -241,7 +256,9 @@ def real_epl_scores():
     if not cache_dir.exists():
         pytest.skip(f"real corpus not present at {cache_dir}")
 
-    artifact_path = Path(__file__).resolve().parents[2] / "models" / "epl_ensemble_v5_phase7.pkl"
+    artifact_path = (
+        Path(__file__).resolve().parents[2] / "models" / "epl_ensemble_v5_phase7.pkl"
+    )
     if not artifact_path.exists():
         pytest.skip(f"real EPL artifact not present at {artifact_path}")
     holdout_season = joblib.load(artifact_path)["model_metadata"]["holdout_season"]
@@ -274,7 +291,9 @@ def real_epl_scores():
         X = np.asarray(row, dtype=np.float64).reshape(1, -1)
         members = member_probabilities(bundle.models_dict, X)
         result = dispersion_from_members(members)
-        assert result.available, "real artifact must produce a real member set on every row"
+        assert result.available, (
+            "real artifact must produce a real member set on every row"
+        )
         mean_p = np.mean(np.stack(members, axis=0), axis=0)
         epistemic[i] = result.epistemic
         aleatoric[i] = result.aleatoric
@@ -300,7 +319,9 @@ class TestRealCorpusValidation:
     certification directive explicitly forbids manufacturing a pass."""
 
     def test_sufficient_rows_for_the_evidence_floor(self, real_epl_scores):
-        assert real_epl_scores["n"] >= UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"]
+        assert (
+            real_epl_scores["n"] >= UNCERTAINTY_EVIDENCE_FLOORS["min_validation_rows"]
+        )
 
     def test_non_negative_on_real_predictions(self, real_epl_scores):
         tolerance = UNCERTAINTY_GATES["non_negative"]["threshold"]["tolerance"]
@@ -319,7 +340,9 @@ class TestRealCorpusValidation:
         max_abs = UNCERTAINTY_GATES["independence_from_confidence"]["threshold"][
             "max_abs_confidence_correlation"
         ]
-        assert abs(corr) <= max_abs, f"corr(epistemic, 1-confidence)={corr:.4f} exceeds {max_abs}"
+        assert abs(corr) <= max_abs, (
+            f"corr(epistemic, 1-confidence)={corr:.4f} exceeds {max_abs}"
+        )
 
     @pytest.mark.xfail(
         reason="Fixing X feature alignment revealed the true spread ratio is ~1.31 (below 2.0). The scrambled features artificially widened the spread previously."
@@ -388,7 +411,9 @@ class TestRealCorpusValidation:
         order = np.argsort(epistemic)
         bucket_size = len(order) // n_buckets
         buckets = [
-            order[i * bucket_size : (i + 1) * bucket_size] if i < n_buckets - 1 else order[i * bucket_size :]
+            order[i * bucket_size : (i + 1) * bucket_size]
+            if i < n_buckets - 1
+            else order[i * bucket_size :]
             for i in range(n_buckets)
         ]
         assert all(len(b) >= min_rows for b in buckets)
@@ -417,7 +442,10 @@ def epl_holdout_matrix():
 
     from src.models.prediction import PredictionEngine
 
-    if not _CACHE_DIR.exists() or not (_MODELS_DIR / "epl_ensemble_v5_phase7.pkl").exists():
+    if (
+        not _CACHE_DIR.exists()
+        or not (_MODELS_DIR / "epl_ensemble_v5_phase7.pkl").exists()
+    ):
         pytest.skip("real corpus or EPL artifact not present")
 
     epl = build_dataset(load_matches(_CACHE_DIR)).get("EPL")
@@ -442,9 +470,14 @@ def test_batched_helper_is_exactly_equivalent_to_production(epl_holdout_matrix):
     this equivalence. Bit-for-bit, not approximately — there is no floating
     point reordering between the two paths, so any deviation means drift."""
     bundle, X = epl_holdout_matrix["bundle"], epl_holdout_matrix["X"][:25]
-    batched = [dispersion_from_members(m) for m in _batched_member_probabilities(bundle.models_dict, X)]
+    batched = [
+        dispersion_from_members(m)
+        for m in _batched_member_probabilities(bundle.models_dict, X)
+    ]
     per_row = [
-        dispersion_from_members(member_probabilities(bundle.models_dict, row.reshape(1, -1)))
+        dispersion_from_members(
+            member_probabilities(bundle.models_dict, row.reshape(1, -1))
+        )
         for row in X
     ]
     for got, want in zip(batched, per_row):
@@ -473,12 +506,16 @@ class TestOutOfSupport:
     @pytest.fixture(scope="class")
     def regimes(self, epl_holdout_matrix):
         bundle, X = epl_holdout_matrix["bundle"], epl_holdout_matrix["X"]
-        span = np.where(X.max(axis=0) - X.min(axis=0) > 0, X.max(axis=0) - X.min(axis=0), 1.0)
+        span = np.where(
+            X.max(axis=0) - X.min(axis=0) > 0, X.max(axis=0) - X.min(axis=0), 1.0
+        )
         rng = np.random.default_rng(0)
 
         def epistemic_for(matrix):
-            results = [dispersion_from_members(m)
-                       for m in _batched_member_probabilities(bundle.models_dict, matrix)]
+            results = [
+                dispersion_from_members(m)
+                for m in _batched_member_probabilities(bundle.models_dict, matrix)
+            ]
             assert all(r.available for r in results), "every regime must still compute"
             return np.array([r.epistemic for r in results])
 
@@ -493,7 +530,8 @@ class TestOutOfSupport:
         }
 
     @pytest.mark.parametrize(
-        "regime", ["far_above_range", "far_below_range", "all_zero", "shuffled_features"]
+        "regime",
+        ["far_above_range", "far_below_range", "all_zero", "shuffled_features"],
     )
     def test_novel_regimes_raise_epistemic_above_in_distribution(self, regimes, regime):
         in_dist = regimes["in_distribution"].mean()
@@ -548,7 +586,9 @@ def cross_league_scores():
         holdout = _artifact_metadata(slug)["holdout_season"]
         mask = np.asarray(data["seasons"]) == holdout
         if int(mask.sum()) < floor:
-            skipped[league] = f"{int(mask.sum())} rows in declared holdout {holdout} (floor {floor})"
+            skipped[league] = (
+                f"{int(mask.sum())} rows in declared holdout {holdout} (floor {floor})"
+            )
             continue
         bundle = asyncio.run(PredictionEngine().get_artifact_bundle(league))
         if bundle is None or not bundle.models_dict:
@@ -563,10 +603,14 @@ def cross_league_scores():
             "results": results,
             "epistemic": np.array([r.epistemic for r in results]),
             "total": np.array([r.total for r in results]),
-            "rps": np.array([
-                ranked_probability_score(int(y[i]), list(np.mean(np.stack(members[i]), axis=0)))
-                for i in range(len(y))
-            ]),
+            "rps": np.array(
+                [
+                    ranked_probability_score(
+                        int(y[i]), list(np.mean(np.stack(members[i]), axis=0))
+                    )
+                    for i in range(len(y))
+                ]
+            ),
             "n": len(y),
             "holdout_season": holdout,
         }
@@ -587,20 +631,35 @@ class TestRobustness:
     history depth to bucket on.
     """
 
-    def test_every_scored_league_produces_a_valid_measurement(self, cross_league_scores):
+    def test_every_scored_league_produces_a_valid_measurement(
+        self, cross_league_scores
+    ):
         scored = cross_league_scores["scored"]
         assert len(scored) >= 5, f"expected >=5 leagues, got {sorted(scored)}"
         tolerance = UNCERTAINTY_GATES["non_negative"]["threshold"]["tolerance"]
-        min_members = UNCERTAINTY_GATES["sufficient_members"]["threshold"]["min_members"]
+        min_members = UNCERTAINTY_GATES["sufficient_members"]["threshold"][
+            "min_members"
+        ]
         for league, s in scored.items():
-            assert all(r.available for r in s["results"]), f"{league}: a row failed to compute"
-            assert bool((s["epistemic"] >= -tolerance).all()), f"{league}: negative epistemic"
-            assert bool((s["epistemic"] <= s["total"] + tolerance).all()), f"{league}: epistemic > total"
-            assert bool((s["total"] <= MAX_ENTROPY_NATS + tolerance).all()), f"{league}: total > ln(3)"
-            assert all(r.model_count >= min_members for r in s["results"]), f"{league}: too few members"
+            assert all(r.available for r in s["results"]), (
+                f"{league}: a row failed to compute"
+            )
+            assert bool((s["epistemic"] >= -tolerance).all()), (
+                f"{league}: negative epistemic"
+            )
+            assert bool((s["epistemic"] <= s["total"] + tolerance).all()), (
+                f"{league}: epistemic > total"
+            )
+            assert bool((s["total"] <= MAX_ENTROPY_NATS + tolerance).all()), (
+                f"{league}: total > ln(3)"
+            )
+            assert all(r.model_count >= min_members for r in s["results"]), (
+                f"{league}: too few members"
+            )
 
-
-    def test_error_association_direction_is_consistent_across_leagues(self, cross_league_scores):
+    def test_error_association_direction_is_consistent_across_leagues(
+        self, cross_league_scores
+    ):
         """Robustness view of the one failing gate: is the reversal an EPL
         quirk or systematic?
 
@@ -620,13 +679,17 @@ class TestRobustness:
             order = np.argsort(s["epistemic"])
             size = len(order) // n_buckets
             lowest = float(s["rps"][order[:size]].mean())
-            highest = float(s["rps"][order[(n_buckets - 1) * size:]].mean())
+            highest = float(s["rps"][order[(n_buckets - 1) * size :]].mean())
             gap = highest - lowest
-            rows.append(f"{league} n={s['n']} low={lowest:.4f} high={highest:.4f} gap={gap:+.4f}")
+            rows.append(
+                f"{league} n={s['n']} low={lowest:.4f} high={highest:.4f} gap={gap:+.4f}"
+            )
             if gap > gate["min_rps_gap_top_vs_bottom"]:
                 passing.append(league)
         if not passing:
-            pytest.xfail("error_association fails in every scored league: " + "; ".join(rows))
+            pytest.xfail(
+                "error_association fails in every scored league: " + "; ".join(rows)
+            )
 
     def test_measurement_is_valid_in_every_temporal_window(self, epl_holdout_matrix):
         """Seasons span 1920-2526; the method must produce a valid measurement
@@ -638,17 +701,27 @@ class TestRobustness:
             rows = X_all[seasons == season][:100]
             if len(rows) < 30:
                 continue
-            results = [dispersion_from_members(m)
-                       for m in _batched_member_probabilities(bundle.models_dict, rows)]
-            assert all(r.available for r in results), f"season {season}: a row failed to compute"
+            results = [
+                dispersion_from_members(m)
+                for m in _batched_member_probabilities(bundle.models_dict, rows)
+            ]
+            assert all(r.available for r in results), (
+                f"season {season}: a row failed to compute"
+            )
             epistemic = np.array([r.epistemic for r in results])
             total = np.array([r.total for r in results])
-            assert bool((epistemic >= 0.0).all()), f"season {season}: negative epistemic"
-            assert bool((epistemic <= total + 1e-9).all()), f"season {season}: epistemic > total"
+            assert bool((epistemic >= 0.0).all()), (
+                f"season {season}: negative epistemic"
+            )
+            assert bool((epistemic <= total + 1e-9).all()), (
+                f"season {season}: epistemic > total"
+            )
             checked += 1
         assert checked >= 5, f"only {checked} temporal windows had enough rows"
 
-    def test_a_missing_feature_fails_closed_on_the_real_artifact(self, epl_holdout_matrix):
+    def test_a_missing_feature_fails_closed_on_the_real_artifact(
+        self, epl_holdout_matrix
+    ):
         """The production async entry point, end to end: an incomplete evidence
         set must return `available=False`, never a zero-filled measurement."""
         import asyncio
@@ -658,7 +731,9 @@ class TestRobustness:
         columns = epl_holdout_matrix["bundle"].feature_columns
         complete = dict(zip(columns, epl_holdout_matrix["X"][0]))
 
-        assert asyncio.run(compute_ensemble_uncertainty("EPL", complete)).available is True
+        assert (
+            asyncio.run(compute_ensemble_uncertainty("EPL", complete)).available is True
+        )
 
         missing = dict(complete)
         missing.pop(columns[0])
@@ -666,6 +741,8 @@ class TestRobustness:
 
         not_finite = dict(complete)
         not_finite[columns[0]] = float("nan")
-        assert asyncio.run(compute_ensemble_uncertainty("EPL", not_finite)) == UNAVAILABLE
+        assert (
+            asyncio.run(compute_ensemble_uncertainty("EPL", not_finite)) == UNAVAILABLE
+        )
 
         assert asyncio.run(compute_ensemble_uncertainty("EPL", {})) == UNAVAILABLE

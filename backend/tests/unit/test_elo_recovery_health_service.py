@@ -1,4 +1,5 @@
 """Read-only release evidence for deterministic Elo recovery and integrity."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -22,7 +23,9 @@ async def factory():
     await engine.dispose()
 
 
-async def test_recovery_health_keeps_progress_separate_from_structural_certification(factory) -> None:
+async def test_recovery_health_keeps_progress_separate_from_structural_certification(
+    factory,
+) -> None:
     kickoff = datetime(2026, 8, 1, 15, 0)
     async with factory() as session:
         session.add(League(id="EPL", name="Premier League", country="England"))
@@ -120,10 +123,14 @@ async def test_recovery_health_keeps_progress_separate_from_structural_certifica
     assert result["structural_integrity"]["counters"]["partial_one_row_matches"] == 2
     assert result["structural_integrity"]["counters"]["self_play_matches"] == 1
     assert result["semantic_integrity"]["status"] == "PASS"
-    assert result["semantics"] == "recovery_progress_plus_direct_persisted_integrity_gates"
+    assert (
+        result["semantics"] == "recovery_progress_plus_direct_persisted_integrity_gates"
+    )
 
 
-async def test_recovery_health_detects_cross_league_historical_identity_contamination(factory) -> None:
+async def test_recovery_health_detects_cross_league_historical_identity_contamination(
+    factory,
+) -> None:
     kickoff = datetime(2026, 8, 2, 15, 0)
     async with factory() as session:
         session.add_all(

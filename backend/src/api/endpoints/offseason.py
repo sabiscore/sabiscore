@@ -176,12 +176,12 @@ def _data_availability(season_status: str) -> Dict[str, bool]:
     """Return per-source data availability flags given season status."""
     live = season_status == "IN_SEASON"
     return {
-        "historical_data": True,           # always available from DB
+        "historical_data": True,  # always available from DB
         "live_odds": live,
         "live_standings": live,
         "live_form": live,
-        "pi_ratings": True,                # computed offline, always available
-        "berrar_ratings": True,            # computed offline, always available
+        "pi_ratings": True,  # computed offline, always available
+        "berrar_ratings": True,  # computed offline, always available
         "market_drift": live,
         "match_context": live,
     }
@@ -189,7 +189,9 @@ def _data_availability(season_status: str) -> Dict[str, bool]:
 
 def _prediction_advisory(season_status: str, days_until: int) -> str:
     if season_status == "IN_SEASON":
-        return "Full live-enrichment pipeline active. Predictions use all Phase 8 signals."
+        return (
+            "Full live-enrichment pipeline active. Predictions use all Phase 8 signals."
+        )
     if days_until > 60:
         return (
             f"Off-season: {days_until} days until next season. "
@@ -234,7 +236,7 @@ async def get_offseason_status(league: str) -> dict:
             "message": (
                 f"League '{league}' is not in the season calendar. "
                 "Supported leagues: "
-                + ", ".join(sorted({v['display_name'] for v in _SEASON_TABLE.values()}))
+                + ", ".join(sorted({v["display_name"] for v in _SEASON_TABLE.values()}))
             ),
             "current_season_label": None,
             "current_season_end": None,

@@ -46,7 +46,9 @@ def test_no_runtime_script_or_alembic_file_contains_direct_schema_creation():
     for path in _tracked_hardening_files():
         text = path.read_text(encoding="utf-8", errors="ignore")
         for pattern in FORBIDDEN_SCHEMA_PATTERNS:
-            assert pattern not in text, f"Retired schema-management path found in {path.relative_to(ROOT)}"
+            assert pattern not in text, (
+                f"Retired schema-management path found in {path.relative_to(ROOT)}"
+            )
 
 
 def test_baseline_migration_is_explicit_and_orm_free():

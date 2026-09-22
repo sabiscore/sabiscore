@@ -21,6 +21,7 @@ football-data.co.uk corpora once for both:
 Adding a season whose promoted club collides with an incumbent fails here,
 loudly, instead of quietly merging two clubs' histories.
 """
+
 from __future__ import annotations
 
 import csv

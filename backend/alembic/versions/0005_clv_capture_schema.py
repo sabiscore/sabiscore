@@ -16,6 +16,7 @@ write against any fixture actually in the database. match_id (no FK, mirrors
 match_prediction_logs.match_id's existing convention) is the real join key
 until identity resolution work populates canonical_fixtures.
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -29,18 +30,33 @@ depends_on = None
 
 def upgrade() -> None:
     with op.batch_alter_table("market_snapshots") as batch_op:
-        batch_op.alter_column("canonical_fixture_id", existing_type=sa.String(), nullable=True)
+        batch_op.alter_column(
+            "canonical_fixture_id", existing_type=sa.String(), nullable=True
+        )
         batch_op.add_column(sa.Column("match_id", sa.String(), nullable=True))
-        batch_op.add_column(sa.Column("home_implied_prob_devigged", sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column("draw_implied_prob_devigged", sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column("away_implied_prob_devigged", sa.Float(), nullable=True))
         batch_op.add_column(
-            sa.Column("is_closing_line", sa.Boolean(), nullable=False, server_default=sa.false())
+            sa.Column("home_implied_prob_devigged", sa.Float(), nullable=True)
+        )
+        batch_op.add_column(
+            sa.Column("draw_implied_prob_devigged", sa.Float(), nullable=True)
+        )
+        batch_op.add_column(
+            sa.Column("away_implied_prob_devigged", sa.Float(), nullable=True)
+        )
+        batch_op.add_column(
+            sa.Column(
+                "is_closing_line",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            )
         )
     op.create_index("ix_market_snapshots_match_id", "market_snapshots", ["match_id"])
 
     with op.batch_alter_table("match_prediction_logs") as batch_op:
-        batch_op.add_column(sa.Column("closing_market_snapshot_id", sa.Integer(), nullable=True))
+        batch_op.add_column(
+            sa.Column("closing_market_snapshot_id", sa.Integer(), nullable=True)
+        )
         batch_op.create_foreign_key(
             "fk_match_prediction_logs_closing_market_snapshot",
             "market_snapshots",

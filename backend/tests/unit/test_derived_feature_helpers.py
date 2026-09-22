@@ -11,6 +11,7 @@ The risk in fixing that is train/serve skew: FeatureTransformer
 agree bit-for-bit. Both now call these helpers, and these tests pin the
 definitions against the values transformers.py has always used.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -34,8 +35,11 @@ from src.models.feature_registry import (
 def test_every_derived_name_is_a_real_canonical_feature():
     """A typo here would silently write a key the artifact never reads."""
     for name in (
-        *TEMPORAL_FEATURES, *LEAGUE_ONEHOT_FEATURES,
-        *LEAGUE_RATE_FEATURES, *COMBINATION_FEATURES, *MARKET_FEATURES_14,
+        *TEMPORAL_FEATURES,
+        *LEAGUE_ONEHOT_FEATURES,
+        *LEAGUE_RATE_FEATURES,
+        *COMBINATION_FEATURES,
+        *MARKET_FEATURES_14,
     ):
         assert name in CANONICAL_FEATURES_58, name
 
@@ -102,8 +106,10 @@ def test_league_rates_match_transformer_table():
 
 def test_combination_features_match_transformer_arithmetic():
     out = derive_combination_features(
-        home_goals_for_avg=2.0, home_goals_against_avg=1.0,
-        away_goals_for_avg=1.4, away_goals_against_avg=1.6,
+        home_goals_for_avg=2.0,
+        home_goals_against_avg=1.0,
+        away_goals_for_avg=1.4,
+        away_goals_against_avg=1.6,
     )
     assert out["combined_attack"] == pytest.approx(3.4)
     assert out["combined_defense_weakness"] == pytest.approx(2.6)

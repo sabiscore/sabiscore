@@ -1,6 +1,7 @@
 """
 Enhanced health check endpoint with comprehensive system status.
 """
+
 import logging
 import os
 from fastapi import APIRouter, Depends, Response, Request
@@ -30,6 +31,7 @@ except ImportError:  # pragma: no cover - depends on optional system package
 
 try:
     from ...connectors.source_registry import registry_summary as _v4_registry_summary
+
     _V4_REGISTRY_AVAILABLE = True
 except ImportError:
     _v4_registry_summary = None  # type: ignore[assignment]
@@ -63,7 +65,11 @@ def _discover_model_artifacts() -> Dict[str, Any]:
     files: list[Path] = []
     for base in candidates:
         try:
-            if base.is_file() and base.suffix in {".pkl", ".joblib"} and base.stat().st_size >= 10_240:
+            if (
+                base.is_file()
+                and base.suffix in {".pkl", ".joblib"}
+                and base.stat().st_size >= 10_240
+            ):
                 files.append(base)
             elif base.exists() and base.is_dir():
                 for pattern in ("*.pkl", "*.joblib"):
@@ -86,7 +92,9 @@ def _check_alembic_revision() -> Dict[str, Any]:
     head = _alembic_head_revision()
     try:
         with get_engine().connect() as conn:
-            applied = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+            applied = conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one_or_none()
     except Exception as exc:
         return {
             "status": "not_ready",
@@ -150,13 +158,13 @@ def _staking_authorization_snapshot() -> Dict[str, Any]:
 def health_check() -> Dict[str, Any]:
     """
     Comprehensive health check endpoint for monitoring and load balancers.
-    
+
     Returns:
         200: All systems operational
         503: Degraded state (some dependencies unavailable)
     """
     db_status = get_db_status()
-    
+
     health_status = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -176,19 +184,21 @@ def health_check() -> Dict[str, Any]:
         # SabiScore, and an operator should not have to go looking for it.
         # Fails closed to a non-staking answer if the manifest is unreadable.
         "staking": _staking_authorization_snapshot(),
-        "components": {}
+        "components": {},
     }
-    
+
     degraded = False
-    
+
     # Check database connectivity
     try:
         with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         health_status["components"]["database"] = {
             "status": "healthy" if not db_status["using_fallback"] else "degraded",
-            "message": "Connected" if not db_status["using_fallback"] else "Using SQLite fallback",
-            "type": db_status["url_type"]
+            "message": "Connected"
+            if not db_status["using_fallback"]
+            else "Using SQLite fallback",
+            "type": db_status["url_type"],
         }
         if db_status["using_fallback"]:
             degraded = True
@@ -197,10 +207,10 @@ def health_check() -> Dict[str, Any]:
         health_status["components"]["database"] = {
             "status": "unhealthy",
             "message": str(e),
-            "type": db_status["url_type"]
+            "type": db_status["url_type"],
         }
         degraded = True
-    
+
     # Check cache connectivity
     try:
         cache_healthy = cache.ping()
@@ -208,7 +218,7 @@ def health_check() -> Dict[str, Any]:
         health_status["components"]["cache"] = {
             "status": "healthy" if cache_healthy else "degraded",
             "message": "Connected" if cache_healthy else "Using fallback",
-            "metrics": cache_metrics
+            "metrics": cache_metrics,
         }
         if not cache_healthy:
             degraded = True
@@ -216,10 +226,10 @@ def health_check() -> Dict[str, Any]:
         logger.error(f"Cache health check failed: {e}")
         health_status["components"]["cache"] = {
             "status": "unhealthy",
-            "message": str(e)
+            "message": str(e),
         }
         degraded = True
-    
+
     # Check model availability
     try:
         discovered = _discover_model_artifacts()
@@ -240,10 +250,10 @@ def health_check() -> Dict[str, Any]:
         logger.error(f"Model health check failed: {e}")
         health_status["components"]["ml_models"] = {
             "status": "unhealthy",
-            "message": str(e)
+            "message": str(e),
         }
         degraded = True
-    
+
     # System resource checks
     try:
         if psutil is None:
@@ -253,11 +263,11 @@ def health_check() -> Dict[str, Any]:
             }
             raise RuntimeError("psutil_unavailable")
         memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
-        
+        disk = psutil.disk_usage("/")
+
         memory_warning = memory.percent > 85
         disk_warning = disk.percent > 85
-        
+
         health_status["components"]["resources"] = {
             "status": "healthy" if not (memory_warning or disk_warning) else "degraded",
             "memory_percent": memory.percent,
@@ -265,7 +275,7 @@ def health_check() -> Dict[str, Any]:
             "disk_percent": disk.percent,
             "disk_free_gb": disk.free // (1024 * 1024 * 1024),
         }
-        
+
         if memory_warning or disk_warning:
             degraded = True
     except Exception as e:
@@ -317,7 +327,7 @@ def health_check() -> Dict[str, Any]:
     # Set overall status
     if degraded:
         health_status["status"] = "degraded"
-    
+
     return health_status
 
 
@@ -327,10 +337,7 @@ def liveness_check(response: Response) -> Dict[str, str]:
     Liveness probe for Kubernetes/container orchestration.
     Simple check that the service is running.
     """
-    return {
-        "status": "live",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    return {"status": "live", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 def _side_effect_free_capability_state(*, ready: bool) -> Dict[str, Any]:
@@ -375,7 +382,7 @@ async def readiness_check(
     """
     ready = True
     checks = {}
-    
+
     # Check database
     try:
         with get_engine().connect() as conn:
@@ -389,7 +396,7 @@ async def readiness_check(
     checks["migrations"] = _check_alembic_revision()
     if checks["migrations"]["status"] != "ready":
         ready = False
-    
+
     # In-process fallback preserves liveness, not production readiness.
     try:
         cache_healthy = cache.production_ready()
@@ -418,7 +425,7 @@ async def readiness_check(
             "external_available": False,
         }
         ready = False
-    
+
     # Check models (critical for predictions)
     try:
         discovered = _discover_model_artifacts()
@@ -426,11 +433,15 @@ async def readiness_check(
         required_leagues = _resolve_required_leagues()
         loaded_models = getattr(app_state, "models", {}) or {}
         models_loaded = bool(getattr(app_state, "models_loaded", False))
-        leagues_loaded = sorted(set(getattr(app_state, "leagues_loaded", []) or list(loaded_models.keys())))
+        leagues_loaded = sorted(
+            set(getattr(app_state, "leagues_loaded", []) or list(loaded_models.keys()))
+        )
         model_version = getattr(app_state, "model_version", None)
         load_error = getattr(app_state, "model_load_error_message", None)
         load_in_progress = bool(getattr(app_state, "model_load_in_progress", False))
-        missing_required = [league for league in required_leagues if league not in loaded_models]
+        missing_required = [
+            league for league in required_leagues if league not in loaded_models
+        ]
         untrained = [
             league
             for league, model in loaded_models.items()
@@ -512,9 +523,13 @@ async def readiness_check(
             }
     except Exception as e:
         logger.error(f"Model check failed: {e}")
-        checks["models"] = {"status": "error", "message": str(e), "models_loaded": False}
+        checks["models"] = {
+            "status": "error",
+            "message": str(e),
+            "models_loaded": False,
+        }
         ready = False
-    
+
     # Durable Elo state is informational for platform readiness: a newly migrated
     # environment can serve honest fail-closed predictions while the historical
     # replay is still pending. Surface the authority and coverage without turning
@@ -555,7 +570,7 @@ async def readiness_check(
         "leagues_loaded": models_status.get("leagues_loaded", []),
         "required_leagues": models_status.get("required_leagues", []),
         "model_error": model_error_message,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if not ready:
@@ -584,20 +599,20 @@ def metrics() -> Dict[str, Any]:
     try:
         # Import metrics collector
         from ...monitoring.metrics import metrics_collector
-        
+
         # Cache metrics
         cache_metrics = cache.metrics_snapshot()
-        
+
         # System metrics
         memory = psutil.virtual_memory() if psutil else None
         cpu_percent = psutil.cpu_percent(interval=0.1) if psutil else None
-        
+
         # Application metrics
         uptime = int(time.time() - _startup_time)
-        
+
         # Production metrics from collector
         production_metrics = metrics_collector.get_summary()
-        
+
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "uptime_seconds": uptime,
@@ -605,16 +620,18 @@ def metrics() -> Dict[str, Any]:
             "system": {
                 "memory_percent": memory.percent if memory else None,
                 "memory_used_mb": memory.used // (1024 * 1024) if memory else None,
-                "memory_available_mb": memory.available // (1024 * 1024) if memory else None,
+                "memory_available_mb": memory.available // (1024 * 1024)
+                if memory
+                else None,
                 "cpu_percent": cpu_percent,
             },
-            "production": production_metrics
+            "production": production_metrics,
         }
     except Exception as e:
         logger.error(f"Metrics collection failed: {e}")
         return {
             "error": "Failed to collect metrics",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 
@@ -633,15 +650,20 @@ async def smoke_check() -> Dict[str, Any]:
     # Models: prefer app.state if available
     try:
         models_flag = False
-        model_instance = getattr(__import__('...api.main', fromlist=['app']).app.state, 'model_instance', None)
-        if model_instance is not None and getattr(model_instance, 'is_trained', False):
+        model_instance = getattr(
+            __import__("...api.main", fromlist=["app"]).app.state,
+            "model_instance",
+            None,
+        )
+        if model_instance is not None and getattr(model_instance, "is_trained", False):
             models_flag = True
         else:
             # fallback: check for .pkl files in models directory
             import os
+
             models_dir = settings.models_path
             if models_dir and models_dir.exists():
-                pkl_files = [f for f in os.listdir(models_dir) if f.endswith('.pkl')]
+                pkl_files = [f for f in os.listdir(models_dir) if f.endswith(".pkl")]
                 models_flag = len(pkl_files) > 0
     except Exception:
         models_flag = False
@@ -649,6 +671,6 @@ async def smoke_check() -> Dict[str, Any]:
     return {
         "db_connected": db_ok,
         "models_loaded": models_flag,
-        "version": os.getenv('APP_VERSION', '1.0.0'),
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "version": os.getenv("APP_VERSION", "1.0.0"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

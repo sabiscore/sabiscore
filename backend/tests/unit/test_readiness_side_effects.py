@@ -93,7 +93,9 @@ async def test_readiness_is_side_effect_free_when_core_gates_are_green() -> None
     assert not hasattr(monitoring, "_check_capability")
 
 
-async def test_readiness_preserves_core_503_semantics_without_capability_probe() -> None:
+async def test_readiness_preserves_core_503_semantics_without_capability_probe() -> (
+    None
+):
     request = _ready_request()
     db = AsyncMock()
     mock_engine = MagicMock()

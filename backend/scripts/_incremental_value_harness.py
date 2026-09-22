@@ -21,6 +21,7 @@ questions look like one.
 Reuses `src/models/evaluation/metrics.py`'s `ranked_probability_score` and
 `block_bootstrap_ci` rather than reimplementing either.
 """
+
 from __future__ import annotations
 
 import sys
@@ -108,20 +109,27 @@ def load_fixtures_with_market(path: Path) -> list[dict[str, Any]]:
             continue
         if pd.isna(parsed) or result not in OUTCOME_CODE or min(odds) <= 1.0:
             continue
-        rows.append({
-            "home_team": str(row[resolved["home"]]).strip(),
-            "away_team": str(row[resolved["away"]]).strip(),
-            "date": parsed.date(),
-            "outcome": OUTCOME_CODE[result],
-            "market_probs": devig(*odds),
-        })
+        rows.append(
+            {
+                "home_team": str(row[resolved["home"]]).strip(),
+                "away_team": str(row[resolved["away"]]).strip(),
+                "date": parsed.date(),
+                "outcome": OUTCOME_CODE[result],
+                "market_probs": devig(*odds),
+            }
+        )
     return rows
 
 
 def mean_rps(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     """Mean Ranked Probability Score. Lower is better."""
     return float(
-        np.mean([ranked_probability_score(int(yt), list(yp)) for yt, yp in zip(y_true, y_proba)])
+        np.mean(
+            [
+                ranked_probability_score(int(yt), list(yp))
+                for yt, yp in zip(y_true, y_proba)
+            ]
+        )
     )
 
 
@@ -157,7 +165,8 @@ def paired_rps_diff_bootstrap(
     """
     per_fixture_diff = np.array(
         [
-            ranked_probability_score(int(yt), list(pc)) - ranked_probability_score(int(yt), list(pb))
+            ranked_probability_score(int(yt), list(pc))
+            - ranked_probability_score(int(yt), list(pb))
             for yt, pc, pb in zip(y_true, proba_candidate, proba_baseline)
         ]
     )
@@ -212,7 +221,9 @@ def run_incremental_value_study(
 
     y_train = np.array([r[outcome_key] for r in train])
     baseline_model = fit_model(np.array([baseline_features(r) for r in train]), y_train)
-    candidate_model = fit_model(np.array([candidate_features(r) for r in train]), y_train)
+    candidate_model = fit_model(
+        np.array([candidate_features(r) for r in train]), y_train
+    )
     # LogisticRegression.classes_ is sorted ascending, which already matches the
     # 0/1/2 home/draw/away encoding ranked_probability_score expects -- asserted
     # rather than assumed, because a silent reordering would corrupt every RPS
@@ -240,16 +251,28 @@ def run_incremental_value_study(
             # RPS decides; log loss and ECE describe HOW a model is better or
             # worse. A candidate can cut log loss by growing sharper while
             # getting less calibrated, and only the pair shows that.
-            "logloss_baseline_model": round(log_loss_multiclass(y_true, proba_baseline), 5),
-            "logloss_candidate_model": round(log_loss_multiclass(y_true, proba_candidate), 5),
-            "ece_baseline_model": expected_calibration_error(y_true, proba_baseline)["mean"],
-            "ece_candidate_model": expected_calibration_error(y_true, proba_candidate)["mean"],
+            "logloss_baseline_model": round(
+                log_loss_multiclass(y_true, proba_baseline), 5
+            ),
+            "logloss_candidate_model": round(
+                log_loss_multiclass(y_true, proba_candidate), 5
+            ),
+            "ece_baseline_model": expected_calibration_error(y_true, proba_baseline)[
+                "mean"
+            ],
+            "ece_candidate_model": expected_calibration_error(y_true, proba_candidate)[
+                "mean"
+            ],
         }
         if raw_reference is not None:
             reference = np.array([raw_reference(r) for r in slice_rows])
             scored[raw_reference_label] = round(mean_rps(y_true, reference), 5)
-            scored["logloss_raw_reference"] = round(log_loss_multiclass(y_true, reference), 5)
-            scored["ece_raw_reference"] = expected_calibration_error(y_true, reference)["mean"]
+            scored["logloss_raw_reference"] = round(
+                log_loss_multiclass(y_true, reference), 5
+            )
+            scored["ece_raw_reference"] = expected_calibration_error(y_true, reference)[
+                "mean"
+            ]
         return scored
 
     result: dict[str, Any] = {
@@ -265,7 +288,8 @@ def run_incremental_value_study(
             group_rows = [r for r in test if str(r[group_key]) == group]
             scored = _score(group_rows)
             per_group[group] = (
-                scored if scored is not None
+                scored
+                if scored is not None
                 else {"n": len(group_rows), "note": "insufficient_test_sample"}
             )
         result["per_group"] = per_group

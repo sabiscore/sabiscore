@@ -32,6 +32,7 @@ out-of-fold column is evidence.**
 Usage:
     PYTHONPATH=. python scripts/diagnose_decoupled_uncertainty.py
 """
+
 from __future__ import annotations
 
 import gc
@@ -106,7 +107,9 @@ def _rank_average_ties(values: np.ndarray) -> np.ndarray:
     return ranks
 
 
-def _batched_members(models_dict: Dict[str, Any], X: np.ndarray) -> List[List[np.ndarray]]:
+def _batched_members(
+    models_dict: Dict[str, Any], X: np.ndarray
+) -> List[List[np.ndarray]]:
     """One `predict_proba` per tree over the whole matrix (vectorised)."""
     trees = getattr(models_dict.get("random_forest"), "estimators_", None)
     if not trees:
@@ -130,7 +133,9 @@ def _batched_members(models_dict: Dict[str, Any], X: np.ndarray) -> List[List[np
 _SCORE_CHUNK_ROWS = 256
 
 
-def _score(models_dict: Dict[str, Any], X: np.ndarray, y: np.ndarray) -> Dict[str, np.ndarray]:
+def _score(
+    models_dict: Dict[str, Any], X: np.ndarray, y: np.ndarray
+) -> Dict[str, np.ndarray]:
     u_alea = np.empty(X.shape[0], dtype=np.float64)
     u_epi = np.empty(X.shape[0], dtype=np.float64)
     rps = np.empty(X.shape[0], dtype=np.float64)
@@ -190,10 +195,14 @@ def main() -> int:
 
     print("Aleatoric-residualized error_association — per league, terciles of u_alea")
     print("Only the OUT-OF-FOLD column is evidence; IN-SAMPLE is an upper bound.\n")
-    print(f"{'league':12} {'n':>5}  {'raw epistemic':^23}  {'residual (in-sample)':^23}  "
-          f"{'residual (out-of-fold)':^23}")
-    print(f"{'':12} {'':>5}  {'S1     S2     S3':^23}  {'S1     S2     S3':^23}  "
-          f"{'S1     S2     S3':^23}")
+    print(
+        f"{'league':12} {'n':>5}  {'raw epistemic':^23}  {'residual (in-sample)':^23}  "
+        f"{'residual (out-of-fold)':^23}"
+    )
+    print(
+        f"{'':12} {'':>5}  {'S1     S2     S3':^23}  {'S1     S2     S3':^23}  "
+        f"{'S1     S2     S3':^23}"
+    )
 
     verdicts: Dict[str, Dict[str, Any]] = {}
     for league, slug in _LEAGUE_SLUGS.items():
@@ -214,8 +223,10 @@ def main() -> int:
         fit_mask = ~eval_mask
 
         if int(eval_mask.sum()) < floor:
-            print(f"{league:12} {int(eval_mask.sum()):>5}  SKIP — below the {floor}-row "
-                  f"evidence floor in declared holdout {holdout_season}")
+            print(
+                f"{league:12} {int(eval_mask.sum()):>5}  SKIP — below the {floor}-row "
+                f"evidence floor in declared holdout {holdout_season}"
+            )
             del raw, models_dict
             gc.collect()
             continue
@@ -238,15 +249,19 @@ def main() -> int:
         oof_corr: List[Optional[float]] = [None] * (N_STRATA)
         if int(fit_mask.sum()) >= MIN_FIT_ROWS:
             fit_rows = _score(models_dict, X_all[fit_mask], y_all[fit_mask])
-            residualizer = EpistemicResidualizer().fit(fit_rows["u_alea"], fit_rows["u_epi"])
+            residualizer = EpistemicResidualizer().fit(
+                fit_rows["u_alea"], fit_rows["u_epi"]
+            )
             oof = residualizer.transform(evaluation["u_alea"], evaluation["u_epi"])
             oof_pass, oof_corr, _ = _stratified_correlations(
                 evaluation["u_alea"], oof, evaluation["rps"]
             )
             del fit_rows
 
-        print(f"{league:12} {n_eval:>5}  {_fmt(raw_corr):^23}  {_fmt(in_corr):^23}  "
-              f"{_fmt(oof_corr):^23}")
+        print(
+            f"{league:12} {n_eval:>5}  {_fmt(raw_corr):^23}  {_fmt(in_corr):^23}  "
+            f"{_fmt(oof_corr):^23}"
+        )
 
         verdicts[league] = {
             "n_eval": n_eval,
@@ -273,8 +288,10 @@ def main() -> int:
         ("residual, out-of-fold fit (the real question)", "out_of_fold_pass"),
     ):
         passing = [lg for lg, v in verdicts.items() if v[key] is True]
-        print(f"{label:52} {len(passing)}/{len(verdicts)} leagues pass"
-              f"{'  ->  ' + ', '.join(sorted(passing)) if passing else ''}")
+        print(
+            f"{label:52} {len(passing)}/{len(verdicts)} leagues pass"
+            f"{'  ->  ' + ', '.join(sorted(passing)) if passing else ''}"
+        )
 
     print("\nA gate change requires ALL leagues passing out-of-fold, plus an explicit,")
     print("versioned authorization recorded against the frozen policy. This script")

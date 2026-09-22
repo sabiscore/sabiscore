@@ -49,6 +49,7 @@ Usage
     # report G5 from what has accumulated
     cd backend && PYTHONPATH=. python scripts/shadow_monitor_e2_lineups.py --report
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,7 +63,9 @@ from typing import Any, Dict, List, Set
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 _CONTRACT_PATH = _REPO_ROOT.parent / "contracts" / "lineup_harvest_epl_contract.yaml"
@@ -116,7 +119,10 @@ def load_log(path: Path) -> Dict[int, str]:
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue  # truncated final line from a killed process
-            fixture_id, state = record.get("fixture_id"), record.get("servable_at_20m_cutoff")
+            fixture_id, state = (
+                record.get("fixture_id"),
+                record.get("servable_at_20m_cutoff"),
+            )
             if isinstance(fixture_id, int) and state:
                 states[fixture_id] = state
     return states
@@ -140,9 +146,7 @@ def _parse_kickoff(raw: str) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def classify_fixture(
-    kickoff_utc: datetime, now: datetime, already: str | None
-) -> str:
+def classify_fixture(kickoff_utc: datetime, now: datetime, already: str | None) -> str:
     """Which action this fixture needs right now.
 
     POLL           inside [T-20m, T-15m] and not yet recorded
@@ -187,15 +191,24 @@ def load_fixtures(path: Path | None) -> List[Dict[str, Any]]:
     if path is None or not path.exists():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
-    fixtures = payload.get("fixtures", payload) if isinstance(payload, dict) else payload
+    fixtures = (
+        payload.get("fixtures", payload) if isinstance(payload, dict) else payload
+    )
     out: List[Dict[str, Any]] = []
     for item in fixtures:
         fixture_id = item.get("fixture_id") or item.get("id")
-        kickoff = _parse_kickoff(str(item.get("kickoff_utc") or item.get("match_date") or ""))
+        kickoff = _parse_kickoff(
+            str(item.get("kickoff_utc") or item.get("match_date") or "")
+        )
         if fixture_id is None or kickoff is None:
             continue  # §5: a fixture we cannot time is skipped, never guessed
-        out.append({"fixture_id": int(fixture_id), "kickoff_utc": kickoff,
-                    "league": item.get("league") or item.get("competition")})
+        out.append(
+            {
+                "fixture_id": int(fixture_id),
+                "kickoff_utc": kickoff,
+                "league": item.get("league") or item.get("competition"),
+            }
+        )
     return out
 
 
@@ -225,12 +238,22 @@ def summarise(path: Path) -> Dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="plan only; no network, no quota")
-    parser.add_argument("--report", action="store_true", help="summarise the accumulated log and exit")
-    parser.add_argument("--fixtures-file", type=Path, default=None,
-                        help="JSON of upcoming fixtures [{fixture_id, kickoff_utc, league}]")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="plan only; no network, no quota"
+    )
+    parser.add_argument(
+        "--report", action="store_true", help="summarise the accumulated log and exit"
+    )
+    parser.add_argument(
+        "--fixtures-file",
+        type=Path,
+        default=None,
+        help="JSON of upcoming fixtures [{fixture_id, kickoff_utc, league}]",
+    )
     parser.add_argument("--max-polls", type=int, default=MAX_POLLS_PER_SWEEP)
-    parser.add_argument("--now", type=str, default=None, help="override current UTC time (testing)")
+    parser.add_argument(
+        "--now", type=str, default=None, help="override current UTC time (testing)"
+    )
     args = parser.parse_args()
 
     load_contract()
@@ -257,42 +280,67 @@ def main() -> int:
             "not invent a schedule; supply one from the authoritative source."
         )
 
-    buckets: Dict[str, List[Dict[str, Any]]] = {"POLL": [], "WAIT": [], "MISSED_WINDOW": [], "DONE": []}
+    buckets: Dict[str, List[Dict[str, Any]]] = {
+        "POLL": [],
+        "WAIT": [],
+        "MISSED_WINDOW": [],
+        "DONE": [],
+    }
     for fixture in fixtures:
-        buckets[classify_fixture(fixture["kickoff_utc"], now, recorded.get(fixture["fixture_id"]))].append(fixture)
+        buckets[
+            classify_fixture(
+                fixture["kickoff_utc"], now, recorded.get(fixture["fixture_id"])
+            )
+        ].append(fixture)
 
     logger.info(
         "Sweep at %s — %d to poll, %d waiting, %d missed, %d already recorded",
-        now.isoformat(), len(buckets["POLL"]), len(buckets["WAIT"]),
-        len(buckets["MISSED_WINDOW"]), len(buckets["DONE"]),
+        now.isoformat(),
+        len(buckets["POLL"]),
+        len(buckets["WAIT"]),
+        len(buckets["MISSED_WINDOW"]),
+        len(buckets["DONE"]),
     )
 
     if args.dry_run:
-        print(json.dumps({
-            "now": now.isoformat(),
-            "to_poll": len(buckets["POLL"]),
-            "waiting": len(buckets["WAIT"]),
-            "missed_window": len(buckets["MISSED_WINDOW"]),
-            "already_recorded": len(buckets["DONE"]),
-            "dry_run": True,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "now": now.isoformat(),
+                    "to_poll": len(buckets["POLL"]),
+                    "waiting": len(buckets["WAIT"]),
+                    "missed_window": len(buckets["MISSED_WINDOW"]),
+                    "already_recorded": len(buckets["DONE"]),
+                    "dry_run": True,
+                },
+                indent=2,
+            )
+        )
         return 0
 
     # A missed window is recorded without spending quota — it is a fact about
     # scheduling, established by the clock alone.
     for fixture in buckets["MISSED_WINDOW"]:
-        _append(_LOG_PATH, {
-            "fixture_id": fixture["fixture_id"],
-            "league": fixture["league"],
-            "kickoff_utc": fixture["kickoff_utc"].isoformat(),
-            "cutoff_minutes_pre_kickoff": CUTOFF_MINUTES_PRE_KICKOFF,
-            "servable_at_20m_cutoff": STATE_MISSED_WINDOW,
-            "observed_at_utc": now.isoformat(),
-        })
+        _append(
+            _LOG_PATH,
+            {
+                "fixture_id": fixture["fixture_id"],
+                "league": fixture["league"],
+                "kickoff_utc": fixture["kickoff_utc"].isoformat(),
+                "cutoff_minutes_pre_kickoff": CUTOFF_MINUTES_PRE_KICKOFF,
+                "servable_at_20m_cutoff": STATE_MISSED_WINDOW,
+                "observed_at_utc": now.isoformat(),
+            },
+        )
 
     todo = buckets["POLL"][: args.max_polls]
     if not todo:
-        print(json.dumps({"polled": 0, "missed_recorded": len(buckets["MISSED_WINDOW"])}, indent=2))
+        print(
+            json.dumps(
+                {"polled": 0, "missed_recorded": len(buckets["MISSED_WINDOW"])},
+                indent=2,
+            )
+        )
         return 0
 
     import asyncio
@@ -308,29 +356,42 @@ def main() -> int:
             try:
                 # Keyword is `fixture_id`; see api_football.lineups signature.
                 result = await provider.lineups(fixture_id=fixture["fixture_id"])
-                state = classify_result(result.status, result.records or [], result.error_code)
+                state = classify_result(
+                    result.status, result.records or [], result.error_code
+                )
                 error = result.error_code
             except Exception as exc:  # noqa: BLE001
                 # §34: our failure is never recorded as the provider's absence.
                 state, error = STATE_POLL_FAILED, type(exc).__name__
                 logger.error("fixture %s: poll failed — %s", fixture["fixture_id"], exc)
-            _append(_LOG_PATH, {
-                "fixture_id": fixture["fixture_id"],
-                "league": fixture["league"],
-                "kickoff_utc": fixture["kickoff_utc"].isoformat(),
-                "cutoff_minutes_pre_kickoff": CUTOFF_MINUTES_PRE_KICKOFF,
-                "observed_lead_time_minutes": round(lead, 2),
-                "servable_at_20m_cutoff": state,
-                "error_code": error,
-                "observed_at_utc": observed.isoformat(),
-            })
+            _append(
+                _LOG_PATH,
+                {
+                    "fixture_id": fixture["fixture_id"],
+                    "league": fixture["league"],
+                    "kickoff_utc": fixture["kickoff_utc"].isoformat(),
+                    "cutoff_minutes_pre_kickoff": CUTOFF_MINUTES_PRE_KICKOFF,
+                    "observed_lead_time_minutes": round(lead, 2),
+                    "servable_at_20m_cutoff": state,
+                    "error_code": error,
+                    "observed_at_utc": observed.isoformat(),
+                },
+            )
             tally[state] = tally.get(state, 0) + 1
         return tally
 
     tally = asyncio.run(sweep())
     logger.info("Sweep complete: %s", tally)
-    print(json.dumps({"polled": sum(tally.values()), "by_state": tally,
-                      "missed_recorded": len(buckets["MISSED_WINDOW"])}, indent=2))
+    print(
+        json.dumps(
+            {
+                "polled": sum(tally.values()),
+                "by_state": tally,
+                "missed_recorded": len(buckets["MISSED_WINDOW"]),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

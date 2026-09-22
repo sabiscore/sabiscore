@@ -15,6 +15,7 @@ made the first live apply attempt fail with a ``ForeignKeyViolationError`` --
 these tests would have caught that if they had matched production's real
 constraints from the start.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -55,10 +56,14 @@ async def session():
     await engine.dispose()
 
 
-async def _give_team_elo_history(session: AsyncSession, *, team_id: str, league_id: str) -> None:
+async def _give_team_elo_history(
+    session: AsyncSession, *, team_id: str, league_id: str
+) -> None:
     hist_date = datetime(2025, 9, 20, 15, 0)
     hist_match_id = f"hist-{team_id}"
-    session.add(Team(id=f"opponent-{team_id}", name="Historical Opponent", league_id=league_id))
+    session.add(
+        Team(id=f"opponent-{team_id}", name="Historical Opponent", league_id=league_id)
+    )
     await session.flush()
     session.add(
         Match(
@@ -187,7 +192,9 @@ async def _apply(session: AsyncSession, sha: str) -> FixtureIdentityRebindApplyR
         "src.services.fixture_identity_rebind_apply_service.acquire_fixture_identity_rebind_locks",
         new=lambda *a, **k: _noop(),
     ):
-        return await apply_fixture_identity_rebind(session, expected_manifest_sha256=sha)
+        return await apply_fixture_identity_rebind(
+            session, expected_manifest_sha256=sha
+        )
 
 
 async def _noop() -> None:
@@ -197,7 +204,9 @@ async def _noop() -> None:
 async def test_rebind_repoints_only_ready_entries_leaving_blocked_untouched(
     session: AsyncSession,
 ) -> None:
-    ready_home, ready_away = await _seed_mismatched_fixture(session, match_id="fd-ready-1")
+    ready_home, ready_away = await _seed_mismatched_fixture(
+        session, match_id="fd-ready-1"
+    )
     blocked_home, blocked_away = await _seed_mismatched_fixture(
         session, match_id="fd-blocked-1", with_prediction=True
     )
@@ -257,14 +266,18 @@ async def test_a_ready_row_that_moved_since_review_fails_the_precondition(
 async def test_an_all_blocked_manifest_is_refused(session: AsyncSession) -> None:
     """Nothing rebind-ready must be an explicit refusal, never a silent
     no-op that reports success."""
-    await _seed_mismatched_fixture(session, match_id="fd-blocked-1", with_prediction=True)
+    await _seed_mismatched_fixture(
+        session, match_id="fd-blocked-1", with_prediction=True
+    )
     manifest = await build_fixture_identity_rebind_manifest(session)
     assert manifest.summary["rebind_ready_count"] == 0
     with pytest.raises(RuntimeError, match="no rebind-ready entries"):
         await _apply(session, manifest.manifest_sha256)
 
 
-async def test_lock_acquisition_refuses_a_non_postgresql_bind(session: AsyncSession) -> None:
+async def test_lock_acquisition_refuses_a_non_postgresql_bind(
+    session: AsyncSession,
+) -> None:
     """The real lock path is PostgreSQL-only and must say so rather than
     silently proceeding unlocked on SQLite."""
     with pytest.raises(RuntimeError, match="requires PostgreSQL"):
@@ -341,7 +354,9 @@ async def test_assert_applicable_refuses_a_cross_league_target_team(
         await _assert_ready_entries_are_applicable(session, manifest)
 
 
-async def test_assert_applicable_refuses_a_duplicated_match(session: AsyncSession) -> None:
+async def test_assert_applicable_refuses_a_duplicated_match(
+    session: AsyncSession,
+) -> None:
     session.add(League(id="EPL", name="EPL", country="test"))
     session.add(Team(id="verified-home", name="Verified Home FC", league_id="EPL"))
     session.add(Team(id="verified-away", name="Verified Away FC", league_id="EPL"))
@@ -352,7 +367,9 @@ async def test_assert_applicable_refuses_a_duplicated_match(session: AsyncSessio
         await _assert_ready_entries_are_applicable(session, manifest)
 
 
-async def test_assert_applicable_refuses_an_empty_ready_set(session: AsyncSession) -> None:
+async def test_assert_applicable_refuses_an_empty_ready_set(
+    session: AsyncSession,
+) -> None:
     manifest = _manifest(_entry(blockers=("HAS_EXISTING_PREDICTIONS",)))
     with pytest.raises(RuntimeError, match="no rebind-ready entries"):
         await _assert_ready_entries_are_applicable(session, manifest)

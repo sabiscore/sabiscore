@@ -6,6 +6,7 @@ has to be *proved*, not assumed. RFC 8291 section 5 publishes a complete worked
 example with fixed keys and a fixed expected body, so the encryption is pinned
 byte for byte against the specification's own output.
 """
+
 from __future__ import annotations
 
 import base64
@@ -45,7 +46,9 @@ def _e(value: bytes) -> str:
 # identifier containing "PRIVATE_KEY" is indistinguishable from a real
 # credential to a secret scanner.
 _VAPID_PRIVATE_KEY_OBJ = ec.generate_private_key(ec.SECP256R1())
-_VAPID_PRIVATE_SCALAR = _VAPID_PRIVATE_KEY_OBJ.private_numbers().private_value.to_bytes(32, "big")
+_VAPID_PRIVATE_SCALAR = _VAPID_PRIVATE_KEY_OBJ.private_numbers().private_value.to_bytes(
+    32, "big"
+)
 _VAPID_PUBLIC_RAW = _VAPID_PRIVATE_KEY_OBJ.public_key().public_bytes(
     encoding=serialization.Encoding.X962,
     format=serialization.PublicFormat.UncompressedPoint,
@@ -112,7 +115,8 @@ def test_a_browser_can_actually_decrypt_a_freshly_generated_payload() -> None:
     assert idlen == 65
 
     shared = ua_private.exchange(
-        ec.ECDH(), ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), as_public)
+        ec.ECDH(),
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), as_public),
     )
     ikm = HKDF(
         algorithm=hashes.SHA256(),
@@ -209,7 +213,9 @@ def test_vapid_authorization_is_a_verifiable_es256_token(monkeypatch) -> None:
 # ── Transport behaviour ───────────────────────────────────────────────────────
 
 
-def _client_returning(status_code: int, captured: dict | None = None) -> httpx.AsyncClient:
+def _client_returning(
+    status_code: int, captured: dict | None = None
+) -> httpx.AsyncClient:
     def handler(request: httpx.Request) -> httpx.Response:
         if captured is not None:
             captured["headers"] = dict(request.headers)
@@ -239,7 +245,9 @@ async def _send(monkeypatch, client: httpx.AsyncClient):
         )
 
 
-async def test_successful_send_sets_the_aes128gcm_transport_headers(monkeypatch) -> None:
+async def test_successful_send_sets_the_aes128gcm_transport_headers(
+    monkeypatch,
+) -> None:
     captured: dict = {}
     result = await _send(monkeypatch, _client_returning(201, captured))
 
@@ -256,7 +264,9 @@ async def test_successful_send_sets_the_aes128gcm_transport_headers(monkeypatch)
 
 
 @pytest.mark.parametrize("status_code", [404, 410])
-async def test_a_gone_subscription_is_reported_as_expired(monkeypatch, status_code: int) -> None:
+async def test_a_gone_subscription_is_reported_as_expired(
+    monkeypatch, status_code: int
+) -> None:
     result = await _send(monkeypatch, _client_returning(status_code))
     assert result.sent is False
     assert result.expired is True
@@ -298,7 +308,9 @@ async def test_malformed_subscription_keys_never_raise(monkeypatch) -> None:
     assert result.reason == "encryption_failed"
 
 
-def test_a_pem_private_key_is_accepted_as_well_as_the_base64url_scalar(monkeypatch) -> None:
+def test_a_pem_private_key_is_accepted_as_well_as_the_base64url_scalar(
+    monkeypatch,
+) -> None:
     """`npx web-push generate-vapid-keys` emits a base64url scalar, but an
     operator arriving from another toolchain may hold a PEM block."""
     _configure(monkeypatch)
@@ -310,7 +322,9 @@ def test_a_pem_private_key_is_accepted_as_well_as_the_base64url_scalar(monkeypat
     monkeypatch.setattr(settings, "vapid_private_key", pem)
 
     token = build_vapid_headers("https://push.example/x")["Authorization"]
-    header_b64, claims_b64, signature_b64 = token[len("vapid t=") :].split(",")[0].split(".")
+    header_b64, claims_b64, signature_b64 = (
+        token[len("vapid t=") :].split(",")[0].split(".")
+    )
     signature = _d(signature_b64)
     _VAPID_PRIVATE_KEY_OBJ.public_key().verify(
         asym_utils.encode_dss_signature(
@@ -338,7 +352,9 @@ def test_a_non_ec_pem_is_rejected_rather_than_used(monkeypatch) -> None:
         build_vapid_headers("https://push.example/x")
 
 
-def test_missing_vapid_settings_raise_rather_than_signing_with_nothing(monkeypatch) -> None:
+def test_missing_vapid_settings_raise_rather_than_signing_with_nothing(
+    monkeypatch,
+) -> None:
     _configure(monkeypatch)
     monkeypatch.setattr(settings, "vapid_claims_sub", None)
     with pytest.raises(ValueError, match="VAPID keypair and subject"):
@@ -357,10 +373,17 @@ async def test_the_http_client_is_shared_and_closable() -> None:
     await aclose()
 
 
-async def test_incomplete_subscription_is_rejected_before_any_request(monkeypatch) -> None:
+async def test_incomplete_subscription_is_rejected_before_any_request(
+    monkeypatch,
+) -> None:
     _configure(monkeypatch)
     result = await send_web_push(
-        endpoint="", p256dh="", auth="", title="t", body="b", client=_client_returning(201)
+        endpoint="",
+        p256dh="",
+        auth="",
+        title="t",
+        body="b",
+        client=_client_returning(201),
     )
     assert result.sent is False
     assert result.reason == "incomplete_subscription"

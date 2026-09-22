@@ -10,22 +10,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_async_session
 from ...services.analytics_service import AnalyticsIngestionService
-from ...services.auth_service import get_anon_id_from_request, get_optional_user_from_request
+from ...services.auth_service import (
+    get_anon_id_from_request,
+    get_optional_user_from_request,
+)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 class AnalyticsEventItem(BaseModel):
-    event_id: Optional[str] = Field(None, description="Client-generated idempotency UUID")
-    event_name: str = Field(..., min_length=1, max_length=100, description="Typed event name")
-    properties: Dict[str, Any] = Field(default_factory=dict, description="Event attributes/metadata")
+    event_id: Optional[str] = Field(
+        None, description="Client-generated idempotency UUID"
+    )
+    event_name: str = Field(
+        ..., min_length=1, max_length=100, description="Typed event name"
+    )
+    properties: Dict[str, Any] = Field(
+        default_factory=dict, description="Event attributes/metadata"
+    )
     session_id: Optional[str] = Field(None, description="Ephemeral client session ID")
-    client_platform: Optional[str] = Field("web", description="Client device platform ('web', 'mobile_web', etc.)")
+    client_platform: Optional[str] = Field(
+        "web", description="Client device platform ('web', 'mobile_web', etc.)"
+    )
     timestamp: Optional[str] = Field(None, description="ISO-8601 UTC timestamp")
 
 
 class AnalyticsEventBatchRequest(BaseModel):
-    events: List[AnalyticsEventItem] = Field(..., max_length=100, description="Batched telemetry events")
+    events: List[AnalyticsEventItem] = Field(
+        ..., max_length=100, description="Batched telemetry events"
+    )
 
 
 class AnalyticsEventBatchResponse(BaseModel):
@@ -34,14 +47,18 @@ class AnalyticsEventBatchResponse(BaseModel):
     scrubbed: bool = True
 
 
-@router.post("/events", response_model=AnalyticsEventBatchResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/events",
+    response_model=AnalyticsEventBatchResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def ingest_analytics_events(
     payload: AnalyticsEventBatchRequest,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
 ):
     """Ingest a batch of client-side product analytics and telemetry events.
-    
+
     All properties are passed through a strict recursive filter that scrubs
     emails, passwords, tokens, API keys, and authorization headers before persisting.
     """

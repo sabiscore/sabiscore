@@ -27,7 +27,7 @@ class OptaConnector:
 
     # TODO: Add actual Opta API endpoint when credentials are available
     BASE_URL = "https://api.opta.com/v1/"
-    
+
     def __init__(self):
         self.session: Optional[aiohttp.ClientSession] = None
         self.api_key = settings.opta_api_key
@@ -53,10 +53,10 @@ class OptaConnector:
     )
     async def fetch_live_xg(self, match_id: str) -> Optional[Dict]:
         """Fetch live xG data for a match"""
-        
+
         # TODO: Implement Opta API integration when credentials are available
         logger.info(f"Opta connector placeholder called for match {match_id}")
-        
+
         return {
             "match_id": match_id,
             "home_xg": 0.0,
@@ -66,9 +66,10 @@ class OptaConnector:
 
 
 if __name__ == "__main__":
+
     async def main():
         async with OptaConnector() as connector:
             xg = await connector.fetch_live_xg("test_match")
             print("xG:", xg)
-    
+
     asyncio.run(main())

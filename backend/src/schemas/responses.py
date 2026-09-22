@@ -20,11 +20,14 @@ class HealthResponse(BaseModel):
     database: bool = Field(..., json_schema_extra={"example": True})
     models: bool = Field(..., json_schema_extra={"example": True})
     model_loading: Optional[bool] = Field(False, json_schema_extra={"example": False})
-    model_error: Optional[str] = Field(None, json_schema_extra={"example": "No model available"})
+    model_error: Optional[str] = Field(
+        None, json_schema_extra={"example": "No model available"}
+    )
     cache: bool = Field(..., json_schema_extra={"example": True})
     cache_metrics: Optional[CacheMetricsResponse] = None
     latency_ms: float = Field(..., ge=0, json_schema_extra={"example": 12.5})
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class MatchSearchResponse(BaseModel):
     id: str = Field(..., json_schema_extra={"example": "1"})
@@ -33,6 +36,7 @@ class MatchSearchResponse(BaseModel):
     league: str = Field(..., json_schema_extra={"example": "EPL"})
     match_date: str = Field(..., json_schema_extra={"example": "2024-10-26T15:00:00Z"})
     venue: str = Field(..., json_schema_extra={"example": "Etihad Stadium"})
+
 
 class PredictionData(BaseModel):
     home_win_prob: float = Field(..., ge=0, le=1, json_schema_extra={"example": 0.65})
@@ -43,11 +47,13 @@ class PredictionData(BaseModel):
     # True when the model was unavailable and these are baseline rates, not an inference.
     is_baseline: bool = Field(default=False, json_schema_extra={"example": False})
 
+
 class XGData(BaseModel):
     home_xg: float = Field(..., ge=0, json_schema_extra={"example": 2.1})
     away_xg: float = Field(..., ge=0, json_schema_extra={"example": 1.3})
     total_xg: float = Field(..., ge=0, json_schema_extra={"example": 3.4})
     xg_difference: float = Field(..., json_schema_extra={"example": 0.8})
+
 
 class ValueBetQuality(BaseModel):
     quality_score: float = Field(..., ge=0, le=100, json_schema_extra={"example": 75.5})
@@ -56,6 +62,7 @@ class ValueBetQuality(BaseModel):
     ev_contribution: float = Field(..., json_schema_extra={"example": 15.2})
     confidence_contribution: float = Field(..., json_schema_extra={"example": 39.0})
     liquidity_contribution: float = Field(..., json_schema_extra={"example": 18.75})
+
 
 class ValueBet(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
@@ -69,15 +76,26 @@ class ValueBet(BaseModel):
     # Bankroll fraction (Quarter-Kelly), never a currency amount. Bounded by the
     # global 5% ceiling so an uncapped sizing bug cannot reach a client.
     kelly_stake: float = Field(..., ge=0, le=0.05, json_schema_extra={"example": 0.05})
-    confidence_interval: List[float] = Field(..., json_schema_extra={"example": [0.58, 0.72]})
+    confidence_interval: List[float] = Field(
+        ..., json_schema_extra={"example": [0.58, 0.72]}
+    )
     edge: float = Field(..., json_schema_extra={"example": 0.174})
     recommendation: str = Field(..., json_schema_extra={"example": "Strong bet"})
     quality: ValueBetQuality
 
+
 class MonteCarloData(BaseModel):
     simulations: int = Field(..., json_schema_extra={"example": 10000})
-    distribution: Dict[str, float] = Field(..., json_schema_extra={"example": {"home_win": 0.65, "draw": 0.20, "away_win": 0.15}})
-    confidence_intervals: Dict[str, List[float]] = Field(..., json_schema_extra={"example": {"home_win": [0.63, 0.67]}})
+    distribution: Dict[str, float] = Field(
+        ...,
+        json_schema_extra={
+            "example": {"home_win": 0.65, "draw": 0.20, "away_win": 0.15}
+        },
+    )
+    confidence_intervals: Dict[str, List[float]] = Field(
+        ..., json_schema_extra={"example": {"home_win": [0.63, 0.67]}}
+    )
+
 
 class Scenario(BaseModel):
     name: str = Field(..., json_schema_extra={"example": "Most Likely"})
@@ -86,16 +104,22 @@ class Scenario(BaseModel):
     away_score: int = Field(..., ge=0, json_schema_extra={"example": 1})
     result: str = Field(..., json_schema_extra={"example": "home_win"})
 
+
 class RiskAssessment(BaseModel):
     risk_level: str = Field(..., json_schema_extra={"example": "low"})
-    confidence_score: float = Field(..., ge=0, le=1, json_schema_extra={"example": 0.78})
+    confidence_score: float = Field(
+        ..., ge=0, le=1, json_schema_extra={"example": 0.78}
+    )
     value_available: bool = Field(..., json_schema_extra={"example": True})
     best_bet: Optional[ValueBet] = None
     distribution: Dict[str, float] = Field(default_factory=dict)
     recommendation: str = Field(..., json_schema_extra={"example": "Proceed"})
 
+
 class Metadata(BaseModel):
-    matchup: str = Field(..., json_schema_extra={"example": "Manchester City vs Liverpool"})
+    matchup: str = Field(
+        ..., json_schema_extra={"example": "Manchester City vs Liverpool"}
+    )
     league: str = Field(..., json_schema_extra={"example": "EPL"})
     home_team: str = Field(..., json_schema_extra={"example": "Manchester City"})
     away_team: str = Field(..., json_schema_extra={"example": "Liverpool"})
@@ -103,7 +127,9 @@ class Metadata(BaseModel):
 
 class TransformationStep(BaseModel):
     step: str = Field(..., json_schema_extra={"example": "feature_engineering"})
-    function: str = Field(..., json_schema_extra={"example": "FeatureTransformer.engineer_features"})
+    function: str = Field(
+        ..., json_schema_extra={"example": "FeatureTransformer.engineer_features"}
+    )
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -125,7 +151,9 @@ class DataProvenance(BaseModel):
     computed_from: List[str] = Field(
         default_factory=list,
         description="Identifiers of upstream records used to compute this response",
-        json_schema_extra={"example": ["match:ARS-BOU", "team_stats:arsenal", "team_stats:bournemouth"]},
+        json_schema_extra={
+            "example": ["match:ARS-BOU", "team_stats:arsenal", "team_stats:bournemouth"]
+        },
     )
     transformations: List[TransformationStep] = Field(
         default_factory=list,
@@ -159,7 +187,9 @@ class InsightsUncertainty(BaseModel):
     aleatoric_unc: float = Field(..., ge=0)
     concentration: float = Field(..., ge=0)
     credible_interval: Dict[str, float] = Field(default_factory=dict)
-    confidence_tier: str = Field(default="OK", description='"LOW_EVIDENCE" | "OK" — C12')
+    confidence_tier: str = Field(
+        default="OK", description='"LOW_EVIDENCE" | "OK" — C12'
+    )
 
 
 class CausalSummary(BaseModel):
@@ -201,19 +231,25 @@ class RLRecommendation(BaseModel):
 class InsightsResponse(BaseModel):
     model_config = ConfigDict()
 
-    matchup: str = Field(..., json_schema_extra={"example": "Manchester City vs Liverpool"})
+    matchup: str = Field(
+        ..., json_schema_extra={"example": "Manchester City vs Liverpool"}
+    )
     league: str = Field(..., json_schema_extra={"example": "EPL"})
     metadata: Metadata
     predictions: PredictionData
     xg_analysis: XGData
-    value_analysis: Dict[str, Any] = Field(..., description="Enhanced value betting analysis")
+    value_analysis: Dict[str, Any] = Field(
+        ..., description="Enhanced value betting analysis"
+    )
     monte_carlo: MonteCarloData
     scenarios: List[Scenario] = Field(default_factory=list)
     explanation: Dict[str, Any] = Field(default_factory=dict)
     risk_assessment: RiskAssessment
     narrative: str = Field(..., description="Human-readable analysis summary")
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    confidence_level: float = Field(..., ge=0, le=1, json_schema_extra={"example": 0.78})
+    confidence_level: float = Field(
+        ..., ge=0, le=1, json_schema_extra={"example": 0.78}
+    )
     uncertainty: Optional[InsightsUncertainty] = Field(default=None)
     causal_summary: Optional[CausalSummary] = Field(default=None)
     rl_recommendation: Optional[RLRecommendation] = Field(default=None)
@@ -222,9 +258,12 @@ class InsightsResponse(BaseModel):
         description="Traceability metadata describing source, transformations, and validation state",
     )
 
+
 class ErrorResponse(BaseModel):
     model_config = ConfigDict()
 
     detail: str = Field(..., json_schema_extra={"example": "An error occurred"})
-    error_code: Optional[str] = Field(None, json_schema_extra={"example": "VALIDATION_ERROR"})
+    error_code: Optional[str] = Field(
+        None, json_schema_extra={"example": "VALIDATION_ERROR"}
+    )
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

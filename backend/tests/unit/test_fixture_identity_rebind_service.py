@@ -15,6 +15,7 @@ The correct "verified" identity is a durable ``ProviderEloTeamMapping`` bridge
 ``fixture_sync_service._resolve_upcoming_team_id``'s fast path uses on every
 sync tick.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -47,10 +48,14 @@ async def session():
     await engine.dispose()
 
 
-async def _give_team_elo_history(session: AsyncSession, *, team_id: str, league_id: str) -> None:
+async def _give_team_elo_history(
+    session: AsyncSession, *, team_id: str, league_id: str
+) -> None:
     hist_date = datetime(2025, 9, 20, 15, 0)
     hist_match_id = f"hist-{team_id}"
-    session.add(Team(id=f"opponent-{team_id}", name="Historical Opponent", league_id=league_id))
+    session.add(
+        Team(id=f"opponent-{team_id}", name="Historical Opponent", league_id=league_id)
+    )
     await session.flush()
     session.add(
         Match(
@@ -163,7 +168,9 @@ async def _seed_mismatched_match(
     await session.commit()
 
 
-async def test_manifest_flags_mismatched_unsettled_fixture(session: AsyncSession) -> None:
+async def test_manifest_flags_mismatched_unsettled_fixture(
+    session: AsyncSession,
+) -> None:
     await _seed_mismatched_match(session, match_id="fd-1")
 
     manifest = await build_fixture_identity_rebind_manifest(session)
@@ -184,7 +191,9 @@ async def test_manifest_flags_mismatched_unsettled_fixture(session: AsyncSession
     assert entry.rebind_status == "READY"
 
 
-async def test_manifest_omits_fixtures_with_agreeing_identity(session: AsyncSession) -> None:
+async def test_manifest_omits_fixtures_with_agreeing_identity(
+    session: AsyncSession,
+) -> None:
     league_id = "SERIE_A"
     match_id = "fd-2"
     verified_id = "fdco-team-serie_a-agreeing"
@@ -267,7 +276,9 @@ async def test_manifest_excludes_matches_with_no_durable_binding(
             status="scheduled",
         )
     )
-    session.add(Team(id="fd-team-serie_a:stored-away", name="Stored Away", league_id=league_id))
+    session.add(
+        Team(id="fd-team-serie_a:stored-away", name="Stored Away", league_id=league_id)
+    )
     await session.flush()
     await ensure_canonical_fixture(
         session,
@@ -313,7 +324,9 @@ async def test_manifest_flags_kickoff_passed_blocker(session: AsyncSession) -> N
     assert entry.rebind_status == "BLOCKED"
 
 
-async def test_manifest_flags_existing_predictions_blocker(session: AsyncSession) -> None:
+async def test_manifest_flags_existing_predictions_blocker(
+    session: AsyncSession,
+) -> None:
     await _seed_mismatched_match(session, match_id="fd-5")
     session.add(
         MatchPredictionLog(

@@ -10,6 +10,7 @@ Two defects both showed up as a permanent critical gap on every fixture:
    ``_odds_edge_from_features`` always returned None and
    COHERENT_1X2_MARKET_UNAVAILABLE was likewise unconditional.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from src.services.upcoming_match_feature_service import _model_input_staleness_s
 # --------------------------------------------------------------------------- #
 # Model-input staleness — the measure that keeps the critical gate
 # --------------------------------------------------------------------------- #
+
 
 def _ts(days_ago: float) -> float:
     return (datetime.now(timezone.utc) - timedelta(days=days_ago)).timestamp()
@@ -45,12 +47,15 @@ def test_model_input_staleness_uses_the_older_of_the_two_sides():
 
 
 def test_model_input_staleness_never_negative_for_a_future_timestamp():
-    assert _model_input_staleness_seconds({"last_finished_match_ts": _ts(-5)}, None) == 0.0
+    assert (
+        _model_input_staleness_seconds({"last_finished_match_ts": _ts(-5)}, None) == 0.0
+    )
 
 
 # --------------------------------------------------------------------------- #
 # The gate split, through the real endpoint
 # --------------------------------------------------------------------------- #
+
 
 def _live(**overrides) -> dict:
     base = {
@@ -112,7 +117,9 @@ async def test_stale_enrichment_is_advisory_and_never_blocks(monkeypatch):
     own inputs are fresh. This is the regression that kept every fixture at no-bet."""
     _install(monkeypatch, _live())
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
     quality = payload["evidence_quality"]
 
     assert "STALE_ENRICHMENT_EVIDENCE" in quality["advisory_gaps"]
@@ -124,7 +131,9 @@ async def test_genuinely_old_model_inputs_still_force_a_critical_gap(monkeypatch
     """Form older than a full season describes a different squad — still critical."""
     _install(monkeypatch, _live(model_input_staleness_seconds=500 * 86400))
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
     assert "STALE_REQUIRED_EVIDENCE" in payload["evidence_quality"]["critical_gaps"]
 
 
@@ -133,13 +142,16 @@ async def test_absent_model_input_staleness_does_not_invent_a_gap(monkeypatch):
     """No history at all is reported as missing inputs, never as stale ones."""
     _install(monkeypatch, _live(model_input_staleness_seconds=None))
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
     assert "STALE_REQUIRED_EVIDENCE" not in payload["evidence_quality"]["critical_gaps"]
 
 
 # --------------------------------------------------------------------------- #
 # Live market wiring
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_market_gap_clears_when_a_coherent_price_is_available(monkeypatch):
@@ -155,8 +167,13 @@ async def test_market_gap_clears_when_a_coherent_price_is_available(monkeypatch)
         odds={"home_win": 2.50, "draw": 3.30, "away_win": 3.10},
     )
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
-    assert "COHERENT_1X2_MARKET_UNAVAILABLE" not in payload["evidence_quality"]["critical_gaps"]
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
+    assert (
+        "COHERENT_1X2_MARKET_UNAVAILABLE"
+        not in payload["evidence_quality"]["critical_gaps"]
+    )
     assert payload["odds_edge"] is not None
 
 
@@ -165,14 +182,20 @@ async def test_market_gap_still_fires_when_no_price_exists(monkeypatch):
     """Fail closed — an odds outage must not fabricate an edge."""
     _install(monkeypatch, _live(), odds=None)
 
-    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
-    assert "COHERENT_1X2_MARKET_UNAVAILABLE" in payload["evidence_quality"]["critical_gaps"]
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
+    assert (
+        "COHERENT_1X2_MARKET_UNAVAILABLE"
+        in payload["evidence_quality"]["critical_gaps"]
+    )
     assert payload["odds_edge"] is None
 
 
 @pytest.mark.asyncio
 async def test_fetch_market_odds_degrades_to_none_on_provider_failure(monkeypatch):
     """A market is optional evidence; an outage degrades the analysis, never breaks it."""
+
     class Boom:
         async def get_match_odds(self, **_kwargs):
             raise RuntimeError("provider down")
@@ -189,9 +212,13 @@ async def test_fetch_market_odds_degrades_to_none_on_provider_failure(monkeypatc
 @pytest.mark.asyncio
 async def test_fetch_market_odds_rejects_the_services_unavailable_shape(monkeypatch):
     """OddsService returns a sentinel dict rather than raising when no market exists."""
+
     class Unavailable:
         async def get_match_odds(self, **_kwargs):
-            return {"source": "unavailable", "reason": "coherent_1x2_market_snapshot_not_found"}
+            return {
+                "source": "unavailable",
+                "reason": "coherent_1x2_market_snapshot_not_found",
+            }
 
     import src.services.odds_service as odds_module
 
@@ -204,4 +231,7 @@ async def test_fetch_market_odds_rejects_the_services_unavailable_shape(monkeypa
 
 @pytest.mark.asyncio
 async def test_fetch_market_odds_skips_lookup_without_team_names():
-    assert await endpoint._fetch_market_odds(home_team=None, away_team="X", league="EPL") is None
+    assert (
+        await endpoint._fetch_market_odds(home_team=None, away_team="X", league="EPL")
+        is None
+    )

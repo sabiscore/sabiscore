@@ -43,6 +43,7 @@ from typing import Any, Deque, Dict, List, Mapping, Sequence, Tuple
 import numpy as np
 
 from ..core.config import settings
+
 # EloContext is reused rather than redeclared: this replay's output has exactly
 # its seven fields, and returning the offline research engine's own context type
 # is what makes cross_verify_against_elo_engine() a same-type comparison rather
@@ -106,12 +107,18 @@ class FastEloReplay:
         self._k_base = k_base
         self._league_importance = league_importance
         self._season_carryover = season_carryover
-        self._history: Dict[Tuple[str, str], List[Tuple[str, float]]] = defaultdict(list)
-        self._deltas: Dict[Tuple[str, str], Deque[float]] = defaultdict(lambda: deque(maxlen=5))
+        self._history: Dict[Tuple[str, str], List[Tuple[str, float]]] = defaultdict(
+            list
+        )
+        self._deltas: Dict[Tuple[str, str], Deque[float]] = defaultdict(
+            lambda: deque(maxlen=5)
+        )
         self._league_season_sum: Dict[Tuple[str, str], float] = defaultdict(float)
         self._league_season_n: Dict[Tuple[str, str], int] = defaultdict(int)
 
-    def get_pre_and_trend(self, team: str, league: str, season: str) -> Tuple[float, float, bool]:
+    def get_pre_and_trend(
+        self, team: str, league: str, season: str
+    ) -> Tuple[float, float, bool]:
         key = (team, league)
         hist = self._history[key]
         if not hist:
@@ -122,7 +129,9 @@ class FastEloReplay:
         if self._season_carryover and last_season != season:
             ls_key = (league, season)
             n = self._league_season_n[ls_key]
-            league_mean = (self._league_season_sum[ls_key] / n) if n else _DEFAULT_BASE_ELO
+            league_mean = (
+                (self._league_season_sum[ls_key] / n) if n else _DEFAULT_BASE_ELO
+            )
             last_post = apply_season_carryover(last_post, league_mean)
         return last_post, trend, True
 
@@ -147,7 +156,15 @@ class FastEloReplay:
             away_resolved=away_found,
         )
 
-    def update(self, home: str, away: str, league: str, season: str, home_goals: int, away_goals: int) -> None:
+    def update(
+        self,
+        home: str,
+        away: str,
+        league: str,
+        season: str,
+        home_goals: int,
+        away_goals: int,
+    ) -> None:
         home_pre, _, _ = self.get_pre_and_trend(home, league, season)
         away_pre, _, _ = self.get_pre_and_trend(away, league, season)
         adjusted_home = home_pre + self._home_advantage
@@ -162,7 +179,10 @@ class FastEloReplay:
         k = self._k_base * self._league_importance.get(league.lower(), 1.0)
         home_post = home_pre + k * (home_actual - home_expected)
         away_post = away_pre + k * (away_actual - away_expected)
-        for team, pre, post in ((home, home_pre, home_post), (away, away_pre, away_post)):
+        for team, pre, post in (
+            (home, home_pre, home_post),
+            (away, away_pre, away_post),
+        ):
             key = (team, league)
             self._deltas[key].append(post - pre)
             self._history[key].append((season, post))
@@ -181,7 +201,9 @@ def default_fast_elo_replay() -> FastEloReplay:
     )
 
 
-def cross_verify_against_elo_engine(matches: Sequence[Mapping[str, Any]], n_check: int = 300) -> None:
+def cross_verify_against_elo_engine(
+    matches: Sequence[Mapping[str, Any]], n_check: int = 300
+) -> None:
     """Run both engines over the first ``n_check`` matches and assert
     numerically identical pre-match context. Raises on mismatch; a caller must
     never trust ``FastEloReplay``'s output at scale without calling this
@@ -203,15 +225,21 @@ def cross_verify_against_elo_engine(matches: Sequence[Mapping[str, Any]], n_chec
             real_ctx = real.get_context(home, away, league, season, date)
             fast_ctx = fast.get_context(home, away, league, season)
 
-            if not np.isclose(real_ctx.elo_difference, fast_ctx.elo_difference, atol=1e-6) or (
-                real_ctx.resolved != fast_ctx.resolved
-            ):
+            if not np.isclose(
+                real_ctx.elo_difference, fast_ctx.elo_difference, atol=1e-6
+            ) or (real_ctx.resolved != fast_ctx.resolved):
                 mismatches += 1
 
             real.update_after_match(
-                match_id=f"verify_{i}", home_team_id=home, away_team_id=away,
-                home_goals=hg, away_goals=ag, league=league, season=season,
-                match_date=date, persist=False,
+                match_id=f"verify_{i}",
+                home_team_id=home,
+                away_team_id=away,
+                home_goals=hg,
+                away_goals=ag,
+                league=league,
+                season=season,
+                match_date=date,
+                persist=False,
             )
             fast.update(home, away, league, season, hg, ag)
 
@@ -246,7 +274,9 @@ class EloReplayResult:
         )
 
 
-def compute_elo_training_columns(matches: Sequence[Mapping[str, Any]]) -> EloReplayResult:
+def compute_elo_training_columns(
+    matches: Sequence[Mapping[str, Any]],
+) -> EloReplayResult:
     """Replay real Elo over historical matches, in the order given.
 
     Unlike the Phase 8 replay, this does not need to internally re-sort:

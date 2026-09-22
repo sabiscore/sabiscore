@@ -13,7 +13,9 @@ FILES_TO_SCAN = [
     ROOT / "apps" / "web" / "vercel.json",
 ]
 
-PUBLIC_SECRET_PATTERN = re.compile(r"NEXT_PUBLIC_[A-Z0-9_]*(?:KEY|TOKEN|SECRET)", re.IGNORECASE)
+PUBLIC_SECRET_PATTERN = re.compile(
+    r"NEXT_PUBLIC_[A-Z0-9_]*(?:KEY|TOKEN|SECRET)", re.IGNORECASE
+)
 ASSIGNED_SECRET_PATTERN = re.compile(
     r"^[ \t]*(?:FOOTBALL_DATA_API_KEY|API_FOOTBALL_API_KEY|API_FOOTBALL_KEY|SPORTMONKS_API_TOKEN|SPORTMONKS_API_KEY|THE_ODDS_API_KEY|ODDS_API_KEY)[ \t]*=[ \t]*([^\r\n]*)[ \t]*$",
     re.MULTILINE,
@@ -25,7 +27,9 @@ SECRET_ASSIGNMENT_PATTERN = re.compile(
 REALISTIC_SECRET_PATTERNS = [
     re.compile(r"redis://[^:\s]+:[^@\s]{12,}@", re.IGNORECASE),
     re.compile(r"postgres(?:ql)?://[^:\s]+:[^@\s]{12,}@", re.IGNORECASE),
-    re.compile(r"(?i)(?:api[_-]?key|token|secret|password)\s*[:=]\s*['\"][A-Za-z0-9_\-]{24,}['\"]"),
+    re.compile(
+        r"(?i)(?:api[_-]?key|token|secret|password)\s*[:=]\s*['\"][A-Za-z0-9_\-]{24,}['\"]"
+    ),
 ]
 SECRET_SURFACE_FILES = [
     ROOT / ".env.example",
@@ -57,7 +61,13 @@ def test_provider_keys_in_examples_are_empty_or_placeholders():
 
 
 def test_sensitive_connection_examples_are_empty_or_local_placeholders():
-    allowed = {"", "CHANGE_ME", "CHANGE_ME_SECURE_PASSWORD", "your-secret-key-here", "your-cron-secret-here"}
+    allowed = {
+        "",
+        "CHANGE_ME",
+        "CHANGE_ME_SECURE_PASSWORD",
+        "your-secret-key-here",
+        "your-cron-secret-here",
+    }
     for path in SECRET_SURFACE_FILES:
         text = path.read_text(encoding="utf-8")
         for match in SECRET_ASSIGNMENT_PATTERN.finditer(text):
@@ -128,9 +138,24 @@ def test_tracked_files_do_not_define_espn_api_key_variable():
     # for this retired name, which isn't a declaration risk like code/config is.
     for rel_path in result.stdout.splitlines():
         path = ROOT / rel_path
-        if not path.is_file() or path.suffix.lower() not in {".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".yml", ".yaml", ".env", ".example", ".sh", ".ps1"}:
+        if not path.is_file() or path.suffix.lower() not in {
+            ".py",
+            ".ts",
+            ".tsx",
+            ".js",
+            ".jsx",
+            ".json",
+            ".yml",
+            ".yaml",
+            ".env",
+            ".example",
+            ".sh",
+            ".ps1",
+        }:
             continue
         if any(part in {"node_modules", ".venv", ".git"} for part in path.parts):
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        assert retired_espn_key_name not in text, f"Retired ESPN key variable found in {rel_path}"
+        assert retired_espn_key_name not in text, (
+            f"Retired ESPN key variable found in {rel_path}"
+        )

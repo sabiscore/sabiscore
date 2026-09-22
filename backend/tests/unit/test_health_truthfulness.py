@@ -1,4 +1,5 @@
 """Truthfulness regressions for health/readiness surfaces."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -52,7 +53,9 @@ def _generation(*, certification_state: str = "UNVERIFIED") -> dict:
     }
 
 
-def test_release_sha_prefers_render_runtime_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_release_sha_prefers_render_runtime_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     render_sha = "2beb31e0d4ed8c340fa55ea0063af93daae1d4f7"
     fallback_sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     monkeypatch.setenv("RENDER_GIT_COMMIT", render_sha.upper())
@@ -83,7 +86,9 @@ def test_release_sha_rejects_truncated_or_malformed_values(
 def test_unverified_generation_can_be_runtime_ready_but_never_stake_permitted() -> None:
     request = _request(models_loaded=True, loaded_leagues=["epl", "la_liga"])
 
-    with patch("src.api.endpoints.health._validated_generation", return_value=_generation()):
+    with patch(
+        "src.api.endpoints.health._validated_generation", return_value=_generation()
+    ):
         result = _model_readiness(request)
 
     assert result["status"] == "healthy"
@@ -95,7 +100,9 @@ def test_unverified_generation_can_be_runtime_ready_but_never_stake_permitted() 
 def test_missing_required_runtime_model_fails_readiness() -> None:
     request = _request(models_loaded=True, loaded_leagues=["epl"])
 
-    with patch("src.api.endpoints.health._validated_generation", return_value=_generation()):
+    with patch(
+        "src.api.endpoints.health._validated_generation", return_value=_generation()
+    ):
         result = _model_readiness(request)
 
     assert result["status"] == "unhealthy"
@@ -104,7 +111,9 @@ def test_missing_required_runtime_model_fails_readiness() -> None:
     assert result["stake_permitted"] is False
 
 
-def test_certified_generation_requires_runtime_readiness_before_stake_permission() -> None:
+def test_certified_generation_requires_runtime_readiness_before_stake_permission() -> (
+    None
+):
     request = _request(models_loaded=False, loaded_leagues=["epl", "la_liga"])
 
     with patch(

@@ -84,7 +84,13 @@ def _provider_row_id(row: dict[str, object]) -> str:
     else:
         payload = "|".join(
             str(row.get(field) or "")
-            for field in ("league", "match_date", "match_time", "home_team", "away_team")
+            for field in (
+                "league",
+                "match_date",
+                "match_time",
+                "home_team",
+                "away_team",
+            )
         )
     # The fallback is content-derived, never run-derived, so reacquiring the
     # same source row remains idempotent across manifests.
@@ -92,12 +98,16 @@ def _provider_row_id(row: dict[str, object]) -> str:
 
 
 def _legacy_team_id(competition: str, name: str) -> str:
-    digest = hashlib.sha256(f"{competition}|{name.casefold()}".encode()).hexdigest()[:20]
+    digest = hashlib.sha256(f"{competition}|{name.casefold()}".encode()).hexdigest()[
+        :20
+    ]
     return f"fdco-team-{digest}"
 
 
 def _fixture_payloads(paths: tuple[Path, ...]) -> list[Path]:
-    return [path for path in paths if path.suffix == ".json" and "fixtures-" in path.name]
+    return [
+        path for path in paths if path.suffix == ".json" and "fixtures-" in path.name
+    ]
 
 
 async def ingest_manifest(
@@ -126,46 +136,60 @@ async def ingest_manifest(
                 raise ManifestValidationError("fixture payload must be a JSON array")
             for row in rows:
                 if not isinstance(row, dict):
-                    raise ManifestValidationError("fixture payload contains a non-object row")
+                    raise ManifestValidationError(
+                        "fixture payload contains a non-object row"
+                    )
                 report.fixtures_seen += 1
                 competition = str(row.get("league") or "")
                 if competition not in COMPETITIONS:
-                    raise ManifestValidationError(f"unknown competition: {competition or 'missing'}")
+                    raise ManifestValidationError(
+                        f"unknown competition: {competition or 'missing'}"
+                    )
                 home = str(row.get("home_team") or "").strip()
                 away = str(row.get("away_team") or "").strip()
                 if not home or not away or home.casefold() == away.casefold():
-                    raise ManifestValidationError("fixture teams are missing or ambiguous")
+                    raise ManifestValidationError(
+                        "fixture teams are missing or ambiguous"
+                    )
                 kickoff = _parse_utc(row)
                 scores = (row.get("home_goals"), row.get("away_goals"))
                 finished = all(isinstance(score, (int, float)) for score in scores)
                 if finished and kickoff > acquired_at:
-                    raise ManifestValidationError("finished fixture is future-dated at acquisition")
+                    raise ManifestValidationError(
+                        "finished fixture is future-dated at acquisition"
+                    )
 
                 competition_name, country = COMPETITIONS[competition]
                 if await session.get(League, competition) is None:
-                    session.add(League(id=competition, name=competition_name, country=country))
+                    session.add(
+                        League(id=competition, name=competition_name, country=country)
+                    )
                 home_id = _legacy_team_id(competition, home)
                 away_id = _legacy_team_id(competition, away)
                 for team_id, team_name in ((home_id, home), (away_id, away)):
                     if await session.get(Team, team_id) is None:
-                        session.add(Team(id=team_id, name=team_name, league_id=competition))
+                        session.add(
+                            Team(id=team_id, name=team_name, league_id=competition)
+                        )
                 await session.flush()
 
                 provider_event_id = _provider_row_id(row)
                 legacy_id = provider_event_id
                 existing_match = await session.get(Match, legacy_id)
                 if existing_match is None:
-                    session.add(Match(
-                        id=legacy_id,
-                        league_id=competition,
-                        home_team_id=home_id,
-                        away_team_id=away_id,
-                        match_date=kickoff.replace(tzinfo=None),
-                        season=canonical_season(kickoff),
-                        status="finished" if finished else "scheduled",
-                        home_score=int(scores[0]) if finished else None,
-                        away_score=int(scores[1]) if finished else None,
-                    ))
+                    session.add(
+                        Match(
+                            id=legacy_id,
+                            league_id=competition,
+                            home_team_id=home_id,
+                            away_team_id=away_id,
+                            match_date=kickoff.replace(tzinfo=None),
+                            season=canonical_season(kickoff),
+                            status="finished" if finished else "scheduled",
+                            home_score=int(scores[0]) if finished else None,
+                            away_score=int(scores[1]) if finished else None,
+                        )
+                    )
                     report.fixtures_inserted += 1
                 else:
                     if (
@@ -173,7 +197,9 @@ async def ingest_manifest(
                         or existing_match.away_team_id != away_id
                         or existing_match.match_date != kickoff.replace(tzinfo=None)
                     ):
-                        raise ManifestValidationError("duplicate fixture conflicts with persisted identity")
+                        raise ManifestValidationError(
+                            "duplicate fixture conflicts with persisted identity"
+                        )
                     report.fixtures_existing += 1
 
                 canonical_id = await ensure_canonical_fixture(
@@ -203,57 +229,81 @@ async def ingest_manifest(
 
                 market = row.get("market")
                 if market is not None:
-                    if not isinstance(market, dict) or market.get("coherent") is not True:
-                        raise ManifestValidationError("market evidence is not a coherent book")
+                    if (
+                        not isinstance(market, dict)
+                        or market.get("coherent") is not True
+                    ):
+                        raise ManifestValidationError(
+                            "market evidence is not a coherent book"
+                        )
                     odds = market.get("raw_odds")
                     probabilities = market.get("devigged_probabilities")
-                    if not isinstance(odds, dict) or not isinstance(probabilities, dict):
+                    if not isinstance(odds, dict) or not isinstance(
+                        probabilities, dict
+                    ):
                         raise ManifestValidationError("market book is incomplete")
                     values = [odds.get(key) for key in ("home", "draw", "away")]
                     probs = [probabilities.get(key) for key in ("home", "draw", "away")]
-                    if not all(isinstance(value, (int, float)) and value > 1 for value in values):
+                    if not all(
+                        isinstance(value, (int, float)) and value > 1
+                        for value in values
+                    ):
                         raise ManifestValidationError("market odds are malformed")
-                    if not all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in probs):
-                        raise ManifestValidationError("de-vigged probabilities are malformed")
+                    if not all(
+                        isinstance(value, (int, float)) and 0 <= value <= 1
+                        for value in probs
+                    ):
+                        raise ManifestValidationError(
+                            "de-vigged probabilities are malformed"
+                        )
                     if abs(sum(float(value) for value in probs) - 1.0) > 1e-6:
-                        raise ManifestValidationError("de-vigged probabilities do not sum to one")
+                        raise ManifestValidationError(
+                            "de-vigged probabilities do not sum to one"
+                        )
                     bookmaker = str(market.get("bookmaker") or "")
                     existing_market = (
-                        await session.execute(
-                            select(MarketSnapshot.id).where(
-                                MarketSnapshot.canonical_fixture_id == canonical_id,
-                                MarketSnapshot.provider == provider,
-                                MarketSnapshot.bookmaker == bookmaker,
-                                MarketSnapshot.captured_at == acquired_at.replace(tzinfo=None),
+                        (
+                            await session.execute(
+                                select(MarketSnapshot.id).where(
+                                    MarketSnapshot.canonical_fixture_id == canonical_id,
+                                    MarketSnapshot.provider == provider,
+                                    MarketSnapshot.bookmaker == bookmaker,
+                                    MarketSnapshot.captured_at
+                                    == acquired_at.replace(tzinfo=None),
+                                )
                             )
                         )
-                    ).scalars().first()
+                        .scalars()
+                        .first()
+                    )
                     if existing_market is None:
-                        session.add(MarketSnapshot(
-                            canonical_fixture_id=canonical_id,
-                            match_id=legacy_id,
-                            provider=provider,
-                            bookmaker=bookmaker,
-                            market_type="1X2",
-                            home_odds=float(values[0]),
-                            draw_odds=float(values[1]),
-                            away_odds=float(values[2]),
-                            home_implied_prob_devigged=float(probs[0]),
-                            draw_implied_prob_devigged=float(probs[1]),
-                            away_implied_prob_devigged=float(probs[2]),
-                            is_closing_line=False,
-                            provider_timestamp=None,
-                            captured_at=acquired_at.replace(tzinfo=None),
-                            coherent=True,
-                            executable=False,
-                            provenance={
-                                "historical": True,
-                                "run_id": report.run_id,
-                                "source_row_index": row.get("source_row_index"),
-                                "event_timestamp": kickoff.isoformat(),
-                                "acquired_at": acquired_at.isoformat(),
-                            },
-                        ))
+                        session.add(
+                            MarketSnapshot(
+                                canonical_fixture_id=canonical_id,
+                                match_id=legacy_id,
+                                provider=provider,
+                                bookmaker=bookmaker,
+                                market_type="1X2",
+                                home_odds=float(values[0]),
+                                draw_odds=float(values[1]),
+                                away_odds=float(values[2]),
+                                home_implied_prob_devigged=float(probs[0]),
+                                draw_implied_prob_devigged=float(probs[1]),
+                                away_implied_prob_devigged=float(probs[2]),
+                                is_closing_line=False,
+                                provider_timestamp=None,
+                                captured_at=acquired_at.replace(tzinfo=None),
+                                coherent=True,
+                                executable=False,
+                                provenance={
+                                    "historical": True,
+                                    "run_id": report.run_id,
+                                    "source_row_index": row.get("source_row_index"),
+                                    "event_timestamp": kickoff.isoformat(),
+                                    "acquired_at": acquired_at.isoformat(),
+                                },
+                            )
+                        )
                         report.market_snapshots_inserted += 1
                     else:
                         report.market_snapshots_existing += 1
@@ -261,7 +311,9 @@ async def ingest_manifest(
                 eligible = finished and kickoff <= acquired_at
                 report.feature_eligible += int(eligible)
                 report.non_feature_eligible += int(not eligible)
-                report.competitions[competition] = report.competitions.get(competition, 0) + 1
+                report.competitions[competition] = (
+                    report.competitions.get(competition, 0) + 1
+                )
 
         if not report.fixtures_seen:
             raise ManifestValidationError("manifest contains no fixture payloads")

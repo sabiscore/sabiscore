@@ -18,6 +18,7 @@ path while the strict startup check rejected all six. These tests exercise the
 real committed artifacts through both paths, using the same smoke test the
 startup code runs.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -85,8 +86,10 @@ def test_request_path_still_serves_the_same_artifact(league: str):
     vector = np.array(
         [DEFAULT_FEATURE_VALUES_68[f] for f in CANONICAL_FEATURES_68], dtype=np.float32
     )
-    result = asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-        PredictionEngine().predict(features=vector, league=league)
+    result = (
+        asyncio.get_event_loop_policy()
+        .new_event_loop()
+        .run_until_complete(PredictionEngine().predict(features=vector, league=league))
     )
     assert result.model_version != "fallback"
     assert abs((result.home_win + result.draw + result.away_win) - 1.0) < 1e-3

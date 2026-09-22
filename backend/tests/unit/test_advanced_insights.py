@@ -1,4 +1,5 @@
 """Unit tests for the Advanced Insights endpoint and service (R4 of v5 directive)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -50,10 +51,14 @@ class TestAdvancedInsightsService:
         exec_mock.scalar_one_or_none.return_value = None
         mock_async_session.execute = AsyncMock(return_value=exec_mock)
 
-        with patch("src.core.cache.cache_manager.get", return_value=None), \
-             patch("src.core.cache.cache_manager.set"):
+        with (
+            patch("src.core.cache.cache_manager.get", return_value=None),
+            patch("src.core.cache.cache_manager.set"),
+        ):
             service = AdvancedInsightsService()
-            result = await service.get_advanced_insights(match_id="nonexistent", db=mock_async_session)
+            result = await service.get_advanced_insights(
+                match_id="nonexistent", db=mock_async_session
+            )
             assert result is None
 
     @pytest.mark.asyncio
@@ -96,6 +101,7 @@ class TestAdvancedInsightsService:
         )
 
         call_idx = 0
+
         def execute_side_effect(stmt):
             nonlocal call_idx
             res = MagicMock()
@@ -112,10 +118,14 @@ class TestAdvancedInsightsService:
 
         mock_async_session.execute = AsyncMock(side_effect=execute_side_effect)
 
-        with patch("src.core.cache.cache_manager.get", return_value=None), \
-             patch("src.core.cache.cache_manager.set"):
+        with (
+            patch("src.core.cache.cache_manager.get", return_value=None),
+            patch("src.core.cache.cache_manager.set"),
+        ):
             service = AdvancedInsightsService()
-            result = await service.get_advanced_insights(match_id=sample_match.id, db=mock_async_session)
+            result = await service.get_advanced_insights(
+                match_id=sample_match.id, db=mock_async_session
+            )
 
             assert isinstance(result, AdvancedInsightsResponse)
             assert result.match_id == sample_match.id
@@ -126,7 +136,10 @@ class TestAdvancedInsightsService:
             # Check advanced metrics
             assert result.advanced_metrics.ppda_home == 8.5
             assert result.advanced_metrics.ppda_status == MetricStatus.AVAILABLE.value
-            assert result.advanced_metrics.xt_status == MetricStatus.ADVISORY_REQUIRES_CORPUS.value
+            assert (
+                result.advanced_metrics.xt_status
+                == MetricStatus.ADVISORY_REQUIRES_CORPUS.value
+            )
 
             # Check context
             assert result.match_context.weather_condition == "Clear, 18C"
@@ -160,7 +173,9 @@ class TestAdvancedInsightsEndpoint:
     """Test HTTP endpoint integration."""
 
     @pytest.mark.asyncio
-    async def test_get_advanced_insights_404_for_missing_match(self, mock_async_session):
+    async def test_get_advanced_insights_404_for_missing_match(
+        self, mock_async_session
+    ):
         exec_mock = MagicMock()
         exec_mock.scalar_one_or_none.return_value = None
         mock_async_session.execute = AsyncMock(return_value=exec_mock)
@@ -170,11 +185,17 @@ class TestAdvancedInsightsEndpoint:
         # ASGI app never runs it, so provide the dependency directly.
         app.dependency_overrides[get_odds_service] = lambda: MagicMock()
         try:
-            with patch("src.core.cache.cache_manager.get", return_value=None), \
-                 patch("src.core.cache.cache_manager.set"):
+            with (
+                patch("src.core.cache.cache_manager.get", return_value=None),
+                patch("src.core.cache.cache_manager.set"),
+            ):
                 transport = ASGITransport(app=app)
-                async with AsyncClient(transport=transport, base_url="http://test") as client:
-                    resp = await client.get("/api/v1/matches/nonexistent_id_9999/advanced-insights")
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as client:
+                    resp = await client.get(
+                        "/api/v1/matches/nonexistent_id_9999/advanced-insights"
+                    )
                     assert resp.status_code == 404
                     data = resp.json()
                     assert "detail" in data

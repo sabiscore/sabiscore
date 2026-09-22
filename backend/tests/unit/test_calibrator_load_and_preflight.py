@@ -53,7 +53,9 @@ class _Unusable:
 
     @property
     def calibrators(self) -> Any:
-        raise AttributeError("'LogisticRegression' object has no attribute 'multi_class'")
+        raise AttributeError(
+            "'LogisticRegression' object has no attribute 'multi_class'"
+        )
 
 
 class _Hostile:
@@ -123,7 +125,9 @@ def test_committed_artifact_calibrator_admission_matches_preflight(league: str) 
     so this test pins contract behavior, not a fixed per-league outcome.
     """
     raw = _raw(league)
-    expected = PredictionEngine._usable_calibrator(raw.get("calibrator"), league, _artifact(league))
+    expected = PredictionEngine._usable_calibrator(
+        raw.get("calibrator"), league, _artifact(league)
+    )
 
     bundle = PredictionEngine._wrap_artifact(raw, league, _artifact(league))
     assert bundle is not None
@@ -138,7 +142,9 @@ def test_committed_artifact_calibrator_admission_matches_preflight(league: str) 
 
 
 def test_preflight_rejects_a_calibrator_that_raises_on_use() -> None:
-    assert PredictionEngine._usable_calibrator(_Unusable(), "bundesliga", "<test>") is None
+    assert (
+        PredictionEngine._usable_calibrator(_Unusable(), "bundesliga", "<test>") is None
+    )
 
 
 def test_preflight_never_raises_on_a_hostile_object() -> None:
@@ -151,7 +157,9 @@ def test_preflight_passes_none_through() -> None:
     assert PredictionEngine._usable_calibrator(None, "epl", "<test>") is None
 
 
-def test_preflight_admits_a_calibrator_that_returns_a_valid_simplex(monkeypatch) -> None:
+def test_preflight_admits_a_calibrator_that_returns_a_valid_simplex(
+    monkeypatch,
+) -> None:
     """The screen must not be a blanket refusal -- a good calibrator gets used."""
     monkeypatch.setattr(
         "src.models.prediction._apply_calibrator",
@@ -160,7 +168,9 @@ def test_preflight_admits_a_calibrator_that_returns_a_valid_simplex(monkeypatch)
     monkeypatch.setattr("src.models.prediction._CAL_AVAILABLE", True)
 
     calibrator = _Identity()
-    assert PredictionEngine._usable_calibrator(calibrator, "epl", "<test>") is calibrator
+    assert (
+        PredictionEngine._usable_calibrator(calibrator, "epl", "<test>") is calibrator
+    )
 
 
 def test_preflight_rejects_a_calibrator_returning_a_non_simplex(monkeypatch) -> None:
@@ -209,7 +219,9 @@ def test_artifact_calibrator_screening_never_forces_fallback(league: str) -> Non
     assert bundle.meta_model is not None
     assert bundle.models_dict
 
-    result = PredictionEngine()._run_inference(bundle, np.zeros((68,), dtype=np.float32), league.upper())
+    result = PredictionEngine()._run_inference(
+        bundle, np.zeros((68,), dtype=np.float32), league.upper()
+    )
     assert result.model_version != "fallback"
 
     if bundle.calibrator is None:

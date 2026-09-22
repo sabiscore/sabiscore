@@ -32,6 +32,7 @@ Exit codes
 0   Audit complete (JSON written to reports/evaluation/).
 1   Fetch error (network or JSON parse failure).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -108,6 +109,7 @@ _DATE_TOLERANCE_DAYS = 1
 # Corpus loading
 # ---------------------------------------------------------------------------
 
+
 def _parse_corpus_date(raw: str) -> date | None:
     raw = raw.strip()
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
@@ -174,13 +176,12 @@ def load_corpus() -> list[dict[str, Any]]:
 # StatsBomb fetching (with dates -- the sibling audit discards them)
 # ---------------------------------------------------------------------------
 
+
 def fetch_sb_matches() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return (matches, competition_index) for every SabiScore-relevant comp."""
     comps = _fetch_json(_SB_COMPETITIONS_URL)
     if not isinstance(comps, list):
-        raise TypeError(
-            f"competitions.json: expected list, got {type(comps).__name__}"
-        )
+        raise TypeError(f"competitions.json: expected list, got {type(comps).__name__}")
 
     index = [
         {
@@ -207,7 +208,9 @@ def fetch_sb_matches() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         except Exception as exc:  # noqa: BLE001
             log.warning(
                 "Could not fetch %s %s: %s",
-                entry["league"], entry["season_name"], exc,
+                entry["league"],
+                entry["season_name"],
+                exc,
             )
             continue
 
@@ -233,7 +236,9 @@ def fetch_sb_matches() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             )
         log.info(
             "  SB %s %s: %d matches",
-            entry["league"], entry["season_name"], len(payload),
+            entry["league"],
+            entry["season_name"],
+            len(payload),
         )
         time.sleep(0.05)
 
@@ -243,6 +248,7 @@ def fetch_sb_matches() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
 # ---------------------------------------------------------------------------
 # Gate D1 -- identity crosswalk (fail-closed, staged, uniqueness-guarded)
 # ---------------------------------------------------------------------------
+
 
 def _tokens_equivalent(corpus_token: str, sb_run: list[str]) -> bool:
     """Does one corpus token stand for this run of StatsBomb tokens?
@@ -281,7 +287,7 @@ def _containment_score(corpus_key: str, sb_key: str) -> int | None:
     while ci < len(corpus_tokens) and si < len(sb_tokens):
         matched = False
         for run_len in (2, 1):  # prefer the abbreviation reading
-            run = sb_tokens[si:si + run_len]
+            run = sb_tokens[si : si + run_len]
             if len(run) == run_len and _tokens_equivalent(corpus_tokens[ci], run):
                 consumed += run_len
                 si += run_len
@@ -364,6 +370,7 @@ def build_crosswalk(
 # Gates G1-G6
 # ---------------------------------------------------------------------------
 
+
 def run_gates(
     sb_matches: list[dict[str, Any]],
     corpus: list[dict[str, Any]],
@@ -376,7 +383,9 @@ def run_gates(
     for row in corpus:
         corpus_seasons[row["league"]].add(row["season"])
         corpus_by_league[row["league"]] += 1
-        corpus_index[(row["league"], row["home_key"], row["away_key"])].append(row["date"])
+        corpus_index[(row["league"], row["home_key"], row["away_key"])].append(
+            row["date"]
+        )
         servable_by_key[
             (row["league"], row["home_key"], row["away_key"], row["date"])
         ] = row["season"]
@@ -430,9 +439,12 @@ def run_gates(
     g2 = {
         league: {
             "corpus_seasons": sorted(corpus_seasons.get(league, set())),
-            "statsbomb_seasons_all_time": sorted(sb_seasons_by_league.get(league, set())),
+            "statsbomb_seasons_all_time": sorted(
+                sb_seasons_by_league.get(league, set())
+            ),
             "statsbomb_seasons_inside_corpus_window": sorted(
-                sb_seasons_by_league.get(league, set()) & corpus_seasons.get(league, set())
+                sb_seasons_by_league.get(league, set())
+                & corpus_seasons.get(league, set())
             ),
         }
         for league in _SABISCORE_LEAGUES
@@ -443,7 +455,8 @@ def run_gates(
 
     # G4 cross-league portability.
     leagues_clearing = [
-        lg for lg, v in per_league.items()
+        lg
+        for lg, v in per_league.items()
         if v["coverage_pct"] >= COVERAGE_THRESHOLD_PCT
     ]
     leagues_zero = [lg for lg, v in per_league.items() if v["matched_fixtures"] == 0]
@@ -455,7 +468,8 @@ def run_gates(
     sb_newest_by_league = {
         league: (
             max(sb_seasons_by_league[league])
-            if sb_seasons_by_league.get(league) else None
+            if sb_seasons_by_league.get(league)
+            else None
         )
         for league in _SABISCORE_LEAGUES
     }
@@ -470,7 +484,9 @@ def run_gates(
         "servable_fixtures": servable_total,
         "servable_fixtures_with_statsbomb_events": servable_matched,
         "prediction_time_availability_pct": (
-            round(100.0 * servable_matched / servable_total, 2) if servable_total else 0.0
+            round(100.0 * servable_matched / servable_total, 2)
+            if servable_total
+            else 0.0
         ),
         "statsbomb_newest_season_by_league": sb_newest_by_league,
     }
@@ -508,7 +524,9 @@ def run_gates(
         "G6_production_default_rate": {
             "implied_default_rate_pct": g6_default_rate,
             "verdict": (
-                "PASS" if g6_default_rate <= (100.0 - COVERAGE_THRESHOLD_PCT) else "FAIL"
+                "PASS"
+                if g6_default_rate <= (100.0 - COVERAGE_THRESHOLD_PCT)
+                else "FAIL"
             ),
         },
     }
@@ -517,6 +535,7 @@ def run_gates(
 # ---------------------------------------------------------------------------
 # Gate D2 -- event completeness on a bounded sample
 # ---------------------------------------------------------------------------
+
 
 def audit_event_completeness(
     sb_matches: list[dict[str, Any]],
@@ -529,7 +548,8 @@ def audit_event_completeness(
     2003/04 season SabiScore cannot train on is not evidence about E4.
     """
     eligible = [
-        m for m in sb_matches
+        m
+        for m in sb_matches
         if m["league"] in _SABISCORE_LEAGUES and m["season"] in corpus_seasons
     ]
     if not eligible:
@@ -555,25 +575,26 @@ def audit_event_completeness(
             results.append({"match_id": match["match_id"], "error": str(exc)[:120]})
             continue
         if not isinstance(events, list):
-            results.append({"match_id": match["match_id"], "error": "payload not a list"})
+            results.append(
+                {"match_id": match["match_id"], "error": "payload not a list"}
+            )
             continue
-        malformed = sum(
-            1 for e in events if not isinstance(e, dict) or "type" not in e
-        )
+        malformed = sum(1 for e in events if not isinstance(e, dict) or "type" not in e)
         types = {
-            (e.get("type") or {}).get("name")
-            for e in events if isinstance(e, dict)
+            (e.get("type") or {}).get("name") for e in events if isinstance(e, dict)
         }
         with_location = sum(
             1 for e in events if isinstance(e, dict) and e.get("location")
         )
         teams = {
             (e.get("team") or {}).get("name")
-            for e in events if isinstance(e, dict) and e.get("team")
+            for e in events
+            if isinstance(e, dict) and e.get("team")
         }
         players = {
             (e.get("player") or {}).get("id")
-            for e in events if isinstance(e, dict) and e.get("player")
+            for e in events
+            if isinstance(e, dict) and e.get("player")
         }
         results.append(
             {

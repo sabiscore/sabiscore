@@ -240,9 +240,7 @@ async def test_semantic_repair_review_stays_blocked_when_manifest_is_incomplete(
     db.rollback.assert_awaited_once()
 
 
-async def test_fixture_identity_review_exposes_manifest_and_apply_endpoint() -> (
-    None
-):
+async def test_fixture_identity_review_exposes_manifest_and_apply_endpoint() -> None:
     response = Response()
     db = MagicMock()
 
@@ -300,7 +298,9 @@ async def test_fixture_identity_review_exposes_manifest_and_apply_endpoint() -> 
     )
 
 
-async def test_fixture_identity_rebind_apply_rejects_a_wrong_confirmation_token() -> None:
+async def test_fixture_identity_rebind_apply_rejects_a_wrong_confirmation_token() -> (
+    None
+):
     from fastapi import HTTPException
 
     body = data_authority.FixtureIdentityRebindApplyRequest(
@@ -326,7 +326,9 @@ async def test_fixture_identity_rebind_apply_rejects_a_wrong_confirmation_token(
     db.commit.assert_not_called()
 
 
-async def test_fixture_identity_rebind_apply_commits_on_a_correct_confirmation() -> None:
+async def test_fixture_identity_rebind_apply_commits_on_a_correct_confirmation() -> (
+    None
+):
     from src.services.fixture_identity_rebind_apply_service import (
         FixtureIdentityRebindApplyResult,
     )

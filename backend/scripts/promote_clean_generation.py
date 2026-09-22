@@ -18,6 +18,7 @@ Usage
         --candidate-dir models/candidate_clean2526 --generation v11_clean2526
     # add --dry-run to print the plan and write nothing
 """
+
 from __future__ import annotations
 
 import argparse
@@ -96,7 +97,9 @@ def build_metadata(
             "EREDIVISIE has only season 2526 in the corpus, and 2526 is the holdout, "
             "so it has zero pre-holdout training rows and serves the pooled "
             "all-league model."
-        ) if pooled else None,
+        )
+        if pooled
+        else None,
         "in_artifact_calibrator": "calibrator" in raw,
         "in_artifact_calibrator_note": (
             "No 'calibrator' key is written by this training path. PredictionEngine "
@@ -122,16 +125,23 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidate-dir", type=Path, required=True)
     parser.add_argument("--generation", required=True)
-    parser.add_argument("--supersedes-reason", default=(
-        "v5_phase7-20260808 was trained with holdout_season 2425 while season 2526 was "
-        "in its training set. 2526 is the holdout every candidate comparison scores "
-        "against, so that generation memorised the test set (docs/DEBT.md item 81). "
-        "This generation holds 2526 out strictly."
-    ))
+    parser.add_argument(
+        "--supersedes-reason",
+        default=(
+            "v5_phase7-20260808 was trained with holdout_season 2425 while season 2526 was "
+            "in its training set. 2526 is the holdout every candidate comparison scores "
+            "against, so that generation memorised the test set (docs/DEBT.md item 81). "
+            "This generation holds 2526 out strictly."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    src = args.candidate_dir if args.candidate_dir.is_absolute() else _BACKEND_ROOT / args.candidate_dir
+    src = (
+        args.candidate_dir
+        if args.candidate_dir.is_absolute()
+        else _BACKEND_ROOT / args.candidate_dir
+    )
     manifest = json.loads((src / "training_manifest.json").read_text(encoding="utf-8"))
     report = json.loads((src / "training_report_real.json").read_text(encoding="utf-8"))
     suffix = manifest["training_config"]["artifact_suffix"]
@@ -159,7 +169,9 @@ def main() -> int:
             "required": slug in _REQUIRED,
         }
         rps = metadata.get("rps")
-        print(f"  {league:<11} rps={rps:.4f} n={metadata.get('holdout_samples')} -> {dst_pkl.name}")
+        print(
+            f"  {league:<11} rps={rps:.4f} n={metadata.get('holdout_samples')} -> {dst_pkl.name}"
+        )
 
     if args.dry_run:
         print("dry run — nothing written")
@@ -193,8 +205,10 @@ def main() -> int:
         "artifacts": artifacts,
     }
     active_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"\nactive_generation.json -> {payload['generation']} "
-          f"({payload['feature_schema_version']}, holdout {config['holdout_season']})")
+    print(
+        f"\nactive_generation.json -> {payload['generation']} "
+        f"({payload['feature_schema_version']}, holdout {config['holdout_season']})"
+    )
     print("previous manifest preserved at models/active_generation.prev.json")
     return 0
 

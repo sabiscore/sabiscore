@@ -41,6 +41,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/qualify_player_availability_coverage.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -90,8 +91,25 @@ _SEASONS: dict[int, str] = {2022: "2223", 2023: "2324", 2024: "2425"}
 # ---------------------------------------------------------------------------
 
 _LEGAL_TEAM_TOKENS = {
-    "ac", "acf", "afc", "as", "bc", "ca", "cf", "fc", "fsv", "osc", "rc",
-    "sc", "sco", "ss", "ssc", "stade", "ud", "us", "vfb",
+    "ac",
+    "acf",
+    "afc",
+    "as",
+    "bc",
+    "ca",
+    "cf",
+    "fc",
+    "fsv",
+    "osc",
+    "rc",
+    "sc",
+    "sco",
+    "ss",
+    "ssc",
+    "stade",
+    "ud",
+    "us",
+    "vfb",
 }
 _TRAILING_CLUB_WORDS = {"club", "football", "soccer"}
 
@@ -155,7 +173,8 @@ def _identity_key(name: str) -> str:
     while len(tokens) > 1 and tokens[-1] in _TRAILING_CLUB_WORDS:
         tokens.pop()
     while tokens and (
-        tokens[-1] in _LEGAL_TEAM_TOKENS or (tokens[-1].isdigit() and len(tokens[-1]) <= 4)
+        tokens[-1] in _LEGAL_TEAM_TOKENS
+        or (tokens[-1].isdigit() and len(tokens[-1]) <= 4)
     ):
         tokens.pop()
     return " ".join(tokens)
@@ -170,15 +189,21 @@ def _keys_equivalent(left: str, right: str) -> bool:
     return left_tokens <= right_tokens or right_tokens <= left_tokens
 
 
-def resolve_against_roster(provider_name: str, league: str, roster: set[str]) -> str | None:
+def resolve_against_roster(
+    provider_name: str, league: str, roster: set[str]
+) -> str | None:
     """Return the roster's own spelling that `provider_name` identifies, or None."""
     key = _identity_key(provider_name)
-    aliased = _MARKET_ALIASES.get((league, key)) or _AUDITED_ALIASES.get((league, key)) or key
+    aliased = (
+        _MARKET_ALIASES.get((league, key)) or _AUDITED_ALIASES.get((league, key)) or key
+    )
     for candidate in roster:
         candidate_key = _identity_key(candidate)
         if aliased == candidate_key or key == candidate_key:
             return candidate
-        if _keys_equivalent(aliased, candidate_key) or _keys_equivalent(key, candidate_key):
+        if _keys_equivalent(aliased, candidate_key) or _keys_equivalent(
+            key, candidate_key
+        ):
             return candidate
     return None
 
@@ -188,7 +213,9 @@ def resolve_against_roster(provider_name: str, league: str, roster: set[str]) ->
 # ---------------------------------------------------------------------------
 
 
-def load_division_season(division: str, suffix: str) -> tuple[set[str], dict[str, set[date]]]:
+def load_division_season(
+    division: str, suffix: str
+) -> tuple[set[str], dict[str, set[date]]]:
     """Return (team roster, {team: set of match dates}) for one division/season file."""
     import pandas as pd
 
@@ -199,7 +226,11 @@ def load_division_season(division: str, suffix: str) -> tuple[set[str], dict[str
     home_col = "HomeTeam" if "HomeTeam" in frame.columns else "home_team"
     away_col = "AwayTeam" if "AwayTeam" in frame.columns else "away_team"
     date_col = "Date" if "Date" in frame.columns else "date"
-    if home_col not in frame.columns or away_col not in frame.columns or date_col not in frame.columns:
+    if (
+        home_col not in frame.columns
+        or away_col not in frame.columns
+        or date_col not in frame.columns
+    ):
         return set(), {}
 
     roster: set[str] = set()
@@ -234,16 +265,22 @@ async def qualify_league_season(
     roster, dates_by_team = load_division_season(division, suffix)
     if not roster:
         return {
-            "league": league, "season": season, "corpus_file_found": False,
+            "league": league,
+            "season": season,
+            "corpus_file_found": False,
             "queried": False,
         }
 
     result = await provider.injuries(competition=league, season=season)
     if result.status.name != "VERIFIED":
         return {
-            "league": league, "season": season, "corpus_file_found": True,
-            "queried": True, "api_status": result.status.name,
-            "api_error_code": result.error_code, "record_count": 0,
+            "league": league,
+            "season": season,
+            "corpus_file_found": True,
+            "queried": True,
+            "api_status": result.status.name,
+            "api_error_code": result.error_code,
+            "record_count": 0,
         }
 
     coherent = [r for r in result.records if r.get("coherent")]
@@ -293,7 +330,10 @@ async def main() -> int:
     rows: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=30.0) as client:
         provider = APIFootballProvider(
-            api_key=settings.api_football_key, enabled=True, live_tests=True, http_client=client
+            api_key=settings.api_football_key,
+            enabled=True,
+            live_tests=True,
+            http_client=client,
         )
         for league in _LEAGUE_TO_DIVISION:
             for season in _SEASONS:

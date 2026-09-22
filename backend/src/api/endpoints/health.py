@@ -183,7 +183,9 @@ async def readiness_check(
         "ready": critical_healthy,
         "capabilities": {
             "prediction": checks["models"].get("prediction_capability", "BLOCKED"),
-            "stake": "ENABLED" if checks["models"].get("stake_permitted") else "DISABLED",
+            "stake": "ENABLED"
+            if checks["models"].get("stake_permitted")
+            else "DISABLED",
         },
     }
 

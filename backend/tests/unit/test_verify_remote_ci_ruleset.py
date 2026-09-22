@@ -115,8 +115,7 @@ def _write_executable(path: Path, content: str) -> None:
 
 def _fake_gh_script(*, include_required_rule: bool, all_checks_success: bool) -> str:
     required_contexts = (
-        "Backend Lint, Typecheck, Tests\n"
-        "Web Lint, Typecheck, Build\n"
+        "Backend Lint, Typecheck, Tests\nWeb Lint, Typecheck, Build\n"
         if include_required_rule
         else ""
     )
@@ -192,7 +191,9 @@ exit 0
     )
 
 
-def _run_with_fake_gh(tmp_path: Path, *, include_required_rule: bool, all_checks_success: bool) -> subprocess.CompletedProcess[str]:
+def _run_with_fake_gh(
+    tmp_path: Path, *, include_required_rule: bool, all_checks_success: bool
+) -> subprocess.CompletedProcess[str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake_gh = bin_dir / "gh"
@@ -250,7 +251,9 @@ def test_passes_when_runner_booted_and_required_checks_green(tmp_path: Path) -> 
 
 
 @requires_bash
-def test_fails_when_a_required_check_is_red_even_if_runner_booted(tmp_path: Path) -> None:
+def test_fails_when_a_required_check_is_red_even_if_runner_booted(
+    tmp_path: Path,
+) -> None:
     result = _run_with_fake_gh(
         tmp_path,
         include_required_rule=True,

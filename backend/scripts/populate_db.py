@@ -53,14 +53,18 @@ def load_league_matches(league_id: str) -> List[Dict[str, str]]:
         with cache_path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
     else:
-        response = requests.get(source_url, headers=HTTP_HEADERS, timeout=settings.request_timeout * 3)
+        response = requests.get(
+            source_url, headers=HTTP_HEADERS, timeout=settings.request_timeout * 3
+        )
         response.raise_for_status()
         payload = response.json()
         cache_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _team_name(team_entry: Any) -> Optional[str]:
         if isinstance(team_entry, dict):
-            return team_entry.get("name") or team_entry.get("code") or team_entry.get("id")
+            return (
+                team_entry.get("name") or team_entry.get("code") or team_entry.get("id")
+            )
         if isinstance(team_entry, str):
             return team_entry
         return None
@@ -92,7 +96,9 @@ def load_league_matches(league_id: str) -> List[Dict[str, str]]:
         away_name = _team_name(match.get("team2"))
 
         if not home_name or not away_name:
-            logger.debug("Skipping match with missing team names", extra={"match": match})
+            logger.debug(
+                "Skipping match with missing team names", extra={"match": match}
+            )
             continue
 
         date_str = match.get("date")
@@ -139,7 +145,9 @@ def ensure_team(session: Session, league: League, team_name: str) -> Team:
     return team
 
 
-def ensure_league_teams(session: Session, league: League, matches: Iterable[Dict[str, str]]) -> None:
+def ensure_league_teams(
+    session: Session, league: League, matches: Iterable[Dict[str, str]]
+) -> None:
     team_names: Set[str] = set()
     for record in matches:
         if record.get("home"):
@@ -152,7 +160,9 @@ def ensure_league_teams(session: Session, league: League, matches: Iterable[Dict
             ensure_team(session, league, name)
         except SQLAlchemyError as error:
             session.rollback()
-            logger.error("Failed to ensure team %s in league %s: %s", name, league.id, error)
+            logger.error(
+                "Failed to ensure team %s in league %s: %s", name, league.id, error
+            )
         else:
             session.commit()
 
@@ -176,7 +186,9 @@ def season_label(dt: datetime) -> str:
     return f"{dt.year}/{dt.year + 1}" if dt.month >= 7 else f"{dt.year - 1}/{dt.year}"
 
 
-def upsert_league_matches(session: Session, league: League, matches: Iterable[Dict[str, Any]]) -> int:
+def upsert_league_matches(
+    session: Session, league: League, matches: Iterable[Dict[str, Any]]
+) -> int:
     inserted = 0
     for record in matches:
         logger.debug("Processing match record", extra={"record": record})
@@ -204,7 +216,9 @@ def upsert_league_matches(session: Session, league: League, matches: Iterable[Di
                 away_team_id=away.id,
                 match_date=match_date,
                 season=season_label(match_date),
-                status="finished" if record.get("home_score") is not None else "scheduled",
+                status="finished"
+                if record.get("home_score") is not None
+                else "scheduled",
                 home_score=record.get("home_score"),
                 away_score=record.get("away_score"),
                 created_at=datetime.utcnow(),
@@ -239,9 +253,13 @@ def populate_database() -> None:
     session = SessionLocal()
 
     try:
-        target_leagues = session.query(League).filter(League.id.in_(DATA_SOURCES.keys())).all()
+        target_leagues = (
+            session.query(League).filter(League.id.in_(DATA_SOURCES.keys())).all()
+        )
         if not target_leagues:
-            logger.error("No target leagues found. Ensure init_db.py has seeded league metadata.")
+            logger.error(
+                "No target leagues found. Ensure init_db.py has seeded league metadata."
+            )
             return
 
         for league in target_leagues:

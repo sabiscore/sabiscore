@@ -35,7 +35,9 @@ class CausalFeatureSelector:
         "COLLIDER_WARNING",
     }
 
-    def __init__(self, alpha_threshold: float = 0.05, practical_ate: float = 0.02) -> None:
+    def __init__(
+        self, alpha_threshold: float = 0.05, practical_ate: float = 0.02
+    ) -> None:
         self.alpha_threshold = alpha_threshold
         self.practical_ate = practical_ate
 
@@ -73,7 +75,9 @@ class CausalFeatureSelector:
             candidate_features = [f for f in feature_cols if f in prepared.columns]
         else:
             # Fall back to canonical set; silently skip absent columns
-            candidate_features = [f for f in CANONICAL_FEATURES_58 if f in prepared.columns]
+            candidate_features = [
+                f for f in CANONICAL_FEATURES_58 if f in prepared.columns
+            ]
 
         results: List[CausalFeatureResult] = []
         for feature in candidate_features:
@@ -81,7 +85,9 @@ class CausalFeatureSelector:
                 continue
 
             series = pd.to_numeric(prepared[feature], errors="coerce")
-            clean = pd.DataFrame({"x": series, "home": is_home_win, "draw": is_draw}).dropna()
+            clean = pd.DataFrame(
+                {"x": series, "home": is_home_win, "draw": is_draw}
+            ).dropna()
             if len(clean) < 30:
                 continue
 
@@ -94,15 +100,17 @@ class CausalFeatureSelector:
             ate_win = float(treated["home"].mean() - control["home"].mean())
             ate_draw = float(treated["draw"].mean() - control["draw"].mean())
 
-            stderr = float(np.sqrt(
-                np.var(treated["home"], ddof=1) / max(len(treated), 1)
-                + np.var(control["home"], ddof=1) / max(len(control), 1)
-            ))
+            stderr = float(
+                np.sqrt(
+                    np.var(treated["home"], ddof=1) / max(len(treated), 1)
+                    + np.var(control["home"], ddof=1) / max(len(control), 1)
+                )
+            )
             ci_low = ate_win - 1.96 * stderr
             ci_high = ate_win + 1.96 * stderr
 
             z = 0.0 if stderr == 0 else abs(ate_win / stderr)
-            p_value = float(np.exp(-0.717 * z - 0.416 * (z ** 2)))
+            p_value = float(np.exp(-0.717 * z - 0.416 * (z**2)))
             p_value = min(1.0, max(0.0, p_value))
 
             classification = self._classify(ate_win, p_value, feature)
@@ -139,7 +147,9 @@ class CausalFeatureSelector:
         else:
             selected = [c for c in CANONICAL_FEATURES_58 if c in frame.columns]
         numeric = frame[selected].copy()
-        numeric = numeric.apply(pd.to_numeric, errors="coerce").dropna(axis=1, how="all")
+        numeric = numeric.apply(pd.to_numeric, errors="coerce").dropna(
+            axis=1, how="all"
+        )
         corr = numeric.corr(method="pearson", min_periods=50)
 
         edges: List[Dict[str, object]] = []

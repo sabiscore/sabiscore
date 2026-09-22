@@ -37,7 +37,9 @@ def test_unknown_on_dissimilar_name():
 
 def test_requires_review_on_partial_match():
     """A common abbreviation lands in REQUIRES_REVIEW, not auto-VERIFIED or UNKNOWN."""
-    decision = reconcile_team("Man United", [TeamCandidate(team_id="33", name="Manchester United")])
+    decision = reconcile_team(
+        "Man United", [TeamCandidate(team_id="33", name="Manchester United")]
+    )
     assert decision.status == "REQUIRES_REVIEW"
     assert decision.team_id is None, "REQUIRES_REVIEW must not set team_id"
     assert decision.review_candidate_id == "33"

@@ -33,7 +33,9 @@ async def session():
     await engine.dispose()
 
 
-async def _settled_match(session: AsyncSession, match_id: str, *, home: int, away: int) -> None:
+async def _settled_match(
+    session: AsyncSession, match_id: str, *, home: int, away: int
+) -> None:
     session.add(
         Match(
             id=match_id,
@@ -82,11 +84,25 @@ async def test_query_rejects_blank_generation_scope(session: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
-async def test_scoped_query_returns_only_the_requested_generation(session: AsyncSession) -> None:
+async def test_scoped_query_returns_only_the_requested_generation(
+    session: AsyncSession,
+) -> None:
     await _settled_match(session, "m-1", home=2, away=0)
     await _settled_match(session, "m-2", home=1, away=1)
-    await _log(session, "m-1", model_version="v5_phase7", created_at=KICKOFF - timedelta(days=1), probs=(0.6, 0.2, 0.2))
-    await _log(session, "m-2", model_version="v6_phase8", created_at=KICKOFF - timedelta(days=1), probs=(0.3, 0.4, 0.3))
+    await _log(
+        session,
+        "m-1",
+        model_version="v5_phase7",
+        created_at=KICKOFF - timedelta(days=1),
+        probs=(0.6, 0.2, 0.2),
+    )
+    await _log(
+        session,
+        "m-2",
+        model_version="v6_phase8",
+        created_at=KICKOFF - timedelta(days=1),
+        probs=(0.3, 0.4, 0.3),
+    )
 
     records = await get_settled_predictions(session, model_version="v5_phase7")
     assert len(records) == 1
@@ -134,8 +150,20 @@ async def test_scoping_still_picks_the_latest_row_within_one_generation(
     """Scoping must not break same-generation recency selection."""
 
     await _settled_match(session, "m-1", home=0, away=3)
-    await _log(session, "m-1", model_version="v5_phase7", created_at=KICKOFF - timedelta(days=5), probs=(0.5, 0.3, 0.2))
-    await _log(session, "m-1", model_version="v5_phase7", created_at=KICKOFF - timedelta(days=1), probs=(0.2, 0.2, 0.6))
+    await _log(
+        session,
+        "m-1",
+        model_version="v5_phase7",
+        created_at=KICKOFF - timedelta(days=5),
+        probs=(0.5, 0.3, 0.2),
+    )
+    await _log(
+        session,
+        "m-1",
+        model_version="v5_phase7",
+        created_at=KICKOFF - timedelta(days=1),
+        probs=(0.2, 0.2, 0.6),
+    )
 
     records = await get_settled_predictions(session, model_version="v5_phase7")
     assert len(records) == 1

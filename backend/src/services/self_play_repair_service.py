@@ -51,8 +51,14 @@ async def find_and_repair_self_play_matches(
     """
     report = RepairReport()
     corrupted = (
-        await session.execute(select(Match).where(Match.home_team_id == Match.away_team_id))
-    ).scalars().all()
+        (
+            await session.execute(
+                select(Match).where(Match.home_team_id == Match.away_team_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     corrupted_ids = {str(m.id): m for m in corrupted}
     report.corrupted_found = len(corrupted_ids)
     if not corrupted_ids:
@@ -65,16 +71,22 @@ async def find_and_repair_self_play_matches(
     recovered: dict[str, tuple[str, str, str]] = {}
     for path in sorted(directory.glob("fd_*.csv")):
         for row in parse_fd_csv(path):
-            mid = historical_match_id(row.league_id, row.match_date, row.home_team, row.away_team)
+            mid = historical_match_id(
+                row.league_id, row.match_date, row.home_team, row.away_team
+            )
             if mid in corrupted_ids:
                 recovered[mid] = (row.league_id, row.home_team, row.away_team)
 
-    index = TeamIndex((await session.execute(select(Team.id, Team.name))).tuples().all())
+    index = TeamIndex(
+        (await session.execute(select(Team.id, Team.name))).tuples().all()
+    )
 
     for match_id, match in corrupted_ids.items():
         found = recovered.get(match_id)
         if found is None:
-            report.lines.append(f"SKIP {match_id}: original CSV row not found in local cache")
+            report.lines.append(
+                f"SKIP {match_id}: original CSV row not found in local cache"
+            )
             report.skipped += 1
             continue
         league_id, home_name, away_name = found

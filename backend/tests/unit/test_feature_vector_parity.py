@@ -39,6 +39,7 @@ NOT PROVEN, and named rather than silently skipped:
     ``test_backtest_has_no_independent_feature_computation_to_compare`` so
     that if a future change gives it one, this file fails and demands it.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -69,8 +70,22 @@ from src.models.feature_registry import (
 # One fixed synthetic history per side. Six results each, so both pipelines
 # clear their >=5 threshold and take the real (not fallback) branch — the
 # fallback branches are where they legitimately differ, and are out of scope.
-_HOME_RESULTS: Sequence[Tuple[int, int]] = ((2, 0), (1, 1), (3, 1), (0, 2), (2, 2), (1, 0))
-_AWAY_RESULTS: Sequence[Tuple[int, int]] = ((0, 1), (2, 1), (1, 1), (1, 3), (2, 0), (0, 0))
+_HOME_RESULTS: Sequence[Tuple[int, int]] = (
+    (2, 0),
+    (1, 1),
+    (3, 1),
+    (0, 2),
+    (2, 2),
+    (1, 0),
+)
+_AWAY_RESULTS: Sequence[Tuple[int, int]] = (
+    (0, 1),
+    (2, 1),
+    (1, 1),
+    (1, 3),
+    (2, 0),
+    (0, 0),
+)
 
 _LEAGUE = "EPL"
 _KICKOFF = datetime(2026, 8, 22, 15, 0, 0)
@@ -121,7 +136,9 @@ async def _seed(session: AsyncSession) -> None:
     await session.commit()
 
 
-def _training_stats(results: Sequence[Tuple[int, int]], *, is_home: bool) -> Dict[str, float]:
+def _training_stats(
+    results: Sequence[Tuple[int, int]], *, is_home: bool
+) -> Dict[str, float]:
     """Run the real training accumulator, not a reimplementation of it."""
     from scripts.train_on_real_matches import TeamHistory
 
@@ -149,7 +166,9 @@ def _vector_sha256(features: Dict[str, float], order: Sequence[str]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _assemble(home_stats: Dict[str, float], away_stats: Dict[str, float]) -> Dict[str, float]:
+def _assemble(
+    home_stats: Dict[str, float], away_stats: Dict[str, float]
+) -> Dict[str, float]:
     """Assemble the provably-shared canonical block from one side-pair.
 
     Calls the same shared registry functions both real pipelines call. This is
@@ -157,28 +176,46 @@ def _assemble(home_stats: Dict[str, float], away_stats: Dict[str, float]) -> Dic
     these functions equivalent inputs, the digests diverge.
     """
     out: Dict[str, float] = {}
-    out.update(derive_last5_form_features(
-        home_stats["home_form_5"], home_stats["home_win_rate_5"], is_home=True,
-        wins_5=home_stats["wins_5"], draws_5=home_stats["draws_5"],
-        losses_5=home_stats["losses_5"],
-    ))
-    out.update(derive_last5_form_features(
-        away_stats["away_form_5"], away_stats["away_win_rate_5"], is_home=False,
-        wins_5=away_stats["wins_5"], draws_5=away_stats["draws_5"],
-        losses_5=away_stats["losses_5"],
-    ))
-    out.update(derive_goals_gd_features(
-        lambda key, _default: home_stats[key], is_home=True,
-    ))
-    out.update(derive_goals_gd_features(
-        lambda key, _default: away_stats[key], is_home=False,
-    ))
-    out.update(derive_combination_features(
-        home_goals_for_avg=out["home_goals_for_avg"],
-        home_goals_against_avg=out["home_goals_against_avg"],
-        away_goals_for_avg=out["away_goals_for_avg"],
-        away_goals_against_avg=out["away_goals_against_avg"],
-    ))
+    out.update(
+        derive_last5_form_features(
+            home_stats["home_form_5"],
+            home_stats["home_win_rate_5"],
+            is_home=True,
+            wins_5=home_stats["wins_5"],
+            draws_5=home_stats["draws_5"],
+            losses_5=home_stats["losses_5"],
+        )
+    )
+    out.update(
+        derive_last5_form_features(
+            away_stats["away_form_5"],
+            away_stats["away_win_rate_5"],
+            is_home=False,
+            wins_5=away_stats["wins_5"],
+            draws_5=away_stats["draws_5"],
+            losses_5=away_stats["losses_5"],
+        )
+    )
+    out.update(
+        derive_goals_gd_features(
+            lambda key, _default: home_stats[key],
+            is_home=True,
+        )
+    )
+    out.update(
+        derive_goals_gd_features(
+            lambda key, _default: away_stats[key],
+            is_home=False,
+        )
+    )
+    out.update(
+        derive_combination_features(
+            home_goals_for_avg=out["home_goals_for_avg"],
+            home_goals_against_avg=out["home_goals_against_avg"],
+            away_goals_for_avg=out["away_goals_for_avg"],
+            away_goals_against_avg=out["away_goals_against_avg"],
+        )
+    )
     out.update(derive_temporal_features(_KICKOFF))
     out.update(derive_league_features(_LEAGUE))
     out.update(derive_market_features(*_ODDS))
@@ -190,13 +227,20 @@ def _assemble(home_stats: Dict[str, float], away_stats: Dict[str, float]) -> Dic
 #: call-site grep, and recorded per-feature as training_source/serving_source
 #: in backend/models/feature_contract.json.
 PARITY_SCOPE: Tuple[str, ...] = (
-    "home_form_last5_home", "home_wins_last5_home",
-    "home_draws_last5_home", "home_losses_last5_home",
-    "away_form_last5_away", "away_wins_last5_away",
-    "away_draws_last5_away", "away_losses_last5_away",
-    "home_goals_for_avg", "home_goals_against_avg",
-    "away_goals_for_avg", "away_goals_against_avg",
-    "home_gd_recent", "away_gd_recent",
+    "home_form_last5_home",
+    "home_wins_last5_home",
+    "home_draws_last5_home",
+    "home_losses_last5_home",
+    "away_form_last5_away",
+    "away_wins_last5_away",
+    "away_draws_last5_away",
+    "away_losses_last5_away",
+    "home_goals_for_avg",
+    "home_goals_against_avg",
+    "away_goals_for_avg",
+    "away_goals_against_avg",
+    "home_gd_recent",
+    "away_gd_recent",
     *COMBINATION_FEATURES,
     *TEMPORAL_FEATURES,
     *LEAGUE_ONEHOT_FEATURES,
@@ -214,7 +258,9 @@ async def test_training_and_serving_stats_agree_on_identical_history(
     share must match exactly — this is the input half of vector parity, and
     the half that would silently drift first.
     """
-    from src.services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
+    from src.services.upcoming_match_feature_service import (
+        UpcomingMatchFeatureProjector,
+    )
 
     await _seed(session)
     projector = UpcomingMatchFeatureProjector()
@@ -223,7 +269,9 @@ async def test_training_and_serving_stats_agree_on_identical_history(
         (_HOME_ID, _HOME_RESULTS, True),
         (_AWAY_ID, _AWAY_RESULTS, False),
     ):
-        serving = await projector._get_team_stats(team_id, session, _KICKOFF, is_home=is_home)
+        serving = await projector._get_team_stats(
+            team_id, session, _KICKOFF, is_home=is_home
+        )
         training = _training_stats(results, is_home=is_home)
 
         assert serving is not None
@@ -245,7 +293,9 @@ async def test_training_and_serving_vectors_hash_identically(
     diverged, which is exactly the failure mode DEBT item 29 records for the
     Phase 8 columns.
     """
-    from src.services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
+    from src.services.upcoming_match_feature_service import (
+        UpcomingMatchFeatureProjector,
+    )
 
     await _seed(session)
     projector = UpcomingMatchFeatureProjector()
@@ -305,7 +355,8 @@ def test_parity_scope_matches_the_contract_s_own_attribution() -> None:
     assert not missing, f"not in the phase7_68 contract at all: {missing}"
 
     unattributed = [
-        name for name in PARITY_SCOPE
+        name
+        for name in PARITY_SCOPE
         if by_name[name]["training_source"] == "UNDECLARED"
         and by_name[name]["serving_source"] == "UNDECLARED"
     ]
@@ -382,16 +433,20 @@ def _transformer_canonical(
     transformer = FeatureTransformer(
         allow_legacy_defaults=True, schema_version=schema_version
     )
-    row = pd.DataFrame([{
-        "home_goals_per_match_5": _HOME_GOALS_FOR,
-        "home_goals_conceded_per_match_5": _HOME_GOALS_AGAINST,
-        "away_goals_per_match_5": _AWAY_GOALS_FOR,
-        "away_goals_conceded_per_match_5": _AWAY_GOALS_AGAINST,
-        "home_form_5": _HOME_FORM_5,
-        "home_win_rate_5": _HOME_WIN_RATE_5,
-        "away_form_5": _AWAY_FORM_5,
-        "away_win_rate_5": _AWAY_WIN_RATE_5,
-    }])
+    row = pd.DataFrame(
+        [
+            {
+                "home_goals_per_match_5": _HOME_GOALS_FOR,
+                "home_goals_conceded_per_match_5": _HOME_GOALS_AGAINST,
+                "away_goals_per_match_5": _AWAY_GOALS_FOR,
+                "away_goals_conceded_per_match_5": _AWAY_GOALS_AGAINST,
+                "home_form_5": _HOME_FORM_5,
+                "home_win_rate_5": _HOME_WIN_RATE_5,
+                "away_form_5": _AWAY_FORM_5,
+                "away_win_rate_5": _AWAY_WIN_RATE_5,
+            }
+        ]
+    )
     match_data = {
         "schedule": {"date": kickoff.isoformat(), "league": league},
         "odds": {"home_win": _ODDS[0], "draw": _ODDS[1], "away_win": _ODDS[2]},
@@ -440,7 +495,9 @@ def test_second_serving_implementation_matches_the_shared_temporal_helper(
     expected = derive_temporal_features(kickoff)
 
     for name, value in expected.items():
-        assert float(canonical[name]) == pytest.approx(float(value)), f"{kickoff}:{name}"
+        assert float(canonical[name]) == pytest.approx(float(value)), (
+            f"{kickoff}:{name}"
+        )
 
 
 def test_second_serving_implementation_matches_the_shared_combination_helper() -> None:
@@ -510,7 +567,10 @@ def test_second_serving_implementation_matches_the_shared_apex_market_helper() -
     injected perturbation before being trusted (see
     test_apex_market_divergence_actually_breaks_parity below).
     """
-    from src.models.feature_registry import APEX_FEATURES_68, derive_apex_market_features
+    from src.models.feature_registry import (
+        APEX_FEATURES_68,
+        derive_apex_market_features,
+    )
 
     canonical = _transformer_canonical("EPL", _KICKOFF, schema_version="apex_v1_68")
     expected = derive_apex_market_features(*_ODDS)
@@ -535,7 +595,9 @@ def test_apex_schema_actually_takes_the_apex_branch() -> None:
     assert "market_edge_home" not in canonical
 
 
-def test_upcoming_match_feature_projector_resolves_active_apex_schema(monkeypatch) -> None:
+def test_upcoming_match_feature_projector_resolves_active_apex_schema(
+    monkeypatch,
+) -> None:
     """_resolve_is_apex() reads the active schema and fails closed to legacy.
 
     docs/DEBT.md item 37: the projector's own dispatch, independent of
@@ -562,14 +624,19 @@ def test_upcoming_match_feature_projector_apex_constructor_wiring(monkeypatch) -
     to the Apex block; under today's real manifest they do not (regression
     proof, mirrors test_default_schema_version_is_unchanged above)."""
     import src.services.upcoming_match_feature_service as svc
-    from src.models.feature_registry import APEX_MARKET_FEATURES_14, active_canonical_features
+    from src.models.feature_registry import (
+        APEX_MARKET_FEATURES_14,
+        active_canonical_features,
+    )
     from src.core.config import settings
 
     monkeypatch.setattr(svc, "active_feature_schema_version", lambda: "apex_v1_68")
     apex_projector = svc.UpcomingMatchFeatureProjector()
     assert apex_projector._is_apex is True
     expected_apex_columns = active_canonical_features(
-        use_phase7=settings.use_phase7_models, use_phase8=settings.phase8_enabled, apex=True,
+        use_phase7=settings.use_phase7_models,
+        use_phase8=settings.phase8_enabled,
+        apex=True,
     )
     assert apex_projector.canonical_features == expected_apex_columns
     assert set(APEX_MARKET_FEATURES_14) <= set(apex_projector.defaults)

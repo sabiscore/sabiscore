@@ -26,6 +26,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/analyze_player_availability_dependence.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -155,15 +156,22 @@ async def main() -> int:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         provider = APIFootballProvider(
-            api_key=settings.api_football_key, enabled=True, live_tests=True, http_client=client
+            api_key=settings.api_football_key,
+            enabled=True,
+            live_tests=True,
+            http_client=client,
         )
         for league, division in _LEAGUE_TO_DIVISION.items():
             for season, suffix in _SEASONS.items():
                 fixtures = load_fixtures(division, suffix)
                 if not fixtures:
                     continue
-                roster = {f["home_team"] for f in fixtures} | {f["away_team"] for f in fixtures}
-                counts = await collect_unavailable_counts(provider, league, roster, season)
+                roster = {f["home_team"] for f in fixtures} | {
+                    f["away_team"] for f in fixtures
+                }
+                counts = await collect_unavailable_counts(
+                    provider, league, roster, season
+                )
                 await asyncio.sleep(1.0)  # same burst-throttle pacing as Phase 3
 
                 for fx in fixtures:
@@ -190,7 +198,11 @@ async def main() -> int:
                 )
 
     # ---- Stage 1: descriptive ----
-    coverage_pct = round(100.0 * (total_fixtures - missing_both_sides) / total_fixtures, 2) if total_fixtures else 0.0
+    coverage_pct = (
+        round(100.0 * (total_fixtures - missing_both_sides) / total_fixtures, 2)
+        if total_fixtures
+        else 0.0
+    )
     diffs = [j["availability_diff"] for j in joined]
     stage1 = {
         "total_fixtures": total_fixtures,
@@ -224,9 +236,15 @@ async def main() -> int:
         for label, group in groups.items():
             tercile_report[label] = {
                 "n": len(group),
-                "mean_availability_diff": round(statistics.fmean(j["availability_diff"] for j in group), 3),
-                "home_win_rate": round(sum(1 for j in group if j["result"] == "H") / len(group), 3),
-                "away_win_rate": round(sum(1 for j in group if j["result"] == "A") / len(group), 3),
+                "mean_availability_diff": round(
+                    statistics.fmean(j["availability_diff"] for j in group), 3
+                ),
+                "home_win_rate": round(
+                    sum(1 for j in group if j["result"] == "H") / len(group), 3
+                ),
+                "away_win_rate": round(
+                    sum(1 for j in group if j["result"] == "A") / len(group), 3
+                ),
             }
 
     # Robustness (§18): a pooled correlation can hide Simpson's-paradox-style

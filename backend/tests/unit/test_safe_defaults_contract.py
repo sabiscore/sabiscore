@@ -46,7 +46,9 @@ def bare_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
 
 
 @pytest.mark.parametrize("field_name,expected", sorted(SAFE_DEFAULTS.items()))
-def test_flag_is_safe_with_no_env(bare_settings: Settings, field_name: str, expected: bool) -> None:
+def test_flag_is_safe_with_no_env(
+    bare_settings: Settings, field_name: str, expected: bool
+) -> None:
     assert getattr(bare_settings, field_name) is expected, (
         f"{field_name} must default to {expected} with no .env present. "
         "Changing a safe default silently changes production behaviour."

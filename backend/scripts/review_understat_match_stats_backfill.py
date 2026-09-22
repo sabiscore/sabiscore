@@ -39,6 +39,7 @@ Examples (from backend/):
       --authorization-id <approved-change-id> \
       --confirm APPLY_UNDERSTAT_MATCH_STATS
 """
+
 from __future__ import annotations
 
 import argparse
@@ -219,7 +220,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=1000)
     parser.add_argument("--lock-timeout-seconds", type=int, default=5)
     parser.add_argument(
-        "--full", action="store_true", help="Print every entry instead of a bounded sample"
+        "--full",
+        action="store_true",
+        help="Print every entry instead of a bounded sample",
     )
     return parser
 

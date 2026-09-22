@@ -32,12 +32,8 @@ _SENSITIVE_KEYS = {
     "hashed_password",
 }
 
-_EMAIL_PATTERN = re.compile(
-    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-)
-_BEARER_PATTERN = re.compile(
-    r"(?i)bearer\s+[A-Za-z0-9\-_\.=]+"
-)
+_EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+_BEARER_PATTERN = re.compile(r"(?i)bearer\s+[A-Za-z0-9\-_\.=]+")
 
 
 def scrub_pii_and_secrets(data: Any) -> Any:
@@ -47,7 +43,10 @@ def scrub_pii_and_secrets(data: Any) -> Any:
         for k, v in data.items():
             k_lower = str(k).lower()
             k_tokens = set(re.split(r"[_ \-\.]+", k_lower))
-            if any(sensitive in k_tokens or sensitive == k_lower for sensitive in _SENSITIVE_KEYS):
+            if any(
+                sensitive in k_tokens or sensitive == k_lower
+                for sensitive in _SENSITIVE_KEYS
+            ):
                 cleaned[k] = "[REDACTED_SECRET]"
             else:
                 cleaned[k] = scrub_pii_and_secrets(v)
@@ -88,24 +87,31 @@ class AnalyticsIngestionService:
         records: List[AnalyticsEvent] = []
 
         for raw in events:
-            event_name = str(raw.get("event_name") or raw.get("name") or "unknown_event").strip()
+            event_name = str(
+                raw.get("event_name") or raw.get("name") or "unknown_event"
+            ).strip()
             properties = raw.get("properties") or {}
             sanitized_props = cls.sanitize_event_properties(properties)
 
             raw_timestamp = raw.get("timestamp")
             if isinstance(raw_timestamp, str):
                 try:
-                    event_time = to_naive_utc(datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00")))
+                    event_time = to_naive_utc(
+                        datetime.fromisoformat(raw_timestamp.replace("Z", "+00:00"))
+                    )
                 except Exception:
                     event_time = now
             elif isinstance(raw_timestamp, (int, float)):
-                event_time = to_naive_utc(datetime.fromtimestamp(raw_timestamp, tz=timezone.utc))
+                event_time = to_naive_utc(
+                    datetime.fromtimestamp(raw_timestamp, tz=timezone.utc)
+                )
             else:
                 event_time = now
 
             record = AnalyticsEvent(
                 event_id=str(raw.get("event_id") or uuid.uuid4()),
-                anonymous_session_id=raw.get("anonymous_session_id") or default_anonymous_session_id,
+                anonymous_session_id=raw.get("anonymous_session_id")
+                or default_anonymous_session_id,
                 user_id=raw.get("user_id") or default_user_id,
                 event_name=event_name,
                 properties=sanitized_props,

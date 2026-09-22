@@ -60,13 +60,19 @@ _MIN_OVERROUND = 1.005
 _MAX_OVERROUND = 1.25
 
 
-def devig_probabilities(home_odds: float, draw_odds: float, away_odds: float) -> tuple[float, float, float]:
+def devig_probabilities(
+    home_odds: float, draw_odds: float, away_odds: float
+) -> tuple[float, float, float]:
     """(1/odds_i) / overround per outcome — the de-vig arithmetic implied by
     the overround check above but never previously factored into a callable
     (docs/adr/0004-clv-capture.md). Assumes coherent, already-validated odds;
     callers should only pass records where coherent=True."""
     overround = (1 / home_odds) + (1 / draw_odds) + (1 / away_odds)
-    return (1 / home_odds) / overround, (1 / draw_odds) / overround, (1 / away_odds) / overround
+    return (
+        (1 / home_odds) / overround,
+        (1 / draw_odds) / overround,
+        (1 / away_odds) / overround,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +126,10 @@ class TheOddsAPIProvider(BaseProvider):
                 competition=competition,
                 fixtures=True,
                 odds=True,
-                notes=["single_bookmaker_snapshots_required", "quota_headers_recorded_when_live"],
+                notes=[
+                    "single_bookmaker_snapshots_required",
+                    "quota_headers_recorded_when_live",
+                ],
             )
             for competition in ESPN_LEAGUE_SLUGS
         ]
@@ -155,7 +164,9 @@ class TheOddsAPIProvider(BaseProvider):
                 status=ProviderStatus.UNAVAILABLE,
                 trust_tier=self.trust_tier,
                 error_code="provider_disabled_or_unconfigured",
-                warnings=["provider must be enabled and configured with a backend credential"],
+                warnings=[
+                    "provider must be enabled and configured with a backend credential"
+                ],
             )
 
         sport = _SABISCORE_COMP_TO_ODDS_SPORT.get(competition.upper())
@@ -306,7 +317,13 @@ class TheOddsAPIProvider(BaseProvider):
         home_odds = outcomes.get(home_team.casefold())
         away_odds = outcomes.get(away_team.casefold())
 
-        if not home_team or not away_team or draw_odds is None or home_odds is None or away_odds is None:
+        if (
+            not home_team
+            or not away_team
+            or draw_odds is None
+            or home_odds is None
+            or away_odds is None
+        ):
             return OddsMarketRecord(
                 canonical_fixture_id=canonical_fixture_id,
                 provider_event_id=event_id,
@@ -387,7 +404,9 @@ class TheOddsAPIProvider(BaseProvider):
         remaining = headers.get("x-requests-remaining") if headers else None
         used = headers.get("x-requests-used") if headers else None
         return ProviderQuota(
-            remaining=int(remaining) if remaining and str(remaining).isdigit() else None,
+            remaining=int(remaining)
+            if remaining and str(remaining).isdigit()
+            else None,
             cost=int(used) if used and str(used).isdigit() else None,
         )
 

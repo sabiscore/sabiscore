@@ -30,6 +30,7 @@ that put three different Brier scales on one response field.
 Usage:
     PYTHONPATH=. python scripts/temporal_evaluation.py [--out reports/certification/temporal-evaluation.json]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -48,7 +49,8 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 _SPEC = importlib.util.spec_from_file_location(
-    "sabiscore_train_on_real_matches", _BACKEND_ROOT / "scripts" / "train_on_real_matches.py"
+    "sabiscore_train_on_real_matches",
+    _BACKEND_ROOT / "scripts" / "train_on_real_matches.py",
 )
 if _SPEC is None or _SPEC.loader is None:
     raise RuntimeError("cannot load the training pipeline")
@@ -81,7 +83,10 @@ _MIN_PRIOR_SEASONS = 3
 def _rps_vector(y_true: np.ndarray, probs: np.ndarray) -> np.ndarray:
     """Per-row RPS from the canonical scalar scorer."""
     return np.asarray(
-        [ranked_probability_score(int(t), [float(v) for v in p]) for t, p in zip(y_true, probs)],
+        [
+            ranked_probability_score(int(t), [float(v) for v in p])
+            for t, p in zip(y_true, probs)
+        ],
         dtype=float,
     )
 
@@ -91,7 +96,9 @@ def _rps_mean(y_true: np.ndarray, probs: np.ndarray) -> float:
     return float(_rps_vector(y_true, probs).mean())
 
 
-def _baselines(y_train: np.ndarray, y_test: np.ndarray, n_classes: int = 3) -> Dict[str, float]:
+def _baselines(
+    y_train: np.ndarray, y_test: np.ndarray, n_classes: int = 3
+) -> Dict[str, float]:
     """Reference forecasts every candidate must be read against.
 
     `league_prior` is fitted on the TRAINING slice only — using the test
@@ -110,7 +117,9 @@ def _baselines(y_train: np.ndarray, y_test: np.ndarray, n_classes: int = 3) -> D
     }
 
 
-def _score(y_true: np.ndarray, probs: np.ndarray, y_train: np.ndarray) -> Dict[str, Any]:
+def _score(
+    y_true: np.ndarray, probs: np.ndarray, y_train: np.ndarray
+) -> Dict[str, Any]:
     """One fully-specified evaluation record for a single origin."""
     rps_rows = _rps_vector(y_true, probs)
     acc = accuracy_and_per_class(y_true, probs)
@@ -156,7 +165,9 @@ def _evaluate_origin(
     }
 
     try:
-        trained = train_mod.train_league(league, sliced, origin, feature_names=feature_names)
+        trained = train_mod.train_league(
+            league, sliced, origin, feature_names=feature_names
+        )
     except ValueError as exc:
         logger.warning("  %s @ %s: %s", league, origin, exc)
         return None
@@ -178,9 +189,15 @@ def _evaluate_origin(
     logger.info(
         "  %-12s @ %s  train=%5d test=%4d  rps=%.4f [%.4f, %.4f]  ll=%.4f  "
         "market_free_best_baseline=%.4f",
-        league, origin, record["train_rows"], record["n"], record["rps"],
-        record["rps_ci"]["ci_lower"], record["rps_ci"]["ci_upper"],
-        record["log_loss"], min(record["baselines"].values()),
+        league,
+        origin,
+        record["train_rows"],
+        record["n"],
+        record["rps"],
+        record["rps_ci"]["ci_lower"],
+        record["rps_ci"]["ci_upper"],
+        record["log_loss"],
+        min(record["baselines"].values()),
     )
     return record
 
@@ -191,7 +208,10 @@ def main() -> int:
     ap.add_argument(
         "--out",
         type=Path,
-        default=_BACKEND_ROOT / "reports" / "certification" / "temporal-evaluation.json",
+        default=_BACKEND_ROOT
+        / "reports"
+        / "certification"
+        / "temporal-evaluation.json",
     )
     ap.add_argument("--league", default=None, help="restrict to one league (faster)")
     args = ap.parse_args()
@@ -215,9 +235,7 @@ def main() -> int:
         "metric_contract": "reports/evaluation/metric-contract.json",
         "promotion_claim": "NONE — this is evidence, not a gate",
         "dataset": {
-            k: v
-            for k, v in dataset_fingerprint(args.cache_dir).items()
-            if k != "files"
+            k: v for k, v in dataset_fingerprint(args.cache_dir).items() if k != "files"
         },
         "environment": environment_fingerprint(),
         "leagues": {},
@@ -238,7 +256,9 @@ def main() -> int:
 
         league_rows: List[Dict[str, Any]] = []
         for origin in origins:
-            record = _evaluate_origin(league, bundle, seasons, ordered, origin, feature_names)
+            record = _evaluate_origin(
+                league, bundle, seasons, ordered, origin, feature_names
+            )
             if record is not None:
                 league_rows.append(record)
 
@@ -259,7 +279,9 @@ def main() -> int:
         }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.out.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     logger.info("\nWrote %s", args.out)
     logger.info("This is evidence, not a promotion decision.")
     return 0

@@ -70,7 +70,9 @@ def _load_market_baseline() -> Any:
     `src/models/__init__.py` opens a database connection at import time
     (`docs/DEBT.md` item 7), which an offline evidence script must never do.
     """
-    path = REPO_ROOT / "backend" / "src" / "models" / "evaluation" / "market_baseline.py"
+    path = (
+        REPO_ROOT / "backend" / "src" / "models" / "evaluation" / "market_baseline.py"
+    )
     spec = importlib.util.spec_from_file_location("sabiscore_market_baseline", path)
     if spec is None or spec.loader is None:  # pragma: no cover - packaging guard
         raise RuntimeError(f"cannot load market baseline module at {path}")
@@ -86,8 +88,11 @@ MB = _load_market_baseline()
 def git_sha() -> str | None:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True,
-            stderr=subprocess.DEVNULL, timeout=5,
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
         ).strip()
     except Exception:
         return os.getenv("SABISCORE_GIT_SHA")
@@ -155,7 +160,8 @@ def main() -> int:
                     continue
 
                 bucket = per_league.setdefault(
-                    league, {"shin": [], "proportional": [], "y": [], "z": [], "overround": []}
+                    league,
+                    {"shin": [], "proportional": [], "y": [], "z": [], "overround": []},
                 )
                 bucket["shin"].append(shin.probabilities)
                 bucket["proportional"].append(proportional.probabilities)
@@ -196,7 +202,9 @@ def main() -> int:
     }
     pooled = scope(pooled_bucket)
 
-    sharper = sum(1 for s in by_league.values() if s["delta_shin_minus_proportional"] < 0)
+    sharper = sum(
+        1 for s in by_league.values() if s["delta_shin_minus_proportional"] < 0
+    )
 
     report = {
         "report_version": "devig-convention-impact-1",

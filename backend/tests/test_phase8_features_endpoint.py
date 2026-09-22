@@ -68,7 +68,9 @@ class TestPhase8RegistryInvariants:
         }
         mismatches = []
         for name in dir(feature_registry):
-            match = re.fullmatch(r"(?:CANONICAL_FEATURES|PHASE\d+_FEATURES)_(\d+)", name)
+            match = re.fullmatch(
+                r"(?:CANONICAL_FEATURES|PHASE\d+_FEATURES)_(\d+)", name
+            )
             if not match or name in deprecated_aliases:
                 continue
             claimed = int(match.group(1))
@@ -76,7 +78,10 @@ class TestPhase8RegistryInvariants:
             if claimed != actual:
                 mismatches.append(f"{name} claims {claimed}, holds {actual}")
 
-        assert not mismatches, "Feature-registry names disagree with their own length: " + "; ".join(mismatches)
+        assert not mismatches, (
+            "Feature-registry names disagree with their own length: "
+            + "; ".join(mismatches)
+        )
 
     def test_canonical_features_86_count(self):
         """The Phase 8 set is 68 phase7 + 21 phase8 = 89. It was 86 while the Phase 7
@@ -86,7 +91,10 @@ class TestPhase8RegistryInvariants:
 
     def test_canonical_features_83_is_alias_for_86(self):
         """CANONICAL_FEATURES_83 and CANONICAL_FEATURES_86 resolve identically."""
-        assert CANONICAL_FEATURES_83 is CANONICAL_FEATURES_86 or CANONICAL_FEATURES_83 == CANONICAL_FEATURES_86
+        assert (
+            CANONICAL_FEATURES_83 is CANONICAL_FEATURES_86
+            or CANONICAL_FEATURES_83 == CANONICAL_FEATURES_86
+        )
 
     def test_canonical_feature_count_phase8_function(self):
         assert canonical_feature_count_phase8() == 89
@@ -143,7 +151,9 @@ class TestPhase8RegistryInvariants:
 
     def test_default_values_86_covers_all_canonical_86(self):
         """DEFAULT_FEATURE_VALUES_86 must have a value for every feature in CANONICAL_FEATURES_86."""
-        missing = [f for f in CANONICAL_FEATURES_86 if f not in DEFAULT_FEATURE_VALUES_86]
+        missing = [
+            f for f in CANONICAL_FEATURES_86 if f not in DEFAULT_FEATURE_VALUES_86
+        ]
         assert missing == [], f"DEFAULT_FEATURE_VALUES_86 missing keys: {missing}"
 
     def test_canonical_86_no_duplicates(self):
@@ -168,7 +178,9 @@ class TestPhase8EndpointHelpers:
         os.environ.pop("USE_PHASE8_FEATURES", None)
         # Pin the settings fallback so a local .env with phase8 enabled
         # cannot flip this default-contract test (read-only property -> patch class).
-        monkeypatch.setattr(type(settings), "phase8_enabled", property(lambda self: False))
+        monkeypatch.setattr(
+            type(settings), "phase8_enabled", property(lambda self: False)
+        )
         assert _is_phase8_enabled() is False
 
     def test_phase8_enabled_flag_true(self):
@@ -216,7 +228,10 @@ class TestPhase8EndpointHelpers:
         assert "pi_attack_diff" not in gaps
 
     def test_build_groups_returns_five_groups(self):
-        from src.api.endpoints.phase8_features import _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            _build_feature_values,
+            _build_groups,
+        )
 
         gaps: list[str] = []
         fv_map = _build_feature_values({}, gaps)
@@ -224,7 +239,10 @@ class TestPhase8EndpointHelpers:
         assert len(groups) == 5
 
     def test_build_groups_all_not_available_when_gaps(self):
-        from src.api.endpoints.phase8_features import _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            _build_feature_values,
+            _build_groups,
+        )
 
         gaps: list[str] = []
         fv_map = _build_feature_values({}, gaps)
@@ -232,7 +250,10 @@ class TestPhase8EndpointHelpers:
         assert all(not g.all_available for g in groups)
 
     def test_build_groups_all_available_when_fully_live(self):
-        from src.api.endpoints.phase8_features import _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            _build_feature_values,
+            _build_groups,
+        )
         from src.models.feature_registry import DEFAULT_FEATURE_VALUES_86
 
         live = {f: DEFAULT_FEATURE_VALUES_86.get(f, 0.0) for f in PHASE8_FEATURES_18}
@@ -243,7 +264,10 @@ class TestPhase8EndpointHelpers:
 
     def test_build_groups_none_freshness_does_not_crash(self):
         """_build_groups must not crash when live features have freshness_seconds=None."""
-        from src.api.endpoints.phase8_features import _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            _build_feature_values,
+            _build_groups,
+        )
         from src.models.feature_registry import DEFAULT_FEATURE_VALUES_86
 
         # Live values, no per_feature_freshness supplied → all freshness_seconds=None
@@ -305,10 +329,10 @@ class TestPhase8ResponseSchema:
         """Phase8FeaturesResponse must expose feature_source as a top-level dict."""
         from src.api.endpoints.phase8_features import Phase8FeaturesResponse
 
-        assert hasattr(Phase8FeaturesResponse.model_fields, "feature_source") or \
-               "feature_source" in Phase8FeaturesResponse.model_fields, (
-            "Phase8FeaturesResponse missing required 'feature_source' field"
-        )
+        assert (
+            hasattr(Phase8FeaturesResponse.model_fields, "feature_source")
+            or "feature_source" in Phase8FeaturesResponse.model_fields
+        ), "Phase8FeaturesResponse missing required 'feature_source' field"
 
     def test_response_has_feature_freshness_seconds_field(self):
         from src.api.endpoints.phase8_features import Phase8FeaturesResponse
@@ -317,7 +341,11 @@ class TestPhase8ResponseSchema:
 
     def test_response_feature_source_default_empty_dict(self):
         """feature_source must default to an empty dict (not None)."""
-        from src.api.endpoints.phase8_features import Phase8FeaturesResponse, _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            Phase8FeaturesResponse,
+            _build_feature_values,
+            _build_groups,
+        )
         from src.models.feature_registry import PHASE8_FEATURES_18
 
         gaps: list[str] = list(PHASE8_FEATURES_18)
@@ -338,7 +366,11 @@ class TestPhase8ResponseSchema:
 
     def test_response_feature_source_populated_when_provided(self):
         """feature_source dict in response must carry projector-supplied source strings."""
-        from src.api.endpoints.phase8_features import Phase8FeaturesResponse, _build_feature_values, _build_groups
+        from src.api.endpoints.phase8_features import (
+            Phase8FeaturesResponse,
+            _build_feature_values,
+            _build_groups,
+        )
         from src.models.feature_registry import PHASE8_FEATURES_MARKET
 
         live = {f: 0.0 for f in PHASE8_FEATURES_MARKET}

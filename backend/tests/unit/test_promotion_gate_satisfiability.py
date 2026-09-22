@@ -26,6 +26,7 @@ These tests now PIN the repair: if a future change makes the gate
 unsatisfiable again, they fail — update item 38 in the same change rather than
 deleting the tests.
 """
+
 from __future__ import annotations
 
 from src.models.feature_registry import (
@@ -81,7 +82,9 @@ def test_the_gate_would_pass_if_declared_gaps_were_not_counted() -> None:
         "serving_schema_misaligned_slots": 0,
         "always_data_gap_slots": 0,
     }
-    assert _expected_gate(flawless_without_declared_gaps, training_rows=10_000) == "PASS"
+    assert (
+        _expected_gate(flawless_without_declared_gaps, training_rows=10_000) == "PASS"
+    )
 
 
 def test_genuinely_disqualifying_counters_still_block() -> None:
@@ -101,16 +104,19 @@ def test_genuinely_disqualifying_counters_still_block() -> None:
         }
         assert _expected_gate(summary, training_rows=10_000) == "FAIL", blocker
 
-    assert _expected_gate(
-        {
-            "features": 68,
-            "training_defaulted_slots": 0,
-            "non_variable_training_slots": 0,
-            "serving_schema_misaligned_slots": 0,
-            "always_data_gap_slots": 0,
-        },
-        training_rows=0,
-    ) == "FAIL", "a candidate trained on zero rows must never pass"
+    assert (
+        _expected_gate(
+            {
+                "features": 68,
+                "training_defaulted_slots": 0,
+                "non_variable_training_slots": 0,
+                "serving_schema_misaligned_slots": 0,
+                "always_data_gap_slots": 0,
+            },
+            training_rows=0,
+        )
+        == "FAIL"
+    ), "a candidate trained on zero rows must never pass"
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +125,7 @@ def test_genuinely_disqualifying_counters_still_block() -> None:
 # candidate by definition, so `training_defaulted_slots` carried a hard floor
 # of 4 and the gate stayed unsatisfiable. Authorized 2026-09-03.
 # ---------------------------------------------------------------------------
+
 
 def _row(feature: str, *, defaulted: bool) -> dict:
     return {
@@ -158,7 +165,9 @@ def test_unexpectedly_defaulted_slots_still_count() -> None:
     feature that is *not* policy-gapped is still a real quality failure.
     """
     rows = [_row(f, defaulted=True) for f in PHASE7_FEATURES_ALWAYS_DATA_GAP]
-    genuine = [f for f in APEX_FEATURES_68 if f not in PHASE7_FEATURES_ALWAYS_DATA_GAP][:3]
+    genuine = [f for f in APEX_FEATURES_68 if f not in PHASE7_FEATURES_ALWAYS_DATA_GAP][
+        :3
+    ]
     rows += [_row(f, defaulted=True) for f in genuine]
 
     summary = _summary_from_features(rows)

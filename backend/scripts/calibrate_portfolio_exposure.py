@@ -14,6 +14,7 @@ Usage
 
 Requires a DATABASE_URL with read access to match_prediction_logs and matches.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -206,8 +207,9 @@ def _calibrate(groups: Dict[Tuple[str, str], List[Dict]]) -> Dict:
             "AGGREGATE_CAP_MULTIPLIER": proposed_agg_cap_mult,
         },
         "recommendation": (
-            "APPLY" if n_groups >= 10 else
-            f"DEFER — only {n_groups} multi-fixture groups; target ≥10 before applying"
+            "APPLY"
+            if n_groups >= 10
+            else f"DEFER — only {n_groups} multi-fixture groups; target ≥10 before applying"
         ),
     }
 
@@ -229,9 +231,17 @@ def _apply(proposed: Dict) -> None:
     ac = proposed["AGGREGATE_CAP_MULTIPLIER"]
     src_tag = f"CALIBRATED_{proposed.get('date', '2026-09-04')}"
 
-    text = re.sub(r"AGGREGATE_CAP_MULTIPLIER = [\d.]+", f"AGGREGATE_CAP_MULTIPLIER = {ac}", text)
-    text = re.sub(r"HAIRCUT_PER_ADDITIONAL_FIXTURE = [\d.]+", f"HAIRCUT_PER_ADDITIONAL_FIXTURE = {h}", text)
-    text = re.sub(r"HAIRCUT_FLOOR_MULTIPLIER = [\d.]+", f"HAIRCUT_FLOOR_MULTIPLIER = {fl}", text)
+    text = re.sub(
+        r"AGGREGATE_CAP_MULTIPLIER = [\d.]+", f"AGGREGATE_CAP_MULTIPLIER = {ac}", text
+    )
+    text = re.sub(
+        r"HAIRCUT_PER_ADDITIONAL_FIXTURE = [\d.]+",
+        f"HAIRCUT_PER_ADDITIONAL_FIXTURE = {h}",
+        text,
+    )
+    text = re.sub(
+        r"HAIRCUT_FLOOR_MULTIPLIER = [\d.]+", f"HAIRCUT_FLOOR_MULTIPLIER = {fl}", text
+    )
     text = re.sub(
         r'PORTFOLIO_POLICY_SOURCE = "[^"]+"',
         f'PORTFOLIO_POLICY_SOURCE = "{src_tag}"',
@@ -266,10 +276,13 @@ def main() -> None:
 
     groups = _fetch_settled_groups()
     total = sum(len(v) for v in groups.values())
-    print(f"Loaded {total} settled predictions across {len(groups)} (league, matchday) groups")
+    print(
+        f"Loaded {total} settled predictions across {len(groups)} (league, matchday) groups"
+    )
 
     result = _calibrate(groups)
     import json
+
     print(json.dumps(result, indent=2))
 
     if args.apply:

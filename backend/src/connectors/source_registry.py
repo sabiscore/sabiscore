@@ -61,9 +61,7 @@ class SourceDescriptor:
         return asdict(self)
 
 
-def build_source_registry(
-    *, settings: object | None = None
-) -> list[SourceDescriptor]:
+def build_source_registry(*, settings: object | None = None) -> list[SourceDescriptor]:
     """Build the V4 source registry from the current ``settings`` object.
 
     Any attribute access on ``settings`` that is absent falls back to

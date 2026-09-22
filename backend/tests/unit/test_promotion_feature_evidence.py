@@ -7,7 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.models.feature_registry import APEX_FEATURES_68, PHASE7_FEATURES_ALWAYS_DATA_GAP
+from src.models.feature_registry import (
+    APEX_FEATURES_68,
+    PHASE7_FEATURES_ALWAYS_DATA_GAP,
+)
 from src.models.promotion_evidence import (
     build_promotion_feature_evidence,
     validate_promotion_feature_evidence,
@@ -41,7 +44,9 @@ def test_builds_mechanical_positional_feature_contract() -> None:
     assert [row["index"] for row in report["features"]] == list(range(68))
     assert [row["feature"] for row in report["features"]] == list(APEX_FEATURES_68)
     assert report["summary"]["serving_schema_misaligned_slots"] == 11
-    assert report["summary"]["always_data_gap_slots"] == len(PHASE7_FEATURES_ALWAYS_DATA_GAP)
+    assert report["summary"]["always_data_gap_slots"] == len(
+        PHASE7_FEATURES_ALWAYS_DATA_GAP
+    )
     assert report["promotion_gate"] == "FAIL"
     assert validate_promotion_feature_evidence(report) is report
 
@@ -54,7 +59,9 @@ def test_checked_in_quarantined_candidate_report_remains_valid_and_failed() -> N
 
     assert validated["promotion_gate"] == "FAIL"
     assert validated["summary"]["serving_schema_misaligned_slots"] == 11
-    assert validated["summary"]["always_data_gap_slots"] == len(PHASE7_FEATURES_ALWAYS_DATA_GAP)
+    assert validated["summary"]["always_data_gap_slots"] == len(
+        PHASE7_FEATURES_ALWAYS_DATA_GAP
+    )
 
 
 def test_forged_pass_is_rejected() -> None:
@@ -128,7 +135,12 @@ def test_candidate_wider_than_active_serving_contract_does_not_crash() -> None:
     be built — this is exactly the shape the original 'author a wider
     candidate schema' step needs to exercise.
     """
-    candidate = [*APEX_FEATURES_68, "xg_differential", "xg_attack_diff", "xg_defense_diff"]
+    candidate = [
+        *APEX_FEATURES_68,
+        "xg_differential",
+        "xg_attack_diff",
+        "xg_defense_diff",
+    ]
     width = len(candidate)
     dataset = {
         "EPL": {
@@ -149,7 +161,10 @@ def test_candidate_wider_than_active_serving_contract_does_not_crash() -> None:
         assert row["classification"] == "SCHEMA_MISMATCH"
         assert row["candidate_position_matches_current_serving_schema"] is False
     assert report["promotion_gate"] == "FAIL"
-    assert validate_promotion_feature_evidence(report, candidate_features=candidate) is report
+    assert (
+        validate_promotion_feature_evidence(report, candidate_features=candidate)
+        is report
+    )
 
 
 def test_serving_contract_falls_back_to_legacy_when_unresolvable(monkeypatch) -> None:

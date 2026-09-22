@@ -6,6 +6,7 @@ Not a package (pytest.ini excludes scripts/ from collection and pythonpath
 only covers src/), so the module is loaded by inserting its directory onto
 sys.path directly — same pattern as test_train_on_real_matches_market_block.py.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,10 +25,17 @@ _ELO_DIFF_IDX = train_on_real_matches.APEX_FEATURES_68.index("elo_difference")
 _ELO_ADJ_IDX = train_on_real_matches.APEX_FEATURES_68.index("elo_league_adjusted")
 
 
-def _row(i: int, league: str, season: str, home: str, away: str, hg: int, ag: int) -> dict:
+def _row(
+    i: int, league: str, season: str, home: str, away: str, hg: int, ag: int
+) -> dict:
     return {
-        "league": league, "season": season, "date": _KICKOFF + timedelta(days=i),
-        "home": home, "away": away, "hg": hg, "ag": ag,
+        "league": league,
+        "season": season,
+        "date": _KICKOFF + timedelta(days=i),
+        "home": home,
+        "away": away,
+        "hg": hg,
+        "ag": ag,
         # build_dataset() only appends a row when market_features resolves
         # (WP-A: opening-odds gate) — an arbitrary, valid, coherent-tier
         # 1X2 triple, not real market evidence.

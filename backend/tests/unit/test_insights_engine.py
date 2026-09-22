@@ -1,4 +1,5 @@
 """Tests for insights prediction engine with synthetic data."""
+
 import os
 import pytest
 import pandas as pd
@@ -18,18 +19,24 @@ from .test_feature_transformer import _complete_match_data
 # Ensure Redis connections are disabled during import
 os.environ.setdefault("REDIS_ENABLED", "false")
 
-with patch.dict("sys.modules", {
-    "great_expectations": MagicMock(),
-    "great_expectations.dataset": MagicMock(),
-    "sqlalchemy": MagicMock(),
-    "sqlalchemy.orm": MagicMock(),
-    "redis": MagicMock(),
-    "redis.exceptions": MagicMock(),
-    "torch": MagicMock(),
-    "torchvision": MagicMock(),
-    "torchvision.transforms": MagicMock(),
-}):
-    with patch("requests.Session.get") as mock_get, patch("time.sleep", return_value=None):
+with patch.dict(
+    "sys.modules",
+    {
+        "great_expectations": MagicMock(),
+        "great_expectations.dataset": MagicMock(),
+        "sqlalchemy": MagicMock(),
+        "sqlalchemy.orm": MagicMock(),
+        "redis": MagicMock(),
+        "redis.exceptions": MagicMock(),
+        "torch": MagicMock(),
+        "torchvision": MagicMock(),
+        "torchvision.transforms": MagicMock(),
+    },
+):
+    with (
+        patch("requests.Session.get") as mock_get,
+        patch("time.sleep", return_value=None),
+    ):
         mock_response = MagicMock(status_code=200)
         mock_response.raise_for_status.return_value = None
         mock_response.text = ""
@@ -46,13 +53,17 @@ def mock_model():
     """Mock ML model with fixed predictions."""
     mock = MagicMock()  # Remove spec restriction
     # Return DataFrame format as expected by engine
-    mock.predict.return_value = pd.DataFrame([{
-        "home_win_prob": 0.65,
-        "draw_prob": 0.20,
-        "away_win_prob": 0.15,
-        "prediction": "home_win",
-        "confidence": 0.8
-    }])
+    mock.predict.return_value = pd.DataFrame(
+        [
+            {
+                "home_win_prob": 0.65,
+                "draw_prob": 0.20,
+                "away_win_prob": 0.15,
+                "prediction": "home_win",
+                "confidence": 0.8,
+            }
+        ]
+    )
     # Add other methods that might be called
     mock.transform.return_value = pd.DataFrame([{"feature": 1.0}])
     mock.explain.return_value = {"feature_importance": {"feature": 0.5}}
@@ -65,7 +76,7 @@ def mock_model():
 @pytest.fixture(autouse=True)
 def disable_external_calls(monkeypatch):
     """Prevent live HTTP requests and slow sleeps during engine tests."""
-    
+
     # Patch the fetch_data method to prevent external calls
     monkeypatch.setattr(
         "src.data.scrapers.BaseScraper.fetch_data",
@@ -150,7 +161,9 @@ def test_engine_with_synthetic_features(mock_model, sample_match_data):
     assert "narrative" in result
 
 
-def test_engine_untrained_model_falls_back_to_labelled_baseline(mock_model, sample_match_data):
+def test_engine_untrained_model_falls_back_to_labelled_baseline(
+    mock_model, sample_match_data
+):
     """An untrained model degrades to a labelled baseline — evidence is still present."""
     mock_model.is_trained = False
     engine = InsightsEngine(model=mock_model)
@@ -227,7 +240,10 @@ def test_league_kelly_cap_normalises_display_names():
 
 def test_engine_uses_aggregator_when_no_match_data(mock_model, sample_match_data):
     """Verify aggregator is invoked when match_data not provided."""
-    with patch('src.insights.engine.DataAggregator.fetch_match_data', return_value=sample_match_data) as mock_fetch:
+    with patch(
+        "src.insights.engine.DataAggregator.fetch_match_data",
+        return_value=sample_match_data,
+    ) as mock_fetch:
         engine = InsightsEngine(model=mock_model)
         engine.generate_match_insights(matchup="TeamA vs TeamB", league="EPL")
         assert mock_fetch.call_count == 1
@@ -245,20 +261,36 @@ def test_engine_risk_assessment_varies_with_confidence(mock_model, sample_match_
     }
 
     # No bets available -> should be high risk
-    risk = engine._assess_risk(custom_predictions, {"bets": [], "best_bet": None}, {"distribution": {"home_win": 0.9}})
+    risk = engine._assess_risk(
+        custom_predictions,
+        {"bets": [], "best_bet": None},
+        {"distribution": {"home_win": 0.9}},
+    )
     assert risk["risk_level"] == "high"
 
     # Provide positive-EV bet to trigger low risk branch
     value_analysis = {
-        "bets": [{"quality": {"quality_score": 90}, "market_odds": 2.0, "expected_value": 0.2}],
-        "best_bet": {"quality": {"quality_score": 90}, "market_odds": 2.0, "expected_value": 0.2},
+        "bets": [
+            {
+                "quality": {"quality_score": 90},
+                "market_odds": 2.0,
+                "expected_value": 0.2,
+            }
+        ],
+        "best_bet": {
+            "quality": {"quality_score": 90},
+            "market_odds": 2.0,
+            "expected_value": 0.2,
+        },
     }
-    low_risk = engine._assess_risk(custom_predictions, value_analysis, {"distribution": {"home_win": 0.9}})
+    low_risk = engine._assess_risk(
+        custom_predictions, value_analysis, {"distribution": {"home_win": 0.9}}
+    )
     assert low_risk["risk_level"] == "low"
 
     # Low confidence scenario should be high risk regardless of bets
     low_conf_predictions = dict(custom_predictions, confidence=0.4)
-    risk_low = engine._assess_risk(low_conf_predictions, value_analysis, {"distribution": {"home_win": 0.3}})
+    risk_low = engine._assess_risk(
+        low_conf_predictions, value_analysis, {"distribution": {"home_win": 0.3}}
+    )
     assert risk_low["risk_level"] == "high"
-
-

@@ -38,6 +38,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/study_portfolio_f_contextual_state.py
 """
+
 from __future__ import annotations
 
 import glob
@@ -51,7 +52,11 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _incremental_value_harness import devig, run_incremental_value_study  # noqa: E402
-from qualify_player_availability_coverage import _CACHE_DIR, _LEAGUE_TO_DIVISION, _SEASONS  # noqa: E402
+from qualify_player_availability_coverage import (
+    _CACHE_DIR,
+    _LEAGUE_TO_DIVISION,
+    _SEASONS,
+)  # noqa: E402
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _REPORT_DIR = _BACKEND_ROOT.parent / "reports" / "research"
@@ -91,13 +96,23 @@ def _load_raw_fixtures() -> list[dict[str, Any]]:
                 continue
             has_referee = "Referee" in frame.columns
             for _, row in frame.iterrows():
-                parsed = pd.to_datetime(row[col["date"]], errors="coerce", dayfirst=False)
+                parsed = pd.to_datetime(
+                    row[col["date"]], errors="coerce", dayfirst=False
+                )
                 result = str(row[col["result"]]).strip().upper()
                 try:
-                    oh, od, oa = float(row[col["oh"]]), float(row[col["od"]]), float(row[col["oa"]])
+                    oh, od, oa = (
+                        float(row[col["oh"]]),
+                        float(row[col["od"]]),
+                        float(row[col["oa"]]),
+                    )
                 except (TypeError, ValueError):
                     continue
-                if pd.isna(parsed) or result not in _OUTCOME_CODE or min(oh, od, oa) <= 1.0:
+                if (
+                    pd.isna(parsed)
+                    or result not in _OUTCOME_CODE
+                    or min(oh, od, oa) <= 1.0
+                ):
                     continue
                 referee = str(row["Referee"]).strip() if has_referee else ""
                 rows.append(
@@ -107,7 +122,9 @@ def _load_raw_fixtures() -> list[dict[str, Any]]:
                         "date": parsed.date(),
                         "home_team": str(row[col["home"]]).strip(),
                         "away_team": str(row[col["away"]]).strip(),
-                        "referee": referee if referee and referee.lower() != "nan" else None,
+                        "referee": referee
+                        if referee and referee.lower() != "nan"
+                        else None,
                         "market_probs": devig(oh, od, oa),
                         "outcome": _OUTCOME_CODE[result],
                     }
@@ -132,7 +149,9 @@ def enrich_contextual(fixtures: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # argument for always reading the descriptive stats before the headline.
     last_played: dict[tuple[str, int, str], date] = {}
     recent_dates: dict[tuple[str, int, str], list[date]] = defaultdict(list)
-    ref_prior: dict[str, list[int]] = defaultdict(lambda: [0, 0])  # [home_wins, matches]
+    ref_prior: dict[str, list[int]] = defaultdict(
+        lambda: [0, 0]
+    )  # [home_wins, matches]
     league_prior: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
     enriched: list[dict[str, Any]] = []
@@ -143,7 +162,11 @@ def enrich_contextual(fixtures: list[dict[str, Any]]) -> list[dict[str, Any]]:
             previous = last_played.get((league, season, team))
             # No prior fixture (season opener / promoted club): use the
             # window cap rather than a fabricated "fully rested" extreme.
-            return float((fx_date - previous).days) if previous else float(_CONGESTION_WINDOW_DAYS)
+            return (
+                float((fx_date - previous).days)
+                if previous
+                else float(_CONGESTION_WINDOW_DAYS)
+            )
 
         def _congestion(team: str) -> int:
             return sum(
@@ -153,7 +176,10 @@ def enrich_contextual(fixtures: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
 
         home_rest, away_rest = _rest(fx["home_team"]), _rest(fx["away_team"])
-        home_cong, away_cong = _congestion(fx["home_team"]), _congestion(fx["away_team"])
+        home_cong, away_cong = (
+            _congestion(fx["home_team"]),
+            _congestion(fx["away_team"]),
+        )
 
         # Referee home bias, shrunk toward the league base rate. Both the
         # referee's record and the league base rate come only from fixtures
@@ -221,7 +247,11 @@ def descriptive(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "referee_coverage_by_league": {
             lg: round(
                 100.0
-                * sum(1 for r in test if r["league"] == lg and r["referee_prior_matches"] > 0)
+                * sum(
+                    1
+                    for r in test
+                    if r["league"] == lg and r["referee_prior_matches"] > 0
+                )
                 / max(1, sum(1 for r in test if r["league"] == lg)),
                 1,
             )
@@ -263,8 +293,9 @@ def main() -> int:
         "f1_rest_and_congestion_beyond_market": run_incremental_value_study(
             rows,
             baseline_features=lambda r: list(r["market_probs"]),
-            candidate_features=lambda r: list(r["market_probs"])
-            + [r["rest_diff"], r["congestion_diff"]],
+            candidate_features=lambda r: (
+                list(r["market_probs"]) + [r["rest_diff"], r["congestion_diff"]]
+            ),
             **common,
         ),
         # Referee is EPL-only in this corpus (7 of 36 files carry the column,
@@ -274,7 +305,9 @@ def main() -> int:
         "f2_referee_beyond_market_EPL_ONLY": run_incremental_value_study(
             [r for r in rows if r["league"] == "EPL"],
             baseline_features=lambda r: list(r["market_probs"]),
-            candidate_features=lambda r: list(r["market_probs"]) + [r["referee_home_bias"]],
+            candidate_features=lambda r: (
+                list(r["market_probs"]) + [r["referee_home_bias"]]
+            ),
             train_seasons=_TRAIN_SEASONS,
             test_season=_TEST_SEASON,
             group_key=None,
@@ -284,8 +317,10 @@ def main() -> int:
         "f3_rest_congestion_and_referee_EPL_ONLY": run_incremental_value_study(
             [r for r in rows if r["league"] == "EPL"],
             baseline_features=lambda r: list(r["market_probs"]),
-            candidate_features=lambda r: list(r["market_probs"])
-            + [r["rest_diff"], r["congestion_diff"], r["referee_home_bias"]],
+            candidate_features=lambda r: (
+                list(r["market_probs"])
+                + [r["rest_diff"], r["congestion_diff"], r["referee_home_bias"]]
+            ),
             train_seasons=_TRAIN_SEASONS,
             test_season=_TEST_SEASON,
             group_key=None,

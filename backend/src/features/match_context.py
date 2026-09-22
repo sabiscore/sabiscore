@@ -12,6 +12,7 @@ UCL knockout rounds always return 1.0 (maximum stakes).
 Phase 8 Sprint 4: extended with async compute_match_context() that reads real
 LeagueStanding data from the DB and applies UCL competition_stage multipliers.
 """
+
 from __future__ import annotations
 
 import logging
@@ -115,7 +116,9 @@ def match_importance_score(
             return min(0.7, (6 - mr + 1) / 8.0)
         return 0.0
 
-    score = max(_stakes(pos_home, matches_remaining), _stakes(pos_away, matches_remaining))
+    score = max(
+        _stakes(pos_home, matches_remaining), _stakes(pos_away, matches_remaining)
+    )
     return round(min(1.0, score), 3)
 
 
@@ -172,14 +175,14 @@ async def compute_match_context(
         query = (
             select(LeagueStanding)
             .where(LeagueStanding.league == league)
-            .where(
-                LeagueStanding.team_id.in_([home_team_id, away_team_id])
-            )
+            .where(LeagueStanding.team_id.in_([home_team_id, away_team_id]))
         )
         result = await db.execute(query)
         rows = result.scalars().all()
     except Exception as exc:
-        logger.debug("compute_match_context: standings query failed for %s: %s", league, exc)
+        logger.debug(
+            "compute_match_context: standings query failed for %s: %s", league, exc
+        )
         return _gap
 
     if not rows:
@@ -213,7 +216,9 @@ async def compute_match_context(
     if updated is not None:
         if updated.tzinfo is None:
             updated = updated.replace(tzinfo=timezone.utc)
-        freshness_secs = max(0, int((datetime.now(timezone.utc) - updated).total_seconds()))
+        freshness_secs = max(
+            0, int((datetime.now(timezone.utc) - updated).total_seconds())
+        )
 
     return MatchContextResult(
         features={"match_importance_score": importance},

@@ -11,6 +11,7 @@ could see.
 These tests assert *behaviour*, not shape: a strong home side must not receive
 the same probabilities as a weak one, and the direction must be football-sane.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -33,9 +34,18 @@ MATCH_DATE = datetime(2026, 8, 15)
 
 
 def _vector(
-    *, home_form: float, home_win_rate: float, home_gf: float, home_ga: float,
-    away_form: float, away_win_rate: float, away_gf: float, away_ga: float,
-    home_odds: float = 2.38, draw_odds: float = 3.85, away_odds: float = 3.13,
+    *,
+    home_form: float,
+    home_win_rate: float,
+    home_gf: float,
+    home_ga: float,
+    away_form: float,
+    away_win_rate: float,
+    away_gf: float,
+    away_ga: float,
+    home_odds: float = 2.38,
+    draw_odds: float = 3.85,
+    away_odds: float = 3.13,
     league: str = "EPL",
 ) -> np.ndarray:
     """Build a serving-shaped vector via the same helpers the projector uses.
@@ -48,17 +58,29 @@ def _vector(
     being optional).
     """
     f = dict(DEFAULT_FEATURE_VALUES_68)
-    f.update(derive_last5_form_features(
-        home_form, home_win_rate, is_home=True,
-        wins_5=home_win_rate * 5, draws_5=1.0, losses_5=max(0.0, 4.0 - home_win_rate * 5),
-    ))
+    f.update(
+        derive_last5_form_features(
+            home_form,
+            home_win_rate,
+            is_home=True,
+            wins_5=home_win_rate * 5,
+            draws_5=1.0,
+            losses_5=max(0.0, 4.0 - home_win_rate * 5),
+        )
+    )
     f["home_goals_for_avg"] = home_gf
     f["home_goals_against_avg"] = home_ga
     f["home_gd_recent"] = home_gf - home_ga
-    f.update(derive_last5_form_features(
-        away_form, away_win_rate, is_home=False,
-        wins_5=away_win_rate * 5, draws_5=1.0, losses_5=max(0.0, 4.0 - away_win_rate * 5),
-    ))
+    f.update(
+        derive_last5_form_features(
+            away_form,
+            away_win_rate,
+            is_home=False,
+            wins_5=away_win_rate * 5,
+            draws_5=1.0,
+            losses_5=max(0.0, 4.0 - away_win_rate * 5),
+        )
+    )
     f["away_goals_for_avg"] = away_gf
     f["away_goals_against_avg"] = away_ga
     f["away_gd_recent"] = away_gf - away_ga
@@ -76,14 +98,30 @@ def _vector(
 # correctly leans on that price. Odds below match the described scenario: a
 # heavy home favorite / heavy away favorite, mirrored between the two dicts.
 _DOMINANT_HOME = dict(
-    home_form=0.93, home_win_rate=0.8, home_gf=2.6, home_ga=0.6,
-    away_form=0.20, away_win_rate=0.0, away_gf=0.7, away_ga=2.2,
-    home_odds=1.30, draw_odds=5.50, away_odds=9.00,
+    home_form=0.93,
+    home_win_rate=0.8,
+    home_gf=2.6,
+    home_ga=0.6,
+    away_form=0.20,
+    away_win_rate=0.0,
+    away_gf=0.7,
+    away_ga=2.2,
+    home_odds=1.30,
+    draw_odds=5.50,
+    away_odds=9.00,
 )
 _DOMINANT_AWAY = dict(
-    home_form=0.20, home_win_rate=0.0, home_gf=0.7, home_ga=2.2,
-    away_form=0.93, away_win_rate=0.8, away_gf=2.6, away_ga=0.6,
-    home_odds=9.00, draw_odds=5.50, away_odds=1.30,
+    home_form=0.20,
+    home_win_rate=0.0,
+    home_gf=0.7,
+    home_ga=2.2,
+    away_form=0.93,
+    away_win_rate=0.8,
+    away_gf=2.6,
+    away_ga=0.6,
+    home_odds=9.00,
+    draw_odds=5.50,
+    away_odds=1.30,
 )
 
 
@@ -107,8 +145,12 @@ async def test_direction_is_football_sane():
     strong = await engine.predict(features=_vector(**_DOMINANT_HOME), league="EPL")
     weak = await engine.predict(features=_vector(**_DOMINANT_AWAY), league="EPL")
 
-    assert strong.home_win > strong.away_win, "dominant home side priced below the away side"
-    assert weak.away_win > weak.home_win, "dominant away side priced below the home side"
+    assert strong.home_win > strong.away_win, (
+        "dominant home side priced below the away side"
+    )
+    assert weak.away_win > weak.home_win, (
+        "dominant away side priced below the home side"
+    )
 
 
 @pytest.mark.asyncio

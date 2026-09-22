@@ -38,6 +38,7 @@ from src.connectors.odds_market import (
 # 1. ADVERSARIAL TESTS: ADVANCED METRICS ENGINE
 # ===========================================================================
 
+
 class TestAdversarialAdvancedMetrics:
     """Aggressive challenge of advanced metrics functions."""
 
@@ -46,13 +47,23 @@ class TestAdversarialAdvancedMetrics:
         """PPDA must not return bogus values when given NaN or Inf."""
         try:
             res = calculate_ppda(nan_inf, 10)
-            assert res is None or math.isnan(res) or not math.isfinite(res) or isinstance(res, float)
+            assert (
+                res is None
+                or math.isnan(res)
+                or not math.isfinite(res)
+                or isinstance(res, float)
+            )
         except (ValueError, TypeError, OverflowError):
             pass
 
         try:
             res = calculate_ppda(100, nan_inf)
-            assert res is None or math.isnan(res) or not math.isfinite(res) or isinstance(res, float)
+            assert (
+                res is None
+                or math.isnan(res)
+                or not math.isfinite(res)
+                or isinstance(res, float)
+            )
         except (ValueError, TypeError, OverflowError):
             pass
 
@@ -121,6 +132,7 @@ class TestAdversarialAdvancedMetrics:
 # 2. ADVERSARIAL TESTS: POWER METHOD & ODDS NORMALIZATION
 # ===========================================================================
 
+
 class TestAdversarialOddsConnector:
     """Stress tests on foundational odds math."""
 
@@ -172,6 +184,7 @@ class TestAdversarialOddsConnector:
 # ===========================================================================
 # 3. ADVERSARIAL TESTS: MARKET INTELLIGENCE PROVENANCE LAYER
 # ===========================================================================
+
 
 class TestAdversarialMarketIntelligence:
     """Stress tests on build_market_intelligence and fail-closed guarantees."""
@@ -229,7 +242,10 @@ class TestAdversarialMarketIntelligence:
         valid_odds = {"home_win": 3.0, "draw": 3.4, "away_win": 2.5}
         model_probs = {"home_win": 0.80, "draw": 0.10, "away_win": 0.10}
 
-        with patch("src.services.market_intel.active_generation_is_certified", return_value=True):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            return_value=True,
+        ):
             summary = build_market_intelligence(
                 odds=valid_odds,
                 model_probabilities=model_probs,
@@ -246,7 +262,10 @@ class TestAdversarialMarketIntelligence:
         valid_odds = {"home_win": 3.0, "draw": 3.4, "away_win": 2.5}
         model_probs = {"home_win": 0.80, "draw": 0.10, "away_win": 0.10}
 
-        with patch("src.services.market_intel.active_generation_is_certified", return_value=True):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            return_value=True,
+        ):
             summary = build_market_intelligence(
                 odds=valid_odds,
                 model_probabilities=model_probs,
@@ -263,7 +282,10 @@ class TestAdversarialMarketIntelligence:
         valid_odds = {"home_win": 5.0, "draw": 3.4, "away_win": 1.5}
         astronomical_edge_probs = {"home_win": 0.90, "draw": 0.05, "away_win": 0.05}
 
-        with patch("src.services.market_intel.active_generation_is_certified", return_value=False):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            return_value=False,
+        ):
             summary = build_market_intelligence(
                 odds=valid_odds,
                 model_probabilities=astronomical_edge_probs,
@@ -273,7 +295,10 @@ class TestAdversarialMarketIntelligence:
             assert summary.provenance.certification_state == "UNVERIFIED"
             assert summary.stake_permitted is False
             assert summary.decision == MarketDecisionState.RESEARCH_ONLY
-            assert summary.outcomes["home_win"].classification == EdgeClassification.POSITIVE_EDGE
+            assert (
+                summary.outcomes["home_win"].classification
+                == EdgeClassification.POSITIVE_EDGE
+            )
             assert summary.outcomes["home_win"].expected_value == 3.5
 
     def test_market_intel_unexpected_keys_in_odds_and_models(self):
@@ -292,7 +317,9 @@ class TestAdversarialMarketIntelligence:
             "away_win": 0.20,
             "btts_yes": 0.55,
         }
-        summary = build_market_intelligence(odds=bloated_odds, model_probabilities=bloated_models)
+        summary = build_market_intelligence(
+            odds=bloated_odds, model_probabilities=bloated_models
+        )
         assert set(summary.outcomes.keys()) == {"home_win", "draw", "away_win"}
         assert summary.provenance.is_complete is True
 
@@ -302,7 +329,9 @@ class TestAdversarialMarketIntelligence:
         summary = build_market_intelligence(odds=high_vig_odds)
         assert summary.margin_percentage > 45.0
         assert summary.market_overround > 1.45
-        fair_probs_sum = sum(o.fair_market_probability for o in summary.outcomes.values())
+        fair_probs_sum = sum(
+            o.fair_market_probability for o in summary.outcomes.values()
+        )
         assert abs(fair_probs_sum - 1.0) < 0.005
 
     def test_market_intel_serialization_stability_under_all_states(self):
@@ -310,7 +339,9 @@ class TestAdversarialMarketIntelligence:
         scenarios = [
             build_market_intelligence(odds={}),
             build_market_intelligence(odds={"home_win": 2.0}),
-            build_market_intelligence(odds={"home_win": 2.0, "draw": 3.0, "away_win": 4.0}),
+            build_market_intelligence(
+                odds={"home_win": 2.0, "draw": 3.0, "away_win": 4.0}
+            ),
             build_market_intelligence(
                 odds={"home_win": 2.0, "draw": 3.0, "away_win": 4.0},
                 model_probabilities={"home_win": 0.5, "draw": 0.3, "away_win": 0.2},
@@ -328,6 +359,7 @@ class TestAdversarialMarketIntelligence:
 # ===========================================================================
 # 4. RANDOMIZED COMBINATORIAL FUZZ HARNESS
 # ===========================================================================
+
 
 class TestRandomizedCombinatorialFuzz:
     """Fuzz harness executing 200 combinatorial permutations of market inputs."""
@@ -360,11 +392,19 @@ class TestRandomizedCombinatorialFuzz:
                 pre_kickoff=pre_ko,
             )
 
-            assert summary.stake_permitted is False, f"Iteration {i} permitted stake in uncertified mode!"
-            assert summary.decision in (MarketDecisionState.RESEARCH_ONLY, MarketDecisionState.HOLD, MarketDecisionState.PARTIAL)
+            assert summary.stake_permitted is False, (
+                f"Iteration {i} permitted stake in uncertified mode!"
+            )
+            assert summary.decision in (
+                MarketDecisionState.RESEARCH_ONLY,
+                MarketDecisionState.HOLD,
+                MarketDecisionState.PARTIAL,
+            )
             assert summary.provenance.certification_state == "UNVERIFIED"
 
             fair_sum = sum(o.fair_market_probability for o in summary.outcomes.values())
-            assert abs(fair_sum - 1.0) < 0.01, f"Iteration {i} fair sum drifted: {fair_sum}"
+            assert abs(fair_sum - 1.0) < 0.01, (
+                f"Iteration {i} fair sum drifted: {fair_sum}"
+            )
 
             assert isinstance(summary.model_dump(), dict)

@@ -20,6 +20,7 @@ def svc() -> UncertaintyService:
 
 # ── _clamp helper ─────────────────────────────────────────────────────────────
 
+
 def test_clamp_below_low():
     assert _clamp(-0.5, 0.0, 1.0) == 0.0
 
@@ -33,6 +34,7 @@ def test_clamp_within_range():
 
 
 # ── UncertaintyBreakdown dataclass ────────────────────────────────────────────
+
 
 def test_uncertainty_breakdown_ok_tier():
     bd = UncertaintyBreakdown(
@@ -56,6 +58,7 @@ def test_uncertainty_breakdown_custom_tier():
 
 
 # ── decompose_from_probabilities ──────────────────────────────────────────────
+
 
 def test_decompose_returns_breakdown(svc):
     probs = {"home_win": 0.45, "draw": 0.30, "away_win": 0.25}
@@ -114,6 +117,7 @@ def test_decompose_missing_outcome_keys(svc):
 
 # ── decompose (BNN fallback path — no model file installed in test env) ───────
 
+
 def test_decompose_falls_back_when_no_bnn(svc):
     """When BNN model is absent, decompose must use proxy fallback."""
     feature_frame = pd.DataFrame({"col_a": [0.5], "col_b": [1.0]})
@@ -130,6 +134,7 @@ def test_decompose_empty_frame_uses_fallback(svc):
 
 # ── compute_from_defaults ─────────────────────────────────────────────────────
 
+
 def test_compute_from_defaults(svc):
     bd = svc.compute_from_defaults()
     assert isinstance(bd, UncertaintyBreakdown)
@@ -137,11 +142,14 @@ def test_compute_from_defaults(svc):
 
 
 def test_compute_from_defaults_custom_probs(svc):
-    bd = svc.compute_from_defaults(home_win_prob=0.60, draw_prob=0.25, away_win_prob=0.15)
+    bd = svc.compute_from_defaults(
+        home_win_prob=0.60, draw_prob=0.25, away_win_prob=0.15
+    )
     assert bd.epistemic_unc == pytest.approx(1.0 - 0.60, abs=0.01)
 
 
 # ── to_dict ────────────────────────────────────────────────────────────────────
+
 
 def test_to_dict_returns_dict(svc):
     bd = UncertaintyBreakdown(

@@ -2,6 +2,7 @@
 """
 Direct integration tests for SabiScore API functionality
 """
+
 import sys
 from pathlib import Path
 import json
@@ -14,6 +15,7 @@ BACKEND_ROOT = PROJECT_ROOT.parent
 SRC_PATH = BACKEND_ROOT / "src"
 sys.path.insert(0, str(SRC_PATH))
 sys.path.insert(0, str(BACKEND_ROOT))
+
 
 def test_database_connectivity():
     """Test database connectivity and data integrity"""
@@ -34,8 +36,10 @@ def test_database_connectivity():
             print(f"✓ Found {len(teams)} teams")
 
             # Test matches
-            matches = session.query(Match).filter(Match.status == 'finished').all()
-            assert len(matches) >= 1000, f"Expected at least 1000 matches, got {len(matches)}"
+            matches = session.query(Match).filter(Match.status == "finished").all()
+            assert len(matches) >= 1000, (
+                f"Expected at least 1000 matches, got {len(matches)}"
+            )
             print(f"✓ Found {len(matches)} finished matches")
 
         print("[PASS] Database connectivity test")
@@ -44,6 +48,7 @@ def test_database_connectivity():
     except Exception as e:
         print(f"[FAIL] Database connectivity test: {e}")
         return False
+
 
 def test_model_loading():
     """Test model loading and basic functionality"""
@@ -60,18 +65,23 @@ def test_model_loading():
 
         # Test basic prediction
         import pandas as pd
-        test_data = pd.DataFrame({
-            'home_goals_avg': [1.8],
-            'away_goals_avg': [1.2],
-            'home_win_rate': [0.6],
-            'away_win_rate': [0.4],
-            # Add other required features with dummy values
-            **{f'feature_{i}': [1.0] for i in range(45)}
-        })
+
+        test_data = pd.DataFrame(
+            {
+                "home_goals_avg": [1.8],
+                "away_goals_avg": [1.2],
+                "home_win_rate": [0.6],
+                "away_win_rate": [0.4],
+                # Add other required features with dummy values
+                **{f"feature_{i}": [1.0] for i in range(45)},
+            }
+        )
 
         predictions = model.predict(test_data)
-        assert 'home_win_prob' in predictions.columns, "Missing home_win_prob in predictions"
-        assert 'prediction' in predictions.columns, "Missing prediction in predictions"
+        assert "home_win_prob" in predictions.columns, (
+            "Missing home_win_prob in predictions"
+        )
+        assert "prediction" in predictions.columns, "Missing prediction in predictions"
         print("✓ Model prediction test passed")
 
         print("[PASS] Model loading test")
@@ -80,8 +90,10 @@ def test_model_loading():
     except Exception as e:
         print(f"[FAIL] Model loading test: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_insights_engine():
     """Test insights engine with real data"""
@@ -100,10 +112,11 @@ def test_insights_engine():
 
         with SessionLocal() as session:
             # Get a real match
-            match = session.query(Match).filter(
-                Match.league_id == 'EPL',
-                Match.status == 'finished'
-            ).first()
+            match = (
+                session.query(Match)
+                .filter(Match.league_id == "EPL", Match.status == "finished")
+                .first()
+            )
 
             if not match:
                 print("[SKIP] No real matches found for testing")
@@ -113,30 +126,49 @@ def test_insights_engine():
 
             # Generate insights
             start_time = time.time()
-            insights = engine.generate_match_insights(matchup, 'EPL')
+            insights = engine.generate_match_insights(matchup, "EPL")
             duration = time.time() - start_time
 
             # Validate response structure
             required_keys = [
-                'matchup', 'league', 'metadata', 'predictions',
-                'xg_analysis', 'value_analysis', 'monte_carlo',
-                'scenarios', 'explanation', 'risk_assessment',
-                'narrative', 'generated_at', 'confidence_level'
+                "matchup",
+                "league",
+                "metadata",
+                "predictions",
+                "xg_analysis",
+                "value_analysis",
+                "monte_carlo",
+                "scenarios",
+                "explanation",
+                "risk_assessment",
+                "narrative",
+                "generated_at",
+                "confidence_level",
             ]
 
             for key in required_keys:
                 assert key in insights, f"Missing required key: {key}"
 
             # Validate predictions
-            pred = insights['predictions']
-            assert 'home_win_prob' in pred, "Missing home_win_prob"
-            assert 'draw_prob' in pred, "Missing draw_prob"
-            assert 'away_win_prob' in pred, "Missing away_win_prob"
-            assert abs(pred['home_win_prob'] + pred['draw_prob'] + pred['away_win_prob'] - 1.0) < 0.01, "Probabilities don't sum to 1"
+            pred = insights["predictions"]
+            assert "home_win_prob" in pred, "Missing home_win_prob"
+            assert "draw_prob" in pred, "Missing draw_prob"
+            assert "away_win_prob" in pred, "Missing away_win_prob"
+            assert (
+                abs(
+                    pred["home_win_prob"]
+                    + pred["draw_prob"]
+                    + pred["away_win_prob"]
+                    - 1.0
+                )
+                < 0.01
+            ), "Probabilities don't sum to 1"
 
             print(f"✓ Insights generated in {duration:.2f} seconds")
             print(f"✓ Generated insights for: {matchup}")
-            print(f"✓ Prediction: {pred['prediction']} (confidence: {pred['confidence']:.3f})")
+            print(
+                f"✓ Prediction: {pred['prediction']} (confidence: {pred['confidence']:.3f})"
+            )
 
         print("[PASS] Insights engine test")
         return True
@@ -144,8 +176,10 @@ def test_insights_engine():
     except Exception as e:
         print(f"[FAIL] Insights engine test: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def test_api_serialization():
     """Test API response serialization"""
@@ -156,60 +190,62 @@ def test_api_serialization():
 
         # Create a complete response
         response_data = {
-            'matchup': 'Test Team vs Other Team',
-            'league': 'EPL',
-            'metadata': {
-                'matchup': 'Test Team vs Other Team',
-                'league': 'EPL',
-                'home_team': 'Test Team',
-                'away_team': 'Other Team'
+            "matchup": "Test Team vs Other Team",
+            "league": "EPL",
+            "metadata": {
+                "matchup": "Test Team vs Other Team",
+                "league": "EPL",
+                "home_team": "Test Team",
+                "away_team": "Other Team",
             },
-            'predictions': {
-                'home_win_prob': 0.6,
-                'draw_prob': 0.2,
-                'away_win_prob': 0.2,
-                'prediction': 'home_win',
-                'confidence': 0.8
+            "predictions": {
+                "home_win_prob": 0.6,
+                "draw_prob": 0.2,
+                "away_win_prob": 0.2,
+                "prediction": "home_win",
+                "confidence": 0.8,
             },
-            'xg_analysis': {
-                'home_xg': 1.8,
-                'away_xg': 1.2,
-                'total_xg': 3.0,
-                'xg_difference': 0.6
+            "xg_analysis": {
+                "home_xg": 1.8,
+                "away_xg": 1.2,
+                "total_xg": 3.0,
+                "xg_difference": 0.6,
             },
-            'value_analysis': {
-                'bets': [],
-                'edges': {},
-                'best_bet': None,
-                'summary': 'No value bets found'
+            "value_analysis": {
+                "bets": [],
+                "edges": {},
+                "best_bet": None,
+                "summary": "No value bets found",
             },
-            'monte_carlo': {
-                'simulations': 10000,
-                'distribution': {'home_win': 0.65, 'draw': 0.20, 'away_win': 0.15},
-                'confidence_intervals': {'home_win': [0.63, 0.67]}
+            "monte_carlo": {
+                "simulations": 10000,
+                "distribution": {"home_win": 0.65, "draw": 0.20, "away_win": 0.15},
+                "confidence_intervals": {"home_win": [0.63, 0.67]},
             },
-            'scenarios': [{
-                'name': 'Most Likely',
-                'probability': 0.6,
-                'home_score': 2,
-                'away_score': 1,
-                'result': 'home_win'
-            }],
-            'explanation': {
-                'type': 'model_based',
-                'description': 'Prediction based on team statistics and form'
+            "scenarios": [
+                {
+                    "name": "Most Likely",
+                    "probability": 0.6,
+                    "home_score": 2,
+                    "away_score": 1,
+                    "result": "home_win",
+                }
+            ],
+            "explanation": {
+                "type": "model_based",
+                "description": "Prediction based on team statistics and form",
             },
-            'risk_assessment': {
-                'risk_level': 'low',
-                'confidence_score': 0.78,
-                'value_available': True,
-                'recommendation': 'Proceed',
-                'distribution': {'home_win': 0.65, 'draw': 0.20, 'away_win': 0.15},
-                'best_bet': None
+            "risk_assessment": {
+                "risk_level": "low",
+                "confidence_score": 0.78,
+                "value_available": True,
+                "recommendation": "Proceed",
+                "distribution": {"home_win": 0.65, "draw": 0.20, "away_win": 0.15},
+                "best_bet": None,
             },
-            'narrative': 'Test Team has a 60% chance of winning based on current form and statistics.',
-            'generated_at': datetime.utcnow(),
-            'confidence_level': 0.8
+            "narrative": "Test Team has a 60% chance of winning based on current form and statistics.",
+            "generated_at": datetime.utcnow(),
+            "confidence_level": 0.8,
         }
 
         # Create Pydantic model
@@ -221,7 +257,7 @@ def test_api_serialization():
 
         # Test deserialization
         parsed = json.loads(json_str)
-        assert parsed['matchup'] == 'Test Team vs Other Team', "Matchup not preserved"
+        assert parsed["matchup"] == "Test Team vs Other Team", "Matchup not preserved"
 
         print("✓ API serialization test passed")
         print("[PASS] API serialization test")
@@ -230,8 +266,10 @@ def test_api_serialization():
     except Exception as e:
         print(f"[FAIL] API serialization test: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 def run_all_tests():
     """Run all integration tests"""
@@ -271,6 +309,7 @@ def run_all_tests():
     else:
         print("All tests passed! SabiScore is ready for production.")
         return True
+
 
 if __name__ == "__main__":
     success = run_all_tests()

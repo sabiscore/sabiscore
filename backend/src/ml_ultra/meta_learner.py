@@ -40,7 +40,7 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
         """Create models with different inductive biases"""
         return {
             # Tree-based (handles non-linearity)
-            'xgb': xgb.XGBClassifier(
+            "xgb": xgb.XGBClassifier(
                 n_estimators=800,
                 learning_rate=0.03,
                 max_depth=8,
@@ -50,16 +50,15 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
                 colsample_bytree=0.8,
                 reg_alpha=0.5,
                 reg_lambda=2.0,
-                tree_method='hist',
+                tree_method="hist",
                 enable_categorical=False,
                 random_state=self.random_state,
                 n_jobs=-1,
-                eval_metric='mlogloss',
-                verbosity=0
+                eval_metric="mlogloss",
+                verbosity=0,
             ),
-
             # Leaf-wise growth (different tree strategy)
-            'lgb': lgb.LGBMClassifier(
+            "lgb": lgb.LGBMClassifier(
                 n_estimators=800,
                 learning_rate=0.03,
                 num_leaves=64,
@@ -73,31 +72,30 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
                 random_state=self.random_state,
                 n_jobs=-1,
                 verbose=-1,
-                force_col_wise=True
+                force_col_wise=True,
             ),
-
             # Ordered boosting (handles overfitting differently)
-            'cat': CatBoostClassifier(
+            "cat": CatBoostClassifier(
                 iterations=800,
                 learning_rate=0.03,
                 depth=8,
                 l2_leaf_reg=5,
-                bootstrap_type='Bernoulli',
+                bootstrap_type="Bernoulli",
                 subsample=0.8,
                 random_seed=self.random_state,
                 verbose=False,
-                thread_count=-1
+                thread_count=-1,
             ),
         }
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> 'DiverseEnsemble':
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "DiverseEnsemble":
         """Train all models and meta-learner"""
         logger.info("🔧 Training diverse ensemble...")
 
         if isinstance(X, pd.DataFrame):
             self.feature_names = X.columns.tolist()
             X = X.values
-        
+
         y_array = y.values if isinstance(y, pd.Series) else y
 
         self.models = self._create_diverse_models()
@@ -114,10 +112,7 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
             # Get out-of-fold predictions for meta-learner
             try:
                 oof_preds = cross_val_predict(
-                    model, X, y_array,
-                    cv=cv,
-                    method='predict_proba',
-                    n_jobs=-1
+                    model, X, y_array, cv=cv, method="predict_proba", n_jobs=-1
                 )
             except Exception as e:
                 logger.warning(f"Cross-validation failed for {name}: {e}")
@@ -125,7 +120,7 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
                 model.fit(X, y_array)
                 oof_preds = model.predict_proba(X)
 
-            meta_features[:, idx*n_classes:(idx+1)*n_classes] = oof_preds
+            meta_features[:, idx * n_classes : (idx + 1) * n_classes] = oof_preds
 
             # Train on full data
             logger.info(f"Training {name} on full dataset...")
@@ -134,10 +129,7 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
             # Calibrate probabilities
             logger.info(f"Calibrating {name}...")
             self.calibrated_models[name] = CalibratedClassifierCV(
-                model,
-                method='isotonic',
-                cv='prefit',
-                n_jobs=-1
+                model, method="isotonic", cv="prefit", n_jobs=-1
             )
             # Use a small portion for calibration
             cal_size = min(len(X), 1000)
@@ -149,9 +141,9 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
         self.meta_learner = LogisticRegression(
             C=1.0,
             max_iter=1000,
-            multi_class='multinomial',
+            multi_class="multinomial",
             random_state=self.random_state,
-            n_jobs=-1
+            n_jobs=-1,
         )
         self.meta_learner.fit(meta_features, y_array)
 
@@ -174,7 +166,7 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
 
         for idx, (name, model) in enumerate(self.calibrated_models.items()):
             preds = model.predict_proba(X)
-            meta_features[:, idx*n_classes:(idx+1)*n_classes] = preds
+            meta_features[:, idx * n_classes : (idx + 1) * n_classes] = preds
 
         # Meta-learner combines predictions
         final_probs = self.meta_learner.predict_proba(meta_features)
@@ -200,12 +192,12 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
             raise ValueError("Cannot save untrained model")
 
         save_dict = {
-            'models': self.models,
-            'meta_learner': self.meta_learner,
-            'calibrated_models': self.calibrated_models,
-            'feature_names': self.feature_names,
-            'is_trained': self.is_trained,
-            'random_state': self.random_state
+            "models": self.models,
+            "meta_learner": self.meta_learner,
+            "calibrated_models": self.calibrated_models,
+            "feature_names": self.feature_names,
+            "is_trained": self.is_trained,
+            "random_state": self.random_state,
         }
 
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -213,16 +205,16 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
         logger.info(f"✅ Ensemble saved to {filepath}")
 
     @classmethod
-    def load(cls, filepath: Path) -> 'DiverseEnsemble':
+    def load(cls, filepath: Path) -> "DiverseEnsemble":
         """Load trained ensemble from disk"""
         save_dict = joblib.load(filepath)
 
-        instance = cls(random_state=save_dict.get('random_state', 42))
-        instance.models = save_dict['models']
-        instance.meta_learner = save_dict['meta_learner']
-        instance.calibrated_models = save_dict['calibrated_models']
-        instance.feature_names = save_dict['feature_names']
-        instance.is_trained = save_dict['is_trained']
+        instance = cls(random_state=save_dict.get("random_state", 42))
+        instance.models = save_dict["models"]
+        instance.meta_learner = save_dict["meta_learner"]
+        instance.calibrated_models = save_dict["calibrated_models"]
+        instance.feature_names = save_dict["feature_names"]
+        instance.is_trained = save_dict["is_trained"]
 
         logger.info(f"✅ Ensemble loaded from {filepath}")
         return instance
@@ -240,11 +232,11 @@ class DiverseEnsemble(BaseEstimator, ClassifierMixin):
         weights = {}
         for idx, name in enumerate(self.models.keys()):
             # Average absolute coefficient across classes
-            model_coef = coef[:, idx*n_classes:(idx+1)*n_classes]
+            model_coef = coef[:, idx * n_classes : (idx + 1) * n_classes]
             weights[name] = float(np.mean(np.abs(model_coef)))
 
         # Normalize
         total = sum(weights.values())
-        weights = {k: v/total for k, v in weights.items()}
+        weights = {k: v / total for k, v in weights.items()}
 
         return weights

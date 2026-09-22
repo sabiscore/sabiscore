@@ -36,7 +36,9 @@ class Settings(BaseSettings):
         # every .env*.example template, README, the Makefile release gate and
         # backend/conftest.py all set; matches the canonical-first convention the
         # provider-key aliases below already follow.
-        validation_alias=AliasChoices("ALLOW_SQLITE_FALLBACK", "SABISCORE_ALLOW_INSECURE_FALLBACK"),
+        validation_alias=AliasChoices(
+            "ALLOW_SQLITE_FALLBACK", "SABISCORE_ALLOW_INSECURE_FALLBACK"
+        ),
         description="Development/test-only opt-in for SQLite fallback when PostgreSQL is unavailable.",
     )
     database_pool_size: int = Field(default=20, ge=1, le=100)
@@ -60,13 +62,13 @@ class Settings(BaseSettings):
         default=None,
         alias="UPSTASH_REDIS_URL",
         description="Upstash Redis-protocol URL (rediss://default:token@hostname:port). "
-                    "When set, used as the middle tier between Redis Labs and in-memory.",
+        "When set, used as the middle tier between Redis Labs and in-memory.",
     )
     upstash_enabled: bool = Field(
         default=False,
         alias="UPSTASH_ENABLED",
         description="Enable Upstash as the 3-tier middle cache. "
-                    "Activated automatically when UPSTASH_REDIS_URL is provided.",
+        "Activated automatically when UPSTASH_REDIS_URL is provided.",
     )
     upstash_max_connections: int = Field(default=20, ge=1, le=100)
 
@@ -93,10 +95,12 @@ class Settings(BaseSettings):
     allowed_hosts_raw: str = Field(
         default="localhost,127.0.0.1",
         alias="ALLOWED_HOSTS",
-        description="Comma-separated list of allowed hosts"
+        description="Comma-separated list of allowed hosts",
     )
     # Render sets this automatically to the public service hostname (e.g. sabiscore-api-bav1.onrender.com)
-    render_external_hostname: Optional[str] = Field(default=None, alias="RENDER_EXTERNAL_HOSTNAME")
+    render_external_hostname: Optional[str] = Field(
+        default=None, alias="RENDER_EXTERNAL_HOSTNAME"
+    )
     opta_api_key: Optional[str] = None
     betfair_app_key: Optional[str] = None
     betfair_session_token: Optional[str] = None
@@ -107,23 +111,23 @@ class Settings(BaseSettings):
         alias="FOOTBALL_DATA_API_KEY",
         description="X-Auth-Token for football-data.org (fixtures, standings, results).",
     )
-    
+
     # App metadata (backwards-compat with legacy settings access in main.py)
     project_name: str = Field(default="SabiScore API", alias="APP_NAME")
     version: str = Field(default="1.0.0", alias="VERSION")
     app_version: str = Field(default="1.0.0", alias="APP_VERSION")
     api_v1_str: str = Field(default="/api/v1", alias="API_V1_STR")
-    
+
     # Next.js Integration
     next_url: str = Field(
         default="http://localhost:3000",
         alias="NEXT_URL",
-        description="Next.js frontend URL for ISR revalidation"
+        description="Next.js frontend URL for ISR revalidation",
     )
     revalidate_secret: Optional[str] = Field(
         default=None,
-        alias="REVALIDATE_SECRET", 
-        description="Secret token for Next.js ISR revalidation API"
+        alias="REVALIDATE_SECRET",
+        description="Secret token for Next.js ISR revalidation API",
     )
 
     # Notification dispatch worker (kickoff reminders + probability-swing alerts).
@@ -179,7 +183,9 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False)
     mock_mode: bool = Field(default=False, alias="MOCK_MODE")
-    enable_legacy_inference: bool = Field(default=False, alias="ENABLE_LEGACY_INFERENCE")
+    enable_legacy_inference: bool = Field(
+        default=False, alias="ENABLE_LEGACY_INFERENCE"
+    )
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="json")
     enable_tracing: bool = Field(default=False)
@@ -198,18 +204,18 @@ class Settings(BaseSettings):
     use_enhanced_models: bool = Field(
         default=True,
         alias="USE_ENHANCED_MODELS",
-        description="Enable enhanced stacking ensemble with isotonic calibration"
+        description="Enable enhanced stacking ensemble with isotonic calibration",
     )
     use_enhanced_models_v7: bool = Field(
         default=False,
         alias="ENHANCED_MODELS_V7",
-        description="Load v7 enhanced ensemble artifacts when available; falls back to legacy models"
+        description="Load v7 enhanced ensemble artifacts when available; falls back to legacy models",
     )
     use_optuna_v4: bool = Field(
         default=True,
         alias="USE_OPTUNA_V4",
         description="Master switch for v4_optuna model artifacts. "
-                    "When False, only legacy _ensemble.pkl files are loaded.",
+        "When False, only legacy _ensemble.pkl files are loaded.",
     )
     use_phase7_models: bool = Field(
         default=False,
@@ -284,19 +290,19 @@ class Settings(BaseSettings):
         le=1.0,
         alias="OPTUNA_V4_CANARY_PCT",
         description="Fraction of leagues routed to v4_optuna models (0.0=0%, 1.0=100%). "
-                    "Routing is deterministic per league via MD5 hash so the same league "
-                    "always maps to the same model version for a given canary setting. "
-                    "Rollout schedule: 0.10 → 0.50 → 1.0.",
+        "Routing is deterministic per league via MD5 hash so the same league "
+        "always maps to the same model version for a given canary setting. "
+        "Rollout schedule: 0.10 → 0.50 → 1.0.",
     )
     brier_threshold: float = Field(
         default=0.13,
         alias="BRIER_THRESHOLD",
-        description="Alert threshold for Brier score (lower is better)"
+        description="Alert threshold for Brier score (lower is better)",
     )
     accuracy_threshold: float = Field(
         default=0.90,
         alias="ACCURACY_THRESHOLD",
-        description="Minimum accuracy threshold for model health"
+        description="Minimum accuracy threshold for model health",
     )
 
     # Scraper networking
@@ -320,7 +326,7 @@ class Settings(BaseSettings):
     cors_origins_raw: Optional[str] = Field(
         default=None,
         alias="CORS_ORIGINS",
-        description="Comma-separated or JSON list string of allowed CORS origins"
+        description="Comma-separated or JSON list string of allowed CORS origins",
     )
     cors_allowed_origins: List[str] = Field(
         default_factory=lambda: [
@@ -344,16 +350,20 @@ class Settings(BaseSettings):
     models_path: Path = Field(
         default_factory=lambda: _PROJECT_ROOT / "models",
         alias="MODELS_PATH",
-        description="Path to ML models directory"
+        description="Path to ML models directory",
     )
-    data_path: Path = Field(default_factory=lambda: (_PROJECT_ROOT / "data" / "processed"))
+    data_path: Path = Field(
+        default_factory=lambda: _PROJECT_ROOT / "data" / "processed"
+    )
     phase7_models_path: Path = Field(
         default_factory=lambda: _PROJECT_ROOT / "backend" / "models",
         alias="PHASE7_MODELS_PATH",
         description="Path containing v5_phase7 model artifacts.",
     )
     elo_parquet_path: Path = Field(
-        default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "elo_ratings.parquet",
+        default_factory=lambda: (
+            _PROJECT_ROOT / "data" / "processed" / "elo_ratings.parquet"
+        ),
         alias="ELO_PARQUET_PATH",
     )
     elo_home_advantage: float = Field(
@@ -376,7 +386,9 @@ class Settings(BaseSettings):
         ),
     )
     statsbomb_cache_path: Path = Field(
-        default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "statsbomb_features_cache.parquet",
+        default_factory=lambda: (
+            _PROJECT_ROOT / "data" / "processed" / "statsbomb_features_cache.parquet"
+        ),
         alias="STATSBOMB_CACHE_PATH",
     )
     statsbomb_staleness_max_days: int = Field(
@@ -385,17 +397,23 @@ class Settings(BaseSettings):
         alias="STATSBOMB_STALENESS_MAX_DAYS",
     )
     causal_report_path: Path = Field(
-        default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "causal_feature_report.json",
+        default_factory=lambda: (
+            _PROJECT_ROOT / "data" / "processed" / "causal_feature_report.json"
+        ),
         alias="CAUSAL_REPORT_PATH",
         description="Path to the Phase 6-B causal feature report (read-only at inference).",
     )
     pi_ratings_parquet_path: Path = Field(
-        default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "pi_ratings.parquet",
+        default_factory=lambda: (
+            _PROJECT_ROOT / "data" / "processed" / "pi_ratings.parquet"
+        ),
         alias="PI_RATINGS_PARQUET_PATH",
         description="Parquet artifact for Pi-rating system (Phase 8-5a). Mirrors elo_ratings.parquet pattern.",
     )
     berrar_ratings_parquet_path: Path = Field(
-        default_factory=lambda: _PROJECT_ROOT / "data" / "processed" / "berrar_ratings.parquet",
+        default_factory=lambda: (
+            _PROJECT_ROOT / "data" / "processed" / "berrar_ratings.parquet"
+        ),
         alias="BERRAR_RATINGS_PARQUET_PATH",
         description="Parquet artifact for Berrar rating system (Phase 8-5a.5).",
     )
@@ -415,7 +433,7 @@ class Settings(BaseSettings):
         le=1.0,
         alias="PHASE8_CANARY_PCT",
         description="Fraction of leagues routed to Phase 8 model artifacts (0.0=0%, 1.0=100%). "
-                    "Start at 0.10 and advance after 7-day soak. Mirrors PHASE7_CANARY_PCT pattern.",
+        "Start at 0.10 and advance after 7-day soak. Mirrors PHASE7_CANARY_PCT pattern.",
     )
     data_retention_days: int = Field(
         default=365,
@@ -430,23 +448,23 @@ class Settings(BaseSettings):
         ge=1,
         alias="ODDS_STALENESS_MAX_HOURS",
         description="Hours after which an odds snapshot is considered stale. Market drift "
-                    "features computed from snapshots older than this threshold are returned "
-                    "as DATA_GAP rather than surfacing stale movement as live signal.",
+        "features computed from snapshots older than this threshold are returned "
+        "as DATA_GAP rather than surfacing stale movement as live signal.",
     )
     phase8_enrichment_shadow: bool = Field(
         default=False,
         alias="PHASE8_ENRICHMENT_SHADOW",
         description="Shadow mode for Phase 8 enrichment. When True, live market drift and "
-                    "match-context features are computed and logged but NOT served in API "
-                    "responses — output remains DATA_GAP. Use for 48h quality soak before "
-                    "canary promotion. Set False to enable live enrichment.",
+        "match-context features are computed and logged but NOT served in API "
+        "responses — output remains DATA_GAP. Use for 48h quality soak before "
+        "canary promotion. Set False to enable live enrichment.",
     )
     use_catboost_learner: bool = Field(
         default=False,
         alias="USE_CATBOOST_LEARNER",
         description="Include CatBoost as a 4th base learner in the stacking ensemble. "
-                    "Gated by per-league SHAP ablation — only enable after contribution "
-                    "and diversity gain pass validation checklist.",
+        "Gated by per-league SHAP ablation — only enable after contribution "
+        "and diversity gain pass validation checklist.",
     )
     training_recency_halflife_seasons: float = Field(
         default=2.0,
@@ -454,15 +472,15 @@ class Settings(BaseSettings):
         le=10.0,
         alias="TRAINING_RECENCY_HALFLIFE_SEASONS",
         description="Half-life in seasons for exponential sample weighting during training. "
-                    "sample_weight = exp(-ln(2) / halflife * match_age_in_seasons). "
-                    "Default 2.0 preserves data volume while giving recency preference.",
+        "sample_weight = exp(-ln(2) / halflife * match_age_in_seasons). "
+        "Default 2.0 preserves data volume while giving recency preference.",
     )
     use_two_stage_draw_model: bool = Field(
         default=False,
         alias="USE_TWO_STAGE_DRAW_MODEL",
         description="Enable two-stage draw model: Stage 1 trains binary win/loss classifiers, "
-                    "Stage 2 derives draw probability as 1 - P(home_win) - P(away_win) with "
-                    "isotonic/Platt overlay. Gated per league by draw-F1 improvement >= 0.03.",
+        "Stage 2 derives draw probability as 1 - P(home_win) - P(away_win) with "
+        "isotonic/Platt overlay. Gated per league by draw-F1 improvement >= 0.03.",
     )
     edge_quality_abstain_threshold: float = Field(
         default=0.30,
@@ -470,8 +488,8 @@ class Settings(BaseSettings):
         le=1.0,
         alias="EDGE_QUALITY_ABSTAIN_THRESHOLD",
         description="edge_quality_score below this threshold triggers ABSTAIN in the "
-                    "recommendation layer. ABSTAIN also fires when any market drift feature "
-                    "is DATA_GAP (market family is always required for CLV computation).",
+        "recommendation layer. ABSTAIN also fires when any market drift feature "
+        "is DATA_GAP (market family is always required for CLV computation).",
     )
     ensemble_correlation_prune_threshold: float = Field(
         default=0.92,
@@ -479,8 +497,8 @@ class Settings(BaseSettings):
         le=1.0,
         alias="ENSEMBLE_CORRELATION_PRUNE_THRESHOLD",
         description="Pairwise probability correlation above which a redundant base learner "
-                    "is flagged for pruning — only when removal does not degrade draw-F1. "
-                    "Pruning rationale must be logged in calibration_report_{league}.json.",
+        "is flagged for pruning — only when removal does not degrade draw-F1. "
+        "Pruning rationale must be logged in calibration_report_{league}.json.",
     )
     shap_prune_threshold: float = Field(
         default=0.002,
@@ -488,8 +506,8 @@ class Settings(BaseSettings):
         le=0.1,
         alias="SHAP_PRUNE_THRESHOLD",
         description="Mean |SHAP| below which a feature family is flagged for review in the "
-                    "per-family ablation report. Families below threshold on 3+ leagues are "
-                    "candidates for removal — never auto-removed without ATE invalidation.",
+        "per-family ablation report. Families below threshold on 3+ leagues are "
+        "candidates for removal — never auto-removed without ATE invalidation.",
     )
     # ── Phase F: UCL soft-coverage and canary gates ──────────────────────────
     ucl_low_evidence_override: bool = Field(
@@ -508,9 +526,9 @@ class Settings(BaseSettings):
         ge=60,
         alias="LIVE_THRESHOLD_SECONDS",
         description="Threshold (seconds) for the edge_quality_score freshness linear decay: "
-                    "freshness_score = max(0, 1 - staleness_seconds / live_threshold_seconds). "
-                    "Features older than this threshold score 0.0 on freshness. "
-                    "Default 3600 (1 hour) — matches typical pre-match enrichment window.",
+        "freshness_score = max(0, 1 - staleness_seconds / live_threshold_seconds). "
+        "Features older than this threshold score 0.0 on freshness. "
+        "Default 3600 (1 hour) — matches typical pre-match enrichment window.",
     )
 
     # ── Phase 9 / V4 candidate data sources (shadow mode) ────────────────────
@@ -518,32 +536,42 @@ class Settings(BaseSettings):
         default=False,
         alias="USE_PHASE9_CANDIDATE_FEATURES",
         description="Enable Phase 9 V4 candidate feature computation. When True, hybrid xG "
-                    "and market-efficiency metadata are computed and appended to API "
-                    "response metadata['phase9_candidate_features']. Never touches the model "
-                    "input frame or probabilities — additive metadata only. Default False "
-                    "(shadow off). Set True in staging before promoting to production.",
+        "and market-efficiency metadata are computed and appended to API "
+        "response metadata['phase9_candidate_features']. Never touches the model "
+        "input frame or probabilities — additive metadata only. Default False "
+        "(shadow off). Set True in staging before promoting to production.",
     )
     phase9_shadow_only: bool = Field(
         default=True,
         alias="PHASE9_SHADOW_ONLY",
         description="When True, Phase 9 candidate features are written only to response "
-                    "metadata and logged — they do not influence predictions, value bets, "
-                    "or any downstream consumer. Set False only after a 7-day production "
-                    "soak and SHAP ablation gate passes.",
+        "metadata and logged — they do not influence predictions, value bets, "
+        "or any downstream consumer. Set False only after a 7-day production "
+        "soak and SHAP ablation gate passes.",
     )
     phase9_sources_path: str = Field(
         default="data/processed/v4_sources",
         alias="PHASE9_SOURCES_PATH",
         description="Local directory where backfill_v4_data_sources.py writes Parquet "
-                    "snapshots and the JSON manifest. Never written to during live requests.",
+        "snapshots and the JSON manifest. Never written to during live requests.",
     )
     enable_espn_provider: bool = Field(default=True, alias="ENABLE_ESPN_PROVIDER")
-    enable_football_data_provider: bool = Field(default=True, alias="ENABLE_FOOTBALL_DATA_PROVIDER")
-    enable_api_football_provider: bool = Field(default=False, alias="ENABLE_API_FOOTBALL_PROVIDER")
-    enable_sportmonks_provider: bool = Field(default=False, alias="ENABLE_SPORTMONKS_PROVIDER")
-    enable_the_odds_api_provider: bool = Field(default=False, alias="ENABLE_THE_ODDS_API_PROVIDER")
+    enable_football_data_provider: bool = Field(
+        default=True, alias="ENABLE_FOOTBALL_DATA_PROVIDER"
+    )
+    enable_api_football_provider: bool = Field(
+        default=False, alias="ENABLE_API_FOOTBALL_PROVIDER"
+    )
+    enable_sportmonks_provider: bool = Field(
+        default=False, alias="ENABLE_SPORTMONKS_PROVIDER"
+    )
+    enable_the_odds_api_provider: bool = Field(
+        default=False, alias="ENABLE_THE_ODDS_API_PROVIDER"
+    )
     provider_live_tests: bool = Field(default=False, alias="PROVIDER_LIVE_TESTS")
-    provider_request_budget_enabled: bool = Field(default=True, alias="PROVIDER_REQUEST_BUDGET_ENABLED")
+    provider_request_budget_enabled: bool = Field(
+        default=True, alias="PROVIDER_REQUEST_BUDGET_ENABLED"
+    )
 
     # Backend-only provider credentials.
     # Canonical names follow the directive contract; old aliases retained for backward compat.
@@ -699,7 +727,15 @@ class Settings(BaseSettings):
     def _coerce_debug_bool(cls, value):
         if isinstance(value, str):
             normalized = value.strip().lower()
-            if normalized in {"release", "prod", "production", "false", "0", "no", "off"}:
+            if normalized in {
+                "release",
+                "prod",
+                "production",
+                "false",
+                "0",
+                "no",
+                "off",
+            }:
                 return False
             if normalized in {"debug", "dev", "development", "true", "1", "yes", "on"}:
                 return True
@@ -709,17 +745,23 @@ class Settings(BaseSettings):
     def _validate_environment(self) -> "Settings":
         env = self.app_env.lower()
         if env not in {"development", "staging", "production", "test"}:
-            raise ValueError("app_env must be one of development, staging, production, test")
+            raise ValueError(
+                "app_env must be one of development, staging, production, test"
+            )
 
         if env == "production":
             if self.debug:
                 raise ValueError("debug must be disabled in production")
             if self.secret_key == _DEFAULT_SECRET or len(self.secret_key) < 32:
-                raise ValueError("SECRET_KEY must be provided and at least 32 characters in production")
+                raise ValueError(
+                    "SECRET_KEY must be provided and at least 32 characters in production"
+                )
             if not self.enable_security_headers:
                 raise ValueError("Security headers must remain enabled in production")
             if self.scraper_allow_insecure_fallback:
-                raise ValueError("SCRAPER_ALLOW_INSECURE_FALLBACK must be disabled in production")
+                raise ValueError(
+                    "SCRAPER_ALLOW_INSECURE_FALLBACK must be disabled in production"
+                )
             if self.allow_sqlite_fallback:
                 raise ValueError("ALLOW_SQLITE_FALLBACK must be disabled in production")
 
@@ -730,9 +772,7 @@ class Settings(BaseSettings):
         self.models_path.mkdir(parents=True, exist_ok=True)
         self.data_path.mkdir(parents=True, exist_ok=True)
         # Normalize CORS origins from raw env once model is initialized
-        self.cors_allowed_origins = [
-            str(o).rstrip("/") for o in self._parse_cors_raw()
-        ]
+        self.cors_allowed_origins = [str(o).rstrip("/") for o in self._parse_cors_raw()]
 
     # Backwards-compat properties expected by legacy code paths
     @property
@@ -777,6 +817,7 @@ class Settings(BaseSettings):
         # Parse redis://host:port or redis://user:pass@host:port
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(self.redis_url)
             return parsed.hostname
         except Exception:

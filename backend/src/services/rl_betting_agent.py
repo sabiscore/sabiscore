@@ -6,6 +6,7 @@ Fallback: deterministic Kelly-fraction policy (always available, no dependencies
 The SAC model is written to rl_agent_path ONLY by scripts/train_rl_agent.py after all
 four production gates pass on 500 held-out episodes (C16).
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 try:
     from stable_baselines3 import SAC as _SB3_SAC  # type: ignore
+
     _SB3_AVAILABLE = True
 except Exception:
     _SB3_AVAILABLE = False
@@ -77,13 +79,17 @@ class RLBettingAgent:
         abstention_enabled: Optional[bool] = None,
     ) -> None:
         self.epistemic_threshold = (
-            settings.epistemic_threshold if epistemic_threshold is None else epistemic_threshold
+            settings.epistemic_threshold
+            if epistemic_threshold is None
+            else epistemic_threshold
         )
         self.max_kelly_cap = (
             settings.rl_max_kelly_cap if max_kelly_cap is None else max_kelly_cap
         )
         self.abstention_enabled = (
-            settings.rl_abstention_enabled if abstention_enabled is None else abstention_enabled
+            settings.rl_abstention_enabled
+            if abstention_enabled is None
+            else abstention_enabled
         )
         self._sac_model = self._load_sac_model()
 
@@ -96,7 +102,9 @@ class RLBettingAgent:
             return None
         model_path = Path(settings.rl_agent_path)
         if not model_path.exists():
-            logger.debug("SAC model not found at %s; using deterministic fallback", model_path)
+            logger.debug(
+                "SAC model not found at %s; using deterministic fallback", model_path
+            )
             return None
         try:
             model = _SB3_SAC.load(str(model_path))
@@ -175,15 +183,27 @@ class RLBettingAgent:
         edge_draw = draw_prob - mkt_draw
         edge_away = away_prob - mkt_away
 
-        state = np.array([
-            home_prob, draw_prob, away_prob,
-            float(epistemic_unc), float(aleatoric_unc),
-            edge_home, edge_draw, edge_away,
-            home_odds, draw_odds, away_odds,
-            float(bankroll_pct), float(current_drawdown),
-            float(rolling_sharpe), float(win_rate_20),
-            float(rolling_ece_20),
-        ], dtype=np.float32)
+        state = np.array(
+            [
+                home_prob,
+                draw_prob,
+                away_prob,
+                float(epistemic_unc),
+                float(aleatoric_unc),
+                edge_home,
+                edge_draw,
+                edge_away,
+                home_odds,
+                draw_odds,
+                away_odds,
+                float(bankroll_pct),
+                float(current_drawdown),
+                float(rolling_sharpe),
+                float(win_rate_20),
+                float(rolling_ece_20),
+            ],
+            dtype=np.float32,
+        )
         return state
 
     def _recommend_sac(
@@ -200,8 +220,15 @@ class RLBettingAgent:
         confidence: float,
     ) -> RLRecommendationPayload:
         state = self._build_state(
-            probabilities, odds, epistemic_unc, aleatoric_unc,
-            bankroll_pct, current_drawdown, rolling_sharpe, win_rate_20, rolling_ece_20,
+            probabilities,
+            odds,
+            epistemic_unc,
+            aleatoric_unc,
+            bankroll_pct,
+            current_drawdown,
+            rolling_sharpe,
+            win_rate_20,
+            rolling_ece_20,
         )
         try:
             action, _ = self._sac_model.predict(state, deterministic=True)
@@ -216,7 +243,11 @@ class RLBettingAgent:
 
         # Scale stake: sigmoid maps [-2,2] → roughly [0.12, 0.88]; rescale to [0, max_kelly]
         stake_fraction = float(
-            np.clip(1.0 / (1.0 + np.exp(-stake_raw)) * self.max_kelly_cap, 0.0, self.max_kelly_cap)
+            np.clip(
+                1.0 / (1.0 + np.exp(-stake_raw)) * self.max_kelly_cap,
+                0.0,
+                self.max_kelly_cap,
+            )
         )
 
         abstain = outcome_idx == _IDX_ABSTAIN
@@ -260,7 +291,9 @@ class RLBettingAgent:
     ) -> RLRecommendationPayload:
         market, market_prob, market_odds = self._pick_market(probabilities, odds)
 
-        should_abstain = self.abstention_enabled and epistemic_unc > self.epistemic_threshold
+        should_abstain = (
+            self.abstention_enabled and epistemic_unc > self.epistemic_threshold
+        )
         raw_kelly = self._kelly_fraction(market_prob, market_odds)
         stake_fraction = 0.0 if should_abstain else min(raw_kelly, self.max_kelly_cap)
 
@@ -325,7 +358,9 @@ class RLBettingAgent:
         abstain: bool,
         market_odds: float,
     ) -> Dict[str, float]:
-        r_pnl = 0.0 if abstain else min(1.0, stake_fraction * max(market_odds - 1.0, 0.0))
+        r_pnl = (
+            0.0 if abstain else min(1.0, stake_fraction * max(market_odds - 1.0, 0.0))
+        )
         r_ic = max(-1.0, min(1.0, (confidence * 2.0) - 1.0))
         r_cal = -abs(epistemic_unc)
         r_risk = 0.0 if abstain else max(-1.0, min(1.0, r_pnl - stake_fraction))

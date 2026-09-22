@@ -18,14 +18,20 @@ from ..core.exceptions import DataUnavailableError
 from ..data.aggregator import DataAggregator, get_enhanced_aggregator
 
 try:
-    from ..features.phase9_xg_market_features import build_market_efficiency_report as _build_market_efficiency
+    from ..features.phase9_xg_market_features import (
+        build_market_efficiency_report as _build_market_efficiency,
+    )
+
     _PHASE9_MARKET_AVAILABLE = True
 except ImportError:
     _build_market_efficiency = None  # type: ignore[assignment]
     _PHASE9_MARKET_AVAILABLE = False
 from ..data.transformers import FeatureTransformer
 from ..models.edge_detector import EdgeDetector
-from ..models.active_generation import active_artifact_path, active_generation_is_certified
+from ..models.active_generation import (
+    active_artifact_path,
+    active_generation_is_certified,
+)
 from ..models.ensemble import SabiScoreEnsemble
 from ..models.evaluation.metrics import expected_brier_score
 from ..monitoring.metrics import metrics_collector
@@ -100,7 +106,7 @@ class PredictionService:
             metrics_collector.record_prediction(
                 duration_ms=(time.time() - start_time) * 1000,
                 confidence=cached.confidence,
-                cache_hit=True
+                cache_hit=True,
             )
             return cached
 
@@ -129,7 +135,7 @@ class PredictionService:
             metrics_collector.record_error(
                 error_type="PredictionError",
                 message=str(exc),
-                context={"match_id": match_id, "league": league_slug}
+                context={"match_id": match_id, "league": league_slug},
             )
             raise
 
@@ -146,10 +152,16 @@ class PredictionService:
             if generation_certified
             else []
         )
-        explanations = self._generate_explanations(feature_vector, ensemble, feature_frame)
+        explanations = self._generate_explanations(
+            feature_vector, ensemble, feature_frame
+        )
         processing_ms = int((time.time() - start_time) * 1000)
-        metadata = self._build_metadata(league_slug, ensemble, processing_ms, feature_context)
-        metadata["certification_state"] = "CERTIFIED" if generation_certified else "UNVERIFIED"
+        metadata = self._build_metadata(
+            league_slug, ensemble, processing_ms, feature_context
+        )
+        metadata["certification_state"] = (
+            "CERTIFIED" if generation_certified else "UNVERIFIED"
+        )
         metadata["stake_permitted"] = generation_certified
 
         # UCL soft-coverage: inject LOW_EVIDENCE tier and caveat into metadata.
@@ -165,7 +177,9 @@ class PredictionService:
             metadata["ucl_generic_model"] = True
 
         # Phase 9 / V4 market-efficiency shadow metadata — never touches probabilities
-        if _PHASE9_MARKET_AVAILABLE and getattr(settings, "use_phase9_candidate_features", False):
+        if _PHASE9_MARKET_AVAILABLE and getattr(
+            settings, "use_phase9_candidate_features", False
+        ):
             try:
                 metadata["phase9_candidate_features"] = {
                     "market_efficiency": _build_market_efficiency(
@@ -176,10 +190,14 @@ class PredictionService:
             except Exception as _p9_exc:
                 logger.warning("Phase 9 market-efficiency report failed: %s", _p9_exc)
                 metadata["phase9_candidate_features"] = {}
-            metadata["phase9_shadow_only"] = getattr(settings, "phase9_shadow_only", True)
+            metadata["phase9_shadow_only"] = getattr(
+                settings, "phase9_shadow_only", True
+            )
 
         sample_size = int(metadata.get("training_samples") or 500)
-        confidence_intervals = self._calculate_confidence_intervals(probabilities, sample_size=sample_size)
+        confidence_intervals = self._calculate_confidence_intervals(
+            probabilities, sample_size=sample_size
+        )
         uncertainty_breakdown = self.uncertainty_service.decompose(
             feature_frame=feature_frame,
             probabilities=probabilities,
@@ -204,8 +222,12 @@ class PredictionService:
         metadata["aleatoric_uncertainty"] = uncertainty_breakdown.aleatoric_unc
         metadata["confidence_tier"] = uncertainty_breakdown.confidence_tier
         metadata.setdefault("calibration_method", "platt_scaling")
-        metadata.setdefault("calibration_validated", metadata.get("accuracy") is not None)
-        metadata["feature_completeness"] = getattr(self.transformer, "feature_completeness", 1.0)
+        metadata.setdefault(
+            "calibration_validated", metadata.get("accuracy") is not None
+        )
+        metadata["feature_completeness"] = getattr(
+            self.transformer, "feature_completeness", 1.0
+        )
 
         prediction = PredictionResponse(
             match_id=match_id,
@@ -230,7 +252,7 @@ class PredictionService:
 
         self._cache_prediction(cache_key, prediction)
         self._update_metrics(prediction)
-        
+
         # Record production metrics
         # ValueBetResponse uses edge_percent (percentage) not edge
         max_edge_pct = max([vb.edge_percent for vb in value_bets], default=0.0)
@@ -238,8 +260,10 @@ class PredictionService:
             duration_ms=processing_ms,
             confidence=prediction.confidence,
             value_bets=len(value_bets),
-            edge=max_edge_pct / 100.0 if max_edge_pct > 0 else None,  # Convert to decimal
-            cache_hit=False
+            edge=max_edge_pct / 100.0
+            if max_edge_pct > 0
+            else None,  # Convert to decimal
+            cache_hit=False,
         )
 
         return prediction
@@ -247,17 +271,23 @@ class PredictionService:
     def _get_ensemble_for_league(self, league_slug: str) -> SabiScoreEnsemble:
         provided = self._provided_model
         if provided is not None and getattr(provided, "is_trained", False):
-            provided_league = self._slugify_league(provided.model_metadata.get("league", ""))
+            provided_league = self._slugify_league(
+                provided.model_metadata.get("league", "")
+            )
             if not provided_league or provided_league == league_slug:
                 with self._cache_lock:
                     self._ensemble_cache.setdefault(league_slug, provided)
-                    self._metadata_cache.setdefault(league_slug, provided.model_metadata or {})
+                    self._metadata_cache.setdefault(
+                        league_slug, provided.model_metadata or {}
+                    )
                 return provided
 
         with self._cache_lock:
             cached = self._ensemble_cache.get(league_slug)
             if cached is not None and getattr(cached, "is_trained", False):
-                self._cache_access_times[league_slug] = datetime.now(timezone.utc).timestamp()
+                self._cache_access_times[league_slug] = datetime.now(
+                    timezone.utc
+                ).timestamp()
                 return cached
 
         candidate_paths = []
@@ -279,11 +309,17 @@ class PredictionService:
 
             if settings.use_optuna_v4 and self._in_canary_group(league_slug):
                 for _search_dir in (settings.models_path, _backend_models):
-                    candidate_paths.append(_search_dir / f"{league_slug}_ensemble_v4_optuna.pkl")
+                    candidate_paths.append(
+                        _search_dir / f"{league_slug}_ensemble_v4_optuna.pkl"
+                    )
 
             if settings.use_enhanced_models_v7:
-                candidate_paths.append(settings.models_path / f"{league_slug}_ensemble_v7.pkl")
-                candidate_paths.append(settings.models_path / f"{league_slug}_enhanced_v2.pkl")
+                candidate_paths.append(
+                    settings.models_path / f"{league_slug}_ensemble_v7.pkl"
+                )
+                candidate_paths.append(
+                    settings.models_path / f"{league_slug}_enhanced_v2.pkl"
+                )
 
             candidate_paths.append(settings.models_path / f"{league_slug}_ensemble.pkl")
 
@@ -296,7 +332,10 @@ class PredictionService:
         model = SabiScoreEnsemble.load_model(str(model_path))
         with self._cache_lock:
             # LRU eviction if cache is full
-            if len(self._ensemble_cache) >= self.MAX_CACHED_MODELS and self._cache_access_times:
+            if (
+                len(self._ensemble_cache) >= self.MAX_CACHED_MODELS
+                and self._cache_access_times
+            ):
                 oldest_key = min(
                     self._cache_access_times,
                     key=lambda key: self._cache_access_times.get(key, 0.0),
@@ -305,10 +344,12 @@ class PredictionService:
                 self._ensemble_cache.pop(oldest_key, None)
                 self._metadata_cache.pop(oldest_key, None)
                 self._cache_access_times.pop(oldest_key, None)
-            
+
             self._ensemble_cache[league_slug] = model
             self._metadata_cache[league_slug] = model.model_metadata or {}
-            self._cache_access_times[league_slug] = datetime.now(timezone.utc).timestamp()
+            self._cache_access_times[league_slug] = datetime.now(
+                timezone.utc
+            ).timestamp()
         return model
 
     def _build_feature_frame(
@@ -329,18 +370,20 @@ class PredictionService:
         # This ensures we align to the canonical 58-feature production schema.
         self.transformer.expected_columns = columns
         feature_frame = self.transformer.engineer_features(match_data)
-        
+
         # Verify columns match
         missing = [c for c in columns if c not in feature_frame.columns]
         if missing:
-            logger.warning(f"Transformer output missing columns expected by model: {missing}")
+            logger.warning(
+                f"Transformer output missing columns expected by model: {missing}"
+            )
             # Fill missing with 0
             for c in missing:
                 feature_frame[c] = 0.0
-                
+
         # Ensure correct order
         feature_frame = cast(pd.DataFrame, feature_frame.loc[:, columns])
-        
+
         # Convert to dict for return
         feature_values = {
             str(name): float(value)
@@ -554,7 +597,8 @@ class PredictionService:
         self._match_context_cache[cache_key] = {
             "match_data": match_data,
             "feature_context": feature_context,
-            "expires_at": datetime.now(timezone.utc).timestamp() + self._match_context_ttl,
+            "expires_at": datetime.now(timezone.utc).timestamp()
+            + self._match_context_ttl,
         }
 
     def _resolve_league_name(self, league: Optional[str]) -> str:
@@ -583,7 +627,9 @@ class PredictionService:
             if edge <= self.edge_detector.min_edge_threshold:
                 continue
 
-            kelly = self.edge_detector.calculate_kelly_stake(probability, offered, bankroll)
+            kelly = self.edge_detector.calculate_kelly_stake(
+                probability, offered, bankroll
+            )
             edge_ngn = edge * bankroll
             # clv_ngn requires closing odds tracked via OddsHistory after match completion.
             # Until closing odds are available, propagate edge_ngn without a scaling proxy.
@@ -609,7 +655,9 @@ class PredictionService:
         return results
 
     @staticmethod
-    def _enforce_certification_gate(prediction: PredictionResponse) -> PredictionResponse:
+    def _enforce_certification_gate(
+        prediction: PredictionResponse,
+    ) -> PredictionResponse:
         """Fail closed for cached responses produced before certification gating existed."""
         metadata = dict(prediction.metadata or {})
         metadata["certification_state"] = "UNVERIFIED"
@@ -653,7 +701,9 @@ class PredictionService:
 
                 return PredictionResponse(**json.loads(cached))
         except Exception as exc:
-            logger.debug("Cached payload could not be restored for %s: %s", cache_key, exc)
+            logger.debug(
+                "Cached payload could not be restored for %s: %s", cache_key, exc
+            )
         return None
 
     def _cache_prediction(self, cache_key: str, prediction: PredictionResponse) -> None:
@@ -701,8 +751,13 @@ class PredictionService:
                 if result:
                     return result
             except Exception as e:
-                logger.debug("ModelExplainer failed, falling back to deterministic feature ranking: %s", e)
-        ranked = sorted(feature_vector.items(), key=lambda item: abs(item[1]), reverse=True)[:5]
+                logger.debug(
+                    "ModelExplainer failed, falling back to deterministic feature ranking: %s",
+                    e,
+                )
+        ranked = sorted(
+            feature_vector.items(), key=lambda item: abs(item[1]), reverse=True
+        )[:5]
         return {
             "top_features": [
                 {"name": name, "impact": float(value)} for name, value in ranked
@@ -729,7 +784,8 @@ class PredictionService:
         }
         return {
             "model_key": f"{league_slug}_ensemble",
-            "model_version": meta.get("model_version") or meta.get("dataset_signature", "unknown"),
+            "model_version": meta.get("model_version")
+            or meta.get("dataset_signature", "unknown"),
             "league": meta.get("league", league_slug),
             "trained_at": meta.get("trained_at"),
             "accuracy": meta.get("accuracy"),
@@ -747,13 +803,13 @@ class PredictionService:
 
         total = self.metrics["predictions_count"]
         self.metrics["avg_confidence"] = (
-            (self.metrics["avg_confidence"] * (total - 1) + prediction.confidence) / total
-        )
+            self.metrics["avg_confidence"] * (total - 1) + prediction.confidence
+        ) / total
         if prediction.value_bets:
             avg_edge = float(np.mean([vb.edge_ngn for vb in prediction.value_bets]))
             self.metrics["avg_edge"] = (
-                (self.metrics["avg_edge"] * (total - 1) + avg_edge) / total
-            )
+                self.metrics["avg_edge"] * (total - 1) + avg_edge
+            ) / total
 
     async def get_metrics(self) -> Dict[str, Any]:
         return {**self.metrics}

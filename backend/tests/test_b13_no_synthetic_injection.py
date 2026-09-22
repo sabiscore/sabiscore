@@ -241,11 +241,10 @@ class TestFeatureCounts:
         assert CANONICAL_FEATURES_86 is CANONICAL_FEATURES_83
 
     def test_no_duplicate_features_in_phase8(self):
-        dupes = [
-            f for f in CANONICAL_FEATURES_83
-            if CANONICAL_FEATURES_83.count(f) > 1
-        ]
-        assert not dupes, f"Duplicate features in CANONICAL_FEATURES_83: {sorted(set(dupes))}"
+        dupes = [f for f in CANONICAL_FEATURES_83 if CANONICAL_FEATURES_83.count(f) > 1]
+        assert not dupes, (
+            f"Duplicate features in CANONICAL_FEATURES_83: {sorted(set(dupes))}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +260,9 @@ class TestPhase8MarketDriftNoSyntheticInjection:
     sentinel), not 0 or any positive integer.
     """
 
-    def _synth_with_freshness(self, data_gaps: list, freshness: dict) -> FullMatchAnalysisResponse:
+    def _synth_with_freshness(
+        self, data_gaps: list, freshness: dict
+    ) -> FullMatchAnalysisResponse:
         """Minimal synthesize() call carrying feature_freshness_seconds metadata."""
         return SYNTH.synthesize(
             match_id="b13_market::001",
@@ -622,7 +623,10 @@ class TestComputeMatchContextDataGap:
         """Missing LeagueStanding rows → DATA_GAP with None freshness."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from src.features.match_context import CONTEXT_FEATURE_NAMES, compute_match_context
+        from src.features.match_context import (
+            CONTEXT_FEATURE_NAMES,
+            compute_match_context,
+        )
 
         mock_scalars = MagicMock()
         mock_scalars.all.return_value = []
@@ -680,10 +684,15 @@ class TestComputeMatchContextDataGap:
         """UCL group stage uses UCL_STAGE_IMPORTANCE constant — no DB call needed."""
         from unittest.mock import AsyncMock
 
-        from src.features.match_context import UCL_STAGE_IMPORTANCE, compute_match_context
+        from src.features.match_context import (
+            UCL_STAGE_IMPORTANCE,
+            compute_match_context,
+        )
 
         mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(side_effect=AssertionError("DB should not be called for UCL"))
+        mock_db.execute = AsyncMock(
+            side_effect=AssertionError("DB should not be called for UCL")
+        )
 
         result = await compute_match_context(
             home_team_id="team_ucl_001",
@@ -694,14 +703,19 @@ class TestComputeMatchContextDataGap:
         )
 
         assert result.data_gaps == [], "UCL with known stage must not be DATA_GAP"
-        assert result.features["match_importance_score"] == UCL_STAGE_IMPORTANCE["group"]
+        assert (
+            result.features["match_importance_score"] == UCL_STAGE_IMPORTANCE["group"]
+        )
 
     @pytest.mark.asyncio
     async def test_ucl_knockout_importance_scales_correctly(self):
         """UCL r16→final stages must return UCL_STAGE_IMPORTANCE values."""
         from unittest.mock import AsyncMock
 
-        from src.features.match_context import UCL_STAGE_IMPORTANCE, compute_match_context
+        from src.features.match_context import (
+            UCL_STAGE_IMPORTANCE,
+            compute_match_context,
+        )
 
         mock_db = AsyncMock()
 

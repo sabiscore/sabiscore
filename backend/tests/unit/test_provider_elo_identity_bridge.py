@@ -1,4 +1,5 @@
 """SAB-20 regressions for live provider identity -> durable Elo bridging."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -182,32 +183,41 @@ async def test_provider_id_bridge_is_durable_and_conflicts_fail_closed(
         index=4,
     )
 
-    assert await bind_provider_elo_team_id(
-        provider="football-data.org",
-        provider_team_id=65,
-        provider_team_name="Manchester City FC",
-        competition="EPL",
-        team_id="fdco-team-epl-man_city",
-        db=session,
-        evidence={"source": "unit-test"},
-    ) is True
+    assert (
+        await bind_provider_elo_team_id(
+            provider="football-data.org",
+            provider_team_id=65,
+            provider_team_name="Manchester City FC",
+            competition="EPL",
+            team_id="fdco-team-epl-man_city",
+            db=session,
+            evidence={"source": "unit-test"},
+        )
+        is True
+    )
     await session.commit()
 
-    assert await resolve_provider_elo_team_id(
-        provider="football-data.org",
-        provider_team_id=65,
-        competition="EPL",
-        db=session,
-    ) == "fdco-team-epl-man_city"
+    assert (
+        await resolve_provider_elo_team_id(
+            provider="football-data.org",
+            provider_team_id=65,
+            competition="EPL",
+            db=session,
+        )
+        == "fdco-team-epl-man_city"
+    )
 
-    assert await bind_provider_elo_team_id(
-        provider="football-data.org",
-        provider_team_id="65",
-        provider_team_name="Manchester City",
-        competition="EPL",
-        team_id="fdco-team-epl-man_city",
-        db=session,
-    ) is True
+    assert (
+        await bind_provider_elo_team_id(
+            provider="football-data.org",
+            provider_team_id="65",
+            provider_team_name="Manchester City",
+            competition="EPL",
+            team_id="fdco-team-epl-man_city",
+            db=session,
+        )
+        is True
+    )
     await session.commit()
 
     mapping = (
@@ -220,7 +230,10 @@ async def test_provider_id_bridge_is_durable_and_conflicts_fail_closed(
         )
     ).scalar_one()
     assert mapping.provider_team_name == "Manchester City"
-    assert mapping.evidence and mapping.evidence["identity_basis"] == "real_durable_elo_history"
+    assert (
+        mapping.evidence
+        and mapping.evidence["identity_basis"] == "real_durable_elo_history"
+    )
 
     with pytest.raises(ValueError, match="conflicts with an existing Elo team mapping"):
         await bind_provider_elo_team_id(
@@ -276,13 +289,17 @@ async def test_new_fixture_uses_historical_elo_teams_and_true_provider_ids(
     assert match.away_team_id == "fdco-team-serie_a-fiorentina"
 
     elo_bridges = (
-        await session.execute(
-            select(ProviderEloTeamMapping).where(
-                ProviderEloTeamMapping.provider == "football-data.org",
-                ProviderEloTeamMapping.competition == "SERIE_A",
+        (
+            await session.execute(
+                select(ProviderEloTeamMapping).where(
+                    ProviderEloTeamMapping.provider == "football-data.org",
+                    ProviderEloTeamMapping.competition == "SERIE_A",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {row.provider_team_id for row in elo_bridges} == {"100", "101"}
     assert {row.team_id for row in elo_bridges} == {
         "fdco-team-serie_a-roma",
@@ -290,13 +307,17 @@ async def test_new_fixture_uses_historical_elo_teams_and_true_provider_ids(
     }
 
     canonical_mappings = (
-        await session.execute(
-            select(ProviderTeamMapping).where(
-                ProviderTeamMapping.provider == "football-data.org",
-                ProviderTeamMapping.competition == "SERIE_A",
+        (
+            await session.execute(
+                select(ProviderTeamMapping).where(
+                    ProviderTeamMapping.provider == "football-data.org",
+                    ProviderTeamMapping.competition == "SERIE_A",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {row.provider_team_id for row in canonical_mappings} == {"100", "101"}
 
 
@@ -376,13 +397,17 @@ async def test_existing_scheduled_fixture_is_not_silently_rekeyed(
     )
 
     elo_bridges = (
-        await session.execute(
-            select(ProviderEloTeamMapping).where(
-                ProviderEloTeamMapping.provider == "football-data.org",
-                ProviderEloTeamMapping.competition == "SERIE_A",
+        (
+            await session.execute(
+                select(ProviderEloTeamMapping).where(
+                    ProviderEloTeamMapping.provider == "football-data.org",
+                    ProviderEloTeamMapping.competition == "SERIE_A",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {row.provider_team_id for row in elo_bridges} == {"100", "101"}
 
 
@@ -429,7 +454,9 @@ async def test_history_free_club_stays_unbridged_and_unresolved(
                     ProviderEloTeamMapping.competition == "EPL",
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     assert "200" not in bridge_ids
     assert "201" in bridge_ids
@@ -602,12 +629,19 @@ async def test_canonical_provider_id_anchor_survives_display_name_change(
 
     assert second == first
     mappings = (
-        await session.execute(
-            select(ProviderTeamMapping).where(
-                ProviderTeamMapping.provider == "football-data.org",
-                ProviderTeamMapping.competition == "EPL",
+        (
+            await session.execute(
+                select(ProviderTeamMapping).where(
+                    ProviderTeamMapping.provider == "football-data.org",
+                    ProviderTeamMapping.competition == "EPL",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {row.provider_team_id for row in mappings} == {"65", "61"}
-    assert {row.provider_team_name for row in mappings} == {"Manchester City", "Chelsea"}
+    assert {row.provider_team_name for row in mappings} == {
+        "Manchester City",
+        "Chelsea",
+    }

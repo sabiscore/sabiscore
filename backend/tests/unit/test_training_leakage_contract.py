@@ -101,7 +101,11 @@ def test_a_matchs_own_result_never_enters_its_own_features():
     # match that was already a home win stays a home win, and the control below
     # would pass vacuously while proving nothing.
     original_label = (
-        0 if original["hg"] > original["ag"] else 1 if original["hg"] == original["ag"] else 2
+        0
+        if original["hg"] > original["ag"]
+        else 1
+        if original["hg"] == original["ag"]
+        else 2
     )
     flipped_score = (0, 4) if original_label != 2 else (4, 0)
 
@@ -257,7 +261,9 @@ def test_dataset_fingerprint_is_order_independent(tmp_path):
     assert len(digests) == 1
 
 
-@pytest.mark.parametrize("field", ["dataset", "labels", "features", "training_config", "environment"])
+@pytest.mark.parametrize(
+    "field", ["dataset", "labels", "features", "training_config", "environment"]
+)
 def test_reproducibility_digest_covers_every_input_field(field, tmp_path):
     """The digest must respond to each input it claims to cover.
 
@@ -405,7 +411,10 @@ def _manifest_kwargs(**overrides: object) -> dict:
 def test_manifest_cites_certification_policy_and_metric_contract_by_hash():
     """The two hashes the module docstring promises must actually be present."""
     from src.models.certification_policy import policy_sha256
-    from src.models.training_manifest import build_training_manifest, metric_contract_sha256
+    from src.models.training_manifest import (
+        build_training_manifest,
+        metric_contract_sha256,
+    )
 
     manifest = build_training_manifest(**_manifest_kwargs())
 

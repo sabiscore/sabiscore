@@ -169,7 +169,9 @@ class FootballDataOrgProvider(BaseProvider):
             return result.model_copy(update={"request_context": request_context})
 
         raw_matches_any = payload.get("matches") if isinstance(payload, dict) else None
-        raw_matches: list[dict[str, Any]] = raw_matches_any if isinstance(raw_matches_any, list) else []
+        raw_matches: list[dict[str, Any]] = (
+            raw_matches_any if isinstance(raw_matches_any, list) else []
+        )
         records = [
             self._normalize_match(raw=match, competition=canonical_competition)
             for match in raw_matches
@@ -215,7 +217,9 @@ class FootballDataOrgProvider(BaseProvider):
             return result.model_copy(update={"request_context": request_context})
 
         raw_groups_any = payload.get("standings") if isinstance(payload, dict) else None
-        raw_groups: list[dict[str, Any]] = raw_groups_any if isinstance(raw_groups_any, list) else []
+        raw_groups: list[dict[str, Any]] = (
+            raw_groups_any if isinstance(raw_groups_any, list) else []
+        )
         records: list[StandingsRecord] = []
         for group in raw_groups:
             if not isinstance(group, dict) or group.get("type") != "TOTAL":
@@ -238,7 +242,9 @@ class FootballDataOrgProvider(BaseProvider):
             trust_tier=self.trust_tier,
             records=[r.model_dump(mode="json") for r in records],
             quota=self._quota_from_headers(headers),
-            warnings=[f"rejected: {r.rejection_reason}" for r in records if not r.coherent],
+            warnings=[
+                f"rejected: {r.rejection_reason}" for r in records if not r.coherent
+            ],
             raw_snapshot_id=stable_hash(payload),
             request_context=request_context,
         )
@@ -263,11 +269,15 @@ class FootballDataOrgProvider(BaseProvider):
                 status=ProviderStatus.UNAVAILABLE,
                 trust_tier=self.trust_tier,
                 error_code="provider_disabled_or_unconfigured",
-                warnings=["provider must be enabled and configured with a backend credential"],
+                warnings=[
+                    "provider must be enabled and configured with a backend credential"
+                ],
             )
         return None
 
-    def _unsupported_competition(self, operation: str, competition: str) -> ProviderResult:
+    def _unsupported_competition(
+        self, operation: str, competition: str
+    ) -> ProviderResult:
         return ProviderResult(
             provider=self.provider_id,
             operation=operation,
@@ -280,7 +290,9 @@ class FootballDataOrgProvider(BaseProvider):
     def _network_failure(self, operation: str, exc: Exception) -> ProviderResult:
         return self._transport_failure_result(operation, exc)
 
-    def _normalize_match(self, *, raw: dict[str, Any], competition: str) -> FixtureRecord:
+    def _normalize_match(
+        self, *, raw: dict[str, Any], competition: str
+    ) -> FixtureRecord:
         try:
             event_id = str(raw["id"])
             home = raw["homeTeam"]
@@ -361,7 +373,9 @@ class FootballDataOrgProvider(BaseProvider):
     def _quota_from_headers(self, headers: Any) -> ProviderQuota:
         from ..core.config import settings
 
-        remaining_minute = headers.get("X-Requests-Available-Minute") if headers else None
+        remaining_minute = (
+            headers.get("X-Requests-Available-Minute") if headers else None
+        )
         reset_header = headers.get("X-RequestCounter-Reset") if headers else None
         reset_at = None
         if reset_header:

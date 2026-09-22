@@ -101,11 +101,17 @@ async def _seed_reconcilable_fixture(session: AsyncSession, tmp_path: Path) -> P
     """One corpus row that resolves cleanly onto one finished ``Match``."""
     prior = KICKOFF - timedelta(days=30)
     await _seed_team_with_history(
-        session, team_id="team-arsenal", name="Arsenal", opponent_id="team-chelsea",
+        session,
+        team_id="team-arsenal",
+        name="Arsenal",
+        opponent_id="team-chelsea",
         match_date=prior,
     )
     await _seed_team_with_history(
-        session, team_id="team-chelsea", name="Chelsea", opponent_id="team-arsenal",
+        session,
+        team_id="team-chelsea",
+        name="Chelsea",
+        opponent_id="team-arsenal",
         match_date=prior,
     )
     session.add(
@@ -203,8 +209,14 @@ async def test_only_expected_goals_is_populated(
     assert row is not None
     assert row.expected_goals is not None
     for column in (
-        "possession", "shots", "shots_on_target", "corners",
-        "fouls", "yellow_cards", "red_cards", "offsides",
+        "possession",
+        "shots",
+        "shots_on_target",
+        "corners",
+        "fouls",
+        "yellow_cards",
+        "red_cards",
+        "offsides",
     ):
         assert getattr(row, column) is None, column
 
@@ -270,7 +282,9 @@ async def test_refuses_to_overwrite_a_differing_existing_value(
     with pytest.raises(RuntimeError, match="refuses to overwrite"):
         await _apply(session, manifest.manifest_sha256, sources_dir)
     await session.rollback()
-    assert await _stats_rows(session) == [("match-target", "team-arsenal", HOME_XG + 0.5)]
+    assert await _stats_rows(session) == [
+        ("match-target", "team-arsenal", HOME_XG + 0.5)
+    ]
 
 
 async def test_a_manifest_with_no_ready_entries_is_refused(
@@ -306,12 +320,20 @@ async def test_unresolved_entries_are_skipped_and_counted_not_fatal(
         tmp_path,
         [
             {
-                "home_team": "Arsenal", "away_team": "Chelsea", "date": KICKOFF,
-                "home_xg": HOME_XG, "away_xg": AWAY_XG, "has_data": True,
+                "home_team": "Arsenal",
+                "away_team": "Chelsea",
+                "date": KICKOFF,
+                "home_xg": HOME_XG,
+                "away_xg": AWAY_XG,
+                "has_data": True,
             },
             {
-                "home_team": "Never Heard Of FC", "away_team": "Nor This One FC",
-                "date": KICKOFF, "home_xg": 1.0, "away_xg": 1.0, "has_data": True,
+                "home_team": "Never Heard Of FC",
+                "away_team": "Nor This One FC",
+                "date": KICKOFF,
+                "home_xg": 1.0,
+                "away_xg": 1.0,
+                "has_data": True,
             },
         ],
     )

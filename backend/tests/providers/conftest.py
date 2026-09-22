@@ -12,10 +12,14 @@ import httpx
 import pytest
 
 
-def make_mock_client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.AsyncClient:
+def make_mock_client(
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
 @pytest.fixture
-def mock_client_factory() -> Callable[[Callable[[httpx.Request], httpx.Response]], httpx.AsyncClient]:
+def mock_client_factory() -> Callable[
+    [Callable[[httpx.Request], httpx.Response]], httpx.AsyncClient
+]:
     return make_mock_client

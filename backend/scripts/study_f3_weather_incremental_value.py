@@ -49,6 +49,7 @@ Usage
 -----
     cd backend && PYTHONPATH=. python scripts/study_f3_weather_incremental_value.py
 """
+
 from __future__ import annotations
 
 import json
@@ -71,12 +72,19 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _CACHE_DIR = _BACKEND_ROOT / "data" / "cache"
 _WEATHER_PARQUET = _CACHE_DIR / "weather_forecasts_f1.parquet"
 _REPORT = (
-    _BACKEND_ROOT.parent / "reports" / "research" / "portfolio-f3-weather-incremental-value.json"
+    _BACKEND_ROOT.parent
+    / "reports"
+    / "research"
+    / "portfolio-f3-weather-incremental-value.json"
 )
 
 _DIV_TO_LEAGUE = {
-    "E0": "EPL", "SP1": "LA_LIGA", "I1": "SERIE_A",
-    "D1": "BUNDESLIGA", "F1": "LIGUE_1", "N1": "EREDIVISIE",
+    "E0": "EPL",
+    "SP1": "LA_LIGA",
+    "I1": "SERIE_A",
+    "D1": "BUNDESLIGA",
+    "F1": "LIGUE_1",
+    "N1": "EREDIVISIE",
 }
 
 # Expanding-window walk-forward. Seasons are named by their opening year, the
@@ -96,8 +104,12 @@ _SEED = 42  # matches train_on_real_matches._TRAINING_SEED
 # copied deliberately: an arm tuned here would not be comparable to any
 # candidate the promotion gate has ever scored.
 _XGB_PARAMS = {
-    "n_estimators": 250, "max_depth": 4, "learning_rate": 0.05,
-    "subsample": 0.85, "colsample_bytree": 0.85, "reg_lambda": 2.0,
+    "n_estimators": 250,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.85,
+    "colsample_bytree": 0.85,
+    "reg_lambda": 2.0,
 }
 
 _WEATHER_FEATURES = ("temperature_2m_c", "precipitation_mm")
@@ -108,8 +120,13 @@ def fit_xgboost(X: np.ndarray, y: np.ndarray) -> Any:
     from xgboost import XGBClassifier
 
     model = XGBClassifier(
-        objective="multi:softprob", num_class=3, random_state=_SEED,
-        tree_method="hist", eval_metric="mlogloss", n_jobs=-1, **_XGB_PARAMS,
+        objective="multi:softprob",
+        num_class=3,
+        random_state=_SEED,
+        tree_method="hist",
+        eval_metric="mlogloss",
+        n_jobs=-1,
+        **_XGB_PARAMS,
     )
     model.fit(X, y)
     return model
@@ -144,19 +161,26 @@ def build_rows() -> list[dict[str, Any]]:
             continue
         season = 2000 + int(code[:2])
         for fixture in load_fixtures_with_market(path):
-            key = (league, str(fixture["date"]), fixture["home_team"], fixture["away_team"])
+            key = (
+                league,
+                str(fixture["date"]),
+                fixture["home_team"],
+                fixture["away_team"],
+            )
             observed = by_key.get(key)
             if observed is None:
                 continue
             matched_keys.add(key)
-            rows.append({
-                "league": league,
-                "season": season,
-                "date": str(fixture["date"]),
-                "market_probs": fixture["market_probs"],
-                "outcome": fixture["outcome"],
-                **observed,
-            })
+            rows.append(
+                {
+                    "league": league,
+                    "season": season,
+                    "date": str(fixture["date"]),
+                    "market_probs": fixture["market_probs"],
+                    "outcome": fixture["outcome"],
+                    **observed,
+                }
+            )
 
     unjoined = len(by_key) - len(matched_keys)
     print(
@@ -220,13 +244,20 @@ def verdict(arms: dict[str, Any]) -> dict[str, Any]:
                 pooled.append(entry)
             for league, slice_entry in (fold.get("per_group") or {}).items():
                 if "candidate_minus_baseline_bootstrap" in slice_entry:
-                    per_league.append({
-                        "arm": arm["learner"], "fold": fold_name, "league": league,
-                        "favourable": _favourable(slice_entry),
-                    })
+                    per_league.append(
+                        {
+                            "arm": arm["learner"],
+                            "fold": fold_name,
+                            "league": league,
+                            "favourable": _favourable(slice_entry),
+                        }
+                    )
 
     if not pooled:
-        return {"label": "INCONCLUSIVE", "reason": "no fold produced a scored pooled slice"}
+        return {
+            "label": "INCONCLUSIVE",
+            "reason": "no fold produced a scored pooled slice",
+        }
 
     improving = sum(1 for e in pooled if _favourable(e) is True)
     degrading = sum(1 for e in pooled if _favourable(e) is False)
@@ -293,7 +324,7 @@ def main() -> int:
             "learner": "catboost",
             "status": "UNAVAILABLE",
             "reason": (
-                "pinned `python_version < \"3.14\"` in requirements.txt, "
+                'pinned `python_version < "3.14"` in requirements.txt, '
                 "requirements-training.txt and requirements-ml-ultra.txt; no wheel "
                 f"exists for this interpreter ({sys.version.split()[0]}). CatBoost is "
                 "also not a member of the served stacking ensemble "
@@ -308,9 +339,7 @@ def main() -> int:
         "stage": "directive §16 Stage 3 — incremental value beyond the market",
         "seed": _SEED,
         "rows_joined": len(rows),
-        "folds": [
-            {"train_seasons": list(t), "test_season": s} for t, s in _FOLDS
-        ],
+        "folds": [{"train_seasons": list(t), "test_season": s} for t, s in _FOLDS],
         "candidate_features": list(_WEATHER_FEATURES),
         "arms": arms,
         "verdict": verdict(arms),

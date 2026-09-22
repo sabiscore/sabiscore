@@ -54,27 +54,31 @@ async def _run(*, apply: bool) -> int:
     try:
         async with session_factory() as session:
             matches = (
-                await session.execute(
-                    select(Match)
-                    .where(
-                        func.lower(Match.status) == "finished",
-                        Match.home_score.is_not(None),
-                        Match.away_score.is_not(None),
-                        Match.league_id.is_not(None),
-                    )
-                    .order_by(Match.match_date.asc(), Match.id.asc())
-                )
-            ).scalars().all()
-
-            existing_matches = set(
                 (
                     await session.execute(
-                        select(EloRatingSnapshot.match_id).distinct()
+                        select(Match)
+                        .where(
+                            func.lower(Match.status) == "finished",
+                            Match.home_score.is_not(None),
+                            Match.away_score.is_not(None),
+                            Match.league_id.is_not(None),
+                        )
+                        .order_by(Match.match_date.asc(), Match.id.asc())
                     )
-                ).scalars().all()
+                )
+                .scalars()
+                .all()
             )
 
-            eligible = [match for match in matches if str(match.id) not in existing_matches]
+            existing_matches = set(
+                (await session.execute(select(EloRatingSnapshot.match_id).distinct()))
+                .scalars()
+                .all()
+            )
+
+            eligible = [
+                match for match in matches if str(match.id) not in existing_matches
+            ]
             print(
                 f"finished={len(matches)} existing_elo_matches={len(existing_matches)} "
                 f"eligible={len(eligible)} mode={'apply' if apply else 'dry-run'}"

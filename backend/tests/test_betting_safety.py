@@ -137,7 +137,9 @@ def _make_match_request(
     )
 
 
-def _make_core_match(competition: str = "UCL", certified: bool = True, epistemic: float = 0.03) -> dict:
+def _make_core_match(
+    competition: str = "UCL", certified: bool = True, epistemic: float = 0.03
+) -> dict:
     return {
         "match_id": "core-ucl-001",
         "home_team": "Real Madrid",
@@ -198,6 +200,7 @@ def _make_core_match(competition: str = "UCL", certified: bool = True, epistemic
 # R1: Backend Betting Safety & Default-Deny Research Posture
 # ===========================================================================
 
+
 class TestDefaultDenyResearchPosture:
     """Verifies that stake_permitted evaluates to False in Research Mode,
     unverified model states, or missing evidence, and that no executable
@@ -207,9 +210,16 @@ class TestDefaultDenyResearchPosture:
         """In Research Mode (uncertified model), build_market_intelligence must evaluate
         stake_permitted = False and decision = RESEARCH_ONLY even with strong edge."""
         odds = {"home_win": 2.50, "draw": 3.40, "away_win": 3.10}
-        model_probs = {"home_win": 0.60, "draw": 0.25, "away_win": 0.15}  # Strong home edge: 60% vs ~40% implied
+        model_probs = {
+            "home_win": 0.60,
+            "draw": 0.25,
+            "away_win": 0.15,
+        }  # Strong home edge: 60% vs ~40% implied
 
-        with patch("src.services.market_intel.active_generation_is_certified", return_value=False):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            return_value=False,
+        ):
             intel = build_market_intelligence(
                 odds=odds,
                 model_probabilities=model_probs,
@@ -231,7 +241,10 @@ class TestDefaultDenyResearchPosture:
         odds = {"home_win": 2.50, "draw": 3.40, "away_win": 3.10}
         model_probs = {"home_win": 0.60, "draw": 0.25, "away_win": 0.15}
 
-        with patch("src.services.market_intel.active_generation_is_certified", return_value=True):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            return_value=True,
+        ):
             intel = build_market_intelligence(
                 odds=odds,
                 model_probabilities=model_probs,
@@ -269,7 +282,9 @@ class TestDefaultDenyResearchPosture:
         assert match_result.stake == "pass"
         assert match_result.stake_fraction == 0.0
 
-    def test_intelligence_synthesizer_evaluates_stake_permitted_false_when_unverified(self):
+    def test_intelligence_synthesizer_evaluates_stake_permitted_false_when_unverified(
+        self,
+    ):
         """In intelligence_synthesizer, unverified fixture or critical gaps evaluate
         stake_permitted = False and zero out RL and Kelly stakes."""
         synth = IntelligenceSynthesizer()
@@ -308,7 +323,16 @@ class TestDefaultDenyResearchPosture:
             match_id="m1",
             ensemble=ensemble,
             uncertainty=uncertainty,
-            causal_results=[CausalFeatureResult(name="elo_difference", ate_win=0.1, ate_draw=-0.02, ate_ci=(0.05, 0.15), p_value=0.01, classification="POSITIVE")],
+            causal_results=[
+                CausalFeatureResult(
+                    name="elo_difference",
+                    ate_win=0.1,
+                    ate_draw=-0.02,
+                    ate_ci=(0.05, 0.15),
+                    p_value=0.01,
+                    classification="POSITIVE",
+                )
+            ],
             rl_rec=rl_rec,
             elo_ctx=None,
             odds_edge=odds_edge,
@@ -324,7 +348,16 @@ class TestDefaultDenyResearchPosture:
             match_id="m2",
             ensemble=ensemble,
             uncertainty=uncertainty,
-            causal_results=[CausalFeatureResult(name="elo_difference", ate_win=0.1, ate_draw=-0.02, ate_ci=(0.05, 0.15), p_value=0.01, classification="POSITIVE")],
+            causal_results=[
+                CausalFeatureResult(
+                    name="elo_difference",
+                    ate_win=0.1,
+                    ate_draw=-0.02,
+                    ate_ci=(0.05, 0.15),
+                    p_value=0.01,
+                    classification="POSITIVE",
+                )
+            ],
             rl_rec=rl_rec,
             elo_ctx=None,
             odds_edge=odds_edge,
@@ -339,6 +372,7 @@ class TestDefaultDenyResearchPosture:
 # ===========================================================================
 # R1: AST & Route Introspection — Absence of EXECUTE_BET and Automated Betting
 # ===========================================================================
+
 
 class TestNoAutomatedBettingOrExecuteBet:
     """Formally inspects the backend codebase to verify that no EXECUTE_BET
@@ -366,20 +400,31 @@ class TestNoAutomatedBettingOrExecuteBet:
 
         for py_file in backend_src.rglob("*.py"):
             try:
-                tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+                tree = ast.parse(
+                    py_file.read_text(encoding="utf-8"), filename=str(py_file)
+                )
             except Exception as e:
                 pytest.fail(f"Failed to parse {py_file}: {e}")
 
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
                     name_lower = node.name.lower()
                     if name_lower in prohibited_terms:
-                        violations.append(f"{py_file.name}:{node.lineno} -> {node.name}")
+                        violations.append(
+                            f"{py_file.name}:{node.lineno} -> {node.name}"
+                        )
                 elif isinstance(node, ast.Assign):
                     for target in node.targets:
                         if isinstance(target, ast.Name):
-                            if target.id.lower() in prohibited_terms or target.id == "EXECUTE_BET":
-                                violations.append(f"{py_file.name}:{node.lineno} -> {target.id}")
+                            if (
+                                target.id.lower() in prohibited_terms
+                                or target.id == "EXECUTE_BET"
+                            ):
+                                violations.append(
+                                    f"{py_file.name}:{node.lineno} -> {target.id}"
+                                )
 
         assert not violations, (
             f"Found prohibited bet execution symbols in backend/src: {violations}"
@@ -390,7 +435,13 @@ class TestNoAutomatedBettingOrExecuteBet:
         for placing bets, executing wagers, or broker integration."""
         from src.api.main import app
 
-        prohibited_path_fragments = ["/execute-bet", "/place-bet", "/wager", "/bet-placement", "/broker"]
+        prohibited_path_fragments = [
+            "/execute-bet",
+            "/place-bet",
+            "/wager",
+            "/bet-placement",
+            "/broker",
+        ]
         matched_routes: list[str] = []
 
         for route in app.routes:
@@ -416,7 +467,9 @@ class TestNoAutomatedBettingOrExecuteBet:
             "NO_BET",
         }
         for item in VerdictEnum:
-            assert item.value in allowed_verdicts, f"Unexpected verdict enum: {item.value}"
+            assert item.value in allowed_verdicts, (
+                f"Unexpected verdict enum: {item.value}"
+            )
             assert "EXECUTE" not in item.value
             assert item.value != "EXECUTE_BET"
 
@@ -428,13 +481,16 @@ class TestNoAutomatedBettingOrExecuteBet:
             "RESEARCH_ONLY",
         }
         for item in MarketDecisionState:
-            assert item.value in allowed_decisions, f"Unexpected market decision enum: {item.value}"
+            assert item.value in allowed_decisions, (
+                f"Unexpected market decision enum: {item.value}"
+            )
             assert "EXECUTE" not in item.value
 
 
 # ===========================================================================
 # R2: Backend UCL Hard-Cap Coverage
 # ===========================================================================
+
 
 class TestUCLHardCapCoverage:
     """Verifies that fixtures in the Champions League (UCL) are strictly hard-capped
@@ -447,7 +503,9 @@ class TestUCLHardCapCoverage:
         epl_req = _make_match_request(
             competition=CompetitionEnum.EPL,
             model=_make_model_input(home=0.75, draw=0.15, away=0.10, epistemic=0.02),
-            market=_make_market_input(home=1.70, draw=4.00, away=6.00, captured_at=MARKET_NOW),
+            market=_make_market_input(
+                home=1.70, draw=4.00, away=6.00, captured_at=MARKET_NOW
+            ),
             lineup_status=LineupStatusEnum.CONFIRMED,
             sharp_signal=SharpSignalEnum.CONFIRMING,
             market_seconds=60,
@@ -465,7 +523,9 @@ class TestUCLHardCapCoverage:
         ucl_req = _make_match_request(
             competition=CompetitionEnum.UCL,
             model=_make_model_input(home=0.75, draw=0.15, away=0.10, epistemic=0.02),
-            market=_make_market_input(home=1.70, draw=4.00, away=6.00, captured_at=MARKET_NOW),
+            market=_make_market_input(
+                home=1.70, draw=4.00, away=6.00, captured_at=MARKET_NOW
+            ),
             lineup_status=LineupStatusEnum.CONFIRMED,
             sharp_signal=SharpSignalEnum.CONFIRMING,
             market_seconds=60,
@@ -503,9 +563,10 @@ class TestUCLHardCapCoverage:
             f"Core engine UCL must be capped at ACTIONABLE, got {ucl_result.verdict}"
         )
         assert ucl_result.verdict != "HIGH_CONVICTION"
-        assert any("UCL soft coverage caps the verdict at ACTIONABLE" in r for r in ucl_result.risks), (
-            f"Expected UCL soft coverage risk explanation in {ucl_result.risks}"
-        )
+        assert any(
+            "UCL soft coverage caps the verdict at ACTIONABLE" in r
+            for r in ucl_result.risks
+        ), f"Expected UCL soft coverage risk explanation in {ucl_result.risks}"
 
     @pytest.mark.parametrize("league_code", ["UCL", "UEFA_CHAMPIONS_LEAGUE"])
     def test_ucl_hard_capped_in_intelligence_synthesizer(self, league_code: str):
@@ -552,8 +613,22 @@ class TestUCLHardCapCoverage:
             ensemble=ensemble,
             uncertainty=uncertainty,
             causal_results=[
-                CausalFeatureResult(name="elo_difference", ate_win=0.15, ate_draw=-0.03, ate_ci=(0.08, 0.22), p_value=0.001, classification="POSITIVE"),
-                CausalFeatureResult(name="xg_differential", ate_win=0.10, ate_draw=-0.02, ate_ci=(0.04, 0.16), p_value=0.002, classification="POSITIVE"),
+                CausalFeatureResult(
+                    name="elo_difference",
+                    ate_win=0.15,
+                    ate_draw=-0.03,
+                    ate_ci=(0.08, 0.22),
+                    p_value=0.001,
+                    classification="POSITIVE",
+                ),
+                CausalFeatureResult(
+                    name="xg_differential",
+                    ate_win=0.10,
+                    ate_draw=-0.02,
+                    ate_ci=(0.04, 0.16),
+                    p_value=0.002,
+                    classification="POSITIVE",
+                ),
             ],
             rl_rec=rl_rec,
             elo_ctx=None,
@@ -575,13 +650,19 @@ class TestUCLHardCapCoverage:
         req = _make_match_request(
             competition=CompetitionEnum.UCL,
             model=_make_model_input(home=0.51, draw=0.25, away=0.24, epistemic=0.03),
-            market=_make_market_input(home=2.00, draw=3.40, away=4.00),  # fair ~0.485, edge ~0.025
+            market=_make_market_input(
+                home=2.00, draw=3.40, away=4.00
+            ),  # fair ~0.485, edge ~0.025
         )
         # Give no causal drivers, dropping it from actionable to speculative
         result = analyze_match(req, causal_drivers=[], evaluation_at=MARKET_NOW)
 
         # Should be SPECULATIVE or HOLD, never elevated to ACTIONABLE
-        assert result.verdict in (VerdictEnum.SPECULATIVE, VerdictEnum.HOLD, VerdictEnum.NO_BET)
+        assert result.verdict in (
+            VerdictEnum.SPECULATIVE,
+            VerdictEnum.HOLD,
+            VerdictEnum.NO_BET,
+        )
         assert result.verdict != VerdictEnum.HIGH_CONVICTION
         assert result.verdict != VerdictEnum.ACTIONABLE
 

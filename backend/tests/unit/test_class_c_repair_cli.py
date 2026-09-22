@@ -2,6 +2,7 @@
 34/35/39): redaction, digest validation, and the common review/apply argument
 shape.
 """
+
 from __future__ import annotations
 
 import sys

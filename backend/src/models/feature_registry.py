@@ -128,9 +128,9 @@ PHASE7_FEATURES_7 = PHASE7_FEATURES_10
 # Removed Phase 7 features — kept for audit trail and future re-evaluation.
 # DO NOT include these in any training vector without re-running ATE validation.
 PHASE7_FEATURES_REMOVED: List[str] = [
-    "elo_league_adjusted",           # collinear proxy, no independent ATE signal
+    "elo_league_adjusted",  # collinear proxy, no independent ATE signal
     "key_passes_under_pressure_diff",  # proxy ATE=0.005 < threshold
-    "set_piece_xg_diff",             # mixed/inconclusive directional signal
+    "set_piece_xg_diff",  # mixed/inconclusive directional signal
 ]
 
 # Features that remain in CANONICAL_FEATURES_68 for backward compatibility with v5_phase7
@@ -210,7 +210,8 @@ APEX_FEATURES_68: List[str] = [*APEX_FEATURES_58, *PHASE7_FEATURES_10]
 #
 # Width: 66 = 68 − 2 event-data gap features.
 APEX_FEATURES_66: List[str] = [
-    f for f in APEX_FEATURES_68
+    f
+    for f in APEX_FEATURES_68
     if f not in ("home_pressing_intensity", "progressive_carry_diff")
 ]
 
@@ -580,8 +581,11 @@ def active_default_feature_values(
     are defined later in this file; the diff is 14 names, negligible cost.
     """
     base = (
-        dict(DEFAULT_FEATURE_VALUES_89) if use_phase8
-        else dict(DEFAULT_FEATURE_VALUES_68 if use_phase7 else DEFAULT_FEATURE_VALUES_58)
+        dict(DEFAULT_FEATURE_VALUES_89)
+        if use_phase8
+        else dict(
+            DEFAULT_FEATURE_VALUES_68 if use_phase7 else DEFAULT_FEATURE_VALUES_58
+        )
     )
     if apex:
         legacy_only = frozenset(MARKET_FEATURES_14) - frozenset(APEX_MARKET_FEATURES_14)
@@ -694,7 +698,8 @@ def derive_xg_rolling_features(
     ):
         return None
     return {
-        "xg_differential": (home_xg_for - home_xg_against) - (away_xg_for - away_xg_against),
+        "xg_differential": (home_xg_for - home_xg_against)
+        - (away_xg_for - away_xg_against),
         "xg_attack_diff": home_xg_for - away_xg_for,
         "xg_defense_diff": away_xg_against - home_xg_against,
     }
@@ -771,14 +776,19 @@ _LEAGUE_ONEHOT_ALIASES: Dict[str, str] = {
     "ligue1": "league_Ligue_1",
 }
 LEAGUE_ONEHOT_FEATURES = (
-    "league_Bundesliga", "league_EPL", "league_La_Liga",
-    "league_Ligue_1", "league_Serie_A",
+    "league_Bundesliga",
+    "league_EPL",
+    "league_La_Liga",
+    "league_Ligue_1",
+    "league_Serie_A",
 )
 TEMPORAL_FEATURES = ("day_of_week", "is_weekend", "month", "season_phase")
 LEAGUE_RATE_FEATURES = ("league_home_rate", "league_avg_goals", "league_draw_rate")
 COMBINATION_FEATURES = (
-    "combined_attack", "combined_defense_weakness",
-    "home_attack_vs_away_defense", "away_attack_vs_home_defense",
+    "combined_attack",
+    "combined_defense_weakness",
+    "home_attack_vs_away_defense",
+    "away_attack_vs_home_defense",
 )
 
 
@@ -850,16 +860,27 @@ def derive_combination_features(
 # WP-A: the 14 canonical market fields CANONICAL_FEATURES_58 declares (see
 # feature_registry.py:25-38), in that same order.
 MARKET_FEATURES_14 = (
-    "market_prob_home", "market_prob_draw", "market_prob_away",
-    "market_edge_home", "market_favorite", "odds_ratio",
-    "log_odds_home", "log_odds_draw", "log_odds_away",
-    "draw_probability", "market_confidence",
-    "ev_home", "ev_draw", "ev_away",
+    "market_prob_home",
+    "market_prob_draw",
+    "market_prob_away",
+    "market_edge_home",
+    "market_favorite",
+    "odds_ratio",
+    "log_odds_home",
+    "log_odds_draw",
+    "log_odds_away",
+    "draw_probability",
+    "market_confidence",
+    "ev_home",
+    "ev_draw",
+    "ev_away",
 )
 
 
 def derive_market_features(
-    home_odds: float, draw_odds: float, away_odds: float,
+    home_odds: float,
+    draw_odds: float,
+    away_odds: float,
 ) -> Dict[str, float]:
     """WP-A: pure remap from 1X2 decimal odds onto the 14 canonical market
     fields (MARKET_FEATURES_14). Numerically identical to the inline formula
@@ -999,20 +1020,28 @@ H2H_WINDOW = 10
 HOME_VENUE_WINDOW = 20
 
 H2H_FEATURES: Tuple[str, ...] = (
-    "h2h_home_wins", "h2h_away_wins", "h2h_draws", "h2h_matches", "h2h_dominance",
+    "h2h_home_wins",
+    "h2h_away_wins",
+    "h2h_draws",
+    "h2h_matches",
+    "h2h_dominance",
 )
 HOME_VENUE_FEATURES: Tuple[str, ...] = (
-    "home_venue_win_rate", "home_venue_draw_rate", "home_venue_loss_rate",
+    "home_venue_win_rate",
+    "home_venue_draw_rate",
+    "home_venue_loss_rate",
     "home_advantage_strength",
 )
 MARKET_INTERACTION_FEATURES: Tuple[str, ...] = (
-    "form_market_agreement_home", "form_market_disagreement",
-    "venue_market_combo", "h2h_market_agreement",
+    "form_market_agreement_home",
+    "form_market_disagreement",
+    "venue_market_combo",
+    "h2h_market_agreement",
 )
 
 
 def derive_h2h_features(
-    meetings: Sequence[Tuple[int, int]]
+    meetings: Sequence[Tuple[int, int]],
 ) -> Optional[Dict[str, float]]:
     """Last-H2H_WINDOW head-to-head meetings, scored from one side's perspective.
 
@@ -1044,7 +1073,7 @@ def derive_h2h_features(
 
 
 def derive_home_venue_features(
-    results: Sequence[Tuple[int, int]]
+    results: Sequence[Tuple[int, int]],
 ) -> Optional[Dict[str, float]]:
     """Home-venue record from the last HOME_VENUE_WINDOW matches a team hosted.
 
@@ -1226,10 +1255,14 @@ _UNDECLARED_FIELDS: Tuple[str, ...] = (
 # generic default for them — listed explicitly here instead, mirroring how
 # MARKET_FEATURES_14 is already written out rather than sliced implicitly.
 _LAST5_FORM_FIELDS: Tuple[str, ...] = (
-    "home_form_last5_home", "home_wins_last5_home",
-    "home_draws_last5_home", "home_losses_last5_home",
-    "away_form_last5_away", "away_wins_last5_away",
-    "away_draws_last5_away", "away_losses_last5_away",
+    "home_form_last5_home",
+    "home_wins_last5_home",
+    "home_draws_last5_home",
+    "home_losses_last5_home",
+    "away_form_last5_away",
+    "away_wins_last5_away",
+    "away_draws_last5_away",
+    "away_losses_last5_away",
 )
 
 # The other half of the WP-18 remap block (the codebase's own
@@ -1241,8 +1274,12 @@ _LAST5_FORM_FIELDS: Tuple[str, ...] = (
 # deliberately different — item 36(b) declares that divergence by design — so
 # the helper takes the caller's own (key, default) lookup rather than owning it.
 _GOALS_GD_FIELDS: Tuple[str, ...] = (
-    "home_goals_for_avg", "home_goals_against_avg", "home_gd_recent",
-    "away_goals_for_avg", "away_goals_against_avg", "away_gd_recent",
+    "home_goals_for_avg",
+    "home_goals_against_avg",
+    "home_gd_recent",
+    "away_goals_for_avg",
+    "away_goals_against_avg",
+    "away_gd_recent",
 )
 
 # The 15 Phase 8 fields a real historical replay can compute (Pi + Berrar +
@@ -1255,7 +1292,9 @@ _GOALS_GD_FIELDS: Tuple[str, ...] = (
 # UNDECLARED, matching docs/DEBT.md item 29's "structurally underivable"
 # finding.
 _PHASE8_RESOLVED_FIELDS: Tuple[str, ...] = (
-    *PHASE8_FEATURES_PI, *PHASE8_FEATURES_BERRAR, *PHASE8_FEATURES_FORM,
+    *PHASE8_FEATURES_PI,
+    *PHASE8_FEATURES_BERRAR,
+    *PHASE8_FEATURES_FORM,
 )
 
 # docs/DEBT.md item 48 follow-up: the 4 canonical Elo slots a real historical
@@ -1267,7 +1306,10 @@ _PHASE8_RESOLVED_FIELDS: Tuple[str, ...] = (
 # independent causal signal — see the PHASE7_FEATURES_REMOVED comment above),
 # so it stays UNDECLARED regardless of what training can compute.
 _ELO_TRAINING_RESOLVED_FIELDS: Tuple[str, ...] = (
-    "elo_difference", "elo_home_trend_5", "elo_away_trend_5", "elo_momentum_cross",
+    "elo_difference",
+    "elo_home_trend_5",
+    "elo_away_trend_5",
+    "elo_momentum_cross",
 )
 
 _TRAINING_SOURCE_LAST5_FORM = (
@@ -1418,7 +1460,8 @@ def _training_source(name: str, group: str, schema_version: str) -> str:
         return _TRAINING_SOURCE_COMBINATION
     if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
         return (
-            _TRAINING_SOURCE_MARKET_APEX if is_apex_schema(schema_version)
+            _TRAINING_SOURCE_MARKET_APEX
+            if is_apex_schema(schema_version)
             else UNDECLARED
         )
     if name in _PHASE8_RESOLVED_FIELDS:
@@ -1462,7 +1505,8 @@ def _serving_source(name: str, group: str, schema_version: str) -> str:
         return _SERVING_SOURCE_COMBINATION
     if group in ("MARKET_FEATURES_14", "APEX_MARKET_FEATURES_14"):
         return (
-            _SERVING_SOURCE_MARKET_APEX if is_apex_schema(schema_version)
+            _SERVING_SOURCE_MARKET_APEX
+            if is_apex_schema(schema_version)
             else _SERVING_SOURCE_MARKET_LEGACY
         )
     return UNDECLARED
@@ -1527,7 +1571,7 @@ def _feature_group(name: str) -> str:
 
 def _league_scope(name: str) -> str:
     if name in LEAGUE_ONEHOT_FEATURES:
-        return name[len("league_"):]
+        return name[len("league_") :]
     return "ALL"
 
 

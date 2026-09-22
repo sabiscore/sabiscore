@@ -63,6 +63,7 @@ A carry is "progressive" when it ends at least 10m closer to goal than it
 started and ends past the midfield line (following StatsBomb's own definition
 in their public methodology doc).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -74,12 +75,14 @@ from pathlib import Path
 # Soft-import: only required at runtime, not at import time
 try:
     import pandas as pd
+
     _PANDAS_AVAILABLE = True
 except ImportError:
     _PANDAS_AVAILABLE = False
 
 try:
     from statsbombpy import sb as statsbomb
+
     _STATSBOMBPY_AVAILABLE = True
 except ImportError:
     _STATSBOMBPY_AVAILABLE = False
@@ -92,11 +95,11 @@ logger = logging.getLogger(__name__)
 # Only competitions with meaningful historical coverage are listed.
 # UCL and Eredivisie are absent from Open Data for most recent seasons.
 _SABISCORE_TO_SB_COMPETITION: dict[str, list[int]] = {
-    "EPL": [2],          # Premier League (England)
-    "LA_LIGA": [11],     # La Liga (Spain)
-    "BUNDESLIGA": [9],   # 1. Bundesliga (Germany)  — ⚠️ sparse: 2015/16 only
-    "SERIE_A": [12],     # Serie A (Italy)
-    "LIGUE_1": [7],      # Ligue 1 (France)         — ⚠️ sparse: limited seasons
+    "EPL": [2],  # Premier League (England)
+    "LA_LIGA": [11],  # La Liga (Spain)
+    "BUNDESLIGA": [9],  # 1. Bundesliga (Germany)  — ⚠️ sparse: 2015/16 only
+    "SERIE_A": [12],  # Serie A (Italy)
+    "LIGUE_1": [7],  # Ligue 1 (France)         — ⚠️ sparse: limited seasons
     # EREDIVISIE: absent from Open Data
     # UCL: partial only (knockout rounds, not group stage); omitted
 }
@@ -107,19 +110,39 @@ _MIN_COVERAGE_MATCHES = 50
 
 # ── Team-name normalisation ───────────────────────────────────────────────────
 
+
 def _identity_key(name: str) -> str:
     """Inline copy of team_identity._identity_key for zero-import usage."""
     import re
     import unicodedata
 
     _LEGAL_TOKENS = {
-        "ac","acf","afc","as","bc","ca","cf","fc","fsv","osc",
-        "rc","sc","sco","ss","ssc","stade","ud","us","vfb",
+        "ac",
+        "acf",
+        "afc",
+        "as",
+        "bc",
+        "ca",
+        "cf",
+        "fc",
+        "fsv",
+        "osc",
+        "rc",
+        "sc",
+        "sco",
+        "ss",
+        "ssc",
+        "stade",
+        "ud",
+        "us",
+        "vfb",
     }
     _TRAILING = {"club", "football", "soccer"}
 
     def _ascii(s: str) -> str:
-        return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+        return "".join(
+            c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)
+        )
 
     def _collapse(tokens: list[str]) -> list[str]:
         out: list[str] = []
@@ -141,7 +164,9 @@ def _identity_key(name: str) -> str:
         tokens.pop(0)
     while len(tokens) > 1 and tokens[-1] in _TRAILING:
         tokens.pop()
-    while tokens and (tokens[-1] in _LEGAL_TOKENS or (tokens[-1].isdigit() and len(tokens[-1]) <= 4)):
+    while tokens and (
+        tokens[-1] in _LEGAL_TOKENS or (tokens[-1].isdigit() and len(tokens[-1]) <= 4)
+    ):
         tokens.pop()
     return " ".join(tokens)
 
@@ -181,6 +206,7 @@ def _resolve_sb_team_name(sb_name: str, league: str) -> str | None:
 
 # ── PPDA computation ──────────────────────────────────────────────────────────
 
+
 def _ppda_from_events(events: "pd.DataFrame", team_id: int) -> float | None:
     """Compute PPDA for one team from a StatsBomb events DataFrame.
 
@@ -209,10 +235,7 @@ def _progressive_carries_from_events(events: "pd.DataFrame", team_id: int) -> in
     StatsBomb methodology: a carry is progressive when the carry distance toward
     goal is ≥ 10m and the carry ends past the midfield line (x ≥ 60).
     """
-    carries = events[
-        (events["team_id"] == team_id)
-        & (events["type_name"] == "Carry")
-    ]
+    carries = events[(events["team_id"] == team_id) & (events["type_name"] == "Carry")]
     count = 0
     for _, row in carries.iterrows():
         start = row.get("location")
@@ -227,6 +250,7 @@ def _progressive_carries_from_events(events: "pd.DataFrame", team_id: int) -> in
 
 
 # ── Coverage audit ────────────────────────────────────────────────────────────
+
 
 def run_coverage_audit() -> dict:
     """Compare StatsBomb Open coverage against the fd_*.csv Elo corpus."""
@@ -258,10 +282,14 @@ def run_coverage_audit() -> dict:
         for comp_id in comp_ids:
             try:
                 comps = statsbomb.competitions()
-                seasons = comps[comps["competition_id"] == comp_id]["season_id"].tolist()
+                seasons = comps[comps["competition_id"] == comp_id][
+                    "season_id"
+                ].tolist()
                 for season_id in seasons:
                     try:
-                        matches = statsbomb.matches(competition_id=comp_id, season_id=season_id)
+                        matches = statsbomb.matches(
+                            competition_id=comp_id, season_id=season_id
+                        )
                         total += len(matches)
                     except Exception as exc:
                         logger.warning("Skip %s season %s: %s", league, season_id, exc)
@@ -293,6 +321,7 @@ def run_coverage_audit() -> dict:
 
 
 # ── Parquet cache population ──────────────────────────────────────────────────
+
 
 def populate_league(
     league: str,
@@ -345,7 +374,9 @@ def populate_league(
                 if "carry_end_location" not in events.columns:
                     events["carry_end_location"] = events.get(
                         "carry", pd.Series([None] * len(events))
-                    ).apply(lambda c: c.get("end_location") if isinstance(c, dict) else None)
+                    ).apply(
+                        lambda c: c.get("end_location") if isinstance(c, dict) else None
+                    )
 
                 for side, name_col, id_col in [
                     ("home", "home_team", "home_team_id"),
@@ -357,27 +388,33 @@ def populate_league(
                     resolved = _resolve_sb_team_name(sb_name, league)
                     if resolved is None:
                         if sb_name not in skipped_teams:
-                            logger.warning("UNRESOLVED team: %r (league=%s) — skipping", sb_name, league)
+                            logger.warning(
+                                "UNRESOLVED team: %r (league=%s) — skipping",
+                                sb_name,
+                                league,
+                            )
                             skipped_teams.add(sb_name)
                         continue
 
                     ppda = _ppda_from_events(events, team_id)
                     prog_carries = _progressive_carries_from_events(events, team_id)
 
-                    rows.append({
-                        "match_id": match_id,
-                        "team_id": resolved,           # Elo-corpus identity key
-                        "sb_team_name": sb_name,
-                        "league": league,
-                        "match_date": match_date,
-                        "ppda_ratio": ppda if ppda is not None else 1.0,
-                        "ppda_available": ppda is not None,
-                        "progressive_carry_diff": float(prog_carries),
-                        # sentinel columns for downstream gap detection
-                        "shot_quality_diff": float("nan"),
-                        "key_passes_under_pressure_diff": float("nan"),
-                        "set_piece_xg_diff": float("nan"),
-                    })
+                    rows.append(
+                        {
+                            "match_id": match_id,
+                            "team_id": resolved,  # Elo-corpus identity key
+                            "sb_team_name": sb_name,
+                            "league": league,
+                            "match_date": match_date,
+                            "ppda_ratio": ppda if ppda is not None else 1.0,
+                            "ppda_available": ppda is not None,
+                            "progressive_carry_diff": float(prog_carries),
+                            # sentinel columns for downstream gap detection
+                            "shot_quality_diff": float("nan"),
+                            "key_passes_under_pressure_diff": float("nan"),
+                            "set_piece_xg_diff": float("nan"),
+                        }
+                    )
 
     summary = {
         "league": league,
@@ -394,7 +431,13 @@ def populate_league(
         logger.info("%s dry-run: %d rows (not written)", league, len(rows))
         return summary
 
-    cache_path = output_path or Path(__file__).parents[1] / "data" / "processed" / "statsbomb_features_cache.parquet"
+    cache_path = (
+        output_path
+        or Path(__file__).parents[1]
+        / "data"
+        / "processed"
+        / "statsbomb_features_cache.parquet"
+    )
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
     new_df = pd.DataFrame(rows)
@@ -414,12 +457,21 @@ def populate_league(
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("--audit-only", action="store_true", help="Print coverage audit and exit")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "--audit-only", action="store_true", help="Print coverage audit and exit"
+    )
     parser.add_argument("--league", help="Populate one league (e.g. EPL)")
-    parser.add_argument("--all-leagues", action="store_true", help="Populate all supported leagues")
-    parser.add_argument("--dry-run", action="store_true", help="Compute but skip the parquet write")
+    parser.add_argument(
+        "--all-leagues", action="store_true", help="Populate all supported leagues"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Compute but skip the parquet write"
+    )
     parser.add_argument("--output", help="Override parquet output path")
     args = parser.parse_args()
 
@@ -428,7 +480,9 @@ def main() -> None:
         sys.exit(1)
 
     if not _STATSBOMBPY_AVAILABLE and not args.audit_only:
-        print("ERROR: statsbombpy is required.  pip install statsbombpy", file=sys.stderr)
+        print(
+            "ERROR: statsbombpy is required.  pip install statsbombpy", file=sys.stderr
+        )
         sys.exit(1)
 
     if args.audit_only:
@@ -441,7 +495,9 @@ def main() -> None:
             if isinstance(v, dict) and not v.get("sufficient_for_enrichment", False)
         ]
         if insufficient:
-            print(f"\n⚠️  Insufficient StatsBomb coverage for: {', '.join(insufficient)}")
+            print(
+                f"\n⚠️  Insufficient StatsBomb coverage for: {', '.join(insufficient)}"
+            )
             print("   Do NOT set ENABLE_STATSBOMB_ENRICHMENT=true for these leagues.")
         return
 

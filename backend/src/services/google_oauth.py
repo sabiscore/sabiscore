@@ -41,20 +41,31 @@ async def _get_google_jwks() -> dict[str, Any]:
                 response.raise_for_status()
                 payload = response.json()
         except (httpx.HTTPError, ValueError) as exc:
-            raise GoogleOAuthError("Unable to verify Google identity right now") from exc
+            raise GoogleOAuthError(
+                "Unable to verify Google identity right now"
+            ) from exc
 
         keys = payload.get("keys") if isinstance(payload, dict) else None
         if not isinstance(keys, list) or not keys:
             raise GoogleOAuthError("Google signing keys are unavailable")
 
-        _jwks_cache = {str(key.get("kid")): key for key in keys if isinstance(key, dict) and key.get("kid")}
+        _jwks_cache = {
+            str(key.get("kid")): key
+            for key in keys
+            if isinstance(key, dict) and key.get("kid")
+        }
         _jwks_expires_at = time.monotonic() + JWKS_CACHE_TTL_SECONDS
         return _jwks_cache
 
 
 async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str, Any]:
     """Validate Google's signed OIDC ID token and return trusted claims."""
-    enabled = os.getenv("GOOGLE_OAUTH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    enabled = os.getenv("GOOGLE_OAUTH_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
     if not enabled or not client_id:
         raise GoogleOAuthError("Google authentication is not configured")
@@ -101,7 +112,9 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
     if claims.get("nonce") != expected_nonce:
         raise GoogleOAuthError("Google OAuth nonce verification failed")
     if claims.get("azp") and claims.get("azp") != client_id:
-        raise GoogleOAuthError("Google authorized party does not match this application")
+        raise GoogleOAuthError(
+            "Google authorized party does not match this application"
+        )
 
     email = str(claims.get("email") or "").strip().lower()
     subject = str(claims.get("sub") or "").strip()

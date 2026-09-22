@@ -49,6 +49,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/study_portfolio_e_market_microstructure.py
 """
+
 from __future__ import annotations
 
 import glob
@@ -66,7 +67,11 @@ from _incremental_value_harness import (  # noqa: E402
     mean_rps,
     run_incremental_value_study,
 )
-from qualify_player_availability_coverage import _CACHE_DIR, _LEAGUE_TO_DIVISION, _SEASONS  # noqa: E402
+from qualify_player_availability_coverage import (
+    _CACHE_DIR,
+    _LEAGUE_TO_DIVISION,
+    _SEASONS,
+)  # noqa: E402
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _REPORT_DIR = _BACKEND_ROOT.parent / "reports" / "research"
@@ -129,14 +134,20 @@ def load_rows() -> list[dict[str, Any]]:
                 if result not in _OUTCOME_CODE:
                     continue
                 try:
-                    quotes = {k: float(row[cols[k]]) for k in cols if k not in ("date", "home", "away", "result")}
+                    quotes = {
+                        k: float(row[cols[k]])
+                        for k in cols
+                        if k not in ("date", "home", "away", "result")
+                    }
                 except (TypeError, ValueError):
                     continue
                 if any(v <= 1.0 or not np.isfinite(v) for v in quotes.values()):
                     continue
 
                 open_probs = devig(quotes["open_h"], quotes["open_d"], quotes["open_a"])
-                close_probs = devig(quotes["close_h"], quotes["close_d"], quotes["close_a"])
+                close_probs = devig(
+                    quotes["close_h"], quotes["close_d"], quotes["close_a"]
+                )
                 # Dispersion: how far the best available price sits above the
                 # cross-book average, per outcome. Larger = more disagreement
                 # between books about that outcome.
@@ -175,8 +186,12 @@ def q1_efficiency(rows: list[dict[str, Any]]) -> dict[str, Any]:
         y = np.array([r["outcome"] for r in slice_rows])
         per_league[league] = {
             "n": len(slice_rows),
-            "rps_opening_quote": round(mean_rps(y, np.array([r["open_probs"] for r in slice_rows])), 5),
-            "rps_closing_quote": round(mean_rps(y, np.array([r["close_probs"] for r in slice_rows])), 5),
+            "rps_opening_quote": round(
+                mean_rps(y, np.array([r["open_probs"] for r in slice_rows])), 5
+            ),
+            "rps_closing_quote": round(
+                mean_rps(y, np.array([r["close_probs"] for r in slice_rows])), 5
+            ),
         }
     return {
         "n": len(test),
@@ -196,7 +211,9 @@ def q1_efficiency(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def main() -> int:
     rows = load_rows()
     if len(rows) < 100:
-        print(f"Only {len(rows)} usable rows — corpus odds columns missing or unparseable.")
+        print(
+            f"Only {len(rows)} usable rows — corpus odds columns missing or unparseable."
+        )
         return 1
     print(f"Loaded {len(rows)} fixtures with both opening and closing quotes.")
 

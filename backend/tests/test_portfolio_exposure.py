@@ -4,6 +4,7 @@ Stateless, advisory-only policy: grouping/haircut/aggregate-cap math, the
 vΩ.26 league-vocabulary regression, mutation safety, and the honest
 drawdown stub. See docs/adr/0005-portfolio-exposure-policy.md.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -20,7 +21,11 @@ def _match(
     edge_pct=5.0,
 ):
     best_value_bet = (
-        {"kelly_stake_pct": kelly_stake_pct, "edge_pct": edge_pct, "outcome": "home_win"}
+        {
+            "kelly_stake_pct": kelly_stake_pct,
+            "edge_pct": edge_pct,
+            "outcome": "home_win",
+        }
         if has_value
         else None
     )
@@ -128,16 +133,37 @@ def test_exceeds_aggregate_cap_flags_only_fixtures_that_push_running_total_over_
     # Different days -> no haircut interaction; isolates the aggregate-cap math.
     # EREDIVISIE aggregate_cap_pct = 3.0 * 0.025 * 100 = 7.5
     matches = [
-        _match(match_id="m1", match_date="2026-08-07T15:00:00Z", edge_pct=10.0, kelly_stake_pct=3.0),
-        _match(match_id="m2", match_date="2026-08-08T15:00:00Z", edge_pct=8.0, kelly_stake_pct=3.0),
-        _match(match_id="m3", match_date="2026-08-09T15:00:00Z", edge_pct=5.0, kelly_stake_pct=3.0),
+        _match(
+            match_id="m1",
+            match_date="2026-08-07T15:00:00Z",
+            edge_pct=10.0,
+            kelly_stake_pct=3.0,
+        ),
+        _match(
+            match_id="m2",
+            match_date="2026-08-08T15:00:00Z",
+            edge_pct=8.0,
+            kelly_stake_pct=3.0,
+        ),
+        _match(
+            match_id="m3",
+            match_date="2026-08-09T15:00:00Z",
+            edge_pct=5.0,
+            kelly_stake_pct=3.0,
+        ),
     ]
     summary = compute_portfolio_exposure(matches)
 
     by_id = {m["match_id"]: m for m in matches}
-    assert by_id["m1"]["portfolio"]["exceeds_aggregate_cap"] is False  # running 3.0 <= 7.5
-    assert by_id["m2"]["portfolio"]["exceeds_aggregate_cap"] is False  # running 6.0 <= 7.5
-    assert by_id["m3"]["portfolio"]["exceeds_aggregate_cap"] is True  # running 9.0 > 7.5
+    assert (
+        by_id["m1"]["portfolio"]["exceeds_aggregate_cap"] is False
+    )  # running 3.0 <= 7.5
+    assert (
+        by_id["m2"]["portfolio"]["exceeds_aggregate_cap"] is False
+    )  # running 6.0 <= 7.5
+    assert (
+        by_id["m3"]["portfolio"]["exceeds_aggregate_cap"] is True
+    )  # running 9.0 > 7.5
     assert summary["exceeds_aggregate_cap"] is True
 
 

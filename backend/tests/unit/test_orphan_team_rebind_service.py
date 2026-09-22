@@ -7,6 +7,7 @@ bind), and everything else worth testing -- digest verification, the
 optimistic row precondition, both postconditions, and the refusal set -- is
 dialect-independent.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -194,7 +195,9 @@ async def test_a_blocked_entry_is_refused(session: AsyncSession) -> None:
     await _seed_repairable_orphan(session)
     match = await session.get(Match, "fd-rebind-1")
     assert match is not None
-    match.match_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+    match.match_date = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        days=1
+    )
     await session.commit()
 
     manifest = await build_orphan_team_repair_manifest(session)

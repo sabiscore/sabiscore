@@ -37,6 +37,7 @@ Usage:
     cd backend
     PYTHONPATH=. python scripts/audit_g24_deployment_parity.py
 """
+
 from __future__ import annotations
 
 import json
@@ -63,12 +64,21 @@ def _load_vercel_json() -> dict[str, Any]:
 def _backend_paths() -> tuple[set[str], dict[str, list[str]]]:
     """Returns (all paths, {path: [methods]}) from the real, safely-imported
     FastAPI OpenAPI schema -- see module docstring point 2."""
-    from verify_openapi import _import_app  # same directory; reuses the safe-import timeout dance
+    from verify_openapi import (
+        _import_app,
+    )  # same directory; reuses the safe-import timeout dance
 
     app = _import_app()
     schema = app.openapi()
     paths = schema.get("paths", {})
-    methods = {path: sorted(m.upper() for m in ops if m.lower() in {"get", "post", "put", "patch", "delete"}) for path, ops in paths.items()}
+    methods = {
+        path: sorted(
+            m.upper()
+            for m in ops
+            if m.lower() in {"get", "post", "put", "patch", "delete"}
+        )
+        for path, ops in paths.items()
+    }
     return set(paths), methods
 
 
@@ -82,7 +92,11 @@ def _rewrite_prefix_covered(rewrite_source: str, backend_paths: set[str]) -> boo
     static_prefix = re.split(r":\w+\*?", rewrite_source, maxsplit=1)[0]
     if rewrite_source in backend_paths:
         return True
-    return any(p.startswith(static_prefix) for p in backend_paths) if static_prefix else False
+    return (
+        any(p.startswith(static_prefix) for p in backend_paths)
+        if static_prefix
+        else False
+    )
 
 
 def audit() -> dict[str, Any]:
@@ -95,35 +109,90 @@ def audit() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 - report, do not crash the audit
         backend_paths, backend_methods = set(), {}
         backend_status = f"IMPORT_FAILED: {exc}"
-        findings.append({"severity": "BLOCKED", "area": "backend_import", "detail": str(exc)})
+        findings.append(
+            {"severity": "BLOCKED", "area": "backend_import", "detail": str(exc)}
+        )
 
     # 1. Rewrites -> real backend paths.
     for rewrite in vercel.get("rewrites", []):
         source, dest = rewrite.get("source", ""), rewrite.get("destination", "")
         if "onrender.com" not in dest and "localhost" not in dest:
             continue
-        covered = _rewrite_prefix_covered(source, backend_paths) if backend_paths else None
+        covered = (
+            _rewrite_prefix_covered(source, backend_paths) if backend_paths else None
+        )
         if covered is False:
-            findings.append({"severity": "MISMATCH", "area": "rewrite", "detail": f"vercel.json rewrite '{source}' -> '{dest}' has no matching backend path prefix in the live OpenAPI schema"})
+            findings.append(
+                {
+                    "severity": "MISMATCH",
+                    "area": "rewrite",
+                    "detail": f"vercel.json rewrite '{source}' -> '{dest}' has no matching backend path prefix in the live OpenAPI schema",
+                }
+            )
 
     # 2. Crons -> the Next.js route files that actually exist.
     registered_crons = {c.get("path") for c in vercel.get("crons", [])}
     cron_dir = REPO_ROOT / "apps" / "web" / "src" / "app" / "api" / "cron"
-    existing_cron_routes = {f"/api/cron/{d.name}" for d in cron_dir.iterdir() if d.is_dir() and (d / "route.ts").exists()} if cron_dir.exists() else set()
+    existing_cron_routes = (
+        {
+            f"/api/cron/{d.name}"
+            for d in cron_dir.iterdir()
+            if d.is_dir() and (d / "route.ts").exists()
+        }
+        if cron_dir.exists()
+        else set()
+    )
     for route_path in sorted(existing_cron_routes - registered_crons):
-        findings.append({"severity": "MISMATCH", "area": "cron", "detail": f"{route_path}/route.ts exists but is NOT in vercel.json's crons array -- per sec 25 of the governing directive, it will never fire automatically (Vercel only registers crons listed there at deploy time)"})
+        findings.append(
+            {
+                "severity": "MISMATCH",
+                "area": "cron",
+                "detail": f"{route_path}/route.ts exists but is NOT in vercel.json's crons array -- per sec 25 of the governing directive, it will never fire automatically (Vercel only registers crons listed there at deploy time)",
+            }
+        )
     for route_path in sorted(registered_crons - existing_cron_routes):
-        findings.append({"severity": "MISMATCH", "area": "cron", "detail": f"vercel.json registers cron '{route_path}' but no matching Next.js route file was found"})
+        findings.append(
+            {
+                "severity": "MISMATCH",
+                "area": "cron",
+                "detail": f"vercel.json registers cron '{route_path}' but no matching Next.js route file was found",
+            }
+        )
 
     # 3. Auth headers -- explicitly N/A, not fabricated. See module docstring point 4.
-    findings.append({"severity": "N/A", "area": "auth_headers", "detail": "No customer-facing API-key auth layer exists in this repository as of this audit (directive sec 15.3.8/sec 27 -- standing future policy, not implemented code). Nothing to check."})
+    findings.append(
+        {
+            "severity": "N/A",
+            "area": "auth_headers",
+            "detail": "No customer-facing API-key auth layer exists in this repository as of this audit (directive sec 15.3.8/sec 27 -- standing future policy, not implemented code). Nothing to check.",
+        }
+    )
 
     # 4. HTTP methods -- report what exists, flag nothing unverifiable.
-    unusual = {p: m for p, m in backend_methods.items() if any(x in m for x in ("PUT", "DELETE", "PATCH"))}
+    unusual = {
+        p: m
+        for p, m in backend_methods.items()
+        if any(x in m for x in ("PUT", "DELETE", "PATCH"))
+    }
     if unusual:
-        findings.append({"severity": "INFO", "area": "http_methods", "detail": f"{len(unusual)} backend path(s) accept PUT/DELETE/PATCH -- verify these are intentional, not evaluated further by this offline audit", "paths": list(unusual)[:10]})
+        findings.append(
+            {
+                "severity": "INFO",
+                "area": "http_methods",
+                "detail": f"{len(unusual)} backend path(s) accept PUT/DELETE/PATCH -- verify these are intentional, not evaluated further by this offline audit",
+                "paths": list(unusual)[:10],
+            }
+        )
 
-    decision = "BLOCKED" if backend_status != "IMPORTED" else ("PARTIAL_MISMATCHES_FOUND" if any(f["severity"] == "MISMATCH" for f in findings) else "PARTIAL_NO_MISMATCHES_FOUND")
+    decision = (
+        "BLOCKED"
+        if backend_status != "IMPORTED"
+        else (
+            "PARTIAL_MISMATCHES_FOUND"
+            if any(f["severity"] == "MISMATCH" for f in findings)
+            else "PARTIAL_NO_MISMATCHES_FOUND"
+        )
+    )
 
     return {
         "report_kind": "g24_offline_deployment_parity_audit",

@@ -5,6 +5,7 @@ remediation script. The critical invariant is that a serialized calibrator is
 fit on the exact probability domain that PredictionEngine serves immediately
 before calibration.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -32,7 +33,9 @@ class _NamedMetaModel:
 
 def _learner(output: tuple[float, float, float]) -> MagicMock:
     model = MagicMock()
-    model.predict_proba.return_value = np.tile(np.asarray(output, dtype=np.float64), (4, 1))
+    model.predict_proba.return_value = np.tile(
+        np.asarray(output, dtype=np.float64), (4, 1)
+    )
     return model
 
 
@@ -142,7 +145,9 @@ def test_serving_head_guard_does_not_reject_a_meta_model_artifact() -> None:
     injector could never fit anything.
     """
     calibrator, outcome = _fit(_confident_bundle())
-    assert outcome != "error", "meta-model artifact must not trip the serving-head guard"
+    assert outcome != "error", (
+        "meta-model artifact must not trip the serving-head guard"
+    )
     assert outcome in {"accepted", "declined"}
 
 

@@ -25,6 +25,7 @@ an `F` code, so this still catches the exact historical bug (item 99's missing
 `scripts/` in the first place — proven below by injecting an equivalent
 regression, not merely asserted.
 """
+
 from __future__ import annotations
 
 import re
@@ -50,7 +51,9 @@ def _ruff_step_lines() -> list[str]:
 def test_no_step_runs_ruff_without_an_explicit_select() -> None:
     """Guard against reverting to a bare `ruff check` on either path."""
     lines = _ruff_step_lines()
-    assert len(lines) == 2, f"expected exactly 2 ruff invocations, found {len(lines)}:\n{lines}"
+    assert len(lines) == 2, (
+        f"expected exactly 2 ruff invocations, found {len(lines)}:\n{lines}"
+    )
     for line in lines:
         assert "--select E4,E7,E9,F" in line, (
             "a ruff step is missing the explicit CI-equivalent --select, which "
@@ -68,7 +71,15 @@ def test_the_real_ruff_steps_pass_on_this_tree() -> None:
     """
     for target in ("src", "scripts"):
         result = subprocess.run(
-            [sys.executable, "-m", "ruff", "check", f"{target}/", "--select", "E4,E7,E9,F"],
+            [
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                f"{target}/",
+                "--select",
+                "E4,E7,E9,F",
+            ],
             cwd=BACKEND_ROOT,
             capture_output=True,
             text=True,

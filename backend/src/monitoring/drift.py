@@ -123,11 +123,15 @@ def _load_manifest(reference_path: Path, manifest_path: Path) -> dict[str, Any]:
         raise DriftConfigurationError("Reference manifest is not READY")
     expected_hash = manifest.get("artifact", {}).get("sha256")
     if not expected_hash or expected_hash != _sha256_file(reference_path):
-        raise DriftConfigurationError("Reference artifact SHA-256 does not match manifest")
+        raise DriftConfigurationError(
+            "Reference artifact SHA-256 does not match manifest"
+        )
     return manifest
 
 
-def _evidently_report(reference_df: pd.DataFrame, current_df: pd.DataFrame) -> Mapping[str, Any]:
+def _evidently_report(
+    reference_df: pd.DataFrame, current_df: pd.DataFrame
+) -> Mapping[str, Any]:
     """Run Evidently using the pinned 0.7 API, isolated from the event loop."""
 
     try:
@@ -202,15 +206,23 @@ class DriftMonitor:
         if not 0 < fdr_alpha < 1:
             raise ValueError("fdr_alpha must be in (0, 1)")
         if not self.reference_path.exists():
-            raise DriftConfigurationError(f"Reference artifact not found: {self.reference_path}")
+            raise DriftConfigurationError(
+                f"Reference artifact not found: {self.reference_path}"
+            )
 
         self.manifest = _load_manifest(self.reference_path, self.manifest_path)
         self.reference_df = pd.read_parquet(self.reference_path)
         if self.reference_df.empty:
             raise DriftConfigurationError("Reference artifact contains no rows")
-        manifest_features = self.manifest.get("feature_schema", {}).get("ordered_features") or []
-        if manifest_features and list(self.reference_df.columns) != list(manifest_features):
-            raise DriftConfigurationError("Reference columns do not match manifest feature order")
+        manifest_features = (
+            self.manifest.get("feature_schema", {}).get("ordered_features") or []
+        )
+        if manifest_features and list(self.reference_df.columns) != list(
+            manifest_features
+        ):
+            raise DriftConfigurationError(
+                "Reference columns do not match manifest feature order"
+            )
 
         self.minimum_current_rows = minimum_current_rows
         self.dataset_drift_share = dataset_drift_share
@@ -279,10 +291,14 @@ class DriftMonitor:
             ),
         )
 
-        drifting = tuple(item.feature for item in feature_results if item.drift_detected)
+        drifting = tuple(
+            item.feature for item in feature_results if item.drift_detected
+        )
         evaluated_features = len(feature_results)
         drift_share = len(drifting) / evaluated_features if evaluated_features else 0.0
-        dataset_drift = bool(evaluated_features and drift_share >= self.dataset_drift_share)
+        dataset_drift = bool(
+            evaluated_features and drift_share >= self.dataset_drift_share
+        )
         drift_feature_share.record(drift_share)
 
         alert_delivered = False

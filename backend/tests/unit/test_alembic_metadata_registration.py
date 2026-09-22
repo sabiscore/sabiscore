@@ -43,6 +43,7 @@ The first reading is what made an earlier session trust this guard. The second
 is the run that matters. Capturing the metadata in a subprocess makes the two
 agree.
 """
+
 from __future__ import annotations
 
 import ast
@@ -179,7 +180,9 @@ def metadata() -> dict[str, Any]:
 def test_the_scan_finds_something(metadata: dict[str, Any]) -> None:
     """Guard the guard: an empty scan would make every assertion below vacuous."""
     declared = _declared_tablenames()
-    assert len(declared) > 10, f"AST scan found only {len(declared)} tables - scan is broken"
+    assert len(declared) > 10, (
+        f"AST scan found only {len(declared)} tables - scan is broken"
+    )
     assert metadata["tables"], "no tables registered - env.py import replay is broken"
 
 
@@ -196,7 +199,9 @@ def test_every_mapped_table_is_reachable_from_alembic_env(
     assert not missing, (
         "These tables are declared under src/ but are NOT on Base.metadata when "
         "alembic/env.py runs, so `alembic check` will propose DROPPING them:\n"
-        + "\n".join(f"  {table}  <- {source}" for table, source in sorted(missing.items()))
+        + "\n".join(
+            f"  {table}  <- {source}" for table, source in sorted(missing.items())
+        )
         + "\n\nFix: import the defining module in alembic/env.py."
     )
 
@@ -240,7 +245,11 @@ def _migration_unique_constraint_names() -> dict[str, str]:
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            name = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", None)
+            )
             if name != "UniqueConstraint":
                 continue
             for keyword in node.keywords:
@@ -286,7 +295,9 @@ def test_named_unique_constraints_in_migrations_exist_in_the_orm(
     assert not missing, (
         "These unique constraints are created by a migration but are absent "
         "from Base.metadata, so `alembic check` will propose dropping them:\n"
-        + "\n".join(f"  {name}  <- {source}" for name, source in sorted(missing.items()))
+        + "\n".join(
+            f"  {name}  <- {source}" for name, source in sorted(missing.items())
+        )
         + "\n\nFix: declare sa.UniqueConstraint(..., name=...) in the model's "
         "__table_args__ - a unique Index is NOT the same object."
     )
@@ -336,7 +347,11 @@ def _migration_string_lengths() -> dict[tuple[str, str], tuple[int, str]]:
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            op = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            op = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", None)
+            )
             if op not in {"create_table", "add_column"} or not node.args:
                 continue
             table_node = node.args[0]
@@ -348,7 +363,9 @@ def _migration_string_lengths() -> dict[tuple[str, str], tuple[int, str]]:
             for arg in node.args[1:]:
                 column = _column_length(arg)
                 if column:
-                    found.setdefault((table_node.value, column[0]), (column[1], path.name))
+                    found.setdefault(
+                        (table_node.value, column[0]), (column[1], path.name)
+                    )
     return found
 
 
@@ -369,7 +386,9 @@ def test_migration_declared_string_lengths_match_the_orm(
     against migration 0014's VARCHAR(32)/(255)/(320).
     """
     mismatches: list[str] = []
-    for (table, column), (expected, source) in sorted(_migration_string_lengths().items()):
+    for (table, column), (expected, source) in sorted(
+        _migration_string_lengths().items()
+    ):
         declared = metadata["columns"].get(table, {}).get(column)
         if declared is None:  # dropped later, or not a mapped table
             continue

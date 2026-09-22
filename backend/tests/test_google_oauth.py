@@ -10,7 +10,9 @@ from src.services.google_oauth import GoogleOAuthError, verify_google_id_token
 
 
 @pytest.mark.asyncio
-async def test_google_id_token_requires_configured_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_google_id_token_requires_configured_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("GOOGLE_OAUTH_ENABLED", "false")
     monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
 
@@ -30,12 +32,13 @@ async def test_google_id_token_verifies_signature_audience_issuer_and_nonce(
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
     public_numbers = private_key.public_key().public_numbers()
 
     def b64url(value: int) -> str:
         import base64
+
         size = (value.bit_length() + 7) // 8
         raw = value.to_bytes(size, "big")
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
@@ -52,15 +55,23 @@ async def test_google_id_token_verifies_signature_audience_issuer_and_nonce(
     client_id = "google-client-id.apps.googleusercontent.com"
     nonce = "test-nonce-123456789"
     from cryptography.hazmat.primitives import serialization
+
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
 
     now = datetime.now(timezone.utc)
-    from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
-    private_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        PrivateFormat,
+        NoEncryption,
+    )
+
+    private_pem = private_key.private_bytes(
+        Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()
+    )
 
     token = jwt.encode(
         {

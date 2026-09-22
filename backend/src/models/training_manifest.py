@@ -35,7 +35,9 @@ from src.models.certification_policy import policy_sha256
 #: This file lives at backend/src/models/, so parents[2] is backend/ — the same
 #: depth convention test_training_leakage_contract.py's BACKEND_ROOT uses.
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_METRIC_CONTRACT_PATH = _BACKEND_ROOT / "reports" / "evaluation" / "metric-contract.json"
+_METRIC_CONTRACT_PATH = (
+    _BACKEND_ROOT / "reports" / "evaluation" / "metric-contract.json"
+)
 
 #: Architecture summary for the trained artifact (directive v7.3 P4's
 #: "model_family"), recorded as a contract so a change to the base learners or
@@ -106,9 +108,9 @@ def _stable_digest(obj: Any) -> str:
     codebase rather than each module inventing its own.
     """
     return _sha256_bytes(
-        json.dumps(obj, separators=(",", ":"), sort_keys=True, ensure_ascii=True).encode(
-            "utf-8"
-        )
+        json.dumps(
+            obj, separators=(",", ":"), sort_keys=True, ensure_ascii=True
+        ).encode("utf-8")
     )
 
 
@@ -261,7 +263,9 @@ def build_training_manifest(
         "git": {"commit": git_commit(), "dirty": git_is_dirty()},
         "dataset": {
             **dataset_fingerprint(cache_dir),
-            "auxiliary": {name: dict(fp) for name, fp in (auxiliary_datasets or {}).items()},
+            "auxiliary": {
+                name: dict(fp) for name, fp in (auxiliary_datasets or {}).items()
+            },
         },
         "provider_versions": {
             "mode": "offline_corpus",
@@ -345,8 +349,12 @@ def write_training_manifest(
         raise ValueError(
             f"refusing to write a training manifest outside the repository: {out_dir}"
         )
-    if artifact_suffix is not None and not _ARTIFACT_SUFFIX_RE.fullmatch(artifact_suffix):
-        raise ValueError(f"invalid artifact suffix for a manifest filename: {artifact_suffix!r}")
+    if artifact_suffix is not None and not _ARTIFACT_SUFFIX_RE.fullmatch(
+        artifact_suffix
+    ):
+        raise ValueError(
+            f"invalid artifact suffix for a manifest filename: {artifact_suffix!r}"
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     name = (
         "training_manifest.json"

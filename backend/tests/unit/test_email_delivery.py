@@ -1,4 +1,5 @@
 """Unit tests for email_delivery (stdlib SMTP transport, config-gated)."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -21,7 +22,9 @@ def test_not_configured_by_default(monkeypatch) -> None:
     monkeypatch.setattr(settings, "enable_email_notifications", False)
     assert is_email_configured() is False
 
-    result = send_notification_email(to_address="fan@example.com", subject="s", body="b")
+    result = send_notification_email(
+        to_address="fan@example.com", subject="s", body="b"
+    )
     assert result.sent is False
     assert result.reason == "not_configured"
 
@@ -39,9 +42,13 @@ def test_sends_via_smtp_with_tls_and_auth_when_configured(monkeypatch) -> None:
     mock_client.__enter__ = MagicMock(return_value=mock_client)
     mock_client.__exit__ = MagicMock(return_value=False)
 
-    with patch("src.services.email_delivery.smtplib.SMTP", return_value=mock_client) as mock_smtp:
+    with patch(
+        "src.services.email_delivery.smtplib.SMTP", return_value=mock_client
+    ) as mock_smtp:
         result = send_notification_email(
-            to_address="fan@example.com", subject="Kickoff reminder", body="Match starts soon."
+            to_address="fan@example.com",
+            subject="Kickoff reminder",
+            body="Match starts soon.",
         )
 
     assert result.sent is True
@@ -59,8 +66,13 @@ def test_sends_via_smtp_with_tls_and_auth_when_configured(monkeypatch) -> None:
 def test_transport_failure_never_raises(monkeypatch) -> None:
     _configure(monkeypatch)
 
-    with patch("src.services.email_delivery.smtplib.SMTP", side_effect=OSError("connection refused")):
-        result = send_notification_email(to_address="fan@example.com", subject="s", body="b")
+    with patch(
+        "src.services.email_delivery.smtplib.SMTP",
+        side_effect=OSError("connection refused"),
+    ):
+        result = send_notification_email(
+            to_address="fan@example.com", subject="s", body="b"
+        )
 
     assert result.sent is False
     assert result.reason == "send_failed"
@@ -75,7 +87,9 @@ def test_no_credentials_skips_login(monkeypatch) -> None:
     mock_client.__exit__ = MagicMock(return_value=False)
 
     with patch("src.services.email_delivery.smtplib.SMTP", return_value=mock_client):
-        result = send_notification_email(to_address="fan@example.com", subject="s", body="b")
+        result = send_notification_email(
+            to_address="fan@example.com", subject="s", body="b"
+        )
 
     assert result.sent is True
     mock_client.login.assert_not_called()

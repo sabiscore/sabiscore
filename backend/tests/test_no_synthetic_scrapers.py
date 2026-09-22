@@ -31,7 +31,9 @@ def test_legacy_scrapers_do_not_generate_synthetic_football_evidence() -> None:
         for token in FORBIDDEN_TOKENS:
             if token.lower() in source:
                 offenders.append(f"{path.name}: {token}")
-    assert not offenders, "Synthetic production scraper paths found:\n" + "\n".join(offenders)
+    assert not offenders, "Synthetic production scraper paths found:\n" + "\n".join(
+        offenders
+    )
 
 
 def test_canonical_manifest_ingestion_stays_data_only() -> None:

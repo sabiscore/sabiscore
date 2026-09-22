@@ -32,6 +32,7 @@ Run
     cd backend && PYTHONPATH=. ../.venv-ml/Scripts/python.exe \
         scripts/measure_xg_feature_ate.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -124,7 +125,9 @@ def build_features(corpus: pd.DataFrame) -> pd.DataFrame:
             pd.DataFrame(
                 {
                     "key": corpus.index,
-                    "part": corpus["sabi_league"] + "|" + corpus["sabi_season"].astype(str),
+                    "part": corpus["sabi_league"]
+                    + "|"
+                    + corpus["sabi_season"].astype(str),
                     "team": corpus["home_team"],
                     "side": "home",
                     "xg_for": corpus["home_xg"].astype(float),
@@ -135,7 +138,9 @@ def build_features(corpus: pd.DataFrame) -> pd.DataFrame:
             pd.DataFrame(
                 {
                     "key": corpus.index,
-                    "part": corpus["sabi_league"] + "|" + corpus["sabi_season"].astype(str),
+                    "part": corpus["sabi_league"]
+                    + "|"
+                    + corpus["sabi_season"].astype(str),
                     "team": corpus["away_team"],
                     "side": "away",
                     "xg_for": corpus["away_xg"].astype(float),
@@ -174,7 +179,8 @@ def build_features(corpus: pd.DataFrame) -> pd.DataFrame:
 
     # 0 = home win, 1 = draw, 2 = away win — the CausalFeatureSelector convention.
     out["match_result"] = np.where(
-        out["home_goals"] > out["away_goals"], 0,
+        out["home_goals"] > out["away_goals"],
+        0,
         np.where(out["home_goals"] == out["away_goals"], 1, 2),
     )
     return out
@@ -215,7 +221,9 @@ def main() -> int:
     )
 
     print(f"\nATE vs home win (threshold |ATE| >= {PRACTICAL_ATE})")
-    print(f"{'feature':<28}{'ate_win':>10}{'ate_draw':>10}{'p':>10}  {'verdict':<18}class")
+    print(
+        f"{'feature':<28}{'ate_win':>10}{'ate_draw':>10}{'p':>10}  {'verdict':<18}class"
+    )
     payload = []
     for r in sorted(results, key=lambda x: -abs(x.ate_win)):
         verdict = "PASS" if abs(r.ate_win) >= PRACTICAL_ATE else "below threshold"

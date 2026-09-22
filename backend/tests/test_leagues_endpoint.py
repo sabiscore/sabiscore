@@ -65,7 +65,10 @@ async def test_ucl_model_artifact_is_generic():
     """UCL must point to the generic production model, not a league-specific pkl."""
     result = await list_leagues()
     ucl = next(item for item in result if item.id == "UCL")
-    assert "sabiscore_production_v2" in ucl.model_artifact or ucl.model_artifact.endswith(".joblib")
+    assert (
+        "sabiscore_production_v2" in ucl.model_artifact
+        or ucl.model_artifact.endswith(".joblib")
+    )
 
 
 @pytest.mark.asyncio
@@ -83,7 +86,9 @@ async def test_all_items_have_generated_at():
     result = await list_leagues()
     for item in result:
         assert item.generated_at, f"{item.id} missing generated_at"
-        assert "T" in item.generated_at, f"{item.id} generated_at not ISO format: {item.generated_at}"
+        assert "T" in item.generated_at, (
+            f"{item.id} generated_at not ISO format: {item.generated_at}"
+        )
 
 
 def test_league_list_item_schema():

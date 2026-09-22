@@ -64,20 +64,37 @@ def test_a_missing_kickoff_hour_is_absent_not_nearest_neighbour() -> None:
     """A gap in the series must stay a gap; the 14:00 reading is not 15:00's."""
     payload = _hourly()
     payload["hourly"]["time"] = ["2026-08-16T14:00", "2026-08-16T16:00"]
-    assert _parse_hourly(
-        payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
-    ) is None
+    assert (
+        _parse_hourly(
+            payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(
     "mutate",
     [
         pytest.param(lambda p: p["hourly"].pop("precipitation"), id="variable-missing"),
-        pytest.param(lambda p: p["hourly"].update({"temperature_2m": [1.0, None, 2.0]}), id="null-value"),
-        pytest.param(lambda p: p["hourly"].update({"temperature_2m": [1.0, float("nan"), 2.0]}), id="nan-value"),
-        pytest.param(lambda p: p["hourly"].update({"wind_speed_10m": [1.0, float("inf"), 2.0]}), id="inf-value"),
-        pytest.param(lambda p: p["hourly"].update({"precipitation": [0.0, True, 0.1]}), id="bool-not-a-reading"),
-        pytest.param(lambda p: p["hourly"].update({"wind_speed_10m": [1.0]}), id="short-series"),
+        pytest.param(
+            lambda p: p["hourly"].update({"temperature_2m": [1.0, None, 2.0]}),
+            id="null-value",
+        ),
+        pytest.param(
+            lambda p: p["hourly"].update({"temperature_2m": [1.0, float("nan"), 2.0]}),
+            id="nan-value",
+        ),
+        pytest.param(
+            lambda p: p["hourly"].update({"wind_speed_10m": [1.0, float("inf"), 2.0]}),
+            id="inf-value",
+        ),
+        pytest.param(
+            lambda p: p["hourly"].update({"precipitation": [0.0, True, 0.1]}),
+            id="bool-not-a-reading",
+        ),
+        pytest.param(
+            lambda p: p["hourly"].update({"wind_speed_10m": [1.0]}), id="short-series"
+        ),
         pytest.param(lambda p: p.update({"hourly": []}), id="hourly-not-an-object"),
     ],
 )
@@ -85,9 +102,12 @@ def test_partial_or_malformed_responses_yield_nothing(mutate) -> None:
     """Never a partially populated reading — that would look like a measurement."""
     payload = _hourly()
     mutate(payload)
-    assert _parse_hourly(
-        payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
-    ) is None
+    assert (
+        _parse_hourly(
+            payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -103,7 +123,9 @@ async def test_a_past_kickoff_reads_the_archive() -> None:
 
 @pytest.mark.asyncio
 async def test_a_future_kickoff_reads_the_forecast() -> None:
-    soon = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(days=2)
+    soon = datetime.now(timezone.utc).replace(
+        minute=0, second=0, microsecond=0
+    ) + timedelta(days=2)
     stamp = soon.strftime("%Y-%m-%dT%H:00")
     payload = {
         "hourly": {
@@ -115,7 +137,9 @@ async def test_a_future_kickoff_reads_the_forecast() -> None:
         }
     }
     provider = _StubProvider(payload)
-    reading = await provider.weather_at_kickoff(latitude=53.4, longitude=-2.9, kickoff_utc=soon)
+    reading = await provider.weather_at_kickoff(
+        latitude=53.4, longitude=-2.9, kickoff_utc=soon
+    )
     assert reading is not None and reading.source == "forecast"
     assert "archive" not in (provider.last_url or "")
 
@@ -124,31 +148,55 @@ async def test_a_future_kickoff_reads_the_forecast() -> None:
 async def test_beyond_the_forecast_horizon_is_absent_never_extrapolated() -> None:
     far = datetime.now(timezone.utc) + timedelta(days=FORECAST_HORIZON_DAYS + 5)
     provider = _StubProvider(_hourly())
-    assert await provider.weather_at_kickoff(
-        latitude=53.4, longitude=-2.9, kickoff_utc=far
-    ) is None
+    assert (
+        await provider.weather_at_kickoff(
+            latitude=53.4, longitude=-2.9, kickoff_utc=far
+        )
+        is None
+    )
     assert provider.last_url is None, "no request should be issued past the horizon"
 
 
 @pytest.mark.asyncio
-async def test_geocode_country_mismatch_returns_none_rather_than_another_country() -> None:
+async def test_geocode_country_mismatch_returns_none_rather_than_another_country() -> (
+    None
+):
     """`Valencia` exists in both ES and VE. A filtered miss must not fall through."""
-    provider = _StubProvider({
-        "results": [
-            {"name": "Valencia", "country_code": "VE", "latitude": 10.2, "longitude": -67.9},
-        ]
-    })
+    provider = _StubProvider(
+        {
+            "results": [
+                {
+                    "name": "Valencia",
+                    "country_code": "VE",
+                    "latitude": 10.2,
+                    "longitude": -67.9,
+                },
+            ]
+        }
+    )
     assert await provider.geocode("Valencia", country_code="ES") is None
 
 
 @pytest.mark.asyncio
 async def test_geocode_filters_to_the_requested_country() -> None:
-    provider = _StubProvider({
-        "results": [
-            {"name": "Valencia", "country_code": "VE", "latitude": 10.2, "longitude": -67.9},
-            {"name": "Valencia", "country_code": "ES", "latitude": 39.47, "longitude": -0.38},
-        ]
-    })
+    provider = _StubProvider(
+        {
+            "results": [
+                {
+                    "name": "Valencia",
+                    "country_code": "VE",
+                    "latitude": 10.2,
+                    "longitude": -67.9,
+                },
+                {
+                    "name": "Valencia",
+                    "country_code": "ES",
+                    "latitude": 39.47,
+                    "longitude": -0.38,
+                },
+            ]
+        }
+    )
     point = await provider.geocode("Valencia", country_code="ES")
     assert point is not None and point.country_code == "ES"
     assert point.latitude == pytest.approx(39.47)

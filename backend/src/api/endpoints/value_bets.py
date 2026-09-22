@@ -23,11 +23,19 @@ MIN_EDGE_THRESHOLD = 4.2
 class ValueBetFilter(BaseModel):
     """Filtering criteria for value bet discovery."""
 
-    league: Optional[str] = Field(None, description="Filter by league (e.g., EPL, LaLiga)")
-    min_edge: float = Field(MIN_EDGE_THRESHOLD, ge=0, description="Minimum edge percentage")
-    min_confidence: float = Field(0.70, ge=0, le=1, description="Minimum confidence threshold")
+    league: Optional[str] = Field(
+        None, description="Filter by league (e.g., EPL, LaLiga)"
+    )
+    min_edge: float = Field(
+        MIN_EDGE_THRESHOLD, ge=0, description="Minimum edge percentage"
+    )
+    min_confidence: float = Field(
+        0.70, ge=0, le=1, description="Minimum confidence threshold"
+    )
     max_results: int = Field(20, ge=1, le=100, description="Maximum results to return")
-    markets: Optional[List[str]] = Field(None, description="Markets to include (home_win, draw, away_win)")
+    markets: Optional[List[str]] = Field(
+        None, description="Markets to include (home_win, draw, away_win)"
+    )
 
 
 class ValueBetSummary(BaseModel):
@@ -77,7 +85,9 @@ async def list_value_bets(
 
     Results ordered by edge (descending) to surface highest-value opportunities first.
     """
-    cache_key = f"value_bets:{league or 'all'}:{min_edge}:{min_confidence}:{max_results}"
+    cache_key = (
+        f"value_bets:{league or 'all'}:{min_edge}:{min_confidence}:{max_results}"
+    )
 
     cached = cache_manager.get(cache_key)
     if cached and isinstance(cached, dict):
@@ -119,7 +129,10 @@ async def list_value_bets(
                     conf = vb.get("confidence", 0)
 
                     if edge >= min_edge and conf >= min_confidence:
-                        if league and vb.get("league", features.get("league")) != league:
+                        if (
+                            league
+                            and vb.get("league", features.get("league")) != league
+                        ):
                             continue
                         try:
                             value_bets.append(ValueBetResponse(**vb))
@@ -139,7 +152,9 @@ async def list_value_bets(
 
     except Exception as exc:
         logger.error("Failed to retrieve value bets: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve value bets") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve value bets"
+        ) from exc
 
 
 @router.get("/summary", response_model=ValueBetSummary)
@@ -182,7 +197,11 @@ async def value_bet_summary(
 
             for vb in value_bets:
                 # Aggregate by league (if available in match_id prefix or similar)
-                league_key = vb.match_id.split("_")[0].upper() if "_" in vb.match_id else "unknown"
+                league_key = (
+                    vb.match_id.split("_")[0].upper()
+                    if "_" in vb.match_id
+                    else "unknown"
+                )
                 by_league[league_key] = by_league.get(league_key, 0) + 1
 
                 by_market[vb.market] = by_market.get(vb.market, 0) + 1
@@ -191,7 +210,8 @@ async def value_bet_summary(
             summary = ValueBetSummary(
                 total_bets=len(value_bets),
                 avg_edge=sum(vb.edge_percent for vb in value_bets) / len(value_bets),
-                avg_confidence=sum(vb.confidence for vb in value_bets) / len(value_bets),
+                avg_confidence=sum(vb.confidence for vb in value_bets)
+                / len(value_bets),
                 total_potential_edge_ngn=total_edge_ngn,
                 by_league=by_league,
                 by_market=by_market,
@@ -202,7 +222,9 @@ async def value_bet_summary(
 
     except Exception as exc:
         logger.error("Failed to compute value bet summary: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to compute summary") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to compute summary"
+        ) from exc
 
 
 @router.get("/{match_id}", response_model=List[ValueBetResponse])
@@ -229,7 +251,9 @@ async def get_value_bets_for_match(
         prediction = result.scalar_one_or_none()
 
         if not prediction:
-            raise HTTPException(status_code=404, detail=f"No prediction found for match {match_id}")
+            raise HTTPException(
+                status_code=404, detail=f"No prediction found for match {match_id}"
+            )
 
         features = prediction.features
         if isinstance(features, str):
@@ -258,8 +282,12 @@ async def get_value_bets_for_match(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to get value bets for match %s: %s", match_id, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve value bets") from exc
+        logger.error(
+            "Failed to get value bets for match %s: %s", match_id, exc, exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve value bets"
+        ) from exc
 
 
 __all__ = ["router"]

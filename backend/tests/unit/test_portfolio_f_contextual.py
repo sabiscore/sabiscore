@@ -5,6 +5,7 @@ over the whole corpus would include the fixture being predicted and
 manufacture a spectacular fake result; these tests pin that every referee
 statistic is built strictly from EARLIER fixtures.
 """
+
 import sys
 from datetime import date
 from pathlib import Path
@@ -14,7 +15,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from study_portfolio_f_contextual_state import enrich_contextual  # noqa: E402
 
 
-def _fixture(day: int, home: str, away: str, outcome: int, referee: str | None = None, season: int = 2024):
+def _fixture(
+    day: int,
+    home: str,
+    away: str,
+    outcome: int,
+    referee: str | None = None,
+    season: int = 2024,
+):
     return {
         "league": "EPL",
         "season": season,
@@ -37,7 +45,9 @@ def test_referee_bias_never_includes_the_fixture_being_scored():
     # Every fixture is a home win. If the referee's own match leaked into its
     # own feature, the LAST fixture would still be scored against a rate built
     # only from the four before it -- and crucially the FIRST must be 0.0.
-    fixtures = [_fixture(d, f"H{d}", f"A{d}", 0, referee="R Smith") for d in range(1, 6)]
+    fixtures = [
+        _fixture(d, f"H{d}", f"A{d}", 0, referee="R Smith") for d in range(1, 6)
+    ]
     rows = enrich_contextual(fixtures)
     assert rows[0]["referee_prior_matches"] == 0
     # Prior-match counts must be strictly the number of EARLIER fixtures.
@@ -48,7 +58,9 @@ def test_referee_bias_is_shrunk_toward_zero_for_small_samples():
     # Three prior fixtures, all home wins, in a league whose base rate is also
     # built from those same three -- the raw deviation is 0, and even a
     # non-zero deviation would be heavily shrunk at n=3 vs the prior of 20.
-    fixtures = [_fixture(d, f"H{d}", f"A{d}", 0, referee="R Smith") for d in range(1, 5)]
+    fixtures = [
+        _fixture(d, f"H{d}", f"A{d}", 0, referee="R Smith") for d in range(1, 5)
+    ]
     rows = enrich_contextual(fixtures)
     assert abs(rows[-1]["referee_home_bias"]) < 0.2
 

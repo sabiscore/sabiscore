@@ -8,6 +8,7 @@ Tests cover:
   - Root orchestrator: _validate_report propagates backend gate failures,
     _find_prior_baseline resolution
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -24,10 +25,10 @@ import pytest
 # ── path bootstrap ─────────────────────────────────────────────────────────────
 # test file: backend/tests/test_phase_c_pipeline.py
 # parents[0] = backend/tests, parents[1] = backend, parents[2] = repo root
-BACKEND_ROOT = Path(__file__).resolve().parents[1]   # sabiscore/backend
-REPO_ROOT = Path(__file__).resolve().parents[2]      # sabiscore
-SCRIPTS_ROOT = REPO_ROOT / "scripts"                 # sabiscore/scripts
-BACKEND_SCRIPTS = BACKEND_ROOT / "scripts"           # sabiscore/backend/scripts
+BACKEND_ROOT = Path(__file__).resolve().parents[1]  # sabiscore/backend
+REPO_ROOT = Path(__file__).resolve().parents[2]  # sabiscore
+SCRIPTS_ROOT = REPO_ROOT / "scripts"  # sabiscore/scripts
+BACKEND_SCRIPTS = BACKEND_ROOT / "scripts"  # sabiscore/backend/scripts
 SRC_ROOT = BACKEND_ROOT / "src"
 
 for _p in (str(SRC_ROOT), str(BACKEND_ROOT), str(REPO_ROOT)):
@@ -53,7 +54,9 @@ def _bootstrap_models_package() -> None:
         sys.modules["models.evaluation"] = types.ModuleType("models.evaluation")
 
     _load_into("models.feature_registry", SRC_ROOT / "models" / "feature_registry.py")
-    _load_into("models.evaluation.metrics", SRC_ROOT / "models" / "evaluation" / "metrics.py")
+    _load_into(
+        "models.evaluation.metrics", SRC_ROOT / "models" / "evaluation" / "metrics.py"
+    )
     _load_into(
         "models.evaluation.temporal_splits",
         SRC_ROOT / "models" / "evaluation" / "temporal_splits.py",
@@ -64,6 +67,7 @@ _bootstrap_models_package()
 
 
 # ── lazy module loaders ────────────────────────────────────────────────────────
+
 
 def _load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -93,6 +97,7 @@ def root_eval():
 
 # ── fixtures ───────────────────────────────────────────────────────────────────
 
+
 def _make_proba(n: int, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
     p = rng.dirichlet([1.5, 1.0, 1.5], size=n).astype(np.float64)
@@ -105,6 +110,7 @@ def _make_y(n: int, seed: int = 0) -> np.ndarray:
 
 
 # ── evaluate_baseline_v8: metric helpers ──────────────────────────────────────
+
 
 class TestComputeRps:
     def test_perfect_prediction_returns_zero(self, eval_v8):
@@ -131,6 +137,7 @@ class TestComputeRps:
 
 
 # ── evaluate_baseline_v8: gate validation ─────────────────────────────────────
+
 
 class TestValidateReport:
     """Tests for _validate_report() in backend/scripts/evaluate_baseline_v8.py."""
@@ -194,12 +201,31 @@ class TestValidateReport:
 
 # ── evaluate_baseline_v8: delta report ───────────────────────────────────────
 
+
 class TestBuildDeltaReport:
     def test_delta_computed_correctly(self, eval_v8):
-        current = {"epl": {"rps": 0.195, "draw_f1": 0.38, "balanced_accuracy": 0.43,
-                            "brier": 0.55, "log_loss": 0.95, "accuracy": 0.52, "macro_f1": 0.42}}
-        baseline = {"epl": {"rps": 0.200, "draw_f1": 0.35, "balanced_accuracy": 0.42,
-                             "brier": 0.56, "log_loss": 0.97, "accuracy": 0.51, "macro_f1": 0.41}}
+        current = {
+            "epl": {
+                "rps": 0.195,
+                "draw_f1": 0.38,
+                "balanced_accuracy": 0.43,
+                "brier": 0.55,
+                "log_loss": 0.95,
+                "accuracy": 0.52,
+                "macro_f1": 0.42,
+            }
+        }
+        baseline = {
+            "epl": {
+                "rps": 0.200,
+                "draw_f1": 0.35,
+                "balanced_accuracy": 0.42,
+                "brier": 0.56,
+                "log_loss": 0.97,
+                "accuracy": 0.51,
+                "macro_f1": 0.41,
+            }
+        }
         deltas = eval_v8._build_delta_report(current, baseline)
         assert "epl" in deltas
         assert deltas["epl"]["rps"] == pytest.approx(-0.005, abs=1e-4)
@@ -210,28 +236,79 @@ class TestBuildDeltaReport:
         assert eval_v8._build_delta_report(current, None) == {}
 
     def test_missing_league_in_baseline_skipped(self, eval_v8):
-        current = {"epl": {"rps": 0.195, "draw_f1": 0.35, "balanced_accuracy": 0.41,
-                            "brier": 0.55, "log_loss": 0.95, "accuracy": 0.52, "macro_f1": 0.41},
-                   "bundesliga": {"rps": 0.202, "draw_f1": 0.32, "balanced_accuracy": 0.40,
-                                   "brier": 0.57, "log_loss": 0.98, "accuracy": 0.50, "macro_f1": 0.40}}
-        baseline = {"epl": {"rps": 0.200, "draw_f1": 0.35, "balanced_accuracy": 0.42,
-                             "brier": 0.56, "log_loss": 0.97, "accuracy": 0.51, "macro_f1": 0.41}}
+        current = {
+            "epl": {
+                "rps": 0.195,
+                "draw_f1": 0.35,
+                "balanced_accuracy": 0.41,
+                "brier": 0.55,
+                "log_loss": 0.95,
+                "accuracy": 0.52,
+                "macro_f1": 0.41,
+            },
+            "bundesliga": {
+                "rps": 0.202,
+                "draw_f1": 0.32,
+                "balanced_accuracy": 0.40,
+                "brier": 0.57,
+                "log_loss": 0.98,
+                "accuracy": 0.50,
+                "macro_f1": 0.40,
+            },
+        }
+        baseline = {
+            "epl": {
+                "rps": 0.200,
+                "draw_f1": 0.35,
+                "balanced_accuracy": 0.42,
+                "brier": 0.56,
+                "log_loss": 0.97,
+                "accuracy": 0.51,
+                "macro_f1": 0.41,
+            }
+        }
         deltas = eval_v8._build_delta_report(current, baseline)
         assert "epl" in deltas
         assert "bundesliga" not in deltas
 
     def test_all_tracked_metrics_present(self, eval_v8):
-        current = {"epl": {"accuracy": 0.52, "log_loss": 0.95, "rps": 0.195, "brier": 0.55,
-                            "macro_f1": 0.42, "balanced_accuracy": 0.43, "draw_f1": 0.38}}
-        baseline = {"epl": {"accuracy": 0.51, "log_loss": 0.97, "rps": 0.200, "brier": 0.56,
-                             "macro_f1": 0.41, "balanced_accuracy": 0.42, "draw_f1": 0.35}}
+        current = {
+            "epl": {
+                "accuracy": 0.52,
+                "log_loss": 0.95,
+                "rps": 0.195,
+                "brier": 0.55,
+                "macro_f1": 0.42,
+                "balanced_accuracy": 0.43,
+                "draw_f1": 0.38,
+            }
+        }
+        baseline = {
+            "epl": {
+                "accuracy": 0.51,
+                "log_loss": 0.97,
+                "rps": 0.200,
+                "brier": 0.56,
+                "macro_f1": 0.41,
+                "balanced_accuracy": 0.42,
+                "draw_f1": 0.35,
+            }
+        }
         deltas = eval_v8._build_delta_report(current, baseline)
-        expected_keys = {"accuracy", "log_loss", "rps", "brier", "macro_f1",
-                         "balanced_accuracy", "draw_f1"}
+        expected_keys = {
+            "accuracy",
+            "log_loss",
+            "rps",
+            "brier",
+            "macro_f1",
+            "balanced_accuracy",
+            "draw_f1",
+        }
         assert set(deltas["epl"].keys()) == expected_keys
 
 
 # ── validate_feature_expansion: dataclass schema ──────────────────────────────
+
 
 class TestFamilyAblationResultSchema:
     """FamilyAblationResult must expose leagues_below_threshold."""
@@ -282,10 +359,13 @@ class TestFamilyAblationResultSchema:
 
 # ── validate_feature_expansion: prune_flag logic ─────────────────────────────
 
+
 class TestPruneFlagLogic:
     """prune_flag must be True iff leagues_below_threshold >= 3 (when per-league data available)."""
 
-    def _ablation_result(self, val_exp, leagues_below: int, mean_shap: float = 0.001) -> object:
+    def _ablation_result(
+        self, val_exp, leagues_below: int, mean_shap: float = 0.001
+    ) -> object:
         return val_exp.FamilyAblationResult(
             family="test_family",
             features=["feat_a"],
@@ -323,6 +403,7 @@ class TestPruneFlagLogic:
 
 # ── validate_feature_expansion: n_folds accuracy ────────────────────────────
 
+
 class TestNFoldsAccuracy:
     """n_folds must reflect actual walk-forward fold count, never hardcoded 0."""
 
@@ -357,6 +438,7 @@ class TestNFoldsAccuracy:
 
 
 # ── root orchestrator: _validate_report ──────────────────────────────────────
+
 
 class TestRootOrchestratorValidateReport:
     """scripts/evaluate_baseline_v8.py _validate_report propagates backend gate failures."""
@@ -407,7 +489,10 @@ class TestRootOrchestratorValidateReport:
 
     def test_backend_gate_failures_propagated(self, root_eval):
         report = self._full_report()
-        report["gates"] = {"passed": False, "failures": ["rps=0.215 exceeds gate 0.210"]}
+        report["gates"] = {
+            "passed": False,
+            "failures": ["rps=0.215 exceeds gate 0.210"],
+        }
         failures = root_eval._validate_report(report, "epl")
         assert any("rps=0.215" in f for f in failures)
 
@@ -419,6 +504,7 @@ class TestRootOrchestratorValidateReport:
 
 
 # ── root orchestrator: _find_prior_baseline ──────────────────────────────────
+
 
 class TestFindPriorBaseline:
     def test_returns_none_when_no_reports(self, root_eval, tmp_path):
@@ -447,6 +533,7 @@ class TestFindPriorBaseline:
 
 # ── root orchestrator: EVALUATOR_PATH ────────────────────────────────────────
 
+
 class TestRootEvaluatorPath:
     def test_evaluator_path_points_to_v8(self, root_eval):
         assert root_eval.EVALUATOR_PATH.name == "evaluate_baseline_v8.py"
@@ -459,6 +546,7 @@ class TestRootEvaluatorPath:
 
 # ── root orchestrator: RPS gate constant ─────────────────────────────────────
 
+
 class TestRpsGateConstants:
     def test_rps_gate_value(self, root_eval):
         assert root_eval.RPS_GATE == pytest.approx(0.210, abs=1e-6)
@@ -468,6 +556,7 @@ class TestRpsGateConstants:
 
 
 # ── validate_feature_expansion: ExpansionReport schema ──────────────────────
+
 
 class TestExpansionReportSchema:
     def test_shap_ablation_list_serialises(self, val_exp):
@@ -530,6 +619,7 @@ class TestExpansionReportSchema:
 
 # ── integration: dated delta file creation ───────────────────────────────────
 
+
 class TestDatedDeltaFileCreation:
     """Verify that the root orchestrator writes per-league delta JSON."""
 
@@ -555,12 +645,15 @@ class TestDatedDeltaFileCreation:
         if all_deltas:
             delta_path = tmp_path / f"delta_per_league_{today}.json"
             delta_path.write_text(
-                json.dumps({
-                    "date": today,
-                    "version": "v6_phase8",
-                    "baseline_compared": str(prior),
-                    "per_league_delta": all_deltas,
-                }, indent=2),
+                json.dumps(
+                    {
+                        "date": today,
+                        "version": "v6_phase8",
+                        "baseline_compared": str(prior),
+                        "per_league_delta": all_deltas,
+                    },
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
 
@@ -584,6 +677,8 @@ class TestDatedDeltaFileCreation:
         }
         today = "20260612"
         if all_deltas:
-            (tmp_path / f"delta_per_league_{today}.json").write_text("{}", encoding="utf-8")
+            (tmp_path / f"delta_per_league_{today}.json").write_text(
+                "{}", encoding="utf-8"
+            )
 
         assert not (tmp_path / f"delta_per_league_{today}.json").exists()

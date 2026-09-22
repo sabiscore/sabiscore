@@ -258,9 +258,7 @@ def compute_market_features(
         features[f"market_prob_{market}"] = current_implied.get(market)
         features[f"ev_{market}"] = (model_prob * price - 1.0) if price else None
         features[f"edge_{market}"] = (
-            model_prob - current_implied[market]
-            if market in current_implied
-            else None
+            model_prob - current_implied[market] if market in current_implied else None
         )
 
         # Log-ratio drift: scale-invariant, additive over time.
@@ -276,9 +274,7 @@ def compute_market_features(
 
         # CLV: only meaningful post-match with true closing odds.
         features[f"clv_{market}"] = (
-            model_prob - closing_implied[market]
-            if market in closing_implied
-            else None
+            model_prob - closing_implied[market] if market in closing_implied else None
         )
 
     # ------------------------------------------------------------------
@@ -287,7 +283,9 @@ def compute_market_features(
     ev_vals = [v for k, v in features.items() if k.startswith("ev_") and v is not None]
     features["max_ev"] = max(ev_vals) if ev_vals else None
 
-    edge_vals = [v for k, v in features.items() if k.startswith("edge_") and v is not None]
+    edge_vals = [
+        v for k, v in features.items() if k.startswith("edge_") and v is not None
+    ]
     features["max_edge"] = max(edge_vals) if edge_vals else None
 
     drift_vals = [

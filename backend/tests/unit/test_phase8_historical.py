@@ -20,7 +20,9 @@ from src.features.phase8_historical import (
 from src.models.feature_registry import DEFAULT_FEATURE_VALUES_89, PHASE8_FEATURES_21
 
 
-def _match(day: int, home: str, away: str, hg: int, ag: int, league: str = "EPL") -> dict:
+def _match(
+    day: int, home: str, away: str, hg: int, ag: int, league: str = "EPL"
+) -> dict:
     return {
         "league": league,
         "season": "2324",
@@ -113,7 +115,14 @@ def test_self_play_is_skipped_without_wedging_the_batch():
 def test_malformed_record_is_skipped_without_wedging_the_batch():
     matches = [
         _match(1, "A", "B", 2, 0),
-        {"league": "EPL", "date": "not-a-datetime", "home": "A", "away": "C", "hg": 1, "ag": 0},
+        {
+            "league": "EPL",
+            "date": "not-a-datetime",
+            "home": "A",
+            "away": "C",
+            "hg": 1,
+            "ag": 0,
+        },
         {"league": "EPL", "date": datetime(2024, 1, 3), "home": "A"},  # missing keys
         _match(4, "A", "D", 3, 1),
     ]

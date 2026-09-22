@@ -15,6 +15,7 @@ from src.data.team_database import (
 
 # ── get_team_elo ─────────────────────────────────────────────────────────────
 
+
 def test_get_team_elo_known_team():
     rating = get_team_elo("Arsenal")
     assert rating == TEAM_ELO_RATINGS["Arsenal"]
@@ -58,6 +59,7 @@ def test_get_team_elo_all_known_teams_in_range():
 
 # ── get_team_squad_value ──────────────────────────────────────────────────────
 
+
 def test_get_squad_value_known_team():
     val = get_team_squad_value("Manchester City")
     assert val == TEAM_SQUAD_VALUES["Manchester City"]
@@ -82,13 +84,25 @@ def test_get_squad_value_unknown_team_stable():
 
 # ── get_team_stats ────────────────────────────────────────────────────────────
 
+
 def test_get_team_stats_returns_expected_keys():
     stats = get_team_stats("Arsenal", is_home=True)
     required_keys = {
-        "win_rate", "goals_per_game", "goals_conceded_per_game",
-        "attacking_strength", "defensive_strength", "xg_avg", "xg_conceded_avg",
-        "squad_value", "form_5", "form_10", "form_20",
-        "win_streak", "unbeaten_streak", "clean_sheet_rate", "scoring_consistency",
+        "win_rate",
+        "goals_per_game",
+        "goals_conceded_per_game",
+        "attacking_strength",
+        "defensive_strength",
+        "xg_avg",
+        "xg_conceded_avg",
+        "squad_value",
+        "form_5",
+        "form_10",
+        "form_20",
+        "win_streak",
+        "unbeaten_streak",
+        "clean_sheet_rate",
+        "scoring_consistency",
     }
     assert required_keys.issubset(set(stats.keys()))
 
@@ -124,6 +138,7 @@ def test_get_team_stats_unknown_team():
 
 
 # ── get_matchup_features ──────────────────────────────────────────────────────
+
 
 def test_get_matchup_features_returns_dict():
     features = get_matchup_features("Arsenal", "Chelsea", league="EPL")

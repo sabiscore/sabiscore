@@ -10,6 +10,7 @@ from src.features.draw_recalibration import DrawRecalibrator
 
 # ── fit ───────────────────────────────────────────────────────────────────────
 
+
 def test_fit_empty_returns_identity():
     cal = DrawRecalibrator.fit(np.array([]), np.zeros((0, 3)))
     assert cal.factor == 1.0
@@ -24,15 +25,17 @@ def test_fit_zero_modeled_draw_rate_returns_identity():
 
 def test_fit_computes_factor():
     # 50% actual draws, 25% modeled → factor = 2.0
-    y_cal = np.array([1, 1, 0, 0])   # 50% draws (label=1 is draw here per docstring)
+    y_cal = np.array([1, 1, 0, 0])  # 50% draws (label=1 is draw here per docstring)
     # Actually the module says 0=home, 1=draw, 2=away
-    y_cal = np.array([1, 1, 0, 2])   # 2 draws out of 4 → 50%
-    y_proba = np.array([
-        [0.5, 0.25, 0.25],
-        [0.5, 0.25, 0.25],
-        [0.7, 0.15, 0.15],
-        [0.4, 0.25, 0.35],
-    ])
+    y_cal = np.array([1, 1, 0, 2])  # 2 draws out of 4 → 50%
+    y_proba = np.array(
+        [
+            [0.5, 0.25, 0.25],
+            [0.5, 0.25, 0.25],
+            [0.7, 0.15, 0.15],
+            [0.4, 0.25, 0.35],
+        ]
+    )
     cal = DrawRecalibrator.fit(y_cal, y_proba)
     actual_draw_rate = 0.5
     modeled_draw_rate = (0.25 + 0.25 + 0.15 + 0.25) / 4
@@ -52,6 +55,7 @@ def test_fit_factor_gt_1_when_model_underpredicts_draws():
 
 
 # ── recalibrate ───────────────────────────────────────────────────────────────
+
 
 def test_recalibrate_identity_factor():
     cal = DrawRecalibrator(factor=1.0)

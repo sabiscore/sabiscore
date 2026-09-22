@@ -19,7 +19,9 @@ def workspace_tmp() -> Path:
         yield root
     finally:
         resolved = root.resolve()
-        workspace_tmp_root = (Path.cwd() / ".pytest_tmp" / "manifest_ingestion").resolve()
+        workspace_tmp_root = (
+            Path.cwd() / ".pytest_tmp" / "manifest_ingestion"
+        ).resolve()
         if workspace_tmp_root in resolved.parents or resolved == workspace_tmp_root:
             shutil.rmtree(resolved, ignore_errors=True)
 
@@ -30,8 +32,16 @@ def _write(path: Path, payload: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _manifest(data_root: Path, payload: Path, *, status: str = "SUCCESS", hash_value: str | None = None) -> Path:
-    manifest_path = data_root / "manifests" / "node-scraper" / "run-node-scraper.manifest.json"
+def _manifest(
+    data_root: Path,
+    payload: Path,
+    *,
+    status: str = "SUCCESS",
+    hash_value: str | None = None,
+) -> Path:
+    manifest_path = (
+        data_root / "manifests" / "node-scraper" / "run-node-scraper.manifest.json"
+    )
     body = {
         "manifest_version": "1.0",
         "run_id": "run",
@@ -44,7 +54,9 @@ def _manifest(data_root: Path, payload: Path, *, status: str = "SUCCESS", hash_v
         "record_count": 1,
         "raw_files": [],
         "processed_files": [str(payload)],
-        "payload_hashes": {str(payload): hash_value or hashlib.sha256(payload.read_bytes()).hexdigest()},
+        "payload_hashes": {
+            str(payload): hash_value or hashlib.sha256(payload.read_bytes()).hexdigest()
+        },
         "source_timestamp": None,
         "oldest_record_timestamp": None,
         "freshness": "UNKNOWN",
@@ -105,22 +117,26 @@ def test_manifest_v2_accepts_content_addressed_artifact(workspace_tmp: Path):
     digest = hashlib.sha256(payload.read_bytes()).hexdigest()
     manifest_path = _manifest(data_root, payload)
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
-    body.update({
-        "manifest_version": "2.0",
-        "adapter_version": "2.0.0",
-        "schema_version": "2.0.0",
-        "registry_version": "2.0.0",
-        "attribution": "football-data.co.uk",
-        "processed_files": [{
-            "file": str(payload),
-            "uri": str(payload),
-            "object_key": f"processed/football-data-csv/run/{digest}.json",
-            "hash": digest,
-            "size_bytes": payload.stat().st_size,
-            "content_type": "application/json",
-        }],
-        "payload_hashes": {str(payload): digest},
-    })
+    body.update(
+        {
+            "manifest_version": "2.0",
+            "adapter_version": "2.0.0",
+            "schema_version": "2.0.0",
+            "registry_version": "2.0.0",
+            "attribution": "football-data.co.uk",
+            "processed_files": [
+                {
+                    "file": str(payload),
+                    "uri": str(payload),
+                    "object_key": f"processed/football-data-csv/run/{digest}.json",
+                    "hash": digest,
+                    "size_bytes": payload.stat().st_size,
+                    "content_type": "application/json",
+                }
+            ],
+            "payload_hashes": {str(payload): digest},
+        }
+    )
     manifest_path.write_text(json.dumps(body), encoding="utf-8")
 
     result = validate_manifest(manifest_path, data_root=data_root)
@@ -135,17 +151,21 @@ def test_manifest_v2_rejects_unsafe_object_key(workspace_tmp: Path):
     digest = hashlib.sha256(payload.read_bytes()).hexdigest()
     manifest_path = _manifest(data_root, payload)
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
-    body.update({
-        "manifest_version": "2.0",
-        "adapter_version": "2.0.0",
-        "registry_version": "2.0.0",
-        "processed_files": [{
-            "file": str(payload),
-            "uri": str(payload),
-            "object_key": "../escape.json",
-            "hash": digest,
-        }],
-    })
+    body.update(
+        {
+            "manifest_version": "2.0",
+            "adapter_version": "2.0.0",
+            "registry_version": "2.0.0",
+            "processed_files": [
+                {
+                    "file": str(payload),
+                    "uri": str(payload),
+                    "object_key": "../escape.json",
+                    "hash": digest,
+                }
+            ],
+        }
+    )
     manifest_path.write_text(json.dumps(body), encoding="utf-8")
 
     with pytest.raises(ManifestValidationError, match="unsafe object_key"):

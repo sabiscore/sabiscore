@@ -16,6 +16,7 @@ Two invariants, both currently asserted only in prose:
    than the candidate effects `market_baseline` adjudicates -- so a PASS/FAIL
    read without knowing the quote is ambiguous in a way that matters.
 """
+
 import sys
 from pathlib import Path
 
@@ -49,9 +50,9 @@ def test_market_baseline_quote_label_is_declared_as_opening():
     # The label the training script stamps onto its own evidence. Pinned so a
     # future change to _ODDS_COLUMNS cannot leave a stale "opening" claim
     # attached to a closing-line bar.
-    source = (Path(__file__).resolve().parents[2] / "scripts" / "train_on_real_matches.py").read_text(
-        encoding="utf-8"
-    )
+    source = (
+        Path(__file__).resolve().parents[2] / "scripts" / "train_on_real_matches.py"
+    ).read_text(encoding="utf-8")
     assert 'metrics["baseline_rps_market_quote"]' in source
     assert "opening_1x2" in source
 
@@ -60,6 +61,8 @@ def test_comparison_report_falls_back_rather_than_asserting_a_quote():
     # Training reports produced before the label existed must not be silently
     # assigned a quote they never recorded.
     source = (
-        Path(__file__).resolve().parents[2] / "scripts" / "compare_candidate_vs_incumbent.py"
+        Path(__file__).resolve().parents[2]
+        / "scripts"
+        / "compare_candidate_vs_incumbent.py"
     ).read_text(encoding="utf-8")
     assert "unlabelled_pre_2026_09_report" in source

@@ -18,7 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.core.database import League, Match, OddsHistory, Team
 from src.db.models import MarketSnapshot
-from src.services.market_observation_service import PRE_MATCH_CLOSING, persist_market_board
+from src.services.market_observation_service import (
+    PRE_MATCH_CLOSING,
+    persist_market_board,
+)
 
 
 def _ci_postgres_url() -> str:
@@ -30,7 +33,9 @@ def _ci_postgres_url() -> str:
     return url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
-async def test_offset_aware_closing_persists_through_asyncpg_without_poisoning_session() -> None:
+async def test_offset_aware_closing_persists_through_asyncpg_without_poisoning_session() -> (
+    None
+):
     engine = create_async_engine(_ci_postgres_url(), echo=False)
     conn = await engine.connect()
     tx = await conn.begin()
@@ -71,7 +76,9 @@ async def test_offset_aware_closing_persists_through_asyncpg_without_poisoning_s
                 {
                     "provider": "the_odds_api",
                     "provider_event_id": "test-provider-event",
-                    "provider_event_timestamp": kickoff.replace(tzinfo=timezone.utc).isoformat(),
+                    "provider_event_timestamp": kickoff.replace(
+                        tzinfo=timezone.utc
+                    ).isoformat(),
                     "home_team": "Alpha",
                     "away_team": "Beta",
                     "bookmaker": "test-book",
@@ -115,9 +122,7 @@ async def test_offset_aware_closing_persists_through_asyncpg_without_poisoning_s
         # A normal query after the writes proves the AsyncSession/connection was
         # not left in failed-transaction state.
         assert (
-            await session.scalar(
-                select(Match.id).where(Match.id == match_id)
-            )
+            await session.scalar(select(Match.id).where(Match.id == match_id))
         ) == match_id
     finally:
         await session.close()

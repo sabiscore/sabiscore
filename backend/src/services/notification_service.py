@@ -93,7 +93,8 @@ class NotificationService:
             )
         else:
             stmt = select(UserNotificationSubscription).where(
-                UserNotificationSubscription.anonymous_session_id == anonymous_session_id,
+                UserNotificationSubscription.anonymous_session_id
+                == anonymous_session_id,
                 UserNotificationSubscription.match_id == clean_match_id,
                 UserNotificationSubscription.subscription_type == clean_sub_type,
             )
@@ -147,13 +148,15 @@ class NotificationService:
             )
         else:
             stmt = delete(UserNotificationSubscription).where(
-                UserNotificationSubscription.anonymous_session_id == anonymous_session_id,
+                UserNotificationSubscription.anonymous_session_id
+                == anonymous_session_id,
                 UserNotificationSubscription.match_id == clean_match_id,
             )
 
         if subscription_type:
             stmt = stmt.where(
-                UserNotificationSubscription.subscription_type == subscription_type.strip().upper()
+                UserNotificationSubscription.subscription_type
+                == subscription_type.strip().upper()
             )
 
         res = await db.execute(stmt)
@@ -174,10 +177,13 @@ class NotificationService:
             )
         else:
             stmt = select(UserNotificationSubscription).where(
-                UserNotificationSubscription.anonymous_session_id == anonymous_session_id,
+                UserNotificationSubscription.anonymous_session_id
+                == anonymous_session_id,
                 UserNotificationSubscription.is_active.is_(True),
             )
-        result = await db.execute(stmt.order_by(UserNotificationSubscription.created_at.desc()))
+        result = await db.execute(
+            stmt.order_by(UserNotificationSubscription.created_at.desc())
+        )
         return list(result.scalars().all())
 
     @staticmethod
@@ -222,7 +228,9 @@ class NotificationService:
         limit: int = 50,
     ) -> List[UserNotificationLog]:
         if user_id:
-            stmt = select(UserNotificationLog).where(UserNotificationLog.user_id == user_id)
+            stmt = select(UserNotificationLog).where(
+                UserNotificationLog.user_id == user_id
+            )
         else:
             stmt = select(UserNotificationLog).where(
                 UserNotificationLog.anonymous_session_id == anonymous_session_id
@@ -242,7 +250,9 @@ class NotificationService:
         user_id: Optional[str] = None,
         anonymous_session_id: Optional[str] = None,
     ) -> bool:
-        stmt = select(UserNotificationLog).where(UserNotificationLog.id == notification_id)
+        stmt = select(UserNotificationLog).where(
+            UserNotificationLog.id == notification_id
+        )
         if user_id:
             stmt = stmt.where(UserNotificationLog.user_id == user_id)
         elif anonymous_session_id:
@@ -271,7 +281,10 @@ class NotificationService:
         if user_id:
             stmt = (
                 update(UserNotificationLog)
-                .where(UserNotificationLog.user_id == user_id, UserNotificationLog.read.is_(False))
+                .where(
+                    UserNotificationLog.user_id == user_id,
+                    UserNotificationLog.read.is_(False),
+                )
                 .values(read=True, read_at=now)
             )
         elif anonymous_session_id:
@@ -327,7 +340,9 @@ class NotificationService:
             existing.auth = auth
             existing.user_agent = user_agent
             existing.user_id = user_id
-            existing.anonymous_session_id = anonymous_session_id if not user_id else None
+            existing.anonymous_session_id = (
+                anonymous_session_id if not user_id else None
+            )
             existing.is_active = True
             existing.updated_at = now
             await db.commit()

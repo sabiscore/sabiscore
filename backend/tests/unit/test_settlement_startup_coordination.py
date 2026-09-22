@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 
-async def test_initial_settlement_waits_for_fixture_sync_then_runs_without_hour_delay(monkeypatch) -> None:
+async def test_initial_settlement_waits_for_fixture_sync_then_runs_without_hour_delay(
+    monkeypatch,
+) -> None:
     from src.api import main
 
     completed = asyncio.Event()
@@ -22,8 +24,9 @@ async def test_initial_settlement_waits_for_fixture_sync_then_runs_without_hour_
         if sleep_calls >= 2:
             raise asyncio.CancelledError
 
-    with patch("src.services.settlement_service.run_settlement_pass", run_pass), patch(
-        "src.api.main.asyncio.sleep", new=controlled_sleep
+    with (
+        patch("src.services.settlement_service.run_settlement_pass", run_pass),
+        patch("src.api.main.asyncio.sleep", new=controlled_sleep),
     ):
         with pytest.raises(asyncio.CancelledError):
             await main._background_settlement_sync()

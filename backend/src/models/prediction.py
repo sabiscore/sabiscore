@@ -12,6 +12,7 @@ If a meta-model is present but cannot run, or a serialized calibrator cannot be
 loaded/applied, the engine fails closed to its diagnostic fallback instead of
 substituting an unevaluated probability domain.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,6 +35,7 @@ _apply_calibrator = None
 _CAL_AVAILABLE = False
 try:
     from .calibration import apply_calibrator as _apply_calibrator  # type: ignore
+
     _CAL_AVAILABLE = True
 except ImportError:
     pass
@@ -41,6 +43,7 @@ except ImportError:
 _tracer = None
 try:
     from opentelemetry import trace as _otel_trace  # type: ignore
+
     _tracer = _otel_trace.get_tracer(
         "sabiscore.prediction_engine",
         schema_url="https://opentelemetry.io/schemas/1.21.0",
@@ -202,7 +205,9 @@ class PredictionEngine:
         try:
             generation = load_active_generation()
         except ActiveGenerationError as exc:
-            logger.error("PredictionEngine: active generation rejected: %s", redact_text(exc))
+            logger.error(
+                "PredictionEngine: active generation rejected: %s", redact_text(exc)
+            )
             return None
 
         manifest_entry = generation.get("artifacts", {}).get(slug)
@@ -212,8 +217,12 @@ class PredictionEngine:
             "generation": generation.get("generation"),
             "feature_schema_version": generation.get("feature_schema_version"),
             "manifest_sha256": generation.get("manifest_sha256"),
-            "certification_state": str(generation.get("certification_state") or "UNVERIFIED"),
-            "artifact_sha256": manifest_entry.get("artifact_sha256") if manifest_entry else None,
+            "certification_state": str(
+                generation.get("certification_state") or "UNVERIFIED"
+            ),
+            "artifact_sha256": manifest_entry.get("artifact_sha256")
+            if manifest_entry
+            else None,
             "coverage": "dedicated" if manifest_entry else "generic",
         }
 
@@ -225,7 +234,10 @@ class PredictionEngine:
                     candidate = directory / f"{slug}{suffix}{ext}"
                     if not candidate.exists():
                         continue
-                    if manifested is not None and candidate.resolve() != manifested.resolve():
+                    if (
+                        manifested is not None
+                        and candidate.resolve() != manifested.resolve()
+                    ):
                         continue
                     try:
                         try:
@@ -233,13 +245,23 @@ class PredictionEngine:
                         except Exception:
                             with open(candidate, "rb") as handle:
                                 raw = pickle.load(handle)
-                        bundle = self._wrap_artifact(raw, slug, candidate, provenance=provenance)
+                        bundle = self._wrap_artifact(
+                            raw, slug, candidate, provenance=provenance
+                        )
                         if bundle is not None:
-                            logger.info("PredictionEngine: loaded %s from %s", slug, candidate)
+                            logger.info(
+                                "PredictionEngine: loaded %s from %s", slug, candidate
+                            )
                             return bundle
                     except Exception as exc:
-                        logger.warning("PredictionEngine: failed to load %s: %s", candidate, redact_text(exc))
-        logger.warning("PredictionEngine: no model found for league=%r — will use fallback", slug)
+                        logger.warning(
+                            "PredictionEngine: failed to load %s: %s",
+                            candidate,
+                            redact_text(exc),
+                        )
+        logger.warning(
+            "PredictionEngine: no model found for league=%r — will use fallback", slug
+        )
         return None
 
     # A 1x3 probe on the interior of the simplex. Interior matters: a calibrator
@@ -286,7 +308,9 @@ class PredictionEngine:
                 PredictionEngine._CALIBRATOR_PROBE.copy(),
             )
             if not PredictionEngine._valid_probability_matrix(probed):
-                raise ValueError("calibrator probe returned an invalid probability simplex")
+                raise ValueError(
+                    "calibrator probe returned an invalid probability simplex"
+                )
         except Exception as exc:
             # `getattr(..., default)` only absorbs AttributeError, so reading the
             # method name for the log message can itself raise. This handler runs
@@ -320,10 +344,18 @@ class PredictionEngine:
         if isinstance(raw, dict) and "models" in raw:
             models_dict = raw.get("models")
             if not isinstance(models_dict, dict) or not models_dict:
-                logger.warning("PredictionEngine: artifact %s has empty 'models' dict", path)
+                logger.warning(
+                    "PredictionEngine: artifact %s has empty 'models' dict", path
+                )
                 return None
-            if not any(callable(getattr(m, "predict_proba", None)) for m in models_dict.values()):
-                logger.warning("PredictionEngine: no callable predict_proba in 'models' dict at %s", path)
+            if not any(
+                callable(getattr(m, "predict_proba", None))
+                for m in models_dict.values()
+            ):
+                logger.warning(
+                    "PredictionEngine: no callable predict_proba in 'models' dict at %s",
+                    path,
+                )
                 return None
             return _ArtifactBundle(
                 direct_model=None,
@@ -424,17 +456,27 @@ class PredictionEngine:
             else:
                 raw = bundle.direct_model.predict_proba(X)[0]
                 if len(raw) == 2:
-                    proba = np.array([[float(raw[1]), 0.0, float(raw[0])]], dtype=np.float64)
+                    proba = np.array(
+                        [[float(raw[1]), 0.0, float(raw[0])]], dtype=np.float64
+                    )
                 elif len(raw) >= 3:
-                    proba = np.array([[float(raw[0]), float(raw[1]), float(raw[2])]], dtype=np.float64)
+                    proba = np.array(
+                        [[float(raw[0]), float(raw[1]), float(raw[2])]],
+                        dtype=np.float64,
+                    )
                 else:
                     return self._fallback_result(input_dim=expected_dim)
         except Exception as exc:
-            logger.error("PredictionEngine: inference error for %s: %s", league, redact_text(exc))
+            logger.error(
+                "PredictionEngine: inference error for %s: %s", league, redact_text(exc)
+            )
             return self._fallback_result(input_dim=expected_dim)
 
         if not self._valid_probability_matrix(proba):
-            logger.error("PredictionEngine: invalid probability simplex for %s; failing closed", league)
+            logger.error(
+                "PredictionEngine: invalid probability simplex for %s; failing closed",
+                league,
+            )
             return self._fallback_result(input_dim=expected_dim)
 
         model_version = bundle.model_version
@@ -464,7 +506,9 @@ class PredictionEngine:
                         proba,
                     )
                     if not self._valid_probability_matrix(calibrated):
-                        raise ValueError("calibrator returned an invalid probability simplex")
+                        raise ValueError(
+                            "calibrator returned an invalid probability simplex"
+                        )
                     proba = calibrated
                     calibration_method = str(fitted_cal.method)
                     calibration_applied = True
@@ -472,8 +516,13 @@ class PredictionEngine:
                     if span and hasattr(span, "set_attribute"):
                         span.set_attribute("calibration.method", calibration_method)
                         span.set_attribute("calibration.league", league)
-                        span.set_attribute("calibration.ece_after", fitted_cal.ece_after.get("mean", 0.0))
-                        span.set_attribute("calibration.latency_ms", round(latency_ms, 2))
+                        span.set_attribute(
+                            "calibration.ece_after",
+                            fitted_cal.ece_after.get("mean", 0.0),
+                        )
+                        span.set_attribute(
+                            "calibration.latency_ms", round(latency_ms, 2)
+                        )
                 except Exception as exc:
                     logger.error(
                         "PredictionEngine: serialized calibrator failed for %s; failing closed: %s",
@@ -495,14 +544,18 @@ class PredictionEngine:
                         t0 = time.perf_counter()
                         blended = overlay.apply(proba)
                         if not self._valid_probability_matrix(blended):
-                            raise ValueError("overlay returned an invalid probability simplex")
+                            raise ValueError(
+                                "overlay returned an invalid probability simplex"
+                            )
                         proba = blended
                         overlay_applied = True
                         latency_ms = (time.perf_counter() - t0) * 1000
                         if span and hasattr(span, "set_attribute"):
                             span.set_attribute("overlay.alpha", float(overlay.alpha))
                             span.set_attribute("overlay.league", league)
-                            span.set_attribute("overlay.latency_ms", round(latency_ms, 2))
+                            span.set_attribute(
+                                "overlay.latency_ms", round(latency_ms, 2)
+                            )
                 except Exception as exc:
                     logger.warning(
                         "PredictionEngine: Bivariate Poisson overlay failed for %s: %s",
@@ -559,7 +612,9 @@ class PredictionEngine:
         return fallback
 
     @staticmethod
-    def _ensemble_predict_dict(models_dict: Dict[str, Any], X: np.ndarray) -> np.ndarray:
+    def _ensemble_predict_dict(
+        models_dict: Dict[str, Any], X: np.ndarray
+    ) -> np.ndarray:
         all_probs: List[np.ndarray] = []
         for model in models_dict.values():
             try:
@@ -578,7 +633,9 @@ class PredictionEngine:
         for model in models_dict.values():
             probabilities = np.asarray(model.predict_proba(X), dtype=np.float64)
             if probabilities.ndim != 2 or probabilities.shape[1] < 3:
-                raise ValueError("base learner returned invalid meta-feature probabilities")
+                raise ValueError(
+                    "base learner returned invalid meta-feature probabilities"
+                )
             columns.extend(
                 [
                     probabilities[:, 0:1],
@@ -591,7 +648,9 @@ class PredictionEngine:
         return np.hstack(columns)
 
     @staticmethod
-    def _stacked_predict(models_dict: Dict[str, Any], meta_model: Any, X: np.ndarray) -> np.ndarray:
+    def _stacked_predict(
+        models_dict: Dict[str, Any], meta_model: Any, X: np.ndarray
+    ) -> np.ndarray:
         meta_features = PredictionEngine._build_meta_features(models_dict, X)
         proba = np.asarray(meta_model.predict_proba(meta_features), dtype=np.float64)
         if proba.ndim == 1:
@@ -641,17 +700,21 @@ class PredictionEngine:
                     closing = closing_odds.get(outcome)
                     if closing and closing > 1.01:
                         clv_pct = round((pred_prob - 1.0 / closing) * 100, 2)
-                bets.append({
-                    "outcome": outcome,
-                    "edge_pct": round(edge_pct, 2),
-                    "kelly_stake_pct": round(kelly_pct * 100, 2),
-                    "ev_cents": round(ev_cents, 1),
-                    "clv_pct": clv_pct,
-                    "recommended_stake_ngn": int(10_000.0 * kelly_pct),
-                    "confidence": round(min(1.0, pred_prob / 0.5), 2),
-                })
+                bets.append(
+                    {
+                        "outcome": outcome,
+                        "edge_pct": round(edge_pct, 2),
+                        "kelly_stake_pct": round(kelly_pct * 100, 2),
+                        "ev_cents": round(ev_cents, 1),
+                        "clv_pct": clv_pct,
+                        "recommended_stake_ngn": int(10_000.0 * kelly_pct),
+                        "confidence": round(min(1.0, pred_prob / 0.5), 2),
+                    }
+                )
             except Exception as exc:
-                logger.warning("Value bet calc error for %s: %s", outcome, redact_text(exc))
+                logger.warning(
+                    "Value bet calc error for %s: %s", outcome, redact_text(exc)
+                )
         bets.sort(key=lambda item: item["edge_pct"], reverse=True)
         return bets
 
@@ -677,26 +740,36 @@ class PredictionEngine:
                 "generation": generation.get("generation"),
                 "feature_schema_version": generation.get("feature_schema_version"),
                 "manifest_sha256": generation.get("manifest_sha256"),
-                "certification_state": str(generation.get("certification_state") or "UNVERIFIED"),
+                "certification_state": str(
+                    generation.get("certification_state") or "UNVERIFIED"
+                ),
                 "artifact_sha256": manifest_entry.get("artifact_sha256"),
                 "coverage": "dedicated",
             }
 
         raw = model
         models_dict = getattr(model, "models", None)
-        if not isinstance(model, dict) and isinstance(models_dict, dict) and models_dict:
+        if (
+            not isinstance(model, dict)
+            and isinstance(models_dict, dict)
+            and models_dict
+        ):
             raw = {
                 "models": dict(models_dict),
                 "feature_columns": list(getattr(model, "feature_columns", []) or []),
                 "meta_model": getattr(model, "meta_model", None),
                 "calibrator": getattr(model, "calibrator", None),
-                "bivariate_poisson_overlay": getattr(model, "bivariate_poisson_overlay", None),
+                "bivariate_poisson_overlay": getattr(
+                    model, "bivariate_poisson_overlay", None
+                ),
             }
 
         bundle = cls._wrap_artifact(raw, slug, "<startup>", provenance=provenance)
         if bundle is None:
             bundle = _ArtifactBundle(
-                direct_model=model if callable(getattr(model, "predict_proba", None)) else None,
+                direct_model=model
+                if callable(getattr(model, "predict_proba", None))
+                else None,
                 models_dict=None,
                 calibrator=None,
                 overlay=None,

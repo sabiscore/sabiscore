@@ -27,6 +27,7 @@ Usage
     cd backend && PYTHONPATH=. python scripts/harvest_epl_e2_lineups.py --dry-run
     cd backend && PYTHONPATH=. python scripts/harvest_epl_e2_lineups.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,9 @@ from typing import Any, Dict, Iterable, List, Set
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 _CONTRACT_PATH = _REPO_ROOT.parent / "contracts" / "lineup_harvest_epl_contract.yaml"
@@ -104,17 +107,23 @@ def load_contract() -> Dict[str, Any]:
     if target["season"] != SEASON_LABEL:
         mismatches.append(f"season {target['season']!r} != {SEASON_LABEL!r}")
     if policy["harvest_batch_size"] != HARVEST_BATCH_SIZE:
-        mismatches.append(f"batch {policy['harvest_batch_size']} != {HARVEST_BATCH_SIZE}")
+        mismatches.append(
+            f"batch {policy['harvest_batch_size']} != {HARVEST_BATCH_SIZE}"
+        )
     if mismatches:
         raise ValueError(
             "harvester disagrees with its contract: " + "; ".join(mismatches)
         )
     if policy["harvest_batch_size"] >= policy["daily_call_limit"]:
-        raise ValueError("harvest_batch_size must leave headroom under daily_call_limit")
+        raise ValueError(
+            "harvest_batch_size must leave headroom under daily_call_limit"
+        )
     return contract
 
 
-def _normalise_lineup(fixture_id: int, kickoff_utc: str | None, records: Iterable[dict]) -> Dict[str, Any]:
+def _normalise_lineup(
+    fixture_id: int, kickoff_utc: str | None, records: Iterable[dict]
+) -> Dict[str, Any]:
     """Fold provider records into one contract-shaped row.
 
     Two teams per fixture; the first team encountered is treated as home only
@@ -129,8 +138,12 @@ def _normalise_lineup(fixture_id: int, kickoff_utc: str | None, records: Iterabl
             continue
         slot = by_team.setdefault(
             team_id,
-            {"team_id": team_id, "team_name": record.get("team_name"),
-             "formation": record.get("formation"), "starters": []},
+            {
+                "team_id": team_id,
+                "team_name": record.get("team_name"),
+                "formation": record.get("formation"),
+                "starters": [],
+            },
         )
         if record.get("role") == "starting" and record.get("player_id") is not None:
             slot["starters"].append(record["player_id"])
@@ -159,7 +172,9 @@ def _append(path: Path, row: Dict[str, Any]) -> None:
         handle.flush()
 
 
-def fixtures_to_harvest(state: HarvestState, fixture_ids: List[int], batch: int) -> List[int]:
+def fixtures_to_harvest(
+    state: HarvestState, fixture_ids: List[int], batch: int
+) -> List[int]:
     pending = [f for f in fixture_ids if f not in state.harvested]
     return pending[:batch]
 
@@ -184,22 +199,36 @@ SUSPENSION_REASON = (
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true",
-                        help="report the plan and spend no quota")
     parser.add_argument(
-        "--i-understand-this-does-not-answer-g5", action="store_true",
+        "--dry-run", action="store_true", help="report the plan and spend no quota"
+    )
+    parser.add_argument(
+        "--i-understand-this-does-not-answer-g5",
+        action="store_true",
         dest="override_suspension",
         help="resume the suspended historical harvest and spend quota on it",
     )
     parser.add_argument("--batch-size", type=int, default=HARVEST_BATCH_SIZE)
-    parser.add_argument("--fixture-ids", type=Path, default=None,
-                        help="JSON list of provider fixture ids for EPL 2024/2025")
+    parser.add_argument(
+        "--fixture-ids",
+        type=Path,
+        default=None,
+        help="JSON list of provider fixture ids for EPL 2024/2025",
+    )
     args = parser.parse_args()
 
     if SUSPENDED and not args.override_suspension and not args.dry_run:
         logger.error("HALTED — %s", SUSPENSION_REASON)
-        print(json.dumps({"status": "SUSPENDED", "reason": SUSPENSION_REASON,
-                          "requests_spent": 0}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "status": "SUSPENDED",
+                    "reason": SUSPENSION_REASON,
+                    "requests_spent": 0,
+                },
+                indent=2,
+            )
+        )
         return 0
 
     contract = load_contract()
@@ -212,14 +241,16 @@ def main() -> int:
     state = HarvestState.load(_CHECKPOINT)
     logger.info(
         "Checkpoint %s: %d fixtures already harvested",
-        _CHECKPOINT.name, len(state.harvested),
+        _CHECKPOINT.name,
+        len(state.harvested),
     )
 
     if args.fixture_ids is None:
         logger.warning(
             "No --fixture-ids supplied. Provider fixture ids for %s %s must be "
             "resolved before harvesting; this script does not mint or guess them.",
-            LEAGUE, SEASON_LABEL,
+            LEAGUE,
+            SEASON_LABEL,
         )
         fixture_ids: List[int] = []
     else:
@@ -230,8 +261,11 @@ def main() -> int:
     logger.info(
         "Plan: %d of %d EPL fixtures pending; this run would fetch %d "
         "(batch %d, %.1fs throttle, ~%.1f min)",
-        max(expected_total - len(state.harvested), 0), expected_total,
-        len(todo), args.batch_size, THROTTLE_SLEEP_SECONDS,
+        max(expected_total - len(state.harvested), 0),
+        expected_total,
+        len(todo),
+        args.batch_size,
+        THROTTLE_SLEEP_SECONDS,
         len(todo) * THROTTLE_SLEEP_SECONDS / 60.0,
     )
     logger.warning(
@@ -242,12 +276,17 @@ def main() -> int:
     )
 
     if args.dry_run or not todo:
-        print(json.dumps({
-            "already_harvested": len(state.harvested),
-            "pending_this_run": len(todo),
-            "g5_answerable": False,
-            "dry_run": bool(args.dry_run),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "already_harvested": len(state.harvested),
+                    "pending_this_run": len(todo),
+                    "g5_answerable": False,
+                    "dry_run": bool(args.dry_run),
+                },
+                indent=2,
+            )
+        )
         return 0
 
     # Provider import is deferred: --dry-run must work with no credentials.

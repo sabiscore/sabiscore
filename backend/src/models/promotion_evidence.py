@@ -98,7 +98,9 @@ def _stack_candidate_rows(
                 f"got {matrix.shape}"
             )
         if not np.all(np.isfinite(matrix)):
-            raise ValueError(f"candidate matrix for {league} contains non-finite values")
+            raise ValueError(
+                f"candidate matrix for {league} contains non-finite values"
+            )
         rows_by_league[league] = int(matrix.shape[0])
         matrices.append(matrix)
 
@@ -195,7 +197,11 @@ def _expected_gate(summary: Mapping[str, Any], training_rows: int) -> str:
         int(summary["training_defaulted_slots"]),
         int(summary["serving_schema_misaligned_slots"]),
     )
-    return "PASS" if training_rows > 0 and all(value == 0 for value in blockers) else "FAIL"
+    return (
+        "PASS"
+        if training_rows > 0 and all(value == 0 for value in blockers)
+        else "FAIL"
+    )
 
 
 def build_promotion_feature_evidence(
@@ -232,7 +238,11 @@ def build_promotion_feature_evidence(
     rather than trusted blindly.
     """
 
-    candidate = list(candidate_features) if candidate_features is not None else list(APEX_FEATURES_68)
+    candidate = (
+        list(candidate_features)
+        if candidate_features is not None
+        else list(APEX_FEATURES_68)
+    )
     if candidate_schema is not None:
         if candidate_schema not in FEATURE_SCHEMA_VERSIONS:
             raise ValueError(f"unknown candidate_schema {candidate_schema!r}")
@@ -250,7 +260,10 @@ def build_promotion_feature_evidence(
         serving_feature = _serving_feature_at(serving_contract, index)
         column = matrix[:, index] if training_rows else np.empty(0, dtype=np.float64)
         defaulted, training_coverage = _column_is_default_only(feature, column)
-        variable = bool(column.size and not np.allclose(column, column[0], rtol=0.0, atol=_FLOAT_ATOL))
+        variable = bool(
+            column.size
+            and not np.allclose(column, column[0], rtol=0.0, atol=_FLOAT_ATOL)
+        )
         classification = _classification(
             feature=feature,
             serving_feature=serving_feature,
@@ -273,7 +286,8 @@ def build_promotion_feature_evidence(
                 "training_max": float(np.max(column)) if column.size else None,
                 "defaulted_training_slot": defaulted,
                 "always_data_gap": feature in PHASE7_FEATURES_ALWAYS_DATA_GAP,
-                "candidate_position_matches_current_serving_schema": feature == serving_feature,
+                "candidate_position_matches_current_serving_schema": feature
+                == serving_feature,
             }
         )
 
@@ -288,7 +302,8 @@ def build_promotion_feature_evidence(
         # caller passed an ad-hoc list that matches no registered schema —
         # absent beats a guessed label in evidence.
         "candidate_feature_schema_version": (
-            candidate_schema if candidate_schema is not None
+            candidate_schema
+            if candidate_schema is not None
             else _registered_schema_version(candidate)
         ),
         "candidate_contract_hash": _contract_hash(candidate),
@@ -323,7 +338,9 @@ def validate_promotion_feature_evidence(
     """
 
     if report.get("schema") != REPORT_SCHEMA:
-        raise ValueError(f"unsupported promotion evidence schema: {report.get('schema')!r}")
+        raise ValueError(
+            f"unsupported promotion evidence schema: {report.get('schema')!r}"
+        )
 
     if candidate_features is not None:
         candidate = list(candidate_features)
@@ -354,10 +371,17 @@ def validate_promotion_feature_evidence(
                 f"expected {candidate_feature!r}, got {row.get('feature')!r}"
             )
         expected_match = candidate_feature == serving_feature
-        if row.get("candidate_position_matches_current_serving_schema") is not expected_match:
-            raise ValueError(f"promotion serving alignment is stale at feature index {index}")
+        if (
+            row.get("candidate_position_matches_current_serving_schema")
+            is not expected_match
+        ):
+            raise ValueError(
+                f"promotion serving alignment is stale at feature index {index}"
+            )
         if "serving_feature" in row and row.get("serving_feature") != serving_feature:
-            raise ValueError(f"promotion serving feature is stale at feature index {index}")
+            raise ValueError(
+                f"promotion serving feature is stale at feature index {index}"
+            )
         if "classification" in row:
             expected_class = _classification(
                 feature=candidate_feature,
@@ -365,8 +389,13 @@ def validate_promotion_feature_evidence(
                 defaulted_training_slot=bool(row.get("defaulted_training_slot")),
             )
             classification = row.get("classification")
-            if classification not in _ALLOWED_CLASSIFICATIONS or classification != expected_class:
-                raise ValueError(f"promotion classification is invalid at feature index {index}")
+            if (
+                classification not in _ALLOWED_CLASSIFICATIONS
+                or classification != expected_class
+            ):
+                raise ValueError(
+                    f"promotion classification is invalid at feature index {index}"
+                )
 
     summary = report.get("summary")
     if not isinstance(summary, Mapping):
@@ -394,10 +423,18 @@ def validate_promotion_feature_evidence(
             f"promotion_gate={gate} contradicts mechanically derived gate={expected_gate}"
         )
 
-    if "candidate_contract_hash" in report and report.get("candidate_contract_hash") != _contract_hash(candidate):
-        raise ValueError("candidate feature-contract hash does not match the current registry")
-    if "serving_contract_hash" in report and report.get("serving_contract_hash") != _contract_hash(serving_contract):
-        raise ValueError("serving feature-contract hash does not match the current registry")
+    if "candidate_contract_hash" in report and report.get(
+        "candidate_contract_hash"
+    ) != _contract_hash(candidate):
+        raise ValueError(
+            "candidate feature-contract hash does not match the current registry"
+        )
+    if "serving_contract_hash" in report and report.get(
+        "serving_contract_hash"
+    ) != _contract_hash(serving_contract):
+        raise ValueError(
+            "serving feature-contract hash does not match the current registry"
+        )
 
     return report
 

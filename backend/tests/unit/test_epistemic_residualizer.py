@@ -6,6 +6,7 @@ importantly — the invariance that explains why residualizing does NOT rescue
 `UNCERTAINTY_GATES["error_association"]` when that gate is evaluated as a rank
 correlation inside aleatoric strata.
 """
+
 from __future__ import annotations
 
 import warnings

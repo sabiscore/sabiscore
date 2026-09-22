@@ -181,10 +181,10 @@ def evaluate_league(
 
     methods = ["lac", "aps", "raps"]
     method_results = {}
-    
+
     proba = model.predict_proba(X_test)
     point_pred = proba.argmax(axis=1)
-    
+
     for method in methods:
         conformal = SplitConformalClassifier(
             estimator=model,
@@ -230,14 +230,17 @@ def evaluate_league(
 
         stability: dict[str, Any] = {}
         mid = len(y_test) // 2
-        for label, sl in (("test_first_half", slice(0, mid)), ("test_second_half", slice(mid, None))):
+        for label, sl in (
+            ("test_first_half", slice(0, mid)),
+            ("test_second_half", slice(mid, None)),
+        ):
             window: dict[str, Any] = {}
             for i, level in enumerate(CONFIDENCE_LEVELS):
                 sets = y_sets[sl, :, i]
                 yy = y_test[sl]
                 window[f"{level:.2f}"] = float(sets[np.arange(len(yy)), yy].mean())
             stability[label] = {"n": int(len(y_test[sl])), "empirical_coverage": window}
-            
+
         method_results[method] = {
             "levels": per_level,
             "temporal_stability": stability,
@@ -343,9 +346,9 @@ def main() -> int:
 
     report = {
         "study": "Directive §21 — non-adaptive split conformal (MAPIE)",
-        "generated_at": __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": __import__("datetime")
+        .datetime.now(__import__("datetime").timezone.utc)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "claim_scope": (
             "Measures marginal coverage of prediction sets under this evaluation's "
             "assumptions (§21 VALID claim). Does NOT support any claim that the "

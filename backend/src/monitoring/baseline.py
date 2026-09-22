@@ -80,8 +80,7 @@ def _sha256_file(path: Path) -> str:
 
 def _schema_sha256(frame: pd.DataFrame) -> str:
     schema = [
-        {"name": column, "dtype": str(frame[column].dtype)}
-        for column in frame.columns
+        {"name": column, "dtype": str(frame[column].dtype)} for column in frame.columns
     ]
     payload = json.dumps(schema, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(payload).hexdigest()
@@ -183,7 +182,9 @@ class ReferenceBaselineGenerator:
 
                 feature_rows.append(row)
                 included_fixtures.append(fixture)
-            except Exception as exc:  # one malformed fixture must not abort audit collection
+            except (
+                Exception
+            ) as exc:  # one malformed fixture must not abort audit collection
                 skipped_failed += 1
                 logger.warning(
                     "Skipping fixture %s during baseline generation: %s",
@@ -211,13 +212,17 @@ class ReferenceBaselineGenerator:
         artifact_sha = _sha256_file(config.output_path)
         schema_sha = _schema_sha256(frame)
 
-        match_dates = [fixture.match_date for fixture in included_fixtures if fixture.match_date]
+        match_dates = [
+            fixture.match_date for fixture in included_fixtures if fixture.match_date
+        ]
         league_counts = Counter(str(fixture.league_id) for fixture in included_fixtures)
         backend_root = Path(__file__).resolve().parents[2]
         repository_root = backend_root.parent
 
         try:
-            artifact_manifest_path = str(config.output_path.resolve().relative_to(repository_root.resolve()))
+            artifact_manifest_path = str(
+                config.output_path.resolve().relative_to(repository_root.resolve())
+            )
         except ValueError:
             artifact_manifest_path = config.output_path.name
 
@@ -235,7 +240,9 @@ class ReferenceBaselineGenerator:
             "feature_schema": {
                 "sha256": schema_sha,
                 "ordered_features": list(frame.columns),
-                "dtypes": {column: str(frame[column].dtype) for column in frame.columns},
+                "dtypes": {
+                    column: str(frame[column].dtype) for column in frame.columns
+                },
             },
             "source": {
                 "fixture_definition": "score-verified settled fixtures",

@@ -96,7 +96,9 @@ def test_always_data_gap_features_defer_until_data_exists() -> None:
     contract = build_feature_contract("phase7_68")
     by_name = {f["feature_name"]: f for f in contract["features"]}
 
-    assert PHASE7_FEATURES_ALWAYS_DATA_GAP, "fixture assumption: the gap list is non-empty"
+    assert PHASE7_FEATURES_ALWAYS_DATA_GAP, (
+        "fixture assumption: the gap list is non-empty"
+    )
     for name in PHASE7_FEATURES_ALWAYS_DATA_GAP:
         assert by_name[name]["always_data_gap"] is True
         assert by_name[name]["disposition"] == "DEFER_UNTIL_DATA_EXISTS"
@@ -123,7 +125,9 @@ def test_features_without_a_registered_default_stay_undeclared() -> None:
 
     contract = build_feature_contract("apex_v1_68")
     undeclared = [
-        f["feature_name"] for f in contract["features"] if f["disposition"] == UNDECLARED
+        f["feature_name"]
+        for f in contract["features"]
+        if f["disposition"] == UNDECLARED
     ]
 
     assert undeclared, "expected the Apex market block to be genuinely undeclared"
@@ -138,8 +142,9 @@ def test_phase8_defaults_resolve_under_the_89_schema() -> None:
     contract = build_feature_contract("phase8_89")
     by_name = {f["feature_name"]: f for f in contract["features"]}
 
-    assert by_name["home_berrar_rating"]["default_value"] == (
-        DEFAULT_FEATURE_VALUES_89["home_berrar_rating"]
+    assert (
+        by_name["home_berrar_rating"]["default_value"]
+        == (DEFAULT_FEATURE_VALUES_89["home_berrar_rating"])
     )
     assert by_name["match_importance_score"]["disposition"] == "ALIGNED_OBSERVED"
 
@@ -160,7 +165,9 @@ def test_unanswerable_fields_are_literally_undeclared(schema_version: str) -> No
 
     contract = build_feature_contract(schema_version)
 
-    assert _UNDECLARED_FIELDS, "fixture assumption: the undeclared field list is non-empty"
+    assert _UNDECLARED_FIELDS, (
+        "fixture assumption: the undeclared field list is non-empty"
+    )
     for record in contract["features"]:
         for field in _UNDECLARED_FIELDS:
             assert record[field] == UNDECLARED, f"{record['feature_name']}.{field}"
@@ -181,16 +188,18 @@ def test_features_computed_inside_build_dataset_cite_the_leakage_test() -> None:
     # this schema (see _training_source's own rules) — every one of them
     # must therefore cite the leakage test, not sit at UNDECLARED.
     covered_examples = [
-        "home_form_last5_home",   # last5-form
-        "home_goals_for_avg",     # goals-gd
-        "season_phase",           # temporal
-        "league_EPL",             # league one-hot
-        "combined_attack",        # combination
-        "elo_difference",         # elo-replay, wired into build_dataset()
+        "home_form_last5_home",  # last5-form
+        "home_goals_for_avg",  # goals-gd
+        "season_phase",  # temporal
+        "league_EPL",  # league one-hot
+        "combined_attack",  # combination
+        "elo_difference",  # elo-replay, wired into build_dataset()
     ]
     for name in covered_examples:
         record = by_name[name]
-        assert "train_on_real_matches.py:build_dataset()" in record["training_source"], name
+        assert (
+            "train_on_real_matches.py:build_dataset()" in record["training_source"]
+        ), name
         assert record["lookahead_risk"] == (
             "COVERED_BY_WHOLE_VECTOR_LEAKAGE_TEST — "
             "tests/unit/test_training_leakage_contract.py's "
@@ -205,7 +214,9 @@ def test_features_computed_inside_build_dataset_cite_the_leakage_test() -> None:
         ), name
 
 
-def test_phase8_and_undeclared_training_sources_stay_undeclared_lookahead_risk() -> None:
+def test_phase8_and_undeclared_training_sources_stay_undeclared_lookahead_risk() -> (
+    None
+):
     """phase8_historical.py is a separate replay build_dataset() never calls.
 
     Citing the build_dataset() leakage test for it would misattribute
@@ -240,9 +251,9 @@ def test_lookahead_risk_is_never_a_hand_written_guess() -> None:
             if record["lookahead_risk"] == UNDECLARED:
                 continue
             saw_a_covered_feature = True
-            assert "train_on_real_matches.py:build_dataset()" in record["training_source"], (
-                record["feature_name"]
-            )
+            assert (
+                "train_on_real_matches.py:build_dataset()" in record["training_source"]
+            ), record["feature_name"]
     assert saw_a_covered_feature, (
         "fixture assumption: at least one feature must resolve a real "
         "lookahead_risk, or this test's else-branch never runs and proves nothing"

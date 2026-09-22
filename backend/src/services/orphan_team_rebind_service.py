@@ -189,7 +189,8 @@ async def apply_orphan_team_rebind(
     residual = [
         f"{entry.match_id}/{entry.side}"
         for entry in residual_manifest.entries
-        if (entry.match_id, entry.side) in {(e.match_id, e.side) for e in manifest.entries}
+        if (entry.match_id, entry.side)
+        in {(e.match_id, e.side) for e in manifest.entries}
     ]
     if residual:
         raise RuntimeError(

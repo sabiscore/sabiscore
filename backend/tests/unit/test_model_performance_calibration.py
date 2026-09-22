@@ -40,7 +40,9 @@ def _records(n: int) -> list[dict]:
 
 def test_below_floor_reports_meets_sample_floor_false() -> None:
     records = _records(5)  # < MIN_RECORDS_FOR_DECOMPOSITION
-    metrics = _compute_calibration_metrics(records, n_bins=10, league="EPL", model_version="v5_phase7")
+    metrics = _compute_calibration_metrics(
+        records, n_bins=10, league="EPL", model_version="v5_phase7"
+    )
 
     assert metrics["status"] == "OK"
     assert metrics["sample_size"] == 5
@@ -51,7 +53,9 @@ def test_below_floor_reports_meets_sample_floor_false() -> None:
 
 def test_at_or_above_floor_reports_meets_sample_floor_true() -> None:
     records = _records(12)  # >= MIN_RECORDS_FOR_DECOMPOSITION
-    metrics = _compute_calibration_metrics(records, n_bins=5, league="EPL", model_version="v5_phase7")
+    metrics = _compute_calibration_metrics(
+        records, n_bins=5, league="EPL", model_version="v5_phase7"
+    )
 
     assert metrics["sample_size"] == 12
     assert metrics["meets_sample_floor"] is True
@@ -59,7 +63,9 @@ def test_at_or_above_floor_reports_meets_sample_floor_true() -> None:
 
 def test_empty_bin_is_null_not_fabricated() -> None:
     records = _records(12)
-    metrics = _compute_calibration_metrics(records, n_bins=5, league="EPL", model_version="v5_phase7")
+    metrics = _compute_calibration_metrics(
+        records, n_bins=5, league="EPL", model_version="v5_phase7"
+    )
 
     for cls_name in ("home_win", "draw", "away_win"):
         empty_bin = metrics["curves"][cls_name][3]  # (0.6, 0.8], guaranteed empty
@@ -81,7 +87,9 @@ async def test_calibration_endpoint_cache_hit_skips_recompute(monkeypatch) -> No
     store: dict = {}
     monkeypatch.setattr(endpoint.cache, "get", lambda key: store.get(key))
     monkeypatch.setattr(
-        endpoint.cache, "set", lambda key, value, ttl=None: store.__setitem__(key, value)
+        endpoint.cache,
+        "set",
+        lambda key, value, ttl=None: store.__setitem__(key, value),
     )
 
     mock_get_settled = AsyncMock(return_value=_records(15))
@@ -91,7 +99,8 @@ async def test_calibration_endpoint_cache_hit_skips_recompute(monkeypatch) -> No
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             with patch(
-                "src.api.endpoints.performance.get_settled_predictions", new=mock_get_settled
+                "src.api.endpoints.performance.get_settled_predictions",
+                new=mock_get_settled,
             ):
                 first = await client.get("/api/v1/model-performance/calibration")
                 second = await client.get("/api/v1/model-performance/calibration")

@@ -91,7 +91,9 @@ def ranked_probability_score(y_true_outcome: int, probs: list[float]) -> float:
     return sum((p - t) ** 2 for p, t in zip(cumprobs, cumtrue)) / 2.0
 
 
-def ranked_probability_score_rowwise(y_true: np.ndarray, y_proba: np.ndarray) -> np.ndarray:
+def ranked_probability_score_rowwise(
+    y_true: np.ndarray, y_proba: np.ndarray
+) -> np.ndarray:
     """Vectorised ``ranked_probability_score``, one value per row.
 
     Same formula, not a second convention: cumulative predicted mass vs.
@@ -180,7 +182,10 @@ def brier_score_decomposition(
 
     mean = {
         component: round(
-            float(np.mean([per_class[f"class_{i}"][component] for i in range(n_classes)])), 4
+            float(
+                np.mean([per_class[f"class_{i}"][component] for i in range(n_classes)])
+            ),
+            4,
         )
         for component in ("brier_score", "reliability", "resolution", "uncertainty")
     }
@@ -243,8 +248,14 @@ def accuracy_and_per_class(
         raise ValueError("y_proba must be 2D shaped (n_samples, n_classes)")
     n = len(y_true)
     if n == 0:
-        return {"accuracy": 0.0, "per_class": {}, "macro_precision": 0.0,
-                "macro_recall": 0.0, "macro_f1": 0.0, "n_samples": 0}
+        return {
+            "accuracy": 0.0,
+            "per_class": {},
+            "macro_precision": 0.0,
+            "macro_recall": 0.0,
+            "macro_f1": 0.0,
+            "n_samples": 0,
+        }
 
     y_pred = np.argmax(y_proba, axis=1)
     accuracy = float(np.mean(y_pred == y_true))
@@ -263,8 +274,11 @@ def accuracy_and_per_class(
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (2 * precision * recall / (precision + recall)
-              if (precision + recall) > 0 else 0.0)
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
 
         per_class[f"class_{cls}"] = {
             "precision": round(precision, 4),
@@ -337,8 +351,9 @@ def block_bootstrap_ci(
     rng = np.random.default_rng(rng_seed)
     # Build non-overlapping blocks.
     n_blocks = n // block_size
-    blocks: List[Tuple[int, int]] = [(i * block_size, (i + 1) * block_size)
-                                     for i in range(n_blocks)]
+    blocks: List[Tuple[int, int]] = [
+        (i * block_size, (i + 1) * block_size) for i in range(n_blocks)
+    ]
 
     replicates: List[float] = []
     for _ in range(n_bootstrap):
@@ -352,9 +367,15 @@ def block_bootstrap_ci(
             continue
 
     if not replicates:
-        return {"point_estimate": round(float(point), 4), "ci_lower": None,
-                "ci_upper": None, "ci_level": ci_level, "n_bootstrap": 0,
-                "block_size": block_size, "n_samples": n}
+        return {
+            "point_estimate": round(float(point), 4),
+            "ci_lower": None,
+            "ci_upper": None,
+            "ci_level": ci_level,
+            "n_bootstrap": 0,
+            "block_size": block_size,
+            "n_samples": n,
+        }
 
     alpha = (1.0 - ci_level) / 2.0
     ci_lower = float(np.quantile(replicates, alpha))

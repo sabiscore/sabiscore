@@ -15,14 +15,20 @@ def ingest_cli() -> None:
 
 
 @ingest_cli.command("manifest")
-@click.argument("manifest_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument(
+    "manifest_path", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
 @click.option(
     "--data-root",
     required=True,
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Root containing the manifest and every referenced local artifact.",
 )
-@click.option("--commit", is_flag=True, help="Commit validated rows. Omit for a rollback-only dry run.")
+@click.option(
+    "--commit",
+    is_flag=True,
+    help="Commit validated rows. Omit for a rollback-only dry run.",
+)
 def ingest_manifest_command(manifest_path: Path, data_root: Path, commit: bool) -> None:
     """Validate hashes and ingest one completed manifest transactionally."""
 

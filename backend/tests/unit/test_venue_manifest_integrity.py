@@ -11,6 +11,7 @@ diacritic folding, and was marked VERIFIED — roughly 1,296 km from the real
 Barcelona stadium, feeding subtropical Atlantic weather into that fixture's
 features.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -21,7 +22,12 @@ import pytest
 
 _BACKEND = Path(__file__).resolve().parents[2]
 _SCRIPT = _BACKEND / "scripts" / "validate_venue_manifest.py"
-_MANIFEST = _BACKEND.parent / "reports" / "research" / "portfolio-f-venue-location-manifest.json"
+_MANIFEST = (
+    _BACKEND.parent
+    / "reports"
+    / "research"
+    / "portfolio-f-venue-location-manifest.json"
+)
 
 _SPEC = importlib.util.spec_from_file_location("_venue_manifest_gate", _SCRIPT)
 assert _SPEC is not None and _SPEC.loader is not None
@@ -46,8 +52,11 @@ def test_a_club_marooned_from_its_league_is_rejected() -> None:
     """
     manifest = _load()
     spanish = [
-        e for e in manifest["entries"]
-        if e["verdict"] == "VERIFIED" and e.get("country") == "ES" and e.get("candidates")
+        e
+        for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED"
+        and e.get("country") == "ES"
+        and e.get("candidates")
     ]
     assert len(spanish) >= 2, "fixture assumption: several VERIFIED Spanish clubs"
 
@@ -61,7 +70,11 @@ def test_a_club_marooned_from_its_league_is_rejected() -> None:
 def test_a_cross_border_resolution_is_rejected() -> None:
     """The country filter is meant to make this impossible; prove we'd notice."""
     manifest = _load()
-    entry = next(e for e in manifest["entries"] if e["verdict"] == "VERIFIED" and e.get("candidates"))
+    entry = next(
+        e
+        for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED" and e.get("candidates")
+    )
     entry["candidates"][0]["country_code"] = "XX"
     assert any("country_code" in f for f in _GATE.validate(manifest))
 
@@ -69,7 +82,11 @@ def test_a_cross_border_resolution_is_rejected() -> None:
 def test_a_verified_club_without_a_coordinate_is_rejected() -> None:
     """Ingestion reads candidates[0]; an empty list fails at use time."""
     manifest = _load()
-    entry = next(e for e in manifest["entries"] if e["verdict"] == "VERIFIED" and e.get("candidates"))
+    entry = next(
+        e
+        for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED" and e.get("candidates")
+    )
     entry["candidates"] = []
     assert any("no usable candidate" in f for f in _GATE.validate(manifest))
 
@@ -77,7 +94,11 @@ def test_a_verified_club_without_a_coordinate_is_rejected() -> None:
 @pytest.mark.parametrize("lat,lon", [(91.0, 0.0), (0.0, 181.0), (float("nan"), 0.0)])
 def test_out_of_range_coordinates_are_rejected(lat: float, lon: float) -> None:
     manifest = _load()
-    entry = next(e for e in manifest["entries"] if e["verdict"] == "VERIFIED" and e.get("candidates"))
+    entry = next(
+        e
+        for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED" and e.get("candidates")
+    )
     entry["candidates"][0]["latitude"] = lat
     entry["candidates"][0]["longitude"] = lon
     assert _GATE.validate(manifest), f"({lat}, {lon}) accepted"
@@ -101,8 +122,11 @@ def _fresh_manifest_with_espanol_reproduction() -> dict:
     """
     manifest = _load()
     spanish = [
-        e for e in manifest["entries"]
-        if e["verdict"] == "VERIFIED" and e.get("country") == "ES" and e.get("candidates")
+        e
+        for e in manifest["entries"]
+        if e["verdict"] == "VERIFIED"
+        and e.get("country") == "ES"
+        and e.get("candidates")
     ]
     assert len(spanish) >= 2, "fixture assumption: several VERIFIED Spanish clubs"
     spanish[0] = dict(spanish[0])

@@ -31,7 +31,9 @@ def test_temperature_calibration_preserves_probability_simplex() -> None:
 
 def test_larger_temperature_softens_confidence() -> None:
     base = _base().predict_proba([[1.0]])
-    calibrated = TemperatureScaledMetaModel(_base(), temperature=2.0).predict_proba([[1.0]])
+    calibrated = TemperatureScaledMetaModel(_base(), temperature=2.0).predict_proba(
+        [[1.0]]
+    )
     assert calibrated.max() < base.max()
 
 
@@ -106,7 +108,9 @@ def test_isotonic_rejects_calibrator_count_mismatch() -> None:
 
 
 def test_vector_scaling_preserves_probability_simplex() -> None:
-    model = VectorScaledMetaModel(_base(), scale=np.array([1.5, 1.0, 0.5]), bias=np.array([0.1, 0.0, -0.1]))
+    model = VectorScaledMetaModel(
+        _base(), scale=np.array([1.5, 1.0, 0.5]), bias=np.array([0.1, 0.0, -0.1])
+    )
     probabilities = model.predict_proba([[1.0], [-1.0]])
     assert probabilities.shape == (2, 3)
     assert np.allclose(probabilities.sum(axis=1), 1.0)
@@ -119,14 +123,18 @@ def test_vector_scaling_reduces_to_temperature_when_scale_and_bias_are_shared() 
     since vector scaling is meant to strictly generalise it (§20 B2)."""
     base = _base()
     temperature_value = 2.0
-    vector = VectorScaledMetaModel(base, scale=np.full(3, 1.0 / temperature_value), bias=np.zeros(3))
+    vector = VectorScaledMetaModel(
+        base, scale=np.full(3, 1.0 / temperature_value), bias=np.zeros(3)
+    )
     temperature = TemperatureScaledMetaModel(base, temperature=temperature_value)
     x = [[1.0], [-1.0], [0.0]]
     assert np.allclose(vector.predict_proba(x), temperature.predict_proba(x))
 
 
 def test_vector_scaling_predict_matches_argmax_of_predict_proba() -> None:
-    model = VectorScaledMetaModel(_base(), scale=np.array([2.0, 1.0, 0.5]), bias=np.zeros(3))
+    model = VectorScaledMetaModel(
+        _base(), scale=np.array([2.0, 1.0, 0.5]), bias=np.zeros(3)
+    )
     x = [[1.0], [-1.0], [0.0]]
     expected = model.classes_[np.argmax(model.predict_proba(x), axis=1)]
     assert np.array_equal(model.predict(x), expected)
@@ -144,7 +152,9 @@ def test_vector_scaling_rejects_shape_mismatch() -> None:
         (np.ones(3), np.array([np.inf, 0.0, 0.0])),
     ],
 )
-def test_vector_scaling_rejects_non_finite_parameters(scale: np.ndarray, bias: np.ndarray) -> None:
+def test_vector_scaling_rejects_non_finite_parameters(
+    scale: np.ndarray, bias: np.ndarray
+) -> None:
     with pytest.raises(ValueError):
         VectorScaledMetaModel(_base(), scale=scale, bias=bias)
 

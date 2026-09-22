@@ -16,6 +16,7 @@ router = APIRouter(tags=["explain"])
 
 # ─── Calibration schemas ──────────────────────────────────────────────────────
 
+
 class CalibrationMethodStats(BaseModel):
     method: str
     ece_mean: float
@@ -36,6 +37,7 @@ class CalibrationStatsResponse(BaseModel):
 
 
 # ─── SHAP explain schemas ─────────────────────────────────────────────────────
+
 
 class SHAPFeatureContribution(BaseModel):
     feature: str
@@ -60,6 +62,7 @@ class SHAPExplainResponse(BaseModel):
 
 # ─── Calibration stats endpoint ───────────────────────────────────────────────
 
+
 @router.get("/calibration-stats", response_model=CalibrationStatsResponse)
 async def get_calibration_stats(
     request: Request,
@@ -79,7 +82,9 @@ async def get_calibration_stats(
         app_state = request.app.state
         model_instance = getattr(app_state, "model_instance", None)
 
-        if model_instance is not None and getattr(model_instance, "calibration_results", None):
+        if model_instance is not None and getattr(
+            model_instance, "calibration_results", None
+        ):
             cal = model_instance.calibration_results
             platt_ece = cal.get("platt", {})
             iso_ece = cal.get("isotonic", {})
@@ -143,6 +148,7 @@ async def get_calibration_stats(
 
 # ─── SHAP explain endpoint ────────────────────────────────────────────────────
 
+
 @router.get("/explain/{match_id}", response_model=SHAPExplainResponse)
 async def explain_prediction(
     match_id: str,
@@ -161,6 +167,7 @@ async def explain_prediction(
 
         # Pull cached prediction for this match
         from ...core.cache import cache_manager
+
         cached = cache_manager.get(f"prediction:{match_id}")
 
         if cached is None:
@@ -202,9 +209,7 @@ async def explain_prediction(
                             SHAPFeatureContribution(
                                 feature=str(feat),
                                 shap_value=float(val),
-                                direction=(
-                                    "home_win" if val > 0 else "away_win"
-                                ),
+                                direction=("home_win" if val > 0 else "away_win"),
                             )
                         )
             except Exception as shap_exc:

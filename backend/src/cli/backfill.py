@@ -27,7 +27,9 @@ def backfill_cli() -> None:
     default=None,
     help="Directory of fd_*.csv season files (defaults to backend/data/cache).",
 )
-@click.option("--dry-run", is_flag=True, help="Parse and report without writing to the database.")
+@click.option(
+    "--dry-run", is_flag=True, help="Parse and report without writing to the database."
+)
 def history(cache_dir: Optional[Path], dry_run: bool) -> None:
     """Load completed matches from committed football-data.co.uk CSVs."""
     from ..services.historical_backfill_service import (
@@ -104,9 +106,9 @@ def coverage() -> None:
 
             upcoming = (
                 await session.execute(
-                    select(Match.league_id, Match.home_team_id, Match.away_team_id).where(
-                        Match.status == "scheduled"
-                    )
+                    select(
+                        Match.league_id, Match.home_team_id, Match.away_team_id
+                    ).where(Match.status == "scheduled")
                 )
             ).all()
             names = dict((await session.execute(select(Team.id, Team.name))).all())
@@ -114,7 +116,9 @@ def coverage() -> None:
         per_league: dict[str, dict] = {}
         missing: set[str] = set()
         for league_id, home_id, away_id in upcoming:
-            bucket = per_league.setdefault(league_id or "UNKNOWN", {"total": 0, "covered": 0})
+            bucket = per_league.setdefault(
+                league_id or "UNKNOWN", {"total": 0, "covered": 0}
+            )
             bucket["total"] += 1
             if home_id in with_history and away_id in with_history:
                 bucket["covered"] += 1

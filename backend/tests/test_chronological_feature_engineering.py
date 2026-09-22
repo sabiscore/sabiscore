@@ -34,7 +34,9 @@ def _sample_frame(n: int = 2000) -> pd.DataFrame:
 def test_target_encoding_never_uses_future_or_same_day_targets() -> None:
     frame = pd.DataFrame(
         {
-            "date": pd.to_datetime(["2025-01-01", "2025-01-01", "2025-01-02", "2025-01-03"]),
+            "date": pd.to_datetime(
+                ["2025-01-01", "2025-01-01", "2025-01-02", "2025-01-03"]
+            ),
             "team": ["A", "B", "A", "A"],
             "target": [1.0, 1000.0, 0.0, 1.0],
         }
@@ -42,8 +44,12 @@ def test_target_encoding_never_uses_future_or_same_day_targets() -> None:
     encoded = PointInTimeTargetEncoder().fit_transform(frame, "team", "target")
 
     # First day has no prior observations and therefore no evidence.
-    assert encoded.loc[0, "team_target_encoded"] != encoded.loc[0, "team_target_encoded"]
-    assert encoded.loc[1, "team_target_encoded"] != encoded.loc[1, "team_target_encoded"]
+    assert (
+        encoded.loc[0, "team_target_encoded"] != encoded.loc[0, "team_target_encoded"]
+    )
+    assert (
+        encoded.loc[1, "team_target_encoded"] != encoded.loc[1, "team_target_encoded"]
+    )
     # A on Jan 2 can only see A's Jan 1 value, not B's same-day value.
     assert encoded.loc[2, "team_target_encoded"] == pytest.approx(1.0)
     # Jan 3 can see both prior A observations: mean(1, 0) = 0.5.
@@ -51,7 +57,9 @@ def test_target_encoding_never_uses_future_or_same_day_targets() -> None:
     assert encoded["team_target_encoded"].dtype == np.float32
 
 
-def test_target_encoding_same_day_rows_are_all_uninformed_without_prior_history() -> None:
+def test_target_encoding_same_day_rows_are_all_uninformed_without_prior_history() -> (
+    None
+):
     frame = pd.DataFrame(
         {
             "date": pd.to_datetime(["2025-01-01", "2025-01-01", "2025-01-02"]),
@@ -77,7 +85,9 @@ def test_target_encoding_unseen_category_uses_historical_global_mean() -> None:
 
     encoded = PointInTimeTargetEncoder().fit_transform(frame, "team", "target")
 
-    assert encoded.loc[0, "team_target_encoded"] != encoded.loc[0, "team_target_encoded"]
+    assert (
+        encoded.loc[0, "team_target_encoded"] != encoded.loc[0, "team_target_encoded"]
+    )
     assert encoded.loc[1, "team_target_encoded"] == pytest.approx(0.0)
     # NEW has no category history, so only prior global evidence is available.
     assert encoded.loc[2, "team_target_encoded"] == pytest.approx(0.5)
@@ -142,7 +152,10 @@ def test_promoted_team_baseline_uses_prior_seasons_only() -> None:
     transformed, promoted = LeagueTransitionDiscount().apply(frame, 2025)
     assert promoted == {"NEW"}
     # 2025's 9.0 values must not affect the baseline: prior means are 2.0/1.0.
-    assert transformed.loc[2, "home_xg_cold_start"] != transformed.loc[3, "home_xg_cold_start"]
+    assert (
+        transformed.loc[2, "home_xg_cold_start"]
+        != transformed.loc[3, "home_xg_cold_start"]
+    )
     assert transformed.loc[3, "home_xg_cold_start"] == pytest.approx(1.5)
 
 
@@ -161,7 +174,9 @@ def test_transition_discount_fails_closed_when_no_prior_xg_exists() -> None:
         LeagueTransitionDiscount().apply(frame, 2025)
 
 
-def test_transition_discount_preserves_existing_observations_and_unrelated_missing_values() -> None:
+def test_transition_discount_preserves_existing_observations_and_unrelated_missing_values() -> (
+    None
+):
     frame = pd.DataFrame(
         {
             "season": [2024, 2025, 2025],
@@ -224,7 +239,9 @@ def test_pipeline_same_day_target_encoding_does_not_cross_contaminate_matches() 
     ).transform(frame)
 
     current_day = result[result["date"] == pd.Timestamp("2025-01-01")]
-    assert current_day["home_team_home_win_encoded"].tolist() == pytest.approx([0.0, 1.0])
+    assert current_day["home_team_home_win_encoded"].tolist() == pytest.approx(
+        [0.0, 1.0]
+    )
     next_day = result[result["date"] == pd.Timestamp("2025-01-02")]
     assert next_day["home_team_home_win_encoded"].iloc[0] == pytest.approx(0.5)
 

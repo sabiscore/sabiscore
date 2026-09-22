@@ -45,17 +45,22 @@ from .orchestrator import ModelOrchestrator
 def __getattr__(name: str):
     if name == "ModelTrainer":
         from .training import ModelTrainer
+
         return ModelTrainer
     if name == "EnhancedStackingEnsemble":
         from .enhanced_training import EnhancedStackingEnsemble
+
         return EnhancedStackingEnsemble
     if name == "EnhancedModelTrainer":
         from .enhanced_training import EnhancedModelTrainer
+
         return EnhancedModelTrainer
     if name == "CalibratedEnsemble":
         from .enhanced_training import CalibratedEnsemble
+
         return CalibratedEnsemble
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # DB Models
@@ -74,7 +79,6 @@ __all__ = [
     "PlayerValuation",
     "ScrapingLog",
     "LeagueStanding",
-    
     # ML Models
     "BaseModel",
     "RandomForestModel",

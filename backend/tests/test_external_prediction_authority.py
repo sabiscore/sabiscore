@@ -48,7 +48,9 @@ def _external_payload() -> dict:
 
 
 @pytest.mark.asyncio
-async def test_external_probabilities_cannot_be_backend_certified_or_executable() -> None:
+async def test_external_probabilities_cannot_be_backend_certified_or_executable() -> (
+    None
+):
     result = await CertifiedAnalyticsService().analyze_payload(_external_payload())
 
     assert result.verdict is VerdictEnum.PARTIAL

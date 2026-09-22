@@ -2,6 +2,7 @@
 legal-name variants (D2a) via affix-stripping and reconcile_team() fallback,
 while still failing closed on true nicknames and ambiguous names.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -27,7 +28,9 @@ async def session():
 
 
 async def _seed(session: AsyncSession, *names: str) -> None:
-    session.add_all([Team(id=f"team-{i}", name=n, active=True) for i, n in enumerate(names)])
+    session.add_all(
+        [Team(id=f"team-{i}", name=n, active=True) for i, n in enumerate(names)]
+    )
     await session.commit()
 
 
@@ -41,7 +44,9 @@ async def test_case_insensitive_exact_match(session: AsyncSession) -> None:
     assert await resolve_team_id("arsenal", session) == "team-0"
 
 
-async def test_short_name_resolves_against_legal_name_suffix(session: AsyncSession) -> None:
+async def test_short_name_resolves_against_legal_name_suffix(
+    session: AsyncSession,
+) -> None:
     await _seed(session, "Arsenal FC", "Chelsea FC")
     assert await resolve_team_id("Arsenal", session) == "team-0"
 
@@ -88,15 +93,18 @@ def test_canonical_season_format_parity() -> None:
     assert canonical_season(datetime(2026, 6, 30)) == "2025/2026"
 
 
-async def _seed_league(
-    session: AsyncSession, league_id: str, *names: str
-) -> None:
+async def _seed_league(session: AsyncSession, league_id: str, *names: str) -> None:
     """League-scoped seed with real Elo history, mirroring how fixture sync
     calls resolve_team_id(league_id=..., require_elo_history=True)."""
     session.add(League(id=league_id, name=league_id, country="test"))
     session.add_all(
         [
-            Team(id=f"fdco-{league_id.lower()}-{i}", name=n, league_id=league_id, active=True)
+            Team(
+                id=f"fdco-{league_id.lower()}-{i}",
+                name=n,
+                league_id=league_id,
+                active=True,
+            )
             for i, n in enumerate(names)
         ]
     )
@@ -177,7 +185,9 @@ async def test_newly_promoted_club_absent_from_the_corpus_still_fails_closed(
     none of the seven committed Bundesliga seasons, so no Elo-bearing target
     exists. Adding aliases must not make an absent club resolve to a neighbour.
     """
-    await _seed_league(session, "BUNDESLIGA", "Ein Frankfurt", "Hamburg", "Bayern Munich")
+    await _seed_league(
+        session, "BUNDESLIGA", "Ein Frankfurt", "Hamburg", "Bayern Munich"
+    )
     assert (
         await resolve_team_id(
             "SV 07 Elversberg",
@@ -268,7 +278,7 @@ async def test_paris_fc_still_resolves_to_itself(session: AsyncSession) -> None:
 async def test_manchester_city_alias_wins_over_the_near_orphan_duplicate(
     session: AsyncSession,
 ) -> None:
-    """"Manchester City FC" affix-strips to an exact match on "Manchester
+    """ "Manchester City FC" affix-strips to an exact match on "Manchester
     City" -- the corpus's real spelling -- so without the reordering fix the
     near-orphan duplicate wins before the existing alias is ever reached."""
     await _seed_league(session, "EPL", "Man City", "Manchester City FC")
@@ -310,7 +320,7 @@ async def test_newcastle_alias_wins_over_the_near_orphan_duplicate(
 async def test_celta_vigo_alias_survives_an_inserted_token_breaking_containment(
     session: AsyncSession,
 ) -> None:
-    """"Celta de Vigo" contains "de" between the two halves of "Celta Vigo",
+    """ "Celta de Vigo" contains "de" between the two halves of "Celta Vigo",
     so the padded-substring containment check never lines up -- "celta vigo"
     is not a contiguous substring of "celta de vigo"."""
     await _seed_league(session, "LA_LIGA", "RC Celta de Vigo", "Sevilla FC")
@@ -340,7 +350,7 @@ async def test_cologne_alias_bridges_the_anglicized_corpus_spelling(
 async def test_short_name_below_the_containment_length_floor_resolves_via_alias(
     session: AsyncSession,
 ) -> None:
-    """"Lyon" (4 characters) is below containment's 5-character floor, so
+    """ "Lyon" (4 characters) is below containment's 5-character floor, so
     without the alias it can never reach "Olympique Lyonnais" no matter how
     obviously the two names refer to the same club."""
     await _seed_league(session, "LIGUE_1", "Olympique Lyonnais", "Lille")

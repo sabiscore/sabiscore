@@ -20,6 +20,7 @@ _DT = datetime(2024, 9, 14, 15, 0)
 
 # ── get_context defaults ──────────────────────────────────────────────────────
 
+
 def test_get_context_fresh_returns_defaults(sys):
     ctx = sys.get_context("Arsenal", "Chelsea")
     assert isinstance(ctx, PiContext)
@@ -38,15 +39,33 @@ def test_get_context_does_not_mutate(sys):
 
 # ── update ────────────────────────────────────────────────────────────────────
 
+
 def test_update_with_goals_changes_ratings(sys):
-    sys.update("m1", "Arsenal", "Chelsea",
-               home_goals=3, away_goals=1, league="EPL", match_date=_DT)
-    assert sys._attack["Arsenal"] != _DEFAULT_RATING or sys._defense["Arsenal"] != _DEFAULT_RATING
+    sys.update(
+        "m1",
+        "Arsenal",
+        "Chelsea",
+        home_goals=3,
+        away_goals=1,
+        league="EPL",
+        match_date=_DT,
+    )
+    assert (
+        sys._attack["Arsenal"] != _DEFAULT_RATING
+        or sys._defense["Arsenal"] != _DEFAULT_RATING
+    )
 
 
 def test_update_goalless_draw_no_rating_change(sys):
-    sys.update("m0", "Arsenal", "Chelsea",
-               home_goals=0, away_goals=0, league="EPL", match_date=_DT)
+    sys.update(
+        "m0",
+        "Arsenal",
+        "Chelsea",
+        home_goals=0,
+        away_goals=0,
+        league="EPL",
+        match_date=_DT,
+    )
     assert sys._attack["Arsenal"] == pytest.approx(_DEFAULT_RATING, abs=0.001)
     assert sys._defense["Arsenal"] == pytest.approx(_DEFAULT_RATING, abs=0.001)
 
@@ -54,26 +73,54 @@ def test_update_goalless_draw_no_rating_change(sys):
 def test_update_idempotent_by_match_id(tmp_path):
     parquet_file = tmp_path / "pi.parquet"
     s = PiRatingSystem(parquet_path=parquet_file)
-    s.update("m2", "Arsenal", "Chelsea",
-             home_goals=2, away_goals=0, league="EPL", match_date=_DT)
+    s.update(
+        "m2",
+        "Arsenal",
+        "Chelsea",
+        home_goals=2,
+        away_goals=0,
+        league="EPL",
+        match_date=_DT,
+    )
     attack_after_first = s._attack["Arsenal"]
     s._cache = None  # force table reload from parquet
-    s.update("m2", "Arsenal", "Chelsea",
-             home_goals=2, away_goals=0, league="EPL", match_date=_DT)
+    s.update(
+        "m2",
+        "Arsenal",
+        "Chelsea",
+        home_goals=2,
+        away_goals=0,
+        league="EPL",
+        match_date=_DT,
+    )
     assert s._attack["Arsenal"] == pytest.approx(attack_after_first, abs=0.001)
 
 
 def test_context_after_update_reflects_new_ratings(sys):
-    sys.update("m3", "Arsenal", "Chelsea",
-               home_goals=3, away_goals=0, league="EPL", match_date=_DT)
+    sys.update(
+        "m3",
+        "Arsenal",
+        "Chelsea",
+        home_goals=3,
+        away_goals=0,
+        league="EPL",
+        match_date=_DT,
+    )
     ctx = sys.get_context("Arsenal", "Chelsea")
     assert ctx.home_pi_attack > ctx.away_pi_attack
 
 
 def test_sequential_wins_increase_attack(sys):
     for i in range(5):
-        sys.update(f"g{i}", "Arsenal", f"Opp{i}",
-                   home_goals=2, away_goals=0, league="EPL", match_date=_DT)
+        sys.update(
+            f"g{i}",
+            "Arsenal",
+            f"Opp{i}",
+            home_goals=2,
+            away_goals=0,
+            league="EPL",
+            match_date=_DT,
+        )
     assert sys._attack["Arsenal"] > _DEFAULT_RATING
 
 
@@ -94,6 +141,7 @@ def test_persist_noop_without_parquet(sys):
 
 
 # ── PiContext frozen dataclass ─────────────────────────────────────────────────
+
 
 def test_pi_context_frozen():
     ctx = PiContext(

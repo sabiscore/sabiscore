@@ -1,4 +1,5 @@
 """Regression coverage for build/runtime release-SHA truthfulness."""
+
 from __future__ import annotations
 
 import json

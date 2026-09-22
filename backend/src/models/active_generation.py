@@ -59,9 +59,9 @@ ALLOWED_CERTIFICATION_STATES = frozenset(
 #: Fields an `operator_override` block must carry. Each exists so the decision
 #: is attributable and reviewable after the fact rather than anonymous.
 _REQUIRED_OVERRIDE_FIELDS = (
-    "authorizing_identity",   # who took the decision
-    "rationale",              # why, in their own words
-    "authorized_at",          # when (ISO-8601)
+    "authorizing_identity",  # who took the decision
+    "rationale",  # why, in their own words
+    "authorized_at",  # when (ISO-8601)
     "acknowledged_failures",  # which gates they read and accepted anyway
 )
 
@@ -112,9 +112,13 @@ def _safe_file(models_dir: Path, relative_name: object) -> Path:
     try:
         candidate.relative_to(models_dir.resolve())
     except ValueError as exc:
-        raise ActiveGenerationError("Active manifest path escapes the models directory") from exc
+        raise ActiveGenerationError(
+            "Active manifest path escapes the models directory"
+        ) from exc
     if not candidate.is_file():
-        raise ActiveGenerationError(f"Active generation file is missing: {relative_name}")
+        raise ActiveGenerationError(
+            f"Active generation file is missing: {relative_name}"
+        )
     return candidate
 
 
@@ -126,7 +130,9 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ActiveGenerationError("Active generation manifest is unavailable or invalid") from exc
+        raise ActiveGenerationError(
+            "Active generation manifest is unavailable or invalid"
+        ) from exc
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ActiveGenerationError("Unsupported active generation manifest schema")
     if not isinstance(payload.get("generation"), str) or not payload["generation"]:
@@ -139,7 +145,9 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
     verified: dict[str, dict[str, Any]] = {}
     for raw_league, raw_entry in artifacts.items():
         if not isinstance(raw_league, str) or not isinstance(raw_entry, dict):
-            raise ActiveGenerationError("Active generation contains a malformed artifact entry")
+            raise ActiveGenerationError(
+                "Active generation contains a malformed artifact entry"
+            )
         league = raw_league.lower()
         artifact = _safe_file(root, raw_entry.get("artifact"))
         metadata = _safe_file(root, raw_entry.get("metadata"))
@@ -202,7 +210,9 @@ def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ActiveGenerationError("Certification evidence is unreadable or invalid") from exc
+        raise ActiveGenerationError(
+            "Certification evidence is unreadable or invalid"
+        ) from exc
 
     if not isinstance(report, dict) or report.get("promotion_permitted") is not True:
         raise ActiveGenerationError(
@@ -212,7 +222,9 @@ def _verify_certification_claim(payload: dict[str, Any], root: Path) -> None:
 
     gates = report.get("gates")
     if not isinstance(gates, dict) or not gates:
-        raise ActiveGenerationError("Certification evidence declares no promotion gates")
+        raise ActiveGenerationError(
+            "Certification evidence declares no promotion gates"
+        )
     failed = sorted(
         name
         for name, gate in gates.items()
@@ -277,7 +289,9 @@ def _verify_operator_override_claim(payload: dict[str, Any]) -> None:
         )
 
 
-def _verify_feature_contract(payload: dict[str, Any], artifacts: dict[str, dict[str, Any]]) -> None:
+def _verify_feature_contract(
+    payload: dict[str, Any], artifacts: dict[str, dict[str, Any]]
+) -> None:
     """Reject a manifest whose artifacts cannot honour its declared feature contract.
 
     This is the same asymmetry ``_verify_certification_claim`` closes for the
@@ -347,7 +361,9 @@ def verify_feature_contract_freshness(models_dir: Path | None = None) -> None:
     try:
         payload = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ActiveGenerationError("Active generation manifest is unavailable or invalid") from exc
+        raise ActiveGenerationError(
+            "Active generation manifest is unavailable or invalid"
+        ) from exc
     declared = payload.get("feature_schema_version")
     contract_path = root / "feature_contract.json"
     if not contract_path.is_file():
@@ -358,7 +374,9 @@ def verify_feature_contract_freshness(models_dir: Path | None = None) -> None:
     try:
         committed = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ActiveGenerationError("feature_contract.json is unreadable or invalid") from exc
+        raise ActiveGenerationError(
+            "feature_contract.json is unreadable or invalid"
+        ) from exc
 
     fresh = registry.build_feature_contract(declared)
     if committed != fresh:
@@ -368,7 +386,9 @@ def verify_feature_contract_freshness(models_dir: Path | None = None) -> None:
         )
 
 
-def active_artifact_path(league_slug: str, models_dir: Path | None = None) -> Path | None:
+def active_artifact_path(
+    league_slug: str, models_dir: Path | None = None
+) -> Path | None:
     """Return the verified artifact for a manifested league, if one is active."""
 
     generation = load_active_generation(models_dir)
@@ -485,10 +505,16 @@ def active_feature_schema_version(models_dir: Path | None = None) -> str:
     try:
         payload = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ActiveGenerationError("Active generation manifest is unavailable or invalid") from exc
-    version = payload.get("feature_schema_version") if isinstance(payload, dict) else None
+        raise ActiveGenerationError(
+            "Active generation manifest is unavailable or invalid"
+        ) from exc
+    version = (
+        payload.get("feature_schema_version") if isinstance(payload, dict) else None
+    )
     if not isinstance(version, str) or not version.strip():
-        raise ActiveGenerationError("Active generation does not declare feature_schema_version")
+        raise ActiveGenerationError(
+            "Active generation does not declare feature_schema_version"
+        )
     return version.strip()
 
 

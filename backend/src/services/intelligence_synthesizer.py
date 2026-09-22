@@ -49,7 +49,7 @@ class EnsemblePrediction:
     certification_state: str = "UNVERIFIED"
     artifact_sha256: Optional[str] = None
     coverage: str = "dedicated"
-    calibration_method: str = "raw"   # "raw" | "isotonic" | "platt" | …
+    calibration_method: str = "raw"  # "raw" | "isotonic" | "platt" | …
     calibration_applied: bool = False
     overlay_applied: bool = False
 
@@ -59,7 +59,7 @@ class OddsEdge:
     market: str  # "home_win" | "draw" | "away_win"
     market_odds: float
     model_prob: float
-    edge: float          # model_prob − 1/market_odds
+    edge: float  # model_prob − 1/market_odds
     kelly_stake: float
 
 
@@ -82,6 +82,7 @@ class MatchActionability:
     top_evidence: up to 3 key signals behind this edge assessment.
     caveats: data gaps or quality warnings that reduce confidence.
     """
+
     edge_quality_score: float
     clv_pct: Optional[float]
     closing_line_convergence_delta: Optional[float]
@@ -186,7 +187,7 @@ def normalize_evidence_quality(
 @dataclass
 class FullMatchAnalysisResponse:
     match_id: str
-    verdict: str                             # HIGH_CONVICTION|ACTIONABLE|SPECULATIVE|HOLD|NO_BET|PARTIAL
+    verdict: str  # HIGH_CONVICTION|ACTIONABLE|SPECULATIVE|HOLD|NO_BET|PARTIAL
     ensemble: EnsemblePrediction
     uncertainty: Optional[UncertaintyBreakdown]
     model_drivers: List[str]
@@ -194,8 +195,8 @@ class FullMatchAnalysisResponse:
     rl_recommendation: RLRecommendationPayload
     elo_context: Optional[AnyEloContext]
     odds_edge: Optional[OddsEdge]
-    narrative: str                           # B11: ≤280 chars
-    partial_intelligence: bool              # True only for critical gaps/conflicts
+    narrative: str  # B11: ≤280 chars
+    partial_intelligence: bool  # True only for critical gaps/conflicts
     data_gaps: List[str]
     evidence_quality: EvidenceQuality
     prediction_status: str = "AVAILABLE"
@@ -204,11 +205,17 @@ class FullMatchAnalysisResponse:
     is_reduced_evidence_baseline: bool = False
     effective_kelly_cap: float = 0.0
     stake_permitted: bool = False
-    staleness_seconds: int = 0              # Age of oldest live feature source
-    staleness_available: bool = True        # False means freshness is unknown, never LIVE
-    feature_freshness_seconds: dict = field(default_factory=dict)  # Phase 8: feature_name → seconds (None = DATA_GAP)
-    feature_source: dict = field(default_factory=dict)             # Phase 8: feature_name → source identifier
-    actionability: Optional[MatchActionability] = field(default=None)  # Sprint 4 Slice A advisory
+    staleness_seconds: int = 0  # Age of oldest live feature source
+    staleness_available: bool = True  # False means freshness is unknown, never LIVE
+    feature_freshness_seconds: dict = field(
+        default_factory=dict
+    )  # Phase 8: feature_name → seconds (None = DATA_GAP)
+    feature_source: dict = field(
+        default_factory=dict
+    )  # Phase 8: feature_name → source identifier
+    actionability: Optional[MatchActionability] = field(
+        default=None
+    )  # Sprint 4 Slice A advisory
     # Phase F: UCL + high-stakes metadata (populated in full_analysis.py from features_dict)
     match_importance_score: Optional[float] = field(default=None)
     competition_stage: Optional[str] = field(default=None)
@@ -228,7 +235,7 @@ class FullMatchAnalysisResponse:
             return "UNKNOWN"
         if self.staleness_seconds == 0:
             return "LIVE"
-        if self.staleness_seconds < 86_400:   # < 24 h
+        if self.staleness_seconds < 86_400:  # < 24 h
             return "RECENT"
         return "STALE"
 
@@ -497,7 +504,8 @@ class IntelligenceSynthesizer:
             prediction_status=prediction_status,
             prediction_source=prediction_source,
             probabilities_available=probabilities_available,
-            is_reduced_evidence_baseline=prediction_status == "REDUCED_EVIDENCE_BASELINE",
+            is_reduced_evidence_baseline=prediction_status
+            == "REDUCED_EVIDENCE_BASELINE",
             effective_kelly_cap=effective_kelly_cap,
             stake_permitted=stake_permitted,
             staleness_seconds=staleness,
@@ -564,9 +572,14 @@ class IntelligenceSynthesizer:
     def _phase8_context(features_dict: dict, data_gaps: List[str]) -> dict:
         """Extract Phase 8 signals that are live (not in data_gaps)."""
         ctx: dict = {}
-        for key in ("max_abs_odds_drift", "sharp_money_direction",
-                    "match_importance_score", "odds_drift_home",
-                    "odds_drift_draw", "odds_drift_away"):
+        for key in (
+            "max_abs_odds_drift",
+            "sharp_money_direction",
+            "match_importance_score",
+            "odds_drift_home",
+            "odds_drift_draw",
+            "odds_drift_away",
+        ):
             if key not in data_gaps and key in features_dict:
                 val = features_dict[key]
                 if val is not None:
@@ -617,7 +630,9 @@ class IntelligenceSynthesizer:
             if drift >= 0.05:
                 direction_idx = int(phase8_ctx.get("sharp_money_direction", 0))
                 direction_label = ("home", "draw", "away")[direction_idx]
-                parts.append(f"Market: sharp move → {direction_label} (drift {drift:.3f}).")
+                parts.append(
+                    f"Market: sharp move → {direction_label} (drift {drift:.3f})."
+                )
 
             importance = phase8_ctx.get("match_importance_score", 0.0)
             if importance >= 0.70:

@@ -159,7 +159,10 @@ async def test_auth_cookie_login_sets_httponly_cookie() -> None:
                 email_verified=True,
             )
 
-            with patch("src.api.endpoints.auth._get_user_by_email", new=AsyncMock(return_value=mock_user)):
+            with patch(
+                "src.api.endpoints.auth._get_user_by_email",
+                new=AsyncMock(return_value=mock_user),
+            ):
                 with patch("src.api.endpoints.auth._touch_last_login", new=AsyncMock()):
                     response = await client.post(
                         "/api/v1/auth/cookie-login",

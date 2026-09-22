@@ -9,6 +9,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Feature Schema Alignment in Test Suites**:
   - `backend/tests/unit/test_model_artifact_loading.py`: Updated test assertion from legacy `CANONICAL_FEATURES_68` to `APEX_FEATURES_68` using `active_default_feature_values(use_phase7=True, apex=True)`.
   - `backend/tests/unit/test_uncertainty_contract.py`: Switched holdout evaluation matrices from `X_incumbent` (which preserved outdated canonical indexing) to `X` (aligned with the actual candidate schema). Scrambled feature columns previously broke `novel_regimes` and `independence_from_confidence` tests.
@@ -59,6 +64,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   `scripts/audit_release_identity.py` (posix-path rendering, `INCOMPLETE`/`COMPLETE` verdict paths).
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`scripts/audit_release_identity.py` rendered training-manifest paths with native OS separators**
   (`str(Path.relative_to(...))`), so every local regeneration on Windows produced backslash paths
@@ -148,6 +158,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`scripts/evaluate_g16_uncertainty.py`'s `ServedPredictionAdapter.predict_proba` rejected genuinely valid
   calibrated probabilities as an "invalid probability simplex."** Reproduced directly against 301 real
   BUNDESLIGA holdout rows: every prediction is finite, non-negative, and sums to `1.0 ± 1e-4` — ordinary
@@ -176,6 +191,11 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   the current integration-phase sweep.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`requires_bash`'s skip condition only checked that *a* `bash.exe` existed on PATH, not that it
   actually ran.** On Windows there can be several (Git Bash, a non-functional WSL launcher stub in
@@ -207,6 +227,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 ## Unreleased — Schema-drift guard isolated; deleted ledger entry restored (2026-09-20)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **The CI zero-fabrication scan could not fail.** All nine checks were written as `! grep …`, and
   POSIX exempts a `!`-inverted command from `set -e`, so a positive match never aborted and the
@@ -289,6 +314,11 @@ without that authorization. See `docs/DEBT.md` item 126.
   optional — it is the line that caught the market outscoring both fitted models.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`reports/research/experiment_registry.yaml` cross-references.** `schema_reference` read
   `PRODUCTION_EXECUTIVE_DIRECTIVE.md §38`; that file is the Execution & Certification Directive
@@ -391,6 +421,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Closes both `NEXT` follow-ups DEBT 101 recorded a day earlier.** (1) `classify()` now returns
   `(verdict, reason, confirmed)` -- the exact subset of geocoding resolutions it actually trusted,
   not just the verdict. Every candidate persisted to the manifest carries a `"confirmed"` boolean.
@@ -431,6 +466,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 ## Unreleased — Venue Integrity Gate + Migration Target Boundary (2026-09-17)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **A VERIFIED stadium sat 1,296 km from its real location** (DEBT 101). `Espanol` (RCD Espanyol,
   Barcelona) resolved to a place called "Español" at 28.5N -16.33 — Tenerife. The `ES` country
@@ -509,6 +549,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **The G24 gate script crashed before writing its artifact.** `scripts/validate_deployment.py`
   referenced `Path` without importing `pathlib` — `F821`. Line 131 sits on the main path *after*
   all network validation, so G24 would complete its work and then raise `NameError` instead of
@@ -563,6 +608,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 ## Unreleased — v7.5 Calibration Evidence Integrity + Suite Restoration (2026-09-16)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **Calibration evidence was measured in-sample** (`backend/scripts/inject_platt_calibrator.py`,
   DEBT 96): the injector fitted each calibrator on `(y_cal, proba_cal)` and then scored it on
@@ -643,6 +693,11 @@ without that authorization. See `docs/DEBT.md` item 126.
 ## Unreleased - Resolved all 11 backend test suite blockers (2026-09-15)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **Google OAuth**: Fixed `JWSError` caused by passing a `cryptography` RSAPrivateKey object to `python-jose` by encoding the key into PEM bytes first (`tests/test_google_oauth.py`).
 - **Auth User Schema**: Allowed `email_verified` to be `None` (Optional) in `UserInDBBase` to fix Pydantic validation errors for legacy accounts, updating test mocks to explicitly pass `True` (`src/schemas/user.py`, `tests/unit/test_auth_anonymous_and_favorites.py`).
@@ -730,6 +785,11 @@ single-IP), so the item was checked directly instead of deferred. No staking
 constant, verdict gate, Kelly rule, model artifact, or serving path changed.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `backend/scripts/calibrate_portfolio_exposure.py` carried **four defects** and
   had never been executed against a real database:
@@ -909,6 +969,11 @@ staking permission changed — the active generation remains `UNVERIFIED` /
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `_calibration_reliability` (`backend/scripts/train_on_real_matches.py`)
   special-cased its first bin as `[0.0, 0.1]` inclusive while the production
   functions it claimed to match (`expected_calibration_error`,
@@ -974,6 +1039,11 @@ permission changed. The active generation remains `UNVERIFIED` /
 `ACTIVE_FAIL_CLOSED`, and `stake_permitted` remains `false` on every fixture.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `_odds_edge_from_features` (`backend/src/api/endpoints/full_analysis.py`) no
   longer builds a model-vs-market edge from the flat ~1/3 diagnostic prior that
@@ -1051,6 +1121,11 @@ follow-up.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `scripts/audit_statsbomb_coverage.py` — `assert isinstance(...)` inside a
   `try/except Exception` (a real `python:S5779` reliability bug: asserts are
   stripped under `python -O`, and the `except` also silently catches
@@ -1077,6 +1152,11 @@ of the PR, plus a real semantic bug GitHub Copilot's automated review caught
 before merge. `docs/DEBT.md` item 61.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `home_pressing_intensity` (gated behind the new `ENABLE_STATSBOMB_ENRICHMENT`
   flag, default `False`) computed the raw `home_ppda/away_ppda` ratio,
@@ -1117,6 +1197,11 @@ item 2 was therefore not a build but a deletion. `docs/DEBT.md` item 60 has the
 full finding.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `apps/web/src/components/CalibrationCurveChart.tsx` — removed five
   fabrications that rendered in production: a hardcoded +/-3% "95% CI" error bar
@@ -1349,6 +1434,11 @@ Full evidence: `backend/reports/evaluation/apex-v2-71-candidate-evaluation.{json
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Corpus duplication, and every number derived from it.** The committed
   Understat files overlap — `understat_ligue_1_2020` and
   `understat_ligue_1_2021` both hold the whole 2020/21 season — giving 12,459
@@ -1435,6 +1525,11 @@ acceptable outcome; a manufactured PASS is not.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `resolve_team_id()` (`team_identity.py`) now checks `_AUDITED_ALIASES`
   immediately after an exact-name match, before affix-stripping — not after
   it. Affix-stripping a near-orphaned duplicate's full legal name
@@ -1516,6 +1611,11 @@ path; no candidate schema authored/trained yet) in DEBT.md.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `/code-review` caught `_resolve_match_id` binding a tz-aware kickoff window
   directly against `Match.match_date` (naive `TIMESTAMP WITHOUT TIME ZONE`) —
   the same asyncpg `DataError` trap already fixed elsewhere in this codebase
@@ -1568,6 +1668,11 @@ infrastructure and is explicitly out of scope here.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `UpcomingMatchFeatureProjector._get_team_xg()` issued
   `SELECT expected_goals WHERE match_id IN (...)` with **no `ORDER BY`**,
   while its caller took `[:5]` believing it had the 5 most recent matches. Was
@@ -1593,6 +1698,11 @@ infrastructure and is explicitly out of scope here.
 ## Unreleased - Repair the never-executed Understat xG ingestion, acquire the first real corpus, and re-measure the proxy ATE the registry blocks on (2026-09-03)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `backend/src/connectors/understat_source.py` — two stacked defects, the second
   only visible after fixing the first. The connector had **never once executed**:
@@ -1796,6 +1906,11 @@ executing**, because the ledger item it was granted against had gone stale.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `promotion_evidence._summary_from_features()` no longer counts policy-gapped
   slots as training defaults (`docs/DEBT.md` item 49). All four
   `PHASE7_FEATURES_ALWAYS_DATA_GAP` features are *by policy* constant at their
@@ -1882,6 +1997,11 @@ executing**, because the ledger item it was granted against had gone stale.
 ## Unreleased - Fix naive/aware datetime 500s across identity, notifications, developer platform, and analytics (2026-09-03)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - Every `DateTime` column in `db/models.py`/`core/database.py` is naive
   (`TIMESTAMP WITHOUT TIME ZONE`) — asyncpg raises `can't subtract
@@ -2159,6 +2279,11 @@ agent/skill customization files (`.ai/`, `.agents/`, `.claude/`, `.github/skills
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Type safety**: `GET /model-performance`, `/model-performance/summary`,
   and `/model-performance/calibration` returned a bare
   `Dict[str, Any]`-annotated function that also returned `JSONResponse` on
@@ -2279,6 +2404,11 @@ the exact failure) before trusting it.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`docs/DEBT.md` item 46** (`prisma skills sync` postinstall risk): the
   change it described was never actually merged — `package.json` has no
   `postinstall` script and no `prisma` dependency anywhere in the workspace.
@@ -2350,6 +2480,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`docs/DEBT.md` item 48**: every trained artifact, including the served
   `v5_phase7` generation, trained with `elo_difference` and its 3 resolvable
   siblings at a constant `0.0` registry default — nothing replayed Elo over
@@ -2379,6 +2514,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Advanced-insights route was dead behind a broad `except`; five stacked defects fixed (2026-08-30)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`GET /api/v1/matches/{match_id}/advanced-insights` could not succeed for any
   fixture that had odds.** The route was already mounted into the live `/api/v1`
@@ -2467,6 +2607,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Raw backend evidence tokens rendered verbatim in `betting-intelligence-dashboard.tsx`.**
   `fixture.odds_status` (line ~584) and each `evidence.source_status.{model,market,
   team_metrics,availability}` field (lines ~646-649) printed the literal backend
@@ -2500,6 +2645,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Internal model provenance removed from consumer surfaces (APEX §11); hero dead space eliminated (2026-08-26)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **APEX §11 violation on the homepage.** The hero's "Model pulse" rail
   published the active generation's internal provenance verbatim —
@@ -2569,6 +2719,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - Defaults now come from `DEFAULT_FEATURE_VALUES_68` instead of hand-copied
   literals. The projector's copies had already drifted — 1.5/1.2/0.0, with the
   home literals reused verbatim for the away side, against the registry's home
@@ -2600,6 +2755,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Correct repair target for mojibake orphans; PR #81's manifest compared the wrong systems (2026-08-24)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `docs/DEBT.md` item 39's "repair path already exists" claim (from the
   previous entry below) was wrong. `GET /api/v1/release/fixture-identity-review`
@@ -2637,6 +2797,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Fail closed on mojibake team names (2026-08-23)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `backend/src/services/fixture_sync_service.py`: a provider display name
   containing `?` can no longer become team identity. Production
@@ -2702,6 +2867,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Fix broken web typecheck, wire orphaned Firecrawl test, remove non-functional UI pill (2026-08-23)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `apps/web/src/lib/firecrawl/evidence.ts`: statically imported a generated
   JSON artifact via the `@/*` alias (`apps/web/src/data/generated/...`), but
@@ -2917,6 +3087,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - 3 pre-existing tests patched the now-removed `monitoring.engine` module
   attribute (`patch.object(monitoring, "engine", ...)` /
   `patch('...monitoring.engine')`); updated to patch `get_engine` instead.
@@ -2967,6 +3142,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
   injected perturbation before being trusted.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `docs/DEBT.md` item 36: corrected a stale "40-name sub-vector" reference
   (`PARITY_SCOPE` grew to 44 names in §7.2) and recorded the closed
@@ -3050,6 +3230,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `certification_policy()` deep-copies. It previously returned the module-level
   dicts by reference, so a caller could rewrite the "frozen" policy in-process
   — and because `policy_sha256()` hashes the same objects, the digest moved
@@ -3102,6 +3287,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
   is why it stayed invisible. Blocks any Phase 4 retrain until resolved.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - Market attribution is keyed on the **schema**, not the feature name.
   `market_prob_home` / `log_odds_*` / `odds_ratio` appear in both
@@ -3167,6 +3357,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `active_generation.json`'s `feature_schema_version` is now validated instead
   of being unvalidated free text. The manifest hash-protects every artifact's
   bytes, but the field naming the feature contract those artifacts were trained
@@ -3200,6 +3395,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - Phase 8 market-drift features no longer fall back to the provenance-blind
   legacy `Odds` table when canonical `OddsHistory` evidence is absent.
 - User-supplied and legacy odds snapshots now report `RESEARCH_ONLY` and
@@ -3220,6 +3420,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - Codex discovery setup now links each canonical repository skill independently,
   preserving plugin-managed entries already installed under `.agents/skills`.
 - Discovery validation accepts the overlay and fails closed on missing canonical
@@ -3230,6 +3435,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - Phase 2 generation-scoped CLV hardening (2026-08-21)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - Settlement and CLV repository reads now require a non-empty model generation;
   the former permissive default could pool rows from systems that never served as
@@ -3251,6 +3461,11 @@ Backfilled retroactively; this milestone shipped without a CHANGELOG entry.
 ## Unreleased - SAB-22 semantic-repair manifest v3 (2026-08-21)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `TeamIndex` now keeps exact-name and curated-alias registries independent, so
   a unique exact `Man City` identity is not made ambiguous by Manchester City's
@@ -3285,6 +3500,11 @@ separately-issued authorization id, and a literal confirmation token that
 this session neither has nor fabricates.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`backendCapability` was structurally always `null` in production.**
   `apps/web/src/app/api/health/route.ts` read `data.capability` (singular)
@@ -3398,6 +3618,11 @@ this session neither has nor fabricates.
 Closes `docs/DEBT.md` items 23 and 31.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - `backend/src/core/database.py` — the PostgreSQL startup branch now connects
   inline (`with engine.connect(): conn.execute(text("SELECT 1"))`) instead of
@@ -3516,6 +3741,11 @@ agent-doable action left.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`docs/DEBT.md` item #26 retired — it described a bug already fixed 66
   minutes after being filed.** `feature_availability_matrix.json`'s
   producer/consumer schema mismatch (commit `c256852`) was closed by commit
@@ -3559,6 +3789,11 @@ Both would have corrupted certification at the moment it became possible, and
 both were fixed *ahead of* their trigger rather than after.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **Accuracy evidence no longer pools model generations.**
   `build_settled_predictions_query` had no `model_version` filter, so
@@ -3639,6 +3874,11 @@ fresh Render deploy log.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - `apply_finished_match_to_elo` now skips a match where `home_team_id == away_team_id` (a team recorded as playing itself — 26 such rows exist in production, 16× Inter Milan, 10× Espanyol) instead of attempting a doomed two-row insert that collided with itself on the `(match_id, team_id)` unique constraint and aborted the *entire* hourly Elo-sync batch. `elo_rating_snapshots` had stayed at exactly 0 rows for hours despite migration `0007_durable_elo_state` being live; this was why. `docs/DEBT.md` item 23.
 - `sync_upcoming_fixtures` now catches a canonical-identity conflict (a rescheduled fixture's kickoff-derived `fixture_id` no longer matching its existing `ProviderEventMapping`) per-fixture instead of letting it abort the whole sync tick before `session.commit()`. `docs/DEBT.md` item 24.
 - Added `EloEngine.seed_from_matches()` to the legacy offline Parquet engine (research/reproducibility tooling only — not the production Postgres authority) with a clarifying module-docstring disclaimer.
@@ -3662,6 +3902,11 @@ fresh Render deploy log.
 - Added a refined v4.2 execution prompt that makes distributed queues, CatBoost runtime, extra animation libraries, and local LLM workers evidence-triggered rather than mandatory production dependencies.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - Stopped deriving semantic model version from deserialized artifact shape and stopped silently truncating oversized feature vectors to an older model width; schema mismatch now fails closed.
 - Separated provider configuration/readiness from opt-in quota-consuming live validation; `CONFIGURED_UNVERIFIED` is neutral rather than an outage.
@@ -3691,6 +3936,11 @@ fresh Render deploy log.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **Homepage dead space**: reduced outer section spacing from `space-y-8 sm:space-y-12` to `space-y-6 sm:space-y-8` and hero section vertical padding from `sm:p-10` (40px) to `sm:py-7` (28px). Collectively removes ~40px of void between the hero block and the "Explore a manual matchup" `<details>` accordion.
 - **Carousel fixture cards**: added league country flag (`CountryFlag` + league abbreviation) as a compact header row on each `BigMatchesCarousel` card. Fixtures from different leagues are now distinguishable at a glance in the "All" view. Team home name bumped from `text-[11px]` to `text-xs` for legibility.
 - **Mobile vs-row**: the compact selected-matchup bar (`sm:hidden`) now shows the selected league's country flag beside the fixture type label ("Verified fixture selected" / "Manual matchup selected").
@@ -3715,6 +3965,11 @@ fresh Render deploy log.
   preserving the existing five-state status contract.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - Redacted standalone scraper `storage:probe` failures to a bounded error code and
   HTTP status so AWS SDK exception text cannot disclose IAM identity or request
@@ -3777,6 +4032,11 @@ fresh Render deploy log.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - Normalized database-naive canonical fixture kickoffs to offset-aware UTC at
   the public FastAPI boundary while preserving the strict web validator.
 - Separated provider configuration from live verification in the platform
@@ -3829,6 +4089,11 @@ excerpt (2026-08-13T23:22-23:26 UTC).
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`the_odds_api`'s API key was appearing in cleartext in every production
   log line.** `backend/src/api/main.py`'s `logging.basicConfig(level=logging.INFO, ...)`
   left the third-party `httpx` package's own request logger at its default
@@ -3868,6 +4133,11 @@ logic was touched. Every claim below was verified against the rendered DOM on a
 local production build pointed at the live Render backend, not inferred.
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **Every scheduled fixture rendered a green `LIVE` badge.**
   `upcoming-matches-panel.tsx`'s `freshnessLabel()` mapped
@@ -3982,6 +4252,11 @@ remain open operator actions — none are code-resolvable from this environment.
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 Sweeping for siblings of the `/api/upcoming` fix below turned up **four more**
 league-parameterized boundaries that did not normalize. All now route through
 `canonicalLeagueId()` (`apps/web/src/lib/league.ts`):
@@ -4093,6 +4368,11 @@ all 16.
 ## Unreleased - Proxy league normalization, type unification, selector/loading polish (2026-08-12)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`/api/upcoming` league filter was silently broken for 3 of 7 leagues.**
   `apps/web/src/app/api/upcoming/route.ts` normalized the incoming `league`
@@ -6339,6 +6619,11 @@ fail-closed; the insights fixture now carries real evidence, reusing
 
 ### Fixed
 
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
+
 - **`insights-display.tsx` "Generated" timestamps aligned to the canonical WAT +
   `<time>` idiom.** The Phase-7 `InsightsDisplay` panel (which renders directly
   above the vΩ.18-hardened `FullAnalysisSection` on `/match/[id]`) formatted its
@@ -6390,6 +6675,11 @@ fail-closed; the insights fixture now carries real evidence, reusing
 ## vΩ.21 — Full-analysis contract null-parse fix, CI copy-scan fix (2026-07-24)
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - **`/match/[id]` "The backend returned an invalid full-analysis contract" — root cause.**
   `apps/web/src/lib/full-analysis-contract.ts` typed `phase9_shadow_only:
@@ -7614,6 +7904,11 @@ P7-B (Ensemble Retraining) is now unblocked. Base learners still consume 58 dims
 - **`NEXUS.md`** v2.0 — Added 4 new intent types; added 4 new routing graphs; updated 34-skill registry with Clusters 6 & 7; more specific stack fingerprints per vertical
 
 ### Fixed
+
+- **Code Formatting**:
+  - Ran `ruff format .` to resolve linting failures on 561 files causing CI to fail.
+- **Verification & Optimization**:
+  - Validated frontend state and backend queries; confirmed production readiness.
 
 - NEXUS.md: `motion-interaction-architect` was invisible in the original routing graphs — now added to all relevant skill graphs with explicit strategy → implementation order
 - NEXUS.md: `api-contract-governance-architect` missing from Correctness tier in conflict resolution — added

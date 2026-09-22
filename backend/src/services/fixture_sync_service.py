@@ -4,6 +4,7 @@ Production acquisition is injected from the application lifespan provider
 registry. The compatibility loader owns normalization only; it never opens an
 independent HTTP client.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,13 +29,13 @@ from .team_identity import (
 logger = logging.getLogger(__name__)
 
 _LEAGUE_META: dict[str, tuple[str, str]] = {
-    "EPL":        ("EPL",        "England"),
-    "La Liga":    ("LA_LIGA",    "Spain"),
+    "EPL": ("EPL", "England"),
+    "La Liga": ("LA_LIGA", "Spain"),
     "Bundesliga": ("BUNDESLIGA", "Germany"),
-    "Serie A":    ("SERIE_A",    "Italy"),
-    "Ligue 1":    ("LIGUE_1",    "France"),
+    "Serie A": ("SERIE_A", "Italy"),
+    "Ligue 1": ("LIGUE_1", "France"),
     "Eredivisie": ("EREDIVISIE", "Netherlands"),
-    "UCL":        ("UCL",        "Europe"),
+    "UCL": ("UCL", "Europe"),
 }
 
 SYNC_HORIZON_DAYS = 14
@@ -118,9 +119,7 @@ async def _resolve_upcoming_team_id(
 
     if is_unusable_team_name(team_name):
         metrics_collector.increment("fixture_sync.unusable_team_name")
-        raise ValueError(
-            f"provider team name is not usable as identity: {team_name!r}"
-        )
+        raise ValueError(f"provider team name is not usable as identity: {team_name!r}")
 
     historical = await resolve_team_id(
         team_name,
@@ -207,7 +206,9 @@ async def _claim_fixture_sync_lease() -> tuple[bool, str | None]:
             return True, None
 
         if time.monotonic() >= deadline:
-            logger.info("fixture_sync: lease wait expired; another instance remains authoritative")
+            logger.info(
+                "fixture_sync: lease wait expired; another instance remains authoritative"
+            )
             return False, None
         await asyncio.sleep(_FIXTURE_SYNC_LEASE_POLL_SECONDS)
 
@@ -253,7 +254,9 @@ async def _finish_fixture_sync_lease(token: str | None, *, completed: bool) -> N
             token,
         )
     except RedisError as exc:
-        logger.warning("fixture_sync: Redis lease release failed; TTL will recover: %s", exc)
+        logger.warning(
+            "fixture_sync: Redis lease release failed; TTL will recover: %s", exc
+        )
 
 
 async def sync_upcoming_fixtures(
@@ -290,14 +293,19 @@ async def sync_upcoming_fixtures(
     Returns the number of new Match rows inserted.
     """
     from ..core.database import League, Match, Team
-    from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
+    from ..data.loaders.football_data_api import (
+        FootballDataAPIClient,
+        FootballDataAPIError,
+    )
     from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
     started_at = time.perf_counter()
     client = FootballDataAPIClient(provider=provider)
     try:
         async with _FOOTBALL_DATA_SYNC_LIMITER:
-            matches_raw = await client.get_upcoming_matches(days_ahead=SYNC_HORIZON_DAYS, limit=50)
+            matches_raw = await client.get_upcoming_matches(
+                days_ahead=SYNC_HORIZON_DAYS, limit=50
+            )
     except FootballDataAPIError as exc:
         logger.warning("fixture_sync: football-data.org unavailable: %s", exc)
         metrics_collector.record_provider_outcome(
@@ -393,7 +401,9 @@ async def sync_upcoming_fixtures(
             # Elo-bearing "Bayern Munich"/"Ein Frankfurt" rows that
             # resolve_team_id matches against) can never be renamed out from
             # under the resolver. Identity itself (Team.id) is never touched.
-            if is_unusable_team_name(str(existing.name)) and not is_unusable_team_name(tname):
+            if is_unusable_team_name(str(existing.name)) and not is_unusable_team_name(
+                tname
+            ):
                 metrics_collector.increment("fixture_sync.team_name_repaired")
                 logger.info(
                     "fixture_sync: repaired unusable stored team name team_id=%s -> %r",
@@ -405,9 +415,13 @@ async def sync_upcoming_fixtures(
 
         raw_date = str(raw.get("match_date") or "")
         try:
-            match_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            match_date = datetime.fromisoformat(
+                raw_date.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
         except (TypeError, ValueError):
-            logger.debug("fixture_sync: unparseable date %r — skipping %s", raw_date, match_id)
+            logger.debug(
+                "fixture_sync: unparseable date %r — skipping %s", raw_date, match_id
+            )
             continue
 
         season = canonical_season(match_date)
@@ -528,13 +542,18 @@ async def sync_settled_results(
     Never creates a Match row and never rewrites a row already settled.
     """
     from ..core.database import Match
-    from ..data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
+    from ..data.loaders.football_data_api import (
+        FootballDataAPIClient,
+        FootballDataAPIError,
+    )
     from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
     client = FootballDataAPIClient(provider=provider)
     try:
         async with _FOOTBALL_DATA_SYNC_LIMITER:
-            results_raw = await client.get_recent_results(days_back=days_back, limit=100)
+            results_raw = await client.get_recent_results(
+                days_back=days_back, limit=100
+            )
     except FootballDataAPIError as exc:
         logger.warning("settlement_sync: football-data.org unavailable: %s", exc)
         return {"updated": 0, "unmatched": 0, "already_settled": 0}
@@ -562,7 +581,11 @@ async def sync_settled_results(
         updated += 1
 
     await session.commit()
-    return {"updated": updated, "unmatched": unmatched, "already_settled": already_settled}
+    return {
+        "updated": updated,
+        "unmatched": unmatched,
+        "already_settled": already_settled,
+    }
 
 
 async def run_fixture_sync(provider: Any = None) -> None:
@@ -576,7 +599,9 @@ async def run_fixture_sync(provider: Any = None) -> None:
 
     lease_acquired, lease_token = await _claim_fixture_sync_lease()
     if not lease_acquired:
-        logger.info("fixture_sync: skipped; another instance owns the recent execution window")
+        logger.info(
+            "fixture_sync: skipped; another instance owns the recent execution window"
+        )
         metrics_collector.increment("fixture_sync.lease_skips")
         return
 
@@ -587,7 +612,9 @@ async def run_fixture_sync(provider: Any = None) -> None:
             logger.info("fixture_sync: %d new upcoming fixtures seeded", count)
             completed = True
     except Exception as exc:
-        logger.exception("fixture_sync: unhandled error — continuing without fixture data")
+        logger.exception(
+            "fixture_sync: unhandled error — continuing without fixture data"
+        )
         metrics_collector.increment("fixture_sync.failures")
         metrics_collector.record_error(
             error_type=type(exc).__name__,

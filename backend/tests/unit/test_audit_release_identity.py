@@ -4,6 +4,7 @@ docs/DEBT.md item 124 records this script as the audit tool for the release
 identity chain (source commit, dataset snapshot, artifact hashes). It has no
 prior test coverage.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,7 +41,9 @@ def test_training_manifest_paths_are_posix_style(monkeypatch, tmp_path) -> None:
     """
     repo_root = tmp_path
     models_dir = repo_root / "backend" / "models"
-    _seed_models_dir(models_dir, manifest_relpath="candidate/sub/training_manifest.json")
+    _seed_models_dir(
+        models_dir, manifest_relpath="candidate/sub/training_manifest.json"
+    )
 
     monkeypatch.setattr(ari, "REPO_ROOT", repo_root)
     monkeypatch.setattr(ari, "MODELS_DIR", models_dir)
@@ -80,7 +83,11 @@ def test_verdict_is_complete_when_a_manifest_binds_the_served_generation(
     models_dir.mkdir(parents=True)
     (models_dir / "active_generation.json").write_text(
         json.dumps(
-            {"generation": "v99-test", "feature_schema_version": "apex_v1_68", "artifacts": {}}
+            {
+                "generation": "v99-test",
+                "feature_schema_version": "apex_v1_68",
+                "artifacts": {},
+            }
         ),
         encoding="utf-8",
     )
@@ -108,4 +115,7 @@ def test_verdict_is_complete_when_a_manifest_binds_the_served_generation(
 
     assert report["identity_chain"]["source_commit"]["status"] == ari.BOUND
     assert report["identity_chain"]["dataset_snapshot"]["status"] == ari.BOUND
-    assert report["binding_training_manifest"] == "backend/models/candidate/training_manifest.json"
+    assert (
+        report["binding_training_manifest"]
+        == "backend/models/candidate/training_manifest.json"
+    )

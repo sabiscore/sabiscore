@@ -51,6 +51,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/study_e6_dynamic_team_state.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -97,7 +98,8 @@ def _load_training_module() -> Any:
     third copy of either.
     """
     spec = importlib.util.spec_from_file_location(
-        "train_on_real_matches", Path(__file__).resolve().parent / "train_on_real_matches.py"
+        "train_on_real_matches",
+        Path(__file__).resolve().parent / "train_on_real_matches.py",
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load the training pipeline")
@@ -146,7 +148,9 @@ def build_rows() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             without_odds += 1
         else:
             home_goals, away_goals = int(match["hg"]), int(match["ag"])
-            outcome = 0 if home_goals > away_goals else (1 if home_goals == away_goals else 2)
+            outcome = (
+                0 if home_goals > away_goals else (1 if home_goals == away_goals else 2)
+            )
             rows.append(
                 {
                     "league": league,
@@ -175,7 +179,10 @@ def build_rows() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         dynamic.update(home, away, league, when, int(match["hg"]), int(match["ag"]))
 
         dynamic_moves.append(
-            abs(dynamic.get_context(home, away, league, when).home_strength - home_before)
+            abs(
+                dynamic.get_context(home, away, league, when).home_strength
+                - home_before
+            )
         )
         elo_moves.append(
             abs(elo.get_context(home, away, league, season).home_elo - elo_home_before)
@@ -222,7 +229,9 @@ def _redundancy(rows: list[dict[str, Any]]) -> dict[str, Any]:
     dynamic_values = [r["dynamic_diff"] for r in rows]
     return {
         "n": len(rows),
-        "pearson_elo_vs_dynamic": round(statistics.correlation(elo_values, dynamic_values), 4),
+        "pearson_elo_vs_dynamic": round(
+            statistics.correlation(elo_values, dynamic_values), 4
+        ),
         "stdev_elo_diff": round(statistics.stdev(elo_values), 2),
         "stdev_dynamic_diff": round(statistics.stdev(dynamic_values), 2),
         "mean_abs_uncertainty": round(
@@ -232,7 +241,10 @@ def _redundancy(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _with_adjusted_ci(
-    result: dict[str, Any], rows: list[dict[str, Any]], baseline_fn: Any, candidate_fn: Any
+    result: dict[str, Any],
+    rows: list[dict[str, Any]],
+    baseline_fn: Any,
+    candidate_fn: Any,
 ) -> dict[str, Any]:
     """Attach the pre-declared Bonferroni-adjusted CI to a harness result.
 
@@ -246,15 +258,21 @@ def _with_adjusted_ci(
     train = [r for r in rows if r["season"] in _TRAIN_SEASONS]
     test = [r for r in rows if r["season"] == _TEST_SEASON]
     y_train = np.array([r["outcome"] for r in train])
-    baseline_model = fit_multinomial_logistic(np.array([baseline_fn(r) for r in train]), y_train)
-    candidate_model = fit_multinomial_logistic(np.array([candidate_fn(r) for r in train]), y_train)
+    baseline_model = fit_multinomial_logistic(
+        np.array([baseline_fn(r) for r in train]), y_train
+    )
+    candidate_model = fit_multinomial_logistic(
+        np.array([candidate_fn(r) for r in train]), y_train
+    )
 
     y_true = np.array([r["outcome"] for r in test])
-    result["pooled"]["candidate_minus_baseline_bootstrap_bonferroni"] = paired_rps_diff_bootstrap(
-        y_true,
-        candidate_model.predict_proba(np.array([candidate_fn(r) for r in test])),
-        baseline_model.predict_proba(np.array([baseline_fn(r) for r in test])),
-        ci_level=_ADJUSTED_CI_LEVEL,
+    result["pooled"]["candidate_minus_baseline_bootstrap_bonferroni"] = (
+        paired_rps_diff_bootstrap(
+            y_true,
+            candidate_model.predict_proba(np.array([candidate_fn(r) for r in test])),
+            baseline_model.predict_proba(np.array([baseline_fn(r) for r in test])),
+            ci_level=_ADJUSTED_CI_LEVEL,
+        )
     )
     return result
 

@@ -36,7 +36,9 @@ def _manifest_artefacts() -> list[dict]:
     for path in sorted(CORPUS.glob("manifest_*.json")):
         for result in json.loads(path.read_text(encoding="utf-8"))["results"]:
             for artefact in result["artefacts"]:
-                artefacts.append({**artefact, "league": result["league"], "season": result["season"]})
+                artefacts.append(
+                    {**artefact, "league": result["league"], "season": result["season"]}
+                )
     return artefacts
 
 
@@ -54,14 +56,18 @@ def test_manifests_describe_the_expected_league_seasons() -> None:
     assert sum(a["match_rows"] for a in artefacts) == EXPECTED_MATCH_ROWS
 
 
-@pytest.mark.parametrize("artefact", _manifest_artefacts(), ids=lambda a: f"{a['league']}_{a['season']}")
+@pytest.mark.parametrize(
+    "artefact", _manifest_artefacts(), ids=lambda a: f"{a['league']}_{a['season']}"
+)
 def test_each_parquet_matches_the_rows_its_manifest_recorded(artefact: dict) -> None:
     """Row-count parity is what catches a truncated or normalised parquet.
 
     Reading the file also proves it survived `* text=auto` — a CRLF-mangled
     parquet raises here rather than yielding short reads downstream.
     """
-    path = CORPUS / f"understat_matches_{artefact['league']}_{artefact['season']}.parquet"
+    path = (
+        CORPUS / f"understat_matches_{artefact['league']}_{artefact['season']}.parquet"
+    )
     assert path.is_file(), f"{path.name} is missing from the committed corpus"
 
     frame = pd.read_parquet(path)
@@ -81,7 +87,10 @@ def test_corpus_carries_real_xg_not_zero_fill() -> None:
     registry applies to `training_defaulted_slots`.
     """
     frame = pd.concat(
-        [pd.read_parquet(p) for p in sorted(CORPUS.glob("understat_matches_*.parquet"))],
+        [
+            pd.read_parquet(p)
+            for p in sorted(CORPUS.glob("understat_matches_*.parquet"))
+        ],
         ignore_index=True,
     )
     played = frame[frame["home_xg"].notna() & frame["away_xg"].notna()]
@@ -89,5 +98,9 @@ def test_corpus_carries_real_xg_not_zero_fill() -> None:
     # 101 Ligue 1 2019/20 fixtures France cancelled for COVID are legitimately
     # null (docs/DEBT.md item 56) — they are unplayed matches, not gaps.
     assert len(played) == EXPECTED_MATCH_ROWS - 101
-    assert played["home_xg"].std() > 0.5, "home_xg has no variance — corpus is defaulted, not observed"
-    assert played["away_xg"].std() > 0.5, "away_xg has no variance — corpus is defaulted, not observed"
+    assert played["home_xg"].std() > 0.5, (
+        "home_xg has no variance — corpus is defaulted, not observed"
+    )
+    assert played["away_xg"].std() > 0.5, (
+        "away_xg has no variance — corpus is defaulted, not observed"
+    )

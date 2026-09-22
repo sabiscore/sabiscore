@@ -216,7 +216,9 @@ def test_reconciliation_unknown_only_when_no_candidate_exists():
 def test_redact_url_scrubs_api_token_query_param():
     from src.providers.base import redact_url
 
-    url = "https://api.sportmonks.com/v3/football/sidelined?api_token=SECRET123&include=x"
+    url = (
+        "https://api.sportmonks.com/v3/football/sidelined?api_token=SECRET123&include=x"
+    )
     redacted = redact_url(url)
     assert "SECRET123" not in redacted
     assert "api_token=%5BREDACTED%5D" in redacted or "api_token=[REDACTED]" in redacted

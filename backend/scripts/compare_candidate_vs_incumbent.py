@@ -13,6 +13,7 @@ the home team can look competitive on accuracy while being useless for pricing.
 Usage:
     PYTHONPATH=. python scripts/compare_candidate_vs_incumbent.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -216,8 +217,10 @@ def main() -> int:
     candidate_dir = _BACKEND_ROOT / "models" / "candidate"
     logger.info(
         "Incumbent baseline: %s (%s) from %s — schema %s, holdout %s",
-        baseline["generation"], baseline["role"],
-        incumbent_dir.relative_to(_BACKEND_ROOT), baseline["feature_schema_version"],
+        baseline["generation"],
+        baseline["role"],
+        incumbent_dir.relative_to(_BACKEND_ROOT),
+        baseline["feature_schema_version"],
         baseline["holdout_season"],
     )
     training_report_name = {
@@ -257,11 +260,7 @@ def main() -> int:
         else candidate_dir / f"feature_availability_matrix_{candidate_suffix}.json"
     )
     availability_report = validate_promotion_feature_evidence(
-        json.loads(
-            availability_path.read_text(
-                encoding="utf-8"
-            )
-        )
+        json.loads(availability_path.read_text(encoding="utf-8"))
     )
 
     # One dataset serves both sides: `X` follows --candidate-schema while
@@ -317,7 +316,8 @@ def main() -> int:
         # apex_v1_68 (X). Hardcoding either silently scores a model on a vector
         # it was never trained on.
         incumbent_key = (
-            "X" if baseline["feature_schema_version"] == args.candidate_schema
+            "X"
+            if baseline["feature_schema_version"] == args.candidate_schema
             else "X_incumbent"
         )
         incumbent_X = np.asarray(data[incumbent_key], dtype=np.float32)[mask]
@@ -366,7 +366,9 @@ def main() -> int:
             # therefore wrote no POOLED entry — raised KeyError even for
             # leagues that were present. Latent until apex_v2_71, whose
             # row-dropping leaves no league needing the pooled fallback.
-            candidate_evidence = training_report.get(league) or training_report.get("POOLED")
+            candidate_evidence = training_report.get(league) or training_report.get(
+                "POOLED"
+            )
             if candidate_evidence is None:
                 raise KeyError(
                     f"training report has neither a {league!r} entry nor a POOLED fallback"
@@ -410,7 +412,11 @@ def main() -> int:
                 # -- same fixtures, same order, no join, no re-derivation.
                 market_columns = [
                     candidate_features.index(name)
-                    for name in ("market_prob_home", "market_prob_draw", "market_prob_away")
+                    for name in (
+                        "market_prob_home",
+                        "market_prob_draw",
+                        "market_prob_away",
+                    )
                 ]
                 per_match[f"{league}__y"] = y
                 per_match[f"{league}__candidate"] = league_probs["candidate"]
@@ -471,7 +477,9 @@ def main() -> int:
             "market_baseline": {
                 "status": (
                     "PASS"
-                    if all(row["candidate_beats_market_baseline"] for row in league_rows)
+                    if all(
+                        row["candidate_beats_market_baseline"] for row in league_rows
+                    )
                     else "FAIL"
                 ),
                 "leagues_beating_market": sum(

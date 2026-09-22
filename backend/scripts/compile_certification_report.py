@@ -5,6 +5,7 @@ The compiler is deliberately evidence-only: it normalizes known harness output
 shapes, never invents a metric, refuses mixed commits, and keeps missing or
 incompatible evidence fail-closed.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 def _load_release_gate_policy() -> tuple[tuple[str, ...], dict[str, Any], str]:
     """Read the release-gate thresholds from the frozen certification policy.
 
@@ -56,7 +59,9 @@ REQUIRED, EVIDENCE_POLICY, _POLICY_SHA256 = _load_release_gate_policy()
 
 def canonical_sha(value: Any) -> str:
     return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")
     ).hexdigest()
 
 
@@ -97,7 +102,7 @@ def _numeric_metric(value: Any, *, key: str, label: str) -> float:
 
 
 def evaluate_g11(a: dict[str, Any]) -> dict[str, Any]:
-    metric = ((a.get("metrics") or {}).get("ece"))
+    metric = (a.get("metrics") or {}).get("ece")
     value = _numeric_metric(metric, key="ece", label="G11")
     threshold = float(EVIDENCE_POLICY["G11"]["adaptive_confidence_ece_max"])
     return {
@@ -109,7 +114,7 @@ def evaluate_g11(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_g15(a: dict[str, Any]) -> dict[str, Any]:
-    metric = ((a.get("metrics") or {}).get("brier"))
+    metric = (a.get("metrics") or {}).get("brier")
     value = abs(_numeric_metric(metric, key="decomposition_error", label="G15"))
     threshold = float(EVIDENCE_POLICY["G15"]["murphy_decomposition_abs_error_max"])
     return {
@@ -121,8 +126,8 @@ def evaluate_g15(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_g16(a: dict[str, Any]) -> dict[str, Any]:
-    pooled = (((a.get("metrics") or {}).get("conformal") or {}).get("pooled") or {})
-    errors = (((a.get("data") or {}).get("coverage") or {}).get("errors") or {})
+    pooled = ((a.get("metrics") or {}).get("conformal") or {}).get("pooled") or {}
+    errors = ((a.get("data") or {}).get("coverage") or {}).get("errors") or {}
     coverage: dict[str, float] = {}
     failures: list[str] = []
     for nominal in EVIDENCE_POLICY["G16"]["nominal_levels"]:
@@ -150,11 +155,14 @@ def evaluate_g16(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_g18(a: dict[str, Any]) -> dict[str, Any]:
-    rps = ((a.get("metrics") or {}).get("rps") or {})
+    rps = (a.get("metrics") or {}).get("rps") or {}
     scopes = [rps.get("pooled"), *list((rps.get("by_league") or {}).values())]
     failures: list[str] = []
     for scope in scopes:
-        if not isinstance(scope, dict) or scope.get("status") == "INSUFFICIENT_EVIDENCE":
+        if (
+            not isinstance(scope, dict)
+            or scope.get("status") == "INSUFFICIENT_EVIDENCE"
+        ):
             failures.append("missing/insufficient scope")
             continue
         if int(scope.get("bootstrap_replicates", 0)) != 10000:
@@ -171,8 +179,8 @@ def evaluate_g18(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def evaluate_g24(a: dict[str, Any]) -> dict[str, Any]:
-    gate = ((a.get("gates") or {}).get("G24") or {})
-    parity = ((a.get("metrics") or {}).get("deployment_parity") or {})
+    gate = (a.get("gates") or {}).get("G24") or {}
+    parity = (a.get("metrics") or {}).get("deployment_parity") or {}
     names = (
         "expected_sha",
         "vercel_deployment_sha",
@@ -194,12 +202,16 @@ def evaluate_g24(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Compile immutable v7.4 certification report")
+    ap = argparse.ArgumentParser(
+        description="Compile immutable v7.4 certification report"
+    )
     ap.add_argument("--g11", type=Path, required=True)
     ap.add_argument("--g16", type=Path, required=True)
     ap.add_argument("--g18", type=Path, required=True)
     ap.add_argument("--g24", type=Path, required=True)
-    ap.add_argument("--core-evidence", type=Path, help="JSON containing pre-existing core gates")
+    ap.add_argument(
+        "--core-evidence", type=Path, help="JSON containing pre-existing core gates"
+    )
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
     inputs = {"G11": args.g11, "G16": args.g16, "G18": args.g18, "G24": args.g24}
@@ -208,14 +220,18 @@ def main() -> int:
     try:
         artifacts = {name: load_json(path) for name, path in inputs.items()}
         if args.output.exists():
-            raise RuntimeError(f"refusing to overwrite existing certification report: {args.output}")
+            raise RuntimeError(
+                f"refusing to overwrite existing certification report: {args.output}"
+            )
         commits = {
             ((artifact.get("repository") or {}).get("commit_sha"))
             for artifact in artifacts.values()
             if (artifact.get("repository") or {}).get("commit_sha")
         }
         if len(commits) != 1:
-            failures.append(f"evidence commit set must contain exactly one SHA; observed={sorted(commits)}")
+            failures.append(
+                f"evidence commit set must contain exactly one SHA; observed={sorted(commits)}"
+            )
         try:
             results = {
                 "G11": evaluate_g11(artifacts["G11"]),
@@ -226,13 +242,17 @@ def main() -> int:
             }
         except ValueError as exc:
             failures.append(f"evidence schema/metric error: {exc}")
-            results = {name: {"status": "BLOCKED", "errors": [str(exc)]} for name in REQUIRED}
+            results = {
+                name: {"status": "BLOCKED", "errors": [str(exc)]} for name in REQUIRED
+            }
 
         if args.core_evidence:
             core = load_json(args.core_evidence)
-            core_commit = ((core.get("repository") or {}).get("commit_sha"))
+            core_commit = (core.get("repository") or {}).get("commit_sha")
             if core_commit and commits and core_commit not in commits:
-                failures.append(f"core evidence commit mismatch: {core_commit} != {next(iter(commits))}")
+                failures.append(
+                    f"core evidence commit mismatch: {core_commit} != {next(iter(commits))}"
+                )
             for name, gate in (core.get("gates") or {}).items():
                 if name in REQUIRED:
                     continue
@@ -241,7 +261,9 @@ def main() -> int:
                     if gate.get("status") != "PASS":
                         failures.append(f"core gate {name} is {gate.get('status')}")
         else:
-            failures.append("core certification evidence not supplied; promotion cannot be certified")
+            failures.append(
+                "core certification evidence not supplied; promotion cannot be certified"
+            )
 
         for name in REQUIRED:
             if results[name].get("status") != "PASS":
@@ -249,8 +271,14 @@ def main() -> int:
 
         try:
             import sys
+
             sys.path.insert(0, str(REPO_ROOT / "backend"))
-            from src.models.certification_policy import CERTIFICATION_POLICY_VERSION, certification_policy, policy_sha256
+            from src.models.certification_policy import (
+                CERTIFICATION_POLICY_VERSION,
+                certification_policy,
+                policy_sha256,
+            )
+
             frozen_policy = certification_policy()
             frozen_policy_sha = policy_sha256(frozen_policy)
         except Exception as exc:
@@ -268,7 +296,9 @@ def main() -> int:
             },
             "deployment": artifacts["G24"].get("deployment", {}),
             "model": artifacts["G16"].get("model", {}),
-            "data": {"evidence_sources": {name: str(path) for name, path in inputs.items()}},
+            "data": {
+                "evidence_sources": {name: str(path) for name, path in inputs.items()}
+            },
             "policy": {
                 "policy_version": CERTIFICATION_POLICY_VERSION,
                 "policy_sha256": frozen_policy_sha,
@@ -299,7 +329,9 @@ def main() -> int:
             "failure_reasons": failures,
         }
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["decision"] == "ACTIONABLE_CERTIFIED" else 2
     except Exception as exc:

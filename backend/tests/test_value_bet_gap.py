@@ -8,6 +8,7 @@ from src.api.endpoints.value_bets import ValueBetListResponse, ValueBetFilter
 
 # ── Schema tests (no DB needed) ──────────────────────────────────────────────
 
+
 def test_value_bet_list_response_schema_has_data_gap():
     """ValueBetListResponse must expose a data_gap boolean field."""
     assert "data_gap" in ValueBetListResponse.model_fields
@@ -30,6 +31,7 @@ def test_value_bet_list_response_data_gap_true():
 def test_value_bet_list_response_serialisable():
     """ValueBetListResponse with empty items must be JSON-safe."""
     import json
+
     response = ValueBetListResponse(items=[], total=0, data_gap=True)
     json.dumps(response.model_dump(mode="json"))
 

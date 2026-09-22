@@ -271,7 +271,12 @@ def build_market_intelligence(
         decision = MarketDecisionState.HOLD
     elif not pre_kickoff:
         decision = MarketDecisionState.HOLD
-    elif best_edge_val is not None and best_edge_val >= MIN_ACTIONABLE_EDGE and best_ev is not None and best_ev > 0:
+    elif (
+        best_edge_val is not None
+        and best_edge_val >= MIN_ACTIONABLE_EDGE
+        and best_ev is not None
+        and best_ev > 0
+    ):
         stake_permitted = True
         decision = MarketDecisionState.ACTIONABLE
     elif best_edge_val is not None and best_edge_val > 0:

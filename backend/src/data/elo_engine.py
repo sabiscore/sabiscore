@@ -138,14 +138,42 @@ class EloEngine:
         if not existing.empty:
             logger.info("Elo update skipped for existing match_id=%s", match_id)
             return {
-                "home_pre": float(existing[existing["team_id"] == home_team_id]["pre_match_elo"].iloc[0]) if (existing["team_id"] == home_team_id).any() else _DEFAULT_BASE_ELO,
-                "away_pre": float(existing[existing["team_id"] == away_team_id]["pre_match_elo"].iloc[0]) if (existing["team_id"] == away_team_id).any() else _DEFAULT_BASE_ELO,
-                "home_post": float(existing[existing["team_id"] == home_team_id]["post_match_elo"].iloc[0]) if (existing["team_id"] == home_team_id).any() else _DEFAULT_BASE_ELO,
-                "away_post": float(existing[existing["team_id"] == away_team_id]["post_match_elo"].iloc[0]) if (existing["team_id"] == away_team_id).any() else _DEFAULT_BASE_ELO,
+                "home_pre": float(
+                    existing[existing["team_id"] == home_team_id]["pre_match_elo"].iloc[
+                        0
+                    ]
+                )
+                if (existing["team_id"] == home_team_id).any()
+                else _DEFAULT_BASE_ELO,
+                "away_pre": float(
+                    existing[existing["team_id"] == away_team_id]["pre_match_elo"].iloc[
+                        0
+                    ]
+                )
+                if (existing["team_id"] == away_team_id).any()
+                else _DEFAULT_BASE_ELO,
+                "home_post": float(
+                    existing[existing["team_id"] == home_team_id][
+                        "post_match_elo"
+                    ].iloc[0]
+                )
+                if (existing["team_id"] == home_team_id).any()
+                else _DEFAULT_BASE_ELO,
+                "away_post": float(
+                    existing[existing["team_id"] == away_team_id][
+                        "post_match_elo"
+                    ].iloc[0]
+                )
+                if (existing["team_id"] == away_team_id).any()
+                else _DEFAULT_BASE_ELO,
             }
 
-        home_pre, _, _ = self._get_pre_and_trend(home_team_id, league, season, match_date)
-        away_pre, _, _ = self._get_pre_and_trend(away_team_id, league, season, match_date)
+        home_pre, _, _ = self._get_pre_and_trend(
+            home_team_id, league, season, match_date
+        )
+        away_pre, _, _ = self._get_pre_and_trend(
+            away_team_id, league, season, match_date
+        )
 
         home_exp, away_exp = self._expected_scores(home_pre, away_pre)
         if home_goals > away_goals:
@@ -155,7 +183,9 @@ class EloEngine:
         else:
             home_actual, away_actual = 0.5, 0.5
 
-        k_factor = float(settings.elo_k_base) * self.LEAGUE_IMPORTANCE.get(league.lower(), 1.0)
+        k_factor = float(settings.elo_k_base) * self.LEAGUE_IMPORTANCE.get(
+            league.lower(), 1.0
+        )
         home_post = home_pre + k_factor * (home_actual - home_exp)
         away_post = away_pre + k_factor * (away_actual - away_exp)
 
@@ -178,7 +208,9 @@ class EloEngine:
             "match_date": pd.Timestamp(match_date),
         }
 
-        updated = pd.concat([table, pd.DataFrame([home_row, away_row])], ignore_index=True)
+        updated = pd.concat(
+            [table, pd.DataFrame([home_row, away_row])], ignore_index=True
+        )
         updated = updated[self._columns]
         if persist:
             self._persist(updated)
@@ -265,7 +297,11 @@ class EloEngine:
                 & (table["season"].astype(str) == str(season))
                 & (pd.to_datetime(table["match_date"]) < pd.Timestamp(match_date))
             ]
-            league_mean = float(league_rows["post_match_elo"].mean()) if not league_rows.empty else _DEFAULT_BASE_ELO
+            league_mean = (
+                float(league_rows["post_match_elo"].mean())
+                if not league_rows.empty
+                else _DEFAULT_BASE_ELO
+            )
             # Season carry-over decay toward league mean.
             last_post = league_mean + 0.5 * (last_post - league_mean)
 
@@ -306,7 +342,9 @@ class EloEngine:
         self.parquet_path.parent.mkdir(parents=True, exist_ok=True)
         table_to_write = table.copy()
         table_to_write["match_date"] = pd.to_datetime(table_to_write["match_date"])
-        table_to_write = table_to_write.sort_values(["league", "season", "match_date", "team_id"])
+        table_to_write = table_to_write.sort_values(
+            ["league", "season", "match_date", "team_id"]
+        )
 
         table_to_write.to_parquet(self.parquet_path, index=False)
         self._cache = table_to_write

@@ -39,14 +39,18 @@ async def canonical_fixture_id_for_provider_event(
     session: AsyncSession, *, provider: str, provider_event_id: str
 ) -> str | None:
     return (
-        await session.execute(
-            select(ProviderEventMapping.canonical_fixture_id).where(
-                ProviderEventMapping.provider == provider,
-                ProviderEventMapping.provider_event_id == provider_event_id,
-                ProviderEventMapping.reconciliation_status == "VERIFIED",
+        (
+            await session.execute(
+                select(ProviderEventMapping.canonical_fixture_id).where(
+                    ProviderEventMapping.provider == provider,
+                    ProviderEventMapping.provider_event_id == provider_event_id,
+                    ProviderEventMapping.reconciliation_status == "VERIFIED",
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
 
 async def _provider_team_anchor(
@@ -132,18 +136,26 @@ async def _remove_unreferenced_reschedule_orphans(
         has_event_mapping = bool(
             await session.scalar(
                 select(
-                    exists().where(ProviderEventMapping.canonical_fixture_id == candidate.id)
+                    exists().where(
+                        ProviderEventMapping.canonical_fixture_id == candidate.id
+                    )
                 )
             )
         )
         has_market_snapshot = bool(
             await session.scalar(
-                select(exists().where(MarketSnapshot.canonical_fixture_id == candidate.id))
+                select(
+                    exists().where(MarketSnapshot.canonical_fixture_id == candidate.id)
+                )
             )
         )
         has_prediction = bool(
             await session.scalar(
-                select(exists().where(MatchPredictionLog.canonical_fixture_id == candidate.id))
+                select(
+                    exists().where(
+                        MatchPredictionLog.canonical_fixture_id == candidate.id
+                    )
+                )
             )
         )
         if has_event_mapping or has_market_snapshot or has_prediction:
@@ -191,7 +203,9 @@ async def ensure_canonical_fixture(
             away_name,
         )
     ):
-        raise ValueError("canonical identity requires explicit provider and fixture fields")
+        raise ValueError(
+            "canonical identity requires explicit provider and fixture fields"
+        )
     if home_provider_id == away_provider_id:
         raise ValueError("home and away provider team IDs must be distinct")
     if _key(home_name) == _key(away_name):
@@ -238,13 +252,17 @@ async def ensure_canonical_fixture(
             raise ValueError("provider event mapping has no canonical fixture")
         mapped_fixture = await session.get(CanonicalFixture, mapped_fixture_id)
         if mapped_fixture is None:
-            raise ValueError("provider event mapping references a missing canonical fixture")
+            raise ValueError(
+                "provider event mapping references a missing canonical fixture"
+            )
         if (
             mapped_fixture.competition_id != competition_id
             or mapped_fixture.home_team_id != team_ids[0]
             or mapped_fixture.away_team_id != team_ids[1]
         ):
-            raise ValueError("provider event conflicts with an existing canonical fixture")
+            raise ValueError(
+                "provider event conflicts with an existing canonical fixture"
+            )
 
     competition = await session.get(CanonicalCompetition, competition_id)
     if competition is None:

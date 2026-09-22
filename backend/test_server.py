@@ -2,6 +2,7 @@
 """
 Simple test server to verify API functionality
 """
+
 import sys
 from pathlib import Path
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/api/v1/health")
 async def health_check():
     """Simple health check endpoint"""
@@ -33,13 +35,15 @@ async def health_check():
         "message": "SabiScore API is running",
         "database": "test",
         "models": "test",
-        "cache": "test"
+        "cache": "test",
     }
+
 
 @app.post("/api/v1/insights")
 async def generate_insights(matchup: str = "Test Match", league: str = "Test League"):
     """Mock insights generation"""
     from datetime import datetime
+
     return {
         "matchup": matchup,
         "league": league,
@@ -48,19 +52,19 @@ async def generate_insights(matchup: str = "Test Match", league: str = "Test Lea
             "draw_prob": 0.3,
             "away_win_prob": 0.2,
             "prediction": "home_win",
-            "confidence": 0.7
+            "confidence": 0.7,
         },
         "xg_analysis": {
             "home_xg": 1.8,
             "away_xg": 1.2,
             "total_xg": 3.0,
-            "xg_difference": 0.6
+            "xg_difference": 0.6,
         },
         "value_analysis": {},
         "monte_carlo": {
             "simulations": 1000,
             "distribution": {},
-            "confidence_intervals": {}
+            "confidence_intervals": {},
         },
         "scenarios": [],
         "explanation": {},
@@ -70,18 +74,21 @@ async def generate_insights(matchup: str = "Test Match", league: str = "Test Lea
             "value_available": True,
             "recommendation": "Proceed",
             "distribution": {},
-            "best_bet": None
+            "best_bet": None,
         },
         "narrative": f"Analysis generated for {matchup} in {league}",
         "generated_at": datetime.utcnow().isoformat(),
-        "confidence_level": 0.7
+        "confidence_level": 0.7,
     }
+
 
 @app.get("/")
 async def root():
     return {"message": "SabiScore Test API", "health": "/api/v1/health"}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     print("Starting SabiScore Test API on http://127.0.0.1:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")

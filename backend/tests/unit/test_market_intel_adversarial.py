@@ -157,7 +157,9 @@ class TestAdversarialInputsAndMalformedData:
             "draw": -0.25,
             "away_win": "invalid",  # type: ignore[dict-item]
         }
-        summary = build_market_intelligence(odds=odds, model_probabilities=bad_model_probs)
+        summary = build_market_intelligence(
+            odds=odds, model_probabilities=bad_model_probs
+        )
         assert summary.provenance.is_complete is True
         for o in summary.outcomes.values():
             assert o.model_probability is None
@@ -179,10 +181,19 @@ class TestUncertifiedStakingLockInvariant:
         assert summary.stake_permitted is False
         assert summary.decision == MarketDecisionState.RESEARCH_ONLY
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=False)
-    @patch("src.services.market_intel.active_model_version", return_value="v5_unverified")
-    @patch("src.services.market_intel.active_feature_schema_version", return_value="canonical_58")
-    def test_randomized_edges_on_uncertified_model(self, mock_schema, mock_ver, mock_cert):
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=False
+    )
+    @patch(
+        "src.services.market_intel.active_model_version", return_value="v5_unverified"
+    )
+    @patch(
+        "src.services.market_intel.active_feature_schema_version",
+        return_value="canonical_58",
+    )
+    def test_randomized_edges_on_uncertified_model(
+        self, mock_schema, mock_ver, mock_cert
+    ):
         """Assert stake_permitted is False across 200 randomized edge scenarios when uncertified."""
         rng = random.Random(42)
 
@@ -199,7 +210,9 @@ class TestUncertifiedStakingLockInvariant:
             p3 = max(0.0, 1.0 - p1 - p2)
             model_probs = {"home_win": p1, "draw": p2, "away_win": p3}
 
-            summary = build_market_intelligence(odds=odds, model_probabilities=model_probs)
+            summary = build_market_intelligence(
+                odds=odds, model_probabilities=model_probs
+            )
 
             # Invariant assertions:
             assert summary.stake_permitted is False, (
@@ -211,12 +224,25 @@ class TestUncertifiedStakingLockInvariant:
 
     def test_active_generation_error_falls_back_to_unverified(self):
         """When active_generation module raises ActiveGenerationError, fail closed."""
-        with patch("src.services.market_intel.active_generation_is_certified", side_effect=RuntimeError("Corrupt manifest")):
-            with patch("src.services.market_intel.active_model_version", side_effect=RuntimeError("Corrupt manifest")):
-                with patch("src.services.market_intel.active_feature_schema_version", side_effect=RuntimeError("Corrupt manifest")):
+        with patch(
+            "src.services.market_intel.active_generation_is_certified",
+            side_effect=RuntimeError("Corrupt manifest"),
+        ):
+            with patch(
+                "src.services.market_intel.active_model_version",
+                side_effect=RuntimeError("Corrupt manifest"),
+            ):
+                with patch(
+                    "src.services.market_intel.active_feature_schema_version",
+                    side_effect=RuntimeError("Corrupt manifest"),
+                ):
                     summary = build_market_intelligence(
                         odds={"home_win": 2.0, "draw": 3.4, "away_win": 3.8},
-                        model_probabilities={"home_win": 0.8, "draw": 0.1, "away_win": 0.1},
+                        model_probabilities={
+                            "home_win": 0.8,
+                            "draw": 0.1,
+                            "away_win": 0.1,
+                        },
                     )
                     assert summary.provenance.certification_state == "UNVERIFIED"
                     assert summary.provenance.model_version == "v5_unverified"
@@ -228,7 +254,9 @@ class TestUncertifiedStakingLockInvariant:
 class TestSuspensionsAndInPlayFailClosedGates:
     """Verify that suspended and in-play markets block staking even when certified."""
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_certified_model_suspended_market_blocks_staking(self, mock_cert):
         """Suspended market with certified model and massive edge must HOLD and forbid staking."""
         odds = {"home_win": 3.0, "draw": 3.5, "away_win": 2.5}
@@ -247,7 +275,9 @@ class TestSuspensionsAndInPlayFailClosedGates:
         assert summary.decision == MarketDecisionState.HOLD
         assert "market_suspended" in summary.data_gaps
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_certified_model_in_play_market_blocks_staking(self, mock_cert):
         """In-play match (pre_kickoff=False) with certified model and huge edge must HOLD and forbid staking."""
         odds = {"home_win": 3.0, "draw": 3.5, "away_win": 2.5}
@@ -266,7 +296,9 @@ class TestSuspensionsAndInPlayFailClosedGates:
         assert summary.decision == MarketDecisionState.HOLD
         assert "in_play_or_post_match" in summary.data_gaps
 
-    @patch("src.services.market_intel.active_generation_is_certified", return_value=True)
+    @patch(
+        "src.services.market_intel.active_generation_is_certified", return_value=True
+    )
     def test_positive_edge_but_negative_ev_blocks_staking(self, mock_cert):
         """Under high overround, positive edge with negative EV must NOT permit staking."""
         # Construct synthetic scenario with high bookmaker vig

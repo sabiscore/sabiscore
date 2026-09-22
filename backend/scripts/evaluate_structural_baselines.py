@@ -150,8 +150,10 @@ def load_corpus() -> pl.DataFrame:
         .alias("league")
     )
     canonical_vocab = sorted({v for v in corpus["league"].to_list() if v})
-    print(f"loaded {corpus.height} rows from {len(frames)} files "
-          f"({len(skipped)} skipped for schema: {', '.join(skipped) or 'none'})")
+    print(
+        f"loaded {corpus.height} rows from {len(frames)} files "
+        f"({len(skipped)} skipped for schema: {', '.join(skipped) or 'none'})"
+    )
     print(f"league vocabulary normalized: {raw_vocab} -> {canonical_vocab}")
     return corpus
 
@@ -216,8 +218,10 @@ def main() -> int:
 
     train = corpus.filter(pl.col("season").is_in(TRAIN_SEASONS))
     test = corpus.filter(pl.col("season") == TEST_SEASON)
-    print(f"train n={train.height} (seasons {TRAIN_SEASONS})  "
-          f"test n={test.height} (season {TEST_SEASON})")
+    print(
+        f"train n={train.height} (seasons {TRAIN_SEASONS})  "
+        f"test n={test.height} (season {TEST_SEASON})"
+    )
 
     # ---- cross-study anchor ----------------------------------------------
     # Score the market on the FULL test season with this script's own de-vig
@@ -253,8 +257,10 @@ def main() -> int:
 
     global_freq = frequency_baseline(train)
     league_freq = league_frequency_baselines(train)
-    print(f"historical frequency (H/D/A): "
-          f"{global_freq[0]:.4f} / {global_freq[1]:.4f} / {global_freq[2]:.4f}")
+    print(
+        f"historical frequency (H/D/A): "
+        f"{global_freq[0]:.4f} / {global_freq[1]:.4f} / {global_freq[2]:.4f}"
+    )
 
     # ---- build the paired eligible set -----------------------------------
     rows: list[dict[str, Any]] = []
@@ -294,8 +300,7 @@ def main() -> int:
         for name in ("market", "dixon_coles", "frequency", "league_frequency")
     }
 
-    print(f"\neligible paired fixtures: {len(rows)} "
-          f"(excluded: {excluded})")
+    print(f"\neligible paired fixtures: {len(rows)} (excluded: {excluded})")
 
     # ---- score ------------------------------------------------------------
     results: dict[str, Any] = {}
@@ -327,9 +332,9 @@ def main() -> int:
 
     report = {
         "study": "Directive §25 structural baselines (evaluation-only)",
-        "generated_at": __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": __import__("datetime")
+        .datetime.now(__import__("datetime").timezone.utc)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "role": (
             "Reference instruments. NOT production candidates (§25). No feature "
             "contract, model artifact, promotion gate or serving path is touched."
@@ -360,7 +365,11 @@ def main() -> int:
         "pooled": results,
         "per_league": per_league,
         "historical_frequency_rates": {
-            "global": {"home": global_freq[0], "draw": global_freq[1], "away": global_freq[2]},
+            "global": {
+                "home": global_freq[0],
+                "draw": global_freq[1],
+                "away": global_freq[2],
+            },
             "per_league": league_freq,
         },
     }

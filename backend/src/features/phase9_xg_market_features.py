@@ -328,5 +328,6 @@ def build_market_efficiency_report(
         "recommended_kelly_fraction": (
             value_bets[0]["kelly_fraction"] if value_bets else None
         ),
-        "clv_available": closing_odds is not None and bool(normalize_decimal_odds(closing_odds)),
+        "clv_available": closing_odds is not None
+        and bool(normalize_decimal_odds(closing_odds)),
     }

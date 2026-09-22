@@ -25,58 +25,58 @@ from src.data.scrapers import (
 
 class ConcreteScraper(BaseScraper):
     """Concrete implementation of BaseScraper for testing."""
-    
+
     async def _fetch_remote(self, **kwargs) -> Optional[Dict[str, Any]]:
         return {"test": "data"}
-    
+
     def _parse_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         return raw_data
 
 
 class TestBaseScraper:
     """Tests for BaseScraper functionality."""
-    
+
     def test_user_agent_rotation(self):
         """Test that user agents rotate properly."""
         scraper = ConcreteScraper(
             base_url="https://example.com",
             rate_limit_delay=0.1,
         )
-        
+
         # Get multiple user agents
         agents = [scraper._get_random_user_agent() for _ in range(10)]
-        
+
         # Should have some variety
         assert len(set(agents)) >= 1
         assert all("Mozilla" in agent for agent in agents)
-    
+
     def test_rate_limiting(self):
         """Test rate limiting between requests."""
         scraper = ConcreteScraper(
             base_url="https://example.com",
             rate_limit_delay=0.1,
         )
-        
+
         start = datetime.now()
         scraper._wait_rate_limit()
         scraper._wait_rate_limit()
         elapsed = (datetime.now() - start).total_seconds()
-        
+
         # Should have waited at least 0.1 seconds
         assert elapsed >= 0.1
 
 
 class TestFootballDataScraper:
     """Tests for football-data.co.uk scraper."""
-    
+
     def test_league_code_mapping(self):
         """Test league code to URL path mapping."""
         scraper = FootballDataEnhancedScraper()
-        
+
         assert "E0" in scraper.LEAGUE_CODES["EPL"]
         assert "SP1" in scraper.LEAGUE_CODES["La Liga"]
         assert "I1" in scraper.LEAGUE_CODES["Serie A"]
-    
+
     def test_download_season_data(self, tmp_path):
         """Test fetching historical data (using cache/fallback)."""
         scraper = FootballDataEnhancedScraper()
@@ -89,7 +89,7 @@ class TestFootballDataScraper:
         # This may use cache or return empty DataFrame if remote fails
         df = scraper.download_season_data("EPL", "2324", use_cache=True)
 
-        assert hasattr(df, 'columns')  # Is a DataFrame
+        assert hasattr(df, "columns")  # Is a DataFrame
         # If data exists, should have expected columns
         if len(df) > 0:
             assert "home_team" in df.columns or "HomeTeam" in df.columns
@@ -101,7 +101,7 @@ class TestFootballDataScraper:
         scraper.cache_dir.mkdir(parents=True, exist_ok=True)
 
         df = scraper.download_season_data("EPL", "2324", use_cache=True)
-        
+
         if len(df) > 0:
             # Check for standardized Pinnacle columns
             pinnacle_cols = ["pinnacle_home", "pinnacle_draw", "pinnacle_away"]
@@ -212,9 +212,7 @@ class TestOddsPortalScraper:
 
         # Real data requires JavaScript rendering; without it, adapter returns None
         assert odds is None or (
-            isinstance(odds, dict)
-            and "opening_odds" in odds
-            and "closing_odds" in odds
+            isinstance(odds, dict) and "opening_odds" in odds and "closing_odds" in odds
         )
 
     def test_odds_features(self):
@@ -299,23 +297,23 @@ class TestFlashscoreScraper:
 
 class TestDataAggregator:
     """Tests for the data aggregator."""
-    
+
     def test_comprehensive_features(self):
         """Test comprehensive feature aggregation."""
         from src.data.aggregator import get_enhanced_aggregator
-        
+
         aggregator = get_enhanced_aggregator()
         features = aggregator.get_comprehensive_features("Arsenal", "Chelsea", "EPL")
-        
+
         assert "home_team" in features
         assert "away_team" in features
         assert "timestamp" in features
-        
+
         # Check for prefixed features from various sources
         feature_keys = list(features.keys())
         has_prefixed = any(
-            k.startswith(prefix) 
-            for k in feature_keys 
+            k.startswith(prefix)
+            for k in feature_keys
             for prefix in ["bf_", "ws_", "sw_", "us_", "tm_"]
         )
         assert has_prefixed or len(feature_keys) > 3  # At least basic features
@@ -341,5 +339,5 @@ def mock_csv_response():
     mock = Mock()
     mock.status_code = 200
     mock.text = csv_content
-    mock.content = csv_content.encode('utf-8')
+    mock.content = csv_content.encode("utf-8")
     return mock

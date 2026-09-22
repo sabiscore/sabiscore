@@ -79,7 +79,12 @@ def test_model_version_is_bound_as_a_parameter_not_interpolated() -> None:
 
 
 def _member(match_id: str, actual: str) -> dict:
-    return {"match_id": match_id, "predicted": actual, "actual": actual, "correct": True}
+    return {
+        "match_id": match_id,
+        "predicted": actual,
+        "actual": actual,
+        "correct": True,
+    }
 
 
 def test_a_match_always_agrees_with_itself() -> None:
@@ -101,7 +106,11 @@ def test_duplicate_rows_inflate_measured_agreement() -> None:
     of 0.3485 rather than 0.1000 — a 3.5x overstatement of the very
     correlation the haircut is derived from.
     """
-    deduped = [_member("m1", "home_win"), _member("m2", "draw"), _member("m3", "away_win")]
+    deduped = [
+        _member("m1", "home_win"),
+        _member("m2", "draw"),
+        _member("m3", "away_win"),
+    ]
     with_duplicates = deduped + [_member("m1", "home_win"), _member("m2", "draw")]
 
     assert _pairwise_agreement(deduped) == 0.0
@@ -116,18 +125,26 @@ def test_higher_measured_correlation_produces_a_harsher_haircut() -> None:
     support it.
     """
     uncorrelated = {
-        ("EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "draw")]
+        ("EPL", f"2026-09-0{i}"): [
+            _member(f"a{i}", "home_win"),
+            _member(f"b{i}", "draw"),
+        ]
         for i in range(1, 10)
     }
     correlated = {
-        ("EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "home_win")]
+        ("EPL", f"2026-09-0{i}"): [
+            _member(f"a{i}", "home_win"),
+            _member(f"b{i}", "home_win"),
+        ]
         for i in range(1, 10)
     }
 
     low = _calibrate(uncorrelated)["proposed_constants"]
     high = _calibrate(correlated)["proposed_constants"]
 
-    assert high["HAIRCUT_PER_ADDITIONAL_FIXTURE"] >= low["HAIRCUT_PER_ADDITIONAL_FIXTURE"]
+    assert (
+        high["HAIRCUT_PER_ADDITIONAL_FIXTURE"] >= low["HAIRCUT_PER_ADDITIONAL_FIXTURE"]
+    )
     assert high["AGGREGATE_CAP_MULTIPLIER"] <= low["AGGREGATE_CAP_MULTIPLIER"]
 
 
@@ -141,7 +158,11 @@ def test_group_and_pair_counts_are_reported_separately() -> None:
     labelling one as the other is a real reporting defect.
     """
     groups = {
-        ("EPL", "2026-09-01"): [_member("a", "home_win"), _member("b", "draw"), _member("c", "draw")],
+        ("EPL", "2026-09-01"): [
+            _member("a", "home_win"),
+            _member("b", "draw"),
+            _member("c", "draw"),
+        ],
         ("SERIE_A", "2026-09-01"): [_member("d", "home_win"), _member("e", "home_win")],
     }
     result = _calibrate(groups)

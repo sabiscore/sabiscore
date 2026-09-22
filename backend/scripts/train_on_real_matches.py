@@ -61,6 +61,7 @@ script prints the incumbent-vs-candidate comparison needed to make that call.
 Usage:
     PYTHONPATH=. python scripts/train_on_real_matches.py [--out-dir DIR] [--holdout-season 2425]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -111,7 +112,9 @@ H2H_WINDOW = _FEATURE_REGISTRY.H2H_WINDOW
 HOME_VENUE_WINDOW = _FEATURE_REGISTRY.HOME_VENUE_WINDOW
 derive_h2h_features = _FEATURE_REGISTRY.derive_h2h_features
 derive_home_venue_features = _FEATURE_REGISTRY.derive_home_venue_features
-derive_market_interaction_features = _FEATURE_REGISTRY.derive_market_interaction_features
+derive_market_interaction_features = (
+    _FEATURE_REGISTRY.derive_market_interaction_features
+)
 
 # src/features/ is free of database imports at module scope (market.py and
 # match_context.py guard theirs behind TYPE_CHECKING), so this is a plain import
@@ -239,7 +242,9 @@ def _schema_version_for(schema: str, feature_names: Sequence[str]) -> str:
     from columns that no longer uniquely determine it.
     """
     if schema not in _SCHEMAS:
-        raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
+        raise ValueError(
+            f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}"
+        )
     if list(feature_names) != list(_schema_features(schema)):
         raise ValueError(
             f"feature_names ({len(list(feature_names))} columns) does not match "
@@ -308,9 +313,16 @@ class TeamHistory:
             "draws_5": float(sum(1 for p in points[window] if p == 1)),
             "losses_5": float(sum(1 for p in points[window] if p == 0)),
             f"{prefix}_goals_per_match_5": float(np.mean(goals_for[window])),
-            f"{prefix}_goals_conceded_per_match_5": float(np.mean(goals_against[window])),
+            f"{prefix}_goals_conceded_per_match_5": float(
+                np.mean(goals_against[window])
+            ),
             f"{prefix}_gd_avg_5": float(
-                np.mean([gf - ga for gf, ga in zip(goals_for[window], goals_against[window])])
+                np.mean(
+                    [
+                        gf - ga
+                        for gf, ga in zip(goals_for[window], goals_against[window])
+                    ]
+                )
             ),
         }
 
@@ -342,7 +354,9 @@ class TeamHistory:
             return None
         return derive_home_venue_features(list(log)[::-1])
 
-    def record_match(self, home: str, away: str, home_goals: int, away_goals: int) -> None:
+    def record_match(
+        self, home: str, away: str, home_goals: int, away_goals: int
+    ) -> None:
         """Update the h2h/venue accumulators. Called once per match, after
         that match's row has been emitted — same leak-boundary discipline as
         `append()` above (see build_dataset's loop-bottom comment)."""
@@ -418,11 +432,18 @@ def load_matches(cache_dir: Path) -> List[dict]:
                     hg, ag = int(float(raw_hg)), int(float(raw_ag))
                 except (TypeError, ValueError):
                     continue
-                rows.append({
-                    "league": league, "season": season, "date": date,
-                    "home": home, "away": away, "hg": hg, "ag": ag,
-                    "odds": _parse_odds_row(row),
-                })
+                rows.append(
+                    {
+                        "league": league,
+                        "season": season,
+                        "date": date,
+                        "home": home,
+                        "away": away,
+                        "hg": hg,
+                        "ag": ag,
+                        "odds": _parse_odds_row(row),
+                    }
+                )
     rows.sort(key=lambda r: r["date"])
     return rows
 
@@ -487,14 +508,18 @@ def build_dataset(
 
     schema = schema or ("apex_v1_89" if include_phase8 else _DEFAULT_SCHEMA)
     if schema not in _SCHEMAS:
-        raise ValueError(f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}")
+        raise ValueError(
+            f"unknown schema {schema!r}; expected one of {sorted(_SCHEMAS)}"
+        )
     if include_phase8 and schema != "apex_v1_89":
         raise ValueError(f"include_phase8=True contradicts schema={schema!r}")
     include_phase8 = schema == "apex_v1_89"
     include_xg = schema == "apex_v2_71"
 
     feature_names = _schema_features(schema)
-    base_defaults = DEFAULT_FEATURE_VALUES_89 if include_phase8 else DEFAULT_FEATURE_VALUES_68
+    base_defaults = (
+        DEFAULT_FEATURE_VALUES_89 if include_phase8 else DEFAULT_FEATURE_VALUES_68
+    )
 
     # docs/DEBT.md item 37: every candidate this script trains declares
     # feature_schema_version: apex_v1_{width} (below), so the market-block
@@ -504,7 +529,9 @@ def build_dataset(
     # exactly the fabrication the feature contract exists to prevent. Static,
     # one-time check; not worth paying per-row.
     _market_start = feature_names.index(APEX_MARKET_FEATURES_14[0])
-    _market_slice = feature_names[_market_start:_market_start + len(APEX_MARKET_FEATURES_14)]
+    _market_slice = feature_names[
+        _market_start : _market_start + len(APEX_MARKET_FEATURES_14)
+    ]
     assert _market_slice == list(APEX_MARKET_FEATURES_14), (
         "feature_names does not carry APEX_MARKET_FEATURES_14 contiguously "
         f"in order at index {_market_start} (got {_market_slice}) — a future "
@@ -518,11 +545,13 @@ def build_dataset(
         logger.info("Phase 8 replay: %s", replay.summary())
         logger.info(
             "Phase 8 columns computed from history: %d (%s)",
-            len(PHASE8_RESOLVED_FEATURES), ", ".join(PHASE8_RESOLVED_FEATURES),
+            len(PHASE8_RESOLVED_FEATURES),
+            ", ".join(PHASE8_RESOLVED_FEATURES),
         )
         logger.info(
             "Phase 8 columns left at registry default (not derivable from this corpus): %d (%s)",
-            len(PHASE8_UNRESOLVED_FEATURES), ", ".join(PHASE8_UNRESOLVED_FEATURES),
+            len(PHASE8_UNRESOLVED_FEATURES),
+            ", ".join(PHASE8_UNRESOLVED_FEATURES),
         )
 
     elo_replay = compute_elo_training_columns(matches)
@@ -531,13 +560,16 @@ def build_dataset(
     xg_rows: List[Dict[str, float]] = []
     dropped_no_xg = 0
     if include_xg:
-        sources = xg_sources_dir or (_BACKEND_ROOT / "data" / "processed" / "v4_sources")
+        sources = xg_sources_dir or (
+            _BACKEND_ROOT / "data" / "processed" / "v4_sources"
+        )
         xg_replay = compute_xg_training_columns(matches, sources)
         xg_rows = xg_replay.rows
         logger.info("xG replay: %s", xg_replay.summary())
         logger.info(
             "xG columns computed from the Understat corpus: %d (%s)",
-            len(XG_TRAINING_COLUMNS), ", ".join(XG_TRAINING_COLUMNS),
+            len(XG_TRAINING_COLUMNS),
+            ", ".join(XG_TRAINING_COLUMNS),
         )
 
     for idx, m in enumerate(matches):
@@ -553,34 +585,52 @@ def build_dataset(
         if home_stats is not None and away_stats is not None:
             features = dict(base_defaults)
 
-            features.update(derive_last5_form_features(
-                home_stats["home_form_5"], home_stats["home_win_rate_5"], is_home=True,
-                wins_5=home_stats["wins_5"], draws_5=home_stats["draws_5"],
-                losses_5=home_stats["losses_5"],
-            ))
+            features.update(
+                derive_last5_form_features(
+                    home_stats["home_form_5"],
+                    home_stats["home_win_rate_5"],
+                    is_home=True,
+                    wins_5=home_stats["wins_5"],
+                    draws_5=home_stats["draws_5"],
+                    losses_5=home_stats["losses_5"],
+                )
+            )
             # Strict lookup on purpose: training drops an incomplete row
             # rather than imputing, so the default is never reached here.
-            features.update(derive_goals_gd_features(
-                lambda key, _default: home_stats[key], is_home=True,
-            ))
+            features.update(
+                derive_goals_gd_features(
+                    lambda key, _default: home_stats[key],
+                    is_home=True,
+                )
+            )
 
-            features.update(derive_last5_form_features(
-                away_stats["away_form_5"], away_stats["away_win_rate_5"], is_home=False,
-                wins_5=away_stats["wins_5"], draws_5=away_stats["draws_5"],
-                losses_5=away_stats["losses_5"],
-            ))
-            features.update(derive_goals_gd_features(
-                lambda key, _default: away_stats[key], is_home=False,
-            ))
+            features.update(
+                derive_last5_form_features(
+                    away_stats["away_form_5"],
+                    away_stats["away_win_rate_5"],
+                    is_home=False,
+                    wins_5=away_stats["wins_5"],
+                    draws_5=away_stats["draws_5"],
+                    losses_5=away_stats["losses_5"],
+                )
+            )
+            features.update(
+                derive_goals_gd_features(
+                    lambda key, _default: away_stats[key],
+                    is_home=False,
+                )
+            )
 
             features.update(derive_temporal_features(m["date"]))
             features.update(derive_league_features(league))
-            features.update(derive_combination_features(
-                home_goals_for_avg=features["home_goals_for_avg"],
-                home_goals_against_avg=features["home_goals_against_avg"],
-                away_goals_for_avg=features["away_goals_for_avg"],
-                away_goals_against_avg=features["away_goals_against_avg"],
-            ))
+            features.update(
+                derive_combination_features(
+                    home_goals_for_avg=features["home_goals_for_avg"],
+                    home_goals_against_avg=features["home_goals_against_avg"],
+                    away_goals_for_avg=features["away_goals_for_avg"],
+                    away_goals_against_avg=features["away_goals_against_avg"],
+                )
+            )
             # docs/DEBT.md item 56: unconditional across every schema, same as
             # the Elo replay two lines below — NOT gated behind
             # schema == "apex_v3_68" the way phase8/xg are, because h2h/venue
@@ -637,12 +687,16 @@ def build_dataset(
                 # resolution. Merged into `features` BEFORE the incumbent
                 # copy below, so X_incumbent carries these too (see the
                 # inertness argument above the h2h/venue merge).
-                features.update(derive_market_interaction_features(
-                    market_prob_home=market_features["market_prob_home"],
-                    home_form_last5_home=features.get("home_form_last5_home"),
-                    home_venue_win_rate=(venue_stats or {}).get("home_venue_win_rate"),
-                    h2h_dominance=(h2h_stats or {}).get("h2h_dominance"),
-                ))
+                features.update(
+                    derive_market_interaction_features(
+                        market_prob_home=market_features["market_prob_home"],
+                        home_form_last5_home=features.get("home_form_last5_home"),
+                        home_venue_win_rate=(venue_stats or {}).get(
+                            "home_venue_win_rate"
+                        ),
+                        h2h_dominance=(h2h_stats or {}).get("h2h_dominance"),
+                    )
+                )
                 incumbent_features = dict(features)
                 incumbent_features.update(derive_market_features(*m["odds"]))
                 features.update(market_features)
@@ -662,26 +716,39 @@ def build_dataset(
         hist.append(m["away"], m["ag"], m["hg"])
         hist.record_match(m["home"], m["away"], m["hg"], m["ag"])
 
-    logger.info("Rows skipped for insufficient history (both sides need %d): %d", _MIN_HISTORY, skipped)
+    logger.info(
+        "Rows skipped for insufficient history (both sides need %d): %d",
+        _MIN_HISTORY,
+        skipped,
+    )
     if include_xg:
         logger.info(
             "Rows dropped for unavailable xG (no corpus observation or side below "
-            "the rolling minimum): %d", dropped_no_xg,
+            "the rolling minimum): %d",
+            dropped_no_xg,
         )
     logger.info(
         "Rows with real market odds: %d/%d (%.0f%%)",
-        odds_rows, total_rows, 100.0 * odds_rows / max(total_rows, 1),
+        odds_rows,
+        total_rows,
+        100.0 * odds_rows / max(total_rows, 1),
     )
     return out
 
 
 # ── Metrics ────────────────────────────────────────────────────────────────────
 
+
 def ranked_probability_score(y_true: np.ndarray, probs: np.ndarray) -> float:
     """Ordered-outcome RPS over [home, draw, away]. Lower is better."""
     onehot = np.zeros_like(probs)
     onehot[np.arange(len(y_true)), y_true] = 1.0
-    return float(np.mean(np.sum((np.cumsum(probs, axis=1) - np.cumsum(onehot, axis=1)) ** 2, axis=1) / 2.0))
+    return float(
+        np.mean(
+            np.sum((np.cumsum(probs, axis=1) - np.cumsum(onehot, axis=1)) ** 2, axis=1)
+            / 2.0
+        )
+    )
 
 
 def multiclass_brier(y_true: np.ndarray, probs: np.ndarray) -> float:
@@ -711,7 +778,9 @@ def evaluate(y_true: np.ndarray, probs: np.ndarray) -> Dict[str, float]:
         "accuracy": float((probs.argmax(axis=1) == y_true).mean()),
         "rps": ranked_probability_score(y_true, probs),
         "brier": multiclass_brier(y_true, probs),
-        "log_loss": float(-np.mean(np.log(np.maximum(probs[np.arange(len(y_true)), y_true], 1e-12)))),
+        "log_loss": float(
+            -np.mean(np.log(np.maximum(probs[np.arange(len(y_true)), y_true], 1e-12)))
+        ),
         "calibration_error": calibration_error,
         "n": int(len(y_true)),
     }
@@ -719,6 +788,7 @@ def evaluate(y_true: np.ndarray, probs: np.ndarray) -> Dict[str, float]:
 
 def _sensitivity(models: dict, X_ref: np.ndarray) -> int:
     """How many of the 68 inputs actually move the output. The incumbent scores 4."""
+
     def predict(x):
         return np.mean([m.predict_proba(x)[0] for m in models.values()], axis=0)
 
@@ -786,7 +856,9 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
     from src.core.meta_model import SoftmaxMetaModel
 
     if len(X_train) < 300:
-        raise ValueError("at least 300 chronological rows are required for temporal stacking")
+        raise ValueError(
+            "at least 300 chronological rows are required for temporal stacking"
+        )
     cv = TimeSeriesSplit(n_splits=5)
     columns = [
         f"{name}_prob_{outcome}"
@@ -803,7 +875,9 @@ def _fit_meta_model(models: dict, X_train: np.ndarray, y_train: np.ndarray):
             fold_model.fit(X_train[train_index], y_train[train_index])
             probabilities = fold_model.predict_proba(X_train[validation_index])
             if list(fold_model.classes_) != [0, 1, 2]:
-                raise ValueError("temporal fold did not produce all three outcome classes")
+                raise ValueError(
+                    "temporal fold did not produce all three outcome classes"
+                )
             oof_values[validation_index, offset : offset + 3] = probabilities
             offset += 3
 
@@ -841,7 +915,12 @@ def _fit_temperature(meta_model: Any, meta_features: Any, y_calibration: np.ndar
         probabilities = exp / exp.sum(axis=1, keepdims=True)
         return float(
             -np.mean(
-                np.log(np.maximum(probabilities[np.arange(len(y_calibration)), y_calibration], 1e-12))
+                np.log(
+                    np.maximum(
+                        probabilities[np.arange(len(y_calibration)), y_calibration],
+                        1e-12,
+                    )
+                )
             )
         )
 
@@ -861,7 +940,9 @@ def _fit_isotonic(meta_model: Any, meta_features: Any, y_calibration: np.ndarray
     Per-class outputs are not jointly constrained, so the caller must renormalise
     (handled inside IsotonicMetaModel.predict_proba).
     """
-    from sklearn.isotonic import IsotonicRegression  # already in requirements.runtime.txt
+    from sklearn.isotonic import (
+        IsotonicRegression,
+    )  # already in requirements.runtime.txt
     from src.core.meta_model import IsotonicMetaModel
 
     raw = meta_model.predict_proba(meta_features)
@@ -903,7 +984,12 @@ def _fit_vector_scaling(meta_model: Any, meta_features: Any, y_calibration: np.n
         probabilities = exp / exp.sum(axis=1, keepdims=True)
         return float(
             -np.mean(
-                np.log(np.maximum(probabilities[np.arange(len(y_calibration)), y_calibration], 1e-12))
+                np.log(
+                    np.maximum(
+                        probabilities[np.arange(len(y_calibration)), y_calibration],
+                        1e-12,
+                    )
+                )
             )
         )
 
@@ -916,7 +1002,9 @@ def _fit_vector_scaling(meta_model: Any, meta_features: Any, y_calibration: np.n
     return VectorScaledMetaModel(meta_model, scale, bias)
 
 
-def _fit_beta_calibration(meta_model: Any, meta_features: Any, y_calibration: np.ndarray):
+def _fit_beta_calibration(
+    meta_model: Any, meta_features: Any, y_calibration: np.ndarray
+):
     """Fit one 3-parameter beta calibration map per class (§20 B2 candidate #4,
     "beta calibration where justified" -- justified here because it reuses
     the isotonic per-class one-vs-rest decomposition already in this file and
@@ -943,14 +1031,23 @@ def _fit_beta_calibration(meta_model: Any, meta_features: Any, y_calibration: np
         log_p = np.log(p)
         log_1mp = np.log(1.0 - p)
 
-        def objective(params: np.ndarray, log_p: np.ndarray = log_p, log_1mp: np.ndarray = log_1mp, binary: np.ndarray = binary) -> float:
+        def objective(
+            params: np.ndarray,
+            log_p: np.ndarray = log_p,
+            log_1mp: np.ndarray = log_1mp,
+            binary: np.ndarray = binary,
+        ) -> float:
             a, b, c = params
             z = np.clip(a * log_p + b * log_1mp + c, -30.0, 30.0)
             pred = np.clip(1.0 / (1.0 + np.exp(-z)), 1e-12, 1.0 - 1e-12)
-            return float(-np.mean(binary * np.log(pred) + (1.0 - binary) * np.log(1.0 - pred)))
+            return float(
+                -np.mean(binary * np.log(pred) + (1.0 - binary) * np.log(1.0 - pred))
+            )
 
         result = minimize(
-            objective, x0=np.array([1.0, -1.0, 0.0]), method="L-BFGS-B",
+            objective,
+            x0=np.array([1.0, -1.0, 0.0]),
+            method="L-BFGS-B",
             bounds=[(-10.0, 10.0), (-10.0, 10.0), (-5.0, 5.0)],
         )
         if not result.success or not np.all(np.isfinite(result.x)):
@@ -959,7 +1056,9 @@ def _fit_beta_calibration(meta_model: Any, meta_features: Any, y_calibration: np
     return BetaCalibratedMetaModel(meta_model, params_per_class)
 
 
-def _calibration_reliability(calibrated_model: Any, meta_features: Any, y: np.ndarray, n_bins: int = 10) -> Dict[str, float]:
+def _calibration_reliability(
+    calibrated_model: Any, meta_features: Any, y: np.ndarray, n_bins: int = 10
+) -> Dict[str, float]:
     """Murphy reliability and resolution on the calibration holdout.
 
     Delegates to ``brier_score_decomposition`` — the SAME function
@@ -1002,7 +1101,10 @@ def _calibration_wins(candidate: Dict[str, float], baseline: Dict[str, float]) -
     same failure shape as the duplicated season tables and completeness
     formulas this repository has already shipped and had to reconcile.
     """
-    return candidate["reliability"] < baseline["reliability"] and candidate["resolution"] >= baseline["resolution"]
+    return (
+        candidate["reliability"] < baseline["reliability"]
+        and candidate["resolution"] >= baseline["resolution"]
+    )
 
 
 def _fit_served_base_calibrator(
@@ -1063,15 +1165,18 @@ def _fit_served_base_calibrator(
         # recorded in calibration_method so the artifact manifest reflects what shipped.
         fitted_cal = compare_calibration_methods(
             league,
-            y_calibration.astype(np.int64), proba_cal,
-            y_holdout.astype(np.int64), proba_hold,
+            y_calibration.astype(np.int64),
+            proba_cal,
+            y_holdout.astype(np.int64),
+            proba_hold,
         )
         return fitted_cal
     except Exception as exc:
         logger.warning(
             "[DEBT-83] %s: Platt/sigmoid calibrator fitting failed — "
             "artifact will NOT carry a calibrator key: %s",
-            league, exc,
+            league,
+            exc,
         )
         return None
 
@@ -1131,8 +1236,12 @@ def _select_calibrator(
     alongside.
     """
     temp_model = _fit_temperature(meta_model, meta_features_calibration, y_calibration)
-    temp_metrics = _calibration_reliability(temp_model, meta_features_calibration, y_calibration)
-    temp_holdout = _calibration_reliability(temp_model, meta_features_holdout, y_holdout)
+    temp_metrics = _calibration_reliability(
+        temp_model, meta_features_calibration, y_calibration
+    )
+    temp_holdout = _calibration_reliability(
+        temp_model, meta_features_holdout, y_holdout
+    )
 
     diagnostics: Dict[str, Any] = {
         "temperature": temp_metrics,
@@ -1166,44 +1275,65 @@ def _select_calibrator(
         ("isotonic", _fit_isotonic),
     ):
         try:
-            candidate_model = fit_fn(meta_model, meta_features_calibration, y_calibration)
-        except Exception as exc:  # pragma: no cover — numerical fit failure, not a logic branch
+            candidate_model = fit_fn(
+                meta_model, meta_features_calibration, y_calibration
+            )
+        except (
+            Exception
+        ) as exc:  # pragma: no cover — numerical fit failure, not a logic branch
             logger.warning("%s calibration failed (%s); skipping.", name, exc)
             if name == "isotonic" and champion_name == "temperature":
                 chosen_reason = f"isotonic_fit_failed: {exc}"
             continue
 
-        candidate_cal = _calibration_reliability(candidate_model, meta_features_calibration, y_calibration)
-        candidate_hold = _calibration_reliability(candidate_model, meta_features_holdout, y_holdout)
+        candidate_cal = _calibration_reliability(
+            candidate_model, meta_features_calibration, y_calibration
+        )
+        candidate_hold = _calibration_reliability(
+            candidate_model, meta_features_holdout, y_holdout
+        )
         diagnostics[name] = candidate_cal
         diagnostics["held_out_persistence"][name] = candidate_hold
 
         calibration_set_wins = _calibration_wins(candidate_cal, champion_cal)
         holdout_wins = _calibration_wins(candidate_hold, champion_hold)
         if name == "isotonic":
-            diagnostics["held_out_persistence"]["conclusion_persists"] = calibration_set_wins == holdout_wins
+            diagnostics["held_out_persistence"]["conclusion_persists"] = (
+                calibration_set_wins == holdout_wins
+            )
 
         if calibration_set_wins and holdout_wins:
             logger.info(
                 "Calibration: %s unseats %s (reliability %.4f < %.4f, resolution %.4f >= %.4f) "
                 "AND persists on the held-out season (reliability %.4f < %.4f, resolution %.4f >= %.4f).",
-                name, champion_name,
-                candidate_cal["reliability"], champion_cal["reliability"],
-                candidate_cal["resolution"], champion_cal["resolution"],
-                candidate_hold["reliability"], champion_hold["reliability"],
-                candidate_hold["resolution"], champion_hold["resolution"],
+                name,
+                champion_name,
+                candidate_cal["reliability"],
+                champion_cal["reliability"],
+                candidate_cal["resolution"],
+                champion_cal["resolution"],
+                candidate_hold["reliability"],
+                champion_hold["reliability"],
+                candidate_hold["resolution"],
+                champion_hold["resolution"],
             )
             champion_name, champion_model = name, candidate_model
             champion_cal, champion_hold = candidate_cal, candidate_hold
-            chosen_reason = "reliability_improved_resolution_held_and_persisted_on_holdout"
+            chosen_reason = (
+                "reliability_improved_resolution_held_and_persisted_on_holdout"
+            )
         elif calibration_set_wins and not holdout_wins:
             logger.info(
                 "Calibration: %s won the calibration set against %s but did NOT persist on the "
                 "held-out season — staying with %s.",
-                name, champion_name, champion_name,
+                name,
+                champion_name,
+                champion_name,
             )
             if champion_name == "temperature":
-                chosen_reason = f"{name}_won_calibration_set_but_did_not_persist_on_holdout"
+                chosen_reason = (
+                    f"{name}_won_calibration_set_but_did_not_persist_on_holdout"
+                )
         elif candidate_cal["reliability"] < champion_cal["reliability"]:
             if champion_name == "temperature":
                 chosen_reason = f"{name}_degraded_resolution"
@@ -1253,8 +1383,10 @@ def _evaluate_bivariate_poisson_overlay(
     proba_calibration = meta_model.predict_proba(meta_features_calibration)
     proba_holdout = meta_model.predict_proba(meta_features_holdout)
     overlay = BivariatePoissonDrawOverlay.fit(
-        y_calibration, proba_calibration,
-        y_holdout=y_holdout, proba_holdout=proba_holdout,
+        y_calibration,
+        proba_calibration,
+        y_holdout=y_holdout,
+        proba_holdout=proba_holdout,
     )
     return {
         "alpha": overlay.alpha,
@@ -1278,10 +1410,22 @@ def _evaluate_bivariate_poisson_overlay(
 # an untuned run stays byte-identical to every prior candidate.
 _BASE_PARAMS: Dict[str, Dict[str, object]] = {
     "random_forest": {"n_estimators": 300, "max_depth": 8, "min_samples_leaf": 15},
-    "xgboost": {"n_estimators": 250, "max_depth": 4, "learning_rate": 0.05,
-                "subsample": 0.85, "colsample_bytree": 0.85, "reg_lambda": 2.0},
-    "lightgbm": {"n_estimators": 250, "max_depth": 5, "learning_rate": 0.05,
-                 "subsample": 0.85, "colsample_bytree": 0.85, "reg_lambda": 2.0},
+    "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0,
+    },
+    "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0,
+    },
 }
 
 
@@ -1318,16 +1462,27 @@ def _instantiate(learner: str, params: Dict[str, object], *, n_jobs: int = -1):
     from src.models.ensemble import LogOddsResidualWrapper
 
     if learner == "random_forest":
-        clf = RandomForestClassifier(random_state=_TRAINING_SEED, n_jobs=n_jobs, **params)
+        clf = RandomForestClassifier(
+            random_state=_TRAINING_SEED, n_jobs=n_jobs, **params
+        )
     elif learner == "xgboost":
         clf = XGBClassifier(
-            objective="multi:softprob", num_class=3, random_state=_TRAINING_SEED,
-            tree_method="hist", eval_metric="mlogloss", n_jobs=n_jobs, **params,
+            objective="multi:softprob",
+            num_class=3,
+            random_state=_TRAINING_SEED,
+            tree_method="hist",
+            eval_metric="mlogloss",
+            n_jobs=n_jobs,
+            **params,
         )
     else:
         clf = LGBMClassifier(
-            objective="multiclass", num_class=3, random_state=_TRAINING_SEED, verbose=-1,
-            n_jobs=n_jobs, **params,
+            objective="multiclass",
+            num_class=3,
+            random_state=_TRAINING_SEED,
+            verbose=-1,
+            n_jobs=n_jobs,
+            **params,
         )
     return LogOddsResidualWrapper(clf)
 
@@ -1368,6 +1523,7 @@ def tune_hyperparameters(
     # space — so both converge on byte-identical hyperparameters and the stack
     # loses the diversity that is the entire reason for ensembling them.
     for offset, learner in enumerate(("random_forest", "xgboost", "lightgbm")):
+
         def objective(trial, _learner=learner) -> float:
             params = _suggest(trial, _learner)
             scores = []
@@ -1375,7 +1531,9 @@ def tune_hyperparameters(
                 model = _instantiate(_learner, params, n_jobs=1)
                 model.fit(X_train[tr], y_train[tr])
                 scores.append(
-                    ranked_probability_score(y_train[va], model.predict_proba(X_train[va]))
+                    ranked_probability_score(
+                        y_train[va], model.predict_proba(X_train[va])
+                    )
                 )
                 trial.report(float(np.mean(scores)), fold)
                 if trial.should_prune():
@@ -1383,7 +1541,7 @@ def tune_hyperparameters(
             return float(np.mean(scores))
 
         study = optuna.create_study(
-            direction="minimize",                    # RPS: lower is better
+            direction="minimize",  # RPS: lower is better
             sampler=optuna.samplers.TPESampler(seed=_TRAINING_SEED + offset),
             pruner=optuna.pruners.MedianPruner(n_warmup_steps=1),
             study_name=f"{league}_{learner}",
@@ -1392,7 +1550,9 @@ def tune_hyperparameters(
         tuned[learner] = dict(study.best_params)
         logger.info(
             "    %-14s tuned rps=%.4f (%d trials, %d pruned) %s",
-            learner, study.best_value, len(study.trials),
+            learner,
+            study.best_value,
+            len(study.trials),
             sum(1 for t in study.trials if t.state == optuna.trial.TrialState.PRUNED),
             study.best_params,
         )
@@ -1426,8 +1586,12 @@ def train_league(
 
     test_mask = seasons == holdout_season
     if test_mask.sum() < 50:
-        logger.warning("  %s: insufficient split (train=%d test=%d) — skipped",
-                       league, int((~test_mask).sum()), int(test_mask.sum()))
+        logger.warning(
+            "  %s: insufficient split (train=%d test=%d) — skipped",
+            league,
+            int((~test_mask).sum()),
+            int(test_mask.sum()),
+        )
         return None
 
     holdout_start = min(dates[test_mask])
@@ -1438,7 +1602,9 @@ def train_league(
         )
     pretest_mask = np.asarray([date < holdout_start for date in dates], dtype=bool)
     if pretest_mask.sum() < 200:
-        logger.warning("  %s: insufficient pre-holdout rows (%d)", league, int(pretest_mask.sum()))
+        logger.warning(
+            "  %s: insufficient pre-holdout rows (%d)", league, int(pretest_mask.sum())
+        )
         return None
 
     pretest_seasons = list(dict.fromkeys(seasons[pretest_mask].tolist()))
@@ -1452,7 +1618,9 @@ def train_league(
     if calibration_mask.sum() < 50 or core_mask.sum() < 300:
         logger.warning(
             "  %s: insufficient core/calibration split (core=%d calibration=%d) — skipped",
-            league, int(core_mask.sum()), int(calibration_mask.sum()),
+            league,
+            int(core_mask.sum()),
+            int(calibration_mask.sum()),
         )
         return None
 
@@ -1515,17 +1683,22 @@ def train_league(
     metrics["train_n"] = int(len(y_train))
     metrics["calibration_n"] = int(len(y_calibration))
     metrics["evaluation_n"] = int(len(y_test))
-    metrics["responsive_features"] = _served_sensitivity(models, meta_model, X_test[0].copy())
+    metrics["responsive_features"] = _served_sensitivity(
+        models, meta_model, X_test[0].copy()
+    )
 
     # Always-predict-home baseline: the bar any real model must clear.
     home_rate = float((y_test == 0).mean())
     prior = np.tile(np.bincount(y_train, minlength=3) / len(y_train), (len(y_test), 1))
     metrics["baseline_accuracy_home"] = home_rate
     metrics["baseline_rps_trainprior"] = ranked_probability_score(y_test, prior)
-    market_columns = [feature_names.index(name) for name in (
-        "market_prob_home", "market_prob_draw", "market_prob_away"
-    )]
-    metrics["baseline_rps_market"] = ranked_probability_score(y_test, X_test[:, market_columns])
+    market_columns = [
+        feature_names.index(name)
+        for name in ("market_prob_home", "market_prob_draw", "market_prob_away")
+    ]
+    metrics["baseline_rps_market"] = ranked_probability_score(
+        y_test, X_test[:, market_columns]
+    )
     # Name the quote in the evidence itself. A reader of the emitted report
     # otherwise cannot tell WHICH market price this bar represents, and the
     # distinction is not cosmetic: Portfolio E measured the closing quote at
@@ -1541,7 +1714,11 @@ def train_league(
     # Evaluation-only (directive Experiment E7) -- does not affect the shipped
     # calibrator or any promotion gate. See _evaluate_bivariate_poisson_overlay.
     metrics["bivariate_poisson_overlay"] = _evaluate_bivariate_poisson_overlay(
-        meta_model, meta_features_calibration, y_calibration, meta_features_test, y_test,
+        meta_model,
+        meta_features_calibration,
+        y_calibration,
+        meta_features_test,
+        y_test,
     )
     metrics["training_window"] = {
         "start": min(dates[core_mask]).date().isoformat(),
@@ -1559,11 +1736,18 @@ def train_league(
     logger.info(
         "  %-12s train=%5d test=%4d | avg: acc=%.4f rps=%.4f | stacked: acc=%.4f rps=%.4f "
         "| home-only %.4f prior-rps %.4f market-rps %.4f responsive=%d/%d",
-        league, metrics["train_n"], metrics["n"], metrics["accuracy"], metrics["rps"],
-        metrics["stacked"]["accuracy"], metrics["stacked"]["rps"],
-        metrics["baseline_accuracy_home"], metrics["baseline_rps_trainprior"],
+        league,
+        metrics["train_n"],
+        metrics["n"],
+        metrics["accuracy"],
+        metrics["rps"],
+        metrics["stacked"]["accuracy"],
+        metrics["stacked"]["rps"],
+        metrics["baseline_accuracy_home"],
+        metrics["baseline_rps_trainprior"],
         metrics["baseline_rps_market"],
-        metrics["responsive_features"], len(feature_names),
+        metrics["responsive_features"],
+        len(feature_names),
     )
 
     return {
@@ -1642,10 +1826,16 @@ def train_pooled(
     for league, data in dataset.items():
         for key in pooled:
             pooled[key].extend(data[key])
-    logger.info("\nPooled model over %d leagues, %d rows", len(dataset), len(pooled["y"]))
+    logger.info(
+        "\nPooled model over %d leagues, %d rows", len(dataset), len(pooled["y"])
+    )
     return train_league(
-        "POOLED", pooled, holdout_season,
-        feature_names=feature_names, tune_trials=tune_trials, schema=schema,
+        "POOLED",
+        pooled,
+        holdout_season,
+        feature_names=feature_names,
+        tune_trials=tune_trials,
+        schema=schema,
     )
 
 
@@ -1659,12 +1849,16 @@ def _feature_contract_sha() -> Optional[str]:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8")).get("feature_contract_sha256")
+        return json.loads(path.read_text(encoding="utf-8")).get(
+            "feature_contract_sha256"
+        )
     except (json.JSONDecodeError, OSError):
         return None
 
 
-def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report, schema) -> None:
+def _emit_reproducibility_manifest(
+    args, feature_names, artifact_suffix, report, schema
+) -> None:
     """Record what produced this run (certification Stage 4/8).
 
     The training report says how well the run scored; this says what produced
@@ -1718,14 +1912,19 @@ def _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
-    ap.add_argument("--out-dir", type=Path, default=_BACKEND_ROOT / "models" / "candidate")
+    ap.add_argument(
+        "--out-dir", type=Path, default=_BACKEND_ROOT / "models" / "candidate"
+    )
     ap.add_argument("--holdout-season", default="2526")
     ap.add_argument(
-        "--tune", type=int, default=0, metavar="N",
+        "--tune",
+        type=int,
+        default=0,
+        metavar="N",
         help="Run N Optuna (TPE) trials per base learner, scored on RPS over a "
-             "TimeSeriesSplit of the training slice. 0 (default) keeps the "
-             "baseline hyperparameters, so an untuned run is unchanged. "
-             "Start around 30; trials are pruned on the median rule.",
+        "TimeSeriesSplit of the training slice. 0 (default) keeps the "
+        "baseline hyperparameters, so an untuned run is unchanged. "
+        "Start around 30; trials are pruned on the median rule.",
     )
     ap.add_argument(
         "--include-phase8",
@@ -1774,7 +1973,9 @@ def main() -> int:
     # from-scratch reimplementation can silently diverge from the algorithm
     # it means to replicate.
     cross_verify_against_elo_engine(matches, n_check=300)
-    logger.info("Elo replay cross-verified against EloEngine on 300 matches: identical.")
+    logger.info(
+        "Elo replay cross-verified against EloEngine on 300 matches: identical."
+    )
 
     if args.include_phase8 and args.schema not in (None, "apex_v1_89"):
         logger.error(
@@ -1784,8 +1985,12 @@ def main() -> int:
         return 1
     schema = args.schema or ("apex_v1_89" if args.include_phase8 else _DEFAULT_SCHEMA)
     feature_names, artifact_suffix = _schema_for(schema)
-    logger.info("Feature schema: %s (%d columns) -> *_%s.pkl",
-                schema, len(feature_names), artifact_suffix)
+    logger.info(
+        "Feature schema: %s (%d columns) -> *_%s.pkl",
+        schema,
+        len(feature_names),
+        artifact_suffix,
+    )
     dataset = build_dataset(
         matches,
         include_phase8=(schema == "apex_v1_89"),
@@ -1799,8 +2004,12 @@ def main() -> int:
     trained: set = set()
     for league in sorted(dataset):
         bundle = train_league(
-            league, dataset[league], args.holdout_season,
-            feature_names=feature_names, tune_trials=args.tune, schema=schema,
+            league,
+            dataset[league],
+            args.holdout_season,
+            feature_names=feature_names,
+            tune_trials=args.tune,
+            schema=schema,
         )
         if bundle is None:
             continue
@@ -1818,8 +2027,11 @@ def main() -> int:
     uncovered = sorted(set(dataset) - trained)
     if uncovered:
         pooled_bundle = train_pooled(
-            dataset, args.holdout_season, feature_names=feature_names,
-            tune_trials=args.tune, schema=schema,
+            dataset,
+            args.holdout_season,
+            feature_names=feature_names,
+            tune_trials=args.tune,
+            schema=schema,
         )
         if pooled_bundle is not None:
             report["POOLED"] = pooled_bundle.pop("_metrics")
@@ -1831,11 +2043,15 @@ def main() -> int:
             for league in uncovered:
                 joblib.dump(
                     pooled_bundle,
-                    args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
+                    args.out_dir
+                    / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
                     compress=3,
                 )
-                logger.info("  %s -> pooled model (own history: %d rows, no holdout)",
-                            league, len(dataset[league]["y"]))
+                logger.info(
+                    "  %s -> pooled model (own history: %d rows, no holdout)",
+                    league,
+                    len(dataset[league]["y"]),
+                )
 
     # apex_v1_68 keeps the historical bare name (candidate_manifest.json and
     # compare_candidate_vs_incumbent both reference it), phase8 keeps the name
@@ -1844,9 +2060,15 @@ def main() -> int:
         "apex_v1_68": "training_report_real.json",
         "apex_v1_89": "training_report_real_phase8.json",
     }.get(schema, f"training_report_real_{artifact_suffix}.json")
-    (args.out_dir / report_name).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (args.out_dir / report_name).write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
 
-    logger.info("\nWrote artifacts for %d leagues to %s", len(trained) + len(uncovered), args.out_dir)
+    logger.info(
+        "\nWrote artifacts for %d leagues to %s",
+        len(trained) + len(uncovered),
+        args.out_dir,
+    )
     _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report, schema)
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0

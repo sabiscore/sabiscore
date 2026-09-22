@@ -25,11 +25,13 @@ def _event_team_names(event: _MarketEvent) -> tuple[str, str]:
     """Name accessor for a grouped provider event (its dict key)."""
     return event[0]
 
+
 logger = logging.getLogger(__name__)
 
 
 class OddsService:
     """Fetch live odds through the canonical provider gateway."""
+
     DEFAULT_ODDS = {"source": "unavailable", "reason": "odds_not_verified"}
 
     def __init__(
@@ -140,7 +142,9 @@ class OddsService:
         Returns:
             Dictionary with home_win, draw, away_win odds
         """
-        cache_key = f"match_odds:{league}:{home_team}:{away_team}".lower().replace(" ", "_")
+        cache_key = f"match_odds:{league}:{home_team}:{away_team}".lower().replace(
+            " ", "_"
+        )
         cached = self.cache.get(cache_key)
         if cached:
             if isinstance(cached, dict):
@@ -287,13 +291,15 @@ class OddsService:
 
             movement = []
             for record in odds_records:
-                movement.append({
-                    "timestamp": record.timestamp.isoformat(),
-                    "bookmaker": record.bookmaker,
-                    "home_win": record.home_win,
-                    "draw": record.draw,
-                    "away_win": record.away_win,
-                })
+                movement.append(
+                    {
+                        "timestamp": record.timestamp.isoformat(),
+                        "bookmaker": record.bookmaker,
+                        "home_win": record.home_win,
+                        "draw": record.draw,
+                        "away_win": record.away_win,
+                    }
+                )
 
             return movement
 

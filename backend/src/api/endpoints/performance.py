@@ -184,7 +184,9 @@ async def value_bet_scan(
     started = time.perf_counter()
     try:
         records = (
-            await asyncio.wait_for(db.execute(query), timeout=_VALUE_SCAN_DB_DEADLINE_SECONDS)
+            await asyncio.wait_for(
+                db.execute(query), timeout=_VALUE_SCAN_DB_DEADLINE_SECONDS
+            )
         ).all()
     except TimeoutError:
         metrics_collector.increment("value_scan.db_deadline_exceeded")
@@ -248,7 +250,9 @@ async def value_bet_scan(
                 outcome=str(odds_edge.get("market") or "") or None,
                 model_prob=model_prob,
                 implied_prob=round(1.0 / market_odds, 6),
-                created_at=prediction.created_at.replace(tzinfo=timezone.utc).isoformat(),
+                created_at=prediction.created_at.replace(
+                    tzinfo=timezone.utc
+                ).isoformat(),
             )
         )
 
@@ -308,7 +312,9 @@ async def _walk_forward_summary(
 ) -> Dict[str, Any]:
     started_at = None
     if window is not None:
-        started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
+        started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=window
+        )
 
     # Scope to the serving generation. Pooling generations would report an
     # accuracy/RPS series for a model that never existed — see
@@ -359,7 +365,9 @@ async def model_performance(
     # CLV has its own data floor, independent of walk-forward's — a season can
     # have plenty of captured closing lines and too few *finished* matches for
     # RPS, or vice versa. Computed unconditionally so neither gates the other.
-    started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
+    started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        days=window
+    )
     clv_records = await get_clv_records(
         db,
         league=_resolve_league_filter(league),
@@ -464,7 +472,11 @@ def _compute_calibration_metrics(
 
     # Compute detailed reliability curves for each outcome class
     bins = np.linspace(0.0, 1.0, n_bins + 1)
-    curves: Dict[str, List[Dict[str, Any]]] = {"home_win": [], "draw": [], "away_win": []}
+    curves: Dict[str, List[Dict[str, Any]]] = {
+        "home_win": [],
+        "draw": [],
+        "away_win": [],
+    }
     class_names = ["home_win", "draw", "away_win"]
 
     for cls_idx, cls_name in enumerate(class_names):
@@ -472,7 +484,11 @@ def _compute_calibration_metrics(
         probs = y_proba[:, cls_idx]
 
         for b_idx, (lo, hi) in enumerate(zip(bins[:-1], bins[1:])):
-            mask = (probs > lo) & (probs <= hi) if b_idx > 0 else (probs >= lo) & (probs <= hi)
+            mask = (
+                (probs > lo) & (probs <= hi)
+                if b_idx > 0
+                else (probs >= lo) & (probs <= hi)
+            )
             count = int(mask.sum())
             if count > 0:
                 p_mean = round(float(probs[mask].mean()), 4)
@@ -484,19 +500,28 @@ def _compute_calibration_metrics(
                 p_mean = None
                 emp_freq = None
 
-            curves[cls_name].append({
-                "bin_index": b_idx,
-                "bin_lower": round(float(lo), 4),
-                "bin_upper": round(float(hi), 4),
-                "bin_midpoint": round(float((lo + hi) / 2.0), 4),
-                "predicted_mean": p_mean,
-                "empirical_frequency": emp_freq,
-                "count": count,
-            })
+            curves[cls_name].append(
+                {
+                    "bin_index": b_idx,
+                    "bin_lower": round(float(lo), 4),
+                    "bin_upper": round(float(hi), 4),
+                    "bin_midpoint": round(float((lo + hi) / 2.0), 4),
+                    "predicted_mean": p_mean,
+                    "empirical_frequency": emp_freq,
+                    "count": count,
+                }
+            )
 
     # Künsch (1989) block bootstrap confidence intervals
     def rps_metric(yt, yp):  # noqa: E306
-        return float(np.mean([ranked_probability_score(int(yt[i]), yp[i].tolist()) for i in range(len(yt))]))
+        return float(
+            np.mean(
+                [
+                    ranked_probability_score(int(yt[i]), yp[i].tolist())
+                    for i in range(len(yt))
+                ]
+            )
+        )
 
     def brier_metric(yt, yp):  # noqa: E306
         return brier_score_decomposition(yt, yp, n_bins=n_bins)["mean"]["brier_score"]
@@ -543,7 +568,9 @@ async def model_performance_calibration(
     part, and the underlying data changes on settlement cadence, not per-request.
     """
     model_version = active_model_version()
-    cache_key = f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
+    cache_key = (
+        f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
+    )
     cached = cache.get(cache_key) if cache else None
     if cached is not None:
         try:
@@ -560,7 +587,9 @@ async def model_performance_calibration(
 
     started_at = None
     if window is not None:
-        started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=window)
+        started_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            days=window
+        )
 
     records = await get_settled_predictions(
         db,

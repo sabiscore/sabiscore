@@ -42,7 +42,12 @@ from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match, Team
-from ..db.models import EloRatingSnapshot, MatchPredictionLog, ProviderEventMapping, ProviderTeamMapping
+from ..db.models import (
+    EloRatingSnapshot,
+    MatchPredictionLog,
+    ProviderEventMapping,
+    ProviderTeamMapping,
+)
 from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 from .fixture_sync_service import is_unusable_team_name
 from .team_identity import resolve_team_id
@@ -186,7 +191,9 @@ async def build_orphan_team_repair_manifest(
                 "orphan_team_name": orphan_team_name,
             }
 
-            provider_team_id = str(evidence.get(f"{side}_provider_team_id") or "").strip()
+            provider_team_id = str(
+                evidence.get(f"{side}_provider_team_id") or ""
+            ).strip()
             if not provider_team_id:
                 unrepaired["ORPHAN_NO_PROVIDER_TEAM_ID_EVIDENCE"] += 1
                 unrepaired_detail.append(
@@ -279,13 +286,17 @@ async def build_orphan_team_repair_manifest(
                     match_id=match.id,
                     league_id=match.league_id,
                     side=side,
-                    kickoff_utc=match.match_date.isoformat() if match.match_date else "",
+                    kickoff_utc=match.match_date.isoformat()
+                    if match.match_date
+                    else "",
                     status=match.status or "",
                     orphan_team_id=stored_team_id,
                     orphan_team_name=orphan_team_name,
                     freshest_observed_name=freshest_name,
                     target_team_id=target_id,
-                    target_team_name=str(target_name_row.name) if target_name_row else None,
+                    target_team_name=str(target_name_row.name)
+                    if target_name_row
+                    else None,
                     target_elo_snapshot_count=snapshot_count,
                     target_elo_first_match_date=first_date,
                     target_elo_last_match_date=last_date,

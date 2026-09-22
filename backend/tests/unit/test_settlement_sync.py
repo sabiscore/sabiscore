@@ -9,6 +9,7 @@ Contracts verified:
      record is dropped without blocking valid siblings; a provider outage
      returns zero counts without raising.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -19,7 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, Match
-from src.data.loaders.football_data_api import FootballDataAPIClient, FootballDataAPIError
+from src.data.loaders.football_data_api import (
+    FootballDataAPIClient,
+    FootballDataAPIError,
+)
 
 
 @pytest.fixture
@@ -33,7 +37,9 @@ async def session():
     await engine.dispose()
 
 
-async def _seed_match(session: AsyncSession, match_id: str, status: str = "scheduled") -> None:
+async def _seed_match(
+    session: AsyncSession, match_id: str, status: str = "scheduled"
+) -> None:
     session.add(
         Match(
             id=match_id,
@@ -111,7 +117,9 @@ def test_normalize_result_missing_id_is_none() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_sync_settled_results_updates_matched_match(session: AsyncSession) -> None:
+async def test_sync_settled_results_updates_matched_match(
+    session: AsyncSession,
+) -> None:
     from src.services.fixture_sync_service import sync_settled_results
 
     await _seed_match(session, "fd-1", status="scheduled")
@@ -140,7 +148,9 @@ async def test_sync_settled_results_idempotent(session: AsyncSession) -> None:
     assert counts_second == {"updated": 0, "unmatched": 0, "already_settled": 1}
 
 
-async def test_sync_settled_results_unmatched_skipped_no_row_created(session: AsyncSession) -> None:
+async def test_sync_settled_results_unmatched_skipped_no_row_created(
+    session: AsyncSession,
+) -> None:
     from src.services.fixture_sync_service import sync_settled_results
 
     with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
@@ -157,7 +167,12 @@ async def test_sync_settled_results_malformed_record_dropped_sibling_still_updat
     from src.services.fixture_sync_service import sync_settled_results
 
     await _seed_match(session, "fd-3", status="scheduled")
-    malformed = {"id": "", "match_date": "2026-08-07T15:00:00Z", "home_score": None, "away_score": None}
+    malformed = {
+        "id": "",
+        "match_date": "2026-08-07T15:00:00Z",
+        "home_score": None,
+        "away_score": None,
+    }
     with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
         MockCls.return_value = _mock_client([malformed, _result("fd-3", 1, 0)])
         counts = await sync_settled_results(session)
@@ -165,7 +180,9 @@ async def test_sync_settled_results_malformed_record_dropped_sibling_still_updat
     assert counts == {"updated": 1, "unmatched": 0, "already_settled": 0}
 
 
-async def test_sync_settled_results_provider_outage_returns_zero_counts(session: AsyncSession) -> None:
+async def test_sync_settled_results_provider_outage_returns_zero_counts(
+    session: AsyncSession,
+) -> None:
     from src.services.fixture_sync_service import sync_settled_results
 
     mock = AsyncMock()

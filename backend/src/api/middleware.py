@@ -82,6 +82,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return bucket[window_start] > self.requests_per_window
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers when enabled."""
 
@@ -92,7 +93,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("X-Content-Type-Options", "nosniff")
             response.headers.setdefault("X-Frame-Options", "DENY")
             response.headers.setdefault("X-XSS-Protection", "1; mode=block")
-            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            response.headers.setdefault(
+                "Referrer-Policy", "strict-origin-when-cross-origin"
+            )
 
             if settings.app_env != "development":
                 response.headers.setdefault(
@@ -138,7 +141,9 @@ class TimingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         process_time = time.time() - start_time
 
-        if request.url.path.startswith("/api/v1/predict") or request.url.path.startswith("/api/v1/predictions"):
+        if request.url.path.startswith(
+            "/api/v1/predict"
+        ) or request.url.path.startswith("/api/v1/predictions"):
             body = getattr(request.state, "prediction_result", {}) or {}
             record = {
                 "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -181,7 +186,9 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
         except Exception:  # pragma: no cover - safety net
-            logger.exception("Unhandled application error", extra={"path": request.url.path})
+            logger.exception(
+                "Unhandled application error", extra={"path": request.url.path}
+            )
             response = JSONResponse(
                 status_code=500,
                 content={
@@ -219,7 +226,8 @@ def setup_middleware(app):
         if settings.allowed_hosts == default_hosts:
             logger.warning(
                 "TrustedHostMiddleware not enabled: ALLOWED_HOSTS is default localhost. "
-                "Set allowed_hosts environment variable to your production host to enable.")
+                "Set allowed_hosts environment variable to your production host to enable."
+            )
         else:
             app.add_middleware(
                 TrustedHostMiddleware,

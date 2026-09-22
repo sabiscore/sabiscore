@@ -21,6 +21,7 @@ _UCL_CAVEAT_FRAGMENT = "soft-evidence"
 
 # ── Schema / config tests (no model loading needed) ──────────────────────────
 
+
 def test_ucl_in_league_code_enum():
     """LeagueCode enum must include UCL = 'ucl'."""
     assert hasattr(LeagueCode, "UCL")

@@ -78,7 +78,9 @@ def test_float32_rounding_noise_is_renormalised_not_rejected():
 
 
 def test_a_negative_probability_still_raises():
-    results = [_FakeResult(1.05, 0.10, -0.15)]  # sums to 1.0, but a component is negative
+    results = [
+        _FakeResult(1.05, 0.10, -0.15)
+    ]  # sums to 1.0, but a component is negative
     with pytest.raises(RuntimeError, match="invalid probability simplex"):
         _adapter(results).predict_proba(np.zeros((1, 3), dtype=np.float32))
 
@@ -97,7 +99,9 @@ def test_a_sum_far_from_one_still_raises():
 
 
 def test_uncalibrated_result_raises_before_the_simplex_check():
-    results = [_FakeResult(0.5, 0.3, 0.2, calibration_applied=False, calibration_method="raw")]
+    results = [
+        _FakeResult(0.5, 0.3, 0.2, calibration_applied=False, calibration_method="raw")
+    ]
     with pytest.raises(RuntimeError, match="calibration provenance failed"):
         _adapter(results).predict_proba(np.zeros((1, 3), dtype=np.float32))
 

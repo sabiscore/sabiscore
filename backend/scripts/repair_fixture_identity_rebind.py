@@ -86,7 +86,9 @@ async def _run(args: argparse.Namespace) -> int:
             if args.review:
                 # Force a server-enforced read-only transaction on PostgreSQL.
                 if session.bind is None or session.bind.dialect.name != "postgresql":
-                    raise RuntimeError("fixture identity rebind review requires PostgreSQL")
+                    raise RuntimeError(
+                        "fixture identity rebind review requires PostgreSQL"
+                    )
                 await session.execute(text("SET TRANSACTION READ ONLY"))
                 manifest = await build_fixture_identity_rebind_manifest(session)
                 ready = [e for e in manifest.entries if e.rebind_ready]
@@ -101,7 +103,9 @@ async def _run(args: argparse.Namespace) -> int:
                 await session.rollback()
                 return 2 if payload["nothing_to_apply"] else 0
 
-            manifest_sha = validate_sha256(args.manifest_sha256, field="--manifest-sha256")
+            manifest_sha = validate_sha256(
+                args.manifest_sha256, field="--manifest-sha256"
+            )
             if not args.authorization_id or not args.authorization_id.strip():
                 raise RuntimeError("--authorization-id is required for --apply")
             if args.confirm != _CONFIRMATION:
@@ -128,7 +132,9 @@ async def _run(args: argparse.Namespace) -> int:
                         "manifest_sha256": result.manifest_sha256,
                         "rebound_count": result.rebound_count,
                         "affected_match_ids": list(result.affected_match_ids),
-                        "skipped_blocked_match_ids": list(result.skipped_blocked_match_ids),
+                        "skipped_blocked_match_ids": list(
+                            result.skipped_blocked_match_ids
+                        ),
                         "leagues": list(result.leagues),
                         "reversals": [list(r) for r in result.reversals],
                         "committed": True,

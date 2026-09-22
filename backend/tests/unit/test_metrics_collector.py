@@ -16,6 +16,7 @@ def mc() -> MetricsCollector:
 
 # ── Counter / gauge / histogram / timer ─────────────────────────────────────
 
+
 def test_increment_default(mc):
     mc.increment("requests")
     assert mc._counters["requests"] == 1
@@ -56,6 +57,7 @@ def test_record_timer_trim_to_1000(mc):
 
 # ── Error tracking ──────────────────────────────────────────────────────────
 
+
 def test_record_error_appends(mc):
     mc.record_error("ValueError", "bad input", context={"field": "league"})
     assert len(mc._errors) == 1
@@ -77,6 +79,7 @@ def test_record_error_no_context(mc):
 
 # ── Scraper calls ────────────────────────────────────────────────────────────
 
+
 def test_record_scraper_call_success(mc):
     mc.record_scraper_call("understat", 55.0, success=True)
     assert mc._scraper_calls["understat"] == 1
@@ -96,6 +99,7 @@ def test_record_scraper_call_trim(mc):
 
 
 # ── Prediction recording ─────────────────────────────────────────────────────
+
 
 def test_record_prediction_cache_hit(mc):
     mc.record_prediction(12.0, 0.72, cache_hit=True)
@@ -137,8 +141,11 @@ def test_record_prediction_trim_edges(mc):
 
 # ── Model accuracy ────────────────────────────────────────────────────────────
 
+
 def test_record_model_accuracy_no_alert(mc):
-    mc.record_model_accuracy(brier_score=0.10, accuracy=0.95, league="EPL", model_version="3.0")
+    mc.record_model_accuracy(
+        brier_score=0.10, accuracy=0.95, league="EPL", model_version="3.0"
+    )
     assert len(mc._calibration_drift_alerts) == 0
 
 
@@ -218,6 +225,7 @@ def test_error_metrics_redact_credentials(mc):
 
 # ── get_summary ───────────────────────────────────────────────────────────────
 
+
 def test_get_summary_empty(mc):
     summary = mc.get_summary()
     assert "uptime_seconds" in summary
@@ -284,6 +292,7 @@ def test_get_summary_with_model_accuracy(mc):
 
 # ── reset ────────────────────────────────────────────────────────────────────
 
+
 def test_reset_clears_all_state(mc):
     mc.increment("requests")
     mc.set_gauge("depth", 5.0)
@@ -298,6 +307,7 @@ def test_reset_clears_all_state(mc):
 
 
 # ── monitor_latency decorator ────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_monitor_latency_async():
@@ -329,6 +339,7 @@ async def test_monitor_latency_async_error():
 
 
 # ── monitor_scraper decorator ────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_monitor_scraper_async_success():

@@ -60,6 +60,7 @@ Usage
     cd backend
     PYTHONPATH=. python scripts/study_e6_ablation_2x2.py
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -106,7 +107,8 @@ _CELLS = {
 
 def _load_training_module() -> Any:
     spec = importlib.util.spec_from_file_location(
-        "train_on_real_matches", Path(__file__).resolve().parent / "train_on_real_matches.py"
+        "train_on_real_matches",
+        Path(__file__).resolve().parent / "train_on_real_matches.py",
     )
     if spec is None or spec.loader is None:
         raise RuntimeError("cannot load the training pipeline")
@@ -145,7 +147,9 @@ def build_rows() -> tuple[list[dict[str, Any]], dict[str, Any]]:
 
     replays: dict[str, Any] = {}
     for label, (gain, carryover) in _CELLS.items():
-        replays[label] = _make_elo(carryover) if gain == "fixed" else _make_dynamic(carryover)
+        replays[label] = (
+            _make_elo(carryover) if gain == "fixed" else _make_dynamic(carryover)
+        )
 
     rows: list[dict[str, Any]] = []
     moves: dict[str, list[float]] = {label: [] for label in _CELLS}
@@ -187,11 +191,19 @@ def build_rows() -> tuple[list[dict[str, Any]], dict[str, Any]]:
         for label, (gain, _carryover) in _CELLS.items():
             replay = replays[label]
             if gain == "fixed":
-                replay.update(home, away, league, season, int(match["hg"]), int(match["ag"]))
+                replay.update(
+                    home, away, league, season, int(match["hg"]), int(match["ag"])
+                )
                 after = replay.get_context(home, away, league, season).home_elo
             else:
                 replay.update(
-                    home, away, league, when, int(match["hg"]), int(match["ag"]), season=season
+                    home,
+                    away,
+                    league,
+                    when,
+                    int(match["hg"]),
+                    int(match["ag"]),
+                    season=season,
                 )
                 after = replay.get_context(
                     home, away, league, when, season=season
@@ -220,9 +232,7 @@ def build_rows() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return rows, descriptives
 
 
-def _contrast(
-    rows: list[dict[str, Any]], cell: str, ci_level: float
-) -> dict[str, Any]:
+def _contrast(rows: list[dict[str, Any]], cell: str, ci_level: float) -> dict[str, Any]:
     """Score one cell against the incumbent, same model class, single input."""
 
     def feature(label: str) -> Callable[[dict[str, Any]], list[float]]:
@@ -243,14 +253,21 @@ def _contrast(
 
     import numpy as np
 
-    from _incremental_value_harness import fit_multinomial_logistic, paired_rps_diff_bootstrap
+    from _incremental_value_harness import (
+        fit_multinomial_logistic,
+        paired_rps_diff_bootstrap,
+    )
 
     train = [r for r in rows if r["season"] in _TRAIN_SEASONS]
     test = [r for r in rows if r["season"] == _TEST_SEASON]
     y_train = np.array([r["outcome"] for r in train])
     base_fn, cand_fn = feature("A_fixed_carryover"), feature(cell)
-    base_model = fit_multinomial_logistic(np.array([base_fn(r) for r in train]), y_train)
-    cand_model = fit_multinomial_logistic(np.array([cand_fn(r) for r in train]), y_train)
+    base_model = fit_multinomial_logistic(
+        np.array([base_fn(r) for r in train]), y_train
+    )
+    cand_model = fit_multinomial_logistic(
+        np.array([cand_fn(r) for r in train]), y_train
+    )
     result["pooled"]["candidate_minus_baseline_bootstrap_bonferroni"] = (
         paired_rps_diff_bootstrap(
             np.array([r["outcome"] for r in test]),
@@ -269,7 +286,11 @@ def main() -> int:
 
     print("\n── 2x2 contrasts against the incumbent (cell A) ──────────────────")
     contrasts: dict[str, Any] = {}
-    for cell in ("B_adaptive_carryover", "C_fixed_no_carryover", "D_adaptive_no_carryover"):
+    for cell in (
+        "B_adaptive_carryover",
+        "C_fixed_no_carryover",
+        "D_adaptive_no_carryover",
+    ):
         result = _contrast(rows, cell, _ADJUSTED_CI_LEVEL)
         contrasts[cell] = result
         pooled = result.get("pooled") or {}
@@ -283,7 +304,7 @@ def main() -> int:
         )
 
     def _delta(cell: str) -> float | None:
-        pooled = (contrasts[cell].get("pooled") or {})
+        pooled = contrasts[cell].get("pooled") or {}
         boot = pooled.get("candidate_minus_baseline_bootstrap", {})
         value = boot.get("point_estimate")
         return float(value) if value is not None else None
@@ -299,11 +320,11 @@ def main() -> int:
         "   [~0 means the two factors are additive]"
     )
 
-    baseline_rps = (
-        (contrasts["B_adaptive_carryover"].get("pooled") or {}).get("rps_baseline_model")
+    baseline_rps = (contrasts["B_adaptive_carryover"].get("pooled") or {}).get(
+        "rps_baseline_model"
     )
-    market_rps = (
-        (contrasts["B_adaptive_carryover"].get("pooled") or {}).get("rps_raw_reference")
+    market_rps = (contrasts["B_adaptive_carryover"].get("pooled") or {}).get(
+        "rps_raw_reference"
     )
     print(f"incumbent (cell A) RPS = {baseline_rps}   de-vigged market = {market_rps}")
 
@@ -322,7 +343,10 @@ def main() -> int:
             "family_size": _FAMILY_SIZE,
             "adjusted_ci_level": _ADJUSTED_CI_LEVEL,
         },
-        "cells": {label: {"gain": g, "season_carryover": c} for label, (g, c) in _CELLS.items()},
+        "cells": {
+            label: {"gain": g, "season_carryover": c}
+            for label, (g, c) in _CELLS.items()
+        },
         "stage_1_descriptives": descriptives,
         "contrasts": contrasts,
         "interaction_point_estimate": interaction,

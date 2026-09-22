@@ -30,6 +30,7 @@ Ablation output reports per-family:
   delta_draw_f1    — draw F1 change when family is held out
   prune_flag       — True if mean_shap < SHAP_PRUNE_THRESHOLD (default 0.002)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -73,6 +74,7 @@ from models.evaluation.temporal_splits import walk_forward_splits  # noqa: E402
 _SHAP_AVAILABLE = False
 try:
     import shap  # type: ignore[import]
+
     _SHAP_AVAILABLE = True
 except ImportError:
     pass
@@ -81,8 +83,16 @@ except ImportError:
 TARGET_COL = "result"
 DATE_COL = "match_date"
 LEAGUE_COL = "league"
-DROP_COLS = {TARGET_COL, DATE_COL, LEAGUE_COL, "match_id", "home_team", "away_team",
-             "home_team_id", "away_team_id"}
+DROP_COLS = {
+    TARGET_COL,
+    DATE_COL,
+    LEAGUE_COL,
+    "match_id",
+    "home_team",
+    "away_team",
+    "home_team_id",
+    "away_team_id",
+}
 
 SHAP_PRUNE_THRESHOLD: float = float(os.getenv("SHAP_PRUNE_THRESHOLD", "0.002"))
 
@@ -102,6 +112,7 @@ logger = logging.getLogger("validate_feature_expansion")
 
 
 # ── data classes ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class FamilyAblationResult:
@@ -138,18 +149,25 @@ class ExpansionReport:
 
 # ── metric helpers ────────────────────────────────────────────────────────────
 
+
 def _compute_rps(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     n_classes = y_proba.shape[1]
     y_onehot = np.eye(n_classes, dtype=float)[y_true.astype(int)]
     cdf_pred = np.cumsum(y_proba, axis=1)[:, :-1]
     cdf_true = np.cumsum(y_onehot, axis=1)[:, :-1]
-    return float(round(np.mean(np.sum((cdf_pred - cdf_true) ** 2, axis=1) / (n_classes - 1)), 4))
+    return float(
+        round(np.mean(np.sum((cdf_pred - cdf_true) ** 2, axis=1) / (n_classes - 1)), 4)
+    )
 
 
 def _multiclass_brier(y_true: np.ndarray, y_proba: np.ndarray) -> float:
     return float(
-        np.mean([brier_score_loss((y_true == c).astype(float), y_proba[:, c])
-                 for c in range(y_proba.shape[1])])
+        np.mean(
+            [
+                brier_score_loss((y_true == c).astype(float), y_proba[:, c])
+                for c in range(y_proba.shape[1])
+            ]
+        )
     )
 
 
@@ -159,33 +177,48 @@ def _draw_f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 # ── target normalisation ──────────────────────────────────────────────────────
 
+
 def _normalize_target(y: pd.Series) -> np.ndarray:
     if y.dtype.kind in {"i", "u", "f"}:
         return y.astype(int).to_numpy()
     mapping = {
-        "home_win": 0, "h": 0, "0": 0,
-        "draw": 1, "d": 1, "1": 1,
-        "away_win": 2, "a": 2, "2": 2,
+        "home_win": 0,
+        "h": 0,
+        "0": 0,
+        "draw": 1,
+        "d": 1,
+        "1": 1,
+        "away_win": 2,
+        "a": 2,
+        "2": 2,
     }
     mapped = y.astype(str).str.strip().str.lower().map(mapping)
     if mapped.isna().any():
-        raise ValueError(f"Unmapped target labels: {sorted(set(y[mapped.isna()].astype(str).tolist()))}")
+        raise ValueError(
+            f"Unmapped target labels: {sorted(set(y[mapped.isna()].astype(str).tolist()))}"
+        )
     return mapped.astype(int).to_numpy()
 
 
 # ── dataset helpers ───────────────────────────────────────────────────────────
+
 
 def _load_dataset(path: Path) -> pd.DataFrame:
     if path.is_dir():
         files = sorted(path.rglob("*.parquet")) + sorted(path.rglob("*.csv"))
         if not files:
             raise ValueError(f"No parquet/csv files under {path}")
-        frames = [pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f) for f in files]
+        frames = [
+            pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f)
+            for f in files
+        ]
         return pd.concat(frames, ignore_index=True)
     return pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path)
 
 
-def _prepare(df: pd.DataFrame, feature_cols: List[str]) -> Tuple[pd.DataFrame, np.ndarray]:
+def _prepare(
+    df: pd.DataFrame, feature_cols: List[str]
+) -> Tuple[pd.DataFrame, np.ndarray]:
     df = df.dropna(subset=[TARGET_COL, DATE_COL]).copy()
     df[DATE_COL] = pd.to_datetime(df[DATE_COL], errors="coerce")
     df = df.dropna(subset=[DATE_COL]).reset_index(drop=True)
@@ -203,6 +236,7 @@ def _prepare(df: pd.DataFrame, feature_cols: List[str]) -> Tuple[pd.DataFrame, n
 
 
 # ── lightweight walk-forward evaluator ───────────────────────────────────────
+
 
 def _quick_lgbm_eval(
     df: pd.DataFrame,
@@ -239,12 +273,15 @@ def _quick_lgbm_eval(
         all_true.append(y_val)
 
     if not all_preds:
-        raise ValueError("walk_forward_splits produced no folds — need ≥4 seasons of data")
+        raise ValueError(
+            "walk_forward_splits produced no folds — need ≥4 seasons of data"
+        )
 
     return np.vstack(all_preds), np.concatenate(all_true)
 
 
 # ── SHAP helpers ──────────────────────────────────────────────────────────────
+
 
 def _compute_shap_values(
     model: lgb.LGBMClassifier,
@@ -280,6 +317,7 @@ def _compute_shap_per_sample(
 
 # ── SHAP ablation ─────────────────────────────────────────────────────────────
 
+
 def run_shap_ablation(
     df: pd.DataFrame,
     all_phase8_features: List[str],
@@ -294,11 +332,15 @@ def run_shap_ablation(
       3. Compute mean |SHAP| for removed family (requires SHAP)
       4. Report delta_rps, delta_brier, delta_draw_f1 vs. full-family baseline
     """
-    logger.info("Running SHAP ablation on %d Phase 8 families", len(PHASE8_FEATURE_FAMILIES))
+    logger.info(
+        "Running SHAP ablation on %d Phase 8 families", len(PHASE8_FEATURE_FAMILIES)
+    )
 
     # ── full baseline (all Phase 8 features) ──────────────────────────────
     full_cols = [c for c in all_phase8_features if c in df.columns]
-    logger.info("Ablation baseline: %d features, running walk-forward...", len(full_cols))
+    logger.info(
+        "Ablation baseline: %d features, running walk-forward...", len(full_cols)
+    )
     p_full, y_full = _quick_lgbm_eval(df, full_cols, y_all)
     rps_full = _compute_rps(y_full, p_full)
     brier_full = _multiclass_brier(y_full, p_full)
@@ -308,14 +350,16 @@ def run_shap_ablation(
     )
 
     # ── always compute splits_list so n_folds is accurate regardless of SHAP ─
-    splits_list = list(walk_forward_splits(
-        df[[DATE_COL]].join(df[full_cols]).join(df[[TARGET_COL]]),
-        date_col=DATE_COL,
-    ))
+    splits_list = list(
+        walk_forward_splits(
+            df[[DATE_COL]].join(df[full_cols]).join(df[[TARGET_COL]]),
+            date_col=DATE_COL,
+        )
+    )
 
     # ── SHAP values on full model (last fold only — representative) ───────
     shap_mean_by_feature: Dict[str, float] = {}
-    shap_per_sample: Optional[np.ndarray] = None   # shape (n_val, n_features)
+    shap_per_sample: Optional[np.ndarray] = None  # shape (n_val, n_features)
     shap_val_idx: Optional[np.ndarray] = None
     if _SHAP_AVAILABLE:
         logger.info("Computing SHAP values on final fold...")
@@ -325,9 +369,15 @@ def run_shap_ablation(
             X_vl = df.loc[last_split.val_idx, full_cols]
             y_tr = y_all[last_split.train_idx]
             shap_model = lgb.LGBMClassifier(
-                n_estimators=200, max_depth=7, learning_rate=0.05,
-                class_weight="balanced", objective="multiclass", num_class=3,
-                random_state=42, n_jobs=-1, verbose=-1,
+                n_estimators=200,
+                max_depth=7,
+                learning_rate=0.05,
+                class_weight="balanced",
+                objective="multiclass",
+                num_class=3,
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1,
             )
             shap_model.fit(X_tr, y_tr)
             shap_vals_agg = _compute_shap_values(shap_model, X_vl)
@@ -341,10 +391,14 @@ def run_shap_ablation(
     results: List[FamilyAblationResult] = []
     for family_name, family_features in PHASE8_FEATURE_FAMILIES.items():
         ablated_cols = [c for c in full_cols if c not in family_features]
-        logger.info("Ablating family '%s' (%d features)...", family_name, len(family_features))
+        logger.info(
+            "Ablating family '%s' (%d features)...", family_name, len(family_features)
+        )
 
         if not ablated_cols:
-            logger.warning("No features remaining after ablating '%s' — skipping", family_name)
+            logger.warning(
+                "No features remaining after ablating '%s' — skipping", family_name
+            )
             continue
 
         try:
@@ -370,8 +424,14 @@ def run_shap_ablation(
         # When per-sample SHAP is available, use league-stratified means.
         # prune_flag = leagues_below >= 3 (spec §4 Phase C); fallback to global mean.
         leagues_below = 0
-        if shap_per_sample is not None and shap_val_idx is not None and LEAGUE_COL in df.columns:
-            feat_indices = [full_cols.index(f) for f in family_features if f in full_cols]
+        if (
+            shap_per_sample is not None
+            and shap_val_idx is not None
+            and LEAGUE_COL in df.columns
+        ):
+            feat_indices = [
+                full_cols.index(f) for f in family_features if f in full_cols
+            ]
             if feat_indices:
                 family_sample_shap = shap_per_sample[:, feat_indices].mean(axis=1)
                 val_leagues = df.loc[shap_val_idx, LEAGUE_COL].astype(str).to_numpy()
@@ -390,26 +450,34 @@ def run_shap_ablation(
         logger.info(
             "  family='%s' mean_shap=%.4f delta_rps=%+.4f delta_brier=%+.4f "
             "delta_draw_f1=%+.4f leagues_below=%d prune=%s",
-            family_name, mean_shap, delta_rps, delta_brier, delta_draw_f1,
-            leagues_below, prune,
+            family_name,
+            mean_shap,
+            delta_rps,
+            delta_brier,
+            delta_draw_f1,
+            leagues_below,
+            prune,
         )
 
-        results.append(FamilyAblationResult(
-            family=family_name,
-            features=family_features,
-            mean_shap=round(mean_shap, 6),
-            delta_rps=delta_rps,
-            delta_brier=delta_brier,
-            delta_draw_f1=delta_draw_f1,
-            prune_flag=prune,
-            n_folds=len(splits_list),
-            leagues_below_threshold=leagues_below,
-        ))
+        results.append(
+            FamilyAblationResult(
+                family=family_name,
+                features=family_features,
+                mean_shap=round(mean_shap, 6),
+                delta_rps=delta_rps,
+                delta_brier=delta_brier,
+                delta_draw_f1=delta_draw_f1,
+                prune_flag=prune,
+                n_folds=len(splits_list),
+                leagues_below_threshold=leagues_below,
+            )
+        )
 
     return results
 
 
 # ── model comparison walk-forward ─────────────────────────────────────────────
+
 
 def _model_walk_forward_metrics(
     model: object,
@@ -425,7 +493,11 @@ def _model_walk_forward_metrics(
     elif hasattr(model, "feature_names_in_"):
         feature_cols = list(model.feature_names_in_)
     else:
-        feature_cols = [c for c in df.columns if c not in DROP_COLS and np.issubdtype(df[c].dtype, np.number)]
+        feature_cols = [
+            c
+            for c in df.columns
+            if c not in DROP_COLS and np.issubdtype(df[c].dtype, np.number)
+        ]
 
     missing = [c for c in feature_cols if c not in df.columns]
     if missing:
@@ -454,21 +526,39 @@ def _model_walk_forward_metrics(
 
     p = np.vstack(all_preds)
     y = np.concatenate(all_true)
-    return _compute_rps(y, p), _multiclass_brier(y, p), _draw_f1(y, np.argmax(p, axis=1))
+    return (
+        _compute_rps(y, p),
+        _multiclass_brier(y, p),
+        _draw_f1(y, np.argmax(p, axis=1)),
+    )
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Phase 8 feature expansion validator")
-    parser.add_argument("--baseline", type=Path, default=None,
-                        help="Path to baseline model pickle (v5_phase7)")
-    parser.add_argument("--candidate", type=Path, default=None,
-                        help="Path to candidate model pickle (v6_phase8)")
-    parser.add_argument("--data", required=True, type=Path,
-                        help="Training dataset path (parquet or csv, or directory)")
-    parser.add_argument("--output", required=True, type=Path,
-                        help="Output JSON report path")
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="Path to baseline model pickle (v5_phase7)",
+    )
+    parser.add_argument(
+        "--candidate",
+        type=Path,
+        default=None,
+        help="Path to candidate model pickle (v6_phase8)",
+    )
+    parser.add_argument(
+        "--data",
+        required=True,
+        type=Path,
+        help="Training dataset path (parquet or csv, or directory)",
+    )
+    parser.add_argument(
+        "--output", required=True, type=Path, help="Output JSON report path"
+    )
     parser.add_argument(
         "--walk-forward",
         action="store_true",
@@ -499,7 +589,9 @@ def main() -> None:
     ablation_results: Optional[List[FamilyAblationResult]] = None
     if args.shap_ablation:
         if not _SHAP_AVAILABLE:
-            logger.warning("SHAP not available — ablation will run without shap values (mean_shap=0.0)")
+            logger.warning(
+                "SHAP not available — ablation will run without shap values (mean_shap=0.0)"
+            )
         ablation_results = run_shap_ablation(
             df=df,
             all_phase8_features=all_phase8_features,
@@ -508,8 +600,11 @@ def main() -> None:
         )
         prune_flagged = [r.family for r in ablation_results if r.prune_flag]
         if prune_flagged:
-            logger.warning("Families flagged for pruning (mean_shap < %.4f): %s",
-                           args.shap_threshold, prune_flagged)
+            logger.warning(
+                "Families flagged for pruning (mean_shap < %.4f): %s",
+                args.shap_threshold,
+                prune_flagged,
+            )
 
     # ── model comparison (only if both models provided) ───────────────────
     baseline_rps = baseline_brier = baseline_draw_f1 = 0.0
@@ -518,26 +613,38 @@ def main() -> None:
     if args.baseline and args.candidate:
         logger.info("Evaluating baseline model: %s", args.baseline)
         baseline_model = joblib.load(args.baseline)
-        baseline_rps, baseline_brier, baseline_draw_f1 = _model_walk_forward_metrics(baseline_model, df.copy())
+        baseline_rps, baseline_brier, baseline_draw_f1 = _model_walk_forward_metrics(
+            baseline_model, df.copy()
+        )
 
         logger.info("Evaluating candidate model: %s", args.candidate)
         candidate_model = joblib.load(args.candidate)
-        candidate_rps, candidate_brier, candidate_draw_f1 = _model_walk_forward_metrics(candidate_model, df.copy())
+        candidate_rps, candidate_brier, candidate_draw_f1 = _model_walk_forward_metrics(
+            candidate_model, df.copy()
+        )
 
         logger.info(
             "Baseline: rps=%.4f brier=%.4f draw_f1=%.4f",
-            baseline_rps, baseline_brier, baseline_draw_f1,
+            baseline_rps,
+            baseline_brier,
+            baseline_draw_f1,
         )
         logger.info(
             "Candidate: rps=%.4f brier=%.4f draw_f1=%.4f",
-            candidate_rps, candidate_brier, candidate_draw_f1,
+            candidate_rps,
+            candidate_brier,
+            candidate_draw_f1,
         )
 
     improvement = (
-        candidate_rps <= baseline_rps
-        and candidate_brier <= baseline_brier
-        and candidate_draw_f1 >= baseline_draw_f1
-    ) if args.baseline and args.candidate else False
+        (
+            candidate_rps <= baseline_rps
+            and candidate_brier <= baseline_brier
+            and candidate_draw_f1 >= baseline_draw_f1
+        )
+        if args.baseline and args.candidate
+        else False
+    )
 
     report = ExpansionReport(
         date=date_str,
@@ -555,7 +662,9 @@ def main() -> None:
         candidate_draw_f1=round(candidate_draw_f1, 4),
         delta_draw_f1=round(candidate_draw_f1 - baseline_draw_f1, 4),
         improvement=improvement,
-        shap_ablation=[asdict(r) for r in ablation_results] if ablation_results else None,
+        shap_ablation=[asdict(r) for r in ablation_results]
+        if ablation_results
+        else None,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

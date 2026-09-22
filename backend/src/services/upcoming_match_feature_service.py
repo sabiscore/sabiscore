@@ -31,7 +31,10 @@ from ..features.form import weighted_form_features
 from ..features.market import MARKET_FEATURE_NAMES, compute_market_drift
 from ..features.match_context import CONTEXT_FEATURE_NAMES, compute_match_context
 from ..features.pi_ratings import PiRatingSystem
-from ..models.active_generation import ActiveGenerationError, active_feature_schema_version
+from ..models.active_generation import (
+    ActiveGenerationError,
+    active_feature_schema_version,
+)
 from ..models.feature_registry import (
     APEX_MARKET_FEATURES_14,
     CANONICAL_FEATURES_58,
@@ -103,6 +106,7 @@ def _model_input_staleness_seconds(
     now = datetime.now(timezone.utc).timestamp()
     return max(0.0, now - newest_per_side)
 
+
 # Canonical features resolved entirely by the CALLER (build_live_feature_vector /
 # build_live_feature_vector_from_matchup), not by project_match_features() itself:
 # elo/statsbomb (PHASE7_FEATURES_7 minus the always-gap shot_quality_diff — elo_engine
@@ -128,28 +132,42 @@ _CALLER_RESOLVED_FEATURES = (
 # indistinguishable from two genuinely equal teams. The caller must therefore
 # report these as gaps when the context is unresolved, or a neutral default is
 # published as an observation (INV-01, the vΩ.24 defect class).
-_ELO_OVERLAY_FEATURES = frozenset({
-    "elo_difference",
-    "elo_home_trend_5",
-    "elo_away_trend_5",
-    "elo_momentum_cross",
-})
+_ELO_OVERLAY_FEATURES = frozenset(
+    {
+        "elo_difference",
+        "elo_home_trend_5",
+        "elo_away_trend_5",
+        "elo_momentum_cross",
+    }
+)
 
 # WP-18/WP-10.3: the last5-form + goals/gd canonical fields rescued from
 # unconditional-gap status once _get_team_stats()/to_projection_stats() data
 # is available for that side and the remap in project_match_features() has
 # run. Resolved per side, independently — one side having history doesn't
 # rescue the other's.
-_HOME_REMAP_FEATURES = frozenset({
-    "home_form_last5_home", "home_wins_last5_home", "home_draws_last5_home",
-    "home_losses_last5_home", "home_goals_for_avg", "home_goals_against_avg",
-    "home_gd_recent",
-})
-_AWAY_REMAP_FEATURES = frozenset({
-    "away_form_last5_away", "away_wins_last5_away", "away_draws_last5_away",
-    "away_losses_last5_away", "away_goals_for_avg", "away_goals_against_avg",
-    "away_gd_recent",
-})
+_HOME_REMAP_FEATURES = frozenset(
+    {
+        "home_form_last5_home",
+        "home_wins_last5_home",
+        "home_draws_last5_home",
+        "home_losses_last5_home",
+        "home_goals_for_avg",
+        "home_goals_against_avg",
+        "home_gd_recent",
+    }
+)
+_AWAY_REMAP_FEATURES = frozenset(
+    {
+        "away_form_last5_away",
+        "away_wins_last5_away",
+        "away_draws_last5_away",
+        "away_losses_last5_away",
+        "away_goals_for_avg",
+        "away_goals_against_avg",
+        "away_gd_recent",
+    }
+)
 
 # Same names as models/feature_registry.py's H2H_FEATURES/HOME_VENUE_FEATURES
 # — frozenset here purely for the membership-check use sites below, not a
@@ -190,9 +208,7 @@ class UpcomingMatchFeatureProjector:
             apex=self._is_apex,
         )
         self.statsbomb = StatsBombAggregator()
-        self.pi_engine = PiRatingSystem(
-            parquet_path=settings.pi_ratings_parquet_path
-        )
+        self.pi_engine = PiRatingSystem(parquet_path=settings.pi_ratings_parquet_path)
         self.berrar_engine = BerrarRatingSystem(
             parquet_path=settings.berrar_ratings_parquet_path
         )
@@ -247,8 +263,12 @@ class UpcomingMatchFeatureProjector:
         # ponytail: Match.match_date is naive TIMESTAMP WITHOUT TIME ZONE — strip tz so asyncpg accepts range bounds
         match_date = match_date.replace(tzinfo=None)
 
-        home_team_id_resolved = await self._get_team_id_by_name(match_dict["home_team"], db)
-        away_team_id_resolved = await self._get_team_id_by_name(match_dict["away_team"], db)
+        home_team_id_resolved = await self._get_team_id_by_name(
+            match_dict["home_team"], db
+        )
+        away_team_id_resolved = await self._get_team_id_by_name(
+            match_dict["away_team"], db
+        )
         home_resolved = home_team_id_resolved is not None
         away_resolved = away_team_id_resolved is not None
 
@@ -261,8 +281,12 @@ class UpcomingMatchFeatureProjector:
         home_team_id = home_team_id_resolved or match_dict["home_team"]
         away_team_id = away_team_id_resolved or match_dict["away_team"]
 
-        home_stats = await self._get_team_stats(home_team_id, db, match_date, is_home=True)
-        away_stats = await self._get_team_stats(away_team_id, db, match_date, is_home=False)
+        home_stats = await self._get_team_stats(
+            home_team_id, db, match_date, is_home=True
+        )
+        away_stats = await self._get_team_stats(
+            away_team_id, db, match_date, is_home=False
+        )
 
         # is_synthetic (below) gates public prediction publishing (WP-0/vΩ.32:
         # upcoming_match_service.py `publishable = not is_fallback and not
@@ -273,10 +297,18 @@ class UpcomingMatchFeatureProjector:
         away_db_missing = away_stats is None
         league_hint = match_dict.get("league")
         home_stats, home_scraped_provenance = self._apply_scraped_fallback(
-            home_stats, competition=league_hint, team=match_dict["home_team"], match_date=match_date, is_home=True
+            home_stats,
+            competition=league_hint,
+            team=match_dict["home_team"],
+            match_date=match_date,
+            is_home=True,
         )
         away_stats, away_scraped_provenance = self._apply_scraped_fallback(
-            away_stats, competition=league_hint, team=match_dict["away_team"], match_date=match_date, is_home=False
+            away_stats,
+            competition=league_hint,
+            team=match_dict["away_team"],
+            match_date=match_date,
+            is_home=False,
         )
 
         # WP-18/WP-10.3: wire the canonical last5-form + goals/gd remap that
@@ -288,29 +320,29 @@ class UpcomingMatchFeatureProjector:
         # already generically credits any key also present in self.defaults,
         # and every new canonical key genuinely is.
         if home_stats:
-            home_stats.update(derive_last5_form_features(
-                home_stats.get("home_form_5", 0.5),
-                home_stats.get("home_win_rate_5", 0.5),
-                is_home=True,
-                wins_5=home_stats.get("wins_5"),
-                draws_5=home_stats.get("draws_5"),
-                losses_5=home_stats.get("losses_5"),
-            ))
             home_stats.update(
-                derive_goals_gd_features(home_stats.get, is_home=True)
+                derive_last5_form_features(
+                    home_stats.get("home_form_5", 0.5),
+                    home_stats.get("home_win_rate_5", 0.5),
+                    is_home=True,
+                    wins_5=home_stats.get("wins_5"),
+                    draws_5=home_stats.get("draws_5"),
+                    losses_5=home_stats.get("losses_5"),
+                )
             )
+            home_stats.update(derive_goals_gd_features(home_stats.get, is_home=True))
         if away_stats:
-            away_stats.update(derive_last5_form_features(
-                away_stats.get("away_form_5", 0.45),
-                away_stats.get("away_win_rate_5", 0.4),
-                is_home=False,
-                wins_5=away_stats.get("wins_5"),
-                draws_5=away_stats.get("draws_5"),
-                losses_5=away_stats.get("losses_5"),
-            ))
             away_stats.update(
-                derive_goals_gd_features(away_stats.get, is_home=False)
+                derive_last5_form_features(
+                    away_stats.get("away_form_5", 0.45),
+                    away_stats.get("away_win_rate_5", 0.4),
+                    is_home=False,
+                    wins_5=away_stats.get("wins_5"),
+                    draws_5=away_stats.get("draws_5"),
+                    losses_5=away_stats.get("losses_5"),
+                )
             )
+            away_stats.update(derive_goals_gd_features(away_stats.get, is_home=False))
 
         features_dict = dict(self.defaults)
         defaults_count = len(self.defaults)
@@ -340,17 +372,21 @@ class UpcomingMatchFeatureProjector:
         # mixing a real average with a registry default would present a
         # half-fabricated difference as a measurement.
         if home_stats and away_stats:
-            features_dict.update(derive_combination_features(
-                home_goals_for_avg=features_dict["home_goals_for_avg"],
-                home_goals_against_avg=features_dict["home_goals_against_avg"],
-                away_goals_for_avg=features_dict["away_goals_for_avg"],
-                away_goals_against_avg=features_dict["away_goals_against_avg"],
-            ))
+            features_dict.update(
+                derive_combination_features(
+                    home_goals_for_avg=features_dict["home_goals_for_avg"],
+                    home_goals_against_avg=features_dict["home_goals_against_avg"],
+                    away_goals_for_avg=features_dict["away_goals_for_avg"],
+                    away_goals_against_avg=features_dict["away_goals_against_avg"],
+                )
+            )
             derived_resolved.update(COMBINATION_FEATURES)
 
         # H2H and home-venue features — pure DB queries, no external provider
         # needed. Called after home/away team IDs are resolved above.
-        h2h_stats = await self._get_h2h_stats(home_team_id, away_team_id, db, match_date)
+        h2h_stats = await self._get_h2h_stats(
+            home_team_id, away_team_id, db, match_date
+        )
         venue_stats = await self._get_home_venue_stats(home_team_id, db, match_date)
         if h2h_stats:
             features_dict.update(h2h_stats)
@@ -370,18 +406,28 @@ class UpcomingMatchFeatureProjector:
         # internally and never raises for an unsupported competition — no
         # extra normalization needed here.
         odds = await self.odds_service.get_match_odds(
-            match_dict["home_team"], match_dict["away_team"], match_dict.get("league") or "",
+            match_dict["home_team"],
+            match_dict["away_team"],
+            match_dict.get("league") or "",
         )
         if {"home_win", "draw", "away_win"}.issubset(odds):
             if self._is_apex:
-                features_dict.update(derive_apex_market_features(
-                    odds["home_win"], odds["draw"], odds["away_win"],
-                ))
+                features_dict.update(
+                    derive_apex_market_features(
+                        odds["home_win"],
+                        odds["draw"],
+                        odds["away_win"],
+                    )
+                )
                 derived_resolved.update(APEX_MARKET_FEATURES_14)
             else:
-                features_dict.update(derive_market_features(
-                    odds["home_win"], odds["draw"], odds["away_win"],
-                ))
+                features_dict.update(
+                    derive_market_features(
+                        odds["home_win"],
+                        odds["draw"],
+                        odds["away_win"],
+                    )
+                )
                 derived_resolved.update(MARKET_FEATURES_14)
         # else: leave features_dict at its DEFAULT_FEATURE_VALUES_68 seed for
         # these 14 keys — they fall through to data_gaps below, same honest-gap
@@ -410,7 +456,10 @@ class UpcomingMatchFeatureProjector:
             derived_resolved.update(interactions)
 
         features_array = np.array(
-            [features_dict.get(f, self.defaults.get(f, 0.0)) for f in self.canonical_features],
+            [
+                features_dict.get(f, self.defaults.get(f, 0.0))
+                for f in self.canonical_features
+            ],
             dtype=np.float32,
         )
 
@@ -432,7 +481,8 @@ class UpcomingMatchFeatureProjector:
             _remap_resolved |= _AWAY_REMAP_FEATURES
 
         data_gaps = [
-            feature for feature in self.canonical_features
+            feature
+            for feature in self.canonical_features
             if feature not in _CALLER_RESOLVED_FEATURES
             and feature not in _remap_resolved
             and feature not in derived_resolved
@@ -455,7 +505,9 @@ class UpcomingMatchFeatureProjector:
             )
 
         data_quality = {
-            "historical_data_ratio": max(0.0, 1.0 - (defaults_count / len(self.defaults)))
+            "historical_data_ratio": max(
+                0.0, 1.0 - (defaults_count / len(self.defaults))
+            )
             if self.defaults
             else 0.0,
             "defaults_used_count": max(0, defaults_count),
@@ -465,7 +517,9 @@ class UpcomingMatchFeatureProjector:
             # keys never intersected self.defaults at all until the remap wired
             # canonical names into them). 1.0 = fully defaulted, 0.0 = fully resolved.
             "feature_defaulted_ratio": (
-                len(data_gaps) / len(self.canonical_features) if self.canonical_features else 0.0
+                len(data_gaps) / len(self.canonical_features)
+                if self.canonical_features
+                else 0.0
             ),
             "is_synthetic": home_db_missing or away_db_missing,
             # Provenance-tagged (INV-10) — closes D12 (ScrapedTeamFormStore had zero
@@ -475,7 +529,10 @@ class UpcomingMatchFeatureProjector:
             # same as DB-native ones, provenance-tagged here for auditability.
             "scraped_fallback": {
                 k: v
-                for k, v in {"home": home_scraped_provenance, "away": away_scraped_provenance}.items()
+                for k, v in {
+                    "home": home_scraped_provenance,
+                    "away": away_scraped_provenance,
+                }.items()
                 if v is not None
             },
         }
@@ -492,7 +549,10 @@ class UpcomingMatchFeatureProjector:
             },
             "features_68": features_array,
             "features_58": features_array[: len(CANONICAL_FEATURES_58)],
-            "features_dict": {f: float(features_array[i]) for i, f in enumerate(self.canonical_features)},
+            "features_dict": {
+                f: float(features_array[i])
+                for i, f in enumerate(self.canonical_features)
+            },
             "data_gaps": sorted(set(data_gaps)),
             "data_quality": data_quality,
             "model_input_staleness_seconds": _model_input_staleness_seconds(
@@ -549,8 +609,12 @@ class UpcomingMatchFeatureProjector:
             season=season,
             match_date=match_date,
         )
-        sb_home = self.statsbomb.get_team_features(str(match.home_team_id), league, match_date)
-        sb_away = self.statsbomb.get_team_features(str(match.away_team_id), league, match_date)
+        sb_home = self.statsbomb.get_team_features(
+            str(match.home_team_id), league, match_date
+        )
+        sb_away = self.statsbomb.get_team_features(
+            str(match.away_team_id), league, match_date
+        )
 
         features_dict = dict(projected["features_dict"])
         features_dict["elo_difference"] = float(elo.elo_difference)
@@ -575,7 +639,11 @@ class UpcomingMatchFeatureProjector:
         features_dict["shot_quality_diff"] = self.defaults.get("shot_quality_diff", 0.0)
 
         match_competition_stage = getattr(match, "competition_stage", None) or "group"
-        phase8_gaps, phase8_freshness, phase8_sources = await self._inject_phase8_features(
+        (
+            phase8_gaps,
+            phase8_freshness,
+            phase8_sources,
+        ) = await self._inject_phase8_features(
             features_dict=features_dict,
             home_team_id=str(match.home_team_id),
             away_team_id=str(match.away_team_id),
@@ -590,7 +658,10 @@ class UpcomingMatchFeatureProjector:
         )
 
         features = np.array(
-            [float(features_dict.get(name, self.defaults.get(name, 0.0))) for name in self.canonical_features],
+            [
+                float(features_dict.get(name, self.defaults.get(name, 0.0)))
+                for name in self.canonical_features
+            ],
             dtype=np.float32,
         )
 
@@ -605,9 +676,9 @@ class UpcomingMatchFeatureProjector:
         staleness_seconds = max(sb_home.staleness_seconds, sb_away.staleness_seconds)
 
         identity_resolution = projected.get("identity_resolution") or {}
-        fixture_identity_verified = bool(identity_resolution.get("home_team_resolved")) and bool(
-            identity_resolution.get("away_team_resolved")
-        )
+        fixture_identity_verified = bool(
+            identity_resolution.get("home_team_resolved")
+        ) and bool(identity_resolution.get("away_team_resolved"))
 
         return {
             "features": features,
@@ -618,7 +689,9 @@ class UpcomingMatchFeatureProjector:
             # pill; the gate in full_analysis.py reads the two keys below.
             "staleness_seconds": staleness_seconds,
             "enrichment_staleness_seconds": staleness_seconds,
-            "model_input_staleness_seconds": projected.get("model_input_staleness_seconds"),
+            "model_input_staleness_seconds": projected.get(
+                "model_input_staleness_seconds"
+            ),
             "elo_pre_match": float(elo.elo_difference),
             "features_dict": features_dict,
             "league": league,
@@ -688,8 +761,12 @@ class UpcomingMatchFeatureProjector:
             season=season,
             match_date=match_date,
         )
-        sb_home = self.statsbomb.get_team_features(str(home_team_id), league, match_date)
-        sb_away = self.statsbomb.get_team_features(str(away_team_id), league, match_date)
+        sb_home = self.statsbomb.get_team_features(
+            str(home_team_id), league, match_date
+        )
+        sb_away = self.statsbomb.get_team_features(
+            str(away_team_id), league, match_date
+        )
 
         features_dict = dict(projected["features_dict"])
         features_dict["elo_difference"] = float(elo.elo_difference)
@@ -708,7 +785,11 @@ class UpcomingMatchFeatureProjector:
             )
         features_dict["shot_quality_diff"] = self.defaults.get("shot_quality_diff", 0.0)
 
-        phase8_gaps, phase8_freshness, phase8_sources = await self._inject_phase8_features(
+        (
+            phase8_gaps,
+            phase8_freshness,
+            phase8_sources,
+        ) = await self._inject_phase8_features(
             features_dict=features_dict,
             home_team_id=str(home_team_id),
             away_team_id=str(away_team_id),
@@ -722,7 +803,10 @@ class UpcomingMatchFeatureProjector:
         )
 
         features = np.array(
-            [float(features_dict.get(name, self.defaults.get(name, 0.0))) for name in self.canonical_features],
+            [
+                float(features_dict.get(name, self.defaults.get(name, 0.0)))
+                for name in self.canonical_features
+            ],
             dtype=np.float32,
         )
 
@@ -737,9 +821,9 @@ class UpcomingMatchFeatureProjector:
         staleness_seconds = max(sb_home.staleness_seconds, sb_away.staleness_seconds)
 
         identity_resolution = projected.get("identity_resolution") or {}
-        fixture_identity_verified = bool(identity_resolution.get("home_team_resolved")) and bool(
-            identity_resolution.get("away_team_resolved")
-        )
+        fixture_identity_verified = bool(
+            identity_resolution.get("home_team_resolved")
+        ) and bool(identity_resolution.get("away_team_resolved"))
 
         return {
             "features": features,
@@ -750,7 +834,9 @@ class UpcomingMatchFeatureProjector:
             # pill; the gate in full_analysis.py reads the two keys below.
             "staleness_seconds": staleness_seconds,
             "enrichment_staleness_seconds": staleness_seconds,
-            "model_input_staleness_seconds": projected.get("model_input_staleness_seconds"),
+            "model_input_staleness_seconds": projected.get(
+                "model_input_staleness_seconds"
+            ),
             "elo_pre_match": float(elo.elo_difference),
             "features_dict": features_dict,
             "league": league,
@@ -807,8 +893,14 @@ class UpcomingMatchFeatureProjector:
             return phase8_gaps, freshness, sources
 
         # ── Pi-ratings ────────────────────────────────────────────────────────
-        _pi_keys = ("home_pi_attack", "home_pi_defense", "away_pi_attack",
-                    "away_pi_defense", "pi_attack_diff", "pi_defense_diff")
+        _pi_keys = (
+            "home_pi_attack",
+            "home_pi_defense",
+            "away_pi_attack",
+            "away_pi_defense",
+            "pi_attack_diff",
+            "pi_defense_diff",
+        )
         try:
             pi = self.pi_engine.get_context(home_team_id, away_team_id)
             features_dict["home_pi_attack"] = pi.home_pi_attack
@@ -821,7 +913,9 @@ class UpcomingMatchFeatureProjector:
                 freshness[k] = 0
                 sources[k] = "pi_ratings"
         except Exception:
-            logger.warning("Pi-rating context unavailable for %s vs %s", home_team_id, away_team_id)
+            logger.warning(
+                "Pi-rating context unavailable for %s vs %s", home_team_id, away_team_id
+            )
             for k in _pi_keys:
                 features_dict.setdefault(k, self.defaults.get(k, 0.0))
                 phase8_gaps.append(k)
@@ -829,7 +923,11 @@ class UpcomingMatchFeatureProjector:
                 sources[k] = "pi_ratings"
 
         # ── Berrar ratings ────────────────────────────────────────────────────
-        _berrar_keys = ("home_berrar_rating", "away_berrar_rating", "berrar_rating_diff")
+        _berrar_keys = (
+            "home_berrar_rating",
+            "away_berrar_rating",
+            "berrar_rating_diff",
+        )
         try:
             berrar = self.berrar_engine.get_context(home_team_id, away_team_id)
             features_dict["home_berrar_rating"] = berrar.home_berrar_rating
@@ -839,7 +937,11 @@ class UpcomingMatchFeatureProjector:
                 freshness[k] = 0
                 sources[k] = "berrar_ratings"
         except Exception:
-            logger.warning("Berrar rating context unavailable for %s vs %s", home_team_id, away_team_id)
+            logger.warning(
+                "Berrar rating context unavailable for %s vs %s",
+                home_team_id,
+                away_team_id,
+            )
             for k in _berrar_keys:
                 features_dict.setdefault(k, self.defaults.get(k, 0.0))
                 phase8_gaps.append(k)
@@ -847,13 +949,23 @@ class UpcomingMatchFeatureProjector:
                 sources[k] = "berrar_ratings"
 
         # ── EWMA form ─────────────────────────────────────────────────────────
-        _ewma_keys = ("home_weighted_win_rate", "home_weighted_draw_rate", "home_weighted_ppg",
-                      "away_weighted_win_rate", "away_weighted_draw_rate", "away_weighted_ppg")
+        _ewma_keys = (
+            "home_weighted_win_rate",
+            "home_weighted_draw_rate",
+            "home_weighted_ppg",
+            "away_weighted_win_rate",
+            "away_weighted_draw_rate",
+            "away_weighted_ppg",
+        )
         _home_ewma_keys = _ewma_keys[:3]
         _away_ewma_keys = _ewma_keys[3:]
         try:
-            home_results = await self._get_team_results_sequence(home_team_id, db, match_date)
-            away_results = await self._get_team_results_sequence(away_team_id, db, match_date)
+            home_results = await self._get_team_results_sequence(
+                home_team_id, db, match_date
+            )
+            away_results = await self._get_team_results_sequence(
+                away_team_id, db, match_date
+            )
             home_form = weighted_form_features(home_results)
             away_form = weighted_form_features(away_results)
             features_dict["home_weighted_win_rate"] = home_form["weighted_win_rate"]
@@ -884,7 +996,9 @@ class UpcomingMatchFeatureProjector:
                     freshness[k] = None
                     sources[k] = "match_history"
         except Exception:
-            logger.warning("EWMA form unavailable for %s vs %s", home_team_id, away_team_id)
+            logger.warning(
+                "EWMA form unavailable for %s vs %s", home_team_id, away_team_id
+            )
             for k in _ewma_keys:
                 features_dict.setdefault(k, self.defaults.get(k, 0.0))
                 phase8_gaps.append(k)
@@ -894,7 +1008,9 @@ class UpcomingMatchFeatureProjector:
         # ── Market drift (Phase 8 P1 live enrichment) ─────────────────────────
         try:
             if current_odds is None:
-                current_odds = await self.odds_service.get_match_odds(home_team, away_team, league)
+                current_odds = await self.odds_service.get_match_odds(
+                    home_team, away_team, league
+                )
             drift_result = await compute_market_drift(
                 current_odds=current_odds,
                 match_id=match_id,
@@ -904,6 +1020,7 @@ class UpcomingMatchFeatureProjector:
         except Exception as exc:
             logger.warning("Market drift computation failed for %s: %s", match_id, exc)
             from ..features.market import MarketDriftResult
+
             drift_result = MarketDriftResult(
                 features={k: 0.0 for k in MARKET_FEATURE_NAMES},
                 data_gaps=list(MARKET_FEATURE_NAMES),
@@ -928,8 +1045,10 @@ class UpcomingMatchFeatureProjector:
             phase8_gaps.extend(drift_result.data_gaps)
             # drift_result freshness uses None for DATA_GAP; propagate as-is
             freshness.update(
-                {k: v if k not in drift_result.data_gaps else None
-                 for k, v in drift_result.per_feature_freshness_seconds.items()}
+                {
+                    k: v if k not in drift_result.data_gaps else None
+                    for k, v in drift_result.per_feature_freshness_seconds.items()
+                }
             )
             for k in PHASE8_FEATURES_MARKET:
                 sources[k] = "odds_service"
@@ -951,8 +1070,13 @@ class UpcomingMatchFeatureProjector:
         except Exception as exc:
             logger.warning("Match context computation failed for %s: %s", match_id, exc)
             from ..features.match_context import MatchContextResult
+
             context_result = MatchContextResult(
-                features={"match_importance_score": self.defaults.get("match_importance_score", 0.2)},
+                features={
+                    "match_importance_score": self.defaults.get(
+                        "match_importance_score", 0.2
+                    )
+                },
                 data_gaps=list(CONTEXT_FEATURE_NAMES),
                 per_feature_freshness_seconds={"match_importance_score": None},
             )
@@ -975,8 +1099,10 @@ class UpcomingMatchFeatureProjector:
                 features_dict[k] = self.defaults.get(k, 0.2)
             phase8_gaps.extend(context_result.data_gaps)
             freshness.update(
-                {k: v if k not in context_result.data_gaps else None
-                 for k, v in context_result.per_feature_freshness_seconds.items()}
+                {
+                    k: v if k not in context_result.data_gaps else None
+                    for k, v in context_result.per_feature_freshness_seconds.items()
+                }
             )
             for k in PHASE8_FEATURES_CONTEXT:
                 sources[k] = "league_standings"
@@ -1002,8 +1128,14 @@ class UpcomingMatchFeatureProjector:
             .where(
                 and_(
                     or_(
-                        and_(Match.home_team_id == home_team_id, Match.away_team_id == away_team_id),
-                        and_(Match.home_team_id == away_team_id, Match.away_team_id == home_team_id),
+                        and_(
+                            Match.home_team_id == home_team_id,
+                            Match.away_team_id == away_team_id,
+                        ),
+                        and_(
+                            Match.home_team_id == away_team_id,
+                            Match.away_team_id == home_team_id,
+                        ),
                     ),
                     Match.match_date < match_date,
                     Match.status == "finished",
@@ -1019,7 +1151,8 @@ class UpcomingMatchFeatureProjector:
         # 56), so training's walk-forward accumulator computes the identical
         # values from the identical formula.
         perspective = [
-            (m.home_score or 0, m.away_score or 0) if m.home_team_id == home_team_id
+            (m.home_score or 0, m.away_score or 0)
+            if m.home_team_id == home_team_id
             else (m.away_score or 0, m.home_score or 0)
             for m in meetings
         ]
@@ -1116,10 +1249,14 @@ class UpcomingMatchFeatureProjector:
         parameter by name after this point.
         """
         prefix = "home" if is_home else "away"
-        recent_matches = await self._completed_matches_before(team_id, db, match_date, 20)
+        recent_matches = await self._completed_matches_before(
+            team_id, db, match_date, 20
+        )
 
         if not recent_matches:
-            logger.debug("No historical matches found for team %s before %s", team_id, match_date)
+            logger.debug(
+                "No historical matches found for team %s before %s", team_id, match_date
+            )
             return None
 
         stats = {}
@@ -1144,7 +1281,9 @@ class UpcomingMatchFeatureProjector:
             stats[f"{prefix}_form_5"] = sum(points[:5]) / 15.0
             stats[f"{prefix}_win_rate_5"] = sum(1 for p in points[:5] if p == 3) / 5.0
         else:
-            stats[f"{prefix}_form_5"] = sum(points) / (len(points) * 3.0) if points else 0.5
+            stats[f"{prefix}_form_5"] = (
+                sum(points) / (len(points) * 3.0) if points else 0.5
+            )
             stats[f"{prefix}_win_rate_5"] = (
                 sum(1 for p in points if p == 3) / len(points) if points else 0.4
             )
@@ -1167,10 +1306,18 @@ class UpcomingMatchFeatureProjector:
             stats[f"{prefix}_form_10"] = stats.get(f"{prefix}_form_5", 0.5)
 
         stats[f"{prefix}_goals_per_match_5"] = (
-            np.mean(goals_for[:5]) if len(goals_for) >= 5 else np.mean(goals_for) if goals_for else 1.5
+            np.mean(goals_for[:5])
+            if len(goals_for) >= 5
+            else np.mean(goals_for)
+            if goals_for
+            else 1.5
         )
         stats[f"{prefix}_goals_conceded_per_match_5"] = (
-            np.mean(goals_against[:5]) if len(goals_against) >= 5 else np.mean(goals_against) if goals_against else 1.2
+            np.mean(goals_against[:5])
+            if len(goals_against) >= 5
+            else np.mean(goals_against)
+            if goals_against
+            else 1.2
         )
 
         if recent_matches:
@@ -1211,7 +1358,9 @@ class UpcomingMatchFeatureProjector:
         xg_values = await self._get_team_xg(team_id, db, recent_matches)
         if xg_values:
             stats[f"{prefix}_xg_avg_5"] = np.mean(xg_values[:5])
-            stats[f"{prefix}_xg_consistency"] = np.std(xg_values[:5]) if len(xg_values) >= 5 else 0.75
+            stats[f"{prefix}_xg_consistency"] = (
+                np.std(xg_values[:5]) if len(xg_values) >= 5 else 0.75
+            )
 
         return stats if stats else None
 
@@ -1243,14 +1392,21 @@ class UpcomingMatchFeatureProjector:
                 competition=league_code, team=team, information_cutoff=match_date
             )
         except Exception:
-            logger.debug("Scraped fallback lookup failed for %s (%s)", team, competition, exc_info=True)
+            logger.debug(
+                "Scraped fallback lookup failed for %s (%s)",
+                team,
+                competition,
+                exc_info=True,
+            )
             return stats, None
         if record is None:
             return stats, None
         return record.to_projection_stats(is_home=is_home), {
             "source": f"scraped:football-data-csv:{record.source_file.name}",
             "matches_sampled": record.matches_sampled,
-            "acquired_at": record.latest_match_date.isoformat() if record.latest_match_date else None,
+            "acquired_at": record.latest_match_date.isoformat()
+            if record.latest_match_date
+            else None,
         }
 
     async def project_xg_rolling_features(
@@ -1383,5 +1539,9 @@ class UpcomingMatchFeatureProjector:
         matches: list,
     ) -> Optional[list]:
         """Team xG across ``matches``, most-recent-first, or None if none exist."""
-        xg_values = [xg_for for xg_for, _ in await self._get_team_xg_series(team_id, db, matches) if xg_for is not None]
+        xg_values = [
+            xg_for
+            for xg_for, _ in await self._get_team_xg_series(team_id, db, matches)
+            if xg_for is not None
+        ]
         return xg_values or None

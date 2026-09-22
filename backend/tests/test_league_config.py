@@ -12,7 +12,15 @@ from src.core.league_config import (
     is_active_league,
 )
 
-_EXPECTED_LEAGUE_IDS = {"EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "Eredivisie", "UCL"}
+_EXPECTED_LEAGUE_IDS = {
+    "EPL",
+    "La Liga",
+    "Bundesliga",
+    "Serie A",
+    "Ligue 1",
+    "Eredivisie",
+    "UCL",
+}
 
 
 def test_active_leagues_has_correct_count():

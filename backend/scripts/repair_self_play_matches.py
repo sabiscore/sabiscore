@@ -59,7 +59,9 @@ async def _run(*, apply: bool) -> int:
     try:
         async with session_factory() as session:
             report = await find_and_repair_self_play_matches(session, apply=apply)
-            print(f"corrupted_rows_found={report.corrupted_found} mode={'apply' if apply else 'dry-run'}")
+            print(
+                f"corrupted_rows_found={report.corrupted_found} mode={'apply' if apply else 'dry-run'}"
+            )
             for line in report.lines:
                 print(f"  {line}")
             print(f"repaired={report.repaired} skipped={report.skipped}")
@@ -69,10 +71,16 @@ async def _run(*, apply: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Repair self-play matches.home_team_id/away_team_id collisions")
+    parser = argparse.ArgumentParser(
+        description="Repair self-play matches.home_team_id/away_team_id collisions"
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--dry-run", action="store_true", help="Report repairable rows without mutation")
-    mode.add_argument("--apply", action="store_true", help="Persist the corrected team ids")
+    mode.add_argument(
+        "--dry-run", action="store_true", help="Report repairable rows without mutation"
+    )
+    mode.add_argument(
+        "--apply", action="store_true", help="Persist the corrected team ids"
+    )
     parser.add_argument(
         "--database-url",
         help="Target database. Overrides DATABASE_URL/.env for this run. Avoids shell-specific env syntax.",

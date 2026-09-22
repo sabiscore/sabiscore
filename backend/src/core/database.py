@@ -138,9 +138,13 @@ def _init_engine() -> Engine:
         return eng
     except Exception as exc:
         if not _sqlite_fallback_allowed():
-            logger.error("PostgreSQL unavailable and SQLite fallback is not explicitly allowed")
+            logger.error(
+                "PostgreSQL unavailable and SQLite fallback is not explicitly allowed"
+            )
             raise
-        logger.warning("PostgreSQL unavailable (%s), using explicit SQLite fallback", exc)
+        logger.warning(
+            "PostgreSQL unavailable (%s), using explicit SQLite fallback", exc
+        )
         _using_fallback = True
         fallback_url = "sqlite:///./sabiscore_fallback.db"
         eng = _create_sqlite_engine(fallback_url)
@@ -193,7 +197,9 @@ def _get_session_factory() -> sessionmaker:
         eng = get_engine()  # outside the lock: does its own locking, and may raise
         with _engine_lock:
             if _session_factory is None:
-                _session_factory = sessionmaker(autocommit=False, autoflush=False, bind=eng)
+                _session_factory = sessionmaker(
+                    autocommit=False, autoflush=False, bind=eng
+                )
     return _session_factory
 
 
@@ -225,16 +231,16 @@ def get_db_status() -> dict:
     return {
         "available": _db_available,
         "using_fallback": _using_fallback,
-        "url_type": "sqlite" if _sync_url.startswith("sqlite") or _using_fallback else "postgresql",
+        "url_type": "sqlite"
+        if _sync_url.startswith("sqlite") or _using_fallback
+        else "postgresql",
     }
 
 
 # Database models
 class UserAccount(Base):
     __tablename__ = "users"
-    __table_args__ = (
-        Index("ix_users_email", "email", unique=True),
-    )
+    __table_args__ = (Index("ix_users_email", "email", unique=True),)
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, nullable=False, unique=True)
@@ -256,9 +262,7 @@ class UserAccount(Base):
 
 class League(Base):
     __tablename__ = "leagues"
-    __table_args__ = (
-        Index("ix_leagues_name", "name"),
-    )
+    __table_args__ = (Index("ix_leagues_name", "name"),)
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
@@ -267,6 +271,7 @@ class League(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
+
 
 class Team(Base):
     __tablename__ = "teams"
@@ -288,6 +293,7 @@ class Team(Base):
 
     league = relationship("League")
 
+
 class Player(Base):
     __tablename__ = "players"
 
@@ -303,6 +309,7 @@ class Player(Base):
     updated_at = Column(DateTime)
 
     team = relationship("Team")
+
 
 class Match(Base):
     __tablename__ = "matches"
@@ -323,7 +330,9 @@ class Match(Base):
     away_score = Column(Integer, nullable=True)
     venue = Column(String)
     referee = Column(String)
-    competition_stage = Column(String, nullable=True)  # UCL: qualifying, group, r16, qf, sf, final
+    competition_stage = Column(
+        String, nullable=True
+    )  # UCL: qualifying, group, r16, qf, sf, final
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -331,11 +340,10 @@ class Match(Base):
     home_team = relationship("Team", foreign_keys=[home_team_id])
     away_team = relationship("Team", foreign_keys=[away_team_id])
 
+
 class MatchStats(Base):
     __tablename__ = "match_stats"
-    __table_args__ = (
-        Index("ix_match_stats_match_team", "match_id", "team_id"),
-    )
+    __table_args__ = (Index("ix_match_stats_match_team", "match_id", "team_id"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(String, ForeignKey("matches.id"))
@@ -353,6 +361,7 @@ class MatchStats(Base):
 
     match = relationship("Match")
     team = relationship("Team")
+
 
 class Prediction(Base):
     __tablename__ = "predictions"
@@ -376,11 +385,10 @@ class Prediction(Base):
 
     match = relationship("Match")
 
+
 class Odds(Base):
     __tablename__ = "odds"
-    __table_args__ = (
-        Index("ix_odds_match_timestamp", "match_id", "timestamp"),
-    )
+    __table_args__ = (Index("ix_odds_match_timestamp", "match_id", "timestamp"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(String, ForeignKey("matches.id"))
@@ -392,6 +400,7 @@ class Odds(Base):
     timestamp = Column(DateTime)
 
     match = relationship("Match")
+
 
 class ValueBet(Base):
     __tablename__ = "value_bets"
@@ -417,9 +426,7 @@ class ValueBet(Base):
 
 class LeagueStanding(Base):
     __tablename__ = "league_standings"
-    __table_args__ = (
-        Index("ix_league_standings_league_team", "league", "team_id"),
-    )
+    __table_args__ = (Index("ix_league_standings_league_team", "league", "team_id"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     league = Column(String, ForeignKey("leagues.id"))
@@ -434,12 +441,13 @@ class LeagueStanding(Base):
     goals_against = Column(Integer)
     goal_difference = Column(Integer)
     updated_at = Column(DateTime)
-    
+
     team = relationship("Team")
 
 
 class MatchEvent(Base):
     """Real-time match events (goals, cards, substitutions, xG shots)"""
+
     __tablename__ = "match_events"
     __table_args__ = (
         Index("ix_match_events_match_time", "match_id", "event_time"),
@@ -449,12 +457,16 @@ class MatchEvent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(String, ForeignKey("matches.id"))
     event_time = Column(Integer)  # Minute of the match
-    event_type = Column(String)  # goal, yellow_card, red_card, substitution, shot, xg_shot
+    event_type = Column(
+        String
+    )  # goal, yellow_card, red_card, substitution, shot, xg_shot
     team_id = Column(String, ForeignKey("teams.id"))
     player_id = Column(String, ForeignKey("players.id"), nullable=True)
     xg_value = Column(Float, nullable=True)  # For xG shots
     description = Column(Text, nullable=True)
-    event_metadata = Column(JSON, nullable=True)  # Extra data (shot location, assist, etc.) - renamed from 'metadata' to avoid SQLAlchemy conflict
+    event_metadata = Column(
+        JSON, nullable=True
+    )  # Extra data (shot location, assist, etc.) - renamed from 'metadata' to avoid SQLAlchemy conflict
     source = Column(String)  # espn, opta, understat, fbref
     timestamp = Column(DateTime)
 
@@ -465,6 +477,7 @@ class MatchEvent(Base):
 
 class OddsHistory(Base):
     """Time-series odds tracking for market movement analysis"""
+
     __tablename__ = "odds_history"
     __table_args__ = (
         Index("ix_odds_history_match_timestamp", "match_id", "timestamp"),
@@ -475,12 +488,12 @@ class OddsHistory(Base):
     match_id = Column(String, ForeignKey("matches.id"))
     bookmaker = Column(String)  # betfair, pinnacle, bet365, etc.
     market_type = Column(String)  # match_odds, over_under_25, btts, etc.
-    
+
     # Match odds (1X2)
     home_win = Column(Float, nullable=True)
     draw = Column(Float, nullable=True)
     away_win = Column(Float, nullable=True)
-    
+
     # Over/Under markets
     over_15 = Column(Float, nullable=True)
     under_15 = Column(Float, nullable=True)
@@ -488,22 +501,22 @@ class OddsHistory(Base):
     under_25 = Column(Float, nullable=True)
     over_35 = Column(Float, nullable=True)
     under_35 = Column(Float, nullable=True)
-    
+
     # Both Teams to Score
     btts_yes = Column(Float, nullable=True)
     btts_no = Column(Float, nullable=True)
-    
+
     # Asian Handicap
     asian_handicap_line = Column(Float, nullable=True)
     asian_handicap_home = Column(Float, nullable=True)
     asian_handicap_away = Column(Float, nullable=True)
-    
+
     # Betting volumes (Betfair specific)
     total_matched = Column(Float, nullable=True)
     home_volume = Column(Float, nullable=True)
     draw_volume = Column(Float, nullable=True)
     away_volume = Column(Float, nullable=True)
-    
+
     timestamp = Column(DateTime)
     created_at = Column(DateTime)
 
@@ -512,6 +525,7 @@ class OddsHistory(Base):
 
 class FeatureVector(Base):
     """Enriched feature vectors for ML models (220 features)"""
+
     __tablename__ = "feature_vectors"
     __table_args__ = (
         Index("ix_feature_vectors_match", "match_id"),
@@ -520,67 +534,67 @@ class FeatureVector(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(String, ForeignKey("matches.id"))
-    
+
     # Team form features (last 5, 10 matches)
     home_form_5 = Column(Float)
     home_form_10 = Column(Float)
     away_form_5 = Column(Float)
     away_form_10 = Column(Float)
-    
+
     # xG features
     home_xg_avg_5 = Column(Float)
     home_xg_conceded_avg_5 = Column(Float)
     away_xg_avg_5 = Column(Float)
     away_xg_conceded_avg_5 = Column(Float)
-    
+
     # Fatigue index (days since last match, travel distance)
     home_fatigue_index = Column(Float)
     away_fatigue_index = Column(Float)
     home_days_rest = Column(Integer)
     away_days_rest = Column(Integer)
-    
+
     # Home advantage boost
     home_crowd_boost = Column(Float)  # Based on attendance, stadium size
     home_advantage_coefficient = Column(Float)
-    
+
     # Momentum (Poisson λ parameter)
     home_momentum_lambda = Column(Float)
     away_momentum_lambda = Column(Float)
-    
+
     # Market panic indicator (odds volatility)
     market_panic_score = Column(Float)
     odds_volatility_1h = Column(Float)
     odds_volatility_24h = Column(Float)
-    
+
     # Head-to-head history
     h2h_home_wins = Column(Integer)
     h2h_draws = Column(Integer)
     h2h_away_wins = Column(Integer)
     h2h_avg_goals = Column(Float)
-    
+
     # Referee bias
     referee_home_bias = Column(Float)
     referee_cards_per_game = Column(Float)
-    
+
     # Squad strength (from Transfermarkt)
     home_squad_value = Column(Float)
     away_squad_value = Column(Float)
     home_missing_value = Column(Float)  # Injured/suspended players
     away_missing_value = Column(Float)
-    
+
     # Weather conditions
     temperature = Column(Float, nullable=True)
     precipitation = Column(Float, nullable=True)
     wind_speed = Column(Float, nullable=True)
-    
+
     # Elo ratings
     home_elo = Column(Float)
     away_elo = Column(Float)
     elo_difference = Column(Float)
-    
+
     # Full 220-feature vector (JSON for flexibility)
     feature_vector_full = Column(JSON)
-    
+
     # Metadata
     features_version = Column(String)  # Track feature engineering version
     timestamp = Column(DateTime)
@@ -591,6 +605,7 @@ class FeatureVector(Base):
 
 class PlayerValuation(Base):
     """Player market valuations from Transfermarkt"""
+
     __tablename__ = "player_valuations"
     __table_args__ = (
         Index("ix_player_valuations_player_date", "player_id", "valuation_date"),
@@ -611,6 +626,7 @@ class PlayerValuation(Base):
 
 class ScrapingLog(Base):
     """Track scraping jobs for monitoring and debugging"""
+
     __tablename__ = "scraping_logs"
     __table_args__ = (
         Index("ix_scraping_logs_source_status", "source", "status"),
@@ -626,7 +642,9 @@ class ScrapingLog(Base):
     error_message = Column(Text, nullable=True)
     execution_time_seconds = Column(Float, nullable=True)
     timestamp = Column(DateTime)
-    job_metadata = Column(JSON, nullable=True)  # Job-specific config/params - renamed from 'metadata' to avoid SQLAlchemy conflict
+    job_metadata = Column(
+        JSON, nullable=True
+    )  # Job-specific config/params - renamed from 'metadata' to avoid SQLAlchemy conflict
 
 
 def get_db() -> Iterator[Session]:
@@ -663,4 +681,6 @@ def check_database_health() -> bool:
 
 def init_database_schema() -> None:
     """Reject direct schema creation from application runtime."""
-    raise RuntimeError("Direct table creation is disabled; run Alembic migrations instead")
+    raise RuntimeError(
+        "Direct table creation is disabled; run Alembic migrations instead"
+    )

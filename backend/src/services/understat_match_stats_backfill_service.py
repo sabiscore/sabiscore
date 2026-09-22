@@ -201,7 +201,9 @@ async def _partition_against_existing(
             continue
         current = existing[key]
         if current is None or abs(float(current) - row["expected_goals"]) > _XG_ATOL:
-            conflicts.append(f"{key}: stored={current} manifest={row['expected_goals']}")
+            conflicts.append(
+                f"{key}: stored={current} manifest={row['expected_goals']}"
+            )
         else:
             already += 1
 
@@ -282,19 +284,25 @@ async def apply_understat_match_stats_backfill(
 
     proposed = _proposed_rows(manifest)
     if not proposed:
-        raise RuntimeError("understat match_stats manifest has no READY entries to apply")
+        raise RuntimeError(
+            "understat match_stats manifest has no READY entries to apply"
+        )
 
     to_insert, already_present = await _partition_against_existing(session, proposed)
 
     before = int(
-        (await session.execute(select(func.count()).select_from(MatchStats))).scalar_one()
+        (
+            await session.execute(select(func.count()).select_from(MatchStats))
+        ).scalar_one()
     )
     for start in range(0, len(to_insert), batch_size):
         await session.execute(insert(MatchStats), to_insert[start : start + batch_size])
     await session.flush()
 
     after = int(
-        (await session.execute(select(func.count()).select_from(MatchStats))).scalar_one()
+        (
+            await session.execute(select(func.count()).select_from(MatchStats))
+        ).scalar_one()
     )
     if after - before != len(to_insert):
         raise RuntimeError(

@@ -61,7 +61,9 @@ class ChronologicalFeaturePipeline:
         required = {"season", "home_team", "away_team", "home_xg", "away_xg"}
         missing = required.difference(df.columns)
         if missing:
-            logger.info("Skipping transition priors; missing columns: %s", sorted(missing))
+            logger.info(
+                "Skipping transition priors; missing columns: %s", sorted(missing)
+            )
             return
 
         df["home_xg_cold_start"] = np.full(len(df), np.nan, dtype=np.float32)
@@ -78,8 +80,12 @@ class ChronologicalFeaturePipeline:
             if not promoted:
                 continue
             mask = df["season"].eq(season)
-            df.loc[mask, "home_xg_cold_start"] = season_frame.loc[mask, "home_xg_cold_start"].to_numpy(dtype=np.float32)
-            df.loc[mask, "away_xg_cold_start"] = season_frame.loc[mask, "away_xg_cold_start"].to_numpy(dtype=np.float32)
+            df.loc[mask, "home_xg_cold_start"] = season_frame.loc[
+                mask, "home_xg_cold_start"
+            ].to_numpy(dtype=np.float32)
+            df.loc[mask, "away_xg_cold_start"] = season_frame.loc[
+                mask, "away_xg_cold_start"
+            ].to_numpy(dtype=np.float32)
 
     def transform(self, df: pd.DataFrame, *, date_col: str = "date") -> pd.DataFrame:
         """Return training-ready engineered features with strict temporal ordering."""

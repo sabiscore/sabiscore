@@ -114,7 +114,9 @@ class StatsBombAggregator:
         try:
             return pd.read_parquet(self.cache_path)
         except Exception as exc:
-            logger.warning("Unable to read StatsBomb cache %s: %s", self.cache_path, exc)
+            logger.warning(
+                "Unable to read StatsBomb cache %s: %s", self.cache_path, exc
+            )
             return pd.DataFrame()
 
     def _staleness_seconds(self, rows: pd.DataFrame) -> int:

@@ -1,4 +1,5 @@
 """Regression test for endpoint-level swallowed DB failures."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -7,7 +8,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_upcoming_endpoint_rolls_back_before_returning_degraded_response() -> None:
+async def test_upcoming_endpoint_rolls_back_before_returning_degraded_response() -> (
+    None
+):
     from src.api.endpoints.upcoming_matches import get_upcoming_matches
 
     db = AsyncMock(name="db")

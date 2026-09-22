@@ -125,7 +125,9 @@ async def _fixture_candidates(
 ) -> list[_FixtureCandidate]:
     home = aliased(Team)
     away = aliased(Team)
-    lower_bound = utc_naive(observed_at) - timedelta(minutes=_KICKOFF_MATCH_TOLERANCE_MINUTES)
+    lower_bound = utc_naive(observed_at) - timedelta(
+        minutes=_KICKOFF_MATCH_TOLERANCE_MINUTES
+    )
     rows = (
         await session.execute(
             select(Match, home.name, away.name)
@@ -207,7 +209,9 @@ async def _current_closings(
                         MarketSnapshot.match_id == match_id,
                         MarketSnapshot.is_closing_line.is_(True),
                     )
-                    .order_by(MarketSnapshot.captured_at.desc(), MarketSnapshot.id.desc())
+                    .order_by(
+                        MarketSnapshot.captured_at.desc(), MarketSnapshot.id.desc()
+                    )
                 )
             )
             .scalars()
@@ -385,7 +389,9 @@ async def persist_market_board(
         grouped.setdefault(event_id, []).append(record)
 
     for event_records in grouped.values():
-        coherent = [record for record in event_records if _valid_record(record) is not None]
+        coherent = [
+            record for record in event_records if _valid_record(record) is not None
+        ]
         if not coherent:
             result.invalid += 1
             continue

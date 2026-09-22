@@ -32,8 +32,12 @@ def test_signed_model_url_and_exception_are_redacted(monkeypatch, caplog) -> Non
 
 
 def test_fetch_shell_does_not_echo_configured_urls() -> None:
-    script = model_fetcher.Path(__file__).resolve().parents[3] / "scripts" / "fetch-models.sh"
+    script = (
+        model_fetcher.Path(__file__).resolve().parents[3]
+        / "scripts"
+        / "fetch-models.sh"
+    )
     source = script.read_text(encoding="utf-8")
     assert 'echo "Fetching $url' not in source
-    assert 'failed to fetch $url' not in source
-    assert 'Got: $MODEL_BASE_URL' not in source
+    assert "failed to fetch $url" not in source
+    assert "Got: $MODEL_BASE_URL" not in source

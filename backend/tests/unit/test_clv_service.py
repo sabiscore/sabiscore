@@ -8,6 +8,7 @@ Contracts verified:
      not merely from the mean — this can flip skipped from True to False if
      gotten wrong, which is what the test below actually pins.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -31,8 +32,12 @@ def test_below_floor_is_skipped_with_true_count() -> None:
 
 def test_mean_clv_and_positive_rate_hand_computed() -> None:
     # argmax(model_probs) is index 0 in every record below.
-    positive = [_record([0.6, 0.25, 0.15], [0.5, 0.3, 0.2]) for _ in range(6)]  # CLV = 0.6 - 0.5 = +0.1
-    negative = [_record([0.6, 0.25, 0.15], [0.7, 0.2, 0.1]) for _ in range(4)]  # CLV = 0.6 - 0.7 = -0.1
+    positive = [
+        _record([0.6, 0.25, 0.15], [0.5, 0.3, 0.2]) for _ in range(6)
+    ]  # CLV = 0.6 - 0.5 = +0.1
+    negative = [
+        _record([0.6, 0.25, 0.15], [0.7, 0.2, 0.1]) for _ in range(4)
+    ]  # CLV = 0.6 - 0.7 = -0.1
 
     result = compute_clv_summary(positive + negative)
 

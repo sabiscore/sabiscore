@@ -1,4 +1,5 @@
 """Provider evidence persistence and registry-observation regressions."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -16,7 +17,13 @@ from src.db.models import (
     ProviderQuotaObservation,
     ProviderRequestSummary,
 )
-from src.providers.base import BaseProvider, ProviderQuota, ProviderResult, ProviderStatus, TrustTier
+from src.providers.base import (
+    BaseProvider,
+    ProviderQuota,
+    ProviderResult,
+    ProviderStatus,
+    TrustTier,
+)
 from src.providers.registry import ProviderRegistry, _returns_provider_result
 from src.providers.the_odds_api import TheOddsAPIProvider
 from src.services.provider_evidence_service import (
@@ -75,9 +82,13 @@ async def test_recorder_persists_sanitized_request_health_and_quota(factory) -> 
 
     assert persisted is True
     async with factory() as session:
-        summaries = (await session.execute(select(ProviderRequestSummary))).scalars().all()
+        summaries = (
+            (await session.execute(select(ProviderRequestSummary))).scalars().all()
+        )
         health_rows = (await session.execute(select(ProviderHealthLog))).scalars().all()
-        quota_rows = (await session.execute(select(ProviderQuotaObservation))).scalars().all()
+        quota_rows = (
+            (await session.execute(select(ProviderQuotaObservation))).scalars().all()
+        )
 
     assert len(summaries) == len(health_rows) == len(quota_rows) == 1
     summary = summaries[0]
@@ -128,7 +139,10 @@ async def test_latest_evidence_zero_observations_is_unknown(factory) -> None:
     assert evidence["test_provider"]["state"] == "UNKNOWN"
     assert evidence["test_provider"]["observations"] == 0
     assert evidence["test_provider"]["last_observed_at"] is None
-    assert evidence["test_provider"]["stale_after_seconds"] == PROVIDER_EVIDENCE_STALE_SECONDS
+    assert (
+        evidence["test_provider"]["stale_after_seconds"]
+        == PROVIDER_EVIDENCE_STALE_SECONDS
+    )
     assert evidence["test_provider"]["contexts"] == []
     assert evidence["test_provider"]["context_count"] == 0
 
@@ -228,7 +242,9 @@ def test_real_odds_operation_is_recognized_as_observable_provider_result() -> No
     assert _returns_provider_result(provider.capabilities) is False
 
 
-async def test_registry_observes_provider_results_without_changing_identity_or_return() -> None:
+async def test_registry_observes_provider_results_without_changing_identity_or_return() -> (
+    None
+):
     sink = SimpleNamespace(
         record_result=AsyncMock(return_value=True),
         record_exception=AsyncMock(return_value=True),

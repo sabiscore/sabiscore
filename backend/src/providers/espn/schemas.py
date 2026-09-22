@@ -45,8 +45,8 @@ class ProviderStatus(str, Enum):
     """A health response may claim HEALTHY only after a successful probe."""
 
     DISABLED = "DISABLED"
-    CONFIGURED = "CONFIGURED"          # enabled, not yet probed
-    HEALTHY = "HEALTHY"                # successful probe within validity window
+    CONFIGURED = "CONFIGURED"  # enabled, not yet probed
+    HEALTHY = "HEALTHY"  # successful probe within validity window
     DEGRADED = "DEGRADED"
     RATE_LIMITED = "RATE_LIMITED"
     SCHEMA_INVALID = "SCHEMA_INVALID"

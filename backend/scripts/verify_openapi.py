@@ -25,6 +25,7 @@ def _import_app():
         def _target():
             try:
                 from src.api.main import app as imported_app
+
                 _result.append(imported_app)
             except Exception as e:
                 _exc.append(e)

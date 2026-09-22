@@ -9,6 +9,7 @@ Contracts verified:
   5. Provider display-name drift does not silently re-key an existing raw
      scheduled Match while canonical provider identity remains stable.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -112,11 +113,15 @@ async def test_synced_league_id_is_canonical(session: AsyncSession) -> None:
     rows = (await session.execute(text("SELECT id FROM leagues"))).fetchall()
     stored_ids = {row[0] for row in rows}
     assert "EPL" in stored_ids, f"Expected canonical 'EPL', got: {stored_ids}"
-    assert "EREDIVISIE" in stored_ids, f"Expected canonical 'EREDIVISIE', got: {stored_ids}"
+    assert "EREDIVISIE" in stored_ids, (
+        f"Expected canonical 'EREDIVISIE', got: {stored_ids}"
+    )
     assert "PL" not in stored_ids
     assert "DED" not in stored_ids
 
-    match_rows = (await session.execute(text("SELECT league_id FROM matches"))).fetchall()
+    match_rows = (
+        await session.execute(text("SELECT league_id FROM matches"))
+    ).fetchall()
     match_league_ids = {row[0] for row in match_rows}
     assert match_league_ids <= {"EPL", "EREDIVISIE"}
 
@@ -154,7 +159,10 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
             status="scheduled",
             reconciliation_status="VERIFIED",
             reconciliation_confidence=1.0,
-            evidence={"provider_event_id": "fd-match-40", "source": "football-data.org"},
+            evidence={
+                "provider_event_id": "fd-match-40",
+                "source": "football-data.org",
+            },
         )
     )
     await session.commit()
@@ -186,14 +194,18 @@ async def test_provider_reschedule_updates_kickoff_without_identity_drift(
 
     canonical_kickoff = (
         await session.execute(
-            select(CanonicalFixture.kickoff_utc).where(CanonicalFixture.id == original_mapping)
+            select(CanonicalFixture.kickoff_utc).where(
+                CanonicalFixture.id == original_mapping
+            )
         )
     ).scalar_one()
     assert canonical_kickoff == datetime(2026, 8, 1, 18, 0)
     assert await session.get(CanonicalFixture, legacy_orphan_id) is None
 
     canonical_count = int(
-        (await session.execute(text("SELECT count(*) FROM canonical_fixtures"))).scalar_one()
+        (
+            await session.execute(text("SELECT count(*) FROM canonical_fixtures"))
+        ).scalar_one()
     )
     assert canonical_count == 2, "reschedule left or minted an orphan canonical fixture"
 
@@ -229,7 +241,9 @@ async def test_provider_name_drift_preserves_raw_identity_and_canonical_anchor(
     ).scalar_one()
     assert raw_home == "TeamA 50"
     assert (
-        await session.execute(text("SELECT count(*) FROM matches WHERE id='fd-match-51'"))
+        await session.execute(
+            text("SELECT count(*) FROM matches WHERE id='fd-match-51'")
+        )
     ).scalar_one() == 1
 
     assert (
@@ -394,7 +408,9 @@ async def test_a_clean_stored_name_is_never_overwritten(session: AsyncSession) -
         fixture = _match(9, league="La Liga")
         fixture["home_provider_team_id"] = 91
         fixture["home_team"] = incoming
-        with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        with patch(
+            "src.data.loaders.football_data_api.FootballDataAPIClient"
+        ) as MockCls:
             MockCls.return_value = _mock_client([fixture])
             await sync_upcoming_fixtures(session)
 

@@ -41,7 +41,9 @@ class TestPredictionPipeline:
     @pytest.fixture
     async def client(self):
         """Async HTTP client for API testing."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
             yield ac
 
     @pytest.fixture
@@ -70,7 +72,9 @@ class TestPredictionPipeline:
         assert response.status_code == 200
         data = response.json()
         # Accept healthy or degraded - degraded is valid in test env without models/redis
-        assert data["status"] in ("healthy", "degraded"), f"Unexpected status: {data['status']}"
+        assert data["status"] in ("healthy", "degraded"), (
+            f"Unexpected status: {data['status']}"
+        )
         assert "version" in data
 
         # Test readiness probe
@@ -94,7 +98,9 @@ class TestPredictionPipeline:
 
         # Check for trained models
         model_files = list(models_path.glob("*_ensemble.pkl"))
-        logger.info(f"Found {len(model_files)} model files: {[f.name for f in model_files]}")
+        logger.info(
+            f"Found {len(model_files)} model files: {[f.name for f in model_files]}"
+        )
 
         if not model_files:
             pytest.skip("No trained models found - run training first")
@@ -104,7 +110,9 @@ class TestPredictionPipeline:
             model = SabiScoreEnsemble.load_model(str(model_files[0]))
         except Exception as exc:
             # Model pickle incompatibility (numpy version mismatch) is common in test env
-            pytest.skip(f"Model could not be loaded (possible numpy version mismatch): {exc}")
+            pytest.skip(
+                f"Model could not be loaded (possible numpy version mismatch): {exc}"
+            )
 
         assert model is not None
         assert model.is_trained
@@ -134,7 +142,7 @@ class TestPredictionPipeline:
             model = SabiScoreEnsemble.load_model(str(model_files[0]))
         except Exception as exc:
             pytest.skip(f"Model could not be loaded: {exc}")
-        
+
         # Generate features (returns 3 values: frame, vector, context)
         frame, vector, context = service._build_feature_frame(
             "test_match_001",
@@ -172,7 +180,9 @@ class TestPredictionPipeline:
 
         # May return 503 if models not loaded yet, 500 if internal error, or 200 on success
         if response.status_code == 503:
-            logger.warning("Models not loaded, endpoint returned 503 (expected in cold start)")
+            logger.warning(
+                "Models not loaded, endpoint returned 503 (expected in cold start)"
+            )
             pytest.skip("Models not loaded yet")
         if response.status_code == 500:
             logger.warning("Internal server error - possibly model loading issue")
@@ -215,7 +225,7 @@ class TestPredictionPipeline:
             model = SabiScoreEnsemble.load_model(str(model_files[0]))
         except Exception as exc:
             pytest.skip(f"Model could not be loaded: {exc}")
-        
+
         # Create service with loaded model
         service = PredictionService(ensemble_model=model)
 
@@ -295,13 +305,15 @@ class TestPredictionPipeline:
         except Exception as exc:
             # Odds API may not be configured or reachable in test env
             pytest.skip(f"Could not fetch odds: {exc}")
-        
+
         assert isinstance(odds_data, list)
         logger.info("Fetched odds for %s events", len(odds_data))
 
         if odds_data:
             event = odds_data[0]
-            logger.info(f"   Sample event: {event.get('home_team')} vs {event.get('away_team')}")
+            logger.info(
+                f"   Sample event: {event.get('home_team')} vs {event.get('away_team')}"
+            )
 
     @pytest.mark.asyncio
     async def test_data_aggregator(self):
@@ -377,8 +389,12 @@ class TestPredictionPipeline:
         assert "metadata" in prediction
 
         logger.info("End-to-end pipeline successful")
-        logger.info(f"   Winner prediction: {max(prediction['predictions'], key=prediction['predictions'].get)}")
-        logger.info(f"   Processing time: {prediction['metadata'].get('processing_time_ms')}ms")
+        logger.info(
+            f"   Winner prediction: {max(prediction['predictions'], key=prediction['predictions'].get)}"
+        )
+        logger.info(
+            f"   Processing time: {prediction['metadata'].get('processing_time_ms')}ms"
+        )
         logger.info(f"   Value opportunities: {len(prediction.get('value_bets', []))}")
 
 
@@ -388,12 +404,14 @@ def run_smoke_tests():
     logger.info("SabiScore Prediction Pipeline Smoke Tests")
     logger.info("=" * 60)
 
-    pytest.main([
-        __file__,
-        "-v",
-        "--tb=short",
-        "--asyncio-mode=auto",
-    ])
+    pytest.main(
+        [
+            __file__,
+            "-v",
+            "--tb=short",
+            "--asyncio-mode=auto",
+        ]
+    )
 
 
 if __name__ == "__main__":

@@ -60,7 +60,7 @@ def test_every_query_term_is_text_the_club_calls_itself() -> None:
 
 
 def test_short_tokens_are_not_queried() -> None:
-    """"man" resolves to the Isle of Man, 250 km from Manchester.
+    """ "man" resolves to the Isle of Man, 250 km from Manchester.
 
     It would otherwise pass the name-match test and produce a confidently wrong
     coordinate, which is the exact failure this study exists to avoid.
@@ -112,7 +112,7 @@ def test_place_is_named_in_club_requires_every_place_token() -> None:
 
 
 def test_abbreviations_are_not_folded_together() -> None:
-    """"St Etienne" must not silently become "Saint-Etienne".
+    """ "St Etienne" must not silently become "Saint-Etienne".
 
     An abbreviation rule permissive enough to join these also joins clubs it
     should not, so the strict form leaves it for review instead.
@@ -130,13 +130,15 @@ def test_no_resolution_is_unknown_not_a_guess() -> None:
 
 
 def test_name_confirmed_single_place_is_verified() -> None:
-    verdict, reason, confirmed = classify("Leverkusen", [_point("Leverkusen", 51.03, 6.98)])
+    verdict, reason, confirmed = classify(
+        "Leverkusen", [_point("Leverkusen", 51.03, 6.98)]
+    )
     assert verdict == VERIFIED
     assert reason == "place_name_appears_in_club_name"
 
 
 def test_two_confirmed_places_far_apart_go_to_review() -> None:
-    """"Bayern" resolves to the state, "Munich" to the city, ~90 km apart.
+    """ "Bayern" resolves to the state, "Munich" to the city, ~90 km apart.
 
     Both are named in the club, so neither can be dismissed as noise; the
     disagreement is real and belongs to a human.
@@ -158,7 +160,10 @@ def test_unconfirmed_noise_does_not_veto_a_confirmed_place() -> None:
     """
     verdict, _, confirmed = classify(
         "Newcastle United",
-        [_point("Newcastle", 54.97, -1.61, "GB"), _point("United Kingdom", 54.76, -2.70, "GB")],
+        [
+            _point("Newcastle", 54.97, -1.61, "GB"),
+            _point("United Kingdom", 54.76, -2.70, "GB"),
+        ],
     )
     assert verdict == VERIFIED
     # The confirmed evidence is Newcastle alone -- the UK centroid never earns

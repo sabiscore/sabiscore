@@ -18,7 +18,9 @@ class RLRecommendRequest(BaseModel):
     probabilities: Dict[str, float] = Field(
         ...,
         description="Outcome probabilities: home_win, draw, away_win",
-        json_schema_extra={"example": {"home_win": 0.48, "draw": 0.27, "away_win": 0.25}},
+        json_schema_extra={
+            "example": {"home_win": 0.48, "draw": 0.27, "away_win": 0.25}
+        },
     )
     odds: Dict[str, float] = Field(
         default_factory=dict,
@@ -56,7 +58,9 @@ async def get_rl_recommendation(request: RLRecommendRequest) -> RLRecommendation
     """
     probs = request.probabilities
     if not probs:
-        raise HTTPException(status_code=422, detail="probabilities must be a non-empty mapping")
+        raise HTTPException(
+            status_code=422, detail="probabilities must be a non-empty mapping"
+        )
 
     total = sum(probs.values())
     if not (0.90 <= total <= 1.10):

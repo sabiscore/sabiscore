@@ -3,11 +3,15 @@ import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 # Suppress numpy warnings for division operations
-warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*divide by zero.*')
-warnings.filterwarnings('ignore', category=RuntimeWarning, message='.*invalid value encountered.*')
+warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*divide by zero.*")
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message=".*invalid value encountered.*"
+)
 
 
-def calculate_expected_value(model_prob: float, odds: float, stake: float = 1.0) -> float:
+def calculate_expected_value(
+    model_prob: float, odds: float, stake: float = 1.0
+) -> float:
     """Return the expected value (EV) for a wager."""
 
     if not 0 <= model_prob <= 1 or odds <= 1.0 or stake <= 0:
@@ -73,7 +77,9 @@ def calculate_confidence_interval(
     return lower, upper
 
 
-def calculate_roi(initial_bankroll: float, final_bankroll: float, total_stakes: float) -> float:
+def calculate_roi(
+    initial_bankroll: float, final_bankroll: float, total_stakes: float
+) -> float:
     """Return on investment percentage for a betting strategy."""
 
     if total_stakes <= 0:
@@ -107,7 +113,9 @@ def calculate_sharpe_ratio(returns: List[float], risk_free_rate: float = 0.02) -
     return float(sharpe * math.sqrt(252))
 
 
-def calculate_betting_edge(model_probs: Dict[str, float], market_odds: Dict[str, float]) -> Dict[str, float]:
+def calculate_betting_edge(
+    model_probs: Dict[str, float], market_odds: Dict[str, float]
+) -> Dict[str, float]:
     """Edge (model probability minus market implied probability) per outcome."""
 
     edges: Dict[str, float] = {}
@@ -121,7 +129,9 @@ def calculate_betting_edge(model_probs: Dict[str, float], market_odds: Dict[str,
     return edges
 
 
-def optimize_bet_size(kelly_stake: float, max_stake: float, min_stake: float = 0.0) -> float:
+def optimize_bet_size(
+    kelly_stake: float, max_stake: float, min_stake: float = 0.0
+) -> float:
     """Clamp Kelly bet to bankroll constraints."""
 
     if max_stake < min_stake:
@@ -137,7 +147,9 @@ def calculate_breakeven_odds(prob: float) -> float:
     return 1.0 / prob
 
 
-def assess_bet_quality(ev: float, confidence: float, market_liquidity: float = 1.0) -> Dict[str, Any]:
+def assess_bet_quality(
+    ev: float, confidence: float, market_liquidity: float = 1.0
+) -> Dict[str, Any]:
     """Heuristic assessment combining EV, confidence, and liquidity."""
 
     quality_score = (ev * 100.0 + confidence * 50.0 + market_liquidity * 25.0) / 1.75

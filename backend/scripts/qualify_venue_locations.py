@@ -83,9 +83,17 @@ WEATHER_CELL_KM = 25.0
 # stopword list. Every entry here costs coverage if it is wrong, and a token
 # that genuinely is not a place simply resolves to nothing at no cost, so the
 # list stays at the handful that are unambiguously corporate.
-_NON_PLACE_TOKENS = frozenset({
-    "club", "calcio", "futbol", "football", "sportiva", "sportif", "verein",
-})
+_NON_PLACE_TOKENS = frozenset(
+    {
+        "club",
+        "calcio",
+        "futbol",
+        "football",
+        "sportiva",
+        "sportif",
+        "verein",
+    }
+)
 
 # A three-letter token carries too little locational information to accept
 # without review: "man" (from "Man United") resolves to the Isle of Man, 250 km
@@ -139,7 +147,10 @@ def haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     lat1, lon1 = math.radians(a[0]), math.radians(a[1])
     lat2, lon2 = math.radians(b[0]), math.radians(b[1])
     dlat, dlon = lat2 - lat1, lon2 - lon1
-    h = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    h = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    )
     return 2 * 6371.0088 * math.asin(min(1.0, math.sqrt(h)))
 
 
@@ -259,7 +270,8 @@ async def resolve_club(
             print(f"    ! {term!r}: {type(exc).__name__}", file=sys.stderr)
             point = None
         if point is not None and not any(
-            haversine_km((point.latitude, point.longitude), (g.latitude, g.longitude)) < 0.5
+            haversine_km((point.latitude, point.longitude), (g.latitude, g.longitude))
+            < 0.5
             for g in found
         ):
             found.append(point)
@@ -267,7 +279,9 @@ async def resolve_club(
     return found, attempted
 
 
-async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -> dict[str, Any]:
+async def run(
+    cache_dir: Path, out_path: Optional[Path], pause_seconds: float
+) -> dict[str, Any]:
     roster = corpus_roster(cache_dir)
     if not roster:
         raise SystemExit(f"no corpus files found under {cache_dir}")
@@ -279,15 +293,17 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
         divisions = sorted(roster[club])
         countries = {LEAGUE_COUNTRY[d] for d in divisions if d in LEAGUE_COUNTRY}
         if len(countries) != 1:
-            entries.append({
-                "club": club,
-                "divisions": divisions,
-                "country": None,
-                "verdict": REQUIRES_REVIEW,
-                "reason": "club_appears_in_more_than_one_country",
-                "candidates": [],
-                "queried": [],
-            })
+            entries.append(
+                {
+                    "club": club,
+                    "divisions": divisions,
+                    "country": None,
+                    "verdict": REQUIRES_REVIEW,
+                    "reason": "club_appears_in_more_than_one_country",
+                    "candidates": [],
+                    "queried": [],
+                }
+            )
             continue
 
         country = countries.pop()
@@ -299,36 +315,45 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
         # `confirmed` is filtered from this exact `found` list (see classify's
         # docstring), never copied, so `in` here is comparing the same objects.
         confirmed_set = set(confirmed)
-        entries.append({
-            "club": club,
-            "divisions": divisions,
-            "country": country,
-            "verdict": verdict,
-            "reason": reason,
-            "candidates": [
-                {
-                    "name": g.name,
-                    "latitude": round(g.latitude, 4),
-                    "longitude": round(g.longitude, 4),
-                    "country_code": g.country_code,
-                    # The candidate classify() actually trusted -- see DEBT 101.
-                    # Ingestion must read this one, never assume candidates[0].
-                    "confirmed": g in confirmed_set,
-                }
-                for g in found
-            ],
-            "queried": attempted,
-        })
-        print(f"[{index:>3}/{len(roster)}] {club:<24} {country}  {verdict:<16} {reason}")
+        entries.append(
+            {
+                "club": club,
+                "divisions": divisions,
+                "country": country,
+                "verdict": verdict,
+                "reason": reason,
+                "candidates": [
+                    {
+                        "name": g.name,
+                        "latitude": round(g.latitude, 4),
+                        "longitude": round(g.longitude, 4),
+                        "country_code": g.country_code,
+                        # The candidate classify() actually trusted -- see DEBT 101.
+                        # Ingestion must read this one, never assume candidates[0].
+                        "confirmed": g in confirmed_set,
+                    }
+                    for g in found
+                ],
+                "queried": attempted,
+            }
+        )
+        print(
+            f"[{index:>3}/{len(roster)}] {club:<24} {country}  {verdict:<16} {reason}"
+        )
 
-    counts = {v: sum(1 for e in entries if e["verdict"] == v) for v in (VERIFIED, REQUIRES_REVIEW, UNKNOWN)}
+    counts = {
+        v: sum(1 for e in entries if e["verdict"] == v)
+        for v in (VERIFIED, REQUIRES_REVIEW, UNKNOWN)
+    }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "corpus": str(cache_dir),
         "roster_size": len(roster),
         "weather_cell_km": WEATHER_CELL_KM,
         "counts": counts,
-        "coverage_verified": round(counts[VERIFIED] / len(roster), 4) if roster else 0.0,
+        "coverage_verified": round(counts[VERIFIED] / len(roster), 4)
+        if roster
+        else 0.0,
         "entries": entries,
     }
 
@@ -362,14 +387,18 @@ async def run(cache_dir: Path, out_path: Optional[Path], pause_seconds: float) -
 
     if out_path is not None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+        out_path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         print(f"\nmanifest -> {out_path}")
     return manifest
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache")
+    parser.add_argument(
+        "--cache-dir", type=Path, default=_BACKEND_ROOT / "data" / "cache"
+    )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--pause-seconds", type=float, default=0.2)
     args = parser.parse_args(list(argv) if argv is not None else None)

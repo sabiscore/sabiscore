@@ -162,7 +162,9 @@ def _lookup(
     """
     candidates = [
         (home_xg, away_xg)
-        for observed_at, home_xg, away_xg in index.get((league_id, home_key, away_key), ())
+        for observed_at, home_xg, away_xg in index.get(
+            (league_id, home_key, away_key), ()
+        )
         if abs(observed_at - kickoff) <= _KICKOFF_TOLERANCE
     ]
     return candidates[0] if len(candidates) == 1 else None

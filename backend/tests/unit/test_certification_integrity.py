@@ -51,7 +51,9 @@ def models_dir(tmp_path: Path) -> Path:
             }
         },
     }
-    (tmp_path / "active_generation.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (tmp_path / "active_generation.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -70,7 +72,10 @@ def _write_report(models_dir: Path, *, permitted: bool, gates: dict) -> Path:
     return report
 
 
-_ALL_PASS = {"market_baseline": {"status": "PASS"}, "no_league_regression": {"status": "PASS"}}
+_ALL_PASS = {
+    "market_baseline": {"status": "PASS"},
+    "no_league_regression": {"status": "PASS"},
+}
 
 
 def test_unverified_generation_loads_without_evidence(models_dir: Path) -> None:
@@ -106,7 +111,10 @@ def test_certified_with_failing_report_is_rejected(models_dir: Path) -> None:
     _rewrite_manifest(
         models_dir,
         certification_state="CERTIFIED",
-        certification_evidence={"report": report.name, "report_sha256": _sha256(report)},
+        certification_evidence={
+            "report": report.name,
+            "report_sha256": _sha256(report),
+        },
     )
     with pytest.raises(ActiveGenerationError, match="does not grant promotion"):
         load_active_generation(models_dir)
@@ -119,7 +127,10 @@ def test_certified_with_tampered_report_hash_is_rejected(models_dir: Path) -> No
     _rewrite_manifest(
         models_dir,
         certification_state="CERTIFIED",
-        certification_evidence={"report": report.name, "report_sha256": _sha256(report)},
+        certification_evidence={
+            "report": report.name,
+            "report_sha256": _sha256(report),
+        },
     )
     report.write_text(
         json.dumps({"promotion_permitted": True, "gates": _ALL_PASS, "tampered": True}),
@@ -129,18 +140,26 @@ def test_certified_with_tampered_report_hash_is_rejected(models_dir: Path) -> No
         load_active_generation(models_dir)
 
 
-def test_certified_with_permitted_flag_but_failing_gate_is_rejected(models_dir: Path) -> None:
+def test_certified_with_permitted_flag_but_failing_gate_is_rejected(
+    models_dir: Path,
+) -> None:
     """Defence in depth: a hand-set promotion_permitted cannot outvote its own gates."""
 
     report = _write_report(
         models_dir,
         permitted=True,
-        gates={"market_baseline": {"status": "FAIL"}, "no_league_regression": {"status": "PASS"}},
+        gates={
+            "market_baseline": {"status": "FAIL"},
+            "no_league_regression": {"status": "PASS"},
+        },
     )
     _rewrite_manifest(
         models_dir,
         certification_state="CERTIFIED",
-        certification_evidence={"report": report.name, "report_sha256": _sha256(report)},
+        certification_evidence={
+            "report": report.name,
+            "report_sha256": _sha256(report),
+        },
     )
     with pytest.raises(ActiveGenerationError, match="failing gates: market_baseline"):
         load_active_generation(models_dir)
@@ -153,19 +172,29 @@ def test_fully_earned_certification_is_accepted(models_dir: Path) -> None:
     _rewrite_manifest(
         models_dir,
         certification_state="CERTIFIED",
-        certification_evidence={"report": report.name, "report_sha256": _sha256(report)},
+        certification_evidence={
+            "report": report.name,
+            "report_sha256": _sha256(report),
+        },
     )
     generation = load_active_generation(models_dir)
     assert generation["certification_state"] == "CERTIFIED"
 
 
-def test_evidence_cannot_escape_the_models_directory(models_dir: Path, tmp_path: Path) -> None:
+def test_evidence_cannot_escape_the_models_directory(
+    models_dir: Path, tmp_path: Path
+) -> None:
     outside = tmp_path.parent / "outside_report.json"
-    outside.write_text(json.dumps({"promotion_permitted": True, "gates": _ALL_PASS}), encoding="utf-8")
+    outside.write_text(
+        json.dumps({"promotion_permitted": True, "gates": _ALL_PASS}), encoding="utf-8"
+    )
     _rewrite_manifest(
         models_dir,
         certification_state="CERTIFIED",
-        certification_evidence={"report": "../outside_report.json", "report_sha256": _sha256(outside)},
+        certification_evidence={
+            "report": "../outside_report.json",
+            "report_sha256": _sha256(outside),
+        },
     )
     with pytest.raises(ActiveGenerationError):
         load_active_generation(models_dir)

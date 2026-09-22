@@ -8,7 +8,9 @@ from src.services.alerting import trigger_slack_drift_alert
 
 @pytest.mark.asyncio
 async def test_alerting_uses_injected_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SLACK_DRIFT_WEBHOOK_URL", "https://hooks.slack.test/services/example")
+    monkeypatch.setenv(
+        "SLACK_DRIFT_WEBHOOK_URL", "https://hooks.slack.test/services/example"
+    )
     requests: list[httpx.Request] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -31,7 +33,9 @@ async def test_alerting_uses_injected_client(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_alerting_skips_when_webhook_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_alerting_skips_when_webhook_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("SLACK_DRIFT_WEBHOOK_URL", raising=False)
 
     async with httpx.AsyncClient() as client:

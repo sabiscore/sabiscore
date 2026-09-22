@@ -4,6 +4,7 @@ Render can overlap old/live and candidate instances during deploys. These tests
 pin the invariant that only one production process may spend the shared
 football-data.org quota in a recent execution window.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,7 +25,9 @@ async def test_production_without_external_redis_fails_closed(monkeypatch) -> No
     assert token is None
 
 
-async def test_nonproduction_without_external_redis_preserves_local_flow(monkeypatch) -> None:
+async def test_nonproduction_without_external_redis_preserves_local_flow(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(service.settings, "app_env", "test")
     monkeypatch.setattr(cache, "redis_client", None)
 
@@ -34,7 +37,9 @@ async def test_nonproduction_without_external_redis_preserves_local_flow(monkeyp
     assert token is None
 
 
-async def test_recent_completion_marker_suppresses_duplicate_candidate(monkeypatch) -> None:
+async def test_recent_completion_marker_suppresses_duplicate_candidate(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(service.settings, "app_env", "production")
     client = MagicMock()
     client.get.return_value = b"completed-by-sibling"
@@ -66,7 +71,9 @@ async def test_first_candidate_claims_token_owned_lease(monkeypatch) -> None:
     )
 
 
-async def test_held_lease_times_out_without_duplicate_provider_pass(monkeypatch) -> None:
+async def test_held_lease_times_out_without_duplicate_provider_pass(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(service.settings, "app_env", "production")
     monkeypatch.setattr(service, "_FIXTURE_SYNC_LEASE_WAIT_SECONDS", 0)
     client = MagicMock()

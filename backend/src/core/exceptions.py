@@ -13,7 +13,9 @@ class DataUnavailableError(Exception):
     NO_BET (reason=DATA_UNAVAILABLE) depending on which evidence is absent.
     """
 
-    def __init__(self, message: str, provider: str = "unknown", evidence_type: str = "unknown"):
+    def __init__(
+        self, message: str, provider: str = "unknown", evidence_type: str = "unknown"
+    ):
         super().__init__(message)
         self.provider = provider
         self.evidence_type = evidence_type
@@ -41,7 +43,9 @@ class SchemaMismatchError(DataUnavailableError):
     INV-01/INV-10 forbid for any other evidence type.
     """
 
-    def __init__(self, actual_dim: int, expected_dim: int, provider: str = "feature_pipeline"):
+    def __init__(
+        self, actual_dim: int, expected_dim: int, provider: str = "feature_pipeline"
+    ):
         super().__init__(
             f"feature vector has {actual_dim} dimensions, expected {expected_dim}; "
             "refusing to zero-pad the missing values into a live prediction",
