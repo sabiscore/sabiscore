@@ -111,10 +111,28 @@ def test_meta_head_carries_no_sklearn_version_coupling(league: str):
     if not path.exists():
         pytest.skip("artifact not present in this checkout")
 
-    from src.core.meta_model import SoftmaxMetaModel
+    from src.core.meta_model import (
+        SoftmaxMetaModel,
+        TemperatureScaledMetaModel,
+        VectorScaledMetaModel,
+        IsotonicMetaModel,
+        BetaCalibratedMetaModel,
+    )
+
+    # All repository-owned meta-head types satisfy the cross-version-coupling invariant.
+    # TemperatureScaledMetaModel and its siblings wrap SoftmaxMetaModel internally
+    # and are safe to deserialise under any scikit-learn version, unlike a bare
+    # LogisticRegression which reads `self.multi_class` on first predict (DEBT 87).
+    _SAFE_META_TYPES = (
+        SoftmaxMetaModel,
+        TemperatureScaledMetaModel,
+        VectorScaledMetaModel,
+        IsotonicMetaModel,
+        BetaCalibratedMetaModel,
+    )
 
     meta = SabiScoreEnsemble.load_model(str(path)).meta_model
-    assert isinstance(meta, SoftmaxMetaModel), (
+    assert isinstance(meta, _SAFE_META_TYPES), (
         f"{path.name} meta_model is {type(meta).__module__}.{type(meta).__name__}; "
         "an sklearn estimator here re-introduces the cross-version unpickle failure"
     )

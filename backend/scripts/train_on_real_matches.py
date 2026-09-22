@@ -1047,13 +1047,7 @@ def _fit_served_base_calibrator(
     Returns a ``FittedCalibrator`` instance ready to be stored under the ``calibrator``
     key in the artifact bundle, or None if fitting fails.
     """
-    from src.models.calibration import (
-        FittedCalibrator,
-        fit_calibrator,
-        apply_calibrator,
-        compute_ece,
-        select_calibration_method,
-    )
+    from src.models.calibration import compare_calibration_methods
 
     try:
         # Get raw probabilities from the base-learner equal-weight average —
@@ -1065,10 +1059,8 @@ def _fit_served_base_calibrator(
             [m.predict_proba(X_holdout) for m in models.values()], axis=0
         ).astype(np.float32)
 
-        n = len(y_calibration)
         # force_method=None lets the standard selection rule run; the result is
         # recorded in calibration_method so the artifact manifest reflects what shipped.
-        from src.models.calibration import compare_calibration_methods
         fitted_cal = compare_calibration_methods(
             league,
             y_calibration.astype(np.int64), proba_cal,

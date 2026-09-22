@@ -15,11 +15,17 @@ describe("ValueBetCard betting safety & default-deny posture (P9)", () => {
     market_odds: 2.25,
     model_prob: 0.52,
     market_prob: 0.44,
+    expected_value: 0.17,
+    value_pct: 18.2,
     edge: 0.08,
     kelly_stake: 0.025,
     quality: {
       tier: "VALUE",
       recommendation: "Positive edge with model support",
+      quality_score: 0.72,
+      ev_contribution: 0.35,
+      confidence_contribution: 0.25,
+      liquidity_contribution: 0.12,
     },
   };
 
