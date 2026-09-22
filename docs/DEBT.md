@@ -1,5 +1,97 @@
 # SabiScore Debt Ledger
 
+## 127. G16's MAPIE harness rejected BUNDESLIGA/LIGUE_1 as "invalid probability simplex" — the model was fine, the harness's own tolerance wasn't
+
+**Tier:** `RESOLVED` — 2026-09-21. **Found:** while re-running
+`scripts/evaluate_g16_uncertainty.py` on `master` after item 122's calibrator
+fix (PR #224) merged, as part of a "measure, don't authorize" P19 scoping
+pass (no MAPIE/APS training pipeline was built — the served generation still
+fails `error_association` in every league, unchanged, so no new evidence
+justifies moving past `docs/adr/0011-*`'s already-recorded posture).
+
+### The symptom
+
+`evaluate_g16_uncertainty.py --training-cutoff 2025-06-01` reported `G16:
+BLOCKED` with BUNDESLIGA and LIGUE_1 both failing `"served path returned an
+invalid probability simplex"` — the *same two leagues* item 122 fixed to have
+a genuinely usable, admitted `sigmoid` calibrator. The other four leagues
+correctly failed with `"calibration provenance failed; method='raw'"` (no
+calibrator ships in those artifacts at all — unchanged, correct).
+
+### Root cause, measured directly rather than inferred
+
+Reproduced the harness's exact real-data path (`train_on_real_matches.build_dataset`
+→ BUNDESLIGA's 301-row `2526` holdout, sorted by date, run row-by-row through
+`PredictionEngine._run_inference`) outside the harness to isolate the cause:
+
+```text
+max |home_win + draw + away_win - 1.0| across 301 real rows:  1.0e-4
+rows exceeding atol=1e-3:                                     0
+any negative probability:                                     False
+any NaN / non-finite value:                                   False
+```
+
+**Every one of the 301 real, calibrated BUNDESLIGA predictions is a
+genuinely valid probability simplex.** `ServedPredictionAdapter.predict_proba`'s
+own check — `np.allclose(output.sum(axis=1), 1.0, atol=1e-5)` over a `float32`
+array (`np.asarray(X, dtype=np.float32)`, line 44) — used a tolerance tighter
+than `float32` precision actually supports after a base-ensemble average is
+carried through a per-class sigmoid calibrator and renormalised. 94 of 301
+(31%) genuinely-valid rows tripped it. This is not a model or calibrator
+defect; it is the measurement instrument's own tolerance being wrong for the
+dtype it was measuring.
+
+⚠️ **This is the same class of bug items 92/111/117 already caught this repo
+doing to itself** — a check that reports a defect which isn't there — just on
+a numerical-tolerance axis rather than a string-matching one.
+
+### Fix
+
+`atol=1e-5` → `atol=1e-3` in the one `np.allclose` call, with the measured
+evidence above recorded inline so a future tightening isn't done blind.
+Verified: BUNDESLIGA/LIGUE_1 no longer raise on any of their real holdout
+rows; the other four leagues are unaffected (they fail earlier, on the
+`calibration_applied` check, before this line is ever reached).
+
+### What this does and does not unblock
+
+G16 can now actually produce MAPIE coverage numbers for the 2 of 6 leagues
+that ship a working calibrator — real measurement, where before there was
+only a false-blocked non-result. It does **not** flip the overall G16
+decision to PASS: the other 4 leagues genuinely have no calibrator to
+evaluate, `error_association` (item 50) is untouched and still fails in every
+league, and nothing here authorizes staking, Kelly sizing, or APS adoption.
+`docs/adr/0011-*`'s existing posture and the OG-06 dossier's G16 disposition
+(`HOLD`, accept as a documented limitation) stand exactly as recorded.
+
+### The real numbers, extracted for P19 scoping (not a certification run)
+
+`evaluate_g16_uncertainty.py`'s own `main()` discards `results` wholesale the
+moment any league errors (its all-or-none gate is correct policy — G16 needs
+every modeled league evaluable, not just some), so the two working leagues'
+real numbers never reach its own output. Called `evaluate_league()` directly
+for BUNDESLIGA and LIGUE_1 to preserve them; saved to
+`backend/reports/research/g16-conformal-coverage-partial-2026-09-21.json`
+(explicitly marked informational, not a PASS):
+
+| League | n_test | Nominal | Empirical coverage | Gap | Mean set size (of 3) |
+|---|---:|---:|---:|---:|---:|
+| BUNDESLIGA | 151 | 0.80 | 0.940 | +14.0pp | 2.51 |
+| BUNDESLIGA | 151 | 0.90 | 0.940 | +4.0pp | 2.51 |
+| LIGUE_1 | 151 | 0.80 | 0.834 | +3.4pp | 2.40 |
+| LIGUE_1 | 151 | 0.90 | **1.000** | +10.0pp | **3.00** |
+
+Both leagues over-cover (the safe direction for a marginal guarantee) rather
+than under-cover. But LIGUE_1 at 90% nominal returns the full 3-class set —
+every one of the 3 possible outcomes — on **all 151** test fixtures: a
+mathematically valid but completely uninformative prediction on every single
+one. This is concrete, measured evidence for exactly the principle the OG-06
+dossier and ADR-0009 already state without a number behind it: a conformal
+coverage guarantee does not by itself authorize capital allocation, because
+even where coverage holds, the resulting sets can be too wide to size a stake
+against. Not a new blocker — `error_association` was already sufficient
+reason to hold — but a second, independent, now-measured one.
+
 ## 126. Production-readiness sweep found no code blockers; `requires_bash`'s skip condition gave a false failure instead of skipping on a broken-WSL machine
 
 **Tier:** `RESOLVED` — 2026-09-21.
