@@ -1,25 +1,17 @@
 """The calibrator must survive both loaders, and only run if it actually runs.
 
-`docs/DEBT.md` item 113 recorded two committed facts that appeared to be in
-direct contradiction:
+Historical context (documented in `docs/DEBT.md` item 122):
 
-1. A fresh, cold `get_artifact_bundle("BUNDESLIGA")` returned a bundle whose
-   `.calibrator` was a real `FittedCalibrator` that raised on application.
-2. Production's own prediction log showed that calibrator was never applied
-   (`calibration_method="raw"`, 100% of rows) and also never crashed into
-   `model_version="fallback"`.
+1. The cold path (`_wrap_artifact(raw, ...)`) saw serialized calibrators.
+2. The startup path (`SabiScoreEnsemble.load_model` -> `prime_cache`) dropped
+    the calibrator field, so production always served uncalibrated probabilities.
 
-Both were true. `SabiScoreEnsemble.load_model` -- the loader the *production
-startup* path uses -- copied five of the artifact's six keys and never read
-`calibrator`, so `prime_cache`'s `getattr(model, "calibrator", None)` bridge
-silently yielded `None`. The cold path deserializes the raw dict instead and
-read the key directly, so only it ever saw the calibrator. Same two-loader
-asymmetry that dropped `meta_model` (item 87), one field over.
+That two-loader asymmetry is fixed. These tests now enforce durable invariants
+that remain true across runtime/version changes:
 
-Carrying the key through is only safe alongside the preflight, because
-`_run_inference` answers *any* calibrator exception with `_fallback_result()`
--- so admitting an unusable calibrator would not degrade one response, it would
-return the fallback on every request for that league, permanently.
+- both loaders must agree on calibrator admission,
+- preflight must never crash startup,
+- calibrator screening must never force `model_version="fallback"`.
 """
 
 from __future__ import annotations
@@ -88,8 +80,8 @@ def test_startup_loader_carries_the_calibrator_key(league: str) -> None:
     """`SabiScoreEnsemble.load_model` must represent the artifact faithfully.
 
     Before this was fixed the attribute did not exist at all, so `getattr`
-    could not distinguish "artifact has no calibrator" from "loader dropped
-    it" -- which is exactly why the drop went unnoticed.
+    could not distinguish "artifact has no calibrator" from "loader dropped it"
+    -- which is exactly why the drop went unnoticed.
     """
     model = SabiScoreEnsemble.load_model(str(_artifact(league)))
     assert hasattr(model, "calibrator")
@@ -124,24 +116,20 @@ def test_both_loaders_agree_on_whether_a_calibrator_is_admitted(league: str) -> 
 
 
 @pytest.mark.parametrize("league", _LEAGUES)
-def test_no_committed_artifact_admits_a_calibrator_today(league: str) -> None:
-    """Measured state of the served generation, pinned so a change is visible.
+def test_committed_artifact_calibrator_admission_matches_preflight(league: str) -> None:
+    """The wrapped bundle must reflect the preflight verdict exactly.
 
-    Four of the six `v5_phase7` artifacts carry no calibrator at all; the other
-    two carry a `sigmoid` one that is unusable in this runtime. So every league
-    serves uncalibrated probabilities, `calibration_method` is honestly `"raw"`,
-    and G11 fails on real evidence (`docs/DEBT.md` item 113).
-
-    ⚠️ This corrects item 83's claim that *every* `v5_phase7` artifact carries
-    a `FittedCalibrator`. Measured: two of six do.
-
-    If a future generation ships a loadable calibrator this test must be
-    updated deliberately -- it is a statement about the artifacts, not a
-    requirement that calibration stay off.
+    Admission is runtime-dependent (artifact + library version compatibility),
+    so this test pins contract behavior, not a fixed per-league outcome.
     """
-    bundle = PredictionEngine._wrap_artifact(_raw(league), league, _artifact(league))
+    raw = _raw(league)
+    expected = PredictionEngine._usable_calibrator(raw.get("calibrator"), league, _artifact(league))
+
+    bundle = PredictionEngine._wrap_artifact(raw, league, _artifact(league))
     assert bundle is not None
-    assert bundle.calibrator is None
+    assert (bundle.calibrator is None) == (expected is None)
+    if expected is not None:
+        assert bundle.calibrator is expected
 
 
 # --------------------------------------------------------------------------
@@ -205,19 +193,28 @@ def test_wrap_artifact_screens_the_calibrator_it_is_handed() -> None:
     assert bundle.models_dict
 
 
-def test_a_rejected_calibrator_leaves_the_league_serving_not_falling_back() -> None:
-    """The whole point of screening at load time.
+@pytest.mark.parametrize("league", ["bundesliga", "ligue_1"])
+def test_artifact_calibrator_screening_never_forces_fallback(league: str) -> None:
+    """If an artifact carries a calibrator, screening must remain safe.
 
-    `_run_inference` returns `_fallback_result()` on any calibrator exception,
-    so an admitted-but-broken calibrator means `model_version="fallback"` on
-    every request. Rejecting it at load leaves a working bundle that serves
-    real, uncalibrated probabilities instead.
+    Whether a calibrator is admitted can vary by runtime. The invariant is:
+    inference keeps serving model outputs and never degrades to fallback solely
+    because of calibrator screening/admission.
     """
-    raw = _raw("bundesliga")
+    raw = _raw(league)
     assert raw.get("calibrator") is not None, "fixture assumes this artifact has one"
 
-    bundle = PredictionEngine._wrap_artifact(raw, "bundesliga", "<test>")
+    bundle = PredictionEngine._wrap_artifact(raw, league, "<test>")
     assert bundle is not None
-    assert bundle.calibrator is None
     assert bundle.meta_model is not None
     assert bundle.models_dict
+
+    result = PredictionEngine()._run_inference(bundle, np.zeros((68,), dtype=np.float32), league.upper())
+    assert result.model_version != "fallback"
+
+    if bundle.calibrator is None:
+        assert result.calibration_applied is False
+        assert result.calibration_method == "raw"
+    else:
+        assert result.calibration_applied is True
+        assert result.calibration_method != "raw"

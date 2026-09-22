@@ -12,17 +12,55 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - **One-page operator action pack**:
   - `docs/certification/operator-action-pack-118-28-16-85-2026-09-22.md`
   - Covers copy/paste execution checklists and evidence templates for DEBT items 118, 28, 16, and 85.
+- **`backend/tests/unit/test_audit_release_identity.py`** — first regression coverage for
+  `scripts/audit_release_identity.py` (posix-path rendering, `INCOMPLETE`/`COMPLETE` verdict paths).
+
+### Fixed
+
+- **`scripts/audit_release_identity.py` rendered training-manifest paths with native OS separators**
+  (`str(Path.relative_to(...))`), so every local regeneration on Windows produced backslash paths
+  that would diff noisily against the Linux-CI-generated committed report. Fixed to
+  `.relative_to(REPO_ROOT).as_posix()`, matching the portability convention already used elsewhere
+  in this script family. Watched failing against the reverted code before being trusted.
 
 ### Changed
+
+- **Phase B (DEBT items 114/124) re-verified with dated evidence, not retrained:**
+  - Item 114: re-ran `compare_candidate_vs_incumbent.py` and
+    `generate_feature_availability_matrix.py` against the candidate artifacts already present in
+    this workspace (dated 2026-09-09/12/13, gitignored). Results match the previously committed
+    evidence exactly (`no_league_regression: 3/6`, `market_baseline: 0/6`,
+    `mean_rps_improvement ≈ -2.9e-10`, `promotion_permitted: false`) — no drift. Refreshed
+    `backend/models/candidate/comparison_report.json` and produced a first-ever per-match `.npz`
+    for the default `apex_v1_68` schema (gitignored, local-only). Marked `RESOLVED` for this
+    workspace; a genuinely fresh checkout with no local training run remains blocked on a retrain.
+  - Item 124: re-ran `scripts/audit_release_identity.py`. Verdict unchanged —
+    `RELEASE_IDENTITY_INCOMPLETE` (`source_commit`/`dataset_snapshot` still `UNBOUND`). Refreshed
+    `backend/reports/certification/release-identity-audit.json`. Genuinely closing this item
+    requires training and promoting a new generation (Class C / OG-07) — not attempted; recorded
+    as still `OPEN` in both the ledger and the blocker matrix.
+- **`docs/certification/blocker-matrix-2026-09-21.md`** updated with the current item 114/124 states.
 
 - **`docs/certification/upgraded-execution-directive-2026-09-21.md`** updated with:
   - current snapshot date alignment,
   - corrected item 85 handling (resolved-monitoring, not active-open),
   - explicit link to the operator action pack as the first execution artifact.
 
+- **`docs/DEBT.md` ledger integrity preflight completed**:
+  - removed unresolved merge markers at the file head,
+  - preserved both competing entries by assigning the blocker-matrix section to item `128`,
+  - disambiguated a pre-existing duplicate item `67` heading by relabeling the Stage-3 harness section to `67A` while keeping the Sentry observability entry as canonical item `67`.
+
+- **Phase A operator-gate evidence refresh captured**:
+  - item `118`: operator decision still pending, with current non-prediction-path behavior re-documented,
+  - item `28`: probe rerun logged and explicitly classified as non-diagnostic when `SABISCORE_ARTIFACT_BUCKET` is unset,
+  - item `16`: runner-backed CI evidence and fresh Gitleaks history scan output recorded,
+  - item `85`: alias/backend parity monitor evidence refreshed with current SHA snapshot.
+
 - **`docs/certification/blocker-matrix-2026-09-21.md`** reconciled with ledger truth:
   - item 67 remains resolved frontend-side,
-  - item 85 moved from `OPEN` to `RESOLVED (monitor)` with parity re-check guidance.
+  - item 85 moved from `OPEN` to `RESOLVED (monitor)` with parity re-check guidance,
+  - item 16 and item 28 rows updated to reflect the latest operator-only evidence state.
 
 ### Notes
 

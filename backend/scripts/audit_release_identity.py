@@ -123,7 +123,8 @@ def audit() -> dict[str, Any]:
         manifest = load_json(path) or {}
         git_block = manifest.get("git") or {}
         candidates.append({
-            "path": str(path.relative_to(REPO_ROOT)),
+            # Posix-style so a committed report doesn't churn between OSes.
+            "path": path.relative_to(REPO_ROOT).as_posix(),
             "declares_generation_id": manifest.get("generation_id"),
             "binds_served_generation": manifest.get("generation_id") == served and served != "",
             "feature_schema_version": (manifest.get("features") or {}).get(

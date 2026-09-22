@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Home, AlertCircle } from 'lucide-react';
+import { logError } from '@/lib/error-utils';
 
 interface MatchErrorProps {
   error: Error & { digest?: string };
@@ -15,7 +16,13 @@ export default function MatchInsightsError({ error, reset }: MatchErrorProps) {
   useEffect(() => {
     // API/backend errors are caught inline in page.tsx; this boundary only fires
     // for genuine unexpected crashes (rendering errors, unhandled component throws).
-    console.error('[MatchInsightsError] Unexpected crash:', error.digest ?? error.message);
+    logError(error, {
+      component: 'app/match/[id]/error',
+      action: 'render',
+      metadata: {
+        digest: error.digest,
+      },
+    });
   }, [error]);
 
   return (

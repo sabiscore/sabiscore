@@ -17,7 +17,7 @@
       "incumbent": {
         "accuracy": 0.521594684385382,
         "rps": 0.19937717060191004,
-        "brier": 0.5833243698852318,
+        "brier": 0.5833243698852317,
         "log_loss": 0.9816868193903705,
         "calibration_error": 0.06323534335597078,
         "n": 301
@@ -39,15 +39,15 @@
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
           0.6066366069250754,
-          0.24959771748953413,
-          0.14376567558539052
+          0.2495977174895341,
+          0.14376567558539047
         ],
         "away_favourite_probabilities": [
-          0.37099708521790153,
+          0.3709970852179016,
           0.2769015365329759,
           0.35210137824912247
         ],
-        "max_probability_change": 0.23563952170717384,
+        "max_probability_change": 0.23563952170717378,
         "directionally_coherent": true
       }
     },
@@ -77,11 +77,11 @@
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
           0.6729639790554883,
-          0.18594965959545293,
+          0.18594965959545298,
           0.1410863613490587
         ],
         "away_favourite_probabilities": [
-          0.20513904201461206,
+          0.2051390420146121,
           0.2606215249896543,
           0.5342394329957336
         ],
@@ -92,21 +92,21 @@
     "EREDIVISIE": {
       "incumbent": {
         "accuracy": 0.5230769230769231,
-        "rps": 0.19934586472921723,
+        "rps": 0.19934586472921725,
         "brier": 0.5946020278610398,
         "log_loss": 0.9967134988884735,
-        "calibration_error": 0.046097711892516206,
+        "calibration_error": 0.046097711892516186,
         "n": 260
       },
       "candidate": {
         "accuracy": 0.5230769230769231,
         "rps": 0.19934586472921695,
         "brier": 0.594602027861054,
-        "log_loss": 0.9967134988884897,
-        "calibration_error": 0.046097711892510385,
+        "log_loss": 0.9967134988884899,
+        "calibration_error": 0.04609771189251037,
         "n": 260
       },
-      "candidate_rps_improvement": 2.7755575615628914e-16,
+      "candidate_rps_improvement": 3.0531133177191805e-16,
       "candidate_wins": true,
       "market_baseline_rps": 0.19784937798976898,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
@@ -114,16 +114,16 @@
       "responsive_features": 55,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6679631010735186,
-          0.21704671086120178,
-          0.11499018806527962
+          0.6679631010735184,
+          0.2170467108612019,
+          0.11499018806527972
         ],
         "away_favourite_probabilities": [
-          0.17179809177478025,
-          0.2315460279190195,
-          0.5966558803062002
+          0.17179809177478028,
+          0.2315460279190194,
+          0.5966558803062003
         ],
-        "max_probability_change": 0.4961650092987384,
+        "max_probability_change": 0.49616500929873814,
         "directionally_coherent": true
       }
     },
@@ -138,13 +138,13 @@
       },
       "candidate": {
         "accuracy": 0.544,
-        "rps": 0.1975530244435568,
+        "rps": 0.19755302444355674,
         "brier": 0.5775595577756999,
         "log_loss": 0.977087884830227,
-        "calibration_error": 0.03453392836539104,
+        "calibration_error": 0.03453392836539107,
         "n": 375
       },
-      "candidate_rps_improvement": 5.9396931817445875e-15,
+      "candidate_rps_improvement": 5.995204332975845e-15,
       "candidate_wins": true,
       "market_baseline_rps": 0.19628490507602692,
       "market_baseline_quote": "opening_1x2_bet365_then_pinnacle",
@@ -152,16 +152,16 @@
       "responsive_features": 51,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6647225854538732,
-          0.2249220383000149,
-          0.11035537624611194
+          0.6647225854538731,
+          0.22492203830001495,
+          0.11035537624611196
         ],
         "away_favourite_probabilities": [
-          0.12000392415998053,
-          0.22235778815714596,
-          0.6576382876828735
+          0.12000392415998042,
+          0.2223577881571459,
+          0.6576382876828737
         ],
-        "max_probability_change": 0.5472829114367616,
+        "max_probability_change": 0.5472829114367618,
         "directionally_coherent": true
       }
     },
@@ -179,7 +179,7 @@
         "rps": 0.20061411944221572,
         "brier": 0.5893641865165768,
         "log_loss": 0.9901090077354534,
-        "calibration_error": 0.04770085804230043,
+        "calibration_error": 0.04770085804230041,
         "n": 301
       },
       "candidate_rps_improvement": -1.7581740785477251e-09,
@@ -190,8 +190,8 @@
       "responsive_features": 47,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6274304400962019,
-          0.1968710321533871,
+          0.6274304400962017,
+          0.19687103215338708,
           0.17569852775041112
         ],
         "away_favourite_probabilities": [
@@ -207,9 +207,9 @@
       "incumbent": {
         "accuracy": 0.5306666666666666,
         "rps": 0.20083607924724098,
-        "brier": 0.5919517442373475,
+        "brier": 0.5919517442373474,
         "log_loss": 0.9949205306089598,
-        "calibration_error": 0.028175288960085015,
+        "calibration_error": 0.028175288960084983,
         "n": 375
       },
       "candidate": {
@@ -217,7 +217,7 @@
         "rps": 0.20083607924724758,
         "brier": 0.5919517442373601,
         "log_loss": 0.9949205306089886,
-        "calibration_error": 0.028175288960195787,
+        "calibration_error": 0.028175288960195822,
         "n": 375
       },
       "candidate_rps_improvement": -6.6058269965196814e-15,
@@ -228,16 +228,16 @@
       "responsive_features": 50,
       "coherent_price_perturbation": {
         "home_favourite_probabilities": [
-          0.6129428754759693,
-          0.2419539352745187,
-          0.145103189249512
+          0.6129428754759692,
+          0.24195393527451875,
+          0.14510318924951207
         ],
         "away_favourite_probabilities": [
-          0.12855199586483287,
+          0.12855199586483296,
           0.2536288357791789,
           0.6178191683559882
         ],
-        "max_probability_change": 0.48439087961113636,
+        "max_probability_change": 0.4843908796111362,
         "directionally_coherent": true
       }
     }
@@ -266,7 +266,7 @@
     },
     "primary_metric_improvement": {
       "status": "FAIL",
-      "mean_rps_improvement": -2.9306408688700714e-10
+      "mean_rps_improvement": -2.9306407300921933e-10
     },
     "no_league_regression": {
       "status": "FAIL",
@@ -283,7 +283,7 @@
   },
   "candidate_league_wins": 3,
   "leagues_compared": 6,
-  "mean_rps_improvement": -2.9306408688700714e-10,
+  "mean_rps_improvement": -2.9306407300921933e-10,
   "no_league_regression": false,
   "promotion_permitted": false
 }

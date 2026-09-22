@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { safeErrorMessage } from '@/lib/error-utils';
+import { logError, safeErrorMessage } from '@/lib/error-utils';
 
 interface GlobalErrorProps {
   error: Error & { digest?: string };
@@ -10,7 +10,13 @@ interface GlobalErrorProps {
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
-    console.error('Global error:', error);
+    logError(error, {
+      component: 'app/global-error',
+      action: 'render',
+      metadata: {
+        digest: error.digest,
+      },
+    });
   }, [error]);
 
   const errorMessage = safeErrorMessage(error);

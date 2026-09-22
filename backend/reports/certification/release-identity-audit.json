@@ -44,7 +44,7 @@
     }
   },
   "binding_training_manifest": null,
-  "generated_at": "2026-09-20T13:57:45Z",
+  "generated_at": "2026-09-22T01:38:58Z",
   "identity_chain": {
     "calibrator": {
       "detail": "Calibrators live inside the artifact pickles and are therefore covered by artifact_sha256. Measured separately: 0 of 6 leagues has a USABLE calibrator (docs/DEBT.md item 122), so no calibrator participates in serving.",
@@ -86,7 +86,7 @@
   },
   "report_version": "release-identity-audit-1",
   "repository": {
-    "audited_at_commit": "fc8ece8e7f4defdefce24554df9421237ff1c2df",
+    "audited_at_commit": "6f15c04db6c9766fc4f636388807022bc3a1c341",
     "name": "sabiscore/sabiscore"
   },
   "result": {
@@ -150,6 +150,17 @@
       "git_commit": "d793e9be52c5963033df8bf9a12d08d6280529fd",
       "git_dirty": true,
       "path": "backend/models/candidate/training_manifest_v9_gate7.json"
+    },
+    {
+      "artifact_hashes": null,
+      "binds_served_generation": false,
+      "certification_policy_sha256": null,
+      "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+      "declares_generation_id": null,
+      "feature_schema_version": "apex_v1_68",
+      "git_commit": "e4b7603a63733309283520c656a9f3d0f099a9e8",
+      "git_dirty": true,
+      "path": "backend/models/candidate_clean2526/training_manifest.json"
     }
   ]
 }
