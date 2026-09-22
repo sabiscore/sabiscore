@@ -4,6 +4,7 @@ import os
 import json
 import pickle
 from typing import Dict, Any, Optional
+from sklearn.base import BaseEstimator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
@@ -588,7 +589,6 @@ class EnsembleModel:
 SabiScoreEnsemble = EnsembleModel
 
 
-from sklearn.base import BaseEstimator
 
 class LogOddsResidualWrapper(BaseEstimator):
     def __init__(self, base_estimator):
@@ -610,7 +610,7 @@ class LogOddsResidualWrapper(BaseEstimator):
             for odds in raw_odds:
                 try:
                     p = shin_devig(tuple(odds)).fair_probs
-                except:
+                except Exception:
                     p = (0.333, 0.333, 0.334)
                 # Clip to prevent log(0) and ensure valid simplex limits
                 p = np.clip(p, 1e-6, 1.0 - 1e-6)
@@ -638,7 +638,6 @@ class LogOddsResidualWrapper(BaseEstimator):
         return self
 
     def predict_proba(self, X):
-        import numpy as np
         from scipy.special import softmax
         base_margin = self._get_base_margin(X)
         
