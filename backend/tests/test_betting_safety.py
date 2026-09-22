@@ -19,16 +19,13 @@ from __future__ import annotations
 
 import ast
 from datetime import datetime, timezone
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 
 from src.schemas.betting_intelligence import (
-    BestMarketEnum,
     CompetitionEnum,
     FreshnessInput,
-    FreshnessStatusEnum,
     LineupStatusEnum,
     MarketInput,
     MatchAnalysisRequest,
@@ -41,18 +38,16 @@ from src.schemas.betting_intelligence import (
 )
 from src.services.betting_intelligence import analyze_match
 from src.services.core_engine import analyze_core_matches
-from src.schemas.core_engine import CoreEngineAnalyzeRequest, CoreMatchInput
+from src.schemas.core_engine import CoreMatchInput
 from src.services.market_intel import (
     build_market_intelligence,
     MarketDecisionState,
-    MarketProvenance,
 )
 from src.services.intelligence_synthesizer import (
     EnsemblePrediction,
     IntelligenceSynthesizer,
     OddsEdge,
 )
-from src.data.elo_engine import EloContext
 from src.models.causal_selector import CausalFeatureResult
 from src.services.rl_betting_agent import RLRecommendationPayload
 from src.services.uncertainty_service import UncertaintyBreakdown

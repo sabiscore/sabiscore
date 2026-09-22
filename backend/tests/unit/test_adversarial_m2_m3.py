@@ -8,31 +8,20 @@ Empirical verification of:
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 from fastapi import HTTPException
-from httpx import ASGITransport, AsyncClient
 
 from src.api.endpoints.auth import _check_rate_limit, _rate_limit_store
 from src.api.endpoints.performance import _compute_calibration_metrics
-from src.api.main import app
-from src.core.database import UserAccount
-from src.core.security import get_password_hash
 from src.db.models import ApiKey, UserFavorite, UserPreference, UserSavedMatch
 from src.models.evaluation.metrics import (
-    accuracy_and_per_class,
-    block_bootstrap_ci,
-    brier_score_decomposition,
     expected_brier_score,
-    expected_calibration_error,
-    log_loss_multiclass,
     ranked_probability_score,
 )
 from src.services.analytics_service import (
-    AnalyticsIngestionService,
     scrub_pii_and_secrets,
 )
 from src.services.auth_service import UserStateService

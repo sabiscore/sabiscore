@@ -116,11 +116,11 @@ def test_higher_measured_correlation_produces_a_harsher_haircut() -> None:
     support it.
     """
     uncorrelated = {
-        (f"EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "draw")]
+        ("EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "draw")]
         for i in range(1, 10)
     }
     correlated = {
-        (f"EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "home_win")]
+        ("EPL", f"2026-09-0{i}"): [_member(f"a{i}", "home_win"), _member(f"b{i}", "home_win")]
         for i in range(1, 10)
     }
 

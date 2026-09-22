@@ -30,7 +30,7 @@ _LEAGUES = ["epl", "la_liga", "bundesliga", "serie_a", "ligue_1", "eredivisie"]
 
 def _artifact(league: str) -> Path:
     name = f"{league}_ensemble_v5_phase7.pkl"
-    return Path(__file__).resolve().parents[3] / "models" / name
+    return Path(__file__).resolve().parents[2] / "models" / name
 
 
 def _neutral_vector() -> np.ndarray:
