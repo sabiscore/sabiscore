@@ -5,6 +5,44 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Upcoming-fixture acquisition restored (2026-09-23)
+
+### Fixed
+
+- **Zero upcoming fixtures across all six leagues** (`docs/DEBT.md` item 137,
+  closing item 130). `fixture_sync` queried football-data.org v4 with
+  `status=SCHEDULED`. v4 assigns `SCHEDULED` only while a match has "a rough
+  date set" and promotes it to `TIMED` "as soon the date is finalised with an
+  exact date and time" — so every fixture inside the 14-day horizon was `TIMED`,
+  `status=SCHEDULED` matched nothing, and the API returned HTTP 200 with an
+  empty `matches` array for all seven competitions. That is indistinguishable
+  from a genuine off-season, which is why every gate stayed green: suite
+  passing, provider `VERIFIED`, circuit closed, transport `SUCCESS`.
+
+  Diagnosed from `GET /api/v1/providers/evidence`, which already recorded the
+  `RESULTS` query returning 3–5 usable records per league while the `UPCOMING`
+  query returned zero, over the same credential and healthy quota.
+
+  ⚠️ Fixed **without** `status="SCHEDULED,TIMED"` — v4 documents no
+  comma-separated list, and guessing at vendor filter behaviour is how this
+  defect class starts. The server-side filter is dropped for the upcoming query
+  only, and selection happens client-side against `{"SCHEDULED", "TIMED"}` —
+  the same two-value vocabulary `_fixture_request_context` has always used to
+  label a query `UPCOMING`. Request budget is unchanged at one per competition.
+
+  `get_recent_results` keeps its server-side `FINISHED` filter (a single exact
+  status), the query keeps its evidence `query_intent` label via an explicit
+  parameter, and already-finished matches are excluded client-side so they
+  cannot be persisted as upcoming fixtures.
+
+### Changed
+
+- `dropped_wrong_status` added to `/metrics` alongside `dropped_incoherent`, so
+  a status mismatch can never be misread as bad data.
+- `test_upcoming_sync_keeps_seven_request_budget_and_persists_each_observation`
+  asserted `status == "SCHEDULED"` — it encoded the defect as a contract and
+  passed throughout the outage. Corrected, with the reason inline.
+
 ## Unreleased — Live production incident triage from Render log + `/metrics` evidence (2026-09-23)
 
 Four defects found by probing deployed `sha:7039aa4` directly (operator-supplied

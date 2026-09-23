@@ -213,3 +213,79 @@ async def test_a_genuinely_empty_provider_response_records_zero_candidates(caplo
     assert matches == []
     assert "received=0" in caplog.text
     assert "dropped_incoherent=0" in caplog.text
+
+
+async def test_upcoming_query_sends_no_status_filter_and_accepts_TIMED() -> None:
+    """The upcoming window must not be selected with `status=SCHEDULED`.
+
+    football-data.org v4 assigns SCHEDULED only while a match has "a rough date
+    set" and promotes it to TIMED "as soon the date is finalised with an exact
+    date and time". Every fixture inside a two-week horizon is therefore TIMED,
+    so `status=SCHEDULED` matched nothing and the API answered HTTP 200 with an
+    empty `matches` array for all seven competitions -- indistinguishable from an
+    off-season. Production served zero upcoming fixtures across all six leagues
+    on 2026-09-22 for exactly this reason (docs/DEBT.md item 137).
+
+    Two assertions, because either alone would pass a broken implementation: the
+    request must carry no server-side status filter, AND a TIMED record must
+    survive to the output.
+    """
+    timed = _record(41)
+    timed["status"] = "TIMED"
+    scheduled = _record(42)
+    scheduled["status"] = "SCHEDULED"
+
+    provider = _provider_with(
+        _result(ProviderStatus.VERIFIED, timed, scheduled),
+        *[_result(ProviderStatus.PARTIAL) for _ in range(6)],
+    )
+    client = FootballDataAPIClient(provider=provider)
+
+    matches = await client.get_upcoming_matches(days_ahead=14, limit=50)
+
+    assert {m["id"] for m in matches} == {"fd-41", "fd-42"}, "TIMED must not be dropped"
+    kwargs = provider.fixtures.await_args_list[0].kwargs
+    assert kwargs["status"] is None, (
+        "a server-side status filter cannot express 'upcoming' -- v4 splits it "
+        "across SCHEDULED and TIMED and documents no comma-separated list"
+    )
+    assert kwargs["query_intent"] == "UPCOMING", (
+        "dropping the status filter must not cost the provider-evidence context "
+        "its intent label"
+    )
+
+
+async def test_upcoming_query_still_excludes_already_finished_matches() -> None:
+    """Removing the server-side filter must not start ingesting results.
+
+    The window starts today, so a match played earlier today comes back FINISHED.
+    `_normalize_match` hardcodes status="scheduled" on everything it emits, so an
+    unfiltered batch would persist finished matches as upcoming fixtures.
+    """
+    finished = _record(43, home_score=2, away_score=1)
+    upcoming = _record(44)
+    upcoming["status"] = "TIMED"
+
+    provider = _provider_with(
+        _result(ProviderStatus.VERIFIED, finished, upcoming),
+        *[_result(ProviderStatus.PARTIAL) for _ in range(6)],
+    )
+    client = FootballDataAPIClient(provider=provider)
+
+    matches = await client.get_upcoming_matches(days_ahead=14, limit=50)
+
+    assert {m["id"] for m in matches} == {"fd-44"}, "FINISHED must not be ingested as upcoming"
+
+
+async def test_results_query_keeps_its_server_side_finished_filter() -> None:
+    """FINISHED is a single exact status, so that filter stays server-side.
+
+    Keeping it narrows the response on a 10-req/min free tier rather than
+    fetching a whole window and discarding most of it.
+    """
+    provider = _provider_with(*[_result(ProviderStatus.PARTIAL) for _ in range(7)])
+    client = FootballDataAPIClient(provider=provider)
+
+    await client.get_recent_results(days_back=3, limit=100)
+
+    assert provider.fixtures.await_args_list[0].kwargs["status"] == "FINISHED"

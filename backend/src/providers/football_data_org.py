@@ -77,8 +77,18 @@ def _fixture_request_context(
     date_from: str | None,
     date_to: str | None,
     status: str | None,
+    query_intent: str | None = None,
 ) -> dict[str, str]:
-    """Return only non-secret dimensions needed to interpret one match query."""
+    """Return only non-secret dimensions needed to interpret one match query.
+
+    ``query_intent`` is accepted explicitly because a caller may deliberately
+    send no ``status`` filter. The upcoming-fixture job does exactly that: v4
+    promotes a match from SCHEDULED to TIMED once its kickoff time is finalised,
+    so no single status value selects "upcoming" and the filter has to be
+    applied client-side instead. Without this parameter that query would lose
+    its intent label and its provider-evidence context would stop being
+    interpretable (docs/DEBT.md item 137).
+    """
     context = {"competition": competition.upper()}
     if status:
         normalized_status = status.upper()
@@ -89,6 +99,8 @@ def _fixture_request_context(
             context["query_intent"] = "RESULTS"
         else:
             context["query_intent"] = "MATCHES"
+    elif query_intent:
+        context["query_intent"] = query_intent.upper()
     if date_from:
         context["date_from"] = date_from
     if date_to:
@@ -123,6 +135,7 @@ class FootballDataOrgProvider(BaseProvider):
         date_to: str | None = None,
         status: str | None = None,
         limit: int | None = None,
+        query_intent: str | None = None,
     ) -> ProviderResult:
         """Fetch one competition's match window through the canonical gateway.
 
@@ -139,6 +152,7 @@ class FootballDataOrgProvider(BaseProvider):
             date_from=date_from,
             date_to=date_to,
             status=status,
+            query_intent=query_intent,
         )
         guard = self._guard("fixtures")
         if guard is not None:
