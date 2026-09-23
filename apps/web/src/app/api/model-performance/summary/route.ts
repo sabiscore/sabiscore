@@ -12,9 +12,19 @@ export const dynamic = 'force-dynamic';
  * accuracy/CLV/ROI with literal zeros, which read as measurements rather than
  * as absence (INV-01).
  */
-function infrastructureError(message: string, status: number) {
+function infrastructureError(
+  message: string,
+  status: number,
+  // A request that ran out of time and a host that refused the connection are
+  // different facts. This endpoint measures 2.5-3.0s warm against a 5s budget,
+  // and Render's free tier has been measured at ~11s on an idle dyno, so a cold
+  // start times out routinely -- reporting that as "unreachable" asserts an
+  // outage we did not observe. Same principle the keep-alive job already
+  // encodes: inability to confirm is not an outage (docs/DEBT.md item 138).
+  reason: 'backend_unreachable' | 'backend_timeout' = 'backend_unreachable',
+) {
   return NextResponse.json(
-    { status: 'METRICS_UNAVAILABLE', reason: 'backend_unreachable', error: message },
+    { status: 'METRICS_UNAVAILABLE', reason, error: message },
     { status },
   );
 }
@@ -39,11 +49,13 @@ export async function GET() {
       return infrastructureError('Unexpected response from backend', 502);
     }
   } catch (error: unknown) {
+    const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
     return infrastructureError(
-      error instanceof DOMException && error.name === 'TimeoutError'
+      timedOut
         ? 'Backend performance request timed out'
         : 'Backend performance service unavailable',
       503,
+      timedOut ? 'backend_timeout' : 'backend_unreachable',
     );
   }
 }
