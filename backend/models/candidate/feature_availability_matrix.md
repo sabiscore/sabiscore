@@ -6,7 +6,7 @@ Training rows: **12256**
 ## Mechanical blockers
 
 - Training-default-only slots: **1**
-- Positional train/serve schema mismatches: **11**
+- Positional train/serve schema mismatches: **0**
 - Permanent serving data-gap slots: **6**
 
 ## Candidate rows by league

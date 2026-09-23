@@ -335,6 +335,17 @@ def _verify_feature_contract(
                 f"{str(declared)!r} ({expected} features) but its artifact metadata "
                 f"declares {count}"
             )
+        # Width alone cannot tell phase7_68 from apex_v1_68 (both 68, 11 market
+        # slots differ), and serving builds whichever block the manifest names —
+        # a same-width relabel fed every live prediction the wrong market
+        # features (docs/DEBT.md item 141). Metadata without the field predates
+        # schema recording, so width stays its only check.
+        trained = metadata.get("feature_schema_version")
+        if trained is not None and trained != declared:
+            raise ActiveGenerationError(
+                f"Feature contract mismatch for {league}: manifest declares "
+                f"{str(declared)!r} but its artifact was trained on {trained!r}"
+            )
 
 
 def verify_feature_contract_freshness(models_dir: Path | None = None) -> None:

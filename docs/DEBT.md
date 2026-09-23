@@ -1,8 +1,133 @@
 # SabiScore Debt Ledger
 
+## 142. The served calibrator was fitted on a head production does not serve, and three records disagree about what is served — OPEN, a model-selection decision
+
+**Tier:** `OPEN` — needs an authorized decision. The label half is fixed; the composition half is deliberately not. **Found:** 2026-09-23, re-verifying item 140 on the correct checkout.
+
+Four records describe the `v5_phase7-20260922` served path. None of them match what the code does:
+
+| Source | Says the served path is | Records RPS of |
+| --- | --- | --- |
+| Sidecar metadata JSON (hash-pinned, written by `promote_clean_generation.py`) | `served_head: base_learner_average`, and "no post-hoc calibration… the request path does not execute" the stacking head | the base-learner average (Bundesliga 0.19983) |
+| The pickle's own `model_metadata` (written at training) | — | the stacked head **without** the calibrator (Bundesliga 0.19938) |
+| Each artifact's `FittedCalibrator.selection_rationale` (injected after training by `inject_platt_calibrator.py`) | "Platt/sigmoid fitted on base-learner equal-weight average" | — |
+| Manifest `served_head`, republished publicly by `GET /api/v1/models/status` | `base_learner_average` | — |
+| **`PredictionEngine._run_inference` (what actually runs)** | **stacked `TemperatureScaledMetaModel` (Ligue 1: `VectorScaledMetaModel`), then that sigmoid calibrator on top** | **nowhere** (Bundesliga 0.21007, measured here) |
+
+`evaluate_split_conformal.py` reproduces both recorded figures exactly for the five single-league artifacts. The pooled Eredivisie model records a figure over all 1,987 pooled holdout rows, so it is not reproducible from Eredivisie's 260 alone.
+
+So a calibrator fitted on one distribution (the base-learner average) is applied to another (an already temperature/vector-scaled stacked head). Measured on each artifact's own 2526 holdout, with the feature vectors the models were trained on (i.e. after item 141):
+
+| League | n | served: stacked + calibrator (RPS / log-loss / ECE) | stacked, no calibrator | average + calibrator | average, no calibrator |
+| --- | ---: | --- | --- | --- | --- |
+| Bundesliga | 301 | 0.2101 / 1.0102 / 0.085 | 0.1994 / 0.9817 / 0.063 | 0.2072 / 1.0031 / 0.058 | 0.1998 / 1.0011 / 0.061 |
+| EPL | 375 | 0.2085 / 1.0265 / 0.046 | 0.2054 / 1.0160 / 0.049 | 0.2047 / 1.0186 / 0.039 | 0.2060 / 1.0382 / 0.080 |
+| La Liga | 375 | 0.2010 / 0.9862 / 0.044 | 0.1976 / 0.9771 / 0.039 | 0.2001 / 0.9817 / 0.043 | 0.1992 / 0.9867 / 0.060 |
+| Ligue 1 | 301 | 0.2053 / 1.0083 / 0.067 | 0.2006 / 0.9901 / 0.062 | 0.1998 / 0.9921 / 0.060 | 0.1991 / 0.9883 / 0.068 |
+| Serie A | 375 | 0.2012 / 0.9944 / 0.037 | 0.2008 / 0.9949 / 0.045 | 0.2031 / 1.0035 / 0.034 | 0.2059 / 1.0298 / 0.062 |
+| Eredivisie | 260 | 0.2004 / 1.0018 / 0.052 | 0.1994 / 0.9967 / 0.055 | 0.2033 / 1.0144 / 0.067 | 0.2032 / 1.0170 / 0.071 |
+
+Adding the calibrator on top of the stacked head makes RPS worse than the stacked head alone in **6/6** leagues and log-loss worse in **5/6** (Serie A is flat). ECE is mixed (3 better, 3 worse). Every recorded metric describes a composition that is not served.
+
+### Fixed here: the label
+
+`promote_clean_generation.py` hardcoded `served_head: "base_learner_average"` in both the per-league metadata and the manifest. It now derives the head the way `_run_inference` does (a present meta-model is served; the average is its fallback), and its calibrator note no longer claims the stacking head is not executed. The committed manifest's `served_head` is corrected to `stacked_meta_model`, so `/api/v1/models/status` stops publishing a head that is not served. Display-only — no serving code reads `served_head` (grep-verified). The hash-pinned per-league metadata keeps its original text; changing it would break the artifact binding, and it now reads as a record of training-time intent.
+
+### Deliberately NOT fixed: which composition to serve
+
+Picking a row from the table above would be selecting the served model on its own evaluation holdout — the tuning `DATA_INTELLIGENCE_DIRECTIVE.md` §20 B3 forbids. The table is evidence that the current composition is incoherent, not licence to choose another from the same numbers. Options for an authorized decision:
+
+1. **Refit the calibrator on the served head.** Fit on the stacked head's output for the calibration season (2425), select on 2425, confirm on 2526 once. The principled option.
+2. **Serve what the calibrator was fitted for** (base-learner average + calibrator) by making `_run_inference` honour `served_head`. Reverses item 87's intent.
+3. **Drop the post-hoc calibrator** where the meta-model is already a calibrated wrapper (Temperature/Vector scaled).
+
+Whichever is chosen, the selection evidence must come from 2425, not from this table.
+
+### Also recorded here: split-conformal coverage of the served path
+
+`evaluate_split_conformal.py` now calls `PredictionEngine`'s own methods, and checks 25 rows per league against `_run_inference` (max difference ≤ 1e-4 in all six). It uses the holdout each artifact records. Calibration is the first half of each league's 2526 season by date, and the test is the second half. Pooled over 996 test rows:
+
+| Score | nominal | empirical | gap | mean set size |
+| --- | ---: | ---: | ---: | ---: |
+| LAC (headline) | 0.80 | 0.782 | −0.018 | 1.94 |
+| | 0.90 | 0.877 | −0.023 | 2.36 |
+| | 0.95 | 0.933 | −0.017 | 2.60 |
+| APS (evaluation-only) | 0.80 | 0.955 | +0.155 | 2.73 |
+| | 0.90 | 1.000 | +0.100 | 3.00 |
+| | 0.95 | 1.000 | +0.050 | 3.00 |
+
+LAC undercovers by about 2 points at every level. That is consistent with a calibration half that precedes the test half within a season, where exchangeability is not guaranteed. Ligue 1 is the weakest league (0.722 at 80%). APS returns the full three-outcome set at 90%+, so it carries no information here. It is also randomised, and moved from 0.962 to 0.955 at 80% between two runs.
+
+**Adaptive scores.** The Phase D/E directive §17 asks for `aps`/`raps`. `DATA_INTELLIGENCE_DIRECTIVE.md` §21 prohibits adaptive conformal "until an appropriate difficulty signal has been demonstrated", and `informative_within_confidence_band` still fails (item 50). APS is kept as evaluation-only; nothing may rest on it until someone decides which directive governs. **RAPS is dropped.** It was added in #228 but never ran, because `main()` crashed first. MAPIE carves RAPS's regularisation set out of the calibration half by *random* `StratifiedShuffleSplit`, which breaks the chronological rule. At about 150 calibration rows that set is 15 rows, below the 20 a 95% level needs, so it raised on every league.
+
+The item 140 conformal numbers were measured on the wrong checkout and are superseded by this table.
+
+**Blast radius (of this item's changes):** `/api/v1/models/status` reports `served_head: stacked_meta_model`; the next promotion writes a truthful head. No prediction changes.
+
+---
+
+## 141. ⭐⭐ Every live prediction fed the model 11 wrong market features — the manifest declared `phase7_68` over artifacts trained on `apex_v1_68` — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` in code — confirm on production after deploy (below). **Found:** 2026-09-23, re-verifying item 140 on the correct checkout.
+
+`active_generation.json` declared `feature_schema_version: "phase7_68"`. Every served artifact records `feature_schema_version: "apex_v1_68"` in its hash-pinned metadata, and its `feature_columns` equal `APEX_FEATURES_68`. The two schemas are both 68 wide and disagree in 11 slots (20–30, the market block). Serving picks the market block from the manifest (`_resolve_is_apex()` in the projector, `schema_version` in `FeatureTransformer`), then assembles the vector **positionally** in that schema's order; `PredictionEngine._run_inference` checks width only. So every production prediction since #228 put legacy market features in the slots the model was trained on Apex market features, and every check passed.
+
+**Cost, measured on each artifact's own 2526 holdout** (served path = stacked head + calibrator, identical except for the feature vector):
+
+| League | n | RPS served until now | RPS with the trained-on features | argmax changed |
+| --- | ---: | ---: | ---: | ---: |
+| Bundesliga | 301 | 0.2212 | 0.2101 | 15.3% |
+| EPL | 375 | 0.2220 | 0.2085 | 23.5% |
+| La Liga | 375 | 0.2176 | 0.2010 | 8.3% |
+| Ligue 1 | 301 | 0.2159 | 0.2053 | 11.0% |
+| Serie A | 375 | 0.2132 | 0.2012 | 9.3% |
+| Eredivisie | 260 | 0.2127 | 0.2004 | 12.3% |
+
+0.011–0.017 RPS in every league — larger than any edge this repo has ever debated against the market. Staking was off throughout (`stake_permitted: false`), so the harm was to forecast quality, not money.
+
+### Fix
+
+1. **The declaration.** `feature_schema_version` → `apex_v1_68`, matching the artifacts' own training record. `feature_contract.json` regenerated (`scripts/generate_feature_contract.py`). Under production's flags (`USE_PHASE7_MODELS=true`, `USE_PHASE8_FEATURES=false`) the projector's column order now equals the artifacts' `feature_columns` exactly; before, it did not.
+2. **The guard that would have caught it.** `_verify_feature_contract` (`src/models/active_generation.py`) checked width only — its own docstring named the relabel risk and then only covered relabels that change width. It now also requires each league's hash-verified metadata `feature_schema_version`, when recorded, to equal the manifest's. It runs in `verify_active_artifacts.py`, the Render build command, so a future mismatch fails the deploy and the previous release keeps serving. Watched rejecting the real pre-fix manifest: *"manifest declares 'phase7_68' but its artifact was trained on 'apex_v1_68'"*.
+3. **Tests that pinned the defect.** Several tests encoded "the live manifest is `phase7_68`" as a *safety proof* that item 37's Apex wiring stayed inert — they certified the skew instead of catching it. Each now pins the schema it is actually about. Two new guards check agreement with the artifacts' training record rather than any particular schema name: `test_default_schema_matches_the_served_artifacts_training_schema` and `test_projector_serves_the_active_artifacts_training_order`, both watched failing on the old value. `test_feature_transformer` gained an Apex case proving `FeatureTransformer`'s Apex branch accepts complete real evidence.
+4. **Derived evidence.** `models/candidate/feature_availability_matrix.json` regenerated: `serving_schema_misaligned_slots` 11 → 0, nothing else moved, `promotion_gate` still `FAIL` (1 training-defaulted slot, 6 always-data-gap slots). The misalignment blocker item 37 described as a structural deadlock is gone; the gate still fails for its other, genuine reasons.
+
+### Root cause, as far as history shows
+
+The manifest has declared `phase7_68` since the first commit that introduced `v5_phase7-20260922` (`a255077`, squash-merged in #228). `promote_clean_generation.py` copies the schema from the training manifest, which says `apex_v1_68`, so the committed value did not come from an unmodified run of that script; history does not show where it came from. Item 129 then aligned the *tests'* feature vectors to Apex (correctly) without questioning the manifest, so the tests measured a correctly-fed model while production served a misfed one.
+
+⚠️ **Width is not identity.** Any check that compares only a vector's length will pass a same-width schema swap. Compare names, or the artifact's recorded schema.
+
+### Latent risk, not fixed
+
+`FeatureTransformer._resolve_active_schema_version()` and the projector's `_resolve_is_apex()` fall back to `phase7_68` when the manifest cannot be read. That default was harmless while the active generation was `phase7_68`; it is now the wrong schema. The manifest is verified at startup (`_startup_load_models_strict`), so a per-request read failure is unlikely — but the fallback should fail closed rather than pick a schema.
+
+### Verify after deploy
+
+`GET /api/v1/models/status` must report `feature_schema_version: apex_v1_68` for each league and a `generation_hash` other than `be44918c…`.
+
+**Blast radius:** every production prediction's market inputs change — intended; argmax moves on 8–24% of holdout fixtures. No threshold, certification state, staking flag or artifact changes.
+
+---
+
 ## 140. `evaluate_split_conformal.py`'s served-path wrapper was stale since item 87 (2026-09-13); re-measuring surfaced that the locally-committed `v5_phase7-20260922` artifacts contradict their own generation's stated retrain, and that production's live artifact hashes match no file in this checkout at all
 
-**Tier:** `RESOLVED` (wrapper staleness) + `OPEN` (artifact/generation mismatch, operator-only). **Found:** 2026-09-23, resuming Track B research (NEXUS Phase D/E directive) at the user's direction.
+**Tier:** `RETRACTED` (Part B, and Part A's numbers) — see the correction immediately below. The original text is kept unedited after it as the record of what was claimed. **Found:** 2026-09-23, resuming Track B research (NEXUS Phase D/E directive) at the user's direction.
+
+### ⚠️ CORRECTION (2026-09-23, same day) — every measurement in this item was taken on the wrong checkout
+
+The measurements below were taken on local `master` at `6f15c04`, which predates #228 — the PR that introduced `v5_phase7-20260922`. That checkout still held the **previous** generation's `.pkl` files beside a newer `active_generation.json`. Re-run on the actual merged tree (`a9140e0`, branch `audit/full-repo-evidence-pass`):
+
+- **Part B is false.** All six served artifacts record `holdout_season: 2526` and `calibration_season: 2425`. Their SHA-256 hashes match what `GET /api/v1/models/status` reports in production. Item 81's leakage **is** fixed by this generation, and there is no production/checkout artifact mismatch. The "byte-identical to item 50" `error_association` numbers were identical because the old artifacts were what got measured.
+- **Part A's numbers are superseded.** The wrapper was stale, but the transcription that replaced it did not match the served path either: it omitted the injected calibrator that `_run_inference` applies after the stacked head. The script now calls `PredictionEngine`'s own methods (`_wrap_artifact`, `_stacked_predict`, `_apply_calibrator`, overlay) and fails if any of 25 rows per league differs from `_run_inference` by more than 1e-4. **The claim that `src.models.prediction` cannot be imported offline was also false** — the script imports it without a database.
+- **What re-verifying actually found:** item 141 (the manifest declared the wrong feature schema — every live prediction was misfed) and item 142 (the served calibrator was fitted on a different head). `error_association` on the real generation: item 50's 2026-09-23 update.
+- **Item 124 is still open** — that half of Part B's first bullet holds: `audit_release_identity.py` on `a9140e0` still reports `RELEASE_IDENTITY_INCOMPLETE`.
+
+⚠️ **Before measuring anything, check `git branch --show-current` and `git rev-parse HEAD`.** A subagent that crashed mid-session left this checkout on a different branch, and nothing about the output looked wrong.
+
+---
+
+*Original entry, as written before the correction:*
 
 ### Part A — the conformal script's wrapper was stale, now fixed
 
@@ -7646,6 +7771,45 @@ gains one case for the new list-subscriptions service method.
 ---
 
 ## 50. Ensemble-dispersion epistemic uncertainty is built, real, and 5/6 certified — `error_association` fails on real evidence (hypotheses 2, 3, 4 **and the calculation-bug hypothesis** ruled out)
+
+> **UPDATE 2026-09-23 — on the `v5_phase7-20260922` generation, `error_association`
+> passes in all five leagues the test suite scores; the item stays OPEN.**
+> Measured on each artifact's own 2526 holdout (the generation that fixed item
+> 81's leakage), with the same bucketing and scoring as
+> `test_uncertainty_contract.py`:
+>
+> | League | n | lowest-epistemic RPS | highest-epistemic RPS | gap |
+> | --- | ---: | ---: | ---: | ---: |
+> | EPL | 375 | 0.1878 | 0.1971 | **+0.0093** |
+> | La Liga | 375 | 0.1566 | 0.2062 | **+0.0496** |
+> | Bundesliga | 301 | 0.1815 | 0.2009 | **+0.0195** |
+> | Serie A | 375 | 0.1998 | 0.2077 | **+0.0078** |
+> | Ligue 1 | 301 | 0.1948 | 0.2087 | **+0.0140** |
+> | Eredivisie (pooled model) | 260 | 0.1854 | 0.1734 | −0.0120 |
+>
+> The direction reversed from every earlier measurement: in all five, higher
+> epistemic uncertainty now goes with *worse* RPS, as the gate requires. The
+> threshold is unchanged: `uncertainty_policy.py` has no diff, and the
+> certification policy hash is still `4e050ad0…f664`. Why it is still open:
+>
+> * **`informative_within_confidence_band` now fails** (spread ratio ≈1.31
+>   against a required 2.0; a static `xfail` since item 129).
+>   `UNCERTAINTY_REQUIRES_ALL_GATES` is `True`, so the method is still
+>   unvalidated and `MODEL_UNCERTAINTY_UNAVAILABLE` stays critical.
+> * **Eredivisie fails.** It is scoreable for the first time, because the
+>   holdout is now 2526 and its only season is 2526, and it runs the wrong way.
+>   The cross-league test does not catch this: it passes as soon as any league
+>   passes.
+> * **What this tests is narrower than what is served.** Epistemic comes from
+>   RandomForest tree dispersion and RPS from the base-learner average. Serving
+>   uses the stacked head plus a calibrator (item 142), so this is not yet
+>   evidence about served forecasts.
+> * **One generation, one holdout.** A reversal between generations is itself a
+>   reason for caution. Both the old inversion and this pass are single
+>   measurements, and neither has been bootstrapped.
+>
+> The earlier "byte-identical on the new generation" claim (item 140, Part B) was
+> measured on a stale checkout and is retracted.
 
 > ⚠️ **Title corrected 2026-09-19.** This heading previously ended "so staking
 > stays blocked". That clause is no longer true: staking is live under the

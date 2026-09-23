@@ -11,11 +11,13 @@ stake is sized for a user. Certification gates G11/G27 are **measured, not passe
 `docs/DEBT.md` for the open items and `backend/src/models/certification_policy.py` for the
 promotion gates themselves.
 
-Post-hoc calibration is applied **only where held-out evidence supports it**. On the current
-generation that is two of six leagues (Bundesliga, Ligue 1); the other four serve their raw
-meta-model output and report `calibration_applied: false`. Calibrators are accepted solely when
-holdout ECE improves and holdout Brier does not degrade — a calibrator is never forced into
-production because it looks good on the rows it was fitted on (`docs/DEBT.md` item 96).
+The generation (`v5_phase7-20260922`) was trained on seasons 1920–2324, calibrated on 2425, and
+scored on the 2526 holdout. Its artifacts use the `apex_v1_68` feature schema, and the build gate
+(`scripts/verify_active_artifacts.py`) rejects a manifest that declares a different schema, even
+one of the same width (`docs/DEBT.md` item 141). Each league is served through its stacked head
+(temperature-scaled; vector-scaled for Ligue 1), with a sigmoid calibrator on top. That calibrator
+was fitted on the base-learner average, a different head, and whether to keep it is an open
+decision (`docs/DEBT.md` item 142).
 
 The canonical production surfaces are:
 

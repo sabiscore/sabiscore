@@ -24,6 +24,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, Match, Team
 from src.models.feature_registry import (
+    APEX_MARKET_FEATURES_14,
     MARKET_FEATURES_14,
     PHASE7_FEATURES_7,
     PHASE7_FEATURES_ALWAYS_DATA_GAP,
@@ -394,9 +395,21 @@ async def test_market_features_rescued_from_gaps_when_odds_available(
         session,
         MATCH_DATE,
     )
-    for feature in MARKET_FEATURES_14:
+    for feature in _served_market_block(projector):
         assert feature not in result["data_gaps"], feature
     assert result["features_dict"]["market_prob_home"] == pytest.approx(6 / 13)
+
+
+def _served_market_block(projector: UpcomingMatchFeatureProjector) -> list[str]:
+    """The market names the projector actually serves under the active schema.
+
+    Legacy and Apex blocks share 7 names; iterating a fixed list pins one schema
+    and passes vacuously for the other's 7 unserved names (docs/DEBT.md item 141).
+    """
+    block = APEX_MARKET_FEATURES_14 if projector._is_apex else MARKET_FEATURES_14
+    served = [f for f in projector.canonical_features if f in set(block)]
+    assert len(served) == 14, served
+    return served
 
 
 async def test_market_features_remain_gap_when_odds_unavailable(
@@ -413,7 +426,7 @@ async def test_market_features_remain_gap_when_odds_unavailable(
         session,
         MATCH_DATE,
     )
-    for feature in MARKET_FEATURES_14:
+    for feature in _served_market_block(projector):
         assert feature in result["data_gaps"], feature
 
 

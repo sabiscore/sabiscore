@@ -5,7 +5,68 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Serving fed the model the wrong market features; manifest schema corrected (2026-09-23)
+
+### Fixed
+
+- ⭐⭐ **Every live prediction put legacy market features into the slots the
+  model was trained on Apex market features** (`docs/DEBT.md` item 141).
+  `active_generation.json` declared `phase7_68` while all six served artifacts
+  record `apex_v1_68`. Both schemas are 68 wide and differ in 11 market slots,
+  and serving builds the vector positionally from the manifest's schema, so the
+  width check passed and the model scored the wrong inputs. Measured on each
+  artifact's own 2526 holdout, RPS improves by 0.011–0.017 in every league
+  (EPL 0.2220 → 0.2085), and the top outcome changes on 8–24% of fixtures. The
+  manifest now declares `apex_v1_68`; `feature_contract.json` and the candidate
+  feature-availability matrix are regenerated (`serving_schema_misaligned_slots`
+  11 → 0; the promotion gate still fails on its genuine blockers).
+- **The build gate now compares schema identity, not only width.**
+  `_verify_feature_contract` requires each artifact's recorded
+  `feature_schema_version` to match the manifest. It runs in Render's build
+  command, so a future mismatch fails the deploy and the previous release keeps
+  serving. Watched rejecting the pre-fix manifest.
+- **Tests that pinned the defect now pin their own schema.** Several tests
+  asserted "the live manifest is `phase7_68`" as proof that the Apex wiring was
+  inert, so they certified the mismatch. Two new guards check that the default
+  schema and the projector's column order match the served artifacts' training
+  record; both were watched failing on the old manifest.
+- **`served_head` no longer names a head that is not served** (item 142).
+  `promote_clean_generation.py` hardcoded `base_learner_average`;
+  `PredictionEngine` serves the stacked meta-model whenever one is present. The
+  script now derives the head, and the manifest reports `stacked_meta_model`.
+- **`evaluate_split_conformal.py` now measures the served path itself.** It
+  calls `PredictionEngine`'s own methods (stacked head, then calibrator, then
+  overlay), checks 25 rows per league against `_run_inference`, uses each
+  artifact's recorded holdout, and builds features with the manifest's schema.
+  Its `main()` had failed with a `KeyError` since #228. Result (996 pooled test
+  rows): LAC covers 0.782 / 0.877 / 0.933 against nominal 0.80 / 0.90 / 0.95,
+  undercovering by about 2 points. APS returns the full outcome set at 90% and
+  above, so it is uninformative. RAPS is dropped: MAPIE draws its
+  regularisation set by random split, and at this calibration size that set
+  was too small for the 95% level in every league.
+
+### Found, not fixed
+
+- **The served calibrator was fitted on the base-learner average but is
+  applied after the stacked head** (item 142). On the 2526 holdout, adding it on
+  top of the stacked head makes RPS worse in 6/6 leagues. Choosing a different
+  composition from those same numbers would tune on the holdout, so it is left
+  to an authorized decision, with the selection evidence to come from the 2425
+  calibration season.
+
+### Corrected
+
+- ⚠️ **The next entry (#233) is retracted** (item 140). Its measurements were
+  taken on a stale local checkout holding the previous generation's artifacts.
+  On the merged tree the artifacts hold 2526 out and match production's hashes,
+  so there is no artifact mismatch and item 81's leakage is fixed. Its conformal
+  numbers are superseded, and its claim that `src.models.prediction` cannot be
+  imported offline was wrong.
+
 ## Unreleased — Conformal wrapper corrected; retrain/production artifact mismatch surfaced (2026-09-23)
+
+> ⚠️ **Retracted — see the entry above and `docs/DEBT.md` item 140.** Measured
+> on the wrong checkout.
 
 ### Fixed
 

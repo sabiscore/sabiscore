@@ -52,6 +52,13 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _served_head(raw: Dict[str, Any]) -> str:
+    # Mirrors PredictionEngine._run_inference: a present meta-model is served,
+    # the base-learner average is only its fallback. This was hardcoded to
+    # "base_learner_average" and published a false head (docs/DEBT.md item 142).
+    return "stacked_meta_model" if raw.get("meta_model") is not None else "base_learner_average"
+
+
 def build_metadata(
     league: str,
     generation: str,
@@ -103,12 +110,12 @@ def build_metadata(
         "in_artifact_calibrator": "calibrator" in raw,
         "in_artifact_calibrator_note": (
             "No 'calibrator' key is written by this training path. PredictionEngine "
-            "applies a FittedCalibrator only when the artifact carries one, so live "
-            f"predictions apply no post-hoc calibration. The {head} wrapper sits on the "
-            "stacking head, which the request path (_ensemble_predict_dict, an "
-            "equal-weight base-learner average) does not execute."
+            "applies a FittedCalibrator only when the artifact carries one, after the "
+            "served head — a calibrator injected later (inject_platt_calibrator.py) is "
+            f"applied on top of the {head} stacking head, which PredictionEngine "
+            "serves whenever it is present."
         ),
-        "served_head": "base_learner_average",
+        "served_head": _served_head(raw),
         "stacking_head_present": head,
         "artifact_keys": sorted(raw.keys()),
         "reproducibility_sha256": manifest["reproducibility_sha256"],
@@ -147,6 +154,7 @@ def main() -> int:
     suffix = manifest["training_config"]["artifact_suffix"]
 
     artifacts: Dict[str, Dict[str, Any]] = {}
+    heads: set[str] = set()
     for slug, league in _SLUGS.items():
         src_pkl = src / f"{slug}_ensemble_{suffix}.pkl"
         if not src_pkl.exists():
@@ -160,6 +168,7 @@ def main() -> int:
 
         shutil.copy2(src_pkl, dst_pkl)
         metadata = build_metadata(league, args.generation, dst_pkl, manifest, report)
+        heads.add(metadata["served_head"])
         dst_meta.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         artifacts[slug] = {
             "artifact": dst_pkl.name,
@@ -189,7 +198,7 @@ def main() -> int:
         "generation": f"{args.generation}-{datetime.now(timezone.utc):%Y%m%d}",
         "active_version": args.generation,
         "feature_schema_version": manifest["features"]["feature_schema_version"],
-        "served_head": "base_learner_average",
+        "served_head": heads.pop() if len(heads) == 1 else "per_league",
         "certification_state": "UNVERIFIED",
         "certified_at": None,
         "promotion_state": "ACTIVE_FAIL_CLOSED",

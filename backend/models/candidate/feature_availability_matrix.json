@@ -12,12 +12,12 @@
   },
   "candidate_feature_schema_version": "apex_v1_68",
   "candidate_contract_hash": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338",
-  "serving_contract_hash": "6f290862052dbd22f22045366fb687bf462103460407e49327fcb8e00afd71aa",
+  "serving_contract_hash": "60d9de2f7d837990bb8a603e64cfe2275db4cb542feb400f9710fad0de5f3338",
   "summary": {
     "features": 68,
     "training_defaulted_slots": 1,
     "non_variable_training_slots": 7,
-    "serving_schema_misaligned_slots": 11,
+    "serving_schema_misaligned_slots": 0,
     "always_data_gap_slots": 6
   },
   "promotion_gate": "FAIL",
@@ -385,8 +385,8 @@
     {
       "index": 20,
       "feature": "market_overround",
-      "serving_feature": "market_edge_home",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_overround",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -398,13 +398,13 @@
       "training_max": 1.1666666666666665,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 21,
       "feature": "market_favorite_home",
-      "serving_feature": "market_favorite",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_favorite_home",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -416,13 +416,13 @@
       "training_max": 1.0,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 22,
       "feature": "market_favorite_draw",
-      "serving_feature": "odds_ratio",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_favorite_draw",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -434,13 +434,13 @@
       "training_max": 1.0,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 23,
       "feature": "market_favorite_away",
-      "serving_feature": "log_odds_home",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_favorite_away",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -452,13 +452,13 @@
       "training_max": 1.0,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 24,
       "feature": "log_odds_home",
-      "serving_feature": "log_odds_draw",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "log_odds_home",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -470,13 +470,13 @@
       "training_max": 3.1354942159291497,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 25,
       "feature": "log_odds_draw",
-      "serving_feature": "log_odds_away",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "log_odds_draw",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -488,13 +488,13 @@
       "training_max": 2.833213344056216,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 26,
       "feature": "log_odds_away",
-      "serving_feature": "draw_probability",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "log_odds_away",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -506,13 +506,13 @@
       "training_max": 3.5263605246161616,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 27,
       "feature": "market_probability_margin",
-      "serving_feature": "market_confidence",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_probability_margin",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -524,13 +524,13 @@
       "training_max": 0.8512778405008723,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 28,
       "feature": "market_normalized_entropy",
-      "serving_feature": "ev_home",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_normalized_entropy",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -542,13 +542,13 @@
       "training_max": 0.999919240212914,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 29,
       "feature": "market_home_away_probability_diff",
-      "serving_feature": "ev_draw",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "market_home_away_probability_diff",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -560,13 +560,13 @@
       "training_max": 0.8717818255825786,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 30,
       "feature": "odds_ratio",
-      "serving_feature": "ev_away",
-      "classification": "SCHEMA_MISMATCH",
+      "serving_feature": "odds_ratio",
+      "classification": "ALIGNED_OBSERVED_SIGNAL",
       "training_source": "exact build_dataset() candidate matrix",
       "serving_source": "active generation's positional serving contract",
       "training_rows": 12256,
@@ -578,7 +578,7 @@
       "training_max": 21.49532710280374,
       "defaulted_training_slot": false,
       "always_data_gap": false,
-      "candidate_position_matches_current_serving_schema": false
+      "candidate_position_matches_current_serving_schema": true
     },
     {
       "index": 31,
