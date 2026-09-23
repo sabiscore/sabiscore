@@ -20,18 +20,20 @@ strictly precedes test, matching how the model would actually be deployed.
 
 Wrapping a surrogate model would measure the conformal machinery but say
 nothing about SabiScore's served forecasts, so the real artifact is wrapped --
-specifically, **the equal-weight average of its RandomForest / XGBoost /
-LightGBM base learners**, which is what ``PredictionEngine`` computes on the
-request path.
+specifically, the same two-branch logic ``PredictionEngine._run_inference``
+computes on the request path: the stacked meta-model when one is present,
+equal-weight base-learner averaging only as its fallback.
 
-⚠️ The stacking head is deliberately NOT used. ``_ensemble_predict_dict``
-averages the base learners and never touches ``meta_model``; serving's
-``_ArtifactBundle`` has no ``meta_model`` field at all. Wrapping the stacking
-head instead — as an earlier revision of this script did — measures a model
-production never serves, and scored ~0.008 RPS better than each artifact's own
-recorded metric. Averaging reproduces every recorded metric **exactly**, which
-is the evidence that this wrapper is the served path rather than a plausible
-look-alike.
+⚠️ **Corrected 2026-09-23.** An earlier revision of this docstring said the
+stacking head is "deliberately NOT used" because ``_ensemble_predict_dict``
+"never touches meta_model" and ``_ArtifactBundle`` "has no meta_model field at
+all". That was an accurate description of serving as it stood on 2026-09-10.
+`docs/DEBT.md` item 87 (2026-09-13) wired ``_run_inference`` to try
+``_stacked_predict`` via ``bundle.meta_model`` FIRST, falling back to
+averaging only when no meta-model is present or its call raises -- so as of
+that fix, averaging is the fallback, not the primary path. See
+``ServedEnsemble`` below for the corrected wrapper and its own faithfulness
+discussion.
 
 **Non-adaptive only.** ``conformity_score="lac"`` is the Least Ambiguous
 set-valued Classifier score (s = 1 - p_true). The adaptive scores (``aps``,
@@ -88,46 +90,80 @@ class ServedEnsemble:
     MAPIE needs ``predict_proba``, ``predict`` and ``classes_``. The artifact is
     a plain dict, so this adapts it without modifying anything on disk.
 
-    ⚠️ **This averages the base learners and does NOT use ``meta_model``.**
-    That is not an approximation -- it is what the request path computes.
-    ``PredictionEngine._ensemble_predict_dict`` (`src/models/prediction.py`) is
-    an equal-weight average of every base learner's ``predict_proba``, and
-    never touches the stacking head; ``_ArtifactBundle`` does not even carry a
-    ``meta_model`` field. CLAUDE.md's vΩ.47 entry records the same split: the
-    stacking head is read by ``SabiScoreEnsemble.load_model()`` at *startup*,
-    while the request path averages.
+    ⚠️ **Updated 2026-09-23 -- the previous revision of this wrapper was
+    correct on 2026-09-10 and has since gone stale.** `docs/DEBT.md` item 87
+    (2026-09-13) wired ``PredictionEngine._run_inference`` to try the stacked
+    meta-model FIRST whenever ``bundle.meta_model is not None``, falling back
+    to the equal-weight base-learner average only if the meta-model is absent
+    or its call raises. Averaging is no longer what production computes when a
+    meta-model is present -- it is the fallback path, not the primary one.
 
-    An earlier revision of this script wrapped ``meta_model`` instead, on the
-    assumption that ``ensemble.py::predict``'s stacking flow was the served
-    one. It is not, and the error was visible in the numbers: the stacking head
-    scored ~0.008 RPS *better* than each artifact's own recorded metric, which
-    was misread as the artifact being unreproducible. Averaging the base
-    learners reproduces every recorded metric exactly (see `faithfulness` in
-    the report), which is the proof this wrapper is the served path.
+    This wrapper now mirrors ``_run_inference`` exactly: ``_build_meta_features``
+    and ``_stacked_predict`` are transcribed from `src/models/prediction.py`
+    (not imported -- `docs/DEBT.md` item 7 records that importing
+    `src.models.prediction`'s chain reaches `core/database.py`, which opens a
+    connection at import time, so an offline research script cannot import it
+    without a live DB). ``predict_proba`` tries the stacked path first and
+    falls back to averaging only when the meta-model is missing or raises,
+    exactly matching the two branches in ``_run_inference``.
+
+    The prior revision's own reasoning for wrapping *only* the average --
+    "the stacking head scored ~0.008 RPS better than each artifact's own
+    recorded metric" -- was correct for the artifacts and the code as they
+    stood on 2026-09-10. It stopped being a reason to prefer averaging the
+    moment production started preferring the meta-model. The `faithfulness`
+    block in the emitted report re-runs that same exact-reproduction check
+    against this wrapper, so a divergence from the artifact's own recorded
+    metrics is measured here, not asserted.
     """
 
     _estimator_type = "classifier"
 
     def __init__(self, artifact: dict[str, Any]) -> None:
         self._models: dict[str, Any] = artifact["models"]
-        # Retained only for classes_; serving never invokes the stacking head.
-        self._unused_meta_model = artifact.get("meta_model")
+        self._meta_model: Any = artifact.get("meta_model")
         self.feature_columns: list[str] = artifact["feature_columns"]
         self.classes_ = np.asarray(
-            getattr(self._unused_meta_model, "classes_", None)
-            if getattr(self._unused_meta_model, "classes_", None) is not None
+            getattr(self._meta_model, "classes_", None)
+            if getattr(self._meta_model, "classes_", None) is not None
             else [0, 1, 2]
         )
         self.metadata: dict[str, Any] = artifact.get("model_metadata", {})
 
-    def predict_proba(self, X: Any) -> np.ndarray:
-        """Equal-weight average of base learner probabilities.
+    def _build_meta_features(self, X: np.ndarray) -> np.ndarray:
+        """Transcribed from ``PredictionEngine._build_meta_features``.
+
+        Concatenates each base learner's 3-class probability vector into one
+        ``(n, 3 * n_models)`` row, in ``self._models``' own iteration order --
+        the same order ``_run_inference`` builds them in, since both iterate
+        the artifact's own ``models`` dict.
+        """
+        columns: list[np.ndarray] = []
+        for model in self._models.values():
+            probabilities = np.asarray(model.predict_proba(X), dtype=np.float64)
+            if probabilities.ndim != 2 or probabilities.shape[1] < 3:
+                raise ValueError("base learner returned invalid meta-feature probabilities")
+            columns.extend(
+                [probabilities[:, 0:1], probabilities[:, 1:2], probabilities[:, 2:3]]
+            )
+        if not columns:
+            raise ValueError("no base learner available for meta-feature construction")
+        return np.hstack(columns)
+
+    def _stacked_predict(self, X: np.ndarray) -> np.ndarray:
+        """Transcribed from ``PredictionEngine._stacked_predict``."""
+        meta_features = self._build_meta_features(X)
+        proba = np.asarray(self._meta_model.predict_proba(meta_features), dtype=np.float64)
+        if proba.ndim == 1:
+            proba = proba.reshape(1, -1)
+        return proba
+
+    def _averaged_predict(self, X: Any) -> np.ndarray:
+        """Equal-weight average of base learner probabilities (fallback only).
 
         Mirrors ``PredictionEngine._ensemble_predict_dict``, including its
         skip-on-failure behaviour, so a base learner that raises is dropped
-        from the average rather than failing the whole prediction. Numpy in,
-        numpy out -- no DataFrame at the inference boundary, matching how the
-        base learners were fitted and how serving calls them.
+        from the average rather than failing the whole prediction.
         """
         arr = np.asarray(X, dtype=float)
         collected: list[np.ndarray] = []
@@ -141,6 +177,25 @@ class ServedEnsemble:
         if not collected:
             raise RuntimeError("no base learner produced a valid 3-class matrix")
         return np.mean(collected, axis=0)
+
+    def predict_proba(self, X: Any) -> np.ndarray:
+        """Stacked meta-model first, averaging only as fallback.
+
+        Matches ``_run_inference``'s two branches exactly: if a meta-model is
+        present, try it; only fall back to averaging if it is absent or its
+        call raises. Unlike serving, this wrapper does not special-case "a
+        serialized calibrator exists" into a hard failure -- MAPIE needs a
+        ``predict_proba`` that always returns, and no artifact evaluated here
+        actually has a *usable* calibrator (0/6 per item 122), so that branch
+        of `_run_inference` is unreachable on the artifacts this script scores.
+        """
+        arr = np.asarray(X, dtype=float)
+        if self._meta_model is not None:
+            try:
+                return self._stacked_predict(arr)
+            except Exception:  # noqa: BLE001 - mirrors serving's own tolerance
+                pass
+        return self._averaged_predict(arr)
 
     def predict(self, X: Any) -> np.ndarray:
         return self.classes_[self.predict_proba(X).argmax(axis=1)]
@@ -357,10 +412,16 @@ def main() -> int:
         "method": {
             "library": f"mapie {__import__('mapie').__version__}",
             "estimator": (
-                "served v5_phase7 request path: equal-weight average of the "
-                "RF/XGB/LGBM base learners, matching "
-                "PredictionEngine._ensemble_predict_dict. The stacking head is "
-                "NOT used, because the request path does not use it."
+                "served v5_phase7 request path, matching "
+                "PredictionEngine._run_inference exactly: the stacked "
+                "meta-model (SoftmaxMetaModel.predict_proba over the RF/XGB/"
+                "LGBM base learners' concatenated probabilities) when present, "
+                "falling back to equal-weight base-learner averaging only if "
+                "no meta-model is present or the stacked call raises. "
+                "Corrected 2026-09-23 -- docs/DEBT.md item 87 (2026-09-13) "
+                "made stacking the primary path; a prior revision of this "
+                "script (and this field) predated that fix and averaged "
+                "unconditionally."
             ),
             "conformity_score": "lac (non-adaptive)",
             "adaptive_scores_excluded": (
@@ -370,19 +431,19 @@ def main() -> int:
             ),
             "prefit": True,
             "scope_caveat": (
-                "The conformalized object is the ARTIFACT's stacking output "
-                "(SoftmaxMetaModel.predict_proba), which is what the .pkl "
-                "actually carries. It is NOT the fully-calibrated served "
-                "probability: each artifact's own model_metadata records "
-                "accuracy/rps that this wrapper does not reproduce on the "
-                "identical fixture set (row counts match exactly; metrics do "
-                "not), because the calibrator selected during training is not "
-                "persisted inside the artifact and calibration_baselines.json "
-                "holds recorded telemetry rather than a fitted calibrator. See "
-                "per_league[].faithfulness for the measured gap. Coverage "
-                "numbers here therefore describe the stacking head, and a "
-                "calibrated-pipeline coverage claim would need the calibrator "
-                "re-fit or persisted first."
+                "On the artifacts this script can load, meta_model is a bare "
+                "SoftmaxMetaModel for all six leagues (docs/DEBT.md: 'genuinely "
+                "uncalibrated'), so the stacked path taken here is the raw, "
+                "uncalibrated stacking output -- not a calibrated probability. "
+                "A serialized calibrator exists for 2/6 leagues (bundesliga, "
+                "ligue_1) but _run_inference never applies it to transform "
+                "probabilities on the success path; it is consulted only if "
+                "the stacked call raises (docs/DEBT.md item 122: 0/6 leagues "
+                "have a USABLE calibrator). See per_league[].faithfulness for "
+                "whether this wrapper reproduces each artifact's own recorded "
+                "accuracy/rps exactly -- exact reproduction is the evidence "
+                "this wrapper matches the object actually being measured, not "
+                "an assumption."
             ),
             "split": (
                 f"season {HOLDOUT_SEASON} (the artifacts' own declared holdout, so "
