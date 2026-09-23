@@ -5,6 +5,43 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Real fixtures lost team identity; the performance bootstrap froze the backend (2026-09-23)
+
+### Fixed
+
+- ⭐⭐ **Real fixtures re-derived team identity from display names, with no league
+  scope** (`docs/DEBT.md` item 143). The real-fixture path held the authoritative
+  team ids but converted them back to names and re-resolved them across every
+  competition. Once a club has a second same-named `Team` row under UCL, the name
+  matches two rows and resolves to nothing: live `fd-564645` (Espanyol vs Real
+  Madrid CF) and `fd-558217` (PSV vs Fortuna Sittard) lost one side's form and
+  head-to-head and were marked `FIXTURE_IDENTITY_UNVERIFIED`, so no model forecast
+  ran. The real-fixture path now uses its stored ids, and name resolution follows
+  fixture sync's contract (same competition, Elo-bearing rows first, never across
+  competitions). The typed-matchup path resolves once and shares the ids with the
+  projector, so Elo and form describe the same club.
+- ⭐⭐ **The walk-forward bootstrap blocked the backend event loop** (item 144).
+  `/api/v1/providers/health` took ~1.3 s alone and 11–25 s while
+  `/model-performance/summary` ran, and the web health route requests that summary
+  on every page's header refresh. That is why the header read "Providers Unknown"
+  on most pages. The computation now runs in a worker thread and is cached on a
+  digest of the exact settled records (the bootstrap is seeded, so the key is
+  exact and a new settlement invalidates it). The calibration endpoint's miss path
+  and the hourly settlement pass also run off the event loop.
+- **Calibration chart no longer draws single-match bins as calibration swings.**
+  The reliability curve used a smooth spline through every bin, including bins
+  with one prediction, which can only read 0% or 100%. The curve is now straight
+  segments through bins with at least 5 predictions; thinner bins are drawn hollow
+  and off the curve, and the caption says so. The ECE and reliability tiles use
+  neutral text instead of success green, since a measured error is not a pass.
+
+### Verification
+
+- Backend suite 2696 passed, 0 failed (19 skipped and 1 xfailed are the existing
+  environment-limited and item-50 cases). Every new guard was watched failing on
+  the old code with the production symptom.
+- Web lint 0, typecheck 0, Vitest 408/408, `NODE_ENV=production` build exit 0.
+
 ## Unreleased — Serving fed the model the wrong market features; manifest schema corrected (2026-09-23)
 
 ### Fixed
