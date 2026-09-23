@@ -60,9 +60,9 @@ MATCH_DATE = datetime(2026, 8, 10, 15, 0)
 async def _seed_old_match(session: AsyncSession, days_before: int) -> None:
     session.add_all(
         [
-            Team(id="team-home", name="Home FC", active=True),
-            Team(id="team-away", name="Away FC", active=True),
-            Team(id="team-opp", name="Opponent FC", active=True),
+            Team(id="team-home", name="Home FC", league_id="EPL", active=True),
+            Team(id="team-away", name="Away FC", league_id="EPL", active=True),
+            Team(id="team-opp", name="Opponent FC", league_id="EPL", active=True),
         ]
     )
     await session.commit()
@@ -245,10 +245,10 @@ async def test_project_match_features_home_and_away_form_dont_collide(
     a remap ever read them."""
     session.add_all(
         [
-            Team(id="team-winner", name="Winner FC", active=True),
-            Team(id="team-loser", name="Loser FC", active=True),
-            Team(id="team-foe1", name="Foe1 FC", active=True),
-            Team(id="team-foe2", name="Foe2 FC", active=True),
+            Team(id="team-winner", name="Winner FC", league_id="EPL", active=True),
+            Team(id="team-loser", name="Loser FC", league_id="EPL", active=True),
+            Team(id="team-foe1", name="Foe1 FC", league_id="EPL", active=True),
+            Team(id="team-foe2", name="Foe2 FC", league_id="EPL", active=True),
         ]
     )
     await session.commit()

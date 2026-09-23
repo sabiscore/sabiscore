@@ -73,8 +73,8 @@ def projector(monkeypatch: pytest.MonkeyPatch) -> UpcomingMatchFeatureProjector:
 async def _seed_teams(session: AsyncSession) -> None:
     session.add_all(
         [
-            Team(id="team-home", name="Arsenal", active=True),
-            Team(id="team-away", name="Chelsea", active=True),
+            Team(id="team-home", name="Arsenal", league_id="EPL", active=True),
+            Team(id="team-away", name="Chelsea", league_id="EPL", active=True),
         ]
     )
     await session.commit()
