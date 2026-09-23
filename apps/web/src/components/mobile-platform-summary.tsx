@@ -5,6 +5,7 @@ import { Activity, BadgeCheck, Database } from "lucide-react";
 import {
   derivePlatformHealth,
   fetchPlatformHealth,
+  formatProviderActivation,
   PLATFORM_HEALTH_QUERY_KEY,
 } from "@/lib/health-status";
 import {
@@ -38,7 +39,7 @@ export function MobilePlatformSummary() {
       role="group"
       aria-label={
         health || modelData
-          ? `Model ${modelVersion}; certification ${certification}; providers ${health?.configured ?? 0} configured; live-validated ${health?.live ?? 0}`
+          ? `Model ${modelVersion}; certification ${certification}; providers ${formatProviderActivation(health?.providerActivation)}`
           : "Checking platform and model status"
       }
     >

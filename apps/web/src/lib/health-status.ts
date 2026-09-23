@@ -247,6 +247,33 @@ export function deriveProviderActivation(
   return { total: providers.length, configured, enabled, live, degraded, label };
 }
 
+/**
+ * Human-readable provider activation, or an explicit "unknown" when there is
+ * nothing to report.
+ *
+ * `deriveProviderActivation` fails closed to all-zeros when the health payload
+ * is missing or malformed, which is correct as *data*. Rendering those zeros
+ * verbatim is not: "0 configured · 0 live-validated" asserts that the platform
+ * has no providers, when the truth is that we could not reach the backend to
+ * ask. That was visible live on 2026-09-22 — /performance showed
+ * "0 configured · 0 live-validated" beside a "Performance service unreachable"
+ * banner, while every other route on the same deployment correctly showed
+ * "5 configured · 2 live-validated".
+ *
+ * Same class as the `LIVE` freshness badge and the vΩ.23 providers pill: a
+ * plausible-looking number standing in for an unanswered question. Three call
+ * sites render this string, so the fix lives here rather than in any of them.
+ */
+export function formatProviderActivation(
+  health: ProviderActivationStats | null | undefined,
+): string {
+  if (!health) return "Checking";
+  // total === 0 means we never received a provider list — distinct from
+  // genuinely receiving a list that reports nothing configured.
+  if (health.total === 0) return "Unknown";
+  return `${health.configured} configured · ${health.live} live-validated`;
+}
+
 export function derivePlatformHealth(payload: BackendHealthPayload) {
   const readiness = deriveBackendReadiness(payload);
   const providers = payload.providers ?? [];

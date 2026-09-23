@@ -14,6 +14,7 @@ import {
   PLATFORM_HEALTH_QUERY_KEY,
   fetchPlatformHealth,
   derivePlatformHealth,
+  formatProviderActivation,
 } from "@/lib/health-status";
 import { LEAGUE_CONFIG, TeamVsDisplay } from "./team-display";
 import {
@@ -762,7 +763,7 @@ export function MatchSelector() {
                 )}
               />
               {platformHealth
-                ? `${platformHealth.configured} configured · ${platformHealth.live} live-validated`
+                ? formatProviderActivation(platformHealth.providerActivation)
                 : "Checking providers"}
             </span>
             <span>•</span>
