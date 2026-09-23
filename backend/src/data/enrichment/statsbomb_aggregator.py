@@ -108,15 +108,26 @@ class StatsBombAggregator:
             staleness_seconds=self._staleness_seconds(recent),
         )
 
+    # Whether this process has already reported an unreadable cache. The failure
+    # is a property of the runtime (a missing parquet engine), not of the
+    # request, so it is the same on every call -- production emitted this
+    # five-line traceback twice per /full-analysis request on 2026-09-22.
+    # Class-level so it stays quiet across aggregator instances too.
+    _cache_failure_reported: bool = False
+
     def _load_cache(self) -> pd.DataFrame:
         if not self.cache_path.exists():
             return pd.DataFrame()
         try:
             return pd.read_parquet(self.cache_path)
         except Exception as exc:
-            logger.warning(
-                "Unable to read StatsBomb cache %s: %s", self.cache_path, exc
-            )
+            if not StatsBombAggregator._cache_failure_reported:
+                StatsBombAggregator._cache_failure_reported = True
+                logger.warning(
+                    "Unable to read StatsBomb cache %s (reported once per process): %s",
+                    self.cache_path,
+                    exc,
+                )
             return pd.DataFrame()
 
     def _staleness_seconds(self, rows: pd.DataFrame) -> int:
