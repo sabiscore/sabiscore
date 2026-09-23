@@ -71,8 +71,8 @@ async def _seed_teams(
 ) -> None:
     session.add_all(
         [
-            Team(id="team-home", name=home, active=True),
-            Team(id="team-away", name=away, active=True),
+            Team(id="team-home", name=home, league_id="EPL", active=True),
+            Team(id="team-away", name=away, league_id="EPL", active=True),
         ]
     )
     await session.commit()
@@ -162,3 +162,133 @@ async def test_db_match_id_path_with_valid_teams_is_verified(
         "home_team_resolved": True,
         "away_team_resolved": True,
     }
+
+
+# ---------------------------------------------------------------------------
+# Cross-competition duplicates (production regression, 2026-09-23)
+#
+# Fixture sync mints a second Team row for a club's European fixtures under
+# league UCL with the SAME provider display name. Serving used to re-resolve
+# identity from that name with no league scope, so the exact-name stage saw
+# two rows and failed closed: real fixtures (fd-564645 Espanyol vs Real Madrid
+# CF, fd-558217 PSV vs Fortuna Sittard) lost one side's form and head-to-head
+# and were stamped FIXTURE_IDENTITY_UNVERIFIED, blocking the model.
+# ---------------------------------------------------------------------------
+
+
+async def _seed_cross_competition_duplicate(session: AsyncSession) -> None:
+    session.add_all(
+        [
+            Team(id="epl-arsenal", name="Arsenal FC", league_id="EPL", active=True),
+            Team(id="ucl-arsenal", name="Arsenal FC", league_id="UCL", active=True),
+            Team(id="epl-chelsea", name="Chelsea FC", league_id="EPL", active=True),
+            Team(id="epl-opp", name="Opponent FC", league_id="EPL", active=True),
+        ]
+    )
+    await session.commit()
+    session.add(
+        Match(
+            id="history-1",
+            home_team_id="epl-arsenal",
+            away_team_id="epl-opp",
+            league_id="EPL",
+            match_date=datetime(2026, 8, 1, 15, 0),
+            status="finished",
+            home_score=2,
+            away_score=0,
+        )
+    )
+    await session.commit()
+
+
+async def test_db_path_uses_stored_ids_when_name_is_ambiguous_across_leagues(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    await _seed_cross_competition_duplicate(session)
+    session.add(
+        Match(
+            id="fixture-1",
+            home_team_id="epl-arsenal",
+            away_team_id="epl-chelsea",
+            league_id="EPL",
+            match_date=datetime(2026, 8, 10, 15, 0),
+            status="scheduled",
+        )
+    )
+    await session.commit()
+
+    result = await projector.build_live_feature_vector(
+        match_id="fixture-1", league="EPL", db=session
+    )
+
+    assert result["fixture_identity_verified"] is True
+    # The home side's real history reached the vector instead of a gap.
+    assert "home_form_last5_home" not in result["data_gaps"]
+
+
+async def test_matchup_path_resolves_within_the_requested_league(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    await _seed_cross_competition_duplicate(session)
+
+    assert await projector._get_team_id_by_name("Arsenal FC", session, "EPL") == "epl-arsenal"
+    # Display-form league spelling folds to the same competition.
+    assert await projector._get_team_id_by_name("Arsenal FC", session, "Premier League") == (
+        "epl-arsenal"
+    )
+
+
+async def test_matchup_path_never_resolves_across_competitions(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    await _seed_cross_competition_duplicate(session)
+
+    assert await projector._get_team_id_by_name("Chelsea FC", session, "LA_LIGA") is None
+
+
+async def test_matchup_path_prefers_the_elo_bearing_row_like_fixture_sync(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    """Same contract as fixture_sync_service._resolve_upcoming_team_id: an
+    Elo-less provider duplicate must not win over the historical row."""
+    from src.db.models import EloRatingSnapshot
+
+    session.add_all(
+        [
+            Team(id="corpus-arsenal", name="Arsenal", league_id="EPL", active=True),
+            Team(id="orphan-arsenal", name="Arsenal FC", league_id="EPL", active=True),
+            Team(id="corpus-opp", name="Opponent", league_id="EPL", active=True),
+        ]
+    )
+    await session.commit()
+    kickoff = datetime(2026, 5, 1, 15, 0)
+    session.add(
+        Match(
+            id="corpus-1",
+            home_team_id="corpus-arsenal",
+            away_team_id="corpus-opp",
+            league_id="EPL",
+            match_date=kickoff,
+            status="finished",
+            home_score=1,
+            away_score=0,
+        )
+    )
+    await session.commit()
+    session.add(
+        EloRatingSnapshot(
+            match_id="corpus-1",
+            team_id="corpus-arsenal",
+            pre_match_elo=1600.0,
+            post_match_elo=1608.0,
+            league="EPL",
+            season="2025/2026",
+            match_date=kickoff,
+            created_at=kickoff,
+        )
+    )
+    await session.commit()
+
+    assert await projector._get_team_id_by_name("Arsenal FC", session, "EPL") == (
+        "corpus-arsenal"
+    )

@@ -263,11 +263,19 @@ class UpcomingMatchFeatureProjector:
         # ponytail: Match.match_date is naive TIMESTAMP WITHOUT TIME ZONE — strip tz so asyncpg accepts range bounds
         match_date = match_date.replace(tzinfo=None)
 
-        home_team_id_resolved = await self._get_team_id_by_name(
-            match_dict["home_team"], db
+        league_hint = match_dict.get("league")
+        # A caller holding authoritative team IDs (the fixture row) passes them;
+        # re-deriving identity from the display name is what let a second
+        # same-named Team row in another competition blank a real fixture.
+        home_team_id_resolved = (
+            match_dict["home_team_id"]
+            if "home_team_id" in match_dict
+            else await self._get_team_id_by_name(match_dict["home_team"], db, league_hint)
         )
-        away_team_id_resolved = await self._get_team_id_by_name(
-            match_dict["away_team"], db
+        away_team_id_resolved = (
+            match_dict["away_team_id"]
+            if "away_team_id" in match_dict
+            else await self._get_team_id_by_name(match_dict["away_team"], db, league_hint)
         )
         home_resolved = home_team_id_resolved is not None
         away_resolved = away_team_id_resolved is not None
@@ -295,7 +303,6 @@ class UpcomingMatchFeatureProjector:
         # reassigns home_stats/away_stats.
         home_db_missing = home_stats is None
         away_db_missing = away_stats is None
-        league_hint = match_dict.get("league")
         home_stats, home_scraped_provenance = self._apply_scraped_fallback(
             home_stats,
             competition=league_hint,
@@ -594,6 +601,9 @@ class UpcomingMatchFeatureProjector:
                 "id": str(match.id),
                 "home_team": home_team or str(match.home_team_id),
                 "away_team": away_team or str(match.away_team_id),
+                # A stored id whose Team row is missing stays unresolved.
+                "home_team_id": str(match.home_team_id) if home_team else None,
+                "away_team_id": str(match.away_team_id) if away_team else None,
                 "league": league,
                 "match_date": match_date.isoformat(),
             },
@@ -737,8 +747,10 @@ class UpcomingMatchFeatureProjector:
 
         season = self._derive_season(match_date)
 
-        home_team_id = await self._get_team_id_by_name(home_team, db) or home_team
-        away_team_id = await self._get_team_id_by_name(away_team, db) or away_team
+        home_resolved_id = await self._get_team_id_by_name(home_team, db, league)
+        away_resolved_id = await self._get_team_id_by_name(away_team, db, league)
+        home_team_id = home_resolved_id or home_team
+        away_team_id = away_resolved_id or away_team
         synthetic_match_id = f"{home_team} vs {away_team}"
 
         projected = await self.project_match_features(
@@ -746,6 +758,8 @@ class UpcomingMatchFeatureProjector:
                 "id": synthetic_match_id,
                 "home_team": home_team,
                 "away_team": away_team,
+                "home_team_id": home_resolved_id,
+                "away_team_id": away_resolved_id,
                 "league": league,
                 "match_date": match_date.isoformat(),
             },
@@ -1223,10 +1237,22 @@ class UpcomingMatchFeatureProjector:
         return canonical_season(match_date)
 
     async def _get_team_id_by_name(
-        self, team_name: str, db: AsyncSession
+        self, team_name: str, db: AsyncSession, league: Optional[str] = None
     ) -> Optional[str]:
-        """Get team ID by team name (exact, affix-stripped, then fuzzy — see team_identity)."""
-        return await resolve_team_id(team_name, db)
+        """Resolve a team name under the contract fixture sync persists with.
+
+        Scoped to the competition and Elo-bearing rows first
+        (``fixture_sync_service._resolve_upcoming_team_id``), so the second
+        same-named Team row fixture sync mints for a club's European fixtures
+        cannot make the name ambiguous. Never crosses into another competition
+        when one is given: that would be a cross-league identity guess.
+        """
+        league_id = canonical_league_id(league) if league else None
+        if not league_id:
+            return await resolve_team_id(team_name, db)
+        return await resolve_team_id(
+            team_name, db, league_id=league_id, require_elo_history=True
+        ) or await resolve_team_id(team_name, db, league_id=league_id)
 
     async def _get_team_stats(
         self,

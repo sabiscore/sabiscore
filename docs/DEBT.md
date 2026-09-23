@@ -1,5 +1,102 @@
 # SabiScore Debt Ledger
 
+## 144. The walk-forward bootstrap ran on the event loop — every page's header refresh froze the backend for 5–25 s — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` — 2026-09-23. **Found:** chasing why the header pill read
+"Providers Unknown" on 5 of 6 page loads in a user's screenshots.
+
+`walk_forward_validate()` runs a 10,000-replicate block bootstrap. Three callers
+ran it inline inside async code: `_walk_forward_summary()` (behind both
+`/api/v1/model-performance` and `/model-performance/summary`), the calibration
+endpoint on a cache miss (three bootstraps), and the hourly settlement pass. A
+CPU-bound call on the single uvicorn event loop stalls **every** request that
+arrives while it runs.
+
+Measured live, not inferred:
+
+| Request | Alone | While `/model-performance/summary` is in flight |
+| --- | --- | --- |
+| `/api/v1/providers/health` | 1.2–1.6 s | **11.2 s, 24.9 s** |
+| `/api/v1/model-performance/summary` | 6.5 s (once ~27 s) | 12–28 s |
+
+The web `/api/health` route requests the summary on **every** header refresh and
+gives the provider registry a 5 s budget, so ordinary browsing kept freezing the
+backend and the provider list timed out to `[]` → "Unknown". It also explains the
+performance-page timeouts item 138 re-labelled as `backend_timeout`.
+
+**Fix:** `performance.py` `_validate_walk_forward()` runs the work via
+`asyncio.to_thread` and caches it on a SHA-256 of the exact settled records. The
+bootstrap is seeded (`rng_seed=42`) and `walk_forward_validate` mutates no shared
+state, so the result is a pure function of its input: the cache key is exact, and
+a settlement that adds a record changes the key rather than serving a stale
+result. The calibration miss path and the settlement pass also move to
+`asyncio.to_thread`. The web route's 5 s budget is deliberately unchanged; the fix
+is to stop blocking the server, not to wait longer.
+
+**Guard:** `tests/unit/test_walk_forward_offloaded_and_cached.py` drives the real
+shared path (`_walk_forward_summary`). Against the old code it fails with
+`assert 6260 != 6260` (ran on the loop thread) and `assert 2 == 1` (recomputed on
+identical records).
+
+**Verify after deploy:** time `/api/v1/providers/health` while a
+`/model-performance/summary` request is in flight; it should stay near its
+standalone latency.
+
+## 143. Real fixtures re-derived team identity from display names, league-unscoped — a UCL same-name row blanked one side and stamped `FIXTURE_IDENTITY_UNVERIFIED` — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` — 2026-09-23. **Found:** a user screenshot of hypothetical
+"Arsenal vs Chelsea" showing Elo unavailable for two of the best-documented clubs
+in the corpus.
+
+Every home-side (Arsenal) form feature was gapped and no away-side (Chelsea) one
+was, which pointed at identity rather than data. Probed live on **real** synced
+fixtures:
+
+| Fixture | Result before the fix |
+| --- | --- |
+| `fd-564645` Espanyol vs Real Madrid CF | Real Madrid form + h2h gapped, `FIXTURE_IDENTITY_UNVERIFIED`, no model prediction |
+| `fd-558217` PSV vs Fortuna Sittard | PSV form + h2h gapped, `FIXTURE_IDENTITY_UNVERIFIED` |
+| `fd-564632` Espanyol vs Levante | clean |
+
+`fd-558217` passed identity on 2026-08-04 (CLAUDE.md §12 re-verification row), so
+this regressed since.
+
+**Root cause, two halves.** (1) `build_live_feature_vector()` holds the fixture's
+authoritative `home_team_id`/`away_team_id`, looked up their *names*, and
+`project_match_features()` re-resolved those names to ids. (2) That resolution
+called `resolve_team_id(name, db)` with **no league scope and no Elo preference**,
+while fixture sync persists with `league_id=…, require_elo_history=True`. Once
+fixture sync mints a second `Team` row for a club's European fixtures under league
+`UCL` with the same provider display name, the exact-name stage matches two rows
+and every later stage is equally ambiguous, so the side resolves to nothing. Elo
+was unaffected on real fixtures because it already used the stored ids — so form
+and Elo could even come from different identities.
+
+⚠️ **Not verified row-by-row.** Port 5432 on `sabiscore_db_v3` was unreachable
+from this environment, so the exact duplicate rows were not read. The UCL-duplicate
+mechanism matches every observation (timing, which clubs fail, Elo unaffected), and
+the fix is correct for any cross-competition duplicate regardless.
+
+**Fix (`upcoming_match_feature_service.py`):** the real-fixture path passes its
+stored ids into `project_match_features()`; a side whose `Team` row is missing
+stays unresolved, so the predicate is still computed, never asserted.
+`_get_team_id_by_name()` now uses fixture sync's own contract: scoped to the
+competition, Elo-bearing rows first, then any row in that competition, and **never**
+across competitions when a league is given. The hypothetical path resolves once and
+shares the ids with the projector, so Elo and form use the same identity.
+
+**Guards:** four tests in `tests/test_fixture_identity_verified.py` (stored ids win
+over an ambiguous name; in-league resolution incl. the display-form league name; no
+cross-competition guess; Elo-bearing row preferred over an Elo-less duplicate).
+All four fail against the old code, the first with exactly
+`fixture_identity_verified: False`. Three existing fixtures seeded `Team` rows with
+no `league_id`, a shape production never has, and gained `league_id="EPL"`; their
+assertions are unchanged.
+
+**Verify after deploy:** re-run `full-analysis` for `fd-564645` and `fd-558217`
+(no `FIXTURE_IDENTITY_UNVERIFIED`, no home/away form gaps), and hypothetical
+`Arsenal vs Chelsea` / `Real Madrid vs Barcelona` with the league set.
+
 ## 142. The served calibrator was fitted on a head production does not serve, and three records disagree about what is served — OPEN, a model-selection decision
 
 **Tier:** `OPEN` — needs an authorized decision. The label half is fixed; the composition half is deliberately not. **Found:** 2026-09-23, re-verifying item 140 on the correct checkout.

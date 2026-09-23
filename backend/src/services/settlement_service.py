@@ -9,6 +9,7 @@ invoked periodically from api/main.py's background task.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -98,7 +99,10 @@ async def run_settlement_pass(provider: Any = None) -> dict[str, Any]:
                 session, model_version=model_version
             )
 
-        validation = get_walk_forward_registry().walk_forward_validate(records)
+        # CPU-bound bootstrap: off the event loop, which serves every request.
+        validation = await asyncio.to_thread(
+            get_walk_forward_registry().walk_forward_validate, records
+        )
 
         _last_result = {
             "outcome": "ok",

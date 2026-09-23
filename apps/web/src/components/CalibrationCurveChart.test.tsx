@@ -3,7 +3,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   CalibrationCurveChart,
+  MIN_BIN_SUPPORT,
   poolCurves,
+  splitBySupport,
   toPlotBins,
   type CalibrationBin,
 } from "./CalibrationCurveChart";
@@ -56,6 +58,28 @@ describe("poolCurves", () => {
     // A real pooled figure must not match the single-class figure it was
     // fabricated from.
     expect(pooled).not.toEqual(homeOnly);
+  });
+});
+
+describe("splitBySupport", () => {
+  it("keeps a single-prediction bin off the curve instead of drawing a 0%/100% swing", () => {
+    // Production /performance, 2026-09-23: an N=1 bin at 84% observed 100%,
+    // and the curve swung through it as if it were a measurement.
+    const bins = [
+      { x: 0.54, y: 0.714, count: 14 },
+      { x: 0.84, y: 1, count: 1 },
+    ];
+
+    const { supported, sparse } = splitBySupport(bins);
+
+    expect(supported).toEqual([{ x: 0.54, y: 0.714, count: 14 }]);
+    expect(sparse).toEqual([{ x: 0.84, y: 1, count: 1 }]);
+  });
+
+  it("treats a bin at exactly the support floor as supported", () => {
+    const { supported, sparse } = splitBySupport([{ x: 0.3, y: 0.4, count: MIN_BIN_SUPPORT }]);
+    expect(supported).toHaveLength(1);
+    expect(sparse).toHaveLength(0);
   });
 });
 
@@ -229,5 +253,27 @@ describe("CalibrationCurveChart", () => {
     expect(screen.getByRole("table", { name: /calibration observations for overall ensemble/i })).toBeInTheDocument();
     expect(screen.getByText("Current serving generation")).toBeInTheDocument();
     expect(screen.queryByText(/≤ 3% goal/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/drawn hollow/i)).not.toBeInTheDocument();
+  });
+
+  it("says when thin bins are left off the curve", async () => {
+    mockCalibration({
+      status: "OK",
+      sample_size: 15,
+      curves: {
+        home_win: [
+          { bin_index: 5, predicted_mean: 0.54, empirical_frequency: 0.714, count: 14 },
+          { bin_index: 8, predicted_mean: 0.84, empirical_frequency: 1, count: 1 },
+        ],
+        draw: [],
+        away_win: [],
+      },
+    });
+
+    renderWithClient();
+
+    expect(
+      await screen.findByText(/fewer than 5 predictions are drawn hollow and left off the curve/i),
+    ).toBeInTheDocument();
   });
 });

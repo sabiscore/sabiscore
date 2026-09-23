@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import lru_cache
+import hashlib
 import json
 import logging
 import time
@@ -331,8 +332,56 @@ async def _walk_forward_summary(
     return {
         "records": records,
         "model_version": model_version,
-        "validation": get_walk_forward_registry().walk_forward_validate(records),
+        "validation": await _validate_walk_forward(records),
     }
+
+
+def _read_cached_dict(key: str) -> Optional[Dict[str, Any]]:
+    cached = cache.get(key) if cache else None
+    if cached is None:
+        return None
+    try:
+        if isinstance(cached, (bytes, bytearray)):
+            cached = cached.decode("utf-8")
+        if isinstance(cached, str):
+            cached = json.loads(cached)
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return cached if isinstance(cached, dict) else None
+
+
+def _write_cached_dict(key: str, value: Dict[str, Any]) -> None:
+    if not cache:
+        return
+    try:
+        cache.set(key, value, ttl=_CALIBRATION_CACHE_TTL_SECONDS)
+    except Exception as exc:
+        logger.debug("Performance cache write failed for %s: %s", key, exc)
+
+
+async def _validate_walk_forward(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Walk-forward validation, cached on the exact records it scores.
+
+    The 10,000-replicate bootstrap is CPU-bound; run inline it froze the single
+    event loop for 5-25 s per call, and the web health route requests this on
+    every page's header refresh, so ordinary browsing stalled every concurrent
+    request. The bootstrap is seeded, so the result is a pure function of the
+    records: keying on their digest is exact, and a settlement that adds a
+    record changes the key rather than serving a stale result.
+    """
+    digest = hashlib.sha256(
+        json.dumps(records, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+    key = f"walk_forward:v1:{digest}"
+    cached = _read_cached_dict(key)
+    if cached is not None:
+        metrics_collector.increment("walk_forward.cache_hit")
+        return cached
+    validation = await asyncio.to_thread(
+        get_walk_forward_registry().walk_forward_validate, records
+    )
+    _write_cached_dict(key, validation)
+    return validation
 
 
 def _accuracy_series(validation: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -571,19 +620,10 @@ async def model_performance_calibration(
     cache_key = (
         f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
     )
-    cached = cache.get(cache_key) if cache else None
+    cached = _read_cached_dict(cache_key)
     if cached is not None:
-        try:
-            if isinstance(cached, (bytes, bytearray)):
-                cached = cached.decode("utf-8")
-            if isinstance(cached, str):
-                cached = json.loads(cached)
-            if not isinstance(cached, dict):
-                raise TypeError("calibration cache payload must be an object")
-            metrics_collector.increment("calibration.cache_hit")
-            return cached
-        except Exception:
-            pass
+        metrics_collector.increment("calibration.cache_hit")
+        return cached
 
     started_at = None
     if window is not None:
@@ -611,17 +651,13 @@ async def model_performance_calibration(
             },
         )
 
-    result = _compute_calibration_metrics(
+    # Three bootstraps: off the event loop for the same reason as walk-forward.
+    result = await asyncio.to_thread(
+        _compute_calibration_metrics,
         records=records,
         n_bins=n_bins,
         league=league,
         model_version=model_version,
     )
-
-    if cache:
-        try:
-            cache.set(cache_key, result, ttl=_CALIBRATION_CACHE_TTL_SECONDS)
-        except Exception as exc:
-            logger.debug("Calibration cache write failed for %s: %s", cache_key, exc)
-
+    _write_cached_dict(cache_key, result)
     return result
