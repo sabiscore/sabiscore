@@ -234,3 +234,73 @@ def test_artifact_calibrator_screening_never_forces_fallback(league: str) -> Non
     else:
         assert result.calibration_applied is True
         assert result.calibration_method != "raw"
+
+
+class _ProductionRuntimeCalibrator:
+    """A Platt calibrator as scikit-learn 1.3.2 sees one fitted under 1.8.
+
+    The artifact deserialises with ``coef_``/``intercept_`` fully intact; only
+    the *method body* breaks, because 1.3.2's ``predict_proba`` reads
+    ``self.multi_class``, which 1.7+ no longer sets. Modelling it this way
+    reproduces the exact production observable on any local scikit-learn, so
+    this guard does not silently pass just because the dev machine happens to
+    run the version the artifact was fitted on.
+    """
+
+    def __init__(self, wrapped: Any) -> None:
+        self.coef_ = wrapped.coef_
+        self.intercept_ = wrapped.intercept_
+        self.classes_ = wrapped.classes_
+
+    def predict_proba(self, X: Any) -> Any:  # noqa: ARG002 - signature parity only
+        raise AttributeError("'LogisticRegression' object has no attribute 'multi_class'")
+
+
+@pytest.mark.parametrize("league", ["bundesliga", "ligue_1"])
+def test_platt_calibration_survives_the_sklearn_version_gap(league: str) -> None:
+    """A sigmoid calibrator must still apply when scikit-learn cannot run it.
+
+    Artifacts are fitted on a developer machine (3.14 / sklearn 1.8) and served
+    on Render (3.11 / sklearn 1.3.2). Before this guard, every sigmoid
+    calibrator was rejected at startup and all six leagues served
+    ``calibration_method="raw"`` -- observed live on 2026-09-22 at ECE 10.51%
+    against the <=3% certification ceiling (docs/DEBT.md items 113, 133).
+
+    Platt on one feature is ``sigmoid(coef_*x + intercept_)`` by scikit-learn's
+    own definition, so reading the coefficients is an identity, not an
+    approximation -- asserted exactly here, not within a tolerance.
+    """
+    from src.models.calibration import apply_calibrator
+
+    raw = _raw(league)
+    calibrator = raw.get("calibrator")
+    assert calibrator is not None, "fixture assumes this artifact has one"
+    assert calibrator.method == "sigmoid", "fixture assumes a Platt calibrator"
+
+    probe = np.array(
+        [[0.40, 0.30, 0.30], [0.55, 0.25, 0.20], [0.10, 0.15, 0.75]],
+        dtype=np.float64,
+    )
+    healthy = apply_calibrator(calibrator.method, calibrator.calibrators, probe.copy())
+    degraded = [_ProductionRuntimeCalibrator(c) for c in calibrator.calibrators]
+    rescued = apply_calibrator(calibrator.method, degraded, probe.copy())
+
+    assert np.array_equal(healthy, rescued), "cross-version rescue must be bit-identical"
+    assert np.allclose(rescued.sum(axis=1), 1.0), "calibrated rows must stay a simplex"
+
+
+@pytest.mark.parametrize("league", ["bundesliga", "ligue_1"])
+def test_startup_preflight_admits_a_calibrator_sklearn_cannot_run(league: str) -> None:
+    """The load-time probe decides whether a league serves calibrated at all.
+
+    ``_usable_calibrator`` rejects any calibrator that cannot demonstrably run,
+    which is correct -- but it is what turned the version gap into six leagues
+    permanently serving ``raw``. With the coefficients read directly, the probe
+    must now admit it.
+    """
+    raw = _raw(league)
+    calibrator = raw["calibrator"]
+    calibrator.calibrators = [_ProductionRuntimeCalibrator(c) for c in calibrator.calibrators]
+
+    admitted = PredictionEngine._usable_calibrator(calibrator, league, "<test>")
+    assert admitted is not None, "preflight rejected a calibrator whose params are intact"
