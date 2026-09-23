@@ -1,7 +1,0 @@
-﻿.sabiscore-logo { transition: transform 150ms ease-out; filter: drop-shadow(0 4px 8px rgba(0, 212, 255, 0.15)); }
-.sabiscore-logo:hover { transform: scale(1.05); }
-.logo-spin-animation { animation: logoSpin 80ms ease-out; }
-@keyframes logoSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.logo-wordmark-container { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; background: linear-gradient(180deg, #0F0F0F 0%, #1C1C1C 100%); border-radius: 16px; }
-.logo-tagline { font-size: 12px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; color: #A0A0A0; }
-.header-monogram { width: 32px; height: 32px; }

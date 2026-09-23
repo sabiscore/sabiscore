@@ -305,8 +305,8 @@ scraper tests + manifest validation
 
 | Path | Status |
 |---|---|
-| `apps/api/` | Legacy API skeleton — absent from CI, Docker, scripts |
-| `frontend/` | Legacy Vite app — absent from CI, Docker, scripts |
+| `apps/api/` | Removed 2026-09-22 (OG-11, `docs/adr/0010-remove-apps-ws.md`) — was already absent from CI/Docker/scripts before deletion |
+| `frontend/` | Removed 2026-09-22 (OG-11, `docs/adr/0010-remove-apps-ws.md`) — was already absent from CI/Docker/scripts before deletion |
 | `npm lockfile` | Stale — `pnpm-lock.yaml` is canonical |
 | `Base.metadata.create_all()` | Replace with Alembic migrations |
 | Direct browser odds fetching | Route through backend proxy |

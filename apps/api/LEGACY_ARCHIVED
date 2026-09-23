@@ -1,4 +1,0 @@
-This directory is archived legacy code.
-
-Canonical backend authority: backend/src/api/main.py
-This path must not be used by CI, Docker, deployment, or runtime imports.
