@@ -709,8 +709,18 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
           isTop={data.away_win_prob === max}
         />
       </div> : (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-xs text-amber-200/80">
-          Official outcome probabilities are unavailable. Diagnostic baseline values are not displayed.
+        // Reason already given once, above, by EvidenceStatusCard — this only
+        // needs to show that these three specific values are absent.
+        <div className="space-y-1.5" aria-label="Outcome probabilities unavailable">
+          {["Home Win", "Draw", "Away Win"].map((label) => (
+            <div key={label} className="flex justify-between text-xs sm:text-sm">
+              <span className="text-slate-400">{label}</span>
+              <span className="font-semibold text-slate-400 tabular-nums">
+                <span className="sr-only">{label} unavailable</span>
+                <span aria-hidden="true">—</span>
+              </span>
+            </div>
+          ))}
         </div>
       )}
       <div className="pt-1 border-t border-slate-800/50 space-y-1.5">
@@ -831,7 +841,7 @@ function ModelDriversCard({ drivers }: { drivers: string[] }) {
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
       <p className="text-xs uppercase tracking-wider text-slate-400">Model Drivers</p>
       {drivers.length === 0 ? (
-        <p className="text-sm text-slate-400">No validated model-driver report is available.</p>
+        <p className="text-sm text-slate-400">Unavailable</p>
       ) : (
         <ul className="space-y-1.5" aria-label="Model feature drivers">
           {drivers.slice(0, 5).map((d, i) => {
@@ -869,9 +879,6 @@ export function EloContextCard({ elo }: { elo: FullMatchEloContext }) {
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-slate-400">
-          Ratings need verified match history, which is unavailable for this fixture.
-        </p>
       </div>
     );
   }
@@ -914,9 +921,6 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
       <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
         <p className="text-xs uppercase tracking-wider text-slate-400">BNN Uncertainty</p>
         <p className="text-sm font-semibold text-slate-300">Unavailable</p>
-        <p className="text-[11px] text-slate-400">
-          No measured uncertainty is available; no interval or percentage is inferred.
-        </p>
       </div>
     );
   }
