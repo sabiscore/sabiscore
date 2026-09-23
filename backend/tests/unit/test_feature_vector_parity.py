@@ -536,8 +536,12 @@ def test_second_serving_implementation_matches_the_shared_last5_form_helper() ->
 
 
 def test_second_serving_implementation_matches_the_shared_market_helper() -> None:
-    """All 14 market fields -- a direct passthrough of derive_market_features()."""
-    canonical = _transformer_canonical("EPL", _KICKOFF)
+    """All 14 legacy market fields -- a direct passthrough of derive_market_features().
+
+    Pinned to phase7_68: the legacy branch still serves any legacy generation,
+    but it is no longer what the live manifest resolves to (docs/DEBT.md item 141).
+    """
+    canonical = _transformer_canonical("EPL", _KICKOFF, schema_version="phase7_68")
     expected = derive_market_features(*_ODDS)
 
     assert expected, "fixture assumption: the helper returns the 14 fields"
@@ -545,19 +549,35 @@ def test_second_serving_implementation_matches_the_shared_market_helper() -> Non
         assert float(canonical[name]) == pytest.approx(float(value)), name
 
 
-def test_default_schema_version_is_unchanged() -> None:
-    """FeatureTransformer() with no schema_version still resolves to phase7_68.
+def test_default_schema_matches_the_served_artifacts_training_schema() -> None:
+    """FeatureTransformer() with no schema_version builds what the models were trained on.
 
-    docs/DEBT.md item 37's serving wire-up must be inert for every existing
-    caller -- this is the load-bearing safety proof that today's active
-    generation is untouched.
+    Replaces a test that pinned the default to phase7_68 as a "safety proof".
+    That pin held while the served artifacts were trained on apex_v1_68, so it
+    certified the train/serve skew docs/DEBT.md item 141 fixed rather than
+    catching it. The invariant that matters is agreement with the artifacts'
+    own hash-verified training record, not a particular schema name.
     """
+    import json
+    from pathlib import Path
+
     from src.data.transformers import FeatureTransformer
-    from src.models.feature_registry import CANONICAL_FEATURES_68
+    from src.models.feature_registry import resolve_feature_schema
+
+    models = Path(__file__).resolve().parents[2] / "models"
+    manifest = json.loads((models / "active_generation.json").read_text(encoding="utf-8"))
+    trained = {
+        json.loads((models / entry["metadata"]).read_text(encoding="utf-8"))[
+            "feature_schema_version"
+        ]
+        for entry in manifest["artifacts"].values()
+    }
 
     transformer = FeatureTransformer()
-    assert transformer.schema_version == "phase7_68"
-    assert transformer.expected_columns == list(CANONICAL_FEATURES_68)
+    assert trained == {transformer.schema_version}
+    assert transformer.expected_columns == list(
+        resolve_feature_schema(transformer.schema_version)
+    )
 
 
 def test_second_serving_implementation_matches_the_shared_apex_market_helper() -> None:
@@ -587,7 +607,7 @@ def test_apex_schema_actually_takes_the_apex_branch() -> None:
     proof the branch really ran derive_apex_market_features(), not that a
     same-named legacy field coincidentally matched."""
     canonical = _transformer_canonical("EPL", _KICKOFF, schema_version="apex_v1_68")
-    legacy = _transformer_canonical("EPL", _KICKOFF)
+    legacy = _transformer_canonical("EPL", _KICKOFF, schema_version="phase7_68")
 
     assert "market_overround" in canonical  # apex-only field
     assert "market_overround" not in legacy
@@ -620,9 +640,8 @@ def test_upcoming_match_feature_projector_resolves_active_apex_schema(
 
 
 def test_upcoming_match_feature_projector_apex_constructor_wiring(monkeypatch) -> None:
-    """Under an apex-declaring manifest, the projector's columns/defaults flip
-    to the Apex block; under today's real manifest they do not (regression
-    proof, mirrors test_default_schema_version_is_unchanged above)."""
+    """Under an apex-declaring manifest the projector's columns/defaults flip to
+    the Apex block; under a phase7_68 one they do not."""
     import src.services.upcoming_match_feature_service as svc
     from src.models.feature_registry import (
         APEX_MARKET_FEATURES_14,
@@ -641,10 +660,37 @@ def test_upcoming_match_feature_projector_apex_constructor_wiring(monkeypatch) -
     assert apex_projector.canonical_features == expected_apex_columns
     assert set(APEX_MARKET_FEATURES_14) <= set(apex_projector.defaults)
 
-    monkeypatch.undo()  # restores active_feature_schema_version -- reads the real manifest
+    monkeypatch.setattr(svc, "active_feature_schema_version", lambda: "phase7_68")
     legacy_projector = svc.UpcomingMatchFeatureProjector()
     assert legacy_projector._is_apex is False
     assert legacy_projector.canonical_features != expected_apex_columns
+
+
+def test_projector_serves_the_active_artifacts_training_order(monkeypatch) -> None:
+    """The real projector, under the real manifest, builds the vector the served
+    artifacts were trained on -- column for column, not just width.
+
+    docs/DEBT.md item 141: _run_inference checks width only, so a same-width
+    schema relabel fed 11 wrong market columns to every live prediction while
+    every width check passed. This is the check that would have caught it.
+    Production's flags are pinned (render.yaml: USE_PHASE7_MODELS=true,
+    USE_PHASE8_FEATURES=false) because CI and dev machines set them differently.
+    """
+    import joblib
+    from pathlib import Path
+
+    import src.services.upcoming_match_feature_service as svc
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "use_phase7_models", True)
+    monkeypatch.setattr(settings, "use_phase8_models", False)
+    monkeypatch.setattr(settings, "use_phase8_features", False)
+    artifact = (
+        Path(__file__).resolve().parents[2] / "models" / "epl_ensemble_v5_phase7.pkl"
+    )
+    trained = list(joblib.load(artifact)["feature_columns"])
+
+    assert svc.UpcomingMatchFeatureProjector().canonical_features == trained
 
 
 def test_unifying_did_not_remove_the_unsupported_league_guard() -> None:

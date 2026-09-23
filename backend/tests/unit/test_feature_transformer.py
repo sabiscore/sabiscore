@@ -3,7 +3,7 @@ import pytest
 
 from src.core.exceptions import DataUnavailableError
 from src.data.transformers import FEATURE_DEFAULTS, FeatureTransformer
-from src.models.feature_registry import CANONICAL_FEATURES_58
+from src.models.feature_registry import APEX_FEATURES_58, CANONICAL_FEATURES_58
 
 
 def _base_features() -> pd.DataFrame:
@@ -176,13 +176,20 @@ def test_engineer_features_fail_closed_rejects_missing_evidence():
     assert "odds.1x2" in str(exc_info.value)
 
 
-def test_engineer_features_fail_closed_accepts_complete_real_evidence():
-    transformer = FeatureTransformer()
-    transformer.expected_columns = list(CANONICAL_FEATURES_58)
+# The schema is pinned per case: the market block is chosen by schema_version and
+# the columns by expected_columns, so mixing one schema's block with the other's
+# columns reports its 7 unshared market names as missing (docs/DEBT.md item 141).
+@pytest.mark.parametrize(
+    ("schema", "columns"),
+    [("phase7_68", CANONICAL_FEATURES_58), ("apex_v1_68", APEX_FEATURES_58)],
+)
+def test_engineer_features_fail_closed_accepts_complete_real_evidence(schema, columns):
+    transformer = FeatureTransformer(schema_version=schema)
+    transformer.expected_columns = list(columns)
 
     frame = transformer.engineer_features(_complete_match_data())
 
-    assert list(frame.columns) == list(CANONICAL_FEATURES_58)
+    assert list(frame.columns) == list(columns)
     assert frame.isnull().sum().sum() == 0
     assert transformer.feature_completeness == pytest.approx(1.0)
 
@@ -192,7 +199,7 @@ def test_engineer_features_legacy_defaults_require_explicit_opt_in():
     frame = transformer.engineer_features({})
 
     assert not frame.empty
-    assert set(CANONICAL_FEATURES_58).issubset(set(frame.columns))
+    assert set(transformer.expected_columns).issubset(set(frame.columns))
 
 
 # ---------------------------------------------------------------------------

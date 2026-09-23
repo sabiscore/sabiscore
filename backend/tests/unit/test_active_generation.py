@@ -136,6 +136,43 @@ def test_rejects_metadata_without_a_usable_feature_count(
         load_active_generation(tmp_path)
 
 
+def test_rejects_same_width_schema_relabel(tmp_path: Path) -> None:
+    """The live 2026-09-23 defect: phase7_68 declared over apex_v1_68 artifacts.
+
+    Both schemas are 68 wide, so the width check alone passes — but they
+    disagree in 11 market slots (20-30), and serving builds whichever block the
+    manifest names. The artifact's hash-verified metadata records the schema it
+    was trained on, so a disagreement is detectable without loading a pickle.
+    """
+
+    _write_generation(
+        tmp_path,
+        feature_schema_version="phase7_68",
+        metadata_body=b'{"feature_count": 68, "feature_schema_version": "apex_v1_68"}',
+    )
+
+    with pytest.raises(ActiveGenerationError, match="apex_v1_68"):
+        load_active_generation(tmp_path)
+
+
+def test_accepts_matching_declared_training_schema(tmp_path: Path) -> None:
+    _write_generation(
+        tmp_path,
+        feature_schema_version="apex_v1_68",
+        metadata_body=b'{"feature_count": 68, "feature_schema_version": "apex_v1_68"}',
+    )
+
+    assert load_active_generation(tmp_path)["feature_schema_version"] == "apex_v1_68"
+
+
+def test_metadata_without_a_training_schema_still_loads_on_width(tmp_path: Path) -> None:
+    """Older artifacts never recorded their schema; width stays the only check."""
+
+    _write_generation(tmp_path, metadata_body=b'{"feature_count": 68}')
+
+    assert load_active_generation(tmp_path)["feature_schema_version"] == "phase7_68"
+
+
 def test_accepts_a_coherent_phase8_generation(tmp_path: Path) -> None:
     """The gate checks agreement, not a hardcoded 68 — 89 over 89 must load."""
 
@@ -157,9 +194,11 @@ def test_committed_manifest_satisfies_its_own_declared_contract() -> None:
     buildCommand, so a mismatch here fails the build rather than production.
     """
 
+    # No schema literal: this used to pin "phase7_68", which certified the
+    # manifest/artifact mismatch in docs/DEBT.md item 141. The loader itself now
+    # requires the declared schema to match each artifact's training record.
     result = load_active_generation()
 
-    assert result["feature_schema_version"] == "phase7_68"
     assert result["artifacts"], "committed manifest declares no artifacts"
 
 

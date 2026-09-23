@@ -35,7 +35,20 @@ def _candidate_dataset() -> dict[str, dict[str, object]]:
     }
 
 
-def test_builds_mechanical_positional_feature_contract() -> None:
+@pytest.fixture
+def legacy_serving(monkeypatch):
+    """Serve the phase7_68 (legacy market) block, independent of the live manifest.
+
+    These tests exercise the misaligned-serving case on purpose. They used to
+    get it for free from the live manifest, which declared phase7_68 over
+    apex_v1_68 artifacts — the defect docs/DEBT.md item 141 fixed.
+    """
+    import src.models.promotion_evidence as pe
+
+    monkeypatch.setattr(pe, "active_feature_schema_version", lambda: "phase7_68")
+
+
+def test_builds_mechanical_positional_feature_contract(legacy_serving) -> None:
     report = build_promotion_feature_evidence(_candidate_dataset())
 
     assert report["schema"] == "apex_v1_68"
@@ -57,17 +70,39 @@ def test_checked_in_quarantined_candidate_report_remains_valid_and_failed() -> N
 
     validated = validate_promotion_feature_evidence(report)
 
+    # Serving now builds the Apex order the candidate was trained on, so the
+    # 11-slot market misalignment is gone (docs/DEBT.md item 141); the gate
+    # still fails on its genuine blockers.
     assert validated["promotion_gate"] == "FAIL"
-    assert validated["summary"]["serving_schema_misaligned_slots"] == 11
+    assert validated["summary"]["serving_schema_misaligned_slots"] == 0
     assert validated["summary"]["always_data_gap_slots"] == len(
         PHASE7_FEATURES_ALWAYS_DATA_GAP
     )
 
 
-def test_forged_pass_is_rejected() -> None:
+def test_forged_pass_is_rejected(legacy_serving) -> None:
     report = build_promotion_feature_evidence(_candidate_dataset())
+    assert report["promotion_gate"] == "FAIL", "fixture assumption: a true FAIL to forge"
     forged = copy.deepcopy(report)
     forged["promotion_gate"] = "PASS"
+
+    with pytest.raises(ValueError, match="contradicts mechanically derived gate"):
+        validate_promotion_feature_evidence(forged)
+
+
+def test_forged_fail_is_rejected(monkeypatch) -> None:
+    """The contradiction check is symmetric — a hidden PASS is caught too.
+
+    Under Apex serving this synthetic candidate's true gate is PASS, so forging
+    it down exercises the same guard from the other direction.
+    """
+    import src.models.promotion_evidence as pe
+
+    monkeypatch.setattr(pe, "active_feature_schema_version", lambda: "apex_v1_68")
+    report = build_promotion_feature_evidence(_candidate_dataset())
+    assert report["promotion_gate"] == "PASS", "fixture assumption: a true PASS to forge"
+    forged = copy.deepcopy(report)
+    forged["promotion_gate"] = "FAIL"
 
     with pytest.raises(ValueError, match="contradicts mechanically derived gate"):
         validate_promotion_feature_evidence(forged)
@@ -107,15 +142,16 @@ def test_serving_comparison_follows_the_active_schema(monkeypatch) -> None:
     """docs/DEBT.md item 37: the gate must compare against what serving
     ACTUALLY produces, not a hardcoded legacy constant.
 
-    Under today's real manifest (phase7_68 -> legacy block) an apex-trained
-    candidate is genuinely misaligned at 11 slots -- that FAIL is correct and
-    must not change. Under an apex_v1_68 manifest, live serving produces the
-    Apex order, so the same candidate is aligned and this particular blocker
-    clears. Without this, the counter would report 11 forever and no serving
-    fix could ever satisfy the gate.
+    Under a phase7_68 manifest (legacy block) an apex-trained candidate is
+    genuinely misaligned at 11 slots -- that FAIL is correct and must not
+    change. Under an apex_v1_68 manifest, live serving produces the Apex order,
+    so the same candidate is aligned and this particular blocker clears.
+    Without this, the counter would report 11 forever and no serving fix could
+    ever satisfy the gate.
     """
     import src.models.promotion_evidence as pe
 
+    monkeypatch.setattr(pe, "active_feature_schema_version", lambda: "phase7_68")
     legacy = build_promotion_feature_evidence(_candidate_dataset())
     assert legacy["summary"]["serving_schema_misaligned_slots"] == 11
 

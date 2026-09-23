@@ -199,8 +199,10 @@ def audit() -> dict[str, Any]:
     chain["calibrator"] = link(
         NOT_APPLICABLE,
         "Calibrators live inside the artifact pickles and are therefore covered by "
-        "artifact_sha256. Measured separately: 0 of 6 leagues has a USABLE calibrator "
-        "(docs/DEBT.md item 122), so no calibrator participates in serving.",
+        "artifact_sha256. Whether each one is admitted at serving is decided per "
+        "load by PredictionEngine._usable_calibrator, not by this audit — an "
+        "earlier revision froze a '0 of 6 usable' count here that later went "
+        "stale (docs/DEBT.md item 140).",
     )
 
     chain["conformal"] = link(
