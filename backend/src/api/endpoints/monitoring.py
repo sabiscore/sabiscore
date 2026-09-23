@@ -21,6 +21,7 @@ from ...db.session import check_db_connection
 from ...db.session import _alembic_head_revision
 from ...db.session import get_async_session
 from ...services.clv_capture_service import last_clv_capture_result
+from ...services.fixture_sync_service import last_fixture_sync_result
 from ...services.notification_dispatch_service import last_notification_dispatch_result
 from ...services.settlement_service import last_settlement_result
 
@@ -292,6 +293,23 @@ def health_check() -> Dict[str, Any]:
             }
         except Exception as _v4_exc:
             logger.debug("V4 source registry summary failed: %s", _v4_exc)
+
+    # Fixture sync snapshot — same informational-only convention as the three
+    # blocks below (a best-effort background job failing must not affect the
+    # Render deploy gate at /health/ready or this endpoint's own status).
+    # Added 2026-09-22: this job previously had no /health visibility at all,
+    # unlike its settlement/clv_capture/notification_dispatch siblings, which
+    # made a live "zero upcoming fixtures" report unresolvable without Render
+    # log access. "provider_error" here means football-data.org failed on the
+    # last tick and 0 was inserted; "ok" with inserted=0 means the provider
+    # call succeeded but returned no new/changed fixtures for that tick.
+    try:
+        health_status["components"]["fixture_sync"] = {
+            "status": "informational",
+            **last_fixture_sync_result(),
+        }
+    except Exception as _fixture_sync_exc:
+        logger.debug("Fixture sync snapshot unavailable: %s", _fixture_sync_exc)
 
     # Settlement pipeline snapshot — informational only, never sets degraded=True.
     # A best-effort background job failing must not affect the Render deploy gate

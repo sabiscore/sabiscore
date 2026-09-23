@@ -42,6 +42,19 @@ SYNC_HORIZON_DAYS = 14
 _FOOTBALL_DATA_SYNC_LIMITER = asyncio.Lock()
 _FOOTBALL_DATA_PROVIDER = "football-data.org"
 
+# /health has no visibility into this job at all today, unlike its
+# settlement/clv_capture/notification_dispatch siblings (monitoring.py) --
+# discovered 2026-09-22 while root-causing a live "zero upcoming fixtures"
+# report: every outward signal (Redis, providers, DB) read healthy, and this
+# was the one thing left unobservable from outside Render's log stream.
+# Same pattern as clv_capture_service._last_result / last_clv_capture_result().
+_last_result: dict[str, Any] = {"outcome": "never_run"}
+
+
+def last_fixture_sync_result() -> dict[str, Any]:
+    """Sync accessor for /health; return a copy, never the live result dict."""
+    return dict(_last_result)
+
 # Render may overlap multiple candidate instances during deploy/retry. The
 # in-process lock above cannot arbitrate between those processes, so a single
 # deploy can otherwise multiply the seven football-data.org requests and burn
@@ -299,6 +312,8 @@ async def sync_upcoming_fixtures(
     )
     from ..repositories.fixtures import SETTLED_MATCH_STATUSES
 
+    global _last_result
+
     started_at = time.perf_counter()
     client = FootballDataAPIClient(provider=provider)
     try:
@@ -313,6 +328,13 @@ async def sync_upcoming_fixtures(
             outcome="fixture_sync_failed",
             duration_ms=(time.perf_counter() - started_at) * 1000,
         )
+        from ..core.redaction import redact_text
+
+        _last_result = {
+            "outcome": "provider_error",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "message": redact_text(str(exc)),
+        }
         return 0
 
     inserted = 0
@@ -528,6 +550,13 @@ async def sync_upcoming_fixtures(
         outcome="fixture_sync_success",
         duration_ms=duration_ms,
     )
+    _last_result = {
+        "outcome": "ok",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "inserted": inserted,
+        "candidates_received": len(matches_raw),
+        "identity_rebind_pending": rebind_pending_count,
+    }
     return inserted
 
 
@@ -593,8 +622,14 @@ async def run_fixture_sync(provider: Any = None) -> None:
     from ..db.session import AsyncSessionLocal
     from ..monitoring.metrics import metrics_collector
 
+    global _last_result
+
     if AsyncSessionLocal is None:
         logger.warning("fixture_sync: DB not ready, skipping")
+        _last_result = {
+            "outcome": "db_not_ready",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
         return
 
     lease_acquired, lease_token = await _claim_fixture_sync_lease()
@@ -621,5 +656,12 @@ async def run_fixture_sync(provider: Any = None) -> None:
             message=str(exc),
             context={"task": "fixture_sync"},
         )
+        from ..core.redaction import redact_text
+
+        _last_result = {
+            "outcome": "error",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "message": redact_text(str(exc)),
+        }
     finally:
         await _finish_fixture_sync_lease(lease_token, completed=completed)

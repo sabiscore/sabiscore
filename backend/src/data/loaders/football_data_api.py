@@ -134,6 +134,20 @@ class FootballDataAPIClient:
 
         normalized: List[Dict[str, Any]] = []
         failures: List[str] = []
+        # Every stage between the HTTP response and an inserted row can reduce
+        # the batch to nothing without raising: a competition that returns an
+        # empty `matches` array yields ProviderStatus.PARTIAL, which is not in
+        # either failure set below and so contributes silently; `_normalize_*`
+        # drops any record the provider marked incoherent, also silently; and
+        # the combined list is truncated at the end. On 2026-09-22 production
+        # reported `fixture_sync.successes: 1, inserted: 0` with no warning and
+        # no failure counter, and nothing recorded WHICH of those stages emptied
+        # it -- so the incident could not be diagnosed at all (docs/DEBT.md item
+        # 130). These counters exist to make that question answerable from
+        # /metrics without shell access to the Render log stream.
+        received = 0
+        dropped_incoherent = 0
+        per_competition: List[str] = []
 
         for index, competition_code in enumerate(competitions):
             canonical = self.CANONICAL_BY_CODE[competition_code]
@@ -175,7 +189,9 @@ class FootballDataAPIClient:
                 )
                 continue
 
+            kept_here = 0
             for record in result.records:
+                received += 1
                 item = (
                     self._normalize_result(record)
                     if settled
@@ -183,8 +199,18 @@ class FootballDataAPIClient:
                         record, competition_code=competition_code
                     )
                 )
-                if item is not None:
-                    normalized.append(item)
+                if item is None:
+                    dropped_incoherent += 1
+                    continue
+                normalized.append(item)
+                kept_here += 1
+
+            per_competition.append(f"{competition_code}={kept_here}/{len(result.records)}")
+            # The provider already explains each rejection; discarding that here
+            # is what made an all-incoherent batch indistinguishable from an
+            # empty one.
+            for warning in result.warnings or ():
+                logger.warning("football_data: %s %s", competition_code, warning)
 
         if failures and not normalized:
             raise FootballDataAPIError(
@@ -192,7 +218,35 @@ class FootballDataAPIClient:
             )
 
         normalized.sort(key=lambda item: item.get("match_date") or "")
-        return normalized[:limit]
+        truncated = normalized[:limit]
+
+        # `limit` is applied per competition AND again to the combined list, so
+        # the platform sees at most `limit` fixtures across all competitions,
+        # earliest-kickoff first. Long-documented behaviour, deliberately left
+        # unchanged here -- but it was previously invisible, which is how a
+        # capped batch and an empty one looked identical from outside.
+        operation = "settlement_sync" if settled else "fixture_sync"
+        logger.info(
+            "football_data %s: received=%d kept=%d dropped_incoherent=%d "
+            "returned=%d (cap=%d) per_competition=[%s]",
+            operation,
+            received,
+            len(normalized),
+            dropped_incoherent,
+            len(truncated),
+            limit,
+            " ".join(per_competition),
+        )
+        try:
+            from ...monitoring.metrics import metrics_collector
+
+            metrics_collector.increment(f"{operation}.candidates_received", received)
+            metrics_collector.increment(f"{operation}.dropped_incoherent", dropped_incoherent)
+            metrics_collector.increment(f"{operation}.truncated_by_cap", len(normalized) - len(truncated))
+        except Exception as exc:  # pragma: no cover - telemetry must never break acquisition
+            logger.debug("football_data: metrics unavailable: %s", exc)
+
+        return truncated
 
     def _resolve_competitions(self, league: Optional[str]) -> List[str]:
         if not league:
