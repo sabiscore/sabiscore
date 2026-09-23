@@ -3781,10 +3781,22 @@ catboost-unavailable-on-3.14, one deliberately-isolated test), 2 xfailed
 
 ## 86. `models/candidate/training_manifest.json` declares `apex_v1_68` for the same `v5_phase7` artifact_suffix the served generation declares as `phase7_68` — CONFIRMED 2026-09-19: by design, not a defect, currently harmless
 
-**Tier:** `NEXT` (documentation/confirmation only — no code change).
+**Tier:** `RESOLVED` — documented as `docs/PLATFORM_OPERATIONS_STANDARDS.md`
+OPS §2.3; no code change.
 **Owner:** unassigned.
 **Found:** 2026-09-13, during a Directive v7.3 P4 (Experiment & Model
 Governance) review.
+
+**Update 2026-09-23:** PR #234 hit the sibling instance of this exact
+collision in the *served* generation (`active_generation.json` declared
+`phase7_68` while the artifacts were trained on `apex_v1_68`) — the danger
+this item warned about, materializing from a different angle than the
+"candidate accidentally read as served" scenario originally anticipated.
+PR #234 fixed that instance and added `_verify_feature_contract()`, which
+guards `load_active_generation()` only. OPS §2.3 now records both the
+`ENFORCED` served-generation case and this item's still-`OPEN` candidate-track
+case as one documented standard, closing this item on paper rather than
+leaving it as an isolated, easily-missed footnote.
 
 `backend/models/active_generation.json` — the certified, hash-pinned, **served**
 generation manifest — declares `"feature_schema_version": "phase7_68"`

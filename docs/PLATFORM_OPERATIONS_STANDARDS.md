@@ -121,6 +121,44 @@ retroactively.
 exact source commit and dataset snapshot. **The existing gap closes only with a
 retrain — it is not a code task, and must not be reported as one.**
 
+### §2.3 A generation-name suffix names exactly one feature schema
+
+`ENFORCED` for the served generation — `_verify_feature_contract()`,
+`backend/src/models/active_generation.py:292`, invoked from
+`load_active_generation()` (`:125`, runs in Render's build command)
+
+`OPEN` for the candidate track — `docs/DEBT.md` item 86
+
+Origin: PR #234 — `active_generation.json` declared `feature_schema_version:
+"phase7_68"` for `v5_phase7-20260808` while all six artifacts were actually
+trained on `apex_v1_68`. Both are distinct, non-alias 68-wide schemas
+(`feature_registry.FEATURE_SCHEMA_VERSIONS`) that differ in the market-feature
+block, slots 20–30. Verification checked feature-vector *width* only, so the
+mismatch passed silently on every live prediction.
+
+**Rule.** An `artifact_suffix` / generation-name string is bound to exactly one
+entry in `FEATURE_SCHEMA_VERSIONS`. It is never reused to name two different
+registered schemas.
+
+`_verify_feature_contract` now rejects a manifest whose declared schema
+disagrees with what any artifact's own hash-verified training metadata
+records — added in PR #234, and it is what makes this instance `ENFORCED`
+rather than merely documented.
+
+**The identical collision exists a second time, unguarded.** `docs/DEBT.md`
+item 86: `train_on_real_matches.py`'s `_SCHEMAS` table maps `apex_v1_68` to the
+same `v5_phase7` suffix the served generation used for `phase7_68` before
+PR #234. `_verify_feature_contract` only runs inside `load_active_generation()`,
+so nothing checks this in `models/candidate/`. Item 86 itself already
+confirmed why it is inert today: candidate output never writes to the served
+`backend/models/` root, and `load_active_generation()`'s SHA-256 check would
+fail closed on any accidental serving-path collision regardless.
+
+A real fix here — either a candidate-track guard, or the suffix rename item 86
+originally floated (`v5_phase7_incumbent_today`) — is deferred, not built.
+Item 86 is closed as a documented, monitored risk on the strength of this
+section, not on new code.
+
 ---
 
 ## OPS §3 — Operator overrides and consumer data contracts
