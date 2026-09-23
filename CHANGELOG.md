@@ -5,6 +5,90 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Live production incident triage from Render log + `/metrics` evidence (2026-09-23)
+
+Four defects found by probing deployed `sha:7039aa4` directly (operator-supplied
+Render startup log, live `/metrics`, live `/api/v1/upcoming/matches`,
+`/api/v1/fixtures/upcoming`, `/api/v1/providers/health`, and production
+screenshots) rather than by reading code. Full analysis in `docs/DEBT.md`
+items 133–136.
+
+### Fixed
+
+- **Every production prediction was served uncalibrated, on all six leagues**
+  (`docs/DEBT.md` item 133). Artifacts are fitted on a developer machine
+  (Python 3.14 / scikit-learn 1.8) and served on Render (3.11 / 1.3.2). A fitted
+  `LogisticRegression` unpickles cleanly, but 1.3.2's `predict_proba` reads
+  `self.multi_class`, which 1.7+ no longer sets — so `PredictionEngine`'s
+  startup preflight correctly rejected every sigmoid calibrator and each league
+  fell back to `calibration_method="raw"`. `src/core/meta_model.py` had already
+  removed this exact coupling from the stacking head; the calibrator never got
+  the same treatment. `apply_calibrator` now reads the fitted `coef_`/
+  `intercept_` instead of invoking scikit-learn. Binary Platt on one feature is
+  `sigmoid(x*coef_ + intercept_)` by scikit-learn's own definition, so this is
+  an identity — verified bit-for-bit against the committed artifacts
+  (max |sklearn - manual| = 0.0e+00 over a 501-point sweep x 3 classes x 2
+  leagues). **No retrain and no artifact-format change**: the deployed pickles
+  already carry intact coefficients.
+- **The providers pill asserted "0 configured" when it meant "could not ask"**
+  (item 136). `/performance` rendered `0 configured · 0 live-validated` beside a
+  "Performance service unreachable" banner while every other route on the same
+  deployment showed `5 configured · 2 live-validated`. `deriveProviderActivation`
+  fails closed to zeros correctly; the renderer printed them as fact. Fixed at a
+  shared `formatProviderActivation()` helper covering all three render sites
+  (including the mobile `aria-label`) — "no provider list received" now reads
+  `Unknown`, while a list that genuinely reports nothing configured still reads
+  `0 configured`.
+- **StatsBomb cache warning repeated twice per `/full-analysis` request**
+  (item 135). The failure is a property of the runtime, not the request, so it
+  is now reported once per process.
+
+### Added
+
+- **Per-stage fixture-acquisition telemetry** (item 134, closing the diagnostic
+  half of item 130). Three stages between the football-data.org response and an
+  inserted row could each empty the batch without raising and without leaving a
+  trace: `ProviderStatus.PARTIAL` on an empty competition falls through both
+  failure sets in `_fetch_competitions`; `_normalize_match` drops
+  `coherent=False` records uncounted while the provider's own rejection reasons
+  were discarded; and the combined seven-competition list is truncated by the
+  per-competition limit. Production reported `fixture_sync.successes: 1,
+  inserted: 0` with zero diagnostic signal. Now emits per-competition
+  `received`/`kept`/`dropped_incoherent`, re-logs the provider's rejection
+  reasons, and exposes `{fixture,settlement}_sync.candidates_received`,
+  `.dropped_incoherent`, `.truncated_by_cap` on `/metrics`.
+- **6 backend regression guards**, every one watched failing against the
+  pre-fix code first: 4 in `test_calibrator_load_and_preflight.py` (bit-identical
+  rescue, simplex preserved, and — the assertion that actually decides whether a
+  league serves calibrated — that the startup preflight now *admits* a
+  calibrator scikit-learn cannot run), 2 in
+  `test_football_data_api_resilience.py` (an all-incoherent batch and a
+  genuinely empty one must no longer look identical).
+- **4 frontend guards** in `health-status.test.ts`, including that a backend
+  genuinely reporting nothing configured must still render `0`.
+
+### Changed
+
+- `backend/requirements.runtime.txt` — the note claiming polars/pyarrow have
+  "zero importers in backend/src" was too strong and is corrected in place:
+  `pd.read_parquet` resolves a parquet engine at call time. pyarrow is
+  deliberately **not** re-added, because `ENABLE_STATSBOMB_ENRICHMENT` is off on
+  measured evidence (23.58% coverage) and restoring the dependency to silence a
+  log would quietly re-enable a gated path.
+
+### Known / unchanged
+
+- **The empty-fixtures root cause is narrowed, not closed.** The boot tick ran,
+  the provider call succeeded, and zero rows were inserted — ruling out provider
+  error, DB-not-ready, and lease-skip. Which of the three silent stages emptied
+  the batch is answered by one `/metrics` read after this deploys; `docs/DEBT.md`
+  item 130 stays `PARTIALLY RESOLVED` until that read is taken.
+- Certification posture is untouched: `certification_policy.py` unmodified, both
+  `error_association` xfails still xfail and still print their live
+  measurements, `staking.permitted` remains `false` on the deployed generation.
+  This release fixes how probabilities are *served*, and does not assert any
+  change in model quality.
+
 ## Unreleased — Production Readiness & CI Gates Certification (2026-09-22)
 
 ### Fixed

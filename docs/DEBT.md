@@ -1,5 +1,352 @@
 # SabiScore Debt Ledger
 
+## 136. The providers pill reported "0 configured" when it meant "could not ask"
+
+**Tier:** `RESOLVED` — 2026-09-23. **Found:** live screenshots of
+`/performance` showed `PROVIDERS 0 configured · 0 live-validated` beside a
+"Performance service unreachable" banner — while every other route on the
+*same deployment* correctly showed `5 configured · 2 live-validated`, and the
+backend's own `/api/v1/providers/health` listed all five as `enabled=True`.
+
+`deriveProviderActivation` (`apps/web/src/lib/health-status.ts`) fails closed
+to all-zeros when the health payload is missing or malformed, which is correct
+*as data* and is deliberately commented as such. The defect was the renderer:
+it printed those zeros verbatim, turning "we could not reach the backend to
+ask" into the assertion "this platform has no providers configured".
+
+⚠️ **Same class as the `LIVE` freshness badge (2026-08-13), the vΩ.23
+providers pill, and the vΩ.24 neutral-default stat tiles — a plausible-looking
+number standing in for an unanswered question.** Every prior instance was
+fixed at one call site; this one had **three** (`platform-health-pills.tsx`,
+`match-selector.tsx`, `mobile-platform-summary.tsx`, the last including its
+`aria-label`), so the fix is a shared `formatProviderActivation()` helper
+rather than three edits — the same "fix it at the shared helper" move that
+closed the model-identity leak.
+
+`total === 0` (no provider list ever received) now renders `Unknown`; a list
+that genuinely reports nothing configured still renders `0 configured`, which
+is a real measurement and must keep saying so. Pinned by four cases in
+`health-status.test.ts`, including that last distinction — a guard that only
+checked "never renders 0" would have been wrong.
+
+---
+
+## 135. `requirements.runtime.txt` claimed pyarrow had "zero importers"; pandas needs it at call time
+
+**Tier:** `RESOLVED (log noise)` / `ACCEPTED (dependency stays out)` — 2026-09-23.
+**Found:** the 2026-09-22 Render log emits a five-line
+`Unable to read StatsBomb cache ... Missing optional dependency 'pyarrow'`
+warning **twice per `/full-analysis` request**.
+
+`requirements.runtime.txt:84` removed polars and pyarrow with the note "zero
+importers in backend/src", to shorten the Render redeploy window (~66 MB).
+There is no *direct* importer, but `pd.read_parquet` resolves a parquet engine
+at call time, and `data/enrichment/statsbomb_aggregator.py::_load_cache` calls
+it on a file that **does** exist in the deployed image.
+
+⚠️ **Deliberately NOT fixed by adding pyarrow back.** The StatsBomb feature is
+gated off on purpose — `ENABLE_STATSBOMB_ENRICHMENT` defaults `False` because
+coverage measured 23.58%, below the 85% bar (item 61) — and the aggregator
+degrades to an empty frame, so the failure is genuinely benign. Re-adding the
+dependency to silence a log would quietly re-enable a path an operator
+switched off on evidence.
+
+Fixed instead at the noise: the failure is a property of the runtime, not of
+the request, so it is now reported once per process. The false "zero
+importers" claim in `requirements.runtime.txt` is corrected in place, with the
+condition under which pyarrow *should* return.
+
+---
+
+## 134. Every stage between the football-data.org response and an inserted fixture could empty the batch silently
+
+**Tier:** `RESOLVED (observability)` — 2026-09-23. Closes the diagnostic half
+of item 130.
+
+**Live evidence, `/metrics` at 2026-09-22T23:32Z on deployed `sha:7039aa4`:**
+
+```
+fixture_sync.successes: 1        fixture_sync.inserted: 0
+provider.football_data_org.fixture_sync_success: 1
+fixture_sync.latency: 1 run, 2180ms
+```
+
+The sync ran, the provider call *succeeded*, and zero rows were inserted —
+with **no** `unusable_team_name`, **no** `identity_conflicts`, **no**
+`failures` counter, and no warning in the Render log beyond
+`fixture_sync: 0 new upcoming fixtures seeded`. Both `/api/v1/upcoming/matches`
+and `/api/v1/fixtures/upcoming` returned `total: 0, source: "database",
+offseason: false, data_gap: false` in late September, with five of six leagues
+mid-season.
+
+**Three stages can each zero the batch without raising, and none left a trace:**
+
+1. `football_data_org.py:181` returns `ProviderStatus.PARTIAL` when a
+   competition's `matches` array is empty. `PARTIAL` is in **neither** failure
+   set `_fetch_competitions` checks (`RATE_LIMITED`/`CIRCUIT_OPEN`, and
+   `UNAVAILABLE`/`UNCONFIGURED`/`INVALID`/`CONFLICTING`), so it falls through
+   to the record loop and contributes silently.
+2. `football_data_api.py::_normalize_match` drops any record the provider
+   flagged `coherent=False` — no counter, no log — and the provider's own
+   `warnings` list, which already carries `rejected: <reason>` for exactly
+   those records, was **discarded** by the loader.
+3. `normalized[:limit]` truncates the *combined* seven-competition list using
+   the *per-competition* limit (`50`), so the platform sees at most 50
+   fixtures overall, earliest-kickoff first.
+
+⚠️ **Because all three are silent, "0 seeded" was unfalsifiable from outside**
+— an empty upstream and a full slate dropped as incoherent produced a
+byte-identical observable. That is why item 130 could not be closed.
+
+**Fixed:** per-competition `received`/`kept`/`dropped_incoherent` counts in one
+INFO summary line, the provider's own rejection reasons re-logged instead of
+discarded, and `{fixture,settlement}_sync.candidates_received`,
+`.dropped_incoherent`, `.truncated_by_cap` on `/metrics`. Telemetry is wrapped
+so it can never break acquisition.
+
+⚠️ **Stage 3's semantics were deliberately left unchanged.** The double-applied
+cap is long-standing documented behaviour (vΩ.33), it produces 50, not 0, so it
+is not this incident's cause — and changing a sync's batch semantics while
+chasing an unrelated zero is how the "fix the first symptom you see" class
+starts. It is now merely *visible*.
+
+⚠️ **The root cause of the empty table is still not determined** — this change
+makes the next tick name the stage, it does not itself reveal which one. The
+answer will be in `/metrics` after deploy: `candidates_received > 0` with
+`dropped_incoherent > 0` means the provider is fine and normalization is
+rejecting; `candidates_received == 0` means football-data.org genuinely
+returned nothing for the 14-day window and the investigation moves upstream
+(plan/quota/date-range). **Do not close item 130 before reading that.**
+
+Pinned by two guards in `test_football_data_api_resilience.py` asserting the
+one invariant that matters: an all-incoherent batch and a genuinely empty one
+must no longer look the same. Both watched failing against the pre-fix loader.
+
+---
+
+## 133. ⭐⭐ Every production prediction was served uncalibrated — all six leagues, silently, by design
+
+**Tier:** `RESOLVED` — 2026-09-23. **Found in the operator-supplied Render log
+for deployed `sha:7039aa4`, 2026-09-22T23:05:18Z** — six consecutive lines, one
+per league, at startup:
+
+```
+PredictionEngine: epl serialized calibrator (method=sigmoid) is unusable in this
+runtime; serving uncalibrated rather than failing every request.
+artifact=<startup> reason='LogisticRegression' object has no attribute 'multi_class'
+```
+
+**Root cause.** `src/core/meta_model.py` already documents this exact hazard and
+already removed it *from the stacking head*: artifacts are fitted on a developer
+machine (Python 3.14 / scikit-learn 1.8) and served on Render (3.11 / 1.3.2);
+a fitted `LogisticRegression` unpickles cleanly but 1.3.2's `predict_proba`
+body reads `self.multi_class`, which 1.7+ no longer sets. The **calibrator** was
+never given the same treatment: `calibration.py::fit_calibrator` stores one
+fitted `LogisticRegression` per class for `method="sigmoid"`, and
+`apply_calibrator` calls `.predict_proba()` on it. Same coupling, one layer over.
+
+`PredictionEngine._usable_calibrator` preflights every calibrator at load and
+rejects any that cannot demonstrably run — which is *correct*, and is what
+turned a version skew into all six leagues permanently reporting
+`calibration_method="raw"`.
+
+**Live consequence.** `/performance` on the same deployment reports
+**multiclass ECE 10.51%** (95% CI [8.93%, 19.94%]) against the ≤3% ceiling
+`certification_policy.py` sets for G11, with a reliability curve that
+overshoots badly above the 40% bin. That is consistent with serving raw
+ensemble output; it is not a controlled calibrated-vs-raw measurement, and is
+not claimed as one.
+
+**Fix.** Read the fitted coefficients instead of invoking scikit-learn. For
+binary Platt on one feature, sklearn's own definition is
+`predict_proba(x)[:, 1] == sigmoid(x*coef_ + intercept_)` — so this is an
+identity, not an approximation. Verified **bit-for-bit against the real
+committed artifacts: max |sklearn - manual| = 0.0e+00 over a 501-point sweep x
+3 classes x 2 leagues.** Anything not shaped like a single-feature binary LR
+falls through to `predict_proba` untouched, so isotonic and any future
+calibrator type are unaffected.
+
+⚠️ **This needs no retrain and changes no artifact format** — the deployed
+pickles already carry intact `coef_`/`intercept_`; only the *method body* was
+unusable. The rescue applies to artifacts already on disk in production.
+
+⚠️ **The local working tree's artifacts are NOT the ones this log describes.**
+`backend/models/*.pkl` were rewritten 2026-09-22T21:15 by the in-flight Phase B
+retrain and now carry a calibrator for only **two** of six leagues (bundesliga,
+ligue_1) — the other four were rejected by the holdout-evidence gate from #212,
+which is honest behaviour, not a regression. The deployed generation had all
+six. Re-derive this per generation; do not carry the "six leagues" figure
+forward.
+
+⚠️ **Reproducing this locally requires modelling the production runtime, not
+running it.** The dev machine runs the scikit-learn the artifact was fitted on,
+so the artifact works there and the bug is invisible. The regression guards use
+a proxy that keeps `coef_`/`intercept_` intact and raises the exact
+`AttributeError` on `predict_proba` — otherwise the guard would pass for the
+wrong reason on every developer machine. A previous session could only
+reproduce it by force-reinstalling scikit-learn 1.3.2, which silently upgraded
+other pins and contaminated an unrelated measurement (item 113).
+
+Four guards in `test_calibrator_load_and_preflight.py`, all watched failing
+against the pre-fix code: two that the rescue is bit-identical and keeps rows
+on the simplex, two that the **startup preflight now admits** a calibrator
+scikit-learn cannot run — the assertion that actually determines whether a
+league serves calibrated at all.
+
+---
+
+## 132. Evidence-messaging polish — four match-detail cards each restated their own absence in a full sentence, on top of the one canonical explanation already given above them
+
+**Tier:** `RESOLVED` — 2026-09-22. **Found:** live screenshots of `/match/[id]`
+for a reduced-evidence fixture showed a wall of independent "unavailable"
+prose — `EnsembleCard` ("Official outcome probabilities are unavailable.
+Diagnostic baseline values are not displayed."), `ModelDriversCard` ("No
+validated model-driver report is available."), `EloContextCard` ("Ratings
+need verified match history, which is unavailable for this fixture."), and
+`UncertaintyCard` ("No measured uncertainty is available; no interval or
+percentage is inferred.") — each restating the same underlying fact
+`EvidenceStatusCard` (`apps/web/src/components/full-analysis-dashboard.tsx`
+~line 1161) already states once, in full, higher up the page.
+
+⚠️ **This is a narrower, previously-unaudited flavor of the redundancy class
+than what a top-level narrative-suppression pass would catch.** The existing
+`isNarrativeRedundant` gate and `EvidenceStatusCard` itself are correct and
+were not touched — the repetition lived one layer down, in four small
+per-metric cards nobody had swept individually.
+
+**Fix:** each card's empty state now shows only a short label, reusing the
+pattern `EloContextCard`'s own stat rows already established (a visible
+em-dash + `sr-only` "unavailable" text per value) rather than inventing a new
+one. `EloContextCard` also had its own now-redundant trailing sentence
+removed outright, since its dash rows already say enough. No new component,
+no new copy system.
+
+**Verified:** `full-analysis-dashboard.test.tsx`'s existing regression guard
+for the vΩ.31 defect class (`does not describe a suppressed baseline's shape
+when probabilities are unavailable`) pinned the *old* text and needed
+updating to assert its absence instead — a stale pinned-string test would
+otherwise have silently continued passing against text that no longer
+existed. Web lint 0, typecheck 0, `full-analysis-dashboard.test.tsx` 24/24.
+
+## 131. Executed OG-11 — `apps/api/` and `frontend/` physically removed (previously deferred, never before authorized)
+
+**Tier:** `RESOLVED` — 2026-09-22. `docs/adr/0010-remove-apps-ws.md`
+explicitly named this exact deletion "OG-11 (irreversible architecture
+deletion)" and recorded that neither directory was authorized for removal
+*in that pass* (2026-09-13) despite both already being confirmed absent from
+every CI workflow, Docker file, and `pnpm-workspace.yaml` at that time.
+Operator authorization for OG-11 was obtained this session before executing.
+
+**Removed:** `apps/api/` (16 tracked files), `frontend/` (70 tracked files),
+plus the orphaned root-level `vite.config.ts` (`root: "frontend/src"`,
+confirmed referenced by nothing in `package.json` — a loose end OG-11 itself
+didn't anticipate, since it predates the ADR).
+
+**Also fixed:** the one stray reference outside historical/ledger docs —
+`.github/copilot-instructions.md`'s own legacy-surfaces table — updated to
+record the removal, matching the equivalent table in `CLAUDE.md`. Historical
+ledger entries (this file, `CHANGELOG.md`, the ADR itself) are left as
+written, per this ledger's own append-only convention — they correctly
+describe a past state, not a current one.
+
+**Verified:** repo-wide grep for `apps/api`/`frontend/` after deletion
+returns only prose mentions in documentation/ledger files (all historically
+accurate) — zero remaining references from any CI, build, or workspace
+config.
+
+## 130. Live "zero upcoming fixtures" incident — root cause undetermined from outside, but the reason it was undeterminable is now fixed
+
+**Update, 2026-09-23 — the live evidence this item asked for arrived, and it
+narrows the cause without closing it.** An operator supplied the Render log for
+deployed `sha:7039aa4` plus `/metrics` was probed directly. Both are recorded in
+full in item 134. Summary: the boot tick **ran and succeeded**
+(`fixture_sync.successes: 1`), the football-data.org call **succeeded** in
+2.18 s (`provider.football_data_org.fixture_sync_success: 1`), and it inserted
+**0** — with no drop counter, no failure counter, and no warning of any kind.
+
+So the three outcomes this item listed resolve as: **not** a provider error,
+**not** a DB-not-ready skip, **not** a lease skip. It is the `"ok"` branch with
+`inserted: 0` — meaning the candidate list reaching the insert loop was empty.
+
+⚠️ **This still does not say WHY, and the deployed code structurally cannot.**
+Item 133 documents three separate stages that each silently reduce the batch to
+nothing, and instruments all of them. **The remaining question is settled by
+one `/metrics` read after the next deploy** — `candidates_received > 0` with
+`dropped_incoherent > 0` points at normalization; `candidates_received == 0`
+points upstream at football-data.org (plan scope, quota, or the date-range
+query). This item stays `PARTIALLY RESOLVED` until that read is taken.
+
+
+**Tier:** `PARTIALLY RESOLVED` — 2026-09-22. `fixture_sync` (`GET
+/api/v1/upcoming/matches` and `GET /api/v1/fixtures/upcoming` both) has no
+findable operator/DEBT.md entry actually investigating *why* it returns
+zero — item 118 logged the same `total=0, offseason=false` symptom the same
+day, in passing, while discussing an unrelated bug.
+
+### What was ruled out, live, this session
+
+Every other outward signal read fully healthy at the moment of investigation:
+`/health` — database/cache/ml_models/resources all `healthy`, Redis
+`tier1_redis_available: true` (rules out `fixture_sync_service.py`'s own
+documented Redis-unavailable fail-closed skip), `elo` informational block
+showing a real match recorded `2026-09-20` (data *is* flowing into the DB via
+some path). `/api/v1/providers/health` showed `football_data_org` and
+`the_odds_api` both `CONFIGURED_UNVERIFIED` (the expected, benign default
+when `PROVIDER_LIVE_TESTS=false` — not itself evidence of a working or
+failing provider either way). Both upcoming-fixtures endpoints agreed
+`total:0`/`"source":"database"` — not a query-layer disagreement between the
+two known-distinct implementations, and no `data_gap` flagged.
+
+### The real defect this surfaced
+
+`fixture_sync` had **zero visibility in `/health`** — unlike its
+`settlement`/`clv_capture`/`notification_dispatch` siblings
+(`backend/src/api/endpoints/monitoring.py`), which each report `outcome`,
+`checked_at`, and counters via a `last_*_result()` module-state accessor.
+This made the live incident genuinely undiagnosable from any public endpoint:
+"provider call failed" and "provider call succeeded, found nothing new" were
+indistinguishable from outside, and neither is distinguishable from "the
+background task silently stopped ticking" without Render log access this
+environment doesn't have.
+
+**Fixed:** `fixture_sync_service.py` gains the identical `_last_result` /
+`last_fixture_sync_result()` pattern as `clv_capture_service.py`, wired into
+`monitoring.py`'s `/health` the same way. Deliberately did **not** change
+`sync_upcoming_fixtures`'s return type or its `FootballDataAPIError`
+swallow-to-`0` behavior (~18 existing test call sites across 3 files treat
+its return as a bare `int`, and the sibling `sync_settled_results` has an
+explicit pinned test — `test_sync_settled_results_provider_outage_returns_zero_counts`
+— for the identical swallow pattern, so that convention is intentional, not
+a defect). Instead, `_last_result` is set from *inside* the existing
+success/`FootballDataAPIError`/unhandled-exception branches, so the outward
+contract is unchanged but the next occurrence of this exact ambiguity
+resolves from `GET /health` alone: `outcome: "ok"` + `inserted`/
+`candidates_received` counts on success, `outcome: "provider_error"` +
+redacted message on a provider failure, `outcome: "error"` on anything
+unhandled.
+
+**Verified:** two new tests
+(`test_health_reports_ok_with_counts_after_a_successful_sync`,
+`test_health_reports_provider_error_distinctly_from_zero_new_fixtures`) pin
+both outcomes and the unchanged `count == 0` contract on the error path.
+Existing `test_fixture_sync.py`/`test_fixture_sync_identity.py`/
+`test_provider_elo_identity_bridge.py`/`test_fixture_sync_distributed_lease.py`
+(35 tests total) and the health-endpoint-sensitive suite
+(`test_api.py`/`test_api_endpoints.py`/`test_health_truthfulness.py`/
+`test_providers_gateway.py`, 10 tests) all still pass unmodified. Ruff clean
+on all three touched files.
+
+⚠️ **Not resolved: the actual reason today's sync found zero fixtures.**
+That still needs one of: (a) this fix deployed, then re-check `GET /health`'s
+new `components.fixture_sync` block, or (b) an operator grep of the Render
+log stream for `fixture_sync:` right now — it will show either
+`"football-data.org unavailable: <reason>"`, `"unhandled error"` with a
+traceback, or `"N new upcoming fixtures seeded"` with `N=0` (meaning the
+provider call itself succeeded but found nothing new/changed — at that
+point the next question is whether football-data.org's schedule genuinely
+has a gap, which is checkable independently of this repo). Re-open with
+whichever of these is observed.
+
 ## 129. CI pipeline stabilized and test suite aligned with APEX feature schema (2026-09-22)
 
 **Tier:** `RESOLVED` — 2026-09-22.

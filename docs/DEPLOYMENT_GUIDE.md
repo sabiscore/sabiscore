@@ -2,8 +2,9 @@
 
 Last verified against the repository: 2026-09-01.
 
-Production entrypoints are `backend/src/api/main.py` and `apps/web`. Do not deploy
-the archived `frontend/` or reintroduce `apps/api/`.
+Production entrypoints are `backend/src/api/main.py` and `apps/web`. The former
+`frontend/` and `apps/api/` roots were removed on 2026-09-23 (OG-11,
+`docs/adr/0010-remove-apps-ws.md`) — do not reintroduce either.
 
 ## 1. Pre-deployment gates
 

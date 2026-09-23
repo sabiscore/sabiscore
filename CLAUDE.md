@@ -356,8 +356,8 @@ No live provider quota may be consumed in default CI (`PROVIDER_LIVE_TESTS=false
 
 | Path | Status | Action |
 |---|---|---|
-| `apps/api/` | Legacy API skeleton (incomplete) | Remove from CI, Docker, scripts |
-| `frontend/` | Legacy Vite app | Remove from CI, Docker, scripts |
+| `apps/api/` | Removed 2026-09-22 (OG-11, `docs/adr/0010-remove-apps-ws.md`) | Done — was already absent from CI/Docker/scripts before deletion |
+| `frontend/` | Removed 2026-09-22 (OG-11, `docs/adr/0010-remove-apps-ws.md`) | Done — was already absent from CI/Docker/scripts before deletion |
 | `npm lockfile` | Stale — pnpm is canonical | Delete; use `pnpm-lock.yaml` only |
 | `Base.metadata.create_all()` | Runtime schema creation | Replace with Alembic migrations |
 | Direct browser odds fetching | Security violation | Route through backend proxy |

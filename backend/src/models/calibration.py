@@ -206,6 +206,48 @@ def fit_calibrator(
     return best_t
 
 
+def _platt_probability(cal: object, raw: np.ndarray) -> np.ndarray:
+    """P(positive class) for a Platt calibrator, without calling scikit-learn.
+
+    A binary ``LogisticRegression`` fitted under one scikit-learn and unpickled
+    under another deserialises with ``coef_``/``intercept_`` fully intact, but
+    1.3.2's ``predict_proba`` body reads ``self.multi_class`` -- an attribute 1.7+
+    no longer sets -- so the call dies with ``AttributeError: 'LogisticRegression'
+    object has no attribute 'multi_class'``. Artifacts are fitted on a developer
+    machine (3.14 / sklearn 1.8) and served on Render (3.11 / sklearn 1.3.2), so
+    every sigmoid calibrator was rejected at startup by
+    ``PredictionEngine._usable_calibrator`` and all six leagues served
+    ``calibration_method="raw"`` -- measured live at ECE 10.51% against the ≤3%
+    certification ceiling (docs/DEBT.md items 113, 133).
+
+    ``src/core/meta_model.py`` already removed this exact coupling from the
+    stacking head by storing plain coefficients; this is the same move one layer
+    over. For binary LR on a single feature, sklearn's own definition is
+    ``predict_proba(x)[:, 1] == sigmoid(x @ coef_.T + intercept_)``, so this is
+    an identity, not an approximation -- verified bit-for-bit (max abs delta
+    0.0e+00 over a 501-point sweep x 3 classes) against the committed
+    bundesliga/ligue_1 artifacts.
+
+    Falls back to ``predict_proba`` for anything not shaped like a fitted binary
+    LR (so an isotonic or future calibrator type is unaffected).
+    """
+    coef = getattr(cal, "coef_", None)
+    intercept = getattr(cal, "intercept_", None)
+    if coef is None or intercept is None:
+        return cal.predict_proba(raw.reshape(-1, 1))[:, 1]  # type: ignore[attr-defined]
+
+    coef_arr = np.asarray(coef, dtype=np.float64).ravel()
+    intercept_arr = np.asarray(intercept, dtype=np.float64).ravel()
+    if coef_arr.size != 1 or intercept_arr.size != 1:
+        # Not the single-feature binary shape fit_calibrator produces; let
+        # scikit-learn own it rather than guessing at a decision function.
+        return cal.predict_proba(raw.reshape(-1, 1))[:, 1]  # type: ignore[attr-defined]
+
+    # Clip the logit before exp() so a steep fitted slope cannot overflow.
+    logit = np.clip(coef_arr[0] * np.asarray(raw, dtype=np.float64) + intercept_arr[0], -30.0, 30.0)
+    return 1.0 / (1.0 + np.exp(-logit))
+
+
 def apply_calibrator(
     method: CalibrationMethodName,
     calibrators: object,
@@ -231,7 +273,7 @@ def apply_calibrator(
         if method == "isotonic":
             out[:, cls] = np.clip(cal.predict(raw), 0.0, 1.0)
         else:
-            out[:, cls] = np.clip(cal.predict_proba(raw.reshape(-1, 1))[:, 1], 0.0, 1.0)
+            out[:, cls] = np.clip(_platt_probability(cal, raw), 0.0, 1.0)
 
     row_sums = out.sum(axis=1, keepdims=True)
     out /= np.where(row_sums > 0, row_sums, 1.0)

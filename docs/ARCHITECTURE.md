@@ -25,7 +25,8 @@ model inference, calibration/uncertainty, EV, Kelly sizing, verdicts, settlement
 and persistence. The web application never calls provider hosts or computes an
 official probability, edge, stake, or verdict.
 
-Legacy `frontend/` and `apps/api/` code is not a production entrypoint.
+The legacy `frontend/` and `apps/api/` roots were never production entrypoints
+and were removed on 2026-09-23 (OG-11, `docs/adr/0010-remove-apps-ws.md`).
 
 ## Evidence and prediction flow
 

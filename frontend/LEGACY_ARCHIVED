@@ -1,4 +1,0 @@
-This directory is archived legacy code.
-
-Canonical public frontend: apps/web
-This path must not be used by CI, Docker, deployment, or runtime imports.

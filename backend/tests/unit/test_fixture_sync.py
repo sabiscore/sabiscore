@@ -418,3 +418,51 @@ async def test_a_clean_stored_name_is_never_overwritten(session: AsyncSession) -
         assert still is not None and still.name == "Real Betis", (
             f"a clean stored name must survive incoming {incoming!r}"
         )
+
+
+async def test_health_reports_ok_with_counts_after_a_successful_sync(
+    session: AsyncSession,
+) -> None:
+    """/health must be able to distinguish "provider succeeded, nothing new"
+    from "provider failed" without needing Render log access (found while
+    investigating a live zero-upcoming-fixtures report where every other
+    /health signal read healthy)."""
+    from src.services.fixture_sync_service import (
+        last_fixture_sync_result,
+        sync_upcoming_fixtures,
+    )
+
+    matches = [_match(30, league="EPL"), _match(31, league="FIFA World Cup")]
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = _mock_client(matches)
+        count = await sync_upcoming_fixtures(session)
+
+    assert count == 1
+    result = last_fixture_sync_result()
+    assert result["outcome"] == "ok"
+    assert result["inserted"] == 1
+    assert result["candidates_received"] == 2
+    assert "checked_at" in result
+
+
+async def test_health_reports_provider_error_distinctly_from_zero_new_fixtures(
+    session: AsyncSession,
+) -> None:
+    """A provider outage must not look identical to "ran fine, nothing new" —
+    that ambiguity is what made the live incident unresolvable from /health."""
+    from src.data.loaders.football_data_api import FootballDataAPIError
+    from src.services.fixture_sync_service import (
+        last_fixture_sync_result,
+        sync_upcoming_fixtures,
+    )
+
+    mock = AsyncMock()
+    mock.get_upcoming_matches.side_effect = FootballDataAPIError("rate limited")
+    with patch("src.data.loaders.football_data_api.FootballDataAPIClient") as MockCls:
+        MockCls.return_value = mock
+        count = await sync_upcoming_fixtures(session)
+
+    assert count == 0  # unchanged contract — existing callers rely on this
+    result = last_fixture_sync_result()
+    assert result["outcome"] == "provider_error"
+    assert "rate limited" in result["message"]

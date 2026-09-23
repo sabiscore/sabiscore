@@ -160,3 +160,56 @@ async def test_recent_results_shares_the_same_isolation() -> None:
     assert results[0]["id"] == "fd-10"
     assert results[0]["home_score"] == 2
     assert provider.fixtures.await_count == 2
+
+
+async def test_an_all_incoherent_batch_is_distinguishable_from_an_empty_one(caplog) -> None:
+    """Two very different failures must not produce the same observable.
+
+    On 2026-09-22 production reported `fixture_sync.successes: 1,
+    fixture_sync.inserted: 0` with no warning and no failure counter, and the
+    platform served zero upcoming fixtures across all six leagues. Nothing
+    recorded whether football-data.org had returned nothing, or had returned a
+    full slate that was then dropped as incoherent -- so the incident was not
+    diagnosable at all (docs/DEBT.md item 130).
+
+    Both paths still legitimately yield zero fixtures. The contract is that they
+    no longer look the same from outside.
+    """
+    incoherent = _record(11)
+    incoherent["coherent"] = False
+    incoherent["rejection_reason"] = "kickoff_utc missing"
+
+    provider = _provider_with(
+        ProviderResult(
+            provider="football_data_org",
+            operation="fixtures",
+            status=ProviderStatus.VERIFIED,
+            trust_tier=TrustTier.OFFICIAL_AUTHENTICATED,
+            records=[incoherent],
+            warnings=["rejected: kickoff_utc missing"],
+        ),
+        *[_result(ProviderStatus.PARTIAL) for _ in range(6)],
+    )
+    client = FootballDataAPIClient(provider=provider)
+
+    with caplog.at_level("INFO"):
+        matches = await client.get_upcoming_matches(days_ahead=14, limit=50)
+
+    assert matches == []
+    text = caplog.text
+    assert "received=1" in text, "candidate count must be recorded"
+    assert "dropped_incoherent=1" in text, "the drop must be attributable"
+    assert "kickoff_utc missing" in text, "the provider's own reason must survive"
+
+
+async def test_a_genuinely_empty_provider_response_records_zero_candidates(caplog) -> None:
+    """The other side of the same contract: nothing received, nothing dropped."""
+    provider = _provider_with(*[_result(ProviderStatus.PARTIAL) for _ in range(7)])
+    client = FootballDataAPIClient(provider=provider)
+
+    with caplog.at_level("INFO"):
+        matches = await client.get_upcoming_matches(days_ahead=14, limit=50)
+
+    assert matches == []
+    assert "received=0" in caplog.text
+    assert "dropped_incoherent=0" in caplog.text

@@ -81,8 +81,14 @@ pandas==2.2.3; python_version < "3.14"
 pandas>=2.3.0,<3.0.0; python_version >= "3.14"
 numpy==1.26.2; python_version < "3.14"
 numpy>=2.3.0,<3.0.0; python_version >= "3.14"
-# polars and pyarrow: zero importers in backend/src — moved to .venv-ml (research env).
+# polars and pyarrow: no *direct* importers in backend/src — moved to .venv-ml (research env).
 # Removing here shortens every Render redeploy window (~28.5 MB + ~38 MB per deploy).
+# ⚠️ "zero importers" was too strong and is corrected here: pandas needs a parquet
+# engine at call time, so `pd.read_parquet` in data/enrichment/statsbomb_aggregator.py
+# fails in production without pyarrow. That is currently BENIGN and deliberate —
+# ENABLE_STATSBOMB_ENRICHMENT defaults False (coverage measured 23.58%, below the
+# 85% bar), and the aggregator degrades to an empty frame. Re-add pyarrow only as
+# part of enabling that feature, never just to silence the log (docs/DEBT.md 135).
 scikit-learn==1.3.2; python_version < "3.12"
 scikit-learn==1.5.2; python_version >= "3.12" and python_version < "3.14"
 scikit-learn>=1.7.0,<2.0.0; python_version >= "3.14"

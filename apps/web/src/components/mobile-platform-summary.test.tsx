@@ -57,7 +57,10 @@ describe("MobilePlatformSummary", () => {
     // screen-reader label, which is consumer output too.
     expect(
       await screen.findByLabelText(
-        "Model Generation 5; certification Research mode; providers 5 configured; live-validated 1",
+        // Shares one formatter with the desktop pill and the match selector, so
+        // a degraded health payload cannot render "0 configured" here while the
+        // other two say "Unknown" (docs/DEBT.md item 136).
+        "Model Generation 5; certification Research mode; providers 5 configured · 1 live-validated",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Generation 5")).toBeInTheDocument();

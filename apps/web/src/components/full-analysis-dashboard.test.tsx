@@ -114,7 +114,10 @@ describe("reduced-evidence display honesty", () => {
   // The card used to pair "Diagnostic baseline values are not displayed"
   // with a second line describing that same suppressed value's shape
   // ("defaults toward even") — contradicting its own non-display claim on
-  // the standard reduced-evidence path shown live in production.
+  // the standard reduced-evidence path shown live in production. 2026-09-22:
+  // that whole explanatory paragraph is gone too — EvidenceStatusCard already
+  // gives the one canonical "why" higher up the page, so this card now shows
+  // only a per-outcome dash, the same minimal pattern EloContextCard uses.
   it("does not describe a suppressed baseline's shape when probabilities are unavailable", () => {
     const { container } = render(
       <EnsembleCard
@@ -139,8 +142,10 @@ describe("reduced-evidence display honesty", () => {
         }}
       />,
     );
-    expect(container.textContent).toContain("Diagnostic baseline values are not displayed");
+    expect(container.textContent).not.toContain("Diagnostic baseline values are not displayed");
     expect(container.textContent).not.toContain("defaults toward");
+    expect(container.textContent).toContain("Home Win unavailable");
+    expect(container.textContent).toContain("—");
   });
 
   // Directive v7.3 P8 (INV-01 zero fabrication): the contract declares

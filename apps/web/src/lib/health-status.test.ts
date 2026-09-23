@@ -4,6 +4,7 @@ import {
   deriveBackendReadiness,
   deriveProviderActivation,
   derivePlatformHealth,
+  formatProviderActivation,
   isHealthyBackendStatus,
   liveMetricLabel,
   mergeProviderEvidence,
@@ -294,5 +295,42 @@ describe("live metric display", () => {
   it("withholds artifact numbers until enough labelled predictions exist", () => {
     expect(liveMetricLabel(false, "51.0%")).toBe("Pending");
     expect(liveMetricLabel(true, "51.0%")).toBe("51.0%");
+  });
+});
+
+describe("formatProviderActivation", () => {
+  // The renderer used to print deriveProviderActivation's fail-closed zeros
+  // verbatim, so an unreachable backend produced "0 configured · 0
+  // live-validated" — a factual claim that the platform has no providers,
+  // standing in for an unanswered question. Seen live on 2026-09-22:
+  // /performance showed exactly that beside "Performance service unreachable"
+  // while every other route on the same deployment showed 5 configured.
+  it("says Unknown when no provider list was received, never zero", () => {
+    expect(formatProviderActivation(deriveProviderActivation([]))).toBe("Unknown");
+    expect(
+      formatProviderActivation(
+        deriveProviderActivation(undefined as unknown as NonNullable<never>),
+      ),
+    ).toBe("Unknown");
+  });
+
+  it("says Checking while the query has not resolved", () => {
+    expect(formatProviderActivation(null)).toBe("Checking");
+    expect(formatProviderActivation(undefined)).toBe("Checking");
+  });
+
+  it("reports real counts when a provider list actually arrived", () => {
+    const stats = deriveProviderActivation([
+      { configured: true, enabled: true, status: "VERIFIED" },
+      { configured: true, enabled: true, status: "CONFIGURED_UNVERIFIED" },
+    ] as never);
+    expect(formatProviderActivation(stats)).toBe("2 configured · 1 live-validated");
+  });
+
+  it("still reports zero when the backend genuinely says nothing is configured", () => {
+    const stats = deriveProviderActivation([
+      { configured: false, enabled: false, status: "UNCONFIGURED" },
+    ] as never);
+    expect(formatProviderActivation(stats)).toBe("0 configured · 0 live-validated");
   });
 });

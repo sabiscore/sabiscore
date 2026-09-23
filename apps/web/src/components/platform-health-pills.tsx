@@ -5,6 +5,7 @@ import { Activity, BarChart3, Database, type LucideIcon } from "lucide-react";
 import {
   derivePlatformHealth,
   fetchPlatformHealth,
+  formatProviderActivation,
   PLATFORM_HEALTH_QUERY_KEY,
 } from "@/lib/health-status";
 
@@ -65,7 +66,7 @@ export function PlatformHealthPills() {
       <HealthPill
         icon={Activity}
         label="Providers"
-        value={health ? `${health.configured} configured · ${health.live} live-validated` : "Checking"}
+        value={formatProviderActivation(health?.providerActivation)}
         status={health?.providerActivation.label ?? "Unavailable"}
       />
       <HealthPill
