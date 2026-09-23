@@ -110,7 +110,13 @@ async def test_upcoming_sync_keeps_seven_request_budget_and_persists_each_observ
 
     assert len(requests) == 7
     assert len(rows) == 7
-    assert all(request.url.params.get("status") == "SCHEDULED" for request in requests)
+    # Was `status == "SCHEDULED"`. That assertion pinned the defect: v4 promotes
+    # a match to TIMED once its kickoff is finalised, so SCHEDULED selected
+    # nothing inside a two-week window and production served zero upcoming
+    # fixtures while this test stayed green (docs/DEBT.md item 137). "Upcoming"
+    # spans two statuses and v4 documents no comma-separated list, so it is
+    # filtered client-side and no status param is sent at all.
+    assert all(request.url.params.get("status") is None for request in requests)
     assert all(request.url.params.get("limit") == "50" for request in requests)
     assert all(request.url.params.get("dateFrom") for request in requests)
     assert all(request.url.params.get("dateTo") for request in requests)

@@ -1,5 +1,84 @@
 # SabiScore Debt Ledger
 
+## 137. ⭐⭐ Zero upcoming fixtures for six leagues — `status=SCHEDULED` stopped matching anything the moment kickoff times were finalised
+
+**Tier:** `RESOLVED` — 2026-09-23. Closes item 130, which had been open as
+`PARTIALLY RESOLVED` pending exactly this determination.
+
+**Found without needing the item-134 instrumentation to deploy.** The answer was
+already sitting in `GET /api/v1/providers/evidence`, whose per-context request
+dimensions exist precisely so "an empty UCL or FINISHED query is not confused
+with provider-wide availability" (that function's own docstring). Read per
+competition, every league showed the same split:
+
+| `query_intent` | `match_status` | window | transport | coverage |
+|---|---|---|---|---|
+| `RESULTS` | `FINISHED` | 09-20 → 09-23 | `SUCCESS` / HTTP 200 | `USABLE`, 3–5 records |
+| `UPCOMING` | `SCHEDULED` | 09-22 → 10-06 | `SUCCESS` / HTTP 200 | **`EMPTY`, 0 records** |
+
+Same credential, same host, quota healthy (`remaining: 3–9`, `rate_limited:
+false`), HTTP 200 both ways. Results worked; upcoming returned nothing. The only
+difference between the two queries is the `status` filter.
+
+**Root cause, confirmed against the vendor's own documentation** rather than
+inferred: football-data.org v4 assigns `SCHEDULED` when "a match finds it's way
+to the database and given there is a rough date set", and replaces it with
+`TIMED` "as soon the date is finalised with an exact date and time". Every
+fixture inside a 14-day horizon has a finalised kickoff, so it is `TIMED`.
+`status=SCHEDULED` therefore correctly matched **zero** matches, and the API
+answered HTTP 200 with an empty `matches` array — which is byte-identical to a
+genuine off-season.
+
+⚠️ **This is why it worked in August and not in September.** The vΩ.43 recovery
+seeded 49 fixtures across 5 leagues on 2026-08-08, when the season had not
+started and fixtures two weeks out still carried only a rough date. As the
+season tightened and broadcasters confirmed kickoff times, every fixture
+migrated to `TIMED` and the window silently emptied. **A query that degrades
+with the calendar rather than with an error is invisible to every gate:** the
+suite was green, the provider was `VERIFIED`, the circuit was closed, transport
+was `SUCCESS`, and the only symptom was an empty list that looks exactly like
+the off-season the platform is designed to render honestly.
+
+⚠️ **The repository already contained the correct vocabulary and did not use
+it.** `_fixture_request_context` (`providers/football_data_org.py`) labels a
+query `query_intent: "UPCOMING"` when its status is `SCHEDULED` **or** `TIMED` —
+it has always known upcoming spans two statuses. The *request* asked for one.
+Third instance of the two-vocabulary class after the league ids and the three
+team-name normalizers, and the first where both vocabularies live in the same
+file, thirty lines apart.
+
+**Fix.** ⚠️ **Not** `status="SCHEDULED,TIMED"` — a comma-separated list is
+**not documented** as supported, and guessing at vendor filter behaviour is how
+this defect class starts. The server-side filter is dropped for the upcoming
+query and the selection is made client-side against `_UPCOMING_STATUSES =
+{"SCHEDULED", "TIMED"}`. Same one request per competition, so the 10 req/min
+free-tier budget is unchanged.
+
+Three things were deliberately preserved:
+
+- `get_recent_results` keeps `status="FINISHED"` server-side. That *is* a single
+  exact status, and keeping it narrows the response rather than fetching a whole
+  window to discard most of it.
+- Dropping the status filter would have cost the query its `query_intent` label
+  in provider evidence — the surface that diagnosed this — so `fixtures()` takes
+  an explicit `query_intent` and the context stays interpretable.
+- `_normalize_match` hardcodes `status: "scheduled"` on everything it emits, so
+  an unfiltered batch would persist a match played earlier today as an upcoming
+  fixture. Pinned by its own test.
+
+**Verification.** `dropped_wrong_status` is counted separately from
+`dropped_incoherent` on `/metrics`, so a status mismatch can never be misread as
+bad data. Three guards in `test_football_data_api_resilience.py`; the two
+behavioural ones were watched failing against the pre-fix loader.
+
+⚠️ **One existing test asserted the defect as a contract** —
+`test_upcoming_sync_keeps_seven_request_budget_and_persists_each_observation`
+read `assert all(request.url.params.get("status") == "SCHEDULED" ...)`. It
+passed throughout the outage. Corrected to assert no status param is sent, with
+the reason inline, because the next reader will otherwise "fix" it back.
+
+---
+
 ## 136. The providers pill reported "0 configured" when it meant "could not ask"
 
 **Tier:** `RESOLVED` — 2026-09-23. **Found:** live screenshots of
@@ -255,6 +334,16 @@ accurate) — zero remaining references from any CI, build, or workspace
 config.
 
 ## 130. Live "zero upcoming fixtures" incident — root cause undetermined from outside, but the reason it was undeterminable is now fixed
+
+**CLOSED 2026-09-23 — see item 137.** The cause was determined before the
+item-134 instrumentation even deployed: `GET /api/v1/providers/evidence` already
+recorded, per competition, that the `UPCOMING` query returned HTTP 200 with zero
+records while the `RESULTS` query returned real matches. football-data.org v4
+had promoted every in-window fixture from `SCHEDULED` to `TIMED`, and the sync
+filtered on `SCHEDULED`. ⚠️ **Note the prediction in this item was wrong about
+*where* the answer would come from** — it named a `/metrics` read after deploy;
+the existing provider-evidence surface already held it. Check what evidence you
+already collect before shipping more of it.
 
 **Update, 2026-09-23 — the live evidence this item asked for arrived, and it
 narrows the cause without closing it.** An operator supplied the Render log for

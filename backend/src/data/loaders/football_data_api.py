@@ -23,6 +23,13 @@ class FootballDataAPIError(RuntimeError):
     """Raised when canonical football-data.org acquisition yields no usable data."""
 
 
+# The two v4 statuses that mean "has not been played yet". SCHEDULED is assigned
+# when only a rough date is known; TIMED replaces it once the exact kickoff is
+# finalised, which is the state of essentially every fixture within a two-week
+# horizon. Both must be accepted or the upcoming window silently reads empty.
+_UPCOMING_STATUSES = frozenset({"SCHEDULED", "TIMED"})
+
+
 class FootballDataAPIClient:
     """Normalize canonical provider records for legacy fixture/settlement consumers.
 
@@ -86,7 +93,23 @@ class FootballDataAPIClient:
             competitions=self._resolve_competitions(league),
             date_from=now.date().isoformat(),
             date_to=(now + timedelta(days=max(days_ahead, 1))).date().isoformat(),
-            status="SCHEDULED",
+            # NOT status="SCHEDULED". football-data.org v4 assigns SCHEDULED only
+            # while a match has "a rough date set", and promotes it to TIMED "as
+            # soon the date is finalised with an exact date and time" -- so every
+            # fixture inside a two-week window is TIMED, and status=SCHEDULED
+            # matched nothing. That returned HTTP 200 with an empty `matches`
+            # array for all seven competitions, which is indistinguishable from
+            # an off-season, and the platform served zero upcoming fixtures.
+            # It worked in August only because fixtures that far out were still
+            # SCHEDULED (docs/DEBT.md item 137).
+            #
+            # A comma-separated status list is NOT documented as supported, so
+            # "SCHEDULED,TIMED" would be guessing at vendor behaviour. Select
+            # client-side instead, on the same two-value vocabulary
+            # `_fixture_request_context` already recognises as "upcoming".
+            status=None,
+            query_intent="UPCOMING",
+            accept_statuses=_UPCOMING_STATUSES,
             limit=limit,
             settled=False,
         )
@@ -116,9 +139,11 @@ class FootballDataAPIClient:
         competitions: List[str],
         date_from: str,
         date_to: str,
-        status: str,
+        status: Optional[str],
         limit: int,
         settled: bool,
+        query_intent: Optional[str] = None,
+        accept_statuses: Optional[frozenset] = None,
     ) -> List[Dict[str, Any]]:
         """Fetch one request per competition through the injected provider.
 
@@ -147,6 +172,7 @@ class FootballDataAPIClient:
         # /metrics without shell access to the Render log stream.
         received = 0
         dropped_incoherent = 0
+        dropped_wrong_status = 0
         per_competition: List[str] = []
 
         for index, competition_code in enumerate(competitions):
@@ -157,6 +183,7 @@ class FootballDataAPIClient:
                 date_to=date_to,
                 status=status,
                 limit=limit,
+                query_intent=query_intent,
             )
 
             if result.status in {
@@ -192,6 +219,15 @@ class FootballDataAPIClient:
             kept_here = 0
             for record in result.records:
                 received += 1
+                # Applied here rather than as a server-side `status` filter: no
+                # single v4 status value selects "upcoming" (see
+                # get_upcoming_matches). Counted separately from the incoherent
+                # drop so a status mismatch can never be misread as bad data.
+                if accept_statuses is not None:
+                    record_status = str(record.get("status") or "").upper()
+                    if record_status not in accept_statuses:
+                        dropped_wrong_status += 1
+                        continue
                 item = (
                     self._normalize_result(record)
                     if settled
@@ -228,11 +264,12 @@ class FootballDataAPIClient:
         operation = "settlement_sync" if settled else "fixture_sync"
         logger.info(
             "football_data %s: received=%d kept=%d dropped_incoherent=%d "
-            "returned=%d (cap=%d) per_competition=[%s]",
+            "dropped_wrong_status=%d returned=%d (cap=%d) per_competition=[%s]",
             operation,
             received,
             len(normalized),
             dropped_incoherent,
+            dropped_wrong_status,
             len(truncated),
             limit,
             " ".join(per_competition),
@@ -242,6 +279,7 @@ class FootballDataAPIClient:
 
             metrics_collector.increment(f"{operation}.candidates_received", received)
             metrics_collector.increment(f"{operation}.dropped_incoherent", dropped_incoherent)
+            metrics_collector.increment(f"{operation}.dropped_wrong_status", dropped_wrong_status)
             metrics_collector.increment(f"{operation}.truncated_by_cap", len(normalized) - len(truncated))
         except Exception as exc:  # pragma: no cover - telemetry must never break acquisition
             logger.debug("football_data: metrics unavailable: %s", exc)
