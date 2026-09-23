@@ -23,7 +23,10 @@ The canonical production surfaces are:
 - Web app: `apps/web`
 - Scraper worker: `apps/scraper`
 
-Legacy roots such as `apps/api` and `frontend/` are deprecated and not production deployment targets.
+The legacy `apps/api/` and `frontend/` roots were removed on 2026-09-23 (OG-11,
+`docs/adr/0010-remove-apps-ws.md`). Neither was ever a production deployment
+target, and both were already absent from every CI, Docker and workspace
+config before deletion. Do not reintroduce them.
 
 ## Production Contract
 
