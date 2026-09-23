@@ -5,6 +5,35 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Conformal wrapper corrected; retrain/production artifact mismatch surfaced (2026-09-23)
+
+### Fixed
+
+- **`evaluate_split_conformal.py`'s served-path wrapper was stale since item 87**
+  (`docs/DEBT.md` item 140). It unconditionally averaged base learners and
+  never used `meta_model`, matching serving as of 2026-09-10 but not since
+  item 87 (2026-09-13) made stacking the primary path whenever a meta-model is
+  present. Re-measured against the corrected wrapper: pooled coverage
+  0.760/0.881/0.932 vs nominal 0.80/0.90/0.95 — the stacked (now-primary) path
+  undercovers more than averaging did, worst at 80% nominal (gap −0.040 vs the
+  superseded measurement's −0.002).
+
+### Found, not fixed (operator-only)
+
+- **The `v5_phase7-20260922` generation's committed artifacts contradict its
+  own stated retrain, and production's live artifacts match nothing in this
+  checkout** (item 140). `error_association` (item 50) re-measured
+  byte-identical to the pre-retrain numbers, because the committed `.pkl`
+  files' own `model_metadata.holdout_season` still reads `2425`, not the
+  `2526` `active_generation.json`'s `temporal_split` claims. Separately, a
+  full local filesystem sweep found no `.pkl` file — active, candidate, or
+  otherwise — matching the six artifact SHA-256 hashes production currently
+  reports live. `scripts/audit_release_identity.py` still reports
+  `RELEASE_IDENTITY_INCOMPLETE` (`source_commit`/`dataset_snapshot` UNBOUND),
+  contrary to a CHANGELOG entry on an unmerged, unpushed-content branch
+  claiming item 124 resolved. No certification gate, `active_generation.json`,
+  or production artifact was touched.
+
 ## Unreleased — Correction: the empty fixture board was not a defect (2026-09-23)
 
 ### Fixed

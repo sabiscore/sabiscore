@@ -1,5 +1,49 @@
 # SabiScore Debt Ledger
 
+## 140. `evaluate_split_conformal.py`'s served-path wrapper was stale since item 87 (2026-09-13); re-measuring surfaced that the locally-committed `v5_phase7-20260922` artifacts contradict their own generation's stated retrain, and that production's live artifact hashes match no file in this checkout at all
+
+**Tier:** `RESOLVED` (wrapper staleness) + `OPEN` (artifact/generation mismatch, operator-only). **Found:** 2026-09-23, resuming Track B research (NEXUS Phase D/E directive) at the user's direction.
+
+### Part A — the conformal script's wrapper was stale, now fixed
+
+`backend/scripts/evaluate_split_conformal.py`'s `ServedEnsemble.predict_proba` unconditionally averaged the base learners and explicitly did not use `meta_model`, with a docstring justifying this by citing the *pre-item-87* state of `PredictionEngine._ensemble_predict_dict`. Item 87 (2026-09-13) changed `_run_inference` to try the stacked meta-model FIRST whenever `bundle.meta_model is not None`, falling back to averaging only on absence or exception. The script was never updated to match, so every run since 2026-09-13 measured a fallback path production only takes when stacking fails — not the primary path.
+
+Fixed: `ServedEnsemble` now transcribes `_build_meta_features`/`_stacked_predict` from `src/models/prediction.py` (transcribed, not imported — item 7 records that importing `src.models.prediction`'s chain reaches `core/database.py`, which opens a connection at import time, so an offline script can't import it without a live DB) and tries the stacked path first, exactly mirroring `_run_inference`'s two branches.
+
+**Re-measured, pooled across 5 scoreable leagues (EREDIVISIE has 0 rows in the 2425 holdout, unchanged from item 76):**
+
+| | nominal | empirical | gap | mean set size |
+| --- | ---: | ---: | ---: | ---: |
+| **stacked (this fix)** | 0.80 | 0.760 | −0.040 | 2.02 |
+| | 0.90 | 0.881 | −0.019 | 2.50 |
+| | 0.95 | 0.932 | −0.018 | 2.70 |
+| averaging (item 76, superseded) | 0.80 | 0.798 | −0.002 | — |
+| | 0.90 | 0.896 | −0.004 | 2.56 |
+| | 0.95 | 0.955 | +0.005 | 2.77 |
+
+**The stacked (now-primary) path undercovers more than averaging did**, worst at 80% nominal (−0.040 vs −0.002). Set sizes are similar to slightly sharper. This is a real, negative finding about the uncalibrated `SoftmaxMetaModel` head specifically, not a script defect — the `faithfulness` block (per-league, in `reports/research/split-conformal-report.json`) confirms row counts match each artifact's own declared holdout exactly, while accuracy/RPS come out consistently *better* than the artifact's own recorded metrics (e.g. EPL accuracy 0.491 here vs 0.464 recorded, RPS 0.2216 vs 0.2304) — the same gap item 76 already found and explained for the stacking head specifically: the artifact's own recorded metrics were not computed on this exact object. Full report: `reports/research/split-conformal-report.json`.
+
+### Part B — re-running item 50's `error_association` tests produced byte-identical numbers to the original measurement, and here is why
+
+Requested separately: check whether `error_association` (item 50) changes under the generation the user's own OG-07 retrain promoted (`v5_phase7-20260922`, superseding `v5_phase7-20260808` specifically to fix item 81's leakage — training on season 2526 while 2526 is the evaluation holdout).
+
+Ran `test_error_association` and `test_error_association_direction_is_consistent_across_leagues` directly. Result: **identical to the last decimal place** to what item 50 recorded for the *old*, superseded generation — BUNDESLIGA gap −0.0448, EPL −0.0217, LA_LIGA −0.0025, LIGUE_1 −0.0288, SERIE_A −0.0098, all digit-for-digit matches.
+
+That is not a coincidence; it is a finding. `backend/models/active_generation.json`, as committed on this checkout, declares `generation: "v5_phase7-20260922"` with `temporal_split.holdout_season: "2526"` and a `supersedes_reason` describing a clean retrain that holds 2526 out. But the `.pkl` files it points to at `backend/models/*.pkl` (hash-verified `BOUND` by `scripts/audit_release_identity.py` — the files genuinely are what `active_generation.json` declares) each carry `model_metadata.holdout_season: "2425"` **inside their own training metadata** — the old holdout, unchanged. The generation's own descriptive text and the binary artifacts it points to disagree about which season was held out. Since the tests score the artifacts' own recorded holdout rows, and those rows are still season 2425 exactly as before, the measurement is mechanically identical to the pre-retrain one — the underlying scored model did not change.
+
+**A third, separate data point makes this concrete rather than speculative:** neither the committed `backend/models/*.pkl` files nor `backend/models/candidate/*.pkl` (the presumed source of the promotion) match the artifact SHA-256 hashes reported live by `GET /api/v1/models/status` in production right now. A full local filesystem sweep of every `.pkl` under `backend/models/` (`models/`, `models/candidate/`, `models/candidate_clean2526/`, `models/evaluation_baseline/`, `models/ultra/`) found no file matching any of the six hashes production currently reports. **Whatever artifacts are actually running in production cannot be reproduced from this checkout at all** — not the ones `active_generation.json` declares, and not the candidate directory either.
+
+### What this means, and what is deliberately not done here
+
+- Item 124 (reproducibility binding) is **not resolved**, contrary to a CHANGELOG entry found on an unmerged branch (`origin/phase10-scraper-reliability` / `origin/fix/final-production-readiness`, tip `0558dc8`, confirmed byte-identical to `origin/master` — see the session's earlier finding, not itself filed as a ledger item) claiming "Lineage Binding: the served generation is now fully bound... resolving DEBT.md item 124." A direct, fresh run of `audit_release_identity.py` right now still reports `source_commit: UNBOUND`, `dataset_snapshot: UNBOUND`, overall verdict `RELEASE_IDENTITY_INCOMPLETE`. Item 124's own entry (elsewhere in this file) was never updated to describe generation `v5_phase7-20260922` at all — it still discusses `v5_phase7-20260808`.
+- Item 81's leakage concern (training on the season used as the evaluation holdout) is **not actually fixed** by this promotion, despite `active_generation.json`'s `supersedes_reason` claiming otherwise — the artifacts committed under that generation label still declare `holdout_season: 2425`, the same as before.
+- **The production/checkout artifact-hash mismatch is not investigated further here.** It needs either Render dashboard/deploy-log access this environment does not have, or the operator's own knowledge of how those specific artifacts were produced and deployed. Recorded as evidence, not diagnosed.
+- No certification gate, `active_generation.json`, or production artifact was modified in this session. The conformal script and its report are evaluation-only, exactly as `evaluate_split_conformal.py` has always been scoped.
+
+**Blast radius:** none — `backend/scripts/evaluate_split_conformal.py` and `reports/research/split-conformal-report.json` only.
+
+---
+
 ## 139. ⚠️ CORRECTION — the empty fixture board was never a defect; it is an international break, and item 137 named the wrong cause
 
 **Tier:** `RESOLVED (no defect)` — 2026-09-23. **Supersedes the root-cause claim
