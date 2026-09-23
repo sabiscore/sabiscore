@@ -267,6 +267,17 @@ export function PerformancePageClient() {
               </p>
             )}
           </>
+        ) : summary?.reason === "backend_timeout" ? (
+          // Not an outage, and must not be painted as one. The request ran out
+          // of time, which on this deployment usually means the free-tier
+          // instance was cold -- it has been measured at ~11s idle against a 5s
+          // budget. Asserting "unreachable" here would be the same defect as
+          // rendering "0 configured" for a provider list we never received.
+          <SummaryNotice tone="info" title="Metrics are still loading">
+            The performance service did not answer within the time budget, which
+            usually means it is warming up after being idle. Nothing is wrong
+            with the stored metrics — reload in a few seconds.
+          </SummaryNotice>
         ) : summary?.reason === "backend_unreachable" ? (
           <SummaryNotice tone="error" title="Performance service unreachable">
             {summary.error

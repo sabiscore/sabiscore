@@ -1,9 +1,126 @@
 # SabiScore Debt Ledger
 
-## 137. ⭐⭐ Zero upcoming fixtures for six leagues — `status=SCHEDULED` stopped matching anything the moment kickoff times were finalised
+## 139. ⚠️ CORRECTION — the empty fixture board was never a defect; it is an international break, and item 137 named the wrong cause
 
-**Tier:** `RESOLVED` — 2026-09-23. Closes item 130, which had been open as
-`PARTIALLY RESOLVED` pending exactly this determination.
+**Tier:** `RESOLVED (no defect)` — 2026-09-23. **Supersedes the root-cause claim
+in item 137 and in the `fix(sync)` entry merged as `7c67424` (#231).** Both
+state that `status=SCHEDULED` caused the zero-fixture board. **That is false.**
+
+**How it was caught: by verifying the fix against production instead of
+trusting the green suite.** #231 deployed as `7c67424`, and the counters added
+in item 134 read:
+
+```
+fixture_sync.candidates_received:      0   <- provider returned nothing, with NO status filter at all
+fixture_sync.dropped_wrong_status:     0   <- the new client-side filter dropped nothing
+settlement_sync.candidates_received:  24   <- same provider, same key, past-dated window
+```
+
+`/api/v1/providers/evidence` confirmed the request shape actually changed
+(`status=None`, `from=2026-09-23`, `to=2026-10-07`) and still returned HTTP 200
+with zero records. Removing the filter changed nothing, so the filter was never
+the cause.
+
+**The actual answer, from a second, independent, keyless provider.** ESPN
+(`site.api.espn.com`, no credential, so no shared failure mode with
+football-data.org):
+
+| date | EPL | LA_LIGA | SERIE_A | BUNDESLIGA |
+|---|---|---|---|---|
+| 2026-09-27 | 0 | 0 | 0 | 0 |
+| 2026-10-04 | 0 | 0 | 0 | 0 |
+| **2026-10-18** | **4** | **4** | **4** | **2** |
+
+ESPN holds future data — it just has none in the queried window. The last
+matchday was 2026-09-20; the next is ~2026-10-18. **Every European domestic
+league pauses together for a FIFA international window, which is exactly why
+all six leagues were empty simultaneously** — the detail that should have
+prompted this check at the start, since six independent competitions failing
+identically is far more likely to be a shared calendar than six shared bugs.
+
+⚠️ **So `fixture_sync` inserting 0 is CORRECT, the API returning an empty
+`matches` array is CORRECT, and "No upcoming fixtures in the next 14 days" is an
+honest and accurate statement.** There is no acquisition defect.
+
+**What #231 actually fixed — still worth having, and not cosmetic.** v4 promotes
+a fixture from `SCHEDULED` to `TIMED` once its kickoff is finalised. The
+2026-10-18 fixtures enter the 14-day horizon around 2026-10-04 and will already
+be `TIMED` by then. Under the old `status=SCHEDULED` filter they would have been
+**excluded, and the board would have stayed empty after the break ended** — a
+real outage, arriving weeks later, with the same invisible signature. #231
+prevents that. It is a latent-defect fix, not an incident fix, and item 137 is
+corrected to say so.
+
+⚠️⚠️ **The lesson, and it is the expensive one.** A plausible mechanism was
+found (`SCHEDULED` genuinely does exclude `TIMED`), it genuinely did explain the
+observable, it was confirmed against vendor documentation, and it was still not
+the cause. **Explaining the symptom is not the same as causing it.** The
+disconfirming evidence was cheap and available throughout: one keyless ESPN
+request would have shown an empty calendar before any code was written. Ask
+"what does a *different* source say the truth is?" before concluding that our
+own pipeline is what is wrong.
+
+⚠️ **Corollary for this repo specifically:** when a fail-closed platform shows
+nothing, "nothing is genuinely there" is a live hypothesis with equal standing
+to "we broke the pipeline", and it is usually the cheaper one to test first.
+`offseason: false` correctly reported that the season is running; the platform
+has no concept of an in-season fixture gap, so it could not say more.
+
+**Open, deliberately not fixed here:** the board cannot distinguish "off-season"
+from "international break" from "malfunction", and renders the same bare empty
+state for all three. That ambiguity is what caused this whole investigation. A
+truthful improvement exists — the backend already knows the season is running
+and when results last arrived — but it must not fabricate a reason it cannot
+verify, and `SYNC_HORIZON_DAYS = 14` is a tuned constant whose widening changes
+prediction load. Recorded as a product decision, not taken unilaterally.
+
+---
+
+## 138. The performance page called a timeout an outage
+
+**Tier:** `RESOLVED` — 2026-09-23. `/api/model-performance/summary` budgets the
+backend at `AbortSignal.timeout(5000)` and mapped **both** a timeout and a
+refused connection to `reason: 'backend_unreachable'`, which the page rendered
+as a red "Performance service unreachable".
+
+Measured live on `sha:22b9eaf`: that backend endpoint answers in **2.5–3.0s
+warm** (6 consecutive runs, all HTTP 200) against the 5s budget, and Render's
+free tier has been measured at ~11s on an idle dyno. So a cold start times out
+routinely, and the page asserted an outage nobody had observed.
+
+⚠️ Same class as item 136 (the providers pill rendering "0 configured" for a
+list that never arrived) — a definite-sounding negative standing in for an
+unanswered question, and the second instance found in one session. The route now
+emits a distinct `backend_timeout`, which the page renders in the existing amber
+`tone="info"` treatment ("Metrics are still loading"), reserving the red
+`unreachable` state for a genuine connection failure.
+
+The 5s budget is deliberately **unchanged** — the fix is to describe the outcome
+honestly, not to hide it behind a longer wait. Same principle the keep-alive job
+already encodes: inability to confirm is not an outage.
+
+Three guards in a new `summary/route.test.ts`, including that the backend's own
+deliberate 503 ("no settled predictions yet") is still forwarded untouched.
+
+---
+
+## 137. `status=SCHEDULED` would have excluded every TIMED fixture — a latent outage, fixed before it fired (NOT the cause of the empty board; see item 139)
+
+**Tier:** `RESOLVED (latent defect)` — 2026-09-23.
+
+⚠️⚠️ **CORRECTED 2026-09-23 by item 139 — read that first.** This entry
+originally claimed `status=SCHEDULED` caused the zero-fixture board and closed
+item 130 on that basis. **It did not.** Verifying the fix against production
+showed `candidates_received: 0` with the filter removed entirely, and a second
+keyless provider (ESPN) showed no fixtures existed in the window at all: the
+leagues were in a FIFA international break. The empty board was correct.
+
+What remains true, and is why this fix was still worth shipping: v4 promotes a
+fixture to `TIMED` once its kickoff is finalised, so the 2026-10-18 fixtures
+would have entered the horizon already `TIMED` and been **excluded**, leaving
+the board empty even after the break ended. This fixed a real outage scheduled
+to fire in October. Everything below describes that mechanism accurately; only
+the claim that it explained the September symptom was wrong.
 
 **Found without needing the item-134 instrumentation to deploy.** The answer was
 already sitting in `GET /api/v1/providers/evidence`, whose per-context request
@@ -335,7 +452,7 @@ config.
 
 ## 130. Live "zero upcoming fixtures" incident — root cause undetermined from outside, but the reason it was undeterminable is now fixed
 
-**CLOSED 2026-09-23 — see item 137.** The cause was determined before the
+**CLOSED 2026-09-23 — see item 139 (and 137).** ⚠️ This pointer originally read "see item 137" and the closure reason given there was wrong; item 139 has the verified answer. The cause was determined before the
 item-134 instrumentation even deployed: `GET /api/v1/providers/evidence` already
 recorded, per competition, that the `UPCOMING` query returned HTTP 200 with zero
 records while the `RESULTS` query returned real matches. football-data.org v4

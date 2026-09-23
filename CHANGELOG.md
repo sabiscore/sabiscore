@@ -5,6 +5,45 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Correction: the empty fixture board was not a defect (2026-09-23)
+
+### Fixed
+
+- **The performance page reported a timeout as an outage** (`docs/DEBT.md` item
+  138). `/api/model-performance/summary` budgets the backend at 5s and mapped
+  both a timeout and a refused connection to `backend_unreachable`, rendered as
+  a red "Performance service unreachable". Measured live: that endpoint answers
+  in 2.5–3.0s warm, and Render's free tier has been measured at ~11s idle, so a
+  cold start times out routinely. A distinct `backend_timeout` now renders in
+  the existing amber "still loading" treatment; the 5s budget is unchanged,
+  because the fix is to describe the outcome honestly rather than hide it behind
+  a longer wait. Same class as item 136.
+
+### Corrected
+
+- ⚠️ **The `fix(sync)` entry below, merged as `7c67424` (#231), named the wrong
+  root cause** (`docs/DEBT.md` item 139). It claimed `status=SCHEDULED` caused
+  the zero-fixture board. Verifying against production after deploy showed
+  `fixture_sync.candidates_received: 0` **with the status filter removed
+  entirely**, and ESPN — an independent, keyless provider — showed no fixtures
+  existed in the window for EPL, La Liga, Serie A or Bundesliga (0 events on
+  2026-09-27 and 2026-10-04; 4/4/4/2 on 2026-10-18). Every European domestic
+  league pauses together for a FIFA international window, which is why all six
+  were empty simultaneously.
+
+  **`fixture_sync` inserting 0 was correct, and "No upcoming fixtures in the
+  next 14 days" was accurate.** There was no acquisition defect.
+
+  #231 is still worth having: the 2026-10-18 fixtures enter the 14-day horizon
+  already `TIMED`, so `status=SCHEDULED` would have excluded them and left the
+  board empty *after* the break ended. It fixed a real outage scheduled to fire
+  in October — a latent-defect fix, not an incident fix.
+
+  ⚠️ Lesson recorded in item 139: a mechanism that genuinely explains the
+  symptom, and is confirmed against vendor documentation, can still not be the
+  cause. One keyless request to a second provider would have shown the empty
+  calendar before any code was written.
+
 ## Unreleased — Upcoming-fixture acquisition restored (2026-09-23)
 
 ### Fixed
