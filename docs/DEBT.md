@@ -1416,7 +1416,6 @@ Decision: OPTION_A
   Observed current payload sample: GET /api/upcoming?limit=5 returning predictions: null
   Follow-up ticket/PR: None
 
-
 `StakingOverrideBadge` is mounted in `upcoming-matches-panel.tsx` and is the
 only per-fixture surface that discloses the override. It cannot ever render.
 
