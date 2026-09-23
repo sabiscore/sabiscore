@@ -7,6 +7,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Line,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -147,6 +148,24 @@ export function poolCurves(curves: OutcomeCurves): PlotBin[] {
     }));
 }
 
+/** A bin this thin can only read 0% or 100% from a single match — too noisy to
+ * draw as part of the curve. Such bins stay visible, hollow and off the line. */
+export const MIN_BIN_SUPPORT = 5;
+
+export function splitBySupport(bins: PlotBin[]): { supported: PlotBin[]; sparse: PlotBin[] } {
+  return {
+    supported: bins.filter((b) => b.count >= MIN_BIN_SUPPORT),
+    sparse: bins.filter((b) => b.count < MIN_BIN_SUPPORT),
+  };
+}
+
+function SparseBinDot({ cx, cy }: { cx?: number; cy?: number }) {
+  if (cx == null || cy == null) return <g />;
+  return (
+    <circle cx={cx} cy={cy} r={4} fill="none" stroke="#10b981" strokeWidth={1.5} strokeOpacity={0.6} />
+  );
+}
+
 /** Format an aggregate bootstrap CI, or "—" when it wasn't computed. */
 function formatCi(ci: BootstrapCI | undefined, fmt: (v: number) => string): string {
   if (!ci || ci.ci_lower == null || ci.ci_upper == null) return "—";
@@ -252,6 +271,7 @@ export function CalibrationCurveChart({
       ? poolCurves(curves)
       : toPlotBins(curves[selectedOutcome] ?? [])
     : [];
+  const { supported, sparse } = splitBySupport(bins);
 
   // Extract metrics — no hardcoded fallback. An absent field renders "—", never
   // a plausible-looking number nobody measured.
@@ -371,7 +391,7 @@ export function CalibrationCurveChart({
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
-                data={bins}
+                data={supported}
                 margin={{ top: 15, right: 20, bottom: 20, left: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
@@ -440,9 +460,10 @@ export function CalibrationCurveChart({
                     fontSize: 10,
                   }}
                 />
-                {/* Actual Reliability Curve */}
+                {/* Reliability curve: straight segments between measured bins —
+                    a spline would draw values between bins nobody measured. */}
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="y"
                   stroke="#10b981"
                   strokeWidth={2.5}
@@ -450,6 +471,13 @@ export function CalibrationCurveChart({
                   activeDot={{ r: 6, fill: "#34d399" }}
                   name="Observed Frequency"
                   isAnimationActive={!prefersReducedMotion}
+                />
+                <Scatter
+                  data={sparse}
+                  dataKey="y"
+                  shape={SparseBinDot}
+                  name="Thin bin"
+                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -462,6 +490,8 @@ export function CalibrationCurveChart({
           <p id="calibration-chart-summary" className="text-xs text-slate-400">
             {selectedOutcomeLabel}: {bins.length} observed probability bins
             {data?.sample_size != null ? ` from ${data.sample_size} settled predictions` : ""}. Empty bins are omitted.
+            {sparse.length > 0 &&
+              ` Bins with fewer than ${MIN_BIN_SUPPORT} predictions are drawn hollow and left off the curve.`}
           </p>
           <details className="mt-2 rounded-lg border border-white/[0.08] bg-white/[0.02]">
             <summary className="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
@@ -512,7 +542,8 @@ export function CalibrationCurveChart({
           <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Multiclass ECE
           </p>
-          <p className="mt-1 text-xl font-bold text-emerald-400 tabular-nums">
+          {/* Neutral, not green: a measured error is not a pass signal. */}
+          <p className="mt-1 text-xl font-bold text-white tabular-nums">
             {eceValue !== null ? `${(eceValue * 100).toFixed(2)}%` : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Expected Calibration Error (lower is better)</p>
@@ -532,7 +563,7 @@ export function CalibrationCurveChart({
           <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
             Reliability (REL)
           </p>
-          <p className="mt-1 text-xl font-bold text-emerald-400 tabular-nums">
+          <p className="mt-1 text-xl font-bold text-white tabular-nums">
             {brierRel !== null ? brierRel.toFixed(4) : "—"}
           </p>
           <p className="mt-0.5 text-[10px] text-slate-500">Calibration error (0.0 is perfect)</p>
