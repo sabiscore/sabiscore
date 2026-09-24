@@ -2,7 +2,7 @@
 
 Contracts verified:
   1. Below the n>=10 floor -> skipped: True with the true count in the reason.
-  2. mean_clv is model_probs[argmax] - closing_probs[argmax], averaged.
+  2. mean_gap is model_probs[argmax] - closing_probs[argmax], averaged.
   3. positive_rate is the fraction of records with CLV > 0.
   4. A record whose model_probs don't sum to ~1.0 is excluded from n itself,
      not merely from the mean — this can flip skipped from True to False if
@@ -44,7 +44,7 @@ def test_mean_clv_and_positive_rate_hand_computed() -> None:
     assert result["skipped"] is False
     assert result["n"] == 10
     # (6 * 0.1 + 4 * -0.1) / 10 = 0.02
-    assert result["mean_clv"] == pytest.approx(0.02)
+    assert result["mean_gap"] == pytest.approx(0.02)
     assert result["positive_rate"] == pytest.approx(0.6)
 
 

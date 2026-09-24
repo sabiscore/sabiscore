@@ -52,18 +52,19 @@ import { cn } from "@/lib/utils";
  * HOLD / shadow evaluation only). Leaving it on screen as a permanent em-dash
  * would imply it is merely awaiting data. It is not.
  *
- * CLV *is* pending, and that is a change: this comment previously said there was
- * "nothing to join a closing line to". `clv_service` + `get_clv_records()` have
- * since shipped and the join works — production reports real joined pairs below
- * the service's own 10-record floor, not an absent capability. So it is shown
- * with its progress toward that floor rather than hidden.
+ * True CLV is absent for the same reason: it needs the price taken at forecast
+ * time, which is not stored. The model-close gap below is a different, weaker
+ * statistic, shown with its progress toward the service's 10-record floor.
  */
-interface ClvSummary {
+/** `model_close_gap_argmax`: model belief minus closing implied probability on
+ *  the model's favourite. Not CLV, and positive for a no-skill model too
+ *  (docs/DEBT.md item 152), so it is rendered neutral, never green. */
+interface ModelCloseGap {
   skipped: boolean;
   /** Joined prediction/closing-line pairs found so far. */
   n: number;
   reason?: string;
-  mean_clv?: number;
+  mean_gap?: number;
   positive_rate?: number;
 }
 
@@ -76,12 +77,12 @@ interface PerfSummary {
   rps_overall?: number;
   n_splits?: number;
   validated_at?: string;
-  clv?: ClvSummary;
+  model_close_gap_argmax?: ModelCloseGap;
   error?: string;
 }
 
 /** The floor `services/clv_service.py` enforces before it will report a mean. */
-const CLV_MIN_JOINED = 10;
+const GAP_MIN_JOINED = 10;
 
 // ─── Summary stats ────────────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ export function PerformancePageClient() {
   const rps = summary?.rps_overall;
   const rpsMeetsGate = meetsRpsGate(rps);
   const settled = summary?.total_settled ?? summary?.settled_predictions ?? 0;
-  const clv = summary?.clv;
+  const gap = summary?.model_close_gap_argmax;
 
   return (
     <div className="space-y-6">
@@ -246,16 +247,15 @@ export function PerformancePageClient() {
               <StatCard
                 label="Market belief differential"
                 value={
-                  clv && !clv.skipped && clv.mean_clv !== undefined
-                    ? `${clv.mean_clv >= 0 ? "+" : ""}${(clv.mean_clv * 100).toFixed(1)}pp`
+                  gap && !gap.skipped && gap.mean_gap !== undefined
+                    ? `${gap.mean_gap >= 0 ? "+" : ""}${(gap.mean_gap * 100).toFixed(1)}pp`
                     : "—"
                 }
                 detail={
-                  clv && !clv.skipped
-                    ? `Mean vs. market close across ${clv.n} joined prediction${clv.n === 1 ? "" : "s"}`
-                    : `${clv?.n ?? 0} of ${CLV_MIN_JOINED} joined predictions — needs a captured closing line per prediction`
+                  gap && !gap.skipped
+                    ? `Mean vs. market close across ${gap.n} joined prediction${gap.n === 1 ? "" : "s"} · not an edge signal`
+                    : `${gap?.n ?? 0} of ${GAP_MIN_JOINED} joined predictions — needs a captured closing line per prediction`
                 }
-                positive={clv && !clv.skipped && clv.mean_clv !== undefined ? clv.mean_clv > 0 : null}
               />
             </div>
             {summary?.validated_at && (

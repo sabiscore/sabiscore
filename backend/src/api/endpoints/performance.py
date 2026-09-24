@@ -433,7 +433,7 @@ async def model_performance(
                 "league": league,
                 "window": window,
                 "settled_predictions": len(records),
-                "clv": clv,
+                "model_close_gap_argmax": clv,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -450,7 +450,7 @@ async def model_performance(
         # owner instead of a hardcoded copy on the client.
         "baseline_accuracy": 1.0 / 3.0,
         "walk_forward": validation,
-        "clv": clv,
+        "model_close_gap_argmax": clv,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -475,7 +475,7 @@ async def model_performance_summary(
                 "status": "METRICS_UNAVAILABLE",
                 "reason": "insufficient_settled_predictions",
                 "settled_predictions": len(records),
-                "clv": clv,
+                "model_close_gap_argmax": clv,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -487,7 +487,7 @@ async def model_performance_summary(
         "rps_overall": validation.get("rps_overall"),
         "n_splits": validation.get("n_splits"),
         "validated_at": validation.get("validated_at"),
-        "clv": clv,
+        "model_close_gap_argmax": clv,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -263,16 +263,17 @@ def health_check() -> Dict[str, Any]:
                 "message": "psutil is not installed; resource metrics unavailable",
             }
             raise RuntimeError("psutil_unavailable")
-        memory = psutil.virtual_memory()
+        instance = _instance_memory()
         disk = psutil.disk_usage("/")
 
-        memory_warning = memory.percent > 85
+        limit_mb = instance["cgroup_limit_mb"]
+        memory_warning = bool(limit_mb) and instance["headroom_mb"] < 0.15 * limit_mb
         disk_warning = disk.percent > 85
 
         health_status["components"]["resources"] = {
             "status": "healthy" if not (memory_warning or disk_warning) else "degraded",
-            "memory_percent": memory.percent,
-            "memory_available_mb": memory.available // (1024 * 1024),
+            "memory": instance,
+            "host_memory_percent": psutil.virtual_memory().percent,
             "disk_percent": disk.percent,
             "disk_free_gb": disk.free // (1024 * 1024 * 1024),
         }
@@ -347,6 +348,50 @@ def health_check() -> Dict[str, Any]:
         health_status["status"] = "degraded"
 
     return health_status
+
+
+_CGROUP_MEMORY_FILES = (
+    ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory.max"),  # cgroup v2
+    (
+        "/sys/fs/cgroup/memory/memory.usage_in_bytes",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+    ),  # cgroup v1
+)
+
+
+def _read_cgroup_bytes(path: str) -> int | None:
+    try:
+        raw = Path(path).read_text().strip()
+    except OSError:
+        return None
+    if not raw.isdigit():  # v2 writes "max" for no limit
+        return None
+    value = int(raw)
+    return value if value < 1 << 60 else None  # v1 "unlimited" sentinel
+
+
+def _instance_memory() -> Dict[str, Any]:
+    """Memory of this container, not the host.
+
+    psutil.virtual_memory() reads the host: on Render's free plan it reported
+    113 GB available for a single-worker instance (docs/DEBT.md item 152).
+    None where the platform does not expose a figure; never a host substitute.
+    """
+    current = limit = None
+    for current_path, limit_path in _CGROUP_MEMORY_FILES:
+        current = _read_cgroup_bytes(current_path)
+        if current is not None:
+            limit = _read_cgroup_bytes(limit_path)
+            break
+    mb = 1024 * 1024
+    return {
+        "process_rss_mb": psutil.Process().memory_info().rss // mb if psutil else None,
+        "cgroup_current_mb": current // mb if current is not None else None,
+        "cgroup_limit_mb": limit // mb if limit is not None else None,
+        "headroom_mb": (limit - current) // mb
+        if current is not None and limit is not None
+        else None,
+    }
 
 
 @router.get("/health/live")
@@ -636,11 +681,8 @@ def metrics() -> Dict[str, Any]:
             "uptime_seconds": uptime,
             "cache": cache_metrics,
             "system": {
-                "memory_percent": memory.percent if memory else None,
-                "memory_used_mb": memory.used // (1024 * 1024) if memory else None,
-                "memory_available_mb": memory.available // (1024 * 1024)
-                if memory
-                else None,
+                "memory": _instance_memory(),
+                "host_memory_percent": memory.percent if memory else None,
                 "cpu_percent": cpu_percent,
             },
             "production": production_metrics,

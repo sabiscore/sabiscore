@@ -618,7 +618,7 @@ def test_apex_schema_actually_takes_the_apex_branch() -> None:
 def test_upcoming_match_feature_projector_resolves_active_apex_schema(
     monkeypatch,
 ) -> None:
-    """_resolve_is_apex() reads the active schema and fails closed to legacy.
+    """_resolve_is_apex() reads the active schema; unreadable -> None, never legacy.
 
     docs/DEBT.md item 37: the projector's own dispatch, independent of
     FeatureTransformer's. Every branch is exercised directly rather than
@@ -636,7 +636,31 @@ def test_upcoming_match_feature_projector_resolves_active_apex_schema(
         raise svc.ActiveGenerationError("no manifest")
 
     monkeypatch.setattr(svc, "active_feature_schema_version", _raise)
-    assert svc.UpcomingMatchFeatureProjector._resolve_is_apex() is False
+    assert svc.UpcomingMatchFeatureProjector._resolve_is_apex() is None
+
+
+def test_projector_refuses_to_project_when_schema_unresolved(monkeypatch) -> None:
+    """docs/DEBT.md item 151: an unreadable manifest yields no feature vector.
+
+    Falling back to the legacy market block put the wrong features in slots
+    20-30 of an apex_v1_68 model while every width check passed (item 141).
+    """
+    import asyncio
+    from datetime import datetime
+
+    import src.services.upcoming_match_feature_service as svc
+
+    def _raise() -> str:
+        raise svc.ActiveGenerationError("no manifest")
+
+    monkeypatch.setattr(svc, "active_feature_schema_version", _raise)
+    projector = svc.UpcomingMatchFeatureProjector()
+    assert projector._schema_unresolved is True
+
+    match = {"id": "m1", "home_team": "A", "away_team": "B", "league": "EPL",
+             "home_team_id": "a", "away_team_id": "b"}
+    with pytest.raises(svc.ActiveGenerationError):
+        asyncio.run(projector.project_match_features(match, db=None, match_date=datetime(2026, 10, 10)))
 
 
 def test_upcoming_match_feature_projector_apex_constructor_wiring(monkeypatch) -> None:

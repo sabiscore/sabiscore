@@ -1,5 +1,11 @@
-"""Compute the backend-diagnostic CLV aggregate from already-captured closing
-lines. Read-only: never feeds EXECUTE_BET (doesn't exist), never computes ROI
+"""Model-vs-closing-market disagreement, from already-captured closing lines.
+
+NOT closing-line value. True CLV is ln(o_taken / o_close) and needs the price
+available at forecast time, which match_prediction_logs does not store. This
+statistic picks the model's argmax, which selects the outcomes where its noise
+ran high, so a no-skill model (market + noise) also scores positive: +0.005 at
+noise sd 0.1, +0.06 at 0.4 (docs/DEBT.md item 152). A disagreement diagnostic,
+not evidence of an edge in either direction. Read-only: never feeds EXECUTE_BET (doesn't exist), never computes ROI
 (no stake is ever placed). See docs/adr/0004-clv-capture.md, Addendum 2.
 """
 
@@ -47,7 +53,7 @@ def compute_clv_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "skipped": False,
         "n": n,
-        "mean_clv": sum(clv_values) / n,
+        "mean_gap": sum(clv_values) / n,
         "positive_rate": sum(1 for v in clv_values if v > 0) / n,
         "computed_at": datetime.now(timezone.utc).isoformat(),
     }

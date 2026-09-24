@@ -116,14 +116,14 @@ describe("PerformancePageClient summary", () => {
   // being true when clv_service + get_clv_records shipped: production reports
   // real joined pairs under the service's own floor. Below the floor the tile
   // must report progress, never a mean computed from too few pairs.
-  it("shows CLV progress toward its floor instead of a premature mean", async () => {
+  it("shows model-close gap progress toward its floor instead of a premature mean", async () => {
     mockSummary({
       status: "OK",
       total_settled: 21,
       accuracy_overall: 0.4,
       rps_overall: 0.2436,
       n_splits: 5,
-      clv: { skipped: true, n: 6, reason: "need >= 10 joined predictions, got 6" },
+      model_close_gap_argmax: { skipped: true, n: 6, reason: "need >= 10 joined predictions, got 6" },
     });
 
     renderWithClient();
@@ -133,19 +133,21 @@ describe("PerformancePageClient summary", () => {
     expect(screen.queryByText(/pp$/)).not.toBeInTheDocument();
   });
 
-  it("reports a measured CLV mean once the floor is cleared", async () => {
+  it("reports the measured model-close gap once the floor is cleared", async () => {
     mockSummary({
       status: "OK",
       total_settled: 40,
       accuracy_overall: 0.45,
       rps_overall: 0.21,
       n_splits: 5,
-      clv: { skipped: false, n: 12, mean_clv: 0.0231, positive_rate: 0.58 },
+      model_close_gap_argmax: { skipped: false, n: 12, mean_gap: 0.0231, positive_rate: 0.58 },
     });
 
     renderWithClient();
 
-    expect(await screen.findByText("+2.3pp")).toBeInTheDocument();
+    const value = await screen.findByText("+2.3pp");
+    // A no-skill model scores positive on this too (DEBT item 152): never green.
+    expect(value.className).not.toMatch(/emerald/);
     expect(
       screen.getByText(/mean vs\. market close across 12 joined predictions/i),
     ).toBeInTheDocument();

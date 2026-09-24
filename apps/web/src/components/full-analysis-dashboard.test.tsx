@@ -304,6 +304,17 @@ describe("EvidenceStatusCard blocking-gap copy", () => {
     expect(gap.className).not.toMatch(/\bcapitalize\b/);
     expect(gap).toHaveTextContent("this model hasn't passed certification yet");
   });
+
+  it("never claims a typed matchup was found in the schedule", () => {
+    render(<EvidenceStatusCard data={{ ...blocked, match_id: "Arsenal vs Brentford" }} />);
+    expect(screen.queryByText(/identified in schedule/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/hypothetical matchup, not a scheduled fixture/i)).toBeInTheDocument();
+  });
+
+  it("keeps the schedule claim for a real fixture id", () => {
+    render(<EvidenceStatusCard data={{ ...blocked, match_id: "fd-564645" }} />);
+    expect(screen.getByText(/fixture identified in schedule/i)).toBeInTheDocument();
+  });
 });
 
 describe("EdgeDeltaBar uses the backend's de-vigged edge", () => {

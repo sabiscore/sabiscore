@@ -1170,6 +1170,10 @@ export function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }
   const conflicts = data.evidence_quality.conflicts;
   const blocking = [...critical, ...conflicts];
   const fixtureVerified = !critical.includes("FIXTURE_IDENTITY_UNVERIFIED");
+  // Same rule the backend uses to take the name path (full_analysis.py
+  // `_is_matchup`). There, a clear identity gap means both TEAMS resolved; no
+  // scheduled fixture was looked up, so "identified in schedule" would be false.
+  const isMatchup = / vs /i.test(data.match_id ?? "");
   // Show uncollapsed when ≤5 blocking gaps; use <details> to collapse a long list
   const needsCollapse = blocking.length > 5;
   // Filter identity gap from list body (it's surfaced via the header check row)
@@ -1197,7 +1201,11 @@ export function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }
           {fixtureVerified ? "●" : "✗"}
         </span>
         <span className={fixtureVerified ? "text-slate-300" : "text-slate-400"}>
-          Fixture {fixtureVerified ? "identified in schedule" : "could not be matched to a scheduled fixture — team history unverifiable"}
+          {!fixtureVerified
+            ? "Fixture could not be matched to a scheduled fixture — team history unverifiable"
+            : isMatchup
+              ? "Both teams identified — hypothetical matchup, not a scheduled fixture"
+              : "Fixture identified in schedule"}
         </span>
       </div>
 
