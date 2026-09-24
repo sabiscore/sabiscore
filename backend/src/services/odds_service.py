@@ -15,6 +15,7 @@ from ..db.models import Odds
 from ..monitoring.metrics import metrics_collector
 from ..providers.base import ProviderStatus
 from ..providers.the_odds_api import TheOddsAPIProvider
+from .market_observation_service import _parse_datetime
 from .team_identity import select_unique_by_team_names
 
 
@@ -247,6 +248,13 @@ class OddsService:
             return None
         if any(value <= 1.0 for value in (home, draw, away)):
             return None
+        # A pre-match forecast may only use a price quoted before kickoff. A
+        # record whose kickoff is unknown cannot be bounded, so it is refused
+        # too (docs/DEBT.md item 151).
+        captured = _parse_datetime(record.get("captured_at"))
+        kickoff = _parse_datetime(record.get("provider_event_timestamp"))
+        if captured is None or kickoff is None or captured >= kickoff:
+            return None
         return {
             "home_win": home,
             "draw": draw,
@@ -255,6 +263,7 @@ class OddsService:
             "timestamp": record.get("captured_at"),
             "bookmaker": record.get("bookmaker"),
             "provider_event_id": record.get("provider_event_id"),
+            "kickoff_utc": record.get("provider_event_timestamp"),
             "bookmaker_last_update": record.get("bookmaker_last_update"),
         }
 

@@ -79,6 +79,9 @@ const fmtPct = (value?: number | null, digits = 1) =>
 const fmtPp = (value?: number | null, digits = 2) =>
   value == null || !Number.isFinite(value) ? "Unavailable" : `${value > 0 ? "+" : ""}${value.toFixed(digits)}pp`;
 
+// Number("") is 0, which previewed an empty form as "H 0.00 D 0.00 A 0.00".
+export const parseOddsInput = (raw: string) => (raw.trim() === "" ? Number.NaN : Number(raw));
+
 const fmtOdds = (value?: number | null) =>
   value == null || !Number.isFinite(value) ? "Unavailable" : value.toFixed(2);
 
@@ -302,9 +305,9 @@ export function BettingIntelligenceDashboard() {
   }, [dateFilter, fixtures, teamQuery]);
   const parsedOdds = useMemo(
     () => ({
-      home: Number(oddsForm.home),
-      draw: Number(oddsForm.draw),
-      away: Number(oddsForm.away),
+      home: parseOddsInput(oddsForm.home),
+      draw: parseOddsInput(oddsForm.draw),
+      away: parseOddsInput(oddsForm.away),
     }),
     [oddsForm.away, oddsForm.draw, oddsForm.home],
   );

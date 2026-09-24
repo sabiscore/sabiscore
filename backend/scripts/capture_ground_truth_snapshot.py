@@ -381,7 +381,7 @@ def section_evidence(offline: bool) -> dict[str, Any]:
     perf = _probe(BACKEND_PERFORMANCE, offline)
     cal = _probe(BACKEND_CALIBRATION, offline)
     wf = _dig(perf["body"], "walk_forward")
-    clv = _dig(perf["body"], "clv")
+    clv = _dig(perf["body"], "model_close_gap_argmax")
     return {
         "settled_predictions": _dig(perf["body"], "settled_predictions"),
         "settled_predictions_source": f"GET {BACKEND_PERFORMANCE}",
@@ -419,15 +419,10 @@ def section_evidence(offline: bool) -> dict[str, Any]:
         },
         "model_market_belief_differential": {
             "n": _dig(clv, "n"),
-            # The backend spells this 'mean_clv', not 'mean'.
-            "mean": _dig(clv, "mean_clv"),
+            # The backend spells this 'mean_gap', not 'mean' (DEBT item 152).
+            "mean": _dig(clv, "mean_gap"),
             "positive_rate": _dig(clv, "positive_rate"),
             "skipped": _dig(clv, "skipped"),
-            "naming_warning": (
-                "The backend field is named 'clv' but measures model belief minus "
-                "closing implied probability, which directive §28 says must not be "
-                "called CLV. Reported here under its true name."
-            ),
         }
         if isinstance(clv, dict)
         else None,

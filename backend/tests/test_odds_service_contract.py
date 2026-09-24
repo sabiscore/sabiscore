@@ -130,6 +130,7 @@ async def test_match_lookup_consumes_one_normalized_bookmaker_snapshot():
         "draw_odds": 3.5,
         "away_odds": 4.4,
         "captured_at": "2026-08-09T08:00:00Z",
+        "provider_event_timestamp": "2026-08-09T14:00:00Z",
         "bookmaker_last_update": "2026-08-09T07:59:00Z",
         "coherent": True,
         "executable": True,
@@ -170,6 +171,39 @@ async def test_match_lookup_rejects_cross_fixture_or_incoherent_records():
     ]
     service = OddsService(cache_backend=_StubCache())
     service.provider = _StubProvider(ProviderStatus.VERIFIED, records)
+
+    odds = await service.get_match_odds("Arsenal", "Brighton", "EPL")
+
+    assert odds["source"] == "unavailable"
+    assert "home_win" not in odds
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "captured_at, kickoff",
+    [
+        ("2026-08-09T14:00:00Z", "2026-08-09T14:00:00Z"),  # at kickoff
+        ("2026-08-09T14:30:00Z", "2026-08-09T14:00:00Z"),  # in play
+        ("2026-08-09T08:00:00Z", None),  # kickoff unknown: cannot be bounded
+    ],
+)
+async def test_match_lookup_refuses_a_price_not_proven_pre_kickoff(captured_at, kickoff):
+    """docs/DEBT.md item 151: a pre-match forecast never reads an in-play price."""
+    record = {
+        "provider_event_id": "evt-1",
+        "home_team": "Arsenal",
+        "away_team": "Brighton",
+        "bookmaker": "pinnacle",
+        "home_odds": 1.9,
+        "draw_odds": 3.5,
+        "away_odds": 4.4,
+        "captured_at": captured_at,
+        "provider_event_timestamp": kickoff,
+        "coherent": True,
+        "executable": True,
+    }
+    service = OddsService(cache_backend=_StubCache())
+    service.provider = _StubProvider(ProviderStatus.VERIFIED, [record])
 
     odds = await service.get_match_odds("Arsenal", "Brighton", "EPL")
 

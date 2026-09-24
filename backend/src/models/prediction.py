@@ -211,7 +211,17 @@ class PredictionEngine:
             return None
 
         manifest_entry = generation.get("artifacts", {}).get(slug)
-        manifested = manifest_entry.get("artifact_path") if manifest_entry else None
+        if not manifest_entry:
+            # Only hash-pinned artifacts serve. Loading "{slug}_ensemble.pkl"
+            # from disk for an unlisted league would serve an unverified model
+            # (repo-root models/ still holds pre-v5 pickles; DEBT item 151).
+            logger.warning(
+                "PredictionEngine: league=%r has no artifact in the active "
+                "generation; refusing to load an unverified model",
+                slug,
+            )
+            return None
+        manifested = manifest_entry.get("artifact_path")
         provenance = {
             "model_version": str(generation.get("active_version") or "unknown"),
             "generation": generation.get("generation"),
@@ -220,10 +230,8 @@ class PredictionEngine:
             "certification_state": str(
                 generation.get("certification_state") or "UNVERIFIED"
             ),
-            "artifact_sha256": manifest_entry.get("artifact_sha256")
-            if manifest_entry
-            else None,
-            "coverage": "dedicated" if manifest_entry else "generic",
+            "artifact_sha256": manifest_entry.get("artifact_sha256"),
+            "coverage": "dedicated",
         }
 
         for directory in (settings.phase7_models_path, settings.models_path):
@@ -235,8 +243,8 @@ class PredictionEngine:
                     if not candidate.exists():
                         continue
                     if (
-                        manifested is not None
-                        and candidate.resolve() != manifested.resolve()
+                        manifested is None
+                        or candidate.resolve() != manifested.resolve()
                     ):
                         continue
                     try:

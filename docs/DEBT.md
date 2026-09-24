@@ -1,8 +1,20 @@
 # SabiScore Debt Ledger
 
-## 152. `/health` reports host memory as the instance's, and the metric named "CLV" is an argmax-selected disagreement that a no-skill model also scores positive — OPEN
+## 152. `/health` reports host memory as the instance's, and the metric named "CLV" is an argmax-selected disagreement that a no-skill model also scores positive — PARTIAL
 
-**Tier:** `OPEN` — 2026-09-24. **Found:** grounding `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md` in live numbers.
+**Tier:** `PARTIAL` — 2026-09-24. **Found:** grounding `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md` in live numbers.
+
+**Addressed 2026-09-24 (directive S1, C5):** `/health` → `components.resources.memory` and
+`/metrics` → `system.memory` now report `process_rss_mb` plus cgroup `memory.current`/`memory.max`
+(v2, then v1) and `headroom_mb`, each `None` where the platform exposes nothing — never a host
+substitute. Host usage survives only as `host_memory_percent`. The memory warning fires on instance
+headroom under 15% of the cgroup limit, never on host figures (`/health` stays HTTP 200 either way;
+Render's check is `/health/ready`). Tests: `tests/unit/test_instance_memory.py`. The API field
+`clv` is renamed `model_close_gap_argmax` (inner `mean_clv` → `mean_gap`) on `/model-performance`
+and `/model-performance/summary`; the web tile keeps its "Market belief differential" label and is
+no longer coloured green when positive. **Still open:** S2 (measure RSS in `python:3.11-slim`, no
+Docker daemon here) and true CLV (C1/C3/C4, which need the recommendation-time price, and C1 needs
+operator approval for the migration).
 
 **Memory.** `/health` → `components.resources` comes from `psutil.virtual_memory()`
 (`api/endpoints/monitoring.py:266` and `:625`), which reads the **host**. Live on 2026-09-24 it
@@ -33,9 +45,21 @@ Do not delete it.
 
 ---
 
-## 151. Serving still has three paths that fail open or are unbounded in time — OPEN
+## 151. Serving still has three paths that fail open or are unbounded in time — RESOLVED (verify after deploy)
 
-**Tier:** `OPEN` — 2026-09-24. All three are latent (each needs a specific trigger), and none has been observed firing in production.
+**Tier:** `RESOLVED` — 2026-09-24, same day as found. All three were latent (each needed a specific trigger), and none was observed firing in production.
+
+**Fix.** (1) `_resolve_is_apex` returns `None` on an unreadable manifest; the projector then raises
+`ActiveGenerationError` from `project_match_features`, inside every caller's existing fail-closed
+handling (construction is per request, so raising in `__init__` would have been a 500). (2)
+`_load_from_disk` returns `None` for any slug without a manifest entry, and only the manifested path
+may load; `coverage` is therefore always `"dedicated"`. (3) `OddsService._coherent_snapshot` refuses
+a record captured at or after `provider_event_timestamp`, and a record whose kickoff is unknown; the
+snapshot now carries `kickoff_utc`. Recording which snapshot a forecast used (C1) remains open under
+item 152. Tests, each watched failing on the reverted code:
+`test_projector_refuses_to_project_when_schema_unresolved`,
+`test_unlisted_league_is_refused_even_with_a_pickle_on_disk`,
+`test_match_lookup_refuses_a_price_not_proven_pre_kickoff` (three cases).
 
 | Path | Behaviour | Trigger | Fix |
 | --- | --- | --- | --- |

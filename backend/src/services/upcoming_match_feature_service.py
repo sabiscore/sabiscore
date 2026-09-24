@@ -196,7 +196,13 @@ class UpcomingMatchFeatureProjector:
 
     def __init__(self, odds_service: OddsService | None = None) -> None:
         self._use_phase8 = settings.phase8_enabled
-        self._is_apex = self._resolve_is_apex()
+        resolved = self._resolve_is_apex()
+        # None = the manifest could not say which market block the served
+        # artifacts expect. Constructed per request, so refusing here would be a
+        # 500; project_match_features refuses instead, inside each caller's own
+        # fail-closed handling (docs/DEBT.md item 151).
+        self._schema_unresolved = resolved is None
+        self._is_apex = bool(resolved)
         self.canonical_features = active_canonical_features(
             use_phase7=settings.use_phase7_models,
             use_phase8=self._use_phase8,
@@ -216,18 +222,19 @@ class UpcomingMatchFeatureProjector:
         self.scraped_form_store = ScrapedTeamFormStore()
 
     @staticmethod
-    def _resolve_is_apex() -> bool:
+    def _resolve_is_apex() -> Optional[bool]:
         """Whether the active generation serves the Apex market block.
 
-        docs/DEBT.md item 37's serving wire-up. Any resolution failure
-        (missing manifest, unregistered schema string) falls back to
-        ``False`` — today's exact behavior for every existing deployment,
-        since the only generation active today declares ``phase7_68``.
+        ``None`` when the manifest cannot be read or names an unregistered
+        schema. It used to fall back to ``False`` (legacy market block), which
+        was harmless while the served schema was ``phase7_68`` and is item 141's
+        defect now that it is ``apex_v1_68``: same width, wrong slots 20-30.
         """
         try:
             return is_apex_schema(active_feature_schema_version())
-        except (ActiveGenerationError, UnknownFeatureSchemaError):
-            return False
+        except (ActiveGenerationError, UnknownFeatureSchemaError) as exc:
+            logger.error("feature projector: active schema unresolved: %s", exc)
+            return None
 
     async def project_match_features(
         self,
@@ -259,6 +266,11 @@ class UpcomingMatchFeatureProjector:
                 }
             }
         """
+
+        if self._schema_unresolved:
+            raise ActiveGenerationError(
+                "active feature schema unresolved; refusing to assemble a feature vector"
+            )
 
         # ponytail: Match.match_date is naive TIMESTAMP WITHOUT TIME ZONE — strip tz so asyncpg accepts range bounds
         match_date = match_date.replace(tzinfo=None)

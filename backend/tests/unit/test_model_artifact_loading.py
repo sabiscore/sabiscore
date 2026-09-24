@@ -119,3 +119,21 @@ async def test_engine_returns_a_real_prediction_not_the_fallback(league: str):
         assert payload["calibration_applied"] is False
     else:
         assert payload["calibration_applied"] is True
+
+
+def test_unlisted_league_is_refused_even_with_a_pickle_on_disk(tmp_path, monkeypatch):
+    """docs/DEBT.md item 151: only artifacts hash-pinned in active_generation.json
+    serve. A stray `{slug}_ensemble*.pkl` for a league the manifest does not list
+    used to load unverified (coverage="generic")."""
+    import shutil
+
+    from src.core.config import settings
+
+    source = _artifact("epl")
+    if not source.exists():
+        pytest.skip("artifact not present in this checkout")
+    shutil.copy(source, tmp_path / "ucl_ensemble_v5_phase7.pkl")
+    monkeypatch.setattr(settings, "phase7_models_path", tmp_path)
+    monkeypatch.setattr(settings, "models_path", tmp_path)
+
+    assert PredictionEngine()._load_from_disk("ucl") is None

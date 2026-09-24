@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BettingIntelligenceDashboard } from "./betting-intelligence-dashboard";
+import { BettingIntelligenceDashboard, parseOddsInput } from "./betting-intelligence-dashboard";
 
 const getUpcomingFixtures = vi.fn();
 const getEnginePolicy = vi.fn();
@@ -251,5 +251,13 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
     await waitFor(() => {
       expect(screen.getByText(/Blocking Gaps — execution paused/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe("parseOddsInput", () => {
+  it("treats an empty field as unavailable, never as a 0.00 price", () => {
+    expect(Number.isNaN(parseOddsInput(""))).toBe(true);
+    expect(Number.isNaN(parseOddsInput("  "))).toBe(true);
+    expect(parseOddsInput("2.35")).toBe(2.35);
   });
 });
