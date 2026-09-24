@@ -53,7 +53,7 @@ def registry(monkeypatch: pytest.MonkeyPatch) -> _RecordingRegistry:
 
     monkeypatch.setattr(performance, "get_walk_forward_registry", lambda: stub)
     monkeypatch.setattr(performance, "get_settled_predictions", _settled)
-    monkeypatch.setattr(performance, "active_model_version", lambda: "v-test")
+    monkeypatch.setattr(performance, "active_served_identity", lambda: "v-test")
     monkeypatch.setattr(performance, "cache", _DictCache())
     stub.settled = settled  # type: ignore[attr-defined]
     return stub

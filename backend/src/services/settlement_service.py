@@ -85,10 +85,10 @@ async def run_settlement_pass(provider: Any = None) -> dict[str, Any]:
 
     try:
         from .fixture_sync_service import sync_settled_results
-        from ..models.active_generation import active_model_version
+        from ..models.active_generation import active_served_identity
         from ..repositories.fixtures import get_settled_predictions
 
-        model_version = active_model_version()
+        model_version = active_served_identity()
 
         async with AsyncSessionLocal() as session:
             sync_counts = await sync_settled_results(session, provider=provider)

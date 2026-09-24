@@ -298,9 +298,10 @@ class UpcomingMatchFeatureProjector:
 
         # is_synthetic (below) gates public prediction publishing (WP-0/vΩ.32:
         # upcoming_match_service.py `publishable = not is_fallback and not
-        # is_synthetic`) — it must reflect whether DB-native history existed, not
-        # whether a scraped fallback was found. Captured before the fallback
-        # reassigns home_stats/away_stats.
+        # is_synthetic`) — it must reflect whether the model's required inputs are
+        # real (DB-native history, and the live market price when the schema takes
+        # one), not whether a scraped fallback was found. Captured before the
+        # fallback reassigns home_stats/away_stats.
         home_db_missing = home_stats is None
         away_db_missing = away_stats is None
         home_stats, home_scraped_provenance = self._apply_scraped_fallback(
@@ -511,6 +512,14 @@ class UpcomingMatchFeatureProjector:
                 provider="upcoming_match_feature_service",
             )
 
+        # Every 68-wide schema takes the market as a model input. Without a live
+        # price those 14 slots keep placeholder odds (2.5/3.3/2.8), and the served
+        # model echoes them: ~0.39/0.25/0.35 for any Elo gap from -200 to +300
+        # (measured 2026-09-24). That is a fabricated forecast, not a weak one.
+        market_inputs_defaulted = (
+            "market_prob_home" in self.canonical_features and not _market_resolved
+        )
+
         data_quality = {
             "historical_data_ratio": max(
                 0.0, 1.0 - (defaults_count / len(self.defaults))
@@ -528,7 +537,8 @@ class UpcomingMatchFeatureProjector:
                 if self.canonical_features
                 else 0.0
             ),
-            "is_synthetic": home_db_missing or away_db_missing,
+            "is_synthetic": home_db_missing or away_db_missing or market_inputs_defaulted,
+            "market_inputs_defaulted": market_inputs_defaulted,
             # Provenance-tagged (INV-10) — closes D12 (ScrapedTeamFormStore had zero
             # callers) without claiming these values as DB-native. No longer inert on
             # the canonical feature vector (WP-10.3 remap wired above): a scraped

@@ -1,5 +1,9 @@
 ﻿# Phase D & E Independent Repository Audit
 
+> **Partly INVALID (2026-09-24, `docs/DEBT.md` item 150).** Any claim here that the model beats
+> the market is unsupported. The residual wrapper never applied a market offset, because
+> `.fair_probs` does not exist and it fell back to a uniform margin.
+
 | Area | Current implementation | Evidence | Status |
 |---|---|---|---|
 | Market baseline | `scripts/compare_candidate_vs_incumbent.py` using `shin_devig()` | Evaluated on holdout per match. BUNDESLIGA, EPL, etc. | PASS (with Shin de-vigging) |

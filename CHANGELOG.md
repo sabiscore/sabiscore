@@ -5,51 +5,36 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased — Login sessions were invisible one request later; Google sign-in redirected off-site; Sentry bloated every page's bundle (2026-09-24)
+## Unreleased — Evidence scoped to the served model; placeholder markets withheld; G18 negative result (2026-09-24)
 
 ### Fixed
 
-- **`GET /auth/me` required a Bearer header and ignored the session cookie
-  login sets** (`docs/DEBT.md` item 145). Production logs showed
-  `POST /auth/login` (200) followed by `GET /auth/me` (401) seconds later —
-  every browser login was invisible to the app one request after it
-  succeeded. `deps.py`'s Bearer-only dependency was used by exactly two
-  endpoints (`/auth/me`, `/users/merge-anonymous`); every other `/users/*`
-  endpoint already accepted the cookie. Both now share
-  `get_required_user_from_request`, reusing the existing header-or-cookie
-  resolution the rest of the file already relied on.
-- **"Continue with Google" redirected to a domain that doesn't resolve**
-  (item 146). Both `vercel.json` files hardcoded `NEXT_PUBLIC_APP_URL` to
-  `sabiscore.com`, a pre-existing unresolved DNS target, instead of the
-  live deployment's own origin. Removed the hardcode; the existing
-  `VERCEL_URL` fallback now supplies the correct, reachable origin for
-  whichever deployment serves the request. Confirmed via the Vercel API
-  that no dashboard-level override exists for this key, so the config
-  change alone is sufficient. Google OAuth credentials remain genuinely
-  unconfigured for this deployment — the "not configured yet" message
-  now correctly renders on the live site instead of a DNS error page.
-- **Sentry's client SDK loaded eagerly on every page** (item 147). First-load
-  JS had grown 103kB→184kB; `error-utils.ts` statically imported
-  `@sentry/nextjs` and is pulled into every page via the Next.js
-  error-boundary files. `logError()` now loads Sentry via a fire-and-forget
-  dynamic import, keeping its existing synchronous signature.
+- ⭐⭐ **Model evidence pooled two generations** (`docs/DEBT.md` item 148). Prediction logs now carry
+  a served identity (`{generation}@{sha256[:16]}` over the serving-relevant manifest fields), and
+  walk-forward, calibration, settlement and certified-value readers scope by it. Live settled
+  counts restart from zero for the served identity: the pooled history was never valid evidence
+  for either generation.
+- ⭐ **Placeholder market odds produced publishable forecasts** (item 149). A forecast whose market
+  block fell back to registry defaults is now `is_synthetic` and withheld from publication.
 
-### Verification
+### Research
 
-- Backend suite 2701 passed, 19 skipped, 1 xfailed, 0 failed (skips are the
-  existing environment-gated ones: Redis/DB integration tests, an optional
-  ML extra unavailable on this interpreter, and a bash-on-PATH scan guard).
-  Ruff clean on both touched files. The new
-  `test_auth_me_accepts_session_cookie_without_bearer_header` regression test
-  was watched failing against the pre-fix dependency (`assert 401 == 200`,
-  reproducing the exact production sequence) before being trusted.
-- Web lint 0, typecheck 0, Vitest 409/409 (one pre-existing, unrelated
-  timing flake in `performance-page-client.test.tsx` reproduced only under
-  full-suite parallel load and passed cleanly in isolation — confirmed
-  unrelated to this change). The new source-guard test in
-  `error-utils.test.ts` was likewise watched failing against the reverted
-  static import before being trusted.
-- Both edited `vercel.json` files confirmed to still parse as valid JSON.
+- **G18 market-residual track v1: negative** (item 150). The protocol was pre-registered and hashed
+  before any run. Over 7,027 test matches no market-offset candidate beat the de-vigged opening
+  market (best pooled ΔRPS −0.00012 [−0.00029, +0.00007]), and the 2025/26 holdout was not opened.
+  The earlier "market superiority" report is bannered invalid: its residual wrapper never applied an
+  offset.
+- **Item 142 cross-fitted evidence** added. The stacked head without the served calibrator beats
+  the served composition in 4/6 leagues, pooled −0.0077 [−0.0104, −0.0050]. The composition decision
+  remains the operator's.
+
+### Documented (open)
+
+- Items 151–152: three fail-open or time-unbounded serving paths; `/health` reports host rather than
+  instance memory; the metric named "CLV" is an argmax-selected disagreement that a no-skill model
+  also scores positive.
+- `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md`: the next directive, covering resource-bounded
+  ingestion, serving, the calibration loop, decision UX and agent orchestration. It supplements v7.4.
 
 ## Unreleased — Real fixtures lost team identity; the performance bootstrap froze the backend (2026-09-23)
 

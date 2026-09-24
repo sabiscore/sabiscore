@@ -21,6 +21,10 @@ from sqlalchemy.orm import sessionmaker
 
 from src.core.database import Base, Match
 from src.db.models import MarketSnapshot, MatchPredictionLog
+from src.models.active_generation import active_served_identity
+
+# What the prediction-log writer stamps for the serving generation.
+SERVED = active_served_identity()
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +72,7 @@ async def _seed(
             MatchPredictionLog(
                 match_id=match_id,
                 canonical_fixture_id=None,
-                model_version="v5_phase7",
+                model_version=SERVED,
                 calibration_method=None,
                 home_probability=0.4,
                 draw_probability=0.3,
@@ -112,7 +116,7 @@ async def _seed_with_closing_lines(
             MatchPredictionLog(
                 match_id=match_id,
                 canonical_fixture_id=None,
-                model_version="v5_phase7",
+                model_version=SERVED,
                 calibration_method=None,
                 home_probability=0.5,
                 draw_probability=0.3,
