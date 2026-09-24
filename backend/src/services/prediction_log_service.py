@@ -15,6 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import Match
 from ..db.models import MatchPredictionLog
+from ..models.active_generation import (
+    ActiveGenerationError,
+    read_active_manifest,
+    served_identity,
+)
 
 PredictionLogOutcome = Literal["created", "duplicate", "ineligible"]
 
@@ -112,6 +117,18 @@ async def persist_prediction_log(
     ):
         return "ineligible"
 
+    # Every retrain keeps the family suffix (``v5_phase7``), so logging the
+    # caller's label pooled distinct generations in settlement, CLV and
+    # calibration evidence. Stamp the served identity instead; a row whose
+    # generation cannot be named is not evidence for any generation.
+    try:
+        manifest = read_active_manifest()
+    except ActiveGenerationError:
+        return "ineligible"
+    model_version = capture.model_version
+    if model_version == manifest.get("active_version"):
+        model_version = served_identity(manifest)
+
     if require_scheduled_pre_kickoff:
         fixture = (
             await session.execute(
@@ -129,7 +146,7 @@ async def persist_prediction_log(
         await session.execute(
             select(MatchPredictionLog.id).where(
                 MatchPredictionLog.match_id == capture.match_id,
-                MatchPredictionLog.model_version == capture.model_version,
+                MatchPredictionLog.model_version == model_version,
                 MatchPredictionLog.input_hash == capture.input_hash,
             )
         )
@@ -141,7 +158,7 @@ async def persist_prediction_log(
         MatchPredictionLog(
             match_id=capture.match_id,
             canonical_fixture_id=capture.canonical_fixture_id,
-            model_version=capture.model_version,
+            model_version=model_version,
             calibration_method=capture.calibration_method,
             home_probability=float(capture.home_probability),
             draw_probability=float(capture.draw_probability),

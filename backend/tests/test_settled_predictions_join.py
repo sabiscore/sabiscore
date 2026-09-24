@@ -23,6 +23,7 @@ from src.api.endpoints.predictions import _save_prediction_to_db
 from src.api.endpoints import full_analysis as full_analysis_endpoint
 from src.core.database import Base, Match
 from src.db.models import MatchPredictionLog
+from src.models.active_generation import active_served_identity
 from src.repositories.fixtures import get_settled_predictions
 from src.schemas.prediction import PredictionResponse
 
@@ -74,7 +75,8 @@ async def test_save_prediction_writes_match_prediction_log(
     row = rows[0]
     assert row.match_id == "match-1"
     assert row.canonical_fixture_id is None
-    assert row.model_version == "v5_phase7"
+    # The caller says "v5_phase7"; the log records which generation served it.
+    assert row.model_version == active_served_identity()
     assert row.calibration_method == "isotonic"
     assert row.home_probability == pytest.approx(0.55)
     assert row.draw_probability == pytest.approx(0.25)
@@ -416,7 +418,11 @@ async def test_full_analysis_capture_flows_into_settlement_join(
     fixture.away_score = 1
     await session.commit()
 
-    records = await get_settled_predictions(session, model_version="v5_phase7")
+    # Read back with the exact scope settlement uses: writer and reader must
+    # derive the same identity or live evidence silently goes missing.
+    records = await get_settled_predictions(
+        session, model_version=active_served_identity()
+    )
     assert len(records) == 1
     assert records[0]["outcome"] == 0
     assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])

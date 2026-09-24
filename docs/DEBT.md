@@ -1,5 +1,143 @@
 # SabiScore Debt Ledger
 
+## 152. `/health` reports host memory as the instance's, and the metric named "CLV" is an argmax-selected disagreement that a no-skill model also scores positive — OPEN
+
+**Tier:** `OPEN` — 2026-09-24. **Found:** grounding `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md` in live numbers.
+
+**Memory.** `/health` → `components.resources` comes from `psutil.virtual_memory()`
+(`api/endpoints/monitoring.py:266` and `:625`), which reads the **host**. Live on 2026-09-24 it
+reported `memory_available_mb: 91603` for a service on Render's `free` plan with one uvicorn
+worker. The instance's real limit and headroom cannot be seen from any endpoint. Locally, on
+Windows with Python 3.14, `import src.api.main` alone reaches **455.5 MB RSS**. That is not the
+production target (Linux, Python 3.11), which is exactly why it has to be measured there.
+**Fix (directive S1/S2):** report process RSS plus cgroup `memory.current`/`memory.max`, and measure
+in `python:3.11-slim`.
+
+**"CLV".** `clv_service.compute_clv_summary` reports `model_p[argmax] − close_p[argmax]`. Picking
+the argmax of the model selects the outcomes where the model's noise ran high, so the mean is
+positive even when the model has no skill. Simulated with a model equal to the closing market plus
+log-space noise (200,000 draws, seed 0):
+
+| noise sd | mean gap | positive rate |
+| ---: | ---: | ---: |
+| 0.1 | +0.0048 | 0.57 |
+| 0.2 | +0.0185 | 0.63 |
+| 0.4 | +0.0619 | 0.73 |
+
+Live on 2026-09-24: n=35, mean +0.0056, positive rate 0.60, inside the no-skill band. It is a
+disagreement diagnostic, **not closing-line value**, and it is not evidence of an edge in either
+direction. True CLV (`ln(o_taken / o_close)`) needs the price available at forecast time, and
+`match_prediction_logs` does not store it. **Fix (directive C1/C3/C5):** persist the
+recommendation-time snapshot, report paired ΔRPS against the de-vigged close, and rename this field.
+Do not delete it.
+
+---
+
+## 151. Serving still has three paths that fail open or are unbounded in time — OPEN
+
+**Tier:** `OPEN` — 2026-09-24. All three are latent (each needs a specific trigger), and none has been observed firing in production.
+
+| Path | Behaviour | Trigger | Fix |
+| --- | --- | --- | --- |
+| `UpcomingMatchFeatureProjector._resolve_is_apex` (`services/upcoming_match_feature_service.py:219`) | returns `False` on `ActiveGenerationError` / `UnknownFeatureSchemaError`, so an `apex_v1_68` generation receives the **legacy** market block. This is item 141's defect shape. | the manifest cannot be read at request time | fail closed: no manifest, no inference |
+| `PredictionEngine._load_from_disk` (`models/prediction.py:201`) | for a slug with **no** manifest entry, loads any `{slug}{suffix}.pkl`/`.joblib` from `phase7_models_path` or `models_path` without a hash check (`coverage: "generic"`) | a request for an unlisted league while a stray pickle sits on disk (the repo root `models/` still holds five old `*_ensemble.pkl`) | refuse anything not hash-pinned in `active_generation.json` |
+| `OddsService.get_match_odds` (`services/odds_service.py:128`) | reads the live board at request time and caches it by team names; nothing asserts that the price was captured before kickoff | a forecast requested after kickoff | bound the price to `captured_at < kickoff_utc` and `<= evaluation_at`; record which snapshot was used |
+
+Related, and documented rather than a defect: training de-vigs **opening** B365 prices (Pinnacle
+fallback) proportionally, while serving uses whatever the board shows now. The two agree only
+at opening time.
+
+---
+
+## 150. G18 market-residual track v1 — NEGATIVE; the earlier "market superiority" report was never valid — CLOSED (negative result)
+
+**Tier:** `CLOSED` — 2026-09-24, negative result. **Evidence:** `backend/reports/research/g18-market-residual-{protocol.json,development.json,development.md}`; `backend/scripts/research_g18_market_residual.py`; `backend/tests/unit/test_research_g18_market_residual.py`.
+
+**Question:** does a market-offset multinomial logit (`z_home = m_home + x·b`, `z_draw = m_draw + x·b`,
+`z_away = 0`, where `m` holds the K−1 log-ratios of the de-vigged opening market) add out-of-sample
+information beyond the market?
+
+**Protocol** frozen and hashed **before** any run (sha256 `57d1704976e1ed878a8e4765a850158e32260bec641b48d38eedde3fe6d62cca`):
+five leagues pooled; walk-forward over test seasons 2021/22 to 2024/25; candidates R1 (intercepts),
+R2 (+own log-ratio), R3 (+Elo and form differences); l2 = 1.0; ISO-week cluster bootstrap with 2,000
+replicates. 2025/26 is physically excluded, and confirmation on it runs only if a candidate's pooled
+CI lies entirely below zero.
+
+**Result (7,027 test matches):**
+
+| | M0 market | R1 | R2 | R3 |
+| --- | ---: | ---: | ---: | ---: |
+| pooled RPS | 0.19526 | 0.19535 | 0.19515 | 0.19516 |
+| pooled ΔRPS vs market | — | +0.00008 [−0.00005, +0.00021] | −0.00012 [−0.00029, +0.00007] | −0.00010 [−0.00036, +0.00015] |
+
+No candidate qualified. Only Serie A R2 beats the market on its own, and Bundesliga trends worse.
+**2025/26 was never opened.** Shin de-vig (sensitivity) moves the market RPS to 0.19510 and changes
+nothing. Three tests pin the offset model: zero coefficients reproduce the market to 1e-12, the
+analytic gradient passes `check_grad`, and a planted draw bias of 0.3 is recovered.
+
+**The earlier attempt never ran.** `LogOddsResidualWrapper` (`models/ensemble.py:660`) reads
+`shin_devig(...).fair_probs`; the field is `DevigResult.probabilities` (`market_baseline.py:102`).
+The resulting `AttributeError` is swallowed by `except Exception`, so every row gets a uniform
+margin. A uniform margin shifts all three classes equally, and softmax ignores that, so the wrapper
+is **inert, not harmful**: wrapped learners train as plain learners. It also reads log-odds at
+`CANONICAL_FEATURES_68` positions, which are the wrong slots under `apex_v1_68`.
+`train_on_real_matches.py::_instantiate` still wraps every learner. The six served
+`v5_phase7-20260922` artifacts hold unwrapped learners (inspected 2026-09-24), so serving is
+unaffected.
+
+**Invalid reports, now bannered:** `reports/research/market_residual_superiority.md` and
+`audit_table.md` claim the model beats the market by 0.027–0.038 RPS in all six leagues, with market
+RPS around 0.232. The measured de-vigged market is 0.195 over 7,027 matches; no provenance for
+those figures exists in the repo. They must not be cited.
+
+**Next:** v2 is a new protocol, not a re-tune (directive v8 §2.4). It benchmarks against the market
+at the forecast timestamp, and it needs forward lineup capture first.
+
+---
+
+## 149. Placeholder market odds produced publishable forecasts — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` — 2026-09-24.
+
+When no coherent market resolved, the market block fell back to `DEFAULT_FEATURE_VALUES_68`, which
+encodes a 2.5 / 3.3 / 2.8 price. The forecast still counted as non-synthetic whenever both teams had
+history, so it was publishable. The model leans on the market block heavily. Probed: with the
+default market, the home probability stays about 0.39 across Elo differences from −200 to +300.
+With odds of 1.40 / 5.0 / 7.5 it sits about 0.55 regardless of Elo. In production, 31 of 118
+`v5_phase7` prediction logs were written without a coherent market.
+
+**Fix:** `upcoming_match_feature_service.py` sets `market_inputs_defaulted` whenever the schema has
+market slots and none resolved. It feeds `is_synthetic`, and is reported in `data_quality`.
+`publishable = not is_fallback and not is_synthetic` (vΩ.32) then withholds these forecasts.
+**Tests:** `test_feature_gap_detection.py` covers a defaulted market with full history (synthetic;
+the pre-fix run fails `assert False is True`) and a live market with history (not synthetic).
+
+---
+
+## 148. Evidence pooled model generations under a bare version suffix — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` — 2026-09-24.
+
+`match_prediction_logs.model_version` was stamped `v5_phase7`, the bare suffix shared by
+`-20260808` (which trained on its own test season, item 81) and `-20260922`. Every scoping reader
+(walk-forward, calibration, settlement, certified value) therefore pooled both generations. The 88
+settled rows `/health` reported on 2026-09-24 describe neither generation cleanly.
+
+**Fix:** `active_generation.served_identity(manifest)` returns
+`"{generation}@{sha256[:16]}"` over `generation, active_version, feature_schema_version,
+served_head, artifacts`. Certification fields are excluded, so certifying a generation does not
+change its identity. `read_active_manifest()` is cheap and hashes no artifacts.
+`persist_prediction_log` stamps the identity at the single write chokepoint, returning
+`"ineligible"` when the manifest is unreadable. `performance.py` and `settlement_service.py` scope by
+`active_served_identity()`. Legacy bare-suffix rows are excluded, not re-attributed; relabelling them
+would be guessing. **Consequence:** live settled counts restart from zero for the served identity
+after deploy. That is correct: the pooled history was never valid evidence for either generation.
+**Tests:** `tests/unit/test_served_identity_evidence_scope.py` (15), plus six updated suites that
+had encoded the pooling. **Still unbound:** training commit, dataset hash, calibrator hash,
+uncertainty method, `evaluation_at` (`audit_release_identity.py` → `RELEASE_IDENTITY_INCOMPLETE`).
+
+---
+
 ## 144. The walk-forward bootstrap ran on the event loop — every page's header refresh froze the backend for 5–25 s — RESOLVED (verify after deploy)
 
 **Tier:** `RESOLVED` — 2026-09-23. **Found:** chasing why the header pill read
@@ -160,6 +298,27 @@ LAC undercovers by about 2 points at every level. That is consistent with a cali
 The item 140 conformal numbers were measured on the wrong checkout and are superseded by this table.
 
 **Blast radius (of this item's changes):** `/api/v1/models/status` reports `served_head: stacked_meta_model`; the next promotion writes a truthful head. No prediction changes.
+
+**Update 2026-09-24 — cross-fitted selection evidence (measurement only; the decision is still open).**
+`backend/scripts/research_item142_crossfit_selection.py` →
+`backend/reports/research/item142-crossfit-selection-2425.{json,md}`. The post-hoc layers were
+refit out-of-fold on five contiguous chronological blocks of 2024/25. The base learners and inner
+meta-model are used as shipped, and 2025/26 was never opened. Row counts match the pickles, and
+parity against the shipped layers is ≤ 2.2e-16. Pooled over the five dedicated leagues (1,732 rows),
+ΔRPS vs the served composition, cross-fitted:
+
+| Candidate | Beats served (CI < 0) | Pooled ΔRPS |
+| --- | --- | --- |
+| C1 base-learner average | 0/6 | −0.0032 [−0.0069, +0.0007] |
+| C2 average + sigmoid | 1/6 | −0.0005 [−0.0024, +0.0016] |
+| C3 stacked head, no calibrator | 4/6 | **−0.0077 [−0.0104, −0.0050]** |
+| C4 stacked head + scale | 5/6 | −0.0071 [−0.0095, −0.0047] |
+
+C3 and C4 are indistinguishable (pooled RPS 0.1978 vs 0.1984), so the scale layer adds nothing
+measurable. The in-sample figures flatter the served composition by about 0.004 RPS. No candidate
+is worse than served in any league. **This does not choose a composition.** It is the evidence the
+operator decision needs, and whatever is chosen ships as a new generation through the promotion
+gate.
 
 ---
 

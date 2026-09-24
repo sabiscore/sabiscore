@@ -430,6 +430,76 @@ async def test_market_features_remain_gap_when_odds_unavailable(
         assert feature in result["data_gaps"], feature
 
 
+async def _seed_history_for_both_sides(session: AsyncSession) -> None:
+    session.add_all(
+        [
+            Team(id="team-winner", name="Winner FC", league_id="EPL", active=True),
+            Team(id="team-loser", name="Loser FC", league_id="EPL", active=True),
+            Team(id="team-foe1", name="Foe1 FC", league_id="EPL", active=True),
+            Team(id="team-foe2", name="Foe2 FC", league_id="EPL", active=True),
+        ]
+    )
+    await session.commit()
+    played = MATCH_DATE - timedelta(days=1)
+    session.add_all(
+        [
+            Match(
+                id="w-hist",
+                home_team_id="team-winner",
+                away_team_id="team-foe1",
+                match_date=played,
+                status="finished",
+                home_score=3,
+                away_score=0,
+            ),
+            Match(
+                id="l-hist",
+                home_team_id="team-foe2",
+                away_team_id="team-loser",
+                match_date=played,
+                status="finished",
+                home_score=3,
+                away_score=0,
+            ),
+        ]
+    )
+    await session.commit()
+
+
+_FIXTURE = {"id": "m1", "home_team": "Winner FC", "away_team": "Loser FC", "league": "EPL"}
+
+
+async def test_missing_market_makes_the_forecast_synthetic_despite_full_history(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    """The served model echoes placeholder odds (2.5/3.3/2.8): ~0.39/0.25/0.35
+    for any Elo gap. A forecast built on them is fabricated, so it must reach
+    the same publish/display gate as missing history. Both sides have real
+    history here, so the market is the only missing input."""
+    assert "market_prob_home" in projector.canonical_features
+    await _seed_history_for_both_sides(session)
+    projector.odds_service.get_match_odds = AsyncMock(
+        return_value={"source": "unavailable", "reason": "no_snapshot"}
+    )
+    result = await projector.project_match_features(_FIXTURE, session, MATCH_DATE)
+
+    assert result["data_quality"]["is_synthetic"] is True
+    assert result["data_quality"]["market_inputs_defaulted"] is True
+
+
+async def test_a_live_market_with_real_history_is_not_synthetic(
+    session: AsyncSession, projector: UpcomingMatchFeatureProjector
+) -> None:
+    await _seed_history_for_both_sides(session)
+    projector.odds_service.get_match_odds = AsyncMock(
+        return_value={"home_win": 1.8, "draw": 3.6, "away_win": 4.5, "source": "odds_api"}
+    )
+    result = await projector.project_match_features(_FIXTURE, session, MATCH_DATE)
+
+    assert result["data_quality"]["is_synthetic"] is False
+    assert result["data_quality"]["market_inputs_defaulted"] is False
+
+
 # ---------------------------------------------------------------------------
 # EWMA form: an empty results sequence must not silently pass as fresh data
 # ---------------------------------------------------------------------------

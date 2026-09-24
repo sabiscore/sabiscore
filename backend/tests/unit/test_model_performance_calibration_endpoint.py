@@ -92,7 +92,7 @@ async def test_calibration_endpoint_reads_serialized_cache_payloads(cached) -> N
         with (
             patch("src.api.endpoints.performance.cache", StubCache()),
             patch(
-                "src.api.endpoints.performance.active_model_version",
+                "src.api.endpoints.performance.active_served_identity",
                 return_value="test",
             ),
             patch(
@@ -137,7 +137,7 @@ async def test_calibration_endpoint_caches_result_without_double_encoding() -> N
         with (
             patch("src.api.endpoints.performance.cache", cache_stub),
             patch(
-                "src.api.endpoints.performance.active_model_version",
+                "src.api.endpoints.performance.active_served_identity",
                 return_value="test",
             ),
             patch(

@@ -122,11 +122,22 @@ def _safe_file(models_dir: Path, relative_name: object) -> Path:
     return candidate
 
 
-def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
-    """Load and verify every file in the active generation manifest."""
+# Every field that changes what the served model outputs. Certification and
+# promotion metadata are excluded: flipping certification_state changes no
+# prediction, so it must not split the evidence ledger. The generation name
+# alone is not enough — v5_phase7-20260808 shipped three different artifact
+# sets under one name, and v5_phase7-20260922 changed its served features
+# (item 141) without changing a single artifact byte.
+_SERVED_IDENTITY_FIELDS = (
+    "generation",
+    "active_version",
+    "feature_schema_version",
+    "served_head",
+    "artifacts",
+)
 
-    root = (models_dir or DEFAULT_MODELS_DIR).resolve()
-    manifest_path = root / MANIFEST_NAME
+
+def _read_manifest(manifest_path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -137,6 +148,44 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
         raise ActiveGenerationError("Unsupported active generation manifest schema")
     if not isinstance(payload.get("generation"), str) or not payload["generation"]:
         raise ActiveGenerationError("Active generation identifier is missing")
+    return payload
+
+
+def served_identity(manifest: dict[str, Any]) -> str:
+    """Name exactly what a manifest serves, as ``<generation>@<digest>``.
+
+    Computed from the manifest as committed — never from a verified copy, which
+    carries machine-specific paths — so the prediction-log writer and the
+    evidence readers derive the same value on any host.
+    """
+
+    subset = {field: manifest.get(field) for field in _SERVED_IDENTITY_FIELDS}
+    encoded = json.dumps(subset, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"{manifest['generation']}@{hashlib.sha256(encoded).hexdigest()[:16]}"
+
+
+def read_active_manifest(models_dir: Path | None = None) -> dict[str, Any]:
+    """Return the committed manifest, validated for shape only.
+
+    Cheap enough for per-request callers: it hashes no artifacts. Artifact
+    integrity is enforced at build and startup by ``load_active_generation``.
+    """
+
+    return _read_manifest((models_dir or DEFAULT_MODELS_DIR).resolve() / MANIFEST_NAME)
+
+
+def active_served_identity(models_dir: Path | None = None) -> str:
+    """The identity that scopes live evidence: settlement, CLV and calibration."""
+
+    return served_identity(read_active_manifest(models_dir))
+
+
+def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
+    """Load and verify every file in the active generation manifest."""
+
+    root = (models_dir or DEFAULT_MODELS_DIR).resolve()
+    manifest_path = root / MANIFEST_NAME
+    payload = _read_manifest(manifest_path)
 
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, dict) or not artifacts:
@@ -170,6 +219,7 @@ def load_active_generation(models_dir: Path | None = None) -> dict[str, Any]:
         **payload,
         "manifest_path": manifest_path,
         "manifest_sha256": _sha256(manifest_path),
+        "served_identity": served_identity(payload),
         "artifacts": verified,
     }
 
@@ -532,6 +582,9 @@ def active_feature_schema_version(models_dir: Path | None = None) -> str:
 def active_model_version(models_dir: Path | None = None) -> str:
     """Return the serving generation's model version (e.g. ``v5_phase7``).
 
+    A display label, not an identity: every retrain keeps this family suffix.
+    Scope live evidence with ``active_served_identity()`` instead.
+
     Deliberately raises instead of returning a permissive default. Callers use
     this to scope accuracy/CLV evidence to a single generation; a ``None``
     fallback would silently restore the cross-generation pooling that scoping
@@ -557,7 +610,10 @@ __all__ = [
     "active_feature_schema_version",
     "active_generation_is_certified",
     "active_model_version",
+    "active_served_identity",
     "load_active_generation",
+    "read_active_manifest",
+    "served_identity",
     "staking_authorization",
     "verify_feature_contract_freshness",
 ]

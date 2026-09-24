@@ -5,6 +5,37 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Evidence scoped to the served model; placeholder markets withheld; G18 negative result (2026-09-24)
+
+### Fixed
+
+- ⭐⭐ **Model evidence pooled two generations** (`docs/DEBT.md` item 148). Prediction logs now carry
+  a served identity (`{generation}@{sha256[:16]}` over the serving-relevant manifest fields), and
+  walk-forward, calibration, settlement and certified-value readers scope by it. Live settled
+  counts restart from zero for the served identity: the pooled history was never valid evidence
+  for either generation.
+- ⭐ **Placeholder market odds produced publishable forecasts** (item 149). A forecast whose market
+  block fell back to registry defaults is now `is_synthetic` and withheld from publication.
+
+### Research
+
+- **G18 market-residual track v1: negative** (item 150). The protocol was pre-registered and hashed
+  before any run. Over 7,027 test matches no market-offset candidate beat the de-vigged opening
+  market (best pooled ΔRPS −0.00012 [−0.00029, +0.00007]), and the 2025/26 holdout was not opened.
+  The earlier "market superiority" report is bannered invalid: its residual wrapper never applied an
+  offset.
+- **Item 142 cross-fitted evidence** added. The stacked head without the served calibrator beats
+  the served composition in 4/6 leagues, pooled −0.0077 [−0.0104, −0.0050]. The composition decision
+  remains the operator's.
+
+### Documented (open)
+
+- Items 151–152: three fail-open or time-unbounded serving paths; `/health` reports host rather than
+  instance memory; the metric named "CLV" is an argmax-selected disagreement that a no-skill model
+  also scores positive.
+- `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md`: the next directive, covering resource-bounded
+  ingestion, serving, the calibration loop, decision UX and agent orchestration. It supplements v7.4.
+
 ## Unreleased — Real fixtures lost team identity; the performance bootstrap froze the backend (2026-09-23)
 
 ### Fixed

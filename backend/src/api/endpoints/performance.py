@@ -24,7 +24,7 @@ from ...db.session import get_async_session
 from ...models.active_generation import (
     ActiveGenerationError,
     CERTIFIED,
-    active_model_version,
+    active_served_identity,
     load_active_generation,
 )
 from ...models.evaluation.metrics import (
@@ -99,10 +99,9 @@ def _certified_value_generation() -> tuple[bool, str | None, str]:
         return False, None, "active_generation_invalid"
     if generation.get("certification_state") != CERTIFIED:
         return False, None, "model_not_certified"
-    model_version = str(generation.get("active_version") or "").strip()
-    if not model_version:
+    if not str(generation.get("active_version") or "").strip():
         return False, None, "active_generation_missing_version"
-    return True, model_version, "certified"
+    return True, str(generation["served_identity"]), "certified"
 
 
 @router.get("/value-bet-scan", response_model=ValueBetScanResponse)
@@ -321,7 +320,7 @@ async def _walk_forward_summary(
     # accuracy/RPS series for a model that never existed — see
     # build_settled_predictions_query. Raising here is deliberate: the caller
     # surfaces it rather than silently publishing a cross-generation metric.
-    model_version = active_model_version()
+    model_version = active_served_identity()
 
     records = await get_settled_predictions(
         db,
@@ -616,7 +615,7 @@ async def model_performance_calibration(
     Cached 6h: the block bootstrap over all settled records is the expensive
     part, and the underlying data changes on settlement cadence, not per-request.
     """
-    model_version = active_model_version()
+    model_version = active_served_identity()
     cache_key = (
         f"calibration:v1:{league or 'all'}:{n_bins}:{window or 'all'}:{model_version}"
     )

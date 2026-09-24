@@ -27,6 +27,7 @@ from sqlalchemy.orm import sessionmaker
 from src.core.database import Base, Match
 from src.data.loaders.football_data_api import FootballDataAPIError
 from src.db.models import MatchPredictionLog
+from src.models.active_generation import active_served_identity
 
 
 @pytest.fixture(autouse=True)
@@ -85,7 +86,7 @@ async def _seed_settled_predictions(session_factory, n: int = 10) -> None:
                 MatchPredictionLog(
                     match_id=match_id,
                     canonical_fixture_id=None,
-                    model_version="v5_phase7",
+                    model_version=active_served_identity(),
                     calibration_method=None,
                     home_probability=0.4,
                     draw_probability=0.3,

@@ -1,0 +1,59 @@
+{
+  "protocol": "g18-market-residual",
+  "version": "1.0.0",
+  "registered_at": "2026-09-24",
+  "status": "PRE-REGISTERED — frozen before any development fold was run",
+  "question": "Does a market-offset residual model add out-of-sample information beyond the de-vigged opening 1X2 market, per league?",
+  "why_new": "The only prior market-offset attempt (LogOddsResidualWrapper, PR #228) never ran: it read DevigResult.fair_probs (the field is .probabilities) and fell through to a uniform margin on every row, and read log-odds from legacy slot positions. Prior market work (items 62, 68, 76) scored free-covariate logits on probabilities, not a K-1 log-ratio offset.",
+  "data": {
+    "source": "backend/data/cache/fd_*.csv via scripts/train_on_real_matches.py load_matches",
+    "development_seasons": ["1920", "2021", "2122", "2223", "2324", "2425"],
+    "physically_excluded_season": "2526",
+    "exclusion_method": "fd_*_2526.csv files are never copied into load_matches' input directory; the run aborts if a 2526 row appears",
+    "leagues": ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1"],
+    "excluded_league": {"EREDIVISIE": "no season before 2526 exists in the corpus"}
+  },
+  "benchmark": {
+    "definition": "the promotion gate's market_baseline: first complete B365 pre-match triple, else Pinnacle pre-match (_parse_odds_row); proportional de-vig",
+    "overround_bounds": [1.0, 1.25],
+    "min_prior_league_matches_per_team": 5,
+    "sensitivity": "Shin de-vig of the same odds (src/models/evaluation/market_baseline.py devig), benchmark only"
+  },
+  "parametrisation": "away is the reference class: z_home = m_home + x.b_home, z_draw = m_draw + x.b_draw, z_away = 0, where m = log(p_market_k / p_market_away); p = softmax(z). Simplex-preserving by construction.",
+  "covariates": {
+    "elo_difference": "compute_elo_training_columns over the loaded corpus; emitted pre-match, updated strictly after",
+    "form_difference": "mean league points over each team's last 5 league matches strictly before the match date, home minus away",
+    "standardisation": "training-fold mean and standard deviation only",
+    "excluded_on_purpose": "shots and xG: production has no shots feed and no current-season xG, so they could not be served"
+  },
+  "candidates": {
+    "M0_market": "benchmark, no parameters",
+    "R1_intercepts": "x = [1] in both equations (2 parameters)",
+    "R2_longshot": "x = [1, m_own] (4 parameters): home equation uses m_home, draw equation uses m_draw",
+    "R3_residual": "R2 plus standardised elo_difference and form_difference in both equations (8 parameters)"
+  },
+  "fit": {
+    "pooling": "one model pooled across the five leagues",
+    "objective": "mean multinomial negative log-likelihood + 0.5 * l2 * sum(non-intercept parameters^2) / n",
+    "l2": 1.0,
+    "optimizer": "scipy.optimize.minimize L-BFGS-B, gtol 1e-9, maxiter 1000, zero initialisation"
+  },
+  "folds": {
+    "scheme": "walk-forward by season",
+    "test_seasons": ["2122", "2223", "2324", "2425"],
+    "train": "every eligible row with season earlier than the test season"
+  },
+  "metrics": {
+    "primary": "mean RPS (lower is better)",
+    "secondary": ["multiclass log loss", "multiclass Brier (mean aggregation, per reports/evaluation/metric-contract.json)"],
+    "paired_delta": "candidate RPS minus M0 RPS per row",
+    "ci": "95% percentile interval from a cluster bootstrap over ISO calendar weeks (weeks resampled with replacement), 2000 replicates, seed 42"
+  },
+  "decision_rule": {
+    "promising": "pooled development delta (all four folds, all five leagues) has a CI upper bound below zero",
+    "selection": "among promising candidates, the lowest pooled development RPS; ties go to fewer parameters",
+    "if_none_promising": "report the negative result; the 2526 confirmation is NOT run and 2526 stays unread",
+    "confirmation": "only for a selected candidate: refit on 1920-2425, score 2526 once per league including Eredivisie with the pooled model; a league passes iff its CI upper bound is below zero",
+    "no_retuning": "no candidate, covariate, penalty or fold may be added or changed after this file is hashed; a change requires a new protocol version"
+  }
+}

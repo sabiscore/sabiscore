@@ -1,5 +1,11 @@
 # Phase D & E: Market-Residual Superiority Evaluation
 
+> **INVALID — do not cite (2026-09-24, `docs/DEBT.md` item 150).** No script in the repo reproduces
+> these figures. The residual wrapper they describe never applied a market offset, and the market
+> RPS here (≈0.232) contradicts the measured de-vigged opening market (0.195 over 7,027 matches,
+> `backend/reports/research/g18-market-residual-development.md`). A pre-registered test of the same
+> question found no market-beating candidate.
+
 | League | N (Holdout) | Market RPS | Model RPS | Delta |
 |---|---|---|---|---|
 | EPL | 375 | 0.2325 | 0.2060 | -0.0265 |
