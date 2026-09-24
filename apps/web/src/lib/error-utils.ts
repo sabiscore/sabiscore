@@ -3,7 +3,6 @@
  * Safe helpers for error message handling to prevent React child errors
  */
 
-import * as Sentry from '@sentry/nextjs';
 import { parseApiError } from './api';
 
 /**
@@ -103,17 +102,22 @@ export function logError(
 
   const sentryError = error instanceof Error ? error : new Error(errorInfo.message);
 
-  try {
-    Sentry.captureException(sentryError, {
-      tags: {
-        component: context?.component,
-        action: context?.action,
-      },
-      extra: errorInfo,
+  // Dynamic import keeps the Sentry client SDK out of the eager first-load
+  // bundle (this module is pulled in by app/error.tsx, app/global-error.tsx,
+  // and app/match/[id]/error.tsx, which ship on every page).
+  import('@sentry/nextjs')
+    .then((Sentry) => {
+      Sentry.captureException(sentryError, {
+        tags: {
+          component: context?.component,
+          action: context?.action,
+        },
+        extra: errorInfo,
+      });
+    })
+    .catch(() => {
+      // Never throw from telemetry capture.
     });
-  } catch {
-    // Never throw from telemetry capture.
-  }
 }
 
 /**
