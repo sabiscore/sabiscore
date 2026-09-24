@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
-from fastapi import Request
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,7 @@ from ..db.models import (
     UserPreference,
     UserSavedMatch,
 )
+from ..db.session import get_async_session
 
 
 def _naive_utc_now() -> datetime:
@@ -73,6 +74,22 @@ async def get_optional_user_from_request(
     except Exception:
         return None
     return None
+
+
+async def get_required_user_from_request(
+    request: Request, db: AsyncSession = Depends(get_async_session)
+) -> UserAccount:
+    """Same resolution as get_optional_user_from_request (Authorization header or
+    sabi_session cookie); raises 401 if neither is present or valid. Use as a
+    FastAPI dependency for endpoints that require authentication.
+    """
+    user = await get_optional_user_from_request(request, db)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+        )
+    return user
 
 
 class UserStateService:

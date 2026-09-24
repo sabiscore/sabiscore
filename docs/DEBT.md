@@ -1,5 +1,122 @@
 # SabiScore Debt Ledger
 
+## 147. `error-utils.ts` statically imported the Sentry SDK — every page paid for it in the first-load bundle whether or not an error ever occurred — RESOLVED
+
+**Tier:** `RESOLVED` — 2026-09-24. **Found:** re-checking the 2026-09-23 bundle-size
+regression flagged in `CLAUDE.md` ("~103 kB → ~184 kB"), which named a file
+(`instrumentation-client.ts`) that no longer exists in the tree.
+
+Traced instead to `apps/web/src/lib/error-utils.ts`, which did
+`import * as Sentry from '@sentry/nextjs'` at module top level. This module is
+imported by `app/error.tsx`, `app/global-error.tsx`, and
+`app/match/[id]/error.tsx` — Next.js error-boundary files that ship in every
+page's critical bundle — so the full Sentry client SDK loaded eagerly on every
+page regardless of whether `logError()` was ever called or a DSN was even
+configured (none is set for this Vercel project — confirmed via a live read of
+the project's environment variables, `hiddenProductionEnvCount: 0`).
+`instrumentation.ts` (server-only, unconditional Sentry import) is a separate
+file that does not affect client bundle size and was left untouched.
+
+**Fix:** `logError()` now loads Sentry via a fire-and-forget dynamic
+`import('@sentry/nextjs').then(...)`, keeping its existing synchronous
+`(): void` signature so none of its 7 call sites needed changes. This moves the
+SDK into its own on-demand chunk instead of the eager first-load bundle.
+
+**Guard:** `error-utils.test.ts` reads the module's own source and asserts no
+static top-level `@sentry/nextjs` import remains; watched failing against the
+reverted source (`TypeError` from the pre-fix static import) before trusting
+it. The 3 existing capture tests were updated to `await vi.waitFor(...)` since
+the capture call is now a microtask away.
+
+**Verify after deploy:** compare the Next.js build's reported First Load JS
+shared bundle size against the ~184 kB figure; it should drop back toward the
+pre-regression ~103 kB.
+
+## 146. `NEXT_PUBLIC_APP_URL` was hardcoded to a domain that doesn't resolve — "Continue with Google" redirected off the live site to a dead custom domain — RESOLVED
+
+**Tier:** `RESOLVED` — 2026-09-24. **Found:** a user screenshot showing the
+Google sign-in button navigating from the live `*.vercel.app` deployment to
+`sabiscore.com/...?auth_error=google_not_configured`, which returns
+`DNS_PROBE_FINISHED_NXDOMAIN` (the pre-existing, separately tracked DNS/
+registrar issue — see the `sabiscore.com` rows elsewhere in this ledger; not
+touched by this fix).
+
+Both `vercel.json` and `apps/web/vercel.json` hardcoded
+`"NEXT_PUBLIC_APP_URL": "https://sabiscore.com"`, which `getAppUrl()` in
+`apps/web/src/app/api/auth/google/{start,callback}/route.ts` prefers over its
+own existing `process.env.VERCEL_URL` fallback. Confirmed live via the Vercel
+API (`filter_project_envs` on the `web` project) that no dashboard-level
+override exists for this key — `vercel.json` was the sole source. Also
+confirmed live: `GOOGLE_OAUTH_CLIENT_ID` is genuinely absent everywhere, so
+`auth_error=google_not_configured` is an honest, correct state — and the
+frontend already had the right UX built for it (`user-nav.tsx` opens the
+sign-in modal on this error code; `AuthModal.tsx`'s `mapOAuthError` already
+renders "Google sign-in is not configured for this deployment yet."). The only
+defect was the redirect target.
+
+**Fix:** removed the `NEXT_PUBLIC_APP_URL` key from both `vercel.json` files'
+`env` blocks, letting `getAppUrl()`'s `VERCEL_URL` fallback take over — always
+the correct, reachable origin for whichever deployment (production or preview)
+serves the request, and more robust than hardcoding one literal. No route-file
+or component changes were needed.
+
+**Left flagged, not fixed:** `NEXT_PUBLIC_SITE_URL` carries the same dead-domain
+value but has a disjoint set of consumers (`sitemap.ts`, `robots.ts`,
+`layout.tsx`, `MatchShareModal.tsx`, `lib/seo.ts` — SEO/share metadata, not
+OAuth). Some of those files hardcode `"https://sabiscore.com"` as their own
+literal fallback, so clearing the env var alone wouldn't fix them; this is a
+genuinely separate, disjoint defect and needs its own fix, not folded into
+this one.
+
+**Verify after deploy:** click "Continue with Google" on the live deployment;
+confirm it redirects to the live origin (not `sabiscore.com`) and lands on the
+"not configured for this deployment yet" message.
+
+## 145. `GET /auth/me` required a Bearer header and ignored the session cookie login sets — every login was invisible to the app one request later — RESOLVED
+
+**Tier:** `RESOLVED` — 2026-09-24. **Found:** production Render logs showing
+`POST /auth/register` (201) → `POST /auth/login` (200) → `GET /auth/me` (401)
+seconds apart, same client; corroborated by a live screenshot of the sign-in
+modal showing "Invalid credentials" for a real user.
+
+`backend/src/deps.py`'s `get_current_user`/`get_current_active_user` used
+`OAuth2PasswordBearer`, which reads only the `Authorization: Bearer` header.
+`POST /auth/login` sets a valid `sabi_session` HttpOnly cookie (and returns a
+JSON `access_token` the frontend never stores or attaches —
+`apps/web/src/lib/auth-context.tsx`'s `login()` relies entirely on the
+cookie). `GET /auth/me` and `POST /users/merge-anonymous` were the **only two
+callers** of `get_current_active_user` in the entire backend (grep-confirmed)
+— every other `/users/*` endpoint already used
+`get_optional_user_from_request` (`services/auth_service.py`), which correctly
+checks the header **or** the cookie.
+
+**Fix:** added `get_required_user_from_request` to `auth_service.py`,
+reusing `get_optional_user_from_request`'s existing resolution and raising 401
+if it returns `None`. `auth.py`'s two affected endpoints now depend on it
+instead of `deps.py`'s Bearer-only helper. This collapses the old distinct
+"403 Inactive user" path into the same 401 every other endpoint in the file
+already uses (`get_optional_user_from_request` already excludes inactive
+users) — `login_user` already blocks inactive accounts at login time with an
+explicit 403, so this only affects an account deactivated mid-session, a rare
+edge case, and makes the two endpoints consistent with the rest of the file
+rather than preserving a one-off variant.
+
+**Left flagged, not touched:** `backend/src/deps.py`'s
+`get_current_user`/`get_current_active_user`/`oauth2_scheme` are now
+grep-confirmed to have zero remaining callers anywhere in the backend.
+Deleting a "reusable dependencies" module as a side effect of an unrelated bug
+fix felt like unnecessary scope creep for this change; left for a deliberate
+follow-up.
+
+**Guard:** `test_auth_me_accepts_session_cookie_without_bearer_header`
+(`backend/tests/unit/test_auth_anonymous_and_favorites.py`) logs in, then
+calls `GET /auth/me` using only the cookie httpx's `AsyncClient` carries
+automatically — no Authorization header. Watched failing against the
+pre-fix dependency (`assert 401 == 200`, reproducing the exact production
+sequence) before trusting it.
+`test_auth_me_rejects_request_with_no_credentials` pins that a genuinely
+unauthenticated request still correctly 401s.
+
 ## 144. The walk-forward bootstrap ran on the event loop — every page's header refresh froze the backend for 5–25 s — RESOLVED (verify after deploy)
 
 **Tier:** `RESOLVED` — 2026-09-23. **Found:** chasing why the header pill read

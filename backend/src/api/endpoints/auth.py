@@ -20,7 +20,6 @@ from ...core.database import UserAccount
 from ...services.social_auth_models import UserIdentity, install_social_user_fields
 from ...core.security import create_access_token, get_password_hash, verify_password
 from ...db.session import get_async_session
-from ...deps import get_current_active_user
 from ...schemas.auth import GoogleOAuthRequest, LoginRequest, LoginResponse
 from ...schemas.token import Token
 from ...schemas.user import UserCreate, UserResponse
@@ -28,6 +27,7 @@ from ...services.auth_service import (
     UserStateService,
     get_anon_id_from_request,
     get_optional_user_from_request,
+    get_required_user_from_request,
 )
 from ...services.google_oauth import GoogleOAuthError, verify_google_id_token
 
@@ -457,7 +457,7 @@ async def login_via_oauth_form(
 
 @auth_router.get("/me", response_model=UserResponse)
 async def get_me(
-    current_user: UserAccount = Depends(get_current_active_user),
+    current_user: UserAccount = Depends(get_required_user_from_request),
 ) -> UserResponse:
     return _serialize_user(current_user)
 
@@ -466,7 +466,7 @@ async def get_me(
 async def merge_anonymous(
     payload: MergeAnonymousRequest,
     request: Request,
-    current_user: UserAccount = Depends(get_current_active_user),
+    current_user: UserAccount = Depends(get_required_user_from_request),
     db: AsyncSession = Depends(get_async_session),
 ):
     anon_id = payload.anonymous_session_id or get_anon_id_from_request(request)
