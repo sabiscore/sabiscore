@@ -20,10 +20,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from src.api.endpoints import performance
 from src.core.database import Base, Match
 from src.db.models import MatchPredictionLog
 from src.models import active_generation
 from src.models.active_generation import (
+    CERTIFIED,
     ActiveGenerationError,
     active_served_identity,
     load_active_generation,
@@ -117,6 +119,59 @@ def test_verified_and_per_request_paths_agree_on_the_committed_manifest() -> Non
 def test_unreadable_manifest_fails_closed(tmp_path) -> None:
     with pytest.raises(ActiveGenerationError):
         active_served_identity(tmp_path)
+
+
+def _verified(**overrides) -> dict:
+    """What ``load_active_generation`` returns: the manifest plus its identity."""
+    generation = {**copy.deepcopy(MANIFEST), **overrides}
+    generation["served_identity"] = served_identity(generation)
+    return generation
+
+
+@pytest.fixture
+def certified_gate(monkeypatch):
+    """Drive the value-bet certification gate from a chosen generation."""
+    performance._certified_value_generation.cache_clear()
+
+    def install(loader):
+        monkeypatch.setattr(performance, "load_active_generation", loader)
+        return performance._certified_value_generation()
+
+    yield install
+    performance._certified_value_generation.cache_clear()
+
+
+def test_certified_gate_scopes_by_the_identity_the_writer_stamps(certified_gate):
+    # The writer stamps logs while the generation is still UNVERIFIED. If
+    # certifying it changed the identity this gate returns, the value-bet scan
+    # would read zero rows the moment a generation earned certification.
+    result = certified_gate(lambda: _verified(certification_state=CERTIFIED))
+
+    assert result == (True, served_identity(MANIFEST), "certified")
+
+
+def _unreadable():
+    raise ActiveGenerationError("manifest unreadable")
+
+
+@pytest.mark.parametrize(
+    ("loader", "reason"),
+    [
+        (_unreadable, "active_generation_invalid"),
+        (lambda: _verified(), "model_not_certified"),
+        (
+            lambda: _verified(certification_state=CERTIFIED, active_version=""),
+            "active_generation_missing_version",
+        ),
+        (
+            lambda: _verified(certification_state=CERTIFIED, active_version="  "),
+            "active_generation_missing_version",
+        ),
+    ],
+    ids=["unreadable", "uncertified", "empty-version", "blank-version"],
+)
+def test_certified_gate_refuses_everything_else(certified_gate, loader, reason):
+    assert certified_gate(loader) == (False, None, reason)
 
 
 @pytest.fixture
