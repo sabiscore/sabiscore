@@ -178,6 +178,72 @@ async def test_auth_cookie_login_sets_httponly_cookie() -> None:
 
 
 @pytest.mark.asyncio
+async def test_auth_me_accepts_session_cookie_without_bearer_header() -> None:
+    """Regression: GET /auth/me required an Authorization: Bearer header and
+    ignored the sabi_session cookie login sets, so every browser session was
+    invisible to the app immediately after a successful login (production
+    logs: POST /auth/login 200 -> GET /auth/me 401, seconds apart). It now
+    shares get_required_user_from_request with get_optional_user_from_request,
+    the same header-or-cookie resolution every other /users/* endpoint uses.
+    """
+    from src.db.session import get_async_session
+
+    mock_db = AsyncMock()
+    app.dependency_overrides[get_async_session] = lambda: mock_db
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            mock_user = UserAccount(
+                id="user-abc",
+                email="test@sabiscore.com",
+                full_name="Tester",
+                hashed_password=get_password_hash("password123"),
+                is_active=True,
+                is_superuser=False,
+                email_verified=True,
+            )
+
+            with patch(
+                "src.api.endpoints.auth._get_user_by_email",
+                new=AsyncMock(return_value=mock_user),
+            ):
+                with patch("src.api.endpoints.auth._touch_last_login", new=AsyncMock()):
+                    login_response = await client.post(
+                        "/api/v1/auth/login",
+                        json={"email": "test@sabiscore.com", "password": "password123"},
+                    )
+            assert login_response.status_code == 200
+            assert "sabi_session" in login_response.cookies
+
+            # get_optional_user_from_request decodes the cookie's token and
+            # looks the user up by id -- httpx's AsyncClient carries the
+            # sabi_session cookie from the login response automatically.
+            db_result = MagicMock()
+            db_result.scalar_one_or_none.return_value = mock_user
+            mock_db.execute.return_value = db_result
+
+            me_response = await client.get("/api/v1/auth/me")
+            assert me_response.status_code == 200
+            assert me_response.json()["email"] == "test@sabiscore.com"
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest.mark.asyncio
+async def test_auth_me_rejects_request_with_no_credentials() -> None:
+    from src.db.session import get_async_session
+
+    app.dependency_overrides[get_async_session] = lambda: AsyncMock()
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/v1/auth/me")
+            assert response.status_code == 401
+    finally:
+        app.dependency_overrides.pop(get_async_session, None)
+
+
+@pytest.mark.asyncio
 async def test_touch_last_login_writes_naive_datetimes() -> None:
     """Regression for the live 500 on POST /api/v1/auth/login.
 
