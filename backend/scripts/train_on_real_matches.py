@@ -66,9 +66,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import importlib.util
 import json
 import logging
+import os
 import sys
 from collections import defaultdict, deque
 from datetime import datetime
@@ -121,6 +123,7 @@ derive_market_interaction_features = (
 # rather than another spec_from_file_location dance. src/models/ is NOT — its
 # __init__ pulls in core.database, which is why the registry above is loaded by
 # path instead.
+from scripts._resource_guard import ResourceGuard  # noqa: E402
 from src.features.phase8_historical import (  # noqa: E402 - after the sys.path bootstrap
     RESOLVED_FEATURES as PHASE8_RESOLVED_FEATURES,
     UNRESOLVED_FEATURES as PHASE8_UNRESOLVED_FEATURES,
@@ -1455,6 +1458,14 @@ def _suggest(trial, learner: str) -> Dict[str, object]:
     }
 
 
+def _max_jobs() -> int:
+    """Final-fit parallelism (directive v8 D2). ``-1`` starts one worker per
+    core and each holds its own copy of the design matrix, which is what breaks
+    the 3 GB heavy-job budget on the 8 GB machine; ``SABISCORE_MAX_JOBS``
+    overrides the default of 2."""
+    return int(os.environ.get("SABISCORE_MAX_JOBS", "2"))
+
+
 def _instantiate(learner: str, params: Dict[str, object], *, n_jobs: int = -1):
     from lightgbm import LGBMClassifier
     from sklearn.ensemble import RandomForestClassifier
@@ -1639,7 +1650,10 @@ def train_league(
         )
         params = tuned_params
 
-    models = {name: _instantiate(name, params[name]) for name in _BASE_PARAMS}
+    models = {
+        name: _instantiate(name, params[name], n_jobs=_max_jobs())
+        for name in _BASE_PARAMS
+    }
     meta_model = _fit_meta_model(models, X_train, y_train)
     for model in models.values():
         model.fit(X_train, y_train)
@@ -1857,7 +1871,7 @@ def _feature_contract_sha() -> Optional[str]:
 
 
 def _emit_reproducibility_manifest(
-    args, feature_names, artifact_suffix, report, schema
+    args, feature_names, artifact_suffix, report, schema, resources=None
 ) -> None:
     """Record what produced this run (certification Stage 4/8).
 
@@ -1887,6 +1901,8 @@ def _emit_reproducibility_manifest(
         tune_trials=args.tune,
         leagues=report,
         artifact_suffix=artifact_suffix,
+        n_jobs=_max_jobs(),
+        resources=resources,
     )
     manifest_path = write_training_manifest(
         manifest,
@@ -2002,56 +2018,60 @@ def main() -> int:
     logger.info("\nTemporal holdout: season %s\n", args.holdout_season)
     report: Dict[str, dict] = {}
     trained: set = set()
-    for league in sorted(dataset):
-        bundle = train_league(
-            league,
-            dataset[league],
-            args.holdout_season,
-            feature_names=feature_names,
-            tune_trials=args.tune,
-            schema=schema,
-        )
-        if bundle is None:
-            continue
-        report[league] = bundle.pop("_metrics")
-        trained.add(league)
-        # DEBT-83 Step 3: compress=3 — memory-efficient, reduces disk footprint ~40 %
-        # without observable load-latency penalty on the 8GB host.
-        joblib.dump(
-            bundle,
-            args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
-            compress=3,
-        )
-
-    # Cover whatever was too small to fit on its own.
-    uncovered = sorted(set(dataset) - trained)
-    if uncovered:
-        pooled_bundle = train_pooled(
-            dataset,
-            args.holdout_season,
-            feature_names=feature_names,
-            tune_trials=args.tune,
-            schema=schema,
-        )
-        if pooled_bundle is not None:
-            report["POOLED"] = pooled_bundle.pop("_metrics")
-            pooled_bundle["model_metadata"]["pooled_fallback_for"] = uncovered
-            pooled_bundle["model_metadata"]["note"] = (
-                "Trained on all leagues; used for competitions with too little "
-                "history to fit or validate independently."
+    # One heavy job, sequential leagues, peak measured (directive v8 D1/D4).
+    with ResourceGuard() as guard:
+        for league in sorted(dataset):
+            bundle = train_league(
+                league,
+                dataset[league],
+                args.holdout_season,
+                feature_names=feature_names,
+                tune_trials=args.tune,
+                schema=schema,
             )
-            for league in uncovered:
-                joblib.dump(
-                    pooled_bundle,
-                    args.out_dir
-                    / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
-                    compress=3,
+            if bundle is None:
+                continue
+            report[league] = bundle.pop("_metrics")
+            trained.add(league)
+            # DEBT-83 Step 3: compress=3 — memory-efficient, reduces disk footprint ~40 %
+            # without observable load-latency penalty on the 8GB host.
+            joblib.dump(
+                bundle,
+                args.out_dir / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
+                compress=3,
+            )
+            del bundle
+            gc.collect()
+
+        # Cover whatever was too small to fit on its own.
+        uncovered = sorted(set(dataset) - trained)
+        if uncovered:
+            pooled_bundle = train_pooled(
+                dataset,
+                args.holdout_season,
+                feature_names=feature_names,
+                tune_trials=args.tune,
+                schema=schema,
+            )
+            if pooled_bundle is not None:
+                report["POOLED"] = pooled_bundle.pop("_metrics")
+                pooled_bundle["model_metadata"]["pooled_fallback_for"] = uncovered
+                pooled_bundle["model_metadata"]["note"] = (
+                    "Trained on all leagues; used for competitions with too little "
+                    "history to fit or validate independently."
                 )
-                logger.info(
-                    "  %s -> pooled model (own history: %d rows, no holdout)",
-                    league,
-                    len(dataset[league]["y"]),
-                )
+                for league in uncovered:
+                    joblib.dump(
+                        pooled_bundle,
+                        args.out_dir
+                        / f"{_LEAGUE_TO_SLUG[league]}_ensemble_{artifact_suffix}.pkl",
+                        compress=3,
+                    )
+                    logger.info(
+                        "  %s -> pooled model (own history: %d rows, no holdout)",
+                        league,
+                        len(dataset[league]["y"]),
+                    )
 
     # apex_v1_68 keeps the historical bare name (candidate_manifest.json and
     # compare_candidate_vs_incumbent both reference it), phase8 keeps the name
@@ -2069,7 +2089,10 @@ def main() -> int:
         len(trained) + len(uncovered),
         args.out_dir,
     )
-    _emit_reproducibility_manifest(args, feature_names, artifact_suffix, report, schema)
+    resources = {**guard.summary(), "leagues": "sequential_single_process"}
+    _emit_reproducibility_manifest(
+        args, feature_names, artifact_suffix, report, schema, resources=resources
+    )
     logger.info("NOT promoted — compare against the incumbent before replacing it.")
     return 0
 

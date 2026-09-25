@@ -505,6 +505,8 @@ export function isNarrativeRedundant(
   );
 }
 
+export type DecisionState = "PLAY" | "PASS" | "WITHHELD";
+
 export function mapFullAnalysisPresentation(
   data: FullMatchAnalysisResponse,
   now = new Date(),
@@ -550,9 +552,34 @@ export function mapFullAnalysisPresentation(
     ? Math.min(data.rl_recommendation.stake_fraction, data.effective_kelly_cap)
     : 0;
 
+  // Directive v8 §3.2. PASS ("we evaluated it and the price is wrong") and
+  // WITHHELD ("we cannot evaluate it") are different claims and must never
+  // collapse into one "No bet". Every input is a backend field; nothing here
+  // computes EV, edge or a stake.
+  const decisionState: DecisionState =
+    stakePermitted && data.odds_edge
+      ? "PLAY"
+      : blocked || !data.odds_edge
+        ? "WITHHELD"
+        : "PASS";
+  const decisionHeadline =
+    decisionState === "PLAY"
+      ? `Qualifies · stake ${(effectiveStake * 100).toFixed(1)}% of bankroll`
+      : decisionState === "PASS"
+        ? watchlistOnly
+          ? "Watchlist only — no stake"
+          : "No value at this price"
+        : "Not evaluable";
+  const decisionReason =
+    decisionState === "WITHHELD" && !blocked
+      ? "No verified market price is available to evaluate this forecast against."
+      : reason;
+
   return {
     primaryDecision,
-    reason,
+    decisionState,
+    decisionHeadline,
+    reason: decisionReason,
     predictionAvailable,
     isReducedEvidenceBaseline: data.is_reduced_evidence_baseline,
     displayedProbabilities: predictionAvailable

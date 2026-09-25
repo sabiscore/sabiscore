@@ -9,6 +9,8 @@ import {
   EloContextCard,
   EnsembleCard,
   EvidenceStatusCard,
+  CounterCase,
+  DecisionStateBadge,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
@@ -297,6 +299,11 @@ describe("EvidenceStatusCard blocking-gap copy", () => {
     },
   } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
 
+  it("adds no counter-case to a WITHHELD fixture; the status card already says why", () => {
+    const { container } = render(<CounterCase data={blocked} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("renders mapped sentence copy without Title-Casing it", () => {
     render(<EvidenceStatusCard data={blocked} />);
 
@@ -416,6 +423,21 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     },
     unavailable_reasons: {},
   } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
+
+  it("argues against a PLAY forecast, loss probability first (directive v8 §3.5)", () => {
+    const { container } = render(<CounterCase data={stakePermittedData} />);
+    const items = container.querySelectorAll("li");
+    expect(items[0].textContent).toMatch(/loses 45\.0% of the time/);
+    expect(container.textContent).toMatch(/uncertainty is unavailable/i);
+  });
+
+  it.each(["PLAY", "PASS", "WITHHELD"] as const)(
+    "names the %s state in words, not only colour",
+    (state) => {
+      const { container } = render(<DecisionStateBadge state={state} />);
+      expect(container.textContent).toBe({ PLAY: "Play", PASS: "Pass", WITHHELD: "Withheld" }[state]);
+    },
+  );
 
   it("stays visible when EvidenceStatusCard renders nothing (stakePermitted path)", () => {
     vi.spyOn(global, "fetch").mockResolvedValue({

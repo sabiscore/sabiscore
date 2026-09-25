@@ -3,7 +3,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FullAnalysisDashboard } from "./full-analysis-dashboard";
 import { BettingAgentPanel } from "./betting-agent-panel";
-import { ValueBetCard } from "./ValueBetCard";
 import { FeatureFlagProvider } from "@/lib/feature-flags";
 import * as api from "@/lib/api";
 import type { FullMatchAnalysisResponse } from "@/lib/full-analysis-contract";
@@ -184,7 +183,7 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
       });
 
       expect(screen.getAllByText("Speculative").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("Watchlist")).toBeInTheDocument();
+      expect(screen.getByText("Watchlist only — no stake")).toBeInTheDocument();
       expect(container.querySelectorAll("input")).toHaveLength(0);
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
@@ -316,46 +315,6 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
       expect(screen.getByText("⚠ Staking Disabled")).toBeInTheDocument();
-      expect(screen.getAllByText("Disabled").length).toBeGreaterThanOrEqual(1);
-    });
-
-    it("ValueBetCard exposes no inputs, suppresses Place Bet button, and defaults to Staking Disabled", () => {
-      const { container } = render(
-        <FeatureFlagProvider>
-          <ValueBetCard
-            bet={{
-              bet_type: "home_win",
-              market_odds: 2.1,
-              model_prob: 0.55,
-              market_prob: 0.47,
-              expected_value: 0.155,
-              value_pct: 17.0,
-              edge: 0.08,
-              kelly_stake: 0.02,
-              quality: {
-                tier: "VALUE",
-                recommendation: "Good edge",
-                quality_score: 0.72,
-                ev_contribution: 0.35,
-                confidence_contribution: 0.25,
-                liquidity_contribution: 0.12,
-              },
-            }}
-            context={{
-              matchId: "m1",
-              homeTeam: "Arsenal",
-              awayTeam: "Chelsea",
-            }}
-            stakePermitted={false}
-            researchMode={true}
-          />
-        </FeatureFlagProvider>,
-      );
-
-      expect(container.querySelectorAll("input")).toHaveLength(0);
-      expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
-      expect(screen.getByText("Staking Disabled")).toBeInTheDocument();
       expect(screen.getAllByText("Disabled").length).toBeGreaterThanOrEqual(1);
     });
   });

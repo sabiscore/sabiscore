@@ -12,9 +12,31 @@ headroom under 15% of the cgroup limit, never on host figures (`/health` stays H
 Render's check is `/health/ready`). Tests: `tests/unit/test_instance_memory.py`. The API field
 `clv` is renamed `model_close_gap_argmax` (inner `mean_clv` → `mean_gap`) on `/model-performance`
 and `/model-performance/summary`; the web tile keeps its "Market belief differential" label and is
-no longer coloured green when positive. **Still open:** S2 (measure RSS in `python:3.11-slim`, no
-Docker daemon here) and true CLV (C1/C3/C4, which need the recommendation-time price, and C1 needs
-operator approval for the migration).
+no longer coloured green when positive.
+
+**Addressed 2026-09-25 (directive S1 live, S3, S4, C1, C2, C3).**
+- *S1 verified live* on `b0ec2e9`: `process_rss_mb 400`, `cgroup_current_mb 382`,
+  `cgroup_limit_mb 512`, `headroom_mb 129`, taken about 15 minutes after a start. This is a
+  measurement on the real target (Linux, Python 3.11.9, the 512 MB cgroup) and replaces the Windows
+  estimate in the directive's §1.1.
+- *S3:* `core/heavy_jobs.run_heavy` serialises the three 10,000-replicate bootstraps (settlement,
+  walk-forward cache miss, calibration cache miss). The lock is taken inside the worker thread, so
+  waiting never blocks the event loop. Tests: `test_heavy_jobs.py`.
+- *S4:* `boto3` (about 20 MB RSS) moved from module load to the S3 download path in
+  `core/model_fetcher.py`. Guard: `test_boto3_is_not_imported_at_startup`.
+- *C1:* the forecast-time price goes into `match_prediction_logs.payload.recommendation_market`. The
+  existing JSON column made a migration unnecessary, and no `market_snapshots` row exists at
+  forecast time for a foreign key to point to.
+- *C2/C3:* `/model-performance` reports `model_vs_close`, a paired ΔRPS against the de-vigged close
+  with an ISO-week cluster CI and the median closing-capture lag. The model-close gap scores a
+  no-skill model positive; this does not (`test_model_vs_close.py`).
+
+**Still open:**
+- *S2's per-library import breakdown.* Docker is available, but the link measured 16 KB/s on
+  2026-09-25, and the runtime wheels total about 450 MB (xgboost alone is about 300 MB).
+  `scripts/measure_runtime_memory.py` is ready to run where bandwidth allows.
+- *C4 (true CLV, ln(o_taken / o_close)).* It needs a permitted stake, and none exists while the
+  generation is `UNVERIFIED`.
 
 **Memory.** `/health` → `components.resources` comes from `psutil.virtual_memory()`
 (`api/endpoints/monitoring.py:266` and `:625`), which reads the **host**. Live on 2026-09-24 it

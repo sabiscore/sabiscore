@@ -358,6 +358,11 @@ def build_clv_records_query(
             MarketSnapshot.home_implied_prob_devigged,
             MarketSnapshot.draw_implied_prob_devigged,
             MarketSnapshot.away_implied_prob_devigged,
+            Match.match_date,
+            Match.status,
+            Match.home_score,
+            Match.away_score,
+            MarketSnapshot.captured_at,
         )
         .select_from(MatchPredictionLog)
         .join(Match, MatchPredictionLog.match_id == Match.id)
@@ -404,7 +409,10 @@ async def get_clv_records(
 ) -> List[Dict[str, Any]]:
     """Return prediction/closing-line pairs shaped for
     ``services.clv_service.compute_clv_summary()``:
-    ``{"model_probs": [h, d, a], "closing_probs": [h, d, a]}``.
+    ``{"model_probs": [h, d, a], "closing_probs": [h, d, a]}``, plus
+    ``match_date``, ``outcome`` (0/1/2 once the match is settled, else None)
+    and ``closing_lag_seconds`` (kickoff minus closing capture, directive v8 C2)
+    for the paired model-vs-close comparison.
     """
 
     result = await session.execute(
@@ -417,20 +425,37 @@ async def get_clv_records(
         )
     )
 
-    return [
-        {
-            "model_probs": [home_prob, draw_prob, away_prob],
-            "closing_probs": [home_implied, draw_implied, away_implied],
-        }
-        for (
-            home_prob,
-            draw_prob,
-            away_prob,
-            home_implied,
-            draw_implied,
-            away_implied,
-        ) in result.all()
-    ]
+    records: List[Dict[str, Any]] = []
+    for (
+        home_prob,
+        draw_prob,
+        away_prob,
+        home_implied,
+        draw_implied,
+        away_implied,
+        match_date,
+        status,
+        home_score,
+        away_score,
+        closing_captured_at,
+    ) in result.all():
+        outcome = None
+        if (
+            str(status or "").lower() in SETTLED_MATCH_STATUSES
+            and home_score is not None
+            and away_score is not None
+        ):
+            outcome = 0 if home_score > away_score else 1 if home_score == away_score else 2
+        records.append(
+            {
+                "model_probs": [home_prob, draw_prob, away_prob],
+                "closing_probs": [home_implied, draw_implied, away_implied],
+                "match_date": match_date.isoformat(),
+                "outcome": outcome,
+                "closing_lag_seconds": (match_date - closing_captured_at).total_seconds(),
+            }
+        )
+    return records
 
 
 async def get_next_upcoming_fixture(

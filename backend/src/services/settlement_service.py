@@ -9,10 +9,11 @@ invoked periodically from api/main.py's background task.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+from ..core.heavy_jobs import run_heavy
 
 if TYPE_CHECKING:
     from ..models.model_registry import ModelRegistry
@@ -100,7 +101,7 @@ async def run_settlement_pass(provider: Any = None) -> dict[str, Any]:
             )
 
         # CPU-bound bootstrap: off the event loop, which serves every request.
-        validation = await asyncio.to_thread(
+        validation = await run_heavy(
             get_walk_forward_registry().walk_forward_validate, records
         )
 

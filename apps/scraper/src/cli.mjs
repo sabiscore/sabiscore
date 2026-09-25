@@ -123,6 +123,7 @@ async function scrape({ adapterKind = "fixtures" } = {}) {
     payload_hashes: summary.payloadHashes,
     record_count: summary.recordCount,
     errors: summary.errors,
+    resource: summary.resource,
     attribution: "football-data.co.uk",
     licence: {
       source_policy: "public CSV; operator must review current terms before live use"

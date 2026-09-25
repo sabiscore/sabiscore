@@ -5,6 +5,49 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — Directive v8 Phases 1–3: memory headroom, model-vs-close evidence, decision states (2026-09-25)
+
+### Fixed
+
+- **Serving fail-open paths closed** (#240, `docs/DEBT.md` item 151). An unreadable manifest now
+  yields no feature vector instead of the legacy market block. Only hash-pinned artifacts load. A
+  price captured at or after kickoff, or with an unknown kickoff, is refused.
+- **`/health` reported host memory as the instance's** (#240, item 152). It now reports process RSS
+  and the cgroup limit and headroom. Live on 2026-09-24 that read 382 of 512 MB used, 129 MB free.
+- **The model-close gap was called CLV** (#240). The API field is now `model_close_gap_argmax`, and
+  the tile is no longer green when positive: a no-skill model also scores positive on it.
+- **Heavy bootstraps could overlap** (S3). The settlement pass and cold `/model-performance` cache
+  misses now share one lane (`core/heavy_jobs.py`), so two 10,000-replicate bootstraps never stack
+  their peaks on a 512 MB instance.
+- **boto3 loaded at startup** (S4). It cost about 20 MB RSS and is used only by the S3 model-download
+  path; it is now imported there.
+- **Client-side stake math removed.** `ValueBetCard` computed a stake and a payout in the browser. It
+  had no production importer and is deleted, and a repo scan now forbids odds arithmetic in
+  `apps/web` (`no-client-ev-contract.test.ts`).
+
+### Added
+
+- **Model vs the de-vigged close** (C2/C3). `/model-performance` and its summary report
+  `model_vs_close`: paired per-match ΔRPS with an ISO-week cluster bootstrap CI. It uses the same
+  `week_cluster_ci` as the G18 study, now shared in `models/evaluation/metrics.py`. It also reports
+  the median closing-capture lag. "Sharper than the close" means the whole CI lies below zero.
+- **Forecast-time price recorded** (C1). Each logged full-analysis forecast stores the coherent
+  1X2 price it was made against in `payload.recommendation_market`, which true CLV needs. No
+  migration was required.
+- **PLAY / PASS / WITHHELD decision states** (§3.2). "We evaluated it and the price is wrong" and
+  "we cannot evaluate it" no longer collapse into one "No bet". The state badge carries the word
+  and the icon shape, with colour as a repeat. A "Why this might fail" panel accompanies every
+  forecast.
+- **Training and scraper resource records** (D1–D4, N1–N2). `ResourceGuard` stops a training job
+  past `SABISCORE_MAX_RSS_MB` (default 3072) and records its peak. The final fit honours
+  `SABISCORE_MAX_JOBS` (default 2). The training manifest records measured `resources`. Scraper
+  manifests record peak RSS and heap, and the scraper cron sets a 384 MB V8 heap cap.
+
+### Verified
+
+- On a fresh PostgreSQL 16 database, `alembic upgrade head` reaches `0014` and `alembic check`
+  reports no drift.
+
 ## Unreleased — Evidence scoped to the served model; placeholder markets withheld; G18 negative result (2026-09-24)
 
 ### Fixed
