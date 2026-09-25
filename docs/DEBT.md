@@ -31,6 +31,16 @@ no longer coloured green when positive.
   with an ISO-week cluster CI and the median closing-capture lag. The model-close gap scores a
   no-skill model positive; this does not (`test_model_vs_close.py`).
 
+**Corrected 2026-09-25, after #241 deployed.** The first headroom figure was computed from raw
+`memory.current`, which includes page cache the kernel reclaims under pressure. Live on `878ae1e`
+it sat at 507 of 512 MB, with RSS steady at 381 MB and no restart, for about four minutes. Then the
+kernel dropped it to 381 MB on its own. Raw-usage headroom (3–5 MB) had meanwhile flagged a healthy
+instance `degraded`. Headroom and the memory warning are now computed from the working set,
+`memory.current − inactive_file` (v1: `total_inactive_file`), the figure Docker and Kubernetes
+report; the raw value remains visible as `cgroup_current_mb`. Test:
+`test_reclaimable_file_cache_is_not_counted_against_headroom`, watched failing on the old code. The
+key name was confirmed against a real 512 MB cgroup v2 container.
+
 **Still open:**
 - *S2's per-library import breakdown.* Docker is available, but the link measured 16 KB/s on
   2026-09-25, and the runtime wheels total about 450 MB (xgboost alone is about 300 MB).

@@ -350,11 +350,19 @@ def health_check() -> Dict[str, Any]:
     return health_status
 
 
+# (usage, limit, stat file, reclaimable-cache key in that stat file)
 _CGROUP_MEMORY_FILES = (
-    ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory.max"),  # cgroup v2
+    (
+        "/sys/fs/cgroup/memory.current",
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory.stat",
+        "inactive_file",
+    ),  # cgroup v2
     (
         "/sys/fs/cgroup/memory/memory.usage_in_bytes",
         "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+        "/sys/fs/cgroup/memory/memory.stat",
+        "total_inactive_file",
     ),  # cgroup v1
 )
 
@@ -370,26 +378,48 @@ def _read_cgroup_bytes(path: str) -> int | None:
     return value if value < 1 << 60 else None  # v1 "unlimited" sentinel
 
 
+def _read_cgroup_stat(path: str, key: str) -> int | None:
+    try:
+        for line in Path(path).read_text().splitlines():
+            name, _, value = line.partition(" ")
+            if name == key and value.strip().isdigit():
+                return int(value)
+    except OSError:
+        pass
+    return None
+
+
 def _instance_memory() -> Dict[str, Any]:
     """Memory of this container, not the host.
 
     psutil.virtual_memory() reads the host: on Render's free plan it reported
     113 GB available for a single-worker instance (docs/DEBT.md item 152).
     None where the platform does not expose a figure; never a host substitute.
+
+    Headroom is measured against the working set (usage minus inactive file
+    cache, the figure Docker and Kubernetes use), not raw usage. Raw usage
+    counts page cache the kernel reclaims under pressure: live on 2026-09-25 it
+    sat at 507/512 MB, with RSS at 381 MB, until the kernel dropped it to 381 MB.
+    Headroom from raw usage flagged /health "degraded" on a healthy instance.
     """
-    current = limit = None
-    for current_path, limit_path in _CGROUP_MEMORY_FILES:
+    current = limit = inactive = None
+    for current_path, limit_path, stat_path, cache_key in _CGROUP_MEMORY_FILES:
         current = _read_cgroup_bytes(current_path)
         if current is not None:
             limit = _read_cgroup_bytes(limit_path)
+            inactive = _read_cgroup_stat(stat_path, cache_key)
             break
+    working_set = (
+        max(0, current - (inactive or 0)) if current is not None else None
+    )
     mb = 1024 * 1024
     return {
         "process_rss_mb": psutil.Process().memory_info().rss // mb if psutil else None,
         "cgroup_current_mb": current // mb if current is not None else None,
+        "cgroup_working_set_mb": working_set // mb if working_set is not None else None,
         "cgroup_limit_mb": limit // mb if limit is not None else None,
-        "headroom_mb": (limit - current) // mb
-        if current is not None and limit is not None
+        "headroom_mb": (limit - working_set) // mb
+        if working_set is not None and limit is not None
         else None,
     }
 
