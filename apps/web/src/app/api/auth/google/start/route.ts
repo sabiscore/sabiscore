@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { googleClientId, googleRedirectUri } from "@/lib/google-oauth";
 
 const STATE_COOKIE = "sabi_google_oauth_state";
 const NONCE_COOKIE = "sabi_google_oauth_nonce";
 const NEXT_COOKIE = "sabi_google_oauth_next";
 const VERIFIER_COOKIE = "sabi_google_oauth_verifier";
 const OAUTH_TTL_SECONDS = 10 * 60;
-
-function getAppUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configured) return configured.replace(/\/$/, "");
-
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) return `https://${vercelUrl}`;
-
-  return "http://localhost:3000";
-}
 
 function safeNextPath(value: string | null): string {
   if (!value) return "/dashboard";
@@ -43,8 +34,8 @@ async function createCodeChallenge(verifier: string): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-  const appUrl = getAppUrl();
+  const clientId = googleClientId();
+  const appUrl = request.nextUrl.origin;
 
   if (!clientId) {
     const url = new URL(safeNextPath(request.nextUrl.searchParams.get("next")), appUrl);
@@ -57,7 +48,7 @@ export async function GET(request: NextRequest) {
   const codeVerifier = randomBase64Url(48);
   const codeChallenge = await createCodeChallenge(codeVerifier);
   const nextPath = safeNextPath(request.nextUrl.searchParams.get("next"));
-  const redirectUri = `${appUrl}/api/auth/google/callback`;
+  const redirectUri = googleRedirectUri(appUrl);
 
   const googleUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   googleUrl.searchParams.set("client_id", clientId);

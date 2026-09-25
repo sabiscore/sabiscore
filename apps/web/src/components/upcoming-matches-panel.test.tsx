@@ -471,3 +471,32 @@ describe("UpcomingMatchesPanel staking disclosure", () => {
     expect(screen.queryByText("Stake withheld")).not.toBeInTheDocument();
   });
 });
+
+describe("empty discovery window", () => {
+  it("names the next scheduled kickoff that sync already holds beyond the window", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      const body = url.startsWith("/api/leagues")
+        ? LEAGUES
+        : url.startsWith("/api/fixtures/upcoming")
+          ? {
+              fixtures: [{
+                fixture_id: "fd-558881", competition: "EREDIVISIE", home_team: "PSV",
+                away_team: "SC Heerenveen", kickoff_utc: "2026-10-09T18:00:00Z",
+                status: "scheduled", venue: null,
+                evidence_status: "MODEL_UNAVAILABLE", odds_status: "DATA_UNAVAILABLE",
+              }],
+              total: 1,
+              source: "database",
+            }
+          : upcomingResponse(0);
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPanel();
+
+    expect(await screen.findByText(/No upcoming fixtures in the next 14 days\. Next scheduled kickoff: .*(9 Oct|Oct 9)/i))
+      .toBeInTheDocument();
+  });
+});

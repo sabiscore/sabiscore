@@ -161,16 +161,26 @@ class TimingMiddleware(BaseHTTPMiddleware):
             }
             print(json.dumps(record), flush=True)
 
-        logger.info(
-            "request_completed",
-            extra={
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": round(process_time * 1000, 2),
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+        # Render probes /health/ready every ~5 s, so a successful probe was
+        # most of the log. A failing probe (>= 400) is still logged. The path,
+        # status and duration are in the message because the root formatter
+        # prints only %(message)s: as `extra` alone they never appeared.
+        path = request.url.path
+        if not (path.startswith("/health") and response.status_code < 400):
+            logger.info(
+                "request_completed %s %s %s %.0fms",
+                request.method,
+                path,
+                response.status_code,
+                process_time * 1000,
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": round(process_time * 1000, 2),
+                    "request_id": getattr(request.state, "request_id", None),
+                },
+            )
 
         if _requires_no_store(request.url.path):
             response.headers.setdefault("Cache-Control", "no-store")

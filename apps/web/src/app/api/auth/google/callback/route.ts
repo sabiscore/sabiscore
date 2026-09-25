@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { googleClientId, googleClientSecret, googleRedirectUri } from "@/lib/google-oauth";
 
 const STATE_COOKIE = "sabi_google_oauth_state";
 const NONCE_COOKIE = "sabi_google_oauth_nonce";
 const NEXT_COOKIE = "sabi_google_oauth_next";
 const VERIFIER_COOKIE = "sabi_google_oauth_verifier";
 const SESSION_COOKIE = "sabi_session";
-
-function getAppUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configured) return configured.replace(/\/$/, "");
-
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) return `https://${vercelUrl}`;
-
-  return "http://localhost:3000";
-}
 
 function safeNextPath(value: string | undefined): string {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
@@ -23,15 +14,15 @@ function safeNextPath(value: string | undefined): string {
   return value.slice(0, 512);
 }
 
-function redirectToApp(nextPath: string, error?: string) {
-  const url = new URL(safeNextPath(nextPath), getAppUrl());
+function redirectToApp(origin: string, nextPath: string, error?: string) {
+  const url = new URL(safeNextPath(nextPath), origin);
   if (error) url.searchParams.set("auth_error", error);
   return NextResponse.redirect(url);
 }
 
 async function exchangeCodeForIdToken(code: string, redirectUri: string, codeVerifier: string) {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  const clientId = googleClientId();
+  const clientSecret = googleClientSecret();
 
   if (!clientId || !clientSecret) {
     throw new Error("google_not_configured");
@@ -74,6 +65,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const returnedState = request.nextUrl.searchParams.get("state");
   const providerError = request.nextUrl.searchParams.get("error");
+  const origin = request.nextUrl.origin;
 
   const clearOAuthCookies = (response: NextResponse) => {
     response.cookies.delete(STATE_COOKIE);
@@ -84,18 +76,18 @@ export async function GET(request: NextRequest) {
   };
 
   if (providerError === "access_denied") {
-    return clearOAuthCookies(redirectToApp(nextPath, "google_cancelled"));
+    return clearOAuthCookies(redirectToApp(origin, nextPath, "google_cancelled"));
   }
 
   if (!stateCookie || !nonceCookie || !codeVerifier || !returnedState || returnedState !== stateCookie) {
-    return clearOAuthCookies(redirectToApp(nextPath, "oauth_state_invalid"));
+    return clearOAuthCookies(redirectToApp(origin, nextPath, "oauth_state_invalid"));
   }
 
   if (!code) {
-    return clearOAuthCookies(redirectToApp(nextPath, "google_authorization_failed"));
+    return clearOAuthCookies(redirectToApp(origin, nextPath, "google_authorization_failed"));
   }
 
-  const redirectUri = `${getAppUrl()}/api/auth/google/callback`;
+  const redirectUri = googleRedirectUri(origin);
 
   try {
     const idToken = await exchangeCodeForIdToken(code, redirectUri, codeVerifier);
@@ -121,7 +113,7 @@ export async function GET(request: NextRequest) {
       const payload = (await backendResponse.json().catch(() => null)) as { detail?: string } | null;
       const detail = payload?.detail || "google_authentication_failed";
       const error = detail.includes("not configured") ? "google_not_configured" : "google_authentication_failed";
-      return clearOAuthCookies(redirectToApp(nextPath, error));
+      return clearOAuthCookies(redirectToApp(origin, nextPath, error));
     }
 
     const payload = (await backendResponse.json()) as {
@@ -130,10 +122,10 @@ export async function GET(request: NextRequest) {
     };
 
     if (!payload.access_token) {
-      return clearOAuthCookies(redirectToApp(nextPath, "google_session_failed"));
+      return clearOAuthCookies(redirectToApp(origin, nextPath, "google_session_failed"));
     }
 
-    const response = redirectToApp(nextPath);
+    const response = redirectToApp(origin, nextPath);
     response.cookies.set(SESSION_COOKIE, payload.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -147,6 +139,6 @@ export async function GET(request: NextRequest) {
     const code = error instanceof Error && error.message === "google_not_configured"
       ? "google_not_configured"
       : "google_authentication_failed";
-    return clearOAuthCookies(redirectToApp(nextPath, code));
+    return clearOAuthCookies(redirectToApp(origin, nextPath, code));
   }
 }

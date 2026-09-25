@@ -1,5 +1,57 @@
 # SabiScore Debt Ledger
 
+## 153. Live-evidence pass 2026-09-25: four client defects fixed; the keep-alive cannot keep the backend awake — PARTIAL (operator steps below)
+
+**Tier:** `PARTIAL` — 2026-09-25. **Found:** a Render log excerpt and 17 screenshots of the live site,
+each checked against the live API before any change.
+
+**Fixed in code (verify after deploy):**
+- *Google sign-in reported "not configured" on a configured deployment.* Vercel holds the client under
+  the Auth.js names `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (added 2026-09-24); the routes read only
+  `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`. `lib/google-oauth.ts` now accepts both, documented name first.
+  Second defect behind it: the redirect URI came from `VERCEL_URL`, the per-deployment host, so a
+  visitor on `sabiscore.vercel.app` was returned to a host holding none of the state, nonce or PKCE
+  cookies; the callback could only answer `oauth_state_invalid`. The flow now stays on the request's
+  own origin. Tests: `app/api/auth/google/start/route.test.ts` (3, watched failing).
+- *`/api/auth/me` logged a 401 on every page load for a visitor with an expired `sabi_session`.* The
+  cookie is now cleared and the answer is "signed out"; a rejected bearer token stays 401.
+- *`/developer` rendered a guess as a measurement.* The page requests usage without an API key, so the
+  backend always answers 401, and a hard-coded `0 / 10`, `0 / 100` was shown instead, over bars forced to
+  a 5% minimum fill. Unmetered now reads "—" with an empty bar. The page also claimed "programmatic access
+  to football probabilities"; keys authenticate `/developer/usage` only, so the copy says that, and the
+  code samples call that endpoint on the reader's own host instead of an endpoint that does not exist
+  on `sabiscore.com`, which does not resolve.
+- *Unbacked capability copy on `/match`:* "Monte Carlo bands" (the component had no importer and is
+  deleted), "liquidity safeguards" (nothing measures liquidity), "in seconds".
+- *The match page said "no" repeatedly (Phase F §4).* The lower verdict row repeated the Decision card's
+  verdict badge and its reason sentence, plus a "Partial" chip beside "Partial Data". All three are gone.
+  The fallback copy pool behind the repeated sentence (`HYPE_COPY`, `sabiInsightCopy`) was unreachable,
+  because the one call site always passed the reason, and is deleted with its tests.
+- *An empty fixture list read like an outage.* The next four fixtures kick off 9 Oct 18:00–19:00 UTC,
+  about five hours past the 14-day window measured on 25 Sep. Fixture sync fetches whole days, so it
+  already holds them. The empty state now names the next scheduled kickoff.
+- *Share links and SEO canonical URLs pointed at `sabiscore.com`*, which still fails DNS (`SERVFAIL`
+  from 8.8.8.8). `NEXT_PUBLIC_SITE_URL` is now `https://sabiscore.vercel.app`, the project's verified
+  production domain. **Revert it when `sabiscore.com` resolves.**
+- *Request log was about 95% health-probe noise*, and the middleware line carried no fields, because
+  `extra` never reaches the `%(message)s` formatter. Successful `/health*` probes are no longer logged;
+  every other line names method, path, status and duration; the duplicate uvicorn access line is off.
+  Test: `tests/unit/test_request_log_noise.py` (3, watched failing).
+
+**Operator-only, still open:**
+1. *The keep-alive does not keep Render awake.* `keep_alive.yml` is scheduled `*/14`, but GitHub ran
+   it 15 times between 23 Sep 00:53 and 25 Sep 09:12, every **3–5 hours**. Render's free plan sleeps
+   after 15 idle minutes; the pasted log shows exactly that (graceful shutdown 12:03:02, cold start
+   12:56:43). No workflow change fixes GitHub's scheduler. Either point an external monitor
+   (UptimeRobot, cron-job.org) at `/health/live` every 5–10 minutes, or move off the free plan.
+2. *Google sign-in needs three settings outside the repo:* register
+   `https://sabiscore.vercel.app/api/auth/google/callback` (and any other alias people sign in from)
+   as an authorised redirect URI; set `GOOGLE_OAUTH_CLIENT_ID` (the same id as `AUTH_GOOGLE_ID`) on the
+   Render service; `GOOGLE_OAUTH_ENABLED=true` is now declared in `render.yaml`.
+3. *Memory:* 13 minutes after the 12:56 cold start, `/health` read RSS 388 MB and a working set of
+   441 of 512 MB, 70 MB of headroom, so `resources.status` was `degraded`. Not an outage, but an
+   always-on instance has less slack than the 129 MB measured on 24 Sep.
+
 ## 152. `/health` reports host memory as the instance's, and the metric named "CLV" is an argmax-selected disagreement that a no-skill model also scores positive — PARTIAL
 
 **Tier:** `PARTIAL` — 2026-09-24. **Found:** grounding `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md` in live numbers.

@@ -15,7 +15,7 @@
     }
   },
   "env": {
-    "NEXT_PUBLIC_SITE_URL": "https://sabiscore.com",
+    "NEXT_PUBLIC_SITE_URL": "https://sabiscore.vercel.app",
     "NEXT_PUBLIC_CURRENCY": "NGN",
     "NEXT_PUBLIC_CURRENCY_SYMBOL": "NGN",
     "NEXT_PUBLIC_BASE_BANKROLL": "10000",

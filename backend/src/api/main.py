@@ -92,6 +92,9 @@ logging.basicConfig(
 # the_odds_api's ?apiKey=...) at INFO on every request. Suppress it the same
 # way core/logging.py already suppresses uvicorn.access noise.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+# The TimingMiddleware line already carries method, path, status and duration;
+# uvicorn's access line repeated every request (and every health probe).
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Global model instance
