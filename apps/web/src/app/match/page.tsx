@@ -10,18 +10,21 @@ export const metadata = {
 };
 
 export default function MatchLandingPage() {
+  // Each card describes something the backend actually does. The previous
+  // copy promised Monte Carlo bands (the component was never mounted),
+  // liquidity safeguards (nothing measures liquidity) and a latency figure.
   const featureCards = [
     {
-      title: "Smart Kelly",
-      body: "Auto-sizes stakes with Quarter Kelly and liquidity safeguards.",
+      title: "Quarter Kelly, capped",
+      body: "Stakes are sized on the server with quarter Kelly and a per-league cap, and stay at zero until the model is certified.",
     },
     {
-      title: "Market Radar",
-      body: "Compares model edge against live bookmaker lines in seconds.",
+      title: "Market comparison",
+      body: "Model probabilities are compared with the de-vigged bookmaker price when a verified odds snapshot exists.",
     },
     {
-      title: "Confidence Bands",
-      body: "Monte Carlo bands show volatility and probability swings.",
+      title: "Named evidence gaps",
+      body: "Every missing input is listed. A critical gap withholds the forecast instead of filling it with a default.",
     },
   ];
 

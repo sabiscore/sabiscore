@@ -28,4 +28,26 @@ describe("/api/auth/me", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("clears a session cookie the backend rejects instead of logging a 401 every load", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"detail":"expired"}', { status: 401 })));
+
+    const res = await GET(
+      new NextRequest("https://web.test/api/auth/me", { headers: { cookie: "sabi_session=stale" } }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+    expect(res.headers.get("set-cookie")).toMatch(/sabi_session=;.*Expires=Thu, 01 Jan 1970/i);
+  });
+
+  it("keeps a rejected bearer token as a 401", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"detail":"bad"}', { status: 401 })));
+
+    const res = await GET(
+      new NextRequest("https://web.test/api/auth/me", { headers: { authorization: "Bearer x" } }),
+    );
+
+    expect(res.status).toBe(401);
+  });
 });

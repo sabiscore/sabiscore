@@ -130,87 +130,6 @@ export function AnalysisShareAction({
   );
 }
 
-// Deterministic hype copy — template table, never LLM-generated at render time
-const HYPE_COPY: Record<string, string[]> = {
-  HIGH_CONVICTION: [
-    "Verified evidence gates passed.",
-    "Model and market evidence are aligned.",
-    // ⚠️ Asserts CERTIFICATION, not evidence. Under ADR-0011 the serving
-    // generation is override-staked and explicitly not certified, so this line
-    // is swapped out below rather than sitting in the pool unconditionally.
-    // The sibling entries are safe: they describe this fixture's *evidence*
-    // gates, which is a genuinely separate thing from the model's own status.
-    "The certified model is available.",
-    "Risk controls permit a bounded stake.",
-  ],
-  ACTIONABLE: [
-    "Verified evidence supports analysis.",
-    "The evidence gates are satisfied.",
-    "A bounded decision is available.",
-    "League staking limits remain enforced.",
-  ],
-  SPECULATIVE: [
-    "Watchlist only; no stake is permitted.",
-    "Evidence is not sufficient for action.",
-    "Monitor for stronger model evidence.",
-    "Speculative evidence remains non-actionable.",
-  ],
-  HOLD: [
-    "Market has this priced in.",
-    "No edge to speak of today.",
-    "Sitting this one out is the move.",
-    "Wait for a better spot.",
-  ],
-  PARTIAL: [
-    "Live feeds incomplete — exercise caution.",
-    "Data gaps. Partial picture only.",
-    "Model working with limited visibility.",
-    "Incomplete data. Use as context only.",
-  ],
-};
-
-/** The one line in HYPE_COPY that claims certification rather than evidence. */
-const CERTIFICATION_CLAIM = "The certified model is available.";
-/** What to say instead when the generation has not earned that claim. */
-const UNCERTIFIED_SUBSTITUTE = "Model output is uncertified — treat as research.";
-
-export function sabiInsightCopy(
-  verdict: Verdict,
-  matchId: string,
-  certificationState?: string | null,
-): string {
-  const certified = String(certificationState ?? "").toUpperCase() === "CERTIFIED";
-  const pool = HYPE_COPY[verdict] ?? HYPE_COPY.HOLD;
-  const hash = matchId.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const line = pool[hash % pool.length];
-  // Substitute rather than filter: filtering would shift every other fixture's
-  // deterministic selection, so the same match would silently change its copy
-  // the moment a generation is certified.
-  return !certified && line === CERTIFICATION_CLAIM ? UNCERTIFIED_SUBSTITUTE : line;
-}
-
-// ─── Sabi Insights badge (E.6) ────────────────────────────────────────────────
-
-function SabiInsightsBadge({
-  verdict,
-  matchId,
-  copy,
-  certificationState,
-}: {
-  verdict: Verdict;
-  matchId: string;
-  copy?: string;
-  certificationState?: string | null;
-}) {
-  const displayedCopy = copy ?? sabiInsightCopy(verdict, matchId, certificationState);
-  return (
-    <p className="text-[11px] text-slate-400 italic leading-relaxed truncate">
-      <span className="sr-only">Sabi Insights: </span>
-      {displayedCopy}
-    </p>
-  );
-}
-
 // ─── Victory micro-animation (E.6) ────────────────────────────────────────────
 
 // ─── Probability orbs (E.1 + E.2) ────────────────────────────────────────────
@@ -431,9 +350,9 @@ function EnhancedMatchHero({
       {/* ── Verdict + freshness + commentary ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/40 pt-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative inline-flex">
-            <VerdictBadge verdict={data.verdict} />
-          </div>
+          {/* The verdict badge and the decision reason already lead the
+              Decision card above; repeating them here was part of the same
+              "no" being said five ways on one page (Phase F §4). */}
           {/* WP-F: suppress alarming STALE badge when no live evidence was produced.
               A baseline/reduced-evidence response references historical training data,
               not a live evidence bundle — "810d ago" is meaningless and alarming. */}
@@ -471,18 +390,12 @@ function EnhancedMatchHero({
               High Stakes ⚡
             </span>
           )}
-          {data.partial_intelligence && (
+          {data.partial_intelligence && data.verdict !== "PARTIAL" && (
             <span className="text-xs font-semibold uppercase tracking-wider text-fuchsia-400 border border-fuchsia-500/20 bg-fuchsia-500/10 rounded-full px-3 py-1">
               Partial
             </span>
           )}
         </div>
-        <SabiInsightsBadge
-          verdict={data.verdict}
-          matchId={matchId}
-          copy={presentation.reason}
-          certificationState={data.ensemble.certification_state}
-        />
       </div>
       {/* ── Verdict description (Phase 3) ── */}
       <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800/30 pt-2">

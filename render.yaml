@@ -105,6 +105,13 @@
         value: "true"
       - key: THE_ODDS_API_KEY
         sync: false
+      # Google sign-in: the backend verifies the ID token's audience against
+      # the same client id the web app uses (docs/AUTHENTICATION_PRODUCTION_SETUP.md).
+      # Without both, /auth/oauth/google answers "not configured".
+      - key: GOOGLE_OAUTH_ENABLED
+        value: "true"
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
       - key: MODELS_PATH
         value: "/opt/render/project/src/backend/models"
       - key: USE_PHASE7_MODELS

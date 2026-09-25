@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Key,
@@ -64,22 +64,21 @@ export default function DeveloperPage() {
   });
 
   // Fetch usage stats
-  const { data: usage } = useQuery<DeveloperUsage>({
+  // Usage is metered per API key and this page holds no key, so the backend
+  // answers 401 here. That used to be replaced with "0 used", which showed a
+  // guess as a measurement; unmetered now reads "—".
+  const { data: usage } = useQuery<DeveloperUsage | null>({
     queryKey: ["developer-usage"],
     queryFn: async () => {
       const res = await fetch("/api/developer/usage", { cache: "no-store" });
-      if (!res.ok) {
-        return {
-          tier: "FREE",
-          minute_limit: 10,
-          minute_used: 0,
-          daily_limit: 100,
-          daily_used: 0,
-        };
-      }
-      return res.json();
+      return res.ok ? res.json() : null;
     },
   });
+
+  // Examples use the host the reader is on (sabiscore.com does not resolve).
+  // Set after mount so the server and client render the same text.
+  const [origin, setOrigin] = useState("https://sabiscore.vercel.app");
+  useEffect(() => setOrigin(window.location.origin), []);
 
   // Create Key Mutation
   const createKeyMutation = useMutation({
@@ -131,31 +130,21 @@ export default function DeveloperPage() {
   const minutePct = Math.min(100, Math.round((minuteUsed / minuteLimit) * 100));
   const dailyPct = Math.min(100, Math.round((dailyUsed / dailyLimit) * 100));
 
+  const apiKey = createdSecret || "sbk_live_YOUR_API_KEY";
   const codeSnippets = {
-    curl: `curl -X GET "https://sabiscore.com/api/v1/predict/arsenal-vs-chelsea" \\
-  -H "x-api-key: ${createdSecret || "sbk_live_YOUR_API_KEY"}" \\
-  -H "Accept: application/json"`,
-    javascript: `const response = await fetch("https://sabiscore.com/api/v1/predict/arsenal-vs-chelsea", {
-  headers: {
-    "x-api-key": "${createdSecret || "sbk_live_YOUR_API_KEY"}",
-    "Accept": "application/json"
-  }
+    curl: `curl "${origin}/api/developer/usage" -H "x-api-key: ${apiKey}"`,
+    javascript: `const response = await fetch("${origin}/api/developer/usage", {
+  headers: { "x-api-key": "${apiKey}" }
 });
-const data = await response.json();
-console.log("Model Verdict:", data.verdict);
-console.log("Probabilities:", data.ensemble);`,
+const usage = await response.json();
+console.log(usage.minute_requests_used, "/", usage.rate_limit_per_minute);
+console.log(usage.daily_requests_used, "/", usage.daily_quota);`,
     python: `import httpx
 
-headers = {
-    "x-api-key": "${createdSecret || "sbk_live_YOUR_API_KEY"}",
-    "Accept": "application/json"
-}
-
-with httpx.Client() as client:
-    res = client.get("https://sabiscore.com/api/v1/predict/arsenal-vs-chelsea", headers=headers)
-    prediction = res.json()
-    print("Top Probability:", prediction["top_outcome_probability"])
-    print("Verdict:", prediction["verdict"])`,
+res = httpx.get("${origin}/api/developer/usage", headers={"x-api-key": "${apiKey}"})
+usage = res.json()
+print(usage["minute_requests_used"], "/", usage["rate_limit_per_minute"])
+print(usage["daily_requests_used"], "/", usage["daily_quota"])`,
   };
 
   return (
@@ -173,7 +162,7 @@ with httpx.Client() as client:
               </h1>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Programmatic access to evidence-backed football probabilities, calibration statistics, and live match intelligence. <strong className="text-emerald-300 font-semibold">100% Free Developer Tier</strong> with zero credit card or billing required.
+              Create and revoke API keys and check each key&apos;s usage. Keys currently authenticate the usage endpoint only; forecast and evidence endpoints do not accept API keys yet. <strong className="text-emerald-300 font-semibold">Free tier</strong>, no card required.
             </p>
           </div>
 
@@ -192,7 +181,7 @@ with httpx.Client() as client:
               Minute Rate Limit
             </span>
             <span className="text-xs font-bold text-emerald-400 tabular-nums">
-              {minuteUsed} / {minuteLimit} req/min
+              {usage ? minuteUsed : "—"} / {minuteLimit} req/min
             </span>
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
@@ -201,7 +190,7 @@ with httpx.Client() as client:
                 "h-full transition-all duration-300",
                 minutePct > 80 ? "bg-amber-400" : "bg-emerald-400"
               )}
-              style={{ width: `${Math.max(5, minutePct)}%` }}
+              style={{ width: `${minutePct}%` }}
             />
           </div>
           <p className="mt-2 text-[10px] text-slate-500">Sliding 60-second window quota. Tier: FREE</p>
@@ -213,7 +202,7 @@ with httpx.Client() as client:
               Daily Request Quota
             </span>
             <span className="text-xs font-bold text-sky-400 tabular-nums">
-              {dailyUsed} / {dailyLimit} req/day
+              {usage ? dailyUsed : "—"} / {dailyLimit} req/day
             </span>
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
@@ -222,12 +211,17 @@ with httpx.Client() as client:
                 "h-full transition-all duration-300",
                 dailyPct > 80 ? "bg-amber-400" : "bg-sky-400"
               )}
-              style={{ width: `${Math.max(5, dailyPct)}%` }}
+              style={{ width: `${dailyPct}%` }}
             />
           </div>
           <p className="mt-2 text-[10px] text-slate-500">Resets daily at 00:00 UTC. Tier: FREE</p>
         </div>
       </div>
+      {!usage && (
+        <p className="text-xs text-slate-500">
+          Usage is metered per API key, so it is not shown here. Call the usage endpoint below with a key to read it.
+        </p>
+      )}
 
       {/* Secret Shown Once Alert */}
       {createdSecret && (

@@ -14,7 +14,6 @@ import {
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
-  sabiInsightCopy,
   UncertaintyCard,
 } from "./full-analysis-dashboard";
 import { EvidencePassport } from "./evidence-passport";
@@ -584,56 +583,3 @@ describe("result-owned analysis sharing", () => {
   });
 });
 
-// ─── Explanation safety: no unearned certification claim (ADR-0011) ──────────
-
-describe("sabiInsightCopy certification safety", () => {
-  /**
-   * The HIGH_CONVICTION pool contains "The certified model is available."
-   * Selection is a deterministic hash of matchId, so the line is reachable for
-   * a specific, findable set of ids — not a rare branch. Under ADR-0011 the
-   * serving generation is override-staked and NOT certified, so rendering that
-   * line would assert earned certification on exactly the surface that is
-   * supposed to disclose the opposite.
-   */
-  const CLAIM = /The certified model is available/i;
-
-  /** Find an id whose hash lands on the certification-claim slot (index 2). */
-  function idHittingClaim(): string {
-    for (let n = 0; n < 5000; n += 1) {
-      const id = `m${n}`;
-      const hash = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-      if (hash % 4 === 2) return id;
-    }
-    throw new Error("no matchId reaches the certification-claim slot");
-  }
-
-  it("keeps the claim when the generation genuinely is certified", () => {
-    // Guard the guard FIRST: if no id reaches the claim, every assertion below
-    // is vacuous and would pass against a completely unfixed component.
-    expect(sabiInsightCopy("HIGH_CONVICTION", idHittingClaim(), "CERTIFIED")).toMatch(CLAIM);
-  });
-
-  it("substitutes the claim under an operator override", () => {
-    const copy = sabiInsightCopy("HIGH_CONVICTION", idHittingClaim(), "OPERATOR_OVERRIDE_UNCERTIFIED");
-    expect(copy).not.toMatch(CLAIM);
-    expect(copy).toMatch(/uncertified/i);
-  });
-
-  it("substitutes the claim for any non-certified state, including absent", () => {
-    for (const state of ["UNVERIFIED", "", null, undefined]) {
-      expect(sabiInsightCopy("HIGH_CONVICTION", idHittingClaim(), state)).not.toMatch(CLAIM);
-    }
-  });
-
-  it("leaves every other line untouched, so only the claim is swapped", () => {
-    // Substituting rather than filtering keeps selection stable: the same
-    // fixture must not silently change its copy when a generation certifies.
-    for (const id of ["m1", "m3", "m4", "m5"]) {
-      const hash = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-      if (hash % 4 === 2) continue;
-      expect(sabiInsightCopy("HIGH_CONVICTION", id, "OPERATOR_OVERRIDE_UNCERTIFIED")).toBe(
-        sabiInsightCopy("HIGH_CONVICTION", id, "CERTIFIED"),
-      );
-    }
-  });
-});

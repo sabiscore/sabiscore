@@ -6,6 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { LEAGUE_COLORS } from "@/lib/league-colors";
 import { getUpcomingMatches, getOffseasonStatus, type UpcomingMatch, type UpcomingMatchesResponse } from "@/lib/api";
+import { getUpcomingFixtures } from "@/lib/betting-intelligence-api";
 import { LeagueOffseasonNotice } from "@/components/LeagueOffseasonNotice";
 import { UCLStageBadge } from "@/components/UCLStageBadge";
 import { EdgeQualityBar } from "@/components/edge-quality-bar";
@@ -396,6 +397,21 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
 
   // Derive off-season state from the matches response — avoids a redundant /api/offseason fetch.
   const isOffseason = Boolean(data?.offseason);
+
+  // An empty window during an international break read like a dead product.
+  // Fixture sync stores kickoffs past the 14-day window (whole-day date range),
+  // so name the next one. Skipped for an unsupported league, which would
+  // otherwise fall back to the next fixture of any league.
+  const windowEmpty = Boolean(
+    data && !data.data_gap && !isOffseason && data.upcoming_matches.length === 0,
+  );
+  const { data: nextFixtures } = useQuery({
+    queryKey: ["upcoming-panel-next-fixture", activeLeagueCode ?? "all"],
+    queryFn: () => getUpcomingFixtures(activeLeagueCode ?? undefined),
+    enabled: windowEmpty && (activeLeague === undefined || activeLeagueCode !== null),
+    staleTime: 5 * 60_000,
+  });
+  const nextKickoff = nextFixtures?.fixtures[0]?.kickoff_utc;
   const nextSeasonStart = data?.next_season_start ?? null;
   const nextSeasonStartEstimated = data?.next_season_start_estimated ?? null;
   const daysUntilNextSeason = useMemo(() => {
@@ -534,7 +550,9 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           <p className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-3.5 py-2.5 text-center text-xs text-slate-300">
             {data.data_gap
               ? "Fixture list unavailable right now. Please try again shortly."
-              : `No upcoming fixtures in the next ${VISIBLE_WINDOW_DAYS} days.`}
+              : `No upcoming fixtures in the next ${VISIBLE_WINDOW_DAYS} days.${
+                  nextKickoff ? ` Next scheduled kickoff: ${formatMatchDate(nextKickoff)}.` : ""
+                }`}
           </p>
         )
       )}

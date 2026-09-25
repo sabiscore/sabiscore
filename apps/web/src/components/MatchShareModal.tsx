@@ -155,7 +155,7 @@ export function MatchShareModal(props: MatchShareModalProps) {
                 ) : (
                   <span>Fixture link</span>
                 )}
-                <span>sabiscore.com</span>
+                <span>{new URL(SITE_URL).host}</span>
               </div>
               {analysis && (
                 <p className="mt-2 text-[10px] text-slate-400">
