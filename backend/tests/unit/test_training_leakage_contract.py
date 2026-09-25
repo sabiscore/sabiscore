@@ -491,3 +491,33 @@ def test_generation_id_and_artifact_hashes_default_to_none_and_never_fabricate()
     assert promoted["generation_id"] == "v5_phase7-20260909"
     assert promoted["artifact_hashes"] == {"epl": "abc123"}
     assert promoted["reproducibility_sha256"] == bare["reproducibility_sha256"]
+
+
+def test_n_jobs_is_a_training_input_but_measured_resources_are_not(tmp_path):
+    """Directive v8 D2/D3: thread count can change a LightGBM fit, so it joins
+    the digest; peak RSS and runtime describe the machine, so they must not."""
+    from src.models.training_manifest import build_training_manifest
+
+    (tmp_path / "fd_E0_2324.csv").write_text("a\n1\n", encoding="utf-8")
+    kwargs = dict(
+        cache_dir=tmp_path,
+        feature_schema_version="apex_v1_68",
+        feature_names=list(train_mod.APEX_FEATURES_68),
+        feature_contract_sha256="deadbeef",
+        holdout_season="2425",
+        seed=42,
+        tune_trials=0,
+        leagues={},
+        artifact_suffix="v5_phase7",
+        n_jobs=2,
+    )
+    base = build_training_manifest(**kwargs)
+    measured = build_training_manifest(
+        **kwargs, resources={"peak_rss_mb": 1834.2, "runtime_s": 611.0}
+    )
+    assert measured["resources"]["peak_rss_mb"] == 1834.2
+    assert measured["reproducibility_sha256"] == base["reproducibility_sha256"]
+    assert (
+        build_training_manifest(**{**kwargs, "n_jobs": 8})["reproducibility_sha256"]
+        != base["reproducibility_sha256"]
+    )

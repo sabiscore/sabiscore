@@ -411,3 +411,18 @@ BLOCKER**. A guard counts only after it has been watched failing on an injected 
 configuration CI runs. A number is reported only from a fresh measurement, with its date and source.
 "Production ready", "accurate", "market beating" and "certified" appear only when the corresponding
 gate in §0 has passed.
+
+---
+
+## 8. Execution status (2026-09-25)
+
+| Phase | Landed | Open |
+| --- | --- | --- |
+| 0 | #239: served identity, synthetic-market gate, G18 v1 negative, item-142 evidence | — |
+| 1 | S1 live (`/health`: RSS 400 MB, cgroup 382/512 MB, headroom 129 MB), S3 heavy-job lane, S4 lazy `boto3` (about 20 MB), D1–D4 (`ResourceGuard`, `SABISCORE_MAX_JOBS`, manifest `resources`, sequential leagues), N1–N2 | S2 per-library breakdown: the link measured 16 KB/s against about 450 MB of wheels; the script is ready |
+| 2 | P1/P4/P5 (#240), C1 (forecast-time price in `payload.recommendation_market`, no migration), C2/C3 (`model_vs_close` on `/model-performance`), C5 (#240) | C4, which needs a permitted stake |
+| 3 | PLAY/PASS/WITHHELD states, state badge (word + shape + colour), counter-case, `no-client-ev-contract` guard; dead client-side stake math (`ValueBetCard`) deleted | `ProbabilityDumbbell` and break-even need per-outcome fair-market probabilities and `1/o_k` from the backend; semantic tokens wait for their first consumer |
+| 4 | — | Operator: item 142; G18 v2 forward-capture scope; certification |
+
+Every fixture reads WITHHELD today: the generation is `UNVERIFIED`, and the international break
+(no EPL match from 21 Sep to 10 Oct) leaves the 14-day window empty. Both are correct.

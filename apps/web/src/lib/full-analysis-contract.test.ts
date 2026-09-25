@@ -131,6 +131,8 @@ describe("full-analysis Zod contract and presentation", () => {
   it("maps certified actionable evidence to one bounded stake decision", () => {
     const view = mapFullAnalysisPresentation(payload(), new Date("2026-07-20T13:00:00Z"));
     expect(view.primaryDecision).toBe("Consider home win");
+    expect(view.decisionState).toBe("PLAY");
+    expect(view.decisionHeadline).toBe("Qualifies · stake 1.5% of bankroll");
     expect(view.predictionAvailable).toBe(true);
     expect(view.topOutcomeProbability).toBe(0.5);
     expect(view.stakePermitted).toBe(true);
@@ -170,6 +172,8 @@ describe("full-analysis Zod contract and presentation", () => {
       actionability: null,
     }));
     expect(view.primaryDecision).toBe("No bet");
+    expect(view.decisionState).toBe("WITHHELD");
+    expect(view.decisionHeadline).toBe("Not evaluable");
     expect(view.stakeFraction).toBe(0);
     expect(view.kellyGaugeRatio).toBe(0);
   });
@@ -216,7 +220,33 @@ describe("full-analysis Zod contract and presentation", () => {
       actionability: null,
     }));
     expect(view.primaryDecision).toBe("Watchlist");
+    expect(view.decisionState).toBe("PASS");
+    expect(view.decisionHeadline).toBe("Watchlist only — no stake");
     expect(view.stakePermitted).toBe(false);
+  });
+
+  // Directive v8 §3.2: "we evaluated it and the price is wrong" and "we cannot
+  // evaluate it" are different claims. They must never collapse into one state.
+  it("separates PASS (evaluated, no value) from WITHHELD (not evaluable)", () => {
+    const evaluated = mapFullAnalysisPresentation(payload({
+      verdict: "HOLD",
+      stake_permitted: false,
+      rl_recommendation: { stake_fraction: 0, abstain: false, reason: "Hold", reward_components: {} },
+      odds_edge: { ...payload().odds_edge, kelly_stake: 0 },
+      actionability: null,
+    }));
+    expect(evaluated.decisionState).toBe("PASS");
+    expect(evaluated.decisionHeadline).toBe("No value at this price");
+
+    const noMarket = mapFullAnalysisPresentation(payload({
+      verdict: "HOLD",
+      stake_permitted: false,
+      rl_recommendation: { stake_fraction: 0, abstain: false, reason: "Hold", reward_components: {} },
+      odds_edge: null,
+      actionability: null,
+    }));
+    expect(noMarket.decisionState).toBe("WITHHELD");
+    expect(noMarket.reason).toMatch(/no verified market price/i);
   });
 
   it("accepts null phase9 fields from an inactive-phase9 baseline response", () => {

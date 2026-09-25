@@ -45,3 +45,19 @@ def test_no_cgroup_never_substitutes_host_memory(tmp_path, monkeypatch):
     assert memory["cgroup_current_mb"] is None
     assert memory["cgroup_limit_mb"] is None
     assert memory["headroom_mb"] is None
+
+
+def test_boto3_is_not_imported_at_startup() -> None:
+    """Directive v8 S4: boto3 costs ~20 MB RSS on a 512 MB instance and only the
+    S3 model-download path uses it, so importing the fetcher must not load it.
+    Run in a fresh interpreter: this suite's own imports would mask it."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    code = (
+        "import sys; import src.core.model_fetcher; "
+        "sys.exit(1 if 'boto3' in sys.modules else 0)"
+    )
+    backend = Path(__file__).resolve().parents[2]
+    assert subprocess.run([sys.executable, "-c", code], cwd=backend).returncode == 0

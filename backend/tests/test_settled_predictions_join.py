@@ -355,7 +355,15 @@ async def test_full_analysis_capture_flows_into_settlement_join(
                 "home_team": "Home FC",
                 "away_team": "Away FC",
                 "kickoff_utc": kickoff.isoformat(),
-                "odds": None,
+                "odds": {
+                    "home_win": 1.9,
+                    "draw": 3.5,
+                    "away_win": 4.4,
+                    "bookmaker": "pinnacle",
+                    "source": "the_odds_api",
+                    "timestamp": "2026-08-01T10:00:00Z",
+                    "kickoff_utc": kickoff.isoformat(),
+                },
                 "market_snapshot_acquired": True,
                 "feature_source": {"home_form": "settled_history"},
             }
@@ -409,6 +417,11 @@ async def test_full_analysis_capture_flows_into_settlement_join(
     assert len(logs) == 1
     assert logs[0].input_hash
     assert logs[0].payload["capture_trigger"] == "interactive_full_analysis"
+    # Directive v8 C1: the price the forecast was made against is stored, so
+    # true CLV (ln(o_taken / o_close)) becomes computable later.
+    market = logs[0].payload["recommendation_market"]
+    assert market["bookmaker"] == "pinnacle"
+    assert (market["home_win"], market["draw"], market["away_win"]) == (1.9, 3.5, 4.4)
 
     fixture = (
         await session.execute(select(Match).where(Match.id == "match-full-analysis"))

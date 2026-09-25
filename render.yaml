@@ -211,6 +211,12 @@
       # scoped bucket credentials, and database access have been approved.
       - key: SCRAPER_PRODUCTION_ENABLED
         value: "false"
+      # Directive v8 N1: the starter plan has 512 MB. The first is the hard V8
+      # heap cap; the second only bounds Crawlee's autoscaling, so both are needed.
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384"
+      - key: CRAWLEE_MEMORY_MBYTES
+        value: "512"
       - key: APP_ENV
         value: production
       - key: SABISCORE_ARTIFACT_BUCKET

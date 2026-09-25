@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ...core.cache import cache
+from ...core.heavy_jobs import run_heavy
 from ...db.session import get_async_session
 from ...models.active_generation import (
     ActiveGenerationError,
@@ -34,7 +35,7 @@ from ...models.evaluation.metrics import (
     ranked_probability_score,
 )
 from ...repositories.fixtures import get_clv_records, get_settled_predictions
-from ...services.clv_service import compute_clv_summary
+from ...services.clv_service import compute_clv_summary, compute_model_vs_close
 from ...services.settlement_service import get_walk_forward_registry
 from ...core.league_policy import canonical_league_id
 from ...core.database import Match, Team
@@ -376,7 +377,7 @@ async def _validate_walk_forward(records: List[Dict[str, Any]]) -> Dict[str, Any
     if cached is not None:
         metrics_collector.increment("walk_forward.cache_hit")
         return cached
-    validation = await asyncio.to_thread(
+    validation = await run_heavy(
         get_walk_forward_registry().walk_forward_validate, records
     )
     _write_cached_dict(key, validation)
@@ -423,6 +424,7 @@ async def model_performance(
         model_version=model_version,
     )
     clv = compute_clv_summary(clv_records)
+    vs_close = compute_model_vs_close(clv_records)
 
     if not records or validation.get("skipped"):
         return JSONResponse(
@@ -434,6 +436,7 @@ async def model_performance(
                 "window": window,
                 "settled_predictions": len(records),
                 "model_close_gap_argmax": clv,
+                "model_vs_close": vs_close,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -451,6 +454,7 @@ async def model_performance(
         "baseline_accuracy": 1.0 / 3.0,
         "walk_forward": validation,
         "model_close_gap_argmax": clv,
+        "model_vs_close": vs_close,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -464,9 +468,9 @@ async def model_performance_summary(
     # Same independence as the sibling handler: CLV has its own data floor, so
     # it is reported even while walk-forward is short — and vice versa. Unwindowed
     # here because this summary is itself all-time (`window=None` above).
-    clv = compute_clv_summary(
-        await get_clv_records(db, model_version=str(result["model_version"]))
-    )
+    clv_records = await get_clv_records(db, model_version=str(result["model_version"]))
+    clv = compute_clv_summary(clv_records)
+    vs_close = compute_model_vs_close(clv_records)
 
     if not records or validation.get("skipped"):
         return JSONResponse(
@@ -476,6 +480,7 @@ async def model_performance_summary(
                 "reason": "insufficient_settled_predictions",
                 "settled_predictions": len(records),
                 "model_close_gap_argmax": clv,
+                "model_vs_close": vs_close,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -488,6 +493,7 @@ async def model_performance_summary(
         "n_splits": validation.get("n_splits"),
         "validated_at": validation.get("validated_at"),
         "model_close_gap_argmax": clv,
+        "model_vs_close": vs_close,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -651,7 +657,7 @@ async def model_performance_calibration(
         )
 
     # Three bootstraps: off the event loop for the same reason as walk-forward.
-    result = await asyncio.to_thread(
+    result = await run_heavy(
         _compute_calibration_metrics,
         records=records,
         n_bins=n_bins,

@@ -232,6 +232,8 @@ def build_training_manifest(
     auxiliary_datasets: Optional[Mapping[str, Dict[str, Any]]] = None,
     generation_id: Optional[str] = None,
     artifact_hashes: Optional[Mapping[str, str]] = None,
+    n_jobs: Optional[int] = None,
+    resources: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Assemble the full reproducibility record for one training run.
 
@@ -254,6 +256,11 @@ def build_training_manifest(
     them, and neither participates in ``reproducibility_sha256``: a later
     promotion decision must not retroactively change the digest of what was
     already fit.
+
+    ``n_jobs`` joins ``training_config`` (thread count can change LightGBM
+    results slightly, so it is a training input). ``resources`` (peak RSS,
+    runtime; directive v8 D3) describes the machine, not the fit, so it stays
+    out of the digest. Both are measured by the caller, never back-filled.
     """
     feature_names = list(feature_names)
     manifest: Dict[str, Any] = {
@@ -289,6 +296,7 @@ def build_training_manifest(
             "seed": seed,
             "holdout_season": holdout_season,
             "tune_trials": tune_trials,
+            "n_jobs": n_jobs,
             "artifact_suffix": artifact_suffix,
             "split": "chronological; holdout is the most recent season, never random",
             "calibration": "latest pre-holdout season, disjoint from core training rows",
@@ -299,6 +307,7 @@ def build_training_manifest(
         "metric_contract_sha256": metric_contract_sha256(),
         "generation_id": generation_id,
         "artifact_hashes": dict(artifact_hashes) if artifact_hashes else None,
+        "resources": dict(resources) if resources else None,
     }
     # Self-digest excludes volatile/derived/post-hoc fields so two runs of
     # identical training inputs produce the same reproducibility_sha256 even

@@ -244,8 +244,15 @@ def _shadow_log_payload(
     advisory_gaps: List[str],
     conflicts: List[str],
     research_uncertainty: Dict[str, Any],
+    recommendation_market: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """The immutable shadow snapshot settlement and CLV evaluate later.
+
+    `recommendation_market` is the coherent 1X2 price this forecast was made
+    against (directive v8 C1): bookmaker, prices, capture time and kickoff,
+    already bounded to pre-kickoff by OddsService. True CLV,
+    ln(o_taken / o_close), needs exactly this and nothing else stored it.
+    `None` means no coherent price existed at forecast time.
 
     `research_uncertainty` is the ADR 0009 ensemble-dispersion measurement,
     recorded for research **only**. It does not gate anything: the fixture's
@@ -271,6 +278,7 @@ def _shadow_log_payload(
         # Research-only; see this function's docstring. `stake_permitted` and
         # every gate are computed without reference to this block.
         "research_uncertainty": research_uncertainty,
+        "recommendation_market": recommendation_market,
     }
 
 
@@ -1091,6 +1099,7 @@ async def get_full_analysis(
                         advisory_gaps=advisory_gaps,
                         conflicts=conflicts,
                         research_uncertainty=research_uncertainty,
+                        recommendation_market=live.get("odds"),
                     ),
                 ),
                 require_scheduled_pre_kickoff=True,

@@ -233,3 +233,11 @@ test("summarizeResults aggregates artifacts, hashes, and record counts from succ
   assert.equal(summary.recordCount, 15);
   assert.deepEqual(summary.errors, []);
 });
+
+test("summarizeResults records measured peak RSS and heap (directive v8 N2)", () => {
+  const { resource } = summarizeResults([]);
+  assert.ok(Number.isInteger(resource.peak_rss_mb) && resource.peak_rss_mb > 0);
+  assert.ok(Number.isInteger(resource.peak_heap_used_mb) && resource.peak_heap_used_mb > 0);
+  // A peak is never below the current reading.
+  assert.ok(resource.peak_rss_mb >= Math.floor(process.memoryUsage().rss / (1024 * 1024)) - 1);
+});

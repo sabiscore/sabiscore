@@ -390,3 +390,29 @@ def block_bootstrap_ci(
         "block_size": block_size,
         "n_samples": n,
     }
+
+
+def week_cluster_ci(delta: np.ndarray, dates: np.ndarray, n_boot: int, seed: int) -> dict:
+    """Percentile CI for the mean row delta, resampling whole ISO calendar weeks.
+
+    Matches within a week share fixtures, referees and market conditions, so
+    rows are not independent; resampling weeks keeps that dependence. The G18
+    research protocol and the live model-vs-close report use this one
+    implementation (directive v8 C3), so they cannot drift apart.
+    """
+    keys = [d.isocalendar()[:2] for d in dates]
+    index = {k: i for i, k in enumerate(sorted(set(keys)))}
+    w = np.asarray([index[k] for k in keys])
+    sums = np.bincount(w, weights=delta)
+    counts = np.bincount(w).astype(float)
+    draw = np.random.default_rng(seed).integers(0, len(sums), size=(n_boot, len(sums)))
+    boot = sums[draw].sum(axis=1) / counts[draw].sum(axis=1)
+    lo, hi = np.percentile(boot, [2.5, 97.5])
+    return {
+        "delta_rps": float(delta.mean()),
+        "ci95": [float(lo), float(hi)],
+        "n_rows": int(len(delta)),
+        "n_weeks": int(len(sums)),
+        "beats_market": bool(hi < 0.0),
+        "worse_than_market": bool(lo > 0.0),
+    }

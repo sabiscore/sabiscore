@@ -384,7 +384,15 @@ export async function readFixture(path) {
 // Shapes per-league scrape() results into the summary fields writeManifest()
 // spreads into a run record. Pure/no I/O — lives here (not cli.mjs) so it can
 // be unit-tested without triggering the CLI's top-level command dispatch.
+// Directive v8 N2: heap has no OS-level peak, so it is sampled at each request
+// boundary (http.mjs) and again here; RSS peak comes from the kernel directly.
+let peakHeapUsed = 0;
+export function sampleHeap() {
+  peakHeapUsed = Math.max(peakHeapUsed, process.memoryUsage().heapUsed);
+}
+
 export function summarizeResults(results) {
+  sampleHeap();
   const rawFiles = [];
   const processedFiles = [];
   const payloadHashes = {};
@@ -409,5 +417,10 @@ export function summarizeResults(results) {
     }
   }
 
-  return { rawFiles, processedFiles, payloadHashes, recordCount, errors };
+  const resource = {
+    // resourceUsage().maxRSS is the process's true peak, in kilobytes.
+    peak_rss_mb: Math.round(process.resourceUsage().maxRSS / 1024),
+    peak_heap_used_mb: Math.round(peakHeapUsed / (1024 * 1024)),
+  };
+  return { rawFiles, processedFiles, payloadHashes, recordCount, errors, resource };
 }

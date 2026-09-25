@@ -38,6 +38,7 @@ from src.models.evaluation.market_baseline import devig  # noqa: E402
 from src.models.evaluation.metrics import (  # noqa: E402
     log_loss_multiclass,
     ranked_probability_score_rowwise,
+    week_cluster_ci,
 )
 
 RESEARCH = BACKEND / "reports" / "research"
@@ -179,26 +180,6 @@ def predict(kind, beta_h, beta_d, mh, md, cov) -> np.ndarray:
     xh, _ = design(kind, mh, cov)
     xd, _ = design(kind, md, cov)
     return softmax_offset(mh, md, xh, xd, beta_h, beta_d)
-
-
-def week_cluster_ci(delta: np.ndarray, dates: np.ndarray, n_boot: int, seed: int) -> dict:
-    """Percentile CI for the mean row delta, resampling whole ISO calendar weeks."""
-    keys = [d.isocalendar()[:2] for d in dates]
-    index = {k: i for i, k in enumerate(sorted(set(keys)))}
-    w = np.asarray([index[k] for k in keys])
-    sums = np.bincount(w, weights=delta)
-    counts = np.bincount(w).astype(float)
-    draw = np.random.default_rng(seed).integers(0, len(sums), size=(n_boot, len(sums)))
-    boot = sums[draw].sum(axis=1) / counts[draw].sum(axis=1)
-    lo, hi = np.percentile(boot, [2.5, 97.5])
-    return {
-        "delta_rps": float(delta.mean()),
-        "ci95": [float(lo), float(hi)],
-        "n_rows": int(len(delta)),
-        "n_weeks": int(len(sums)),
-        "beats_market": bool(hi < 0.0),
-        "worse_than_market": bool(lo > 0.0),
-    }
 
 
 def scores(y: np.ndarray, p: np.ndarray) -> dict:

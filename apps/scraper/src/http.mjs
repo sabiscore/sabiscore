@@ -1,5 +1,6 @@
 import { Configuration, HttpCrawler } from "crawlee";
 import { scraperUserAgent } from "./config.mjs";
+import { sampleHeap } from "./storage.mjs";
 
 export function calculateBackoffMs(retryCount, {
   baseMs = 250,
@@ -71,10 +72,12 @@ export class PublicHttpClient {
         },
       ],
       async requestHandler({ body }) {
+        sampleHeap();
         bodyText = Buffer.isBuffer(body) ? body.toString("utf8") : String(body);
         if (!bodyText.trim()) throw new Error("empty_response_body");
       },
       async failedRequestHandler({ request }, error) {
+        sampleHeap();
         terminalError = new Error(
           `crawl_failed url=${new URL(request.url).origin} attempts=${request.retryCount + 1} reason=${error?.name ?? "Error"}`
         );

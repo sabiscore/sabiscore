@@ -21,13 +21,6 @@ except Exception:
 
     _HAS_REQUESTS = False
 
-try:
-    import boto3
-
-    _HAS_BOTO3 = True
-except Exception:
-    _HAS_BOTO3 = False
-
 from ..models.ensemble import SabiScoreEnsemble  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -375,7 +368,11 @@ def fetch_models_if_needed(
 
         # If model_base_url is an S3 URI, prefer using boto3
         if model_base_url.startswith("s3://"):
-            if not _HAS_BOTO3:
+            # Imported here, not at module load: boto3 costs ~20 MB RSS and only
+            # this S3 download path uses it (directive v8 S4, DEBT item 152).
+            try:
+                import boto3
+            except ImportError:
                 logger.error("MODEL_BASE_URL is s3:// but boto3 is not installed")
                 return False
 

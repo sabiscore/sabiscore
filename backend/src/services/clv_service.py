@@ -57,3 +57,65 @@ def compute_clv_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
         "positive_rate": sum(1 for v in clv_values if v > 0) / n,
         "computed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def compute_model_vs_close(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Directive v8 C3: is the model sharper than the de-vigged closing line?
+
+    Paired, per settled match: ΔRPS = RPS(model) − RPS(close) on the same
+    fixture, with an ISO-week cluster bootstrap CI (the G18 instrument).
+    "Sharper than the close" means the whole CI lies below zero. Unlike the
+    argmax gap above, a proper scoring rule has no selection bias: a model equal
+    to the close plus noise scores worse, not better. Also reports the median
+    kickoff-minus-capture lag of the closing snapshots used (directive C2).
+    """
+    import numpy as np
+
+    from ..models.evaluation.metrics import (
+        ranked_probability_score_rowwise,
+        week_cluster_ci,
+    )
+
+    lags = [
+        r["closing_lag_seconds"]
+        for r in records
+        if isinstance(r.get("closing_lag_seconds"), (int, float))
+    ]
+    settled = [
+        r
+        for r in records
+        if r.get("outcome") in (0, 1, 2)
+        and len(r.get("model_probs") or ()) == 3
+        and len(r.get("closing_probs") or ()) == 3
+        and all(
+            isinstance(p, (int, float)) and math.isfinite(p)
+            for p in (*r["model_probs"], *r["closing_probs"])
+        )
+    ]
+    base: dict[str, Any] = {
+        "benchmark": "de-vigged closing 1X2, latest pre-kickoff snapshot",
+        "n_joined": len(records),
+        "median_closing_lag_seconds": float(np.median(lags)) if lags else None,
+    }
+    n = len(settled)
+    if n < _MIN_CLV_SAMPLE_SIZE:
+        return {
+            **base,
+            "skipped": True,
+            "reason": f"need >= {_MIN_CLV_SAMPLE_SIZE} settled joined predictions, got {n}",
+            "n": n,
+        }
+
+    y = np.array([r["outcome"] for r in settled])
+    model_rps = ranked_probability_score_rowwise(y, np.array([r["model_probs"] for r in settled]))
+    market_rps = ranked_probability_score_rowwise(y, np.array([r["closing_probs"] for r in settled]))
+    dates = np.array([datetime.fromisoformat(r["match_date"]) for r in settled])
+    return {
+        **base,
+        "skipped": False,
+        "n": n,
+        "model_rps": float(model_rps.mean()),
+        "market_rps": float(market_rps.mean()),
+        **week_cluster_ci(model_rps - market_rps, dates, n_boot=2000, seed=0),
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+    }

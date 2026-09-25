@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useCallback } from "react";
-import { HelpCircle, Share2 } from "lucide-react";
+import { CheckCircle2, CircleDashed, HelpCircle, MinusCircle, Share2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -19,6 +19,7 @@ import {
   type FullMatchRLRecommendation,
   type FullMatchOddsEdge,
   type MatchActionability,
+  type DecisionState,
 } from "@/lib/full-analysis-contract";
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
@@ -316,8 +317,9 @@ function EnhancedMatchHero({
           Decision
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <DecisionStateBadge state={presentation.decisionState} />
           <VerdictBadge verdict={data.verdict} />
-          <strong className="text-sm sm:text-base text-white">{presentation.primaryDecision}</strong>
+          <strong className="text-sm sm:text-base text-white">{presentation.decisionHeadline}</strong>
         </div>
         <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
         <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
@@ -487,6 +489,97 @@ function EnhancedMatchHero({
         {VERDICT_COPY[data.verdict] ?? ""}
       </p>
     </div>
+  );
+}
+
+// Directive v8 §3.2: the state is carried by the word and the icon's shape
+// (filled check / bar / dashed ring); colour only repeats it, so the three
+// states stay distinguishable without colour vision.
+const DECISION_STATE_META: Record<
+  DecisionState,
+  { label: string; Icon: typeof CheckCircle2; className: string }
+> = {
+  PLAY: {
+    label: "Play",
+    Icon: CheckCircle2,
+    className: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
+  },
+  PASS: {
+    label: "Pass",
+    Icon: MinusCircle,
+    className: "border-slate-400/40 bg-slate-500/10 text-slate-200",
+  },
+  WITHHELD: {
+    label: "Withheld",
+    Icon: CircleDashed,
+    className: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+  },
+};
+
+export function DecisionStateBadge({ state }: { state: DecisionState }) {
+  const { label, Icon, className } = DECISION_STATE_META[state];
+  return (
+    <span
+      data-decision-state={state}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+        className,
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+// Directive v8 §3.5: why this forecast might fail, from backend fields only.
+// Shown whenever a forecast exists (PLAY or PASS). A WITHHELD fixture has no
+// forecast to argue against; EvidenceStatusCard already says why, and a second
+// panel repeating it is the duplication the consumer review flagged.
+export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
+  const presentation = mapFullAnalysisPresentation(data);
+  if (presentation.decisionState === "WITHHELD") return null;
+  const p = presentation.topOutcomeProbability;
+  const outcome = presentation.topOutcome?.replaceAll("_", " ");
+  const ci = data.uncertainty?.credible_interval;
+  const caveats = data.actionability?.caveats ?? [];
+  const advisory = data.evidence_quality.advisory_gaps;
+
+  return (
+    <section
+      aria-labelledby="counter-case-heading"
+      className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3.5 sm:p-4 space-y-2"
+    >
+      <p id="counter-case-heading" className="text-[10px] font-bold uppercase tracking-wider text-amber-200/80">
+        Why this might fail
+      </p>
+      <ul className="space-y-1.5 text-sm text-slate-300">
+        {p !== null && outcome && (
+          <li>
+            The model gives <strong className="text-white">{outcome}</strong> a {pct(p)} chance, so it
+            loses {pct(1 - p)} of the time.
+          </li>
+        )}
+        <li>
+          {ci
+            ? `Model uncertainty interval: ${pct(ci[0])} to ${pct(ci[1])}.`
+            : "Model uncertainty is unavailable for this fixture; no interval is inferred."}
+        </li>
+        <li>
+          Calibration is judged per serving model once 200 forecasts have settled; the Performance page
+          shows the live figures.
+        </li>
+        {caveats.map((caveat) => (
+          <li key={caveat}>{caveat}</li>
+        ))}
+        {advisory.length > 0 && (
+          <li>
+            Missing, non-blocking evidence: {advisory.slice(0, 3).map(describeEvidenceCode).join("; ")}
+            {advisory.length > 3 ? `, and ${advisory.length - 3} more` : ""}.
+          </li>
+        )}
+      </ul>
+    </section>
   );
 }
 
@@ -1599,6 +1692,7 @@ function FullAnalysisDashboardInner({
 
       {/* ── WP-E: Evidence status card (why no prediction, structured breakdown) ── */}
       <EvidenceStatusCard data={data} />
+      <CounterCase data={data} />
 
       {/* ── Evidence Passport (Phase 5): always-visible per-family provenance/freshness/status ── */}
       <EvidencePassport data={data} />
