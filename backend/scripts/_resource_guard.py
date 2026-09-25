@@ -9,23 +9,30 @@ twice a second, records the peak, and stops the job past the ceiling.
         train()
     manifest["resources"] = guard.summary()
 
-The ceiling is ``SABISCORE_MAX_RSS_MB`` (default 3072). Stopping kills child
-processes first, then interrupts the main thread; a main thread busy inside one
-long C call (a single xgboost fit) is interrupted when that call returns.
-# ponytail: interrupt_main is cooperative; a hard kill (os._exit) would lose the
-# structured error. Upgrade only if a C-level fit is observed blowing past it.
+The ceiling is ``SABISCORE_MAX_RSS_MB`` (default 3072). Past it, children are
+killed and, with ``hard_exit=True`` (the default, for scripts), one JSON line is
+written to stderr and the process exits 137: the point is to protect the
+machine, and a job already past its budget has nothing left worth saving. With
+``hard_exit=False`` the block runs to the end and ``__exit__`` raises
+``ResourceCeilingExceeded``.
+
+An earlier version used ``_thread.interrupt_main()``. That signal is delivered
+asynchronously, so when the sampler fired as the block ended the
+``KeyboardInterrupt`` landed in whatever ran next; in CI it aborted pytest itself.
 """
 
 from __future__ import annotations
 
-import _thread
+import json
 import os
+import sys
 import threading
 import time
 
 import psutil
 
 _MB = 1024 * 1024
+EXIT_CODE = 137  # conventional "killed for memory"
 
 
 class ResourceCeilingExceeded(MemoryError):
@@ -49,13 +56,19 @@ def _tree_rss_mb() -> float:
 
 
 class ResourceGuard:
-    def __init__(self, max_mb: float | None = None, interval_s: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_mb: float | None = None,
+        interval_s: float = 0.5,
+        hard_exit: bool = True,
+    ) -> None:
         self.max_mb = (
             float(max_mb)
             if max_mb is not None
             else float(os.environ.get("SABISCORE_MAX_RSS_MB", "3072"))
         )
         self.interval_s = interval_s
+        self.hard_exit = hard_exit
         self.peak_mb = 0.0
         self.runtime_s = 0.0
         self.exceeded = False
@@ -69,16 +82,31 @@ class ResourceGuard:
             pass
         return self.peak_mb > self.max_mb
 
+    def _stop_job(self) -> None:
+        for child in psutil.Process().children(recursive=True):
+            try:
+                child.kill()
+            except psutil.Error:
+                pass
+        if self.hard_exit:
+            sys.stderr.write(
+                json.dumps(
+                    {
+                        "error": "rss_ceiling_exceeded",
+                        "peak_rss_mb": round(self.peak_mb, 1),
+                        "rss_ceiling_mb": self.max_mb,
+                    }
+                )
+                + "\n"
+            )
+            sys.stderr.flush()
+            os._exit(EXIT_CODE)
+
     def _sample(self) -> None:
         while not self._stop.wait(self.interval_s):
             if self._record():
                 self.exceeded = True
-                for child in psutil.Process().children(recursive=True):
-                    try:
-                        child.kill()
-                    except psutil.Error:
-                        pass
-                _thread.interrupt_main()
+                self._stop_job()
                 return
 
     def __enter__(self) -> "ResourceGuard":
