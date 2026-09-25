@@ -62,10 +62,16 @@ class ResourceGuard:
         self._stop = threading.Event()
         self._started = 0.0
 
+    def _record(self) -> bool:
+        try:
+            self.peak_mb = max(self.peak_mb, _tree_rss_mb())
+        except psutil.Error:  # a child exiting mid-scan must not kill the sampler
+            pass
+        return self.peak_mb > self.max_mb
+
     def _sample(self) -> None:
         while not self._stop.wait(self.interval_s):
-            self.peak_mb = max(self.peak_mb, _tree_rss_mb())
-            if self.peak_mb > self.max_mb:
+            if self._record():
                 self.exceeded = True
                 for child in psutil.Process().children(recursive=True):
                     try:
@@ -86,6 +92,10 @@ class ResourceGuard:
         self._stop.set()
         self._thread.join()
         self.runtime_s = time.monotonic() - self._started
+        # A final reading: a peak between samples, or a sampler that never got
+        # scheduled, must not let an over-ceiling job pass as within budget.
+        if self._record():
+            self.exceeded = True
         if self.exceeded:
             raise ResourceCeilingExceeded(self.peak_mb, self.max_mb) from exc
         return False
