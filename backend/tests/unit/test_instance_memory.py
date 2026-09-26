@@ -87,3 +87,17 @@ def test_reclaimable_file_cache_is_not_counted_against_headroom(tmp_path, monkey
     assert memory["cgroup_current_mb"] == 507
     assert memory["cgroup_working_set_mb"] == 387
     assert memory["headroom_mb"] == 125
+    # The working set is split so a gap above RSS can be attributed.
+    assert (memory["cgroup_anon_mb"], memory["cgroup_active_file_mb"]) == (381, 6)
+
+
+def test_breakdown_is_absent_when_the_stat_file_lacks_it(tmp_path, monkeypatch):
+    mb = 1024 * 1024
+    monkeypatch.setattr(
+        monitoring,
+        "_CGROUP_MEMORY_FILES",
+        _files(tmp_path, str(400 * mb), str(512 * mb), f"inactive_file {10 * mb}\n"),
+    )
+    memory = monitoring._instance_memory()
+    assert memory["cgroup_anon_mb"] is None  # never a substitute such as RSS
+    assert memory["cgroup_active_file_mb"] is None

@@ -1,5 +1,5 @@
 import type { EvidenceStateDescriptor } from "./evidence-state";
-import { groupEvidenceGaps } from "./full-analysis-contract";
+import { formatLagosTimestamp, groupEvidenceGaps } from "./full-analysis-contract";
 
 /**
  * Evidence Passport — per-family resolution status for /match/[id]
@@ -63,12 +63,29 @@ export function formatEvidenceAge(seconds: number | null): string {
   return `${Math.floor(seconds / 86_400)}d ago`;
 }
 
+// v11 U13: who quoted the displayed price and when SabiScore captured it, from
+// the market block's own fields. Nothing is shown for a part that is unknown.
+function marketSourceLine(source: MarketSource | null | undefined): string | null {
+  if (!source) return null;
+  const parts = [
+    source.bookmaker ? titleCase(source.bookmaker) : null,
+    source.capturedAt ? `captured ${formatLagosTimestamp(source.capturedAt)} WAT` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+export interface MarketSource {
+  bookmaker?: string | null;
+  capturedAt?: string | null;
+}
+
 export function buildEvidencePassport(input: {
   fieldAvailability: Record<string, boolean>;
   unavailableReasons: Record<string, string>;
   advisoryGaps: readonly string[];
+  marketSource?: MarketSource | null;
 }): EvidencePassportRow[] {
-  const { fieldAvailability, unavailableReasons, advisoryGaps } = input;
+  const { fieldAvailability, unavailableReasons, advisoryGaps, marketSource } = input;
   const gapCountByLabel = new Map(groupEvidenceGaps(advisoryGaps).map((g) => [g.label, g.count]));
 
   const keys = Object.keys(fieldAvailability);
@@ -84,13 +101,20 @@ export function buildEvidencePassport(input: {
       0,
     );
 
+    // The count used to ride in the chip as "Resolved · 1", with no unit.
+    const gapNote = gapCount > 0 ? `${gapCount} field${gapCount === 1 ? "" : "s"} missing` : null;
+    const parts = resolved
+      ? [key === "market" ? marketSourceLine(marketSource) : null, gapNote]
+      : [unavailableReasons[key] ?? "Evidence unavailable for this family.", gapNote];
+    const reason = parts.filter(Boolean).join(" · ") || null;
+
     return {
       key,
       label: FAMILY_LABELS[key] ?? titleCase(key),
       resolved,
       statusLabel: resolved ? "Resolved" : "Gapped",
       tone: resolved ? "positive" : "warning",
-      reason: resolved ? null : unavailableReasons[key] ?? "Evidence unavailable for this family.",
+      reason,
       gapCount,
     };
   });

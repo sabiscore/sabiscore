@@ -129,8 +129,13 @@ const defaultOddsForm = (): OddsForm => {
   };
 };
 
-function statusText(evidence?: FixtureEvidenceResponse | null) {
-  if (!evidence) return "Select a fixture to retrieve evidence.";
+function statusText(evidence: FixtureEvidenceResponse | null | undefined, hasFixture: boolean) {
+  // Live 2026-09-26 this read "Select a fixture" under a selected fixture's name.
+  if (!evidence) {
+    return hasFixture
+      ? "Evidence has not been retrieved for this fixture yet."
+      : "Select a fixture to retrieve evidence.";
+  }
   if (Object.values(evidence.source_status).some((statusValue) => statusValue === "CONFLICTING")) {
     return "Source conflict detected. The engine will fail closed until the conflict is resolved.";
   }
@@ -166,7 +171,9 @@ function stateBadge(
   if (result) {
     return { label: VERDICT_LABEL[result.verdict].action, tone: VERDICT_LABEL[result.verdict].tone, detail: result.explanation };
   }
-  return { label: "FORECAST ONLY", tone: "neutral", detail: "Retrieve evidence, then submit one coherent odds snapshot before value analysis." };
+  // Not a second copy of the next-action line below it ("Retrieve evidence,
+  // confirm odds, then run analysis."): this line is the consequence.
+  return { label: "FORECAST ONLY", tone: "neutral", detail: "Market value stays unavailable until one coherent odds snapshot is confirmed." };
 }
 
 function nextActionText(
@@ -620,7 +627,7 @@ export function BettingIntelligenceDashboard() {
               <div>
                 <div className="bi-panel-title"><CheckCircle2 size={16} /> Current State</div>
                 <strong>{selectedFixture ? `${selectedFixture.home_team} vs ${selectedFixture.away_team}` : "No fixture selected"}</strong>
-                <p className="bi-muted">{statusText(evidence)}</p>
+                <p className="bi-muted">{statusText(evidence, Boolean(selectedFixture))}</p>
                 <p className="bi-muted">{currentState.detail}</p>
                 <p className="bi-next-action">{nextAction}</p>
               </div>

@@ -1,5 +1,73 @@
 # SabiScore Debt Ledger
 
+## 159. Directive v11 pass: #248's sign-in fix never ran live, every share link was dead, and the cookie banner's choices were ignored — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v11-pass`.
+**Found:** 21 screenshots of `web-ac2qmk2dr-oversabis-projects.vercel.app` (footer `a8b5a5c`, which is
+the production SHA for web and backend, so they are current), a Render log from 16:07–16:41 UTC, and
+live probes.
+
+**#248 post-deploy checks (v11 §5):** 1 pass (`match_date` ends `+00:00`; PSV reads 19:00 WAT);
+2 pass (no `NextjsClientStackFrameNormalization` in any of the homepage's 26 chunks); 3 pass (`cadence`
+per provider); 4 pass (`prediction_capture.recent` is `[]`); **5 fails**; 6 pass ("No odds snapshot").
+Memory at the probe: RSS 400 MB, working set 332 of 512 MB, headroom 179 MB.
+
+1. **Check 5: the pinned host still sent its own URL to Google.** `/api/auth/google/start` on
+   `web-ac2qmk2dr` returned 307 straight to Google with that host as `redirect_uri`, which is the
+   `redirect_uri_mismatch` in the screenshots. Root cause: **the Vercel project builds from `apps/web`
+   and never reads the root `vercel.json`**, where `NEXT_PUBLIC_SITE_URL` is declared (live
+   `X-Frame-Options` is `apps/web/vercel.json`'s `DENY`, not the root file's `SAMEORIGIN`). With the
+   variable unset, `canonicalSignInOrigin` parsed `""`, threw, and its `catch` skipped the redirect.
+   Every existing test stubbed the variable production lacks. The same unset variable put the
+   per-deployment host in `og:url` and `robots.txt`, and sent share links and match/team JSON-LD to
+   `sabiscore.com`, which does not resolve. `lib/site-url.ts` `siteUrl()` now reads it in one place
+   and defaults to `https://sabiscore.vercel.app`, never `VERCEL_URL` and never an unresolved domain.
+   Guards: a sign-in test with the variable unset (failed on the old helper), and a scan that names
+   any second reader of the variable (watched naming `MatchShareModal.tsx`). ⚠️ O2 still applies:
+   Google must also have `https://sabiscore.vercel.app/api/auth/google/callback` registered. The root
+   `vercel.json` is dead configuration for this project; left in place, flagged here.
+2. **M1 committed.** `/health` → `resources.memory` gains `cgroup_anon_mb` and
+   `cgroup_active_file_mb` (from `memory.stat`; absent keys report `None`). Recovered from the
+   uncommitted change another session left in the main checkout; both assertions fail with the
+   source reverted.
+3. **U11: one decision state per card.** PSV read "Withheld · Partial Data · Not evaluable" over
+   "Not enough verified data — this model hasn't passed certification yet", with a forecast and a
+   resolved market. The badge is the state; a withheld card's headline is its first blocking reason
+   (no "not enough data" prefix, which was false for certification and uncertainty codes); the verdict
+   tier is in the evidence line. The homepage glossary defines Play, Pass and Withheld. The badge
+   moved to `components/decision-state-badge.tsx` so the homepage does not load the dashboard.
+4. **U13: the passport names its price.** The market block carries `bookmaker` and `captured_at`
+   from the odds record (kept through the cache); the market row reads "Pinnacle · captured 9 Oct
+   2026, 16:02 WAT". "Resolved · 1" had no unit; the count is now "1 field missing" in the row text.
+5. **U14: one consent step, and the choice is honoured.** The 18+ gate was followed by a bottom
+   cookie banner over the market table at 360 px. Its analytics, marketing and personalization toggles
+   were read by nothing: `lib/analytics.ts` sent events to `/api/analytics/events` whatever the visitor
+   chose, the site has no advertising, and its Privacy Policy link was a 404. The gate now asks once
+   (18+ with usage counts, 18+ essential only, or exit), and `analytics.track()` sends only with an
+   explicit yes. ⚠️ Visible change: analytics now counts only visitors who opt in.
+6. **Statements with no measurement behind them:**
+   - `REQUIRED_MODEL_INPUTS_UNAVAILABLE` said form, head-to-head **and** market were missing. It fires
+     when either side has no history **or** the market was a placeholder; the hypothetical
+     Arsenal–Bournemouth had form and head-to-head, and only market fields were gapped. Same and/or
+     error in the insights 422 state.
+   - "BNN Uncertainty": no Bayesian network exists (item 42); the method is ensemble dispersion
+     (ADR 0009). Now "Model uncertainty".
+   - `/intelligence` said "Select a fixture" under a selected fixture's name, then gave one
+     instruction twice.
+   - The loading footer said "calibrated per league · verified evidence only". The served calibrator
+     worsens RPS (item 142), and a hypothetical is not verified evidence.
+7. **Not built:** U12 (waits on O8 d) and the C6 freeze (O8). Unchanged: every fixture is Withheld.
+
+**Verification (2026-09-26, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
+465/465 across 68 files; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, `/` 227 kB).
+Every new or changed guard was watched failing on the old code. Backend 2,793 passed, 19 skipped,
+1 xfailed, 0 failed (40 min in this worktree); ruff clean; mypy 755, unchanged (ceiling 784).
+Playwright desktop and mobile 4/4. A local production build against the live backend showed one
+consent dialog at 360 px (top not clipped, scrolls to its buttons), the PSV card as `[Withheld] This
+model hasn't passed certification yet.` with 0 px horizontal overflow, the new required-inputs copy
+on the hypothetical, and `robots.txt` naming `sabiscore.vercel.app`. An independent review agent
+found no verified defects; its one nit (a duplicated host literal on `/developer`) is fixed.
+
 ## 158. Directive v10 live pass: the close came from a soft book, kickoffs read an hour early in Lagos, and the Sentry SDK doubled every page's JS — RESOLVED in code (verify after deploy); C6 drafted, awaiting O8
 
 **Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v10-live-pass`. C6 is a DRAFT

@@ -819,7 +819,9 @@ export function MatchLoadingExperience({
         transition={{ delay: 0.8 }}
         className="mt-3 text-center text-[10px] text-slate-400"
       >
-        Ensemble ML models · calibrated per league · verified evidence only
+        {/* Not "calibrated per league · verified evidence only": the served calibrator
+            worsens RPS (DEBT 142), and a hypothetical matchup is not verified evidence. */}
+        One ensemble model per league · missing evidence is shown, never filled in
       </motion.p>
     </div>
   );

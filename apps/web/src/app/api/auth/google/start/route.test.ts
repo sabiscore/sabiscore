@@ -57,6 +57,23 @@ describe("/api/auth/google/start", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  // Live 2026-09-26, after the test above shipped: web-ac2qmk2dr still sent its own
+  // host to Google. Production has no NEXT_PUBLIC_SITE_URL (the project never reads
+  // the root vercel.json that sets it), and every test here stubbed it.
+  it("reaches the canonical host when NEXT_PUBLIC_SITE_URL is unset, as it is in production", async () => {
+    vi.stubEnv("AUTH_GOOGLE_ID", "cid");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+
+    const response = await GET(
+      new NextRequest("https://web-ac2qmk2dr-oversabis-projects.vercel.app/api/auth/google/start?next=/match"),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://sabiscore.vercel.app/api/auth/google/start?next=/match",
+    );
+  });
+
   it("never redirects the canonical host to itself, whatever scheme a proxy reports", async () => {
     vi.stubEnv("AUTH_GOOGLE_ID", "cid");
     vi.stubEnv("VERCEL_ENV", "production");

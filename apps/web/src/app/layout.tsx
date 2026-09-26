@@ -25,10 +25,9 @@ import { MobilePlatformSummary } from "../components/mobile-platform-summary";
 import { SabiScoreBrand } from "../components/brand/sabiscore-brand";
 import { NotificationCenter } from "../components/NotificationCenter";
 import { UserNav } from "../components/auth/user-nav";
+import { siteUrl } from "@/lib/site-url";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://sabiscore.com");
+const SITE_URL = siteUrl();
 
 const WORKSPACE_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },

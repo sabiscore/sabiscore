@@ -141,6 +141,16 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
     await waitFor(() => expect(getUpcomingFixtures).toHaveBeenCalled());
   });
 
+  it("names the selected fixture's state instead of asking for a selection", async () => {
+    render(<BettingIntelligenceDashboard />);
+    const status = await screen.findByText("Evidence has not been retrieved for this fixture yet.");
+    const card = status.closest("section")!;
+    expect(card).toHaveTextContent("Arsenal vs Chelsea");
+    expect(card).not.toHaveTextContent(/Select a fixture/);
+    // Each line says something different: state, consequence, next action.
+    expect(card.textContent!.match(/Retrieve evidence/g)).toHaveLength(1);
+  });
+
   it("renders source conflict state after evidence retrieval", async () => {
     getFixtureEvidence.mockResolvedValue({
       fixture,

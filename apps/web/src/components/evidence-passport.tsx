@@ -25,6 +25,9 @@ export function EvidencePassport({ data }: { data: FullMatchAnalysisResponse }) 
     fieldAvailability: data.field_availability,
     unavailableReasons: data.unavailable_reasons,
     advisoryGaps: data.evidence_quality.advisory_gaps,
+    marketSource: data.market
+      ? { bookmaker: data.market.bookmaker, capturedAt: data.market.captured_at }
+      : null,
   });
 
   return (
@@ -51,7 +54,6 @@ export function EvidencePassport({ data }: { data: FullMatchAnalysisResponse }) 
                 )}
               >
                 {row.statusLabel}
-                {row.gapCount > 0 ? ` · ${row.gapCount}` : ""}
               </span>
             </div>
             {row.reason && <p className="text-xs text-slate-400">{row.reason}</p>}

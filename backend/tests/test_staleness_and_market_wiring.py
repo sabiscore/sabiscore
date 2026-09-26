@@ -353,6 +353,29 @@ def test_market_block_publishes_expected_value_only_when_evaluable():
     assert endpoint._market_block({"home_win": 1.0, "draw": 3, "away_win": 3}, model_probs=probs, evaluable=True) is None
 
 
+def test_market_block_names_the_book_and_capture_time_of_its_prices():
+    """v11 U13: the passport's market row names who quoted the displayed price
+    and when SabiScore captured it. Unknown stays None, never a substitute."""
+    from src.schemas.full_analysis import FullMatchMarketResponse
+
+    odds = {
+        "home_win": 1.24,
+        "draw": 7.36,
+        "away_win": 8.65,
+        "bookmaker": "pinnacle",
+        "timestamp": "2026-10-09T15:02:00Z",
+    }
+    block = endpoint._market_block(odds, model_probs=None, evaluable=False)
+    assert block["bookmaker"] == "pinnacle"
+    assert block["captured_at"] == "2026-10-09T15:02:00+00:00"
+    FullMatchMarketResponse.model_validate(block)
+
+    bare = endpoint._market_block(
+        {"home_win": 1.24, "draw": 7.36, "away_win": 8.65}, model_probs=None, evaluable=False
+    )
+    assert bare["bookmaker"] is None and bare["captured_at"] is None
+
+
 def test_schema_refuses_expected_value_on_a_non_evaluable_market():
     from src.schemas.full_analysis import FullMatchMarketResponse
 
