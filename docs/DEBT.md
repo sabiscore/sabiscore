@@ -60,7 +60,13 @@ Memory at the probe: RSS 400 MB, working set 332 of 512 MB, headroom 179 MB.
 
 **Verification (2026-09-26, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
 465/465 across 68 files; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, `/` 227 kB).
-Every new or changed guard was watched failing on the old code. Backend: see the PR.
+Every new or changed guard was watched failing on the old code. Backend 2,793 passed, 19 skipped,
+1 xfailed, 0 failed (40 min in this worktree); ruff clean; mypy 755, unchanged (ceiling 784).
+Playwright desktop and mobile 4/4. A local production build against the live backend showed one
+consent dialog at 360 px (top not clipped, scrolls to its buttons), the PSV card as `[Withheld] This
+model hasn't passed certification yet.` with 0 px horizontal overflow, the new required-inputs copy
+on the hypothetical, and `robots.txt` naming `sabiscore.vercel.app`. An independent review agent
+found no verified defects; its one nit (a duplicated host literal on `/developer`) is fixed.
 
 ## 158. Directive v10 live pass: the close came from a soft book, kickoffs read an hour early in Lagos, and the Sentry SDK doubled every page's JS — RESOLVED in code (verify after deploy); C6 drafted, awaiting O8
 
