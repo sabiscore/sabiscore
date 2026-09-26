@@ -48,8 +48,8 @@ class WhoScoredScraper(BaseScraper):
         """
         Fetch match statistics.
 
-        In development, returns simulated statistics.
-        Production implementation would use Playwright.
+        Returns None: WhoScored needs a headless browser, which is not
+        implemented. It never simulates statistics.
         """
         logger.info(f"Fetching WhoScored stats for {home_team} vs {away_team}")
         # WhoScored requires a headless browser (Playwright/Selenium); not yet implemented.
