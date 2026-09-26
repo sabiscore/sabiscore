@@ -42,7 +42,9 @@ describe("MatchShareModal", () => {
     await waitFor(() => expect(clipboardWrite).toHaveBeenCalledTimes(1));
     const sharedText = clipboardWrite.mock.calls[0]?.[0] ?? "";
     expect(sharedText).toContain("SabiScore match intelligence: Arsenal vs Chelsea");
-    expect(sharedText).toContain("https://sabiscore.com/match/fd-123?league=EPL");
+    // The canonical alias, not sabiscore.com: that domain does not resolve, so
+    // every shared link was dead (2026-09-26).
+    expect(sharedText).toContain("https://sabiscore.vercel.app/match/fd-123?league=EPL");
     expect(sharedText).not.toContain(window.location.origin);
     expect(sharedText).not.toMatch(/Forecast:|Verdict:|Verified quantitative evidence/);
   });

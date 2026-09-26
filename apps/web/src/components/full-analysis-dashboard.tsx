@@ -58,7 +58,6 @@ interface FullAnalysisDashboardProps {
 
 // ─── Verdict config ───────────────────────────────────────────────────────────
 
-type Verdict = FullMatchAnalysisResponse["verdict"];
 type FullAnalysisPresentation = ReturnType<typeof mapFullAnalysisPresentation>;
 
 const VERDICT_META = VERDICT_TOKENS;
@@ -249,7 +248,7 @@ export function EnhancedMatchHero({
         )}
         {/* v11 U11: the verdict tier is evidence detail, not a second headline state. */}
         <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
-          Verdict: {meta.label} · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
+          Verdict: <span className="text-slate-300">{meta.label}</span> · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
         </p>
       </section>
       {/* ── Teams clash ── */}
