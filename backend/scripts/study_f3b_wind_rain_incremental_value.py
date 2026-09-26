@@ -87,7 +87,7 @@ def main() -> int:
         )
     }
     result = verdict(arms)
-    heavy = sum(1 for r in rows if r["heavy_rain"] == 1.0)
+    heavy = int(sum(r["heavy_rain"] for r in rows))  # a 0/1 indicator; no float equality
     report: dict[str, Any] = {
         "experiment_id": "F3b",
         "protocol_path": "reports/research/f3b-weather-wind-rain-protocol.json",
