@@ -1,5 +1,53 @@
 # SabiScore Debt Ledger
 
+## 154. A fabricated "Fresh", a green edge with no counter-case, and an evidence query that sorted its whole log — RESOLVED (verify after deploy); prediction capture has no scheduled input — OPEN
+
+**Tier:** `RESOLVED` for items 1–5, `OPEN` for item 6. Date: 2026-09-26.
+
+**Found:** screenshots of `web-4vvyi2f61-oversabis-projects.vercel.app` and a Render log excerpt.
+The screenshot host serves `f9d8743`, a pinned deployment from before #243, so its Google-sign-in
+error and duplicate "Partial" chips were already fixed on production (`851e961`). Every item below
+was re-checked against the production alias or the live API.
+
+1. **"Fresh" with nothing measured.** `StatsBombAggregator` returned `staleness_seconds=0` for a
+   missing, unreadable or empty cache, and for rows without dates. Production cannot read the cache
+   (no `pyarrow`), so PSV–Heerenveen (`fd-558881`) showed FRESH. `staleness_seconds` is the only
+   input to the match freshness pill, and the same 0 also gave `edge_quality_score` full freshness
+   credit. The aggregator now returns `None` when nothing was measured; the projector takes the
+   oldest measured side, or `None` (`_enrichment_staleness`). Guard:
+   `test_statsbomb_unmeasured_freshness.py` (2 of its 3 tests fail on the old aggregator).
+2. **"Why no prediction" above a forecast.** `EvidenceStatusCard` is shown whenever no stake is
+   permitted, and it always used that title. It now reads "Why no stake" when a forecast exists.
+3. **A positive edge with no counter-case.** `CounterCase` returned `null` for every WITHHELD
+   fixture, on the assumption that a withheld fixture has no forecast. An uncertified generation
+   withholds fixtures that do have one, so the draw's +8.3pp gap at 7.36 appeared alone. The
+   counter-case now renders whenever a forecast exists, says an uncertified model's gap is not
+   evidence of value, and skips the uncertainty line when the status card already lists it.
+4. **Edge colour followed the sign, not the decision.** `EdgeDeltaBar` and `OddsEdgeCard` are
+   emerald only when `stake_permitted`; otherwise they are neutral, and the sign is still printed.
+   One existing assertion (`betting-safety-audit.test.tsx`) pinned the old title on a payload that
+   carries a forecast and was updated. Guards for items 2–4 are in `full-analysis-dashboard.test.tsx`;
+   all three fail on the old component.
+5. **The evidence query sorted every row it had ever logged, on every call.** The header polls
+   `/providers/evidence` every 30 s per open tab. Two `row_number()` windows sorted every
+   `provider_health_log` row, `details` JSON included: about 9,800 rows, and 489–1,438 ms
+   server-side. It is now one `ORDER BY checked_at DESC, id DESC LIMIT 128` query per provider on
+   `ix_provider_health_provider_time`; list position i is exactly the old `rn = i + 1`. Guards:
+   `test_evidence_query_never_sorts_the_whole_log` (fails on the old query) and
+   `test_contexts_come_only_from_the_newest_lookback_rows` (passes on both, which pins that the
+   behaviour is unchanged). The table itself still grows; retention is directive v9 R2.
+6. **OPEN: nothing captures predictions unless someone opens a fixture.** `persist_prediction_log`
+   is called only from `/full-analysis`, `/predictions` and the analytics service, all on request.
+   The served generation has 0 settled predictions, and settled volume follows traffic rather than
+   fixtures, so C6 (200 under one identity) may never arrive. Fix: directive v9 L4, a pre-kickoff
+   capture on the CLV tick. Deadline: the 9 Oct fixtures.
+
+Also recorded: the fixture list never measures freshness (`include_predictions=false`), so its
+chip read "Unknown" on every row. The chip is now shown only when freshness was measured.
+
+Verification: backend 2,757 passed, 19 skipped, 1 xfailed, 0 failed; mypy 769 (unchanged, ceiling
+784); ruff clean on touched files; web Vitest 424/424, lint 0, typecheck 0.
+
 ## 153. Live-evidence pass 2026-09-25: four client defects fixed; the keep-alive cannot keep the backend awake — PARTIAL (operator steps below)
 
 **Tier:** `PARTIAL` — 2026-09-25. **Found:** a Render log excerpt and 17 screenshots of the live site,

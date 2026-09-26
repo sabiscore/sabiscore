@@ -288,3 +288,54 @@ async def test_observation_sink_failure_never_changes_provider_result() -> None:
     result = await registry.get("dummy").fixtures()
 
     assert result.status is ProviderStatus.VERIFIED
+
+
+async def _seed_contexts(factory, competitions: list[str]) -> None:
+    """One VERIFIED row per competition, oldest first."""
+    recorder = ProviderEvidenceRecorder()
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        for minute, competition in enumerate(competitions):
+            result = _result()
+            result.acquired_at = datetime(2026, 8, 17, 0, minute, tzinfo=timezone.utc)
+            result.request_context = {**result.request_context, "competition": competition}
+            await recorder.record_result(result, duration_ms=5.0, circuit_open=False)
+
+
+async def test_contexts_come_only_from_the_newest_lookback_rows(factory, monkeypatch) -> None:
+    import src.services.provider_evidence_service as svc
+
+    monkeypatch.setattr(svc, "_PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER", 2)
+    await _seed_contexts(factory, ["SERIE_A", "LA_LIGA", "EPL"])
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session, ["test_provider"], now=datetime(2026, 8, 17, 0, 30, tzinfo=timezone.utc)
+        )
+
+    row = evidence["test_provider"]
+    competitions = sorted(c["request_context"]["competition"] for c in row["contexts"])
+    assert competitions == ["EPL", "LA_LIGA"]  # SERIE_A is the third-newest row
+    assert row["request_context"]["competition"] == "EPL"
+    assert row["observations"] == 3
+
+
+async def test_evidence_query_never_sorts_the_whole_log(factory) -> None:
+    """The header polls this every 30 s; the log grows forever. A window over the
+    whole partition read every row (details JSON included) on every call."""
+    from sqlalchemy import event
+
+    await _seed_contexts(factory, ["EPL"])
+    statements: list[str] = []
+
+    async with factory() as session:
+        sync_engine = session.bind.sync_engine
+        listener = lambda *args: statements.append(str(args[2]).lower())  # noqa: E731
+        event.listen(sync_engine, "before_cursor_execute", listener)
+        try:
+            await latest_provider_evidence(session, ["test_provider"])
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", listener)
+
+    assert not any("over (" in sql for sql in statements)
+    detail_reads = [sql for sql in statements if "provider_health_log.details" in sql]
+    assert detail_reads and all(" limit " in sql for sql in detail_reads)

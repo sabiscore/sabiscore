@@ -716,37 +716,40 @@ async def latest_provider_evidence(
         ).all()
     )
 
-    ranked = (
-        select(
-            ProviderHealthLog.id.label("id"),
-            ProviderHealthLog.provider.label("provider"),
-            ProviderHealthLog.status.label("status"),
-            ProviderHealthLog.checked_at.label("checked_at"),
-            ProviderHealthLog.latency_ms.label("latency_ms"),
-            ProviderHealthLog.error_code.label("error_code"),
-            ProviderHealthLog.details.label("details"),
-            func.row_number()
-            .over(
-                partition_by=ProviderHealthLog.provider,
-                order_by=[
-                    ProviderHealthLog.checked_at.desc(),
-                    ProviderHealthLog.id.desc(),
-                ],
-            )
-            .label("rn"),
-        )
-        .where(ProviderHealthLog.provider.in_(provider_list))
-        .subquery()
-    )
     reference_now = _utc_naive(now or datetime.now(timezone.utc))
     if reference_now is None:  # defensive; the expression above is always a datetime
         raise RuntimeError("unable to derive provider evidence reference time")
 
-    latest_result = await session.execute(select(ranked).where(ranked.c.rn == 1))
-    for row in latest_result.mappings().all():
-        provider = str(row["provider"])
+    # One bounded query per provider, newest first, served by
+    # ix_provider_health_provider_time. A row_number() window over the whole
+    # partition sorted every row ever logged (details JSON included) on every
+    # call; at ~10k rows that took 0.5-1.4 s, and the header polls this every
+    # 30 s per open tab while the table grows by a row every few minutes.
+    # Position i in this list is exactly the window's rn = i + 1.
+    columns = (
+        ProviderHealthLog.id.label("id"),
+        ProviderHealthLog.provider.label("provider"),
+        ProviderHealthLog.status.label("status"),
+        ProviderHealthLog.checked_at.label("checked_at"),
+        ProviderHealthLog.latency_ms.label("latency_ms"),
+        ProviderHealthLog.error_code.label("error_code"),
+        ProviderHealthLog.details.label("details"),
+    )
+    recent_by_provider: dict[str, list[Any]] = {}
+    for provider in provider_list:
+        result = await session.execute(
+            select(*columns)
+            .where(ProviderHealthLog.provider == provider)
+            .order_by(ProviderHealthLog.checked_at.desc(), ProviderHealthLog.id.desc())
+            .limit(_PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER)
+        )
+        recent_by_provider[provider] = list(result.mappings().all())
+
+    for provider, rows in recent_by_provider.items():
+        if not rows:
+            continue
         latest = _materialize_evidence_row(
-            row,
+            rows[0],
             reference_now=reference_now,
             stale_after_seconds=stale_after_seconds,
         )
@@ -757,27 +760,23 @@ async def latest_provider_evidence(
     # stable context identity in Python. Date windows remain visible metadata but
     # are deliberately excluded from identity so each scheduled/results stream
     # evolves instead of creating an unbounded new context on every day.
-    recent_result = await session.execute(
-        select(ranked).where(ranked.c.rn <= _PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER)
-    )
     contexts_by_provider: dict[
         str,
         dict[tuple[str, str, str, str], tuple[int, dict[str, Any]]],
     ] = {provider: {} for provider in provider_list}
-    for row in recent_result.mappings().all():
-        provider = str(row["provider"])
-        evidence = _materialize_evidence_row(
-            row,
-            reference_now=reference_now,
-            stale_after_seconds=stale_after_seconds,
-        )
-        identity = _context_identity(evidence)
-        if identity is None:
-            continue
-        rank = int(row["rn"])
-        current = contexts_by_provider[provider].get(identity)
-        if current is None or rank < current[0]:
-            contexts_by_provider[provider][identity] = (rank, evidence)
+    for provider, rows in recent_by_provider.items():
+        for rank, row in enumerate(rows, start=1):
+            evidence = _materialize_evidence_row(
+                row,
+                reference_now=reference_now,
+                stale_after_seconds=stale_after_seconds,
+            )
+            identity = _context_identity(evidence)
+            if identity is None:
+                continue
+            current = contexts_by_provider[provider].get(identity)
+            if current is None or rank < current[0]:
+                contexts_by_provider[provider][identity] = (rank, evidence)
 
     for provider, context_map in contexts_by_provider.items():
         contexts = [entry[1] for entry in context_map.values()]

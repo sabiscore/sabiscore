@@ -263,7 +263,7 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
       // restated it beside the badge was removed as a duplicate.
       expect(screen.getAllByText("Partial Data").length).toBeGreaterThanOrEqual(1);
       expect(screen.queryByText("Partial")).not.toBeInTheDocument();
-      expect(screen.getByRole("region", { name: /why no prediction — evidence status/i })).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: /why no stake — evidence status/i })).toBeInTheDocument();
       expect(screen.getAllByText(/odds data unavailable/i).length).toBeGreaterThanOrEqual(1);
 
       expect(container.querySelectorAll("input")).toHaveLength(0);

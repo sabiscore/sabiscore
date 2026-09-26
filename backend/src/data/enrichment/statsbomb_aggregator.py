@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 class StatsBombFeatureResult:
     features: Dict[str, float]
     data_gaps: List[str]
-    staleness_seconds: int
+    # None when nothing was measured (unreadable or empty cache, no dated rows).
+    # 0 would read as "measured just now" and render as Fresh.
+    staleness_seconds: Optional[int]
 
 
 class StatsBombAggregator:
@@ -53,7 +55,7 @@ class StatsBombAggregator:
             return StatsBombFeatureResult(
                 features=self._default_features(),
                 data_gaps=list(self.FEATURE_COLUMNS),
-                staleness_seconds=0,
+                staleness_seconds=None,
             )
 
         league_rows = table[table["league"].astype(str).str.lower() == league.lower()]
@@ -77,7 +79,7 @@ class StatsBombAggregator:
         max_staleness = settings.statsbomb_staleness_max_days * 86_400
         # B13: if cache data exceeds the staleness window, treat ALL features as DATA_GAP
         # rather than surfacing stale values as if they were live.
-        if staleness > max_staleness > 0:
+        if staleness is not None and staleness > max_staleness > 0:
             logger.info(
                 "StatsBomb cache stale (%ds > limit %ds) for team %s — marking all features as DATA_GAP",
                 staleness,
@@ -130,12 +132,12 @@ class StatsBombAggregator:
                 )
             return pd.DataFrame()
 
-    def _staleness_seconds(self, rows: pd.DataFrame) -> int:
+    def _staleness_seconds(self, rows: pd.DataFrame) -> Optional[int]:
         if rows.empty or "match_date" not in rows.columns:
-            return 0
+            return None
         latest = pd.to_datetime(rows["match_date"], errors="coerce").max()
         if pd.isna(latest):
-            return 0
+            return None
         now = datetime.now(timezone.utc)
         latest_ts = latest.to_pydatetime()
         if latest_ts.tzinfo is None:

@@ -257,7 +257,10 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
 
   const confLabel = conf !== null ? ` · ${(conf * 100).toFixed(0)}% confidence` : "";
   const valueLabelPart = match.has_value ? " · value bet" : "";
-  const freshnessAria = ` · ${freshness.label.toLowerCase()} data`;
+  // This list is built without inference, so freshness is usually unmeasured.
+  // A chip reading "Unknown" on every row says nothing; show only a measurement.
+  const freshnessMeasured = freshness.label !== "Unknown";
+  const freshnessAria = freshnessMeasured ? ` · ${freshness.label.toLowerCase()} data` : "";
   const partialAria = hasDataGaps ? " · partial intelligence" : "";
   // A withheld stake is a safety decision, not decoration — it has to be
   // audible, not merely visible.
@@ -297,9 +300,11 @@ function MatchRow({ match }: { match: UpcomingMatch }) {
             })}
             {" WAT"}
           </span>
-          <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider", freshness.className)}>
-            {freshness.label}
-          </span>
+          {freshnessMeasured && (
+            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider", freshness.className)}>
+              {freshness.label}
+            </span>
+          )}
           {stage && <UCLStageBadge stage={stage} compact />}
           {hasDataGaps && (
             <span className="inline-flex items-center rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
