@@ -6,6 +6,8 @@
  * Strict zero third-party scripts and zero sensitive credentials logged.
  */
 
+import { analyticsConsented } from "./consent";
+
 export type AnalyticsEventName =
   | "match_viewed"
   | "prediction_inspected"
@@ -132,6 +134,8 @@ class AnalyticsTracker {
     eventName: AnalyticsEventName,
     properties: Record<string, unknown> = {}
   ): void {
+    // Opt-in: nothing is queued unless the visitor allowed usage counts.
+    if (!analyticsConsented()) return;
     try {
       const scrubbed = scrubProperties(properties) as Record<string, unknown>;
       const eventItem: AnalyticsEvent = {

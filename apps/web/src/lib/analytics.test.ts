@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { analytics, scrubProperties } from "./analytics";
+import { CONSENT_STORAGE_KEY, CONSENT_VERSION } from "./consent";
 
 describe("First-Party Privacy Analytics", () => {
   it("scrubs sensitive credential keys recursively from event payload", () => {
@@ -31,5 +32,30 @@ describe("First-Party Privacy Analytics", () => {
       analytics.track("prediction_inspected", { model_version: "v5" });
       analytics.track("share_card_generated", { match_id: "101" });
     }).not.toThrow();
+  });
+});
+
+describe("analytics consent (v11 U14)", () => {
+  // Until 2026-09-26 the tracker never read the consent record, so a visitor
+  // who chose "Essential Only" was still counted.
+  it("sends nothing unless the visitor allowed usage counts", () => {
+    const beacon = vi.fn(() => true);
+    Object.defineProperty(navigator, "sendBeacon", { value: beacon, configurable: true });
+
+    localStorage.clear();
+    analytics.track("match_viewed", { fixture_id: "1" });
+    analytics.flush();
+    expect(beacon).not.toHaveBeenCalled();
+
+    localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: CONSENT_VERSION, analytics: false }));
+    analytics.track("match_viewed", { fixture_id: "1" });
+    analytics.flush();
+    expect(beacon).not.toHaveBeenCalled();
+
+    localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: CONSENT_VERSION, analytics: true }));
+    analytics.track("match_viewed", { fixture_id: "1" });
+    analytics.flush();
+    expect(beacon).toHaveBeenCalledTimes(1);
+    localStorage.clear();
   });
 });
