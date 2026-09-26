@@ -24,6 +24,7 @@ import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 import { UncertaintyDisplay } from "./uncertainty-display";
 import { CausalInsights } from "./causal-insights";
 import { BettingAgentPanel } from "./betting-agent-panel";
+import { formatLagosTime } from "@/lib/lagos-time";
 
 interface InsightsDisplayProps {
   insights: InsightsResponse;
@@ -185,7 +186,7 @@ function InsightsDisplayInner({ insights }: InsightsDisplayProps) {
       ? "Draw"
       : null;
     const recordedAt = fanPulse?.poll?.timestamp
-      ? new Date(fanPulse.poll.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? `${formatLagosTime(fanPulse.poll.timestamp)} WAT`
       : null;
     return { totals, choiceKey, votes, share, teamLabel, recordedAt };
   }, [fanPulse?.poll, current.metadata.home_team, current.metadata.away_team]);
@@ -447,7 +448,7 @@ function InsightsDisplayInner({ insights }: InsightsDisplayProps) {
               ) : "--"}
             </p>
             {source.retrieved_at && (
-              <p className="text-xs text-slate-500">Fetched {new Date(source.retrieved_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="text-xs text-slate-500">Fetched {formatLagosTime(source.retrieved_at)} WAT</p>
             )}
           </div>
           <div className="rounded-lg border border-slate-800/50 bg-slate-900/50 p-3 flex items-center justify-between">

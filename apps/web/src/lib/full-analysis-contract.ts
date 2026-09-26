@@ -1,3 +1,4 @@
+import { formatLagosTimestamp } from "./lagos-time";
 import { z } from "zod";
 
 const verdictSchema = z.enum([
@@ -428,13 +429,7 @@ function relativeTime(iso: string, now: Date): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function formatLagosTimestamp(iso: string): string {
-  return new Intl.DateTimeFormat("en-NG", {
-    timeZone: "Africa/Lagos",
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
-}
+export { formatLagosTimestamp };
 
 /**
  * Plain-language readings of the backend's evidence codes.
