@@ -107,6 +107,12 @@ def _model_input_staleness_seconds(
     return max(0.0, now - newest_per_side)
 
 
+def _enrichment_staleness(*results: Any) -> Optional[int]:
+    """Oldest measured StatsBomb age, or None when neither side was measured."""
+    measured = [r.staleness_seconds for r in results if r.staleness_seconds is not None]
+    return max(measured) if measured else None
+
+
 # Canonical features resolved entirely by the CALLER (build_live_feature_vector /
 # build_live_feature_vector_from_matchup), not by project_match_features() itself:
 # elo/statsbomb (PHASE7_FEATURES_7 minus the always-gap shot_quality_diff — elo_engine
@@ -705,7 +711,7 @@ class UpcomingMatchFeatureProjector:
             | set(phase8_gaps)
             | (set() if elo.resolved else set(_ELO_OVERLAY_FEATURES))
         )
-        staleness_seconds = max(sb_home.staleness_seconds, sb_away.staleness_seconds)
+        staleness_seconds = _enrichment_staleness(sb_home, sb_away)
 
         identity_resolution = projected.get("identity_resolution") or {}
         fixture_identity_verified = bool(
@@ -854,7 +860,7 @@ class UpcomingMatchFeatureProjector:
             | set(phase8_gaps)
             | (set() if elo.resolved else set(_ELO_OVERLAY_FEATURES))
         )
-        staleness_seconds = max(sb_home.staleness_seconds, sb_away.staleness_seconds)
+        staleness_seconds = _enrichment_staleness(sb_home, sb_away)
 
         identity_resolution = projected.get("identity_resolution") or {}
         fixture_identity_verified = bool(

@@ -583,3 +583,71 @@ describe("result-owned analysis sharing", () => {
   });
 });
 
+
+describe("a withheld fixture that still carries a forecast (live fd-558881, 2026-09-25)", () => {
+  // Uncertified generation: the forecast exists, the stake is withheld, and the
+  // model puts the draw 8.3pp above the fair market price.
+  const withheldWithForecast = {
+    match_id: "fd-558881",
+    verdict: "PARTIAL",
+    prediction_status: "AVAILABLE",
+    prediction_source: "UNCERTIFIED_MODEL",
+    probabilities_available: true,
+    is_reduced_evidence_baseline: false,
+    top_outcome_probability: 0.646,
+    ensemble: {
+      home_win_prob: 0.646,
+      draw_prob: 0.211,
+      away_win_prob: 0.143,
+      prediction: "home_win",
+      probabilities_available: true,
+      league: "EREDIVISIE",
+      top_outcome_probability: 0.646,
+      certification_state: "UNVERIFIED",
+    },
+    effective_kelly_cap: 0.025,
+    stake_permitted: false,
+    partial_intelligence: true,
+    narrative: "No bet — insufficient verified evidence.",
+    freshness_tag: "UNKNOWN",
+    generated_at: "2026-09-25T19:09:00Z",
+    odds_edge: { market: "draw", market_odds: 7.36, model_prob: 0.211, edge: 0.083, kelly_stake: 0 },
+    rl_recommendation: { abstain: true, stake_fraction: 0, reason: null, reward_components: {} },
+    evidence_quality: {
+      critical_gaps: ["MODEL_GENERATION_UNCERTIFIED", "MODEL_UNCERTAINTY_UNAVAILABLE"],
+      advisory_gaps: [],
+      conflicts: [],
+      critical_gap_count: 2,
+      advisory_gap_count: 0,
+      conflict_count: 0,
+      total_gap_count: 2,
+    },
+  } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
+
+  it("titles the status card for the missing stake, not a missing prediction", () => {
+    render(<EvidenceStatusCard data={withheldWithForecast} />);
+    expect(screen.getByRole("region", { name: /why no stake/i })).toBeInTheDocument();
+    expect(screen.queryByText(/why no prediction/i)).not.toBeInTheDocument();
+  });
+
+  it("puts the counter-case beside the positive edge", () => {
+    const { container } = render(<CounterCase data={withheldWithForecast} />);
+    expect(container.textContent).toMatch(/Why this might fail/);
+    expect(container.textContent).toMatch(/loses 35\.4% of the time/);
+    expect(container.textContent).toMatch(/draw 8\.3pp above the fair market price.*not evidence of value/);
+    // Already listed as a blocking gap in the status card above.
+    expect(container.textContent).not.toMatch(/uncertainty is unavailable/i);
+  });
+
+  it("does not colour a gap the backend will not stake on as value", () => {
+    const edge = withheldWithForecast.odds_edge!;
+    for (const { container } of [
+      render(<EdgeDeltaBar oddsEdge={edge} />),
+      render(<OddsEdgeCard edge={edge} />),
+    ]) {
+      expect(container.innerHTML).not.toMatch(/emerald/);
+      expect(container.textContent).toContain("+8.3");
+    }
+    expect(render(<EdgeDeltaBar oddsEdge={edge} stakePermitted />).container.innerHTML).toMatch(/emerald/);
+  });
+});

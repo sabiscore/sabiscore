@@ -446,17 +446,26 @@ export function DecisionStateBadge({ state }: { state: DecisionState }) {
 }
 
 // Directive v8 §3.5: why this forecast might fail, from backend fields only.
-// Shown whenever a forecast exists (PLAY or PASS). A WITHHELD fixture has no
-// forecast to argue against; EvidenceStatusCard already says why, and a second
-// panel repeating it is the duplication the consumer review flagged.
+// Shown whenever a forecast exists. A WITHHELD fixture can still carry one
+// (withheld because the generation is uncertified), and that is when a positive
+// edge most needs this panel beside it. With no forecast there is nothing to
+// argue against; EvidenceStatusCard already says why.
 export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
   const presentation = mapFullAnalysisPresentation(data);
-  if (presentation.decisionState === "WITHHELD") return null;
+  if (!presentation.predictionAvailable) return null;
   const p = presentation.topOutcomeProbability;
   const outcome = presentation.topOutcome?.replaceAll("_", " ");
   const ci = data.uncertainty?.credible_interval;
   const caveats = data.actionability?.caveats ?? [];
   const advisory = data.evidence_quality.advisory_gaps;
+  const critical = data.evidence_quality.critical_gaps;
+  const edge = data.odds_edge;
+  const uncertifiedEdge =
+    edge != null && edge.edge > 0 && critical.includes("MODEL_GENERATION_UNCERTIFIED");
+  // EvidenceStatusCard (rendered whenever no stake is permitted) already lists
+  // a blocking uncertainty gap; saying it twice is noise.
+  const uncertaintyListedAbove =
+    !presentation.stakePermitted && critical.includes("MODEL_UNCERTAINTY_UNAVAILABLE");
 
   return (
     <section
@@ -473,11 +482,20 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
             loses {pct(1 - p)} of the time.
           </li>
         )}
-        <li>
-          {ci
-            ? `Model uncertainty interval: ${pct(ci[0])} to ${pct(ci[1])}.`
-            : "Model uncertainty is unavailable for this fixture; no interval is inferred."}
-        </li>
+        {uncertifiedEdge && edge && (
+          <li>
+            The model puts {edge.market.replaceAll("_", " ")} {(edge.edge * 100).toFixed(1)}pp above the fair
+            market price, but it has not passed certification against the market, so that gap is not
+            evidence of value.
+          </li>
+        )}
+        {ci ? (
+          <li>{`Model uncertainty interval: ${pct(ci[0])} to ${pct(ci[1])}.`}</li>
+        ) : (
+          !uncertaintyListedAbove && (
+            <li>Model uncertainty is unavailable for this fixture; no interval is inferred.</li>
+          )
+        )}
         <li>
           Calibration is judged per serving model once 200 forecasts have settled; the Performance page
           shows the live figures.
@@ -995,8 +1013,16 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
 
 // ─── Odds edge card ───────────────────────────────────────────────────────────
 
-export function OddsEdgeCard({ edge }: { edge: FullMatchOddsEdge }) {
-  const hasEdge = edge.edge > 0;
+// Green means "value the backend will stake on". A positive gap from a model
+// that is not permitted to stake renders neutral; the sign is still printed.
+export function OddsEdgeCard({
+  edge,
+  stakePermitted = false,
+}: {
+  edge: FullMatchOddsEdge;
+  stakePermitted?: boolean;
+}) {
+  const hasEdge = edge.edge > 0 && stakePermitted;
   return (
     <div className={cn(
       "rounded-xl border p-3.5 sm:p-4.5 space-y-2.5",
@@ -1019,8 +1045,8 @@ export function OddsEdgeCard({ edge }: { edge: FullMatchOddsEdge }) {
             Edge
             <EdgeTooltip />
           </span>
-          <span className={cn("font-bold tabular-nums", hasEdge ? "text-emerald-400" : "text-slate-400")}>
-            {hasEdge ? "+" : ""}{pct(edge.edge)}
+          <span className={cn("font-bold tabular-nums", hasEdge ? "text-emerald-400" : "text-slate-300")}>
+            {edge.edge > 0 ? "+" : ""}{pct(edge.edge)}
           </span>
         </div>
         <div className="flex justify-between text-xs sm:text-sm">
@@ -1086,7 +1112,13 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
 
 // ─── Edge delta bar (CE-2) ────────────────────────────────────────────────────
 
-export function EdgeDeltaBar({ oddsEdge }: { oddsEdge: FullMatchOddsEdge }) {
+export function EdgeDeltaBar({
+  oddsEdge,
+  stakePermitted = false,
+}: {
+  oddsEdge: FullMatchOddsEdge;
+  stakePermitted?: boolean;
+}) {
   // Every figure here comes from the backend, which owns de-vigging (see
   // `_odds_edge_from_features`: `fair = (1/odds) / overround`, `edge =
   // model_prob - fair`). The fair market probability is therefore recoverable
@@ -1106,12 +1138,18 @@ export function EdgeDeltaBar({ oddsEdge }: { oddsEdge: FullMatchOddsEdge }) {
 
   const isPositive = deltaPct > 0;
   const isNeutral = absDelta < 2;
-  const barColor = isNeutral
+  // Same rule as OddsEdgeCard: colour carries the decision, so a gap the
+  // backend will not stake on stays neutral whatever its sign.
+  const barColor = !stakePermitted
+    ? "bg-slate-500"
+    : isNeutral
     ? "bg-amber-500"
     : isPositive
     ? "bg-emerald-500"
     : "bg-rose-500";
-  const textColor = isNeutral
+  const textColor = !stakePermitted
+    ? "text-slate-200"
+    : isNeutral
     ? "text-amber-400"
     : isPositive
     ? "text-emerald-400"
@@ -1184,15 +1222,18 @@ export function EvidenceStatusCard({ data }: { data: FullMatchAnalysisResponse }
   const needsCollapse = blocking.length > 5;
   // Filter identity gap from list body (it's surfaced via the header check row)
   const listGaps = blocking.filter((g) => g !== "FIXTURE_IDENTITY_UNVERIFIED");
+  // A fixture can carry a forecast and still be withheld (uncertified
+  // generation). "Why no prediction" above a 65/21/14 forecast is false.
+  const heading = presentation.predictionAvailable ? "Why no stake" : "Why no prediction";
 
   return (
     <div
       role="region"
-      aria-label="Why no prediction — evidence status"
+      aria-label={`${heading} — evidence status`}
       className="rounded-xl border border-slate-800/50 bg-slate-900/30 p-3.5 sm:p-4 space-y-2.5"
     >
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-        Why no prediction
+        {heading}
       </p>
 
       {/* Fixture identity row */}
@@ -1649,11 +1690,13 @@ function FullAnalysisDashboardInner({
       </div>
 
       {/* ── Edge delta bar (CE-2): model vs market gap ── */}
-      {data.odds_edge && <EdgeDeltaBar oddsEdge={data.odds_edge} />}
+      {data.odds_edge && (
+        <EdgeDeltaBar oddsEdge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
+      )}
 
       {/* ── Odds edge ── */}
       {data.odds_edge ? (
-        <OddsEdgeCard edge={data.odds_edge} />
+        <OddsEdgeCard edge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
       ) : (
         <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-3">
           <svg className="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

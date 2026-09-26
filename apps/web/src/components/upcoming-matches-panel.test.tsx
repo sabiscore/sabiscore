@@ -115,7 +115,7 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
   });
 
 
-  it("treats an explicit unavailable freshness flag as Unknown even when legacy age is zero", async () => {
+  it("never shows a legacy zero age as Fresh when availability is false", async () => {
     const response = upcomingResponse(1);
     response.upcoming_matches[0].staleness_seconds = 0;
     response.upcoming_matches[0].staleness_available = false;
@@ -131,11 +131,14 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
     );
 
     renderPanel();
-    expect(await screen.findByText("Unknown")).toBeInTheDocument();
+    // The list is built without inference, so this is the normal case; an
+    // "Unknown" chip on every row carried no information.
+    expect(await screen.findByText(/Home 1/)).toBeInTheDocument();
     expect(screen.queryByText("Fresh")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
   });
 
-  it("renders missing freshness as Unknown rather than Fresh", async () => {
+  it("shows no freshness claim at all when freshness was not measured", async () => {
     const response = upcomingResponse(1);
     response.upcoming_matches[0].staleness_seconds = null;
     vi.stubGlobal(
@@ -150,8 +153,11 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
     );
 
     renderPanel();
-    expect(await screen.findByText("Unknown")).toBeInTheDocument();
+    // The list is built without inference, so this is the normal case; an
+    // "Unknown" chip on every row carried no information.
+    expect(await screen.findByText(/Home 1/)).toBeInTheDocument();
     expect(screen.queryByText("Fresh")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
   });
 
   it("puts soft coverage in the UCL accessible name and shows a touch-visible legend", async () => {
