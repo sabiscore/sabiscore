@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useState, useEffect, useCallback } from "react";
-import { CheckCircle2, CircleDashed, HelpCircle, MinusCircle, Share2 } from "lucide-react";
+import { HelpCircle, Share2 } from "lucide-react";
+import { DecisionStateBadge } from "./decision-state-badge";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -20,7 +21,6 @@ import {
   type FullMatchMarket,
   type FullMatchOddsEdge,
   type MatchActionability,
-  type DecisionState,
 } from "@/lib/full-analysis-contract";
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
@@ -242,12 +242,14 @@ export function EnhancedMatchHero({
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-2.5">
           <DecisionStateBadge state={presentation.decisionState} />
-          <VerdictBadge verdict={data.verdict} />
           <strong className="text-sm sm:text-base text-white">{presentation.decisionHeadline}</strong>
         </div>
-        <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
+        {presentation.reason !== presentation.decisionHeadline && (
+          <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
+        )}
+        {/* v11 U11: the verdict tier is evidence detail, not a second headline state. */}
         <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
-          Evidence quality: {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
+          Verdict: {meta.label} · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
         </p>
       </section>
       {/* ── Teams clash ── */}
@@ -410,47 +412,6 @@ export function EnhancedMatchHero({
         {VERDICT_COPY[data.verdict] ?? ""}
       </p>
     </div>
-  );
-}
-
-// Directive v8 §3.2: the state is carried by the word and the icon's shape
-// (filled check / bar / dashed ring); colour only repeats it, so the three
-// states stay distinguishable without colour vision. Colours come only from the
-// --state-* tokens (v10 U8); the label stays neutral for contrast.
-const DECISION_STATE_META: Record<
-  DecisionState,
-  { label: string; Icon: typeof CheckCircle2; className: string }
-> = {
-  PLAY: {
-    label: "Play",
-    Icon: CheckCircle2,
-    className: "border-[hsl(var(--state-play)/0.4)] bg-[hsl(var(--state-play)/0.1)] [&>svg]:text-[hsl(var(--state-play))]",
-  },
-  PASS: {
-    label: "Pass",
-    Icon: MinusCircle,
-    className: "border-[hsl(var(--state-pass)/0.4)] bg-[hsl(var(--state-pass)/0.1)] [&>svg]:text-[hsl(var(--state-pass))]",
-  },
-  WITHHELD: {
-    label: "Withheld",
-    Icon: CircleDashed,
-    className: "border-[hsl(var(--state-withheld)/0.5)] bg-[hsl(var(--state-withheld)/0.15)] [&>svg]:text-[hsl(var(--state-withheld))]",
-  },
-};
-
-export function DecisionStateBadge({ state }: { state: DecisionState }) {
-  const { label, Icon, className } = DECISION_STATE_META[state];
-  return (
-    <span
-      data-decision-state={state}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold text-slate-100",
-        className,
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {label}
-    </span>
   );
 }
 
@@ -657,28 +618,6 @@ function PredictionAgePill({ generatedAt }: { generatedAt: string }) {
       title={title}
     >
       Outdated ↻
-    </span>
-  );
-}
-
-// ─── Verdict badge ────────────────────────────────────────────────────────────
-
-function VerdictBadge({ verdict }: { verdict: Verdict }) {
-  const meta = VERDICT_META[verdict];
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold",
-        meta.bg,
-        meta.border,
-        meta.color
-      )}
-    >
-      <span
-        className={cn("h-2 w-2 rounded-full", meta.dot)}
-        aria-hidden="true"
-      />
-      {meta.label}
     </span>
   );
 }
@@ -965,7 +904,7 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
   if (!unc) {
     return (
       <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
-        <p className="text-xs uppercase tracking-wider text-slate-400">BNN Uncertainty</p>
+        <p className="text-xs uppercase tracking-wider text-slate-400">Model uncertainty</p>
         <p className="text-sm font-semibold text-slate-300">Unavailable</p>
       </div>
     );
@@ -975,8 +914,10 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400">
-          BNN Uncertainty
-          <Tooltip content="Bayesian Neural Network — instead of one number, the model reports a range reflecting what it doesn't know.">
+          {/* Not "BNN": no Bayesian network exists (DEBT 42). The method is
+              ensemble dispersion over the random forest's trees (ADR 0009). */}
+          Model uncertainty
+          <Tooltip content="How much the ensemble's trees disagree: instead of one number, the model reports a range reflecting what it doesn't know.">
             <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
           </Tooltip>
         </div>

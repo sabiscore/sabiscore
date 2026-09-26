@@ -127,6 +127,9 @@ class FullMatchMarketResponse(BaseModel):
     evaluable: bool
     outcomes: List[MarketOutcomeResponse] = Field(min_length=3, max_length=3)
     first_seen: Optional[MarketFirstSightingResponse] = None
+    # v11 U13: the book and capture time of the prices above, when known.
+    bookmaker: Optional[str] = None
+    captured_at: Optional[datetime] = None
 
     @model_validator(mode="after")
     def validate_publication(self) -> "FullMatchMarketResponse":

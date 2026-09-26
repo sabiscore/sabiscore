@@ -12,12 +12,12 @@ import {
   EvidenceStatusCard,
   MarketComparisonTable,
   CounterCase,
-  DecisionStateBadge,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
   UncertaintyCard,
 } from "./full-analysis-dashboard";
+import { DecisionStateBadge } from "./decision-state-badge";
 import { EvidencePassport } from "./evidence-passport";
 import { mapFullAnalysisPresentation, type FullMatchMarket } from "@/lib/full-analysis-contract";
 
@@ -246,7 +246,7 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
     expect(screen.getByText(/Kelly Criterion suggests optimal bet sizing/i)).toBeInTheDocument();
   });
 
-  it("exposes the UncertaintyCard BNN/Epistemic/Aleatoric/CI explainers via focus", () => {
+  it("exposes the UncertaintyCard method/Epistemic/Aleatoric/CI explainers via focus", () => {
     const unc = {
       epistemic_unc: 0.12,
       aleatoric_unc: 0.2,
@@ -257,7 +257,7 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
     render(<UncertaintyCard unc={unc} available />);
     const triggers = screen.getAllByRole("button");
     const expectedText = [
-      /Bayesian Neural Network/i,
+      /ensemble's trees disagree/i,
       /Unknown-unknowns/i,
       /Irreducible randomness/i,
       /95% credible interval/i,
@@ -461,9 +461,8 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     expect(screen.getByText("Fixture Identity")).toBeInTheDocument();
     expect(screen.getByText("Model Prediction")).toBeInTheDocument();
     expect(screen.getByText("Team Strength (Elo)")).toBeInTheDocument();
-    // A resolved family can still carry advisory gaps — the market row's chip
-    // reads "Resolved · 1" from this fixture's one advisory gap, which is
-    // the honest rendering, so match the status prefix rather than exact text.
+    // A resolved family can still carry advisory gaps; the count is in the
+    // row's text ("1 field missing"), not the chip.
     expect(screen.getAllByText(/^Resolved/).length).toBe(5);
     expect(screen.queryByText(/^Gapped/)).toBeNull();
   });
@@ -725,6 +724,29 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     expect(render(<EdgeDeltaBar oddsEdge={edge} stakePermitted />).container.innerHTML).toMatch(/emerald/);
     // The neutral is a named decision state, not an incidental grey (v9 U4).
     expect(render(<EdgeDeltaBar oddsEdge={edge} />).container.innerHTML).toMatch(/--state-withheld/);
+  });
+
+  // v11 U11. Live 2026-09-26 the PSV card read "Withheld · Partial Data · Not
+  // evaluable" (three state words) over "Not enough verified data — this model
+  // hasn't passed certification yet", with a resolved market and a forecast.
+  it("shows one decision state, says why, and keeps the verdict in the evidence line", () => {
+    render(
+      <EnhancedMatchHero
+        matchId="fd-558881"
+        data={withheldWithForecast}
+        presentation={mapFullAnalysisPresentation(withheldWithForecast)}
+        league="EREDIVISIE"
+        homeTeam="PSV"
+        awayTeam="SC Heerenveen"
+      />,
+    );
+    const decision = screen.getByRole("region", { name: /decision/i });
+    expect(decision.querySelectorAll("[data-decision-state]")).toHaveLength(1);
+    expect(decision.textContent).toMatch(/This model hasn't passed certification yet\./);
+    expect(decision.textContent).not.toMatch(/Not evaluable|Not enough verified data/);
+    expect(decision.textContent).toMatch(/Verdict: .+ · 2 critical gaps/);
+    // The reason is the headline; it is not printed a second time beneath it.
+    expect(decision.textContent!.match(/passed certification/g)).toHaveLength(1);
   });
 
   it("names no calibration method when no forecast is published", () => {

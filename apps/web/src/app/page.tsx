@@ -21,6 +21,7 @@ import { MatchSelector } from "@/components/match-selector";
 import { ModelMetadataPanel } from "@/components/model-metadata-panel";
 import { MobilePlatformSummary } from "@/components/mobile-platform-summary";
 import { PlatformHealthPills } from "@/components/platform-health-pills";
+import { DecisionStateBadge } from "@/components/decision-state-badge";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
@@ -120,6 +121,21 @@ const PIPELINE_STEPS = [
 ] satisfies Array<{ step: string; label: string; detail: string; icon: LucideIcon }>;
 
 // Verdict definitions
+// v11 U11: match cards lead with a decision state, so the glossary defines it
+// before the verdict tiers. Directive v8 §3.2; PASS and WITHHELD never merge.
+const DECISION_STATE_DEFINITIONS = [
+  {
+    state: "PLAY",
+    detail:
+      "A stake is permitted: a certified forecast, complete evidence, and a price with positive expected return.",
+  },
+  { state: "PASS", detail: "Evaluated, and the price offers no value. No stake." },
+  {
+    state: "WITHHELD",
+    detail: "Not evaluable: a blocking gap, such as an uncertified model or a missing price. No stake.",
+  },
+] as const;
+
 const VERDICT_DEFINITIONS = [
   {
     enum: "PARTIAL",
@@ -365,6 +381,19 @@ function PremiumHome() {
       {/* Verdict education */}
       <section className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
         <h2 className="mb-0.5 text-base font-bold text-white sm:text-lg">Understanding verdicts</h2>
+        <p className="mb-2.5 text-xs text-slate-400">
+          Every match card leads with one decision state. The verdict tier beneath it describes the evidence.
+        </p>
+        <dl className="mb-3 grid gap-2 sm:grid-cols-3">
+          {DECISION_STATE_DEFINITIONS.map((d) => (
+            <div key={d.state} className="rounded-xl border border-white/10 bg-slate-900/60 p-2.5">
+              <dt>
+                <DecisionStateBadge state={d.state} />
+              </dt>
+              <dd className="mt-1.5 text-[10px] leading-normal text-slate-400">{d.detail}</dd>
+            </div>
+          ))}
+        </dl>
         <p className="mb-2.5 text-xs text-slate-400">
           Each verdict is an evidence gate, not a confidence dial. Stronger labels require more independent sources.
         </p>

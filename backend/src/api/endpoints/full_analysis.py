@@ -512,11 +512,18 @@ def _market_block(
                 ),
             }
         )
+    # v11 U13: which book quoted these prices, and when SabiScore captured them
+    # (odds_service keeps the record's captured_at through its cache). None when
+    # unknown; never "now" and never a guessed book.
+    captured_at = _utc_aware_datetime(odds.get("timestamp") if odds else None)
+    bookmaker = odds.get("bookmaker") if odds else None
     return {
         "devig_method": "proportional",
         "overround": overround,
         "evaluable": bool(evaluable and model_probs is not None),
         "outcomes": outcomes,
+        "bookmaker": str(bookmaker) if bookmaker else None,
+        "captured_at": captured_at.isoformat() if captured_at else None,
     }
 
 
