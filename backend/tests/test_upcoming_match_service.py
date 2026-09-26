@@ -664,6 +664,12 @@ async def test_db_rows_satisfy_response_schema_without_predictions():
             assert len(rows) == 1, "seeded in-window fixture must be returned"
             # The canonical identity key the schema and apps/web both read.
             assert rows[0]["match_id"] == "fd-900001"
+            # The kickoff carries its offset. Browsers parse an offset-less
+            # timestamp as local time: a Lagos visitor read an 18:00 UTC
+            # kickoff as "18:00 WAT" (live 2026-09-26; it is 19:00 WAT).
+            assert rows[0]["match_date"] == (now + timedelta(days=2)).replace(
+                tzinfo=timezone.utc
+            ).isoformat()
 
             # Replicate the endpoint's normalisation, then validate for real.
             payload["upcoming_matches"] = payload.pop("matches")

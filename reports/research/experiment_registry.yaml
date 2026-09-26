@@ -1404,3 +1404,83 @@ experiments:
       acquisition/resolution split, fail-closed identity resolution, partitioned
       Parquet sink, temporal-cutoff guard) is source-agnostic and can be pointed
       at any source that clears §12.
+
+  # =========================================================================
+  - experiment_id: C6
+    title: "Served generation vs the de-vigged close (directive v10 P1)"
+    portfolio: null
+    hypothesis: >-
+      The served generation's pre-kickoff forecasts are sharper than the
+      de-vigged closing 1X2 line: mean per-fixture RPS(model) - RPS(close) < 0
+      on settled fixtures that have both a pre-kickoff forecast and a strict
+      pre-kickoff close.
+    migrated_retrospectively: false
+    state: PROPOSED
+    decision: null
+    decision_detail: >-
+      DRAFT, not frozen: awaiting operator approval (O8). The directive asks for
+      state PROTOCOL_FROZEN, which is not a §39 state and would be false before
+      approval; PROPOSED is the earliest state and says only that the protocol
+      is written. No data exists: 0 settled forecasts under the served identity
+      on 2026-09-26. Protocol draft
+      reports/research/c6-served-generation-vs-close-protocol.json, sha256
+      6dc8a2d6c883edc9d16db7562e963ce53ea8a885f36b6943eeee5f8d2d9f1d63. That
+      hash changes if the draft is edited before freezing. Freeze = set the
+      protocol status to PRE-REGISTERED, record the new sha256 here, and commit
+      before 2026-10-09. decision stays null until the first milestone is run.
+    information_source: >-
+      none - no new external source. SabiScore's own match_prediction_logs
+      under the served identity, joined on match_id to the existing The Odds
+      API closing snapshots (market_snapshots.is_closing_line).
+    source_version: "benchmark: one bookmaker per event, Pinnacle first then key order (the_odds_api.bookmaker_preference, shared with the forecast-time price), proportional de-vig (the_odds_api.devig_probabilities)"
+    source_license_class: null
+    source_coverage: "not measured yet; the join rate is reported at each milestone and flagged below 80%"
+    historical_window: "live forecasts under the served identity from the first scheduled capture (expected 2026-10-09) onward"
+    prediction_cutoff: >-
+      strictly before kickoff and before the closing snapshot: L4 captures in
+      [kickoff - 3 h, kickoff - 15 min]; the close is observed in
+      (kickoff - 5 min, kickoff)
+    dataset_version: "match_prediction_logs x market_snapshots via repositories.fixtures.get_clv_records"
+    feature_version: "apex_v1_68"
+    representation_version: "served forecast probabilities as logged; no transformation"
+    model_version: "v5_phase7-20260922@417b9b8ff7ce563d"
+    parameters: "none fitted; evaluation only"
+    seed: 42
+    training_window: null
+    validation_windows: "milestones at 200, 500 and 1,000 settled forecasts with a close; nothing evaluated in between"
+    final_holdout: >-
+      None: every milestone sample is live, out-of-sample data the served
+      generation never saw.
+    baseline_models: ["de-vigged closing 1X2 (strict pre-kickoff close)"]
+    market_baseline: "the de-vigged close is the benchmark itself"
+    primary_metrics: ["mean paired RPS(model) - RPS(de-vigged close)"]
+    secondary_metrics: [adaptive_ECE, brier_decomposition, per_league_slices, join_rate]
+    bootstrap_method: "ISO-week cluster bootstrap, metrics.week_cluster_ci, 10,000 replicates, seed 42"
+    statistical_test: >-
+      sharper than the close only if the 95% CI upper bound < 0; less sharp if
+      the lower bound > 0; otherwise inconclusive
+    multiple_testing_family: "3 milestone looks, each at an unadjusted 95% CI (directive value); per-league slices descriptive only"
+    effect_size: "PENDING - first evaluation at the 200 milestone"
+    confidence_interval: "PENDING - first evaluation at the 200 milestone"
+    sample_size: 0
+    result: "PENDING - no settled forecasts exist yet"
+    robustness: "per-league slices and join rate, reported only; never evidence"
+    failure_modes:
+      - "fixtures missing a close are not missing at random (quota, unmatched names, instance asleep at kickoff); join rate < 80% flags possible bias"
+      - "the live /model-performance endpoints show an interim model_vs_close at 2,000 replicates, seed 0; it is not the protocol result"
+      - "get_clv_records does not filter by writer; POST /predictions or analytics rows under the served identity would enter the join unless filtered on payload.capture_trigger (O8)"
+    compute: "not run yet; the milestone evaluation runs locally, by a person, CPU only"
+    peak_rss: "PENDING - record at each milestone run"
+    runtime: "PENDING - record at each milestone run"
+    artifact_location: "reports/research/c6-served-generation-vs-close-protocol.json (protocol draft); milestone results not yet produced"
+    provenance:
+      - "reports/research/c6-served-generation-vs-close-protocol.json"
+      - "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V10.md §2.3"
+      - "docs/DEBT.md#157"
+      - "backend/src/services/clv_service.py"
+      - "backend/src/models/evaluation/metrics.py"
+      - "backend/src/repositories/fixtures.py"
+    reviewer: "operator (O8), pending"
+    certification_status: >-
+      not a candidate: an evaluation of the served generation, not a
+      promotion or a certification. Certification remains operator decision O4.

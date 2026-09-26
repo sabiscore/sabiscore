@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.cache import cache
@@ -39,6 +40,7 @@ from ...core.league_policy import LeaguePolicyUnavailableError, get_league_polic
 from ...core.redaction import redact_text
 from ...data.elo_engine import EloContext
 from ...services.elo_state_service import DurableEloContext
+from ...db.models import MarketSnapshot
 from ...db.session import get_async_session
 from ...models.causal_selector import CausalFeatureResult
 from ...models.ensemble_uncertainty import compute_ensemble_uncertainty
@@ -515,6 +517,61 @@ def _market_block(
         "overround": overround,
         "evaluable": bool(evaluable and model_probs is not None),
         "outcomes": outcomes,
+    }
+
+
+async def _first_sighting(
+    db: AsyncSession,
+    *,
+    match_id: str,
+    bookmaker: Optional[str],
+    kickoff: Optional[datetime],
+) -> Optional[Dict[str, Any]]:
+    """Directive v10 U6: the earliest pre-kickoff price this bookmaker quoted for
+    this fixture, as market capture stored it.
+
+    Same fixture and same bookmaker only: a "move" across two books is not a
+    price move. It is when SabiScore first saw the price, never the opening
+    line; nothing here observes when a market opened. ``None`` whenever nothing
+    was captured or the comparison cannot be made, never a substitute.
+    """
+    if not bookmaker or kickoff is None:
+        return None
+    if kickoff.tzinfo is not None:
+        kickoff = kickoff.astimezone(timezone.utc).replace(tzinfo=None)
+    try:
+        # A savepoint, so a failed read cannot abort the session the
+        # prediction log is written on later in this request.
+        async with db.begin_nested():
+            row = (
+                await db.execute(
+                    select(MarketSnapshot)
+                    .where(
+                        MarketSnapshot.match_id == match_id,
+                        MarketSnapshot.bookmaker == bookmaker,
+                        MarketSnapshot.coherent.is_(True),
+                        MarketSnapshot.captured_at < kickoff,
+                    )
+                    .order_by(MarketSnapshot.captured_at.asc(), MarketSnapshot.id.asc())
+                    .limit(1)
+                )
+            ).scalars().first()
+    except Exception as exc:
+        logger.warning(
+            "First-sighting lookup failed for %s: %s", match_id, redact_text(str(exc))
+        )
+        return None
+    if row is None:
+        return None
+    captured = row.captured_at
+    if captured.tzinfo is None:
+        captured = captured.replace(tzinfo=timezone.utc)
+    return {
+        "bookmaker": row.bookmaker,
+        "captured_at": captured.isoformat(),
+        "home_win": row.home_odds,
+        "draw": row.draw_odds,
+        "away_win": row.away_odds,
     }
 
 
@@ -1127,6 +1184,13 @@ async def get_full_analysis(
             and not quality.get("conflicts")
         ),
     )
+    if result["market"] is not None and not _is_matchup and fixture_verified:
+        result["market"]["first_seen"] = await _first_sighting(
+            db,
+            match_id=match_id,
+            bookmaker=(market_odds or {}).get("bookmaker"),
+            kickoff=_utc_aware_datetime(live.get("kickoff_utc")),
+        )
 
     # Capture the real model snapshot that settlement and CLV evaluate later.
     # Matchup strings, diagnostic baselines, invalid simplexes, non-scheduled

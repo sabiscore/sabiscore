@@ -24,7 +24,7 @@ export default function MatchLandingPage() {
     },
     {
       title: "Named evidence gaps",
-      body: "Every missing input is listed. A critical gap withholds the forecast instead of filling it with a default.",
+      body: "Every missing input is listed. A critical gap withholds the stake, and a missing model input withholds the forecast instead of filling it with a default.",
     },
   ];
 
@@ -64,10 +64,21 @@ export default function MatchLandingPage() {
       <section className="rounded-2xl border border-slate-800/60 bg-slate-900/40 p-3.5 sm:p-4 text-xs text-slate-400">
         <p className="mb-2 font-semibold text-slate-200">Need a refresher on the numbers?</p>
         <ul className="list-disc space-y-1.5 pl-5 text-left">
-          <li>&ldquo;Edge&rdquo; shows how far the market deviates from Sabiscore fair odds.</li>
-          <li>&ldquo;Kelly stake&rdquo; scales position sizing to protect bankroll and downside.</li>
+          {/* Definitions of the quantities the match page shows. CLV used to read
+              "expected price movement": it is measured after the close, never
+              predicted (live copy, 2026-09-26). */}
           <li>
-            &ldquo;CLV&rdquo; captures expected price movement; use it to gauge closing line efficiency.
+            &ldquo;Gap&rdquo; is the model&rsquo;s probability minus the bookmaker&rsquo;s fair probability (the
+            price with its margin removed), in percentage points. Until the model is certified, a positive gap
+            is not evidence of value.
+          </li>
+          <li>
+            &ldquo;Kelly stake&rdquo; is the share of bankroll the backend would stake: quarter Kelly, capped per
+            league, and zero until the model is certified.
+          </li>
+          <li>
+            &ldquo;CLV&rdquo; (closing-line value) compares the price available when a forecast was made with the
+            last price before kickoff. It is measured after the market closes, never predicted.
           </li>
         </ul>
         <p className="mt-3 text-slate-400">

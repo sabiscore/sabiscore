@@ -26,6 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from ...db.models import Match, Team
 from ...db.session import get_async_session
+from ...utils.db_time import to_utc_iso
 from ...services.upcoming_match_service import UpcomingMatchService
 from ...services.odds_service import OddsService, get_odds_service
 
@@ -208,7 +209,7 @@ async def get_team_intelligence(
 
         form_rows.append(
             FormResultSchema(
-                match_date=m.match_date.isoformat()
+                match_date=to_utc_iso(m.match_date)
                 if isinstance(m.match_date, datetime)
                 else str(m.match_date),
                 opponent=opponent_name,

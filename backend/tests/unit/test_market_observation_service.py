@@ -132,6 +132,30 @@ async def test_first_real_pre_match_observation_is_opening(factory) -> None:
     assert snapshots[0].provenance["opening_semantics"] == "first_observed_by_sabiscore"
 
 
+async def test_capture_prefers_pinnacle_over_bookmaker_key_order(factory) -> None:
+    # The close is the benchmark for "sharper than the close" (C6), so it must be
+    # the sharpest book quoted and the same book the forecast-time price used.
+    # Key order picked a soft book: "betclic" sorts before "pinnacle".
+    kickoff = datetime(2026, 8, 20, 18, 0)
+    await _seed_fixture(factory, kickoff=kickoff)
+
+    async with factory() as session:
+        await persist_market_board(
+            session,
+            league="EPL",
+            records=[
+                _record(kickoff=kickoff, bookmaker="betclic", home=1.8),
+                _record(kickoff=kickoff),
+            ],
+            observed_at=kickoff - timedelta(minutes=30),
+        )
+        await session.commit()
+
+    _history, snapshots = await _rows(factory)
+    assert [snapshot.bookmaker for snapshot in snapshots] == ["pinnacle"]
+    assert snapshots[0].home_odds == 2.0
+
+
 async def test_changed_observation_is_intermediate_and_identical_repeat_dedupes(
     factory,
 ) -> None:

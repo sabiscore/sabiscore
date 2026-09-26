@@ -15,6 +15,11 @@
  *   ⏸ Quota          — RATE_LIMITED
  *   ⚡ Conflict       — CONFLICTING
  *
+ * On-demand providers (backend `cadence: "on_demand"`: called only when a person
+ * retrieves evidence) show their age instead of Stale; that age measures traffic,
+ * not health (directive v10 U7). A scheduled provider is still Stale once it
+ * misses its schedule.
+ *
  * Data comes from /api/providers/health (proxied to backend); never from
  * provider hosts directly.
  *
@@ -33,6 +38,7 @@ import {
   type BackendHealthPayload,
   type ProviderHealthRow,
 } from "@/lib/health-status";
+import { formatEvidenceAge } from "@/lib/evidence-passport";
 
 // Canonical display order matching directive registry
 const CANONICAL_ORDER = [
@@ -57,7 +63,14 @@ export function statusBadge(row: ProviderHealthRow): {
   className: string;
 } {
   if (!row.enabled) return { icon: "○", label: "Not configured", className: "pm-off" };
-  switch (providerOperationalStatus(row)) {
+  const status = providerOperationalStatus(row);
+  if (row.cadence === "on_demand" && (status === "STALE" || status === "UNKNOWN")) {
+    const age = typeof row.age_seconds === "number" ? row.age_seconds : null;
+    return age === null || !Number(row.observations)
+      ? { icon: "◌", label: "Not yet used", className: "pm-unverified" }
+      : { icon: "◌", label: `Last checked ${formatEvidenceAge(age)}`, className: "pm-unverified" };
+  }
+  switch (status) {
     case "VERIFIED":
     case "LIVE_VERIFIED":
       return { icon: "✓", label: "Live-validated", className: "pm-live" };
@@ -144,8 +157,9 @@ export function ProviderMeter() {
       )}
 
       <p className="pm-disclaimer">
-        Configuration and live validation are separate. Routine health checks do not
-        spend provider quota; live validation appears only after an explicit operator probe.
+        Configuration and live validation are separate: a provider is live-validated only
+        by a real request it answered recently. Providers without a schedule run only when
+        evidence is retrieved, so they show when they were last used.
       </p>
 
       <style>{`

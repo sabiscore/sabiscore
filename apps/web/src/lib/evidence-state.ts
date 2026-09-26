@@ -8,7 +8,7 @@
  * tokens: `VERIFIED`, `STALE`, `DATA_GAP` (model/team_metrics/availability),
  * `RESEARCH_ONLY` (`RESEARCH_ONLY_MARKET_STATUS`, line 41 — a market/odds
  * snapshot exists but has no durable provenance), `DATA_UNAVAILABLE`
- * (odds_status when no snapshot exists at all), `MODEL_READY`/
+ * (odds_status when the fixture has no stored odds row; not a provider outage), `MODEL_READY`/
  * `MODEL_UNAVAILABLE` (the sibling `evidence_status` field), and
  * `CONFLICTING` (a value the TypeScript type already anticipates and
  * `betting-intelligence-dashboard.tsx` already branches on elsewhere).
@@ -32,7 +32,7 @@ const EVIDENCE_STATES: Record<string, EvidenceStateDescriptor> = {
   STALE: { label: "Stale", tone: "warning" },
   CONFLICTING: { label: "Limited evidence", tone: "warning" },
   DATA_GAP: { label: "Data unavailable", tone: "neutral" },
-  DATA_UNAVAILABLE: { label: "Provider unavailable", tone: "neutral" },
+  DATA_UNAVAILABLE: { label: "No odds snapshot", tone: "neutral" },
   MODEL_UNAVAILABLE: { label: "Model unavailable", tone: "neutral" },
   RESEARCH_ONLY: { label: "Research mode", tone: "info" },
 };

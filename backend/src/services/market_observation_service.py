@@ -25,7 +25,7 @@ from sqlalchemy.orm import aliased
 
 from ..core.database import Match, OddsHistory, Team
 from ..db.models import MarketSnapshot
-from ..providers.the_odds_api import devig_probabilities
+from ..providers.the_odds_api import bookmaker_preference, devig_probabilities
 from .canonical_identity_service import canonical_fixture_id_for_provider_event
 from .team_identity import select_unique_by_team_names
 
@@ -377,9 +377,10 @@ async def persist_market_board(
     observed = utc_naive(observed_at or datetime.now(timezone.utc))
     candidates = await _fixture_candidates(session, league=league, observed_at=observed)
 
-    # The Odds API returns one record per bookmaker. Preserve the existing CLV
-    # convention of one deterministic bookmaker per provider event rather than
-    # synthesizing a cross-bookmaker 1X2 market or multiplying closing joins.
+    # The Odds API returns one record per bookmaker. Keep one deterministic
+    # bookmaker per provider event rather than synthesizing a cross-bookmaker
+    # 1X2 market or multiplying closing joins; which one is the shared rule the
+    # live price also uses (bookmaker_preference: Pinnacle first).
     grouped: dict[str, list[dict[str, Any]]] = {}
     for record in records:
         event_id = str(record.get("provider_event_id") or "")
@@ -395,7 +396,7 @@ async def persist_market_board(
         if not coherent:
             result.invalid += 1
             continue
-        selected = min(coherent, key=lambda record: str(record.get("bookmaker") or ""))
+        selected = min(coherent, key=lambda record: bookmaker_preference(record.get("bookmaker")))
         candidate, ambiguous = _match_record(selected, candidates, league)
         if candidate is None:
             if ambiguous:

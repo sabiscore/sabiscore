@@ -148,6 +148,40 @@ async def test_match_lookup_consumes_one_normalized_bookmaker_snapshot():
 
 
 @pytest.mark.asyncio
+async def test_match_lookup_prefers_pinnacle_over_board_order():
+    # One bookmaker rule for the whole pipeline (directive v11 §2): the price a
+    # forecast records and the close it is judged against must come from the
+    # same book, and that book should be the sharpest one quoted, not whichever
+    # the provider happened to list first.
+    base = {
+        "provider": "the_odds_api",
+        "provider_event_id": "evt-1",
+        "home_team": "Arsenal",
+        "away_team": "Brighton",
+        "draw_odds": 3.5,
+        "away_odds": 4.4,
+        "captured_at": "2026-08-09T08:00:00Z",
+        "provider_event_timestamp": "2026-08-09T14:00:00Z",
+        "bookmaker_last_update": "2026-08-09T07:59:00Z",
+        "coherent": True,
+        "executable": True,
+    }
+    service = OddsService(cache_backend=_StubCache())
+    service.provider = _StubProvider(
+        ProviderStatus.VERIFIED,
+        [
+            {**base, "bookmaker": "betclic", "home_odds": 1.8},
+            {**base, "bookmaker": "pinnacle", "home_odds": 1.9},
+        ],
+    )
+
+    odds = await service.get_match_odds("Arsenal FC", "Brighton FC", "EPL")
+
+    assert odds["bookmaker"] == "pinnacle"
+    assert odds["home_win"] == 1.9
+
+
+@pytest.mark.asyncio
 async def test_match_lookup_rejects_cross_fixture_or_incoherent_records():
     records = [
         {

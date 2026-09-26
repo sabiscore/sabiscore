@@ -261,3 +261,43 @@ async def test_pass_reports_an_unreadable_manifest_instead_of_writing(monkeypatc
     )
     assert result["outcome"] == "manifest_unreadable"
     assert result["duration_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_the_matchday_burst_can_be_read_after_the_fact(monkeypatch):
+    """Directive v11 §1: D1 reads each capture tick's duration and memory. A
+    person polling /health every five minutes from 15:00 to 18:45 UTC is not a
+    measurement plan, so passes that had work to do are kept, bounded."""
+    from collections import deque
+
+    import src.db.session as db_session
+
+    class _Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    counts = iter([{"due": 2, "captured": 2, "errors": 0}, {"due": 0, "captured": 0, "errors": 0}] * 30)
+
+    async def fake_capture(_session, **_kwargs):
+        return next(counts)
+
+    monkeypatch.setattr(db_session, "AsyncSessionLocal", _Session)
+    monkeypatch.setattr(prediction_capture_service, "capture_due_predictions", fake_capture)
+    monkeypatch.setattr(prediction_capture_service, "_RECENT_PASSES", deque(maxlen=4))
+
+    for _ in range(2):
+        await prediction_capture_service.run_prediction_capture_pass(analyze=object())
+
+    recent = prediction_capture_service.last_prediction_capture_result()["recent"]
+    assert len(recent) == 1  # the idle pass (nothing due) is not history
+    assert recent[0]["due"] == 2 and recent[0]["captured"] == 2
+    assert recent[0]["duration_ms"] >= 0
+    assert isinstance(recent[0]["rss_mb"], int)
+
+    for _ in range(58):
+        await prediction_capture_service.run_prediction_capture_pass(analyze=object())
+    # 30 passes had work; the history keeps only the newest, bounded.
+    assert len(prediction_capture_service.last_prediction_capture_result()["recent"]) == 4

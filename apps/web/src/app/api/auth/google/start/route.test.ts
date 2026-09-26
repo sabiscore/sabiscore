@@ -38,4 +38,49 @@ describe("/api/auth/google/start", () => {
     expect(location.origin).toBe("https://sabiscore.vercel.app");
     expect(location.searchParams.get("auth_error")).toBe("google_not_configured");
   });
+
+  // Live 2026-09-26: sign-in from web-qjzuzffsd-oversabis-projects.vercel.app (a
+  // pinned deployment URL) sent that host to Google as redirect_uri, and Google
+  // answered redirect_uri_mismatch. A per-deployment URL can never be registered.
+  it("sends a production visitor on another host to the canonical host before setting cookies", async () => {
+    vi.stubEnv("AUTH_GOOGLE_ID", "cid");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://sabiscore.vercel.app");
+
+    const response = await GET(
+      new NextRequest("https://web-qjzuzffsd-oversabis-projects.vercel.app/api/auth/google/start?next=/match"),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://sabiscore.vercel.app/api/auth/google/start?next=/match",
+    );
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("never redirects the canonical host to itself, whatever scheme a proxy reports", async () => {
+    vi.stubEnv("AUTH_GOOGLE_ID", "cid");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://sabiscore.vercel.app");
+
+    const location = new URL(
+      (await GET(new NextRequest("http://sabiscore.vercel.app/api/auth/google/start"))).headers.get("location")!,
+    );
+
+    expect(location.host).toBe("accounts.google.com");
+  });
+
+  it("keeps a preview deployment on its own host", async () => {
+    vi.stubEnv("AUTH_GOOGLE_ID", "cid");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://sabiscore.vercel.app");
+
+    const location = new URL(
+      (await GET(new NextRequest("https://web-git-x-oversabis-projects.vercel.app/api/auth/google/start")))
+        .headers.get("location")!,
+    );
+
+    expect(location.searchParams.get("redirect_uri")).toBe(
+      "https://web-git-x-oversabis-projects.vercel.app/api/auth/google/callback",
+    );
+  });
 });

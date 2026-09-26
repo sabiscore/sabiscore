@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { googleClientId, googleRedirectUri } from "@/lib/google-oauth";
+import { canonicalSignInOrigin, googleClientId, googleRedirectUri } from "@/lib/google-oauth";
 
 const STATE_COOKIE = "sabi_google_oauth_state";
 const NONCE_COOKIE = "sabi_google_oauth_nonce";
@@ -34,6 +34,11 @@ async function createCodeChallenge(verifier: string): Promise<string> {
 }
 
 export async function GET(request: NextRequest) {
+  const canonical = canonicalSignInOrigin(request.nextUrl.origin);
+  if (canonical) {
+    return NextResponse.redirect(`${canonical}${request.nextUrl.pathname}${request.nextUrl.search}`);
+  }
+
   const clientId = googleClientId();
   const appUrl = request.nextUrl.origin;
 
