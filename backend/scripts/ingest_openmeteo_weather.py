@@ -6,12 +6,12 @@ Directive v5 §3 (Rule 3: pre-match information is the unit of truth),
 
 WHAT THIS INGESTS, AND WHY IT IS NOT THE REANALYSIS ARCHIVE
 -----------------------------------------------------------
-`src/providers/open_meteo.py` already resolves match weather, but it uses
-`archive-api.open-meteo.com` for historical dates — ERA5 **reanalysis**, i.e.
-what the weather actually was, reconstructed afterwards. Its own docstring
-notes reanalysis and forecast "are not equivalent". Training on reanalysis and
-serving on forecasts is train/serve skew: the model learns to lean on a
-precision serving can never supply.
+Training on reanalysis (what the weather actually was, reconstructed
+afterwards) and serving on forecasts is train/serve skew: the model learns to
+lean on a precision serving can never supply. `src/providers/open_meteo.py`
+read reanalysis for past kickoffs until 2026-09-26 (DEBT 155); it now reads the
+same archived forecast at the same hour as this script, and this script imports
+its cutoff, lead time, hour function and variable set so the two cannot drift.
 
 This script therefore uses the **Historical Forecast API**
 (`historical-forecast-api.open-meteo.com`), which archives the forecasts that
@@ -79,7 +79,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_HISTORICAL_FORECAST_BASE = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+from src.providers.open_meteo import (  # noqa: E402 - needs the sys.path insert above
+    FORECAST_ARCHIVE_START,
+    FORECAST_LEAD_HOURS,
+    HISTORICAL_FORECAST_BASE,
+    HOURLY_VARIABLES,
+    forecast_valid_hour,
+)
+
+_HISTORICAL_FORECAST_BASE = HISTORICAL_FORECAST_BASE
 _CORPUS_DIR = _BACKEND_ROOT / "data" / "cache"
 _VENUE_MANIFEST = (
     _BACKEND_ROOT.parent
@@ -95,16 +103,21 @@ _REPORT_PATH = (
     / "portfolio-f-weather-forecast-gates.json"
 )
 
-# Measured, not assumed — see the module docstring. 2022-03-01 is the earliest
-# probed date at which the Historical Forecast API genuinely diverges from
-# reanalysis; the true boundary is between 2022-01-01 and 2022-03-01, so this
-# is the conservative side of it.
-_FORECAST_ARCHIVE_START = date(2022, 3, 1)
+# Owned by the provider (DEBT 155); aliased here for this script's callers.
+# 2022-03-01 is the conservative side of the measured reanalysis boundary.
+_FORECAST_ARCHIVE_START = FORECAST_ARCHIVE_START
+_CUTOFF_HOURS_PRE_KICKOFF = FORECAST_LEAD_HOURS
+_HOURLY_VARIABLES = HOURLY_VARIABLES
 
-# Rule 3: the forecast as it stood two hours before kickoff.
-_CUTOFF_HOURS_PRE_KICKOFF = 2
-
-_HOURLY_VARIABLES = ("temperature_2m", "precipitation")
+# Parquet column per variable, unit in the name. F3's file predates wind,
+# gusts and humidity; it is left untouched and new runs write a new file.
+_COLUMN = {
+    "temperature_2m": "temperature_2m_c",
+    "precipitation": "precipitation_mm",
+    "wind_speed_10m": "wind_speed_10m_kmh",
+    "wind_gusts_10m": "wind_gusts_10m_kmh",
+    "relative_humidity_2m": "relative_humidity_2m_pct",
+}
 
 _DIV_TO_LEAGUE: Dict[str, str] = {
     "E0": "EPL",
@@ -268,18 +281,13 @@ def fetch_venue_window(
     raise RuntimeError("unreachable")
 
 
-def index_hourly(
-    payload: Dict[str, Any],
-) -> Dict[str, Tuple[float | None, float | None]]:
+def index_hourly(payload: Dict[str, Any]) -> Dict[str, Dict[str, float | None]]:
+    """stamp -> {variable: value or None}. An absent series is None, never 0."""
     hourly = payload.get("hourly") or {}
     times = hourly.get("time") or []
-    temps = hourly.get("temperature_2m") or []
-    precip = hourly.get("precipitation") or []
+    series = {v: hourly.get(v) or [] for v in _HOURLY_VARIABLES}
     return {
-        stamp: (
-            temps[i] if i < len(temps) else None,
-            precip[i] if i < len(precip) else None,
-        )
+        stamp: {v: (s[i] if i < len(s) else None) for v, s in series.items()}
         for i, stamp in enumerate(times)
     }
 
@@ -329,10 +337,10 @@ def build_rows(
             kickoff_local = datetime.combine(
                 fixture["kickoff_date"], datetime.min.time()
             ).replace(hour=hour, minute=minute)
-            cutoff = kickoff_local - timedelta(hours=_CUTOFF_HOURS_PRE_KICKOFF)
+            cutoff = forecast_valid_hour(kickoff_local)
             key = cutoff.strftime("%Y-%m-%dT%H:00")
             observation = hourly.get(key)
-            if observation is None or observation[0] is None:
+            if observation is None or observation.get("temperature_2m") is None:
                 gaps[GAP_HOUR_MISSING] += 1
                 continue
             rows.append(
@@ -347,10 +355,12 @@ def build_rows(
                     "away_team": fixture["away_team"],
                     "latitude": lat,
                     "longitude": lon,
-                    "temperature_2m_c": float(observation[0]),
-                    "precipitation_mm": (
-                        float(observation[1]) if observation[1] is not None else None
-                    ),
+                    **{
+                        _COLUMN[v]: (
+                            float(observation[v]) if observation[v] is not None else None
+                        )
+                        for v in _HOURLY_VARIABLES
+                    },
                     "source": "open-meteo historical-forecast-api",
                     "timezone_mode": "auto (venue-local); corpus Time assumed venue-local",
                 }
@@ -369,6 +379,9 @@ def main() -> int:
         "--dry-run", action="store_true", help="fetch a single venue and write nothing"
     )
     parser.add_argument("--out", type=Path, default=_OUT_PARQUET)
+    # A run for another experiment must not overwrite F3's evidence report.
+    parser.add_argument("--report", type=Path, default=_REPORT_PATH)
+    parser.add_argument("--experiment-id", default="F3")
     args = parser.parse_args()
 
     venues = load_verified_venues()
@@ -385,7 +398,8 @@ def main() -> int:
     # than the archive.
     in_window = [f for f in fixtures if f["kickoff_date"] >= _FORECAST_ARCHIVE_START]
     report = {
-        "experiment_id": "F3",
+        "experiment_id": args.experiment_id,
+        "hourly_variables": list(_HOURLY_VARIABLES),
         "generated_at": datetime.now().astimezone().isoformat(),
         "source": "Open-Meteo Historical Forecast API",
         "source_license_class": "L0",
@@ -426,9 +440,9 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(args.out)
-    _REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _REPORT_PATH.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
-    logger.info("Wrote %s (%d rows) and %s", args.out, frame.height, _REPORT_PATH)
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
+    logger.info("Wrote %s (%d rows) and %s", args.out, frame.height, args.report)
     print(json.dumps(report["gates"], indent=2, default=str))
     return 0
 

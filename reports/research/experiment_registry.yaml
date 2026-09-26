@@ -796,9 +796,13 @@ experiments:
       Pre-match weather forecasts (temperature/precipitation) provide
       non-redundant signal beyond the market and baseline Elo.
     migrated_retrospectively: false
-    state: INFORMATION_TEST
-    decision: HOLD
+    state: CLOSED
+    decision: REJECT
     decision_detail: >-
+      CLOSED 2026-09-26 as REJECT, together with F3b, under the decision rule
+      pre-registered in reports/research/f3b-weather-wind-rain-protocol.json
+      (sha256 cbe78c1e...): F3b (wind speed, gusts, heavy rain) was null on
+      all 3 pooled folds, so the weather family closes. History follows.
       Registered as F3, not F1: F1 is taken (contextual state - rest,
       congestion, referee; CLOSED/REJECT) and F2 is this portfolio's own
       venue-location prerequisite. Acquisition is BUILT and live-probed.
@@ -955,6 +959,98 @@ experiments:
       not a candidate. The information test is null, so there is nothing to
       certify; promoting a feature with no measurable value would add serving
       cost and a live Open-Meteo dependency for no accuracy.
+
+  # =========================================================================
+  - experiment_id: F3b
+    title: "Contextual weather: wind and heavy rain (F3 follow-up)"
+    portfolio: "F"
+    hypothesis: >-
+      The kickoff - 2 h forecast of wind speed, wind gusts and heavy rain
+      (>= 2.5 mm in the hour) adds information about 1X2 beyond the de-vigged
+      market.
+    migrated_retrospectively: false
+    state: CLOSED
+    decision: REJECT
+    decision_detail: >-
+      REJECT under the pre-registered rule: 0 of 3 pooled folds cleared the
+      bar, so F3 and F3b both close. PRE-REGISTERED 2026-09-26 at commit
+      faeaadf, before any F3b data was fetched; protocol
+      reports/research/f3b-weather-wind-rain-protocol.json. Same source as F3
+      (already qualified). The decision rule is fixed in the protocol: ADOPT
+      only if all 3 pooled folds clear F3's bar, otherwise F3 and F3b both
+      close as REJECT.
+    information_source: "Open-Meteo Historical Forecast API (historical-forecast-api.open-meteo.com)"
+    source_version: "as F3; constants owned by src/providers/open_meteo.py (DEBT 155)"
+    source_license_class: L0
+    source_coverage: >-
+      5,342 fixtures (G1 41.85% of the corpus). Gaps: VENUE_NOT_VERIFIED 4,061
+      and NO_ARCHIVED_FORECAST 3,302, identical to F3; FETCH_FAILED 60 (one
+      venue, Lorient, timed out after 3 retries from the acquiring machine;
+      a transport failure, disclosed as a deviation, not re-fetched).
+      Temperature and precipitation match F3 exactly on all 5,342 shared
+      fixtures (max abs diff 0.0), so the archive and the valid hour reproduce.
+    historical_window: "archived forecasts from 2022-03-01; earlier fixtures refused"
+    prediction_cutoff: "T-2h before kickoff (forecast valid time)"
+    dataset_version: "backend/data/cache/weather_forecasts_f3b.parquet"
+    feature_version: null
+    representation_version: "wind_speed_10m_kmh, wind_gusts_10m_kmh, heavy_rain (>= 2.5 mm)"
+    model_version: "not a production artifact - study-local fits only"
+    parameters: "Level 1 multinomial logistic only (F3 showed XGBoost worse at this feature count)"
+    seed: 42
+    training_window: "as F3: expanding window, folds train 2021-2022 / 2021-2023 / 2021-2024"
+    validation_windows: "as F3: test seasons 2023/24, 2024/25, 2025/26"
+    final_holdout: >-
+      None reserved, as F3: an information test with no model selection to
+      protect.
+    baseline_models:
+      - "de-vigged Bet365 1X2 -> multinomial logistic"
+      - "raw de-vigged Bet365 1X2, unmodeled (Rule 6 reference)"
+    market_baseline: "the baseline arm itself (Rule 7)"
+    primary_metrics: [RPS]
+    secondary_metrics: [log_loss, ECE]
+    bootstrap_method: "as F3: paired block bootstrap, non-overlapping blocks of 10"
+    statistical_test: "every pooled fold's paired 95% CI on candidate - baseline RPS entirely below zero"
+    multiple_testing_family: "3 pooled folds (1 learner x 3 origins); per-league slices descriptive only"
+    effect_size: >-
+      Candidate minus baseline RPS: +0.0004 (test_2023), -0.0001 (test_2024),
+      +0.0002 (test_2025). Two of three point estimates are in the wrong
+      direction; every one sits in the 4th decimal.
+    confidence_interval: >-
+      test_2023 [-0.0001, +0.0010]; test_2024 [-0.0006, +0.0003];
+      test_2025 [-0.0003, +0.0007]. All three straddle zero.
+    sample_size: >-
+      4,866 fixtures joined from 5,342 weather rows (476 without a coherent
+      Bet365 price). Test folds n = 1,179 / 1,213 / 888. heavy_rain = 1 on
+      46 joined fixtures (0.9%), so that feature's own power is low; the
+      threshold was frozen and was not changed.
+    result: >-
+      NO MEASURABLE EFFECT (harness label DEGRADES_BASELINE; precise reading
+      null). ECE rose in all three folds (0.0317->0.0320, 0.0308->0.0344,
+      0.0201->0.0225) and log loss moved by < 0.0012. The raw de-vigged market
+      beat the fitted market-only baseline in 2 of 3 folds (test_2024 0.19690
+      vs 0.19741; test_2025 0.19922 vs 0.19927), as in F3.
+    robustness: >-
+      Per-league slices, descriptive only: 1 favourable (LIGUE_1 test_2024)
+      and 1 unfavourable (LA_LIGA test_2025) of 16, against ~0.8 expected by
+      chance. Across F3 and F3b, five weather variables in three forms have
+      now been tested with the same machinery, and none carries information
+      beyond the market.
+    failure_modes:
+      - "as F3: reanalysis fallback before 2022-03-01 (guarded by a hard cutoff)"
+      - "as F3: corpus kickoff clock assumed venue-local"
+    compute: "stdlib urllib + polars; about 105 requests, one per venue-window"
+    peak_rss: UNDECLARED
+    runtime: "acquisition about 50 min over a slow link (104 of 105 venue requests succeeded); study under 1 min"
+    artifact_location: >-
+      reports/research/portfolio-f3b-weather-incremental-value.json (test);
+      reports/research/portfolio-f3b-weather-forecast-gates.json (acquisition)
+    provenance:
+      - "reports/research/f3b-weather-wind-rain-protocol.json"
+      - "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V9.md"
+      - "docs/DEBT.md#155"
+      - "backend/scripts/study_f3b_wind_rain_incremental_value.py"
+    reviewer: UNDECLARED
+    certification_status: "not a candidate: REJECT under its pre-registered rule"
 
   # =========================================================================
   - experiment_id: E6

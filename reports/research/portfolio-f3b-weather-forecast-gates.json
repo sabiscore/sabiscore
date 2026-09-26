@@ -1,0 +1,33 @@
+{
+  "experiment_id": "F3b",
+  "hourly_variables": [
+    "temperature_2m",
+    "precipitation",
+    "wind_speed_10m",
+    "wind_gusts_10m",
+    "relative_humidity_2m"
+  ],
+  "generated_at": "2026-09-26T06:58:32.284480+01:00",
+  "source": "Open-Meteo Historical Forecast API",
+  "source_license_class": "L0",
+  "endpoint": "https://historical-forecast-api.open-meteo.com/v1/forecast",
+  "rule_3_note": "Archived FORECASTS, not ERA5 reanalysis. The endpoint silently falls back to reanalysis before its archive begins, so fixtures before 2022-03-01 are refused rather than filled with post-hoc actuals.",
+  "forecast_archive_start": "2022-03-01",
+  "cutoff_hours_pre_kickoff": 2,
+  "corpus_fixtures": 12765,
+  "fixtures_in_forecast_window": 7959,
+  "matched_fixtures": 5342,
+  "gates": {
+    "G1_whole_corpus_pct": 41.85,
+    "G1_within_forecast_window_pct": 67.12,
+    "threshold_pct": 85.0,
+    "G5_prediction_time_availability": "STRUCTURALLY SATISFIED \u2014 the same endpoint family serves a 16-day forward forecast, so an upcoming fixture is answerable at the same T-2h cutoff. Not yet measured against live fixtures; that requires a prospective probe."
+  },
+  "gaps": {
+    "VENUE_NOT_VERIFIED": 4061,
+    "NO_ARCHIVED_FORECAST": 3302,
+    "FETCH_FAILED": 60
+  },
+  "venues_verified": 115,
+  "dry_run": false
+}

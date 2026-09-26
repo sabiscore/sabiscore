@@ -1,0 +1,590 @@
+{
+  "experiment_id": "F3b",
+  "protocol_path": "reports/research/f3b-weather-wind-rain-protocol.json",
+  "protocol_sha256": "cbe78c1e2c30276e1164c4940fd72a19b3ea3d943d233796479bed3c1decd4b9",
+  "seed": 42,
+  "rows_joined": 4866,
+  "heavy_rain_rows": 46,
+  "folds": [
+    {
+      "train_seasons": [
+        2021,
+        2022
+      ],
+      "test_season": 2023
+    },
+    {
+      "train_seasons": [
+        2021,
+        2022,
+        2023
+      ],
+      "test_season": 2024
+    },
+    {
+      "train_seasons": [
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "test_season": 2025
+    }
+  ],
+  "candidate_features": [
+    "wind_speed_10m_kmh",
+    "wind_gusts_10m_kmh",
+    "heavy_rain"
+  ],
+  "arms": {
+    "level1_multinomial_logistic": {
+      "learner": "multinomial_logistic",
+      "folds": {
+        "test_2023": {
+          "train_seasons": [
+            2021,
+            2022
+          ],
+          "test_season": 2023,
+          "train_n": 1586,
+          "test_n": 1179,
+          "pooled": {
+            "n": 1179,
+            "rps_baseline_model": 0.18632,
+            "rps_candidate_model": 0.18668,
+            "candidate_minus_baseline_bootstrap": {
+              "point_estimate": 0.0004,
+              "ci_lower": -0.0001,
+              "ci_upper": 0.001,
+              "ci_level": 0.95,
+              "n_bootstrap": 1000,
+              "block_size": 10,
+              "n_samples": 1179
+            },
+            "logloss_baseline_model": 0.9476,
+            "logloss_candidate_model": 0.94876,
+            "ece_baseline_model": 0.0317,
+            "ece_candidate_model": 0.032,
+            "rps_raw_market": 0.18654,
+            "logloss_raw_reference": 0.94805,
+            "ece_raw_reference": 0.0343
+          },
+          "per_group": {
+            "BUNDESLIGA": {
+              "n": 221,
+              "rps_baseline_model": 0.18548,
+              "rps_candidate_model": 0.18627,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0008,
+                "ci_lower": -0.0001,
+                "ci_upper": 0.0017,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 221
+              },
+              "logloss_baseline_model": 0.94491,
+              "logloss_candidate_model": 0.94734,
+              "ece_baseline_model": 0.0481,
+              "ece_candidate_model": 0.05,
+              "rps_raw_market": 0.18538,
+              "logloss_raw_reference": 0.94563,
+              "ece_raw_reference": 0.0498
+            },
+            "EPL": {
+              "n": 285,
+              "rps_baseline_model": 0.17902,
+              "rps_candidate_model": 0.17896,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0001,
+                "ci_lower": -0.001,
+                "ci_upper": 0.0008,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 285
+              },
+              "logloss_baseline_model": 0.90447,
+              "logloss_candidate_model": 0.90575,
+              "ece_baseline_model": 0.0337,
+              "ece_candidate_model": 0.0404,
+              "rps_raw_market": 0.17888,
+              "logloss_raw_reference": 0.90382,
+              "ece_raw_reference": 0.0418
+            },
+            "LA_LIGA": {
+              "n": 190,
+              "rps_baseline_model": 0.1739,
+              "rps_candidate_model": 0.17492,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.001,
+                "ci_lower": -0.0002,
+                "ci_upper": 0.0022,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 190
+              },
+              "logloss_baseline_model": 0.91079,
+              "logloss_candidate_model": 0.91283,
+              "ece_baseline_model": 0.0745,
+              "ece_candidate_model": 0.0813,
+              "rps_raw_market": 0.17525,
+              "logloss_raw_reference": 0.91176,
+              "ece_raw_reference": 0.0784
+            },
+            "LIGUE_1": {
+              "n": 255,
+              "rps_baseline_model": 0.2043,
+              "rps_candidate_model": 0.20375,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0005,
+                "ci_lower": -0.0017,
+                "ci_upper": 0.0005,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 255
+              },
+              "logloss_baseline_model": 1.01155,
+              "logloss_candidate_model": 1.00946,
+              "ece_baseline_model": 0.049,
+              "ece_candidate_model": 0.0439,
+              "rps_raw_market": 0.20327,
+              "logloss_raw_reference": 1.01135,
+              "ece_raw_reference": 0.0378
+            },
+            "SERIE_A": {
+              "n": 228,
+              "rps_baseline_model": 0.18647,
+              "rps_candidate_model": 0.18744,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.001,
+                "ci_lower": -0.0006,
+                "ci_upper": 0.0026,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 228
+              },
+              "logloss_baseline_model": 0.96329,
+              "logloss_candidate_model": 0.96596,
+              "ece_baseline_model": 0.0616,
+              "ece_candidate_model": 0.0559,
+              "rps_raw_market": 0.18797,
+              "logloss_raw_reference": 0.96514,
+              "ece_raw_reference": 0.0572
+            }
+          }
+        },
+        "test_2024": {
+          "train_seasons": [
+            2021,
+            2022,
+            2023
+          ],
+          "test_season": 2024,
+          "train_n": 2765,
+          "test_n": 1213,
+          "pooled": {
+            "n": 1213,
+            "rps_baseline_model": 0.19741,
+            "rps_candidate_model": 0.19731,
+            "candidate_minus_baseline_bootstrap": {
+              "point_estimate": -0.0001,
+              "ci_lower": -0.0006,
+              "ci_upper": 0.0003,
+              "ci_level": 0.95,
+              "n_bootstrap": 1000,
+              "block_size": 10,
+              "n_samples": 1213
+            },
+            "logloss_baseline_model": 0.97265,
+            "logloss_candidate_model": 0.97219,
+            "ece_baseline_model": 0.0308,
+            "ece_candidate_model": 0.0344,
+            "rps_raw_market": 0.1969,
+            "logloss_raw_reference": 0.97043,
+            "ece_raw_reference": 0.0287
+          },
+          "per_group": {
+            "BUNDESLIGA": {
+              "n": 238,
+              "rps_baseline_model": 0.21339,
+              "rps_candidate_model": 0.21413,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0007,
+                "ci_lower": -0.0001,
+                "ci_upper": 0.0018,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 238
+              },
+              "logloss_baseline_model": 1.0301,
+              "logloss_candidate_model": 1.03249,
+              "ece_baseline_model": 0.0738,
+              "ece_candidate_model": 0.0725,
+              "rps_raw_market": 0.21009,
+              "logloss_raw_reference": 1.01922,
+              "ece_raw_reference": 0.0633
+            },
+            "EPL": {
+              "n": 285,
+              "rps_baseline_model": 0.1987,
+              "rps_candidate_model": 0.19807,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0006,
+                "ci_lower": -0.0016,
+                "ci_upper": 0.0004,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 285
+              },
+              "logloss_baseline_model": 0.97907,
+              "logloss_candidate_model": 0.97714,
+              "ece_baseline_model": 0.0436,
+              "ece_candidate_model": 0.0509,
+              "rps_raw_market": 0.1976,
+              "logloss_raw_reference": 0.97546,
+              "ece_raw_reference": 0.0487
+            },
+            "LA_LIGA": {
+              "n": 171,
+              "rps_baseline_model": 0.17157,
+              "rps_candidate_model": 0.1714,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0002,
+                "ci_lower": -0.001,
+                "ci_upper": 0.0007,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 171
+              },
+              "logloss_baseline_model": 0.88555,
+              "logloss_candidate_model": 0.88516,
+              "ece_baseline_model": 0.0585,
+              "ece_candidate_model": 0.0714,
+              "rps_raw_market": 0.17388,
+              "logloss_raw_reference": 0.89207,
+              "ece_raw_reference": 0.059
+            },
+            "LIGUE_1": {
+              "n": 272,
+              "rps_baseline_model": 0.20427,
+              "rps_candidate_model": 0.20345,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0008,
+                "ci_lower": -0.0015,
+                "ci_upper": -0.0001,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 272
+              },
+              "logloss_baseline_model": 0.96719,
+              "logloss_candidate_model": 0.96388,
+              "ece_baseline_model": 0.0463,
+              "ece_candidate_model": 0.0452,
+              "rps_raw_market": 0.20397,
+              "logloss_raw_reference": 0.96538,
+              "ece_raw_reference": 0.0388
+            },
+            "SERIE_A": {
+              "n": 247,
+              "rps_baseline_model": 0.19088,
+              "rps_candidate_model": 0.19141,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0005,
+                "ci_lower": -0.0005,
+                "ci_upper": 0.0014,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 247
+              },
+              "logloss_baseline_model": 0.97619,
+              "logloss_candidate_model": 0.97777,
+              "ece_baseline_model": 0.0462,
+              "ece_candidate_model": 0.0512,
+              "rps_raw_market": 0.19156,
+              "logloss_raw_reference": 0.97743,
+              "ece_raw_reference": 0.0564
+            }
+          }
+        },
+        "test_2025": {
+          "train_seasons": [
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "test_season": 2025,
+          "train_n": 3978,
+          "test_n": 888,
+          "pooled": {
+            "n": 888,
+            "rps_baseline_model": 0.19927,
+            "rps_candidate_model": 0.19949,
+            "candidate_minus_baseline_bootstrap": {
+              "point_estimate": 0.0002,
+              "ci_lower": -0.0003,
+              "ci_upper": 0.0007,
+              "ci_level": 0.95,
+              "n_bootstrap": 1000,
+              "block_size": 10,
+              "n_samples": 888
+            },
+            "logloss_baseline_model": 0.98054,
+            "logloss_candidate_model": 0.98092,
+            "ece_baseline_model": 0.0201,
+            "ece_candidate_model": 0.0225,
+            "rps_raw_market": 0.19922,
+            "logloss_raw_reference": 0.98034,
+            "ece_raw_reference": 0.0268
+          },
+          "per_group": {
+            "BUNDESLIGA": {
+              "n": 150,
+              "rps_baseline_model": 0.1942,
+              "rps_candidate_model": 0.19377,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0004,
+                "ci_lower": -0.0015,
+                "ci_upper": 0.0005,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 150
+              },
+              "logloss_baseline_model": 0.97229,
+              "logloss_candidate_model": 0.97118,
+              "ece_baseline_model": 0.0431,
+              "ece_candidate_model": 0.0448,
+              "rps_raw_market": 0.19582,
+              "logloss_raw_reference": 0.97732,
+              "ece_raw_reference": 0.0559
+            },
+            "EPL": {
+              "n": 182,
+              "rps_baseline_model": 0.21534,
+              "rps_candidate_model": 0.21585,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0005,
+                "ci_lower": -0.0003,
+                "ci_upper": 0.001,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 182
+              },
+              "logloss_baseline_model": 1.05053,
+              "logloss_candidate_model": 1.0514,
+              "ece_baseline_model": 0.0852,
+              "ece_candidate_model": 0.0935,
+              "rps_raw_market": 0.21202,
+              "logloss_raw_reference": 1.04249,
+              "ece_raw_reference": 0.0759
+            },
+            "EREDIVISIE": {
+              "n": 113,
+              "rps_baseline_model": 0.21319,
+              "rps_candidate_model": 0.2138,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0006,
+                "ci_lower": -0.0016,
+                "ci_upper": 0.0034,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 113
+              },
+              "logloss_baseline_model": 1.01971,
+              "logloss_candidate_model": 1.02007,
+              "ece_baseline_model": 0.0729,
+              "ece_candidate_model": 0.0666,
+              "rps_raw_market": 0.21178,
+              "logloss_raw_reference": 1.01482,
+              "ece_raw_reference": 0.0609
+            },
+            "LA_LIGA": {
+              "n": 115,
+              "rps_baseline_model": 0.17569,
+              "rps_candidate_model": 0.1776,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0019,
+                "ci_lower": 0.0008,
+                "ci_upper": 0.0028,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 115
+              },
+              "logloss_baseline_model": 0.87186,
+              "logloss_candidate_model": 0.87806,
+              "ece_baseline_model": 0.0766,
+              "ece_candidate_model": 0.0813,
+              "rps_raw_market": 0.17675,
+              "logloss_raw_reference": 0.87597,
+              "ece_raw_reference": 0.0915
+            },
+            "LIGUE_1": {
+              "n": 178,
+              "rps_baseline_model": 0.19594,
+              "rps_candidate_model": 0.19519,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": -0.0007,
+                "ci_lower": -0.0023,
+                "ci_upper": 0.0003,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 178
+              },
+              "logloss_baseline_model": 0.95992,
+              "logloss_candidate_model": 0.95795,
+              "ece_baseline_model": 0.0444,
+              "ece_candidate_model": 0.0446,
+              "rps_raw_market": 0.19616,
+              "logloss_raw_reference": 0.95934,
+              "ece_raw_reference": 0.0554
+            },
+            "SERIE_A": {
+              "n": 150,
+              "rps_baseline_model": 0.1964,
+              "rps_candidate_model": 0.19647,
+              "candidate_minus_baseline_bootstrap": {
+                "point_estimate": 0.0001,
+                "ci_lower": -0.0009,
+                "ci_upper": 0.0011,
+                "ci_level": 0.95,
+                "n_bootstrap": 1000,
+                "block_size": 10,
+                "n_samples": 150
+              },
+              "logloss_baseline_model": 0.98213,
+              "logloss_candidate_model": 0.98177,
+              "ece_baseline_model": 0.0504,
+              "ece_candidate_model": 0.0551,
+              "rps_raw_market": 0.19847,
+              "logloss_raw_reference": 0.98694,
+              "ece_raw_reference": 0.0802
+            }
+          }
+        }
+      }
+    }
+  },
+  "verdict": {
+    "label": "DEGRADES_BASELINE",
+    "precise_reading": "NO MEASURABLE EFFECT. Not one pooled fold's paired CI excludes zero in either direction -- the candidate is statistically indistinguishable from the market-only baseline, not measurably worse than it. Every point estimate sits in the 4th decimal of RPS.",
+    "pooled_folds_scored": 3,
+    "pooled_folds_improving": 0,
+    "pooled_folds_degrading": 0,
+    "pooled_folds_indistinguishable": 3,
+    "multiple_testing_note": "16 per-league slices were scored at the 95% level, so roughly 0.8 would exclude zero by chance alone. Observed: 1 favourable, 1 unfavourable. These are reported for completeness and are NOT evidence; no per-league slice was pre-registered as a hypothesis, and a slice that is favourable under one learner and unfavourable under another on the SAME fold is noise, not a league-specific weather effect.",
+    "per_league_slices": [
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2023",
+        "league": "BUNDESLIGA",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2023",
+        "league": "EPL",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2023",
+        "league": "LA_LIGA",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2023",
+        "league": "LIGUE_1",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2023",
+        "league": "SERIE_A",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2024",
+        "league": "BUNDESLIGA",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2024",
+        "league": "EPL",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2024",
+        "league": "LA_LIGA",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2024",
+        "league": "LIGUE_1",
+        "favourable": true
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2024",
+        "league": "SERIE_A",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "BUNDESLIGA",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "EPL",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "EREDIVISIE",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "LA_LIGA",
+        "favourable": false
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "LIGUE_1",
+        "favourable": null
+      },
+      {
+        "arm": "multinomial_logistic",
+        "fold": "test_2025",
+        "league": "SERIE_A",
+        "favourable": null
+      }
+    ]
+  },
+  "decision_under_protocol": "REJECT",
+  "not_a_promotion": "Stage 3 evidence under a pre-registered protocol. ADOPT would make weather a candidate for the gated route (directive v9 \u00a72.5 W3), not a served feature."
+}
