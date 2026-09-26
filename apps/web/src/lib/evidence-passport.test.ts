@@ -14,10 +14,6 @@ const baseInput = {
     uncertainty: "Certified ensemble-dispersion uncertainty unavailable",
   },
   advisoryGaps: ["market_prob_home", "elo_league_adjusted", "odds_drift_home"],
-  sources: [
-    { name: "odds-market-features", category: "betting_market", freshness_status: "DATA_GAP", enabled: true },
-    { name: "football-data.org", category: "fixtures_results", freshness_status: "LIVE", enabled: true },
-  ],
 };
 
 describe("buildEvidencePassport", () => {
@@ -59,18 +55,6 @@ describe("buildEvidencePassport", () => {
     expect(mystery?.label).not.toBe("mystery_family");
   });
 
-  it("falls back to a neutral freshness label for an unrecognised source status — never the raw token", () => {
-    const rows = buildEvidencePassport({
-      ...baseInput,
-      sources: [
-        { name: "odds-market-features", category: "betting_market", freshness_status: "WEIRD_TOKEN", enabled: true },
-      ],
-    });
-    const market = rows.find((r) => r.key === "market");
-    expect(market?.provenance?.freshnessLabel).toBe("Status unavailable");
-    expect(market?.provenance?.freshnessLabel).not.toBe("WEIRD_TOKEN");
-  });
-
   it("sums gap counts only for families with a matching evidence-family group (market, elo)", () => {
     const rows = buildEvidencePassport(baseInput);
     const market = rows.find((r) => r.key === "market");
@@ -84,18 +68,18 @@ describe("buildEvidencePassport", () => {
     expect(prediction?.gapCount).toBe(0);
   });
 
-  it("attaches provenance only for the family with an honest source-category mapping (market)", () => {
-    const rows = buildEvidencePassport(baseInput);
-    const market = rows.find((r) => r.key === "market");
-    const fixture = rows.find((r) => r.key === "fixture");
-    expect(market?.provenance).toEqual({
-      sourceName: "odds-market-features",
-      category: "Betting Market",
-      freshnessLabel: "Data unavailable",
-      freshnessTone: "neutral",
+  it("says nothing about a family beyond what this fixture measured", () => {
+    // The sub-line that used to come from /sources/freshness read "Data
+    // unavailable" beside "Resolved" (live 2026-09-26): that registry is never
+    // populated, so its status was never a measurement.
+    const rows = buildEvidencePassport({
+      ...baseInput,
+      fieldAvailability: { ...baseInput.fieldAvailability, market: true },
     });
-    // No registered source category maps to "fixture" — never fabricated.
-    expect(fixture?.provenance).toBeNull();
+    const market = rows.find((r) => r.key === "market");
+    expect(market?.statusLabel).toBe("Resolved");
+    expect(market?.reason).toBeNull();
+    expect(JSON.stringify(market)).not.toMatch(/unavailable/i);
   });
 
   it("never leaks a raw backend token through gap or freshness labels", () => {
@@ -110,7 +94,6 @@ describe("buildEvidencePassport", () => {
       fieldAvailability: {},
       unavailableReasons: {},
       advisoryGaps: [],
-      sources: [],
     });
     expect(rows).toEqual([]);
   });

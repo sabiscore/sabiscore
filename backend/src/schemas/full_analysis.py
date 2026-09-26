@@ -97,6 +97,35 @@ class FullMatchOddsEdgeResponse(BaseModel):
     kelly_stake: float = Field(ge=0.0)
 
 
+class MarketOutcomeResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    outcome: Literal["home_win", "draw", "away_win"]
+    odds: float = Field(gt=1.0)
+    implied: float = Field(gt=0.0, lt=1.0)
+    fair: float = Field(gt=0.0, lt=1.0)
+    model_prob: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    edge: Optional[float] = None
+    expected_value: Optional[float] = None
+
+
+class FullMatchMarketResponse(BaseModel):
+    """Directive v9 U1: all three outcomes, de-vigged by the backend only."""
+
+    devig_method: Literal["proportional"]
+    overround: float = Field(gt=0.0)
+    evaluable: bool
+    outcomes: List[MarketOutcomeResponse] = Field(min_length=3, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_publication(self) -> "FullMatchMarketResponse":
+        for row in self.outcomes:
+            if row.expected_value is not None and not self.evaluable:
+                raise ValueError("expected_value is published only when evaluable")
+            if (row.model_prob is None) != (row.edge is None):
+                raise ValueError("edge requires a model probability")
+        return self
+
+
 class MatchActionabilityResponse(BaseModel):
     edge_quality_score: float = Field(ge=0.0, le=1.0)
     clv_pct: Optional[float]
@@ -171,6 +200,7 @@ class FullMatchAnalysisResponseSchema(BaseModel):
     rl_recommendation: FullMatchRLRecommendationResponse
     elo_context: Optional[FullMatchEloResponse]
     odds_edge: Optional[FullMatchOddsEdgeResponse]
+    market: Optional[FullMatchMarketResponse] = None
     narrative: str = Field(max_length=280)
     partial_intelligence: bool
     data_gaps: List[str] = Field(
@@ -243,6 +273,17 @@ class FullMatchAnalysisResponseSchema(BaseModel):
             or self.fixture_verified is not True
         ):
             raise ValueError("stake_permitted is inconsistent with the verdict gate")
+        if self.market is not None:
+            has_forecast = self.prediction_status == PredictionStatus.AVAILABLE
+            if any(
+                (row.model_prob is not None) != has_forecast
+                for row in self.market.outcomes
+            ):
+                raise ValueError("market model probabilities require a forecast")
+            if self.market.evaluable and (
+                not has_forecast or self.partial_intelligence
+            ):
+                raise ValueError("an evaluable market requires a gap-free forecast")
         if not self.stake_permitted:
             if self.rl_recommendation.stake_fraction > 0:
                 raise ValueError("non-permitted states must expose zero RL stake")

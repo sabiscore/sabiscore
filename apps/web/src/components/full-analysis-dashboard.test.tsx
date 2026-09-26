@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -7,8 +7,10 @@ import {
   AnalysisShareAction,
   buildAnalysisEvidenceSummary,
   EloContextCard,
+  EnhancedMatchHero,
   EnsembleCard,
   EvidenceStatusCard,
+  MarketComparisonTable,
   CounterCase,
   DecisionStateBadge,
   NarrativeBlock,
@@ -17,6 +19,7 @@ import {
   UncertaintyCard,
 } from "./full-analysis-dashboard";
 import { EvidencePassport } from "./evidence-passport";
+import { mapFullAnalysisPresentation, type FullMatchMarket } from "@/lib/full-analysis-contract";
 
 describe("NarrativeBlock accessibility", () => {
   it("supports keyboard-operable disclosure with a valid controlled region", () => {
@@ -439,11 +442,6 @@ describe("EvidencePassport (Phase 5 §5)", () => {
   );
 
   it("stays visible when EvidenceStatusCard renders nothing (stakePermitted path)", () => {
-    vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ status: "AVAILABLE", sources: [] }),
-    } as unknown as Response);
-
     const statusCard = render(<EvidenceStatusCard data={stakePermittedData} />);
     expect(statusCard.container).toBeEmptyDOMElement();
 
@@ -459,52 +457,17 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     expect(screen.queryByText(/^Gapped/)).toBeNull();
   });
 
-  // Regression guard for the three raw-enum leaks the old DataFreshnessSection
-  // rendered directly in JSX: {data.status} (route envelope), {src.freshness_status}
-  // (title attr, keys a color map), and {src.category}. The mocked API response
-  // below deliberately carries all five prohibited raw tokens somewhere in its
-  // payload; none may reach the rendered DOM text.
-  const gappedData = {
-    ...stakePermittedData,
-    field_availability: {
-      fixture: true,
-      prediction: true,
-      market: false,
-      uncertainty: false,
-      elo: true,
-    },
-    unavailable_reasons: {
-      market: "Coherent single-bookmaker 1X2 snapshot unavailable",
-      uncertainty: "Certified ensemble-dispersion uncertainty unavailable",
-    },
-  } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
-
-  it("never renders a raw backend token from the sources/freshness response", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        status: "FETCH_FAILED",
-        sources: [
-          { name: "odds-market-features", category: "betting_market", freshness_status: "DATA_GAP", enabled: true },
-          { name: "football-data.org", category: "fixtures_results", freshness_status: "STALE", enabled: true },
-        ],
-      }),
-    } as unknown as Response);
-
-    const { container } = renderWithClient(<EvidencePassport data={gappedData} />);
-
-    // Wait for the sources/freshness query to resolve and the market row's
-    // provenance sub-line (the one family with an honest category mapping) to render.
-    await waitFor(() => {
-      expect(container.textContent ?? "").toContain("Betting Market");
-    });
-
-    await waitFor(() => {
-      const text = container.textContent ?? "";
-      for (const raw of ["DATA_GAP", "fixtures_results", "UNAVAILABLE", "FETCH_FAILED", "UNKNOWN"]) {
-        expect(text).not.toContain(raw);
-      }
-    });
+  it("does not attach a never-measured registry status to a resolved market row", () => {
+    // /sources/freshness is populated by nothing, so the passport printed
+    // "Data unavailable" under "Market Price · Resolved" on every fixture whose
+    // odds had just been fetched (live 2026-09-26). The passport now reads only
+    // this fixture's own evidence, and fetches nothing.
+    const fetchSpy = vi.spyOn(global, "fetch");
+    const { container } = renderWithClient(<EvidencePassport data={stakePermittedData} />);
+    const text = container.textContent ?? "";
+    expect(text).toMatch(/Market Price/);
+    expect(text).not.toMatch(/Data unavailable/);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -639,6 +602,63 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     expect(container.textContent).not.toMatch(/uncertainty is unavailable/i);
   });
 
+  it("says each gap once: no caveat prose restating the banner or the status card", () => {
+    // The live PSV page listed its gaps three times with two counts, and put
+    // the uncertainty gap back under the status card that already blocks on it.
+    const live = {
+      ...withheldWithForecast,
+      evidence_quality: {
+        ...withheldWithForecast.evidence_quality,
+        advisory_gaps: ["causal_analysis", "elo_league_adjusted", "home_pressing_intensity"],
+        advisory_gap_count: 3,
+      },
+      actionability: {
+        caveats: [
+          "Certified ensemble-dispersion uncertainty unavailable",
+          "2 live data gap(s): Causal Analysis, Elo League Adjusted",
+        ],
+      },
+    } as typeof withheldWithForecast;
+    const { container } = render(<CounterCase data={live} />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/ensemble-dispersion uncertainty unavailable/i);
+    expect(text).not.toMatch(/live data gap/i);
+    expect(text).toMatch(/3 non-blocking inputs are missing/);
+    expect(text).not.toMatch(/elo league adjusted|cross-league/i);
+  });
+
+  it("labels the market row as an outcome and withholds Kelly it will not size", () => {
+    const edge = withheldWithForecast.odds_edge!;
+    const withheld = render(<OddsEdgeCard edge={edge} />).container.textContent ?? "";
+    expect(withheld).toMatch(/Outcome/);
+    expect(withheld).not.toMatch(/Market(?! Edge)/);
+    expect(withheld).toMatch(/Kelly.*Withheld/);
+    expect(withheld).not.toMatch(/0\.00%/);
+    const permitted =
+      render(<OddsEdgeCard edge={{ ...edge, kelly_stake: 0.012 }} stakePermitted />).container
+        .textContent ?? "";
+    expect(permitted).toMatch(/1\.20%/);
+  });
+
+  it("shows no freshness pill when nothing was measured", () => {
+    const { container } = render(
+      <EnhancedMatchHero
+        matchId="fd-558881"
+        data={{ ...withheldWithForecast, staleness_available: false, staleness_seconds: 0 }}
+        presentation={mapFullAnalysisPresentation({
+          ...withheldWithForecast,
+          staleness_available: false,
+          staleness_seconds: 0,
+        })}
+        league="EREDIVISIE"
+        homeTeam="PSV"
+        awayTeam="SC Heerenveen"
+      />,
+    );
+    expect(container.textContent).not.toMatch(/unknown/i);
+    expect(container.querySelector('[aria-label="Data freshness unknown"]')).toBeNull();
+  });
+
   it("does not colour a gap the backend will not stake on as value", () => {
     const edge = withheldWithForecast.odds_edge!;
     for (const { container } of [
@@ -649,5 +669,49 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
       expect(container.textContent).toContain("+8.3");
     }
     expect(render(<EdgeDeltaBar oddsEdge={edge} stakePermitted />).container.innerHTML).toMatch(/emerald/);
+    // The neutral is a named decision state, not an incidental grey (v9 U4).
+    expect(render(<EdgeDeltaBar oddsEdge={edge} />).container.innerHTML).toMatch(/--state-withheld/);
+  });
+});
+
+
+describe("MarketComparisonTable (directive v9 U1)", () => {
+  const outcomes: FullMatchMarket["outcomes"] = [
+    { outcome: "home_win", odds: 1.5, implied: 0.667, fair: 0.64, model_prob: 0.646, edge: 0.006, expected_value: null },
+    { outcome: "draw", odds: 7.36, implied: 0.136, fair: 0.128, model_prob: 0.211, edge: 0.083, expected_value: null },
+    { outcome: "away_win", odds: 4.2, implied: 0.238, fair: 0.232, model_prob: 0.143, edge: -0.089, expected_value: null },
+  ];
+  const withheld: FullMatchMarket = { devig_method: "proportional", overround: 1.041, evaluable: false, outcomes };
+
+  it("shows the gap for all three outcomes, neutrally, with no expected return while withheld", () => {
+    const { container } = render(<MarketComparisonTable market={withheld} />);
+    const text = container.textContent ?? "";
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+    expect(text).toContain("+8.3pp");
+    expect(text).toContain("−8.9pp");
+    expect(text).not.toMatch(/Expected return/);
+    expect(container.innerHTML).not.toMatch(/emerald/);
+    expect(text).toMatch(/not evidence of value/);
+  });
+
+  it("adds expected return only when the fixture is evaluable", () => {
+    const evaluable = {
+      ...withheld,
+      evaluable: true,
+      outcomes: outcomes.map((row) => ({ ...row, expected_value: row.outcome === "draw" ? 0.553 : -0.05 })),
+    };
+    const { container } = render(<MarketComparisonTable market={evaluable} />);
+    expect(screen.getByRole("columnheader", { name: /Expected return/ })).toBeInTheDocument();
+    expect(container.textContent).toContain("+55.3%");
+  });
+
+  it("renders market facts only when there is no measured forecast", () => {
+    const marketOnly = {
+      ...withheld,
+      outcomes: outcomes.map((row) => ({ ...row, model_prob: null, edge: null })),
+    };
+    const { container } = render(<MarketComparisonTable market={marketOnly} />);
+    expect(container.textContent).toMatch(/Market only/);
+    expect(container.textContent).not.toMatch(/pp/);
   });
 });

@@ -186,11 +186,16 @@ async def _background_settlement_sync() -> None:
         logger.warning("Initial settlement proceeding before fixture sync completed")
     await asyncio.sleep(_INITIAL_SETTLEMENT_DELAY_SECONDS)
 
+    from ..services.provider_evidence_service import run_provider_evidence_retention
+
     while True:
         try:
             await run_settlement_pass()
         except Exception:
             logger.exception("Background settlement sync failed")
+        # Directive v9 R2: bounded evidence tables. Never raises, and never
+        # delays settlement: it runs after the pass.
+        await run_provider_evidence_retention()
         await asyncio.sleep(_SETTLEMENT_SYNC_INTERVAL_SECONDS)
 
 
@@ -200,17 +205,30 @@ async def _background_settlement_sync() -> None:
 _CLV_CAPTURE_INTERVAL_SECONDS = 300
 
 
-async def _background_clv_capture(provider) -> None:
+async def _clv_capture_tick(provider, odds_service) -> None:
+    """One tick: market evidence first, then pre-kickoff prediction capture.
+
+    Separate try blocks, in this order, so a capture failure can never cost the
+    CLV capture it rides on (directive v9 L4)."""
+    from ..services.clv_capture_service import run_clv_capture_pass
+    from ..services.prediction_capture_service import run_prediction_capture_pass
+
+    try:
+        await run_clv_capture_pass(provider=provider)
+    except Exception:
+        logger.exception("Background CLV capture failed")
+    try:
+        await run_prediction_capture_pass(odds_service=odds_service)
+    except Exception:
+        logger.exception("Background prediction capture failed")
+
+
+async def _background_clv_capture(provider, odds_service=None) -> None:
     """Genuinely periodic, same shape as settlement sync — must keep polling
     across a matchday, not just seed once at boot."""
-    from ..services.clv_capture_service import run_clv_capture_pass
-
     while True:
         await asyncio.sleep(_CLV_CAPTURE_INTERVAL_SECONDS)
-        try:
-            await run_clv_capture_pass(provider=provider)
-        except Exception:
-            logger.exception("Background CLV capture failed")
+        await _clv_capture_tick(provider, odds_service)
 
 
 async def _background_notification_dispatch() -> None:
@@ -299,7 +317,9 @@ async def lifespan(app: FastAPI):
     # Periodic CLV capture: closing 1X2 snapshot per fixture near kickoff.
     # Same handle-stored/cancel-on-shutdown shape as settlement, above.
     app.state.clv_capture_task = asyncio.create_task(
-        _background_clv_capture(app.state.provider_registry.get("the_odds_api"))
+        _background_clv_capture(
+            app.state.provider_registry.get("the_odds_api"), app.state.odds_service
+        )
     )
 
     # Periodic in-app notification dispatch: kickoff reminders + probability-swing

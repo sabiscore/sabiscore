@@ -235,3 +235,124 @@ async def test_fetch_market_odds_skips_lookup_without_team_names():
         await endpoint._fetch_market_odds(home_team=None, away_team="X", league="EPL")
         is None
     )
+
+
+# --------------------------------------------------------------------------- #
+# Directive v9 U1: "no value at this price" is not "no market"
+# --------------------------------------------------------------------------- #
+
+# The model agrees with the market exactly, with a 6% book margin on top:
+# de-vigged fair probabilities equal the model's, so no outcome has positive EV.
+_FAIR_PRICED = {
+    outcome: 1.0 / (p * 1.06)
+    for outcome, p in (("home_win", 0.45), ("draw", 0.28), ("away_win", 0.27))
+}
+
+
+@pytest.mark.asyncio
+async def test_a_coherent_market_without_value_is_not_reported_missing(monkeypatch):
+    """COHERENT_1X2_MARKET_UNAVAILABLE fired whenever odds_edge was None, which
+    also covers a coherent market with no positive-EV outcome. That reported
+    PASS ("no value at this price") as WITHHELD ("no market")."""
+    _install(monkeypatch, _live(), odds=_FAIR_PRICED)
+
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
+
+    assert "COHERENT_1X2_MARKET_UNAVAILABLE" not in payload["evidence_quality"]["critical_gaps"]
+    assert payload["odds_edge"] is None
+    assert payload["field_availability"]["market"] is True
+    # Still no stake: the gap used to be what held the gate closed here.
+    assert payload["stake_permitted"] is False
+    assert payload["rl_recommendation"]["abstain"] is True
+    market = payload["market"]
+    assert [row["outcome"] for row in market["outcomes"]] == ["home_win", "draw", "away_win"]
+    assert market["overround"] == pytest.approx(1.06)
+    assert [row["fair"] for row in market["outcomes"]] == pytest.approx([0.45, 0.28, 0.27])
+    _validates(payload)
+
+
+@pytest.mark.asyncio
+async def test_an_uncertified_generation_never_publishes_expected_value(monkeypatch):
+    _install(
+        monkeypatch,
+        _live(),
+        odds={"home_win": 2.50, "draw": 3.30, "away_win": 3.10},
+    )
+
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
+
+    assert payload["market"]["evaluable"] is False
+    assert all(row["expected_value"] is None for row in payload["market"]["outcomes"])
+    # The model-vs-fair gap is still shown (neutral) for a WITHHELD fixture.
+    assert payload["market"]["outcomes"][0]["edge"] == pytest.approx(0.45 - 0.39, abs=0.01)
+    _validates(payload)
+
+
+def _validates(payload: dict) -> None:
+    """The route declares this schema as its response_model; hold the payload to it."""
+    from src.schemas.full_analysis import FullMatchAnalysisResponseSchema
+
+    FullMatchAnalysisResponseSchema.model_validate(payload)
+
+
+def test_market_block_publishes_expected_value_only_when_evaluable():
+    probs = {"home_win": 0.45, "draw": 0.28, "away_win": 0.27}
+    odds = {"home_win": 2.50, "draw": 3.30, "away_win": 3.10}
+
+    withheld = endpoint._market_block(odds, model_probs=probs, evaluable=False)
+    evaluable = endpoint._market_block(odds, model_probs=probs, evaluable=True)
+    no_forecast = endpoint._market_block(odds, model_probs=None, evaluable=True)
+
+    assert [r["expected_value"] for r in withheld["outcomes"]] == [None, None, None]
+    assert evaluable["outcomes"][0]["expected_value"] == pytest.approx(0.45 * 2.50 - 1)
+    # No forecast: market facts only, never a gap against the diagnostic prior.
+    assert no_forecast["evaluable"] is False
+    assert all(r["model_prob"] is None and r["edge"] is None for r in no_forecast["outcomes"])
+    assert endpoint._market_block({"home_win": 1.0, "draw": 3, "away_win": 3}, model_probs=probs, evaluable=True) is None
+
+
+def test_schema_refuses_expected_value_on_a_non_evaluable_market():
+    from src.schemas.full_analysis import FullMatchMarketResponse
+
+    block = endpoint._market_block(
+        {"home_win": 2.50, "draw": 3.30, "away_win": 3.10},
+        model_probs={"home_win": 0.45, "draw": 0.28, "away_win": 0.27},
+        evaluable=True,
+    )
+    block["evaluable"] = False
+    with pytest.raises(ValueError, match="only when evaluable"):
+        FullMatchMarketResponse.model_validate(block)
+
+
+@pytest.mark.asyncio
+async def test_no_value_at_the_price_abstains_even_with_every_gate_open(monkeypatch):
+    """With the old false gap gone, the explicit no-value abstain is what keeps a
+    stake off a market where no outcome has positive EV. Open every other gate
+    (certified generation, a measured uncertainty) so only that guard remains."""
+    from src.services.uncertainty_service import UncertaintyBreakdown
+
+    async def _measured(*_args, **_kwargs):
+        return UncertaintyBreakdown(0.05, 0.2, 10.0, (0.35, 0.55))
+
+    _install(monkeypatch, _live(), odds=_FAIR_PRICED)
+    monkeypatch.setattr(endpoint, "active_generation_is_certified", lambda: True)
+    monkeypatch.setattr(endpoint, "_uncertainty_from_features", _measured)
+
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-1", league="EPL", db=object()
+    )
+
+    assert payload["evidence_quality"]["critical_gaps"] == []
+    assert payload["rl_recommendation"]["abstain"] is True
+    assert payload["rl_recommendation"]["reason"] == (
+        "Abstained: no outcome offers value at the current price"
+    )
+    assert payload["stake_permitted"] is False
+    # Evaluable (PASS): the negative expected return is shown, not withheld.
+    assert payload["market"]["evaluable"] is True
+    assert all(r["expected_value"] < 0 for r in payload["market"]["outcomes"])
+    _validates(payload)

@@ -1,38 +1,20 @@
-import { evidenceStateFor, type EvidenceStateDescriptor } from "./evidence-state";
+import type { EvidenceStateDescriptor } from "./evidence-state";
 import { groupEvidenceGaps } from "./full-analysis-contract";
 
 /**
- * Evidence Passport — per-family provenance, freshness, and resolution status
- * for /match/[id] (docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md §5). Composes two
- * things the platform already produces; it introduces no new family taxonomy
- * and fetches no new endpoint:
+ * Evidence Passport — per-family resolution status for /match/[id]
+ * (docs/PRODUCTION_EXECUTIVE_DIRECTIVE.md §5), built only from what the
+ * full-analysis endpoint computed for this fixture: `field_availability` /
+ * `unavailable_reasons` (backend/src/api/endpoints/full_analysis.py) and the
+ * advisory gap codes. No raw backend enum token lives in either field.
  *
- *  - `field_availability` / `unavailable_reasons` — the resolution status the
- *    full-analysis endpoint already computes
- *    (backend/src/api/endpoints/full_analysis.py `field_availability` /
- *    `unavailable_reasons`, ~lines 886-903): fixture, prediction, market,
- *    uncertainty, elo. Booleans + prose reasons — no raw backend enum token
- *    lives in either of those two fields.
- *  - GET /api/v1/sources/freshness (proxied at /api/sources/freshness) — the
- *    V4 source registry's per-category freshness. Only "market" has an
- *    honest 1:1 category match today (see FAMILY_SOURCE_CATEGORY below); the
- *    other families render without a provenance sub-line rather than
- *    guessing one.
+ * It used to add a per-family "provenance" sub-line from GET
+ * /api/v1/sources/freshness. That registry is populated by
+ * `record_source_check`, which nothing calls, so every source reads
+ * "never_checked" and the market row said "Data unavailable" beside
+ * "Resolved" on fixtures whose odds had just been fetched (live 2026-09-26).
+ * A status that is never measured is not provenance; it was removed.
  */
-
-export interface SourceFreshnessItem {
-  name: string;
-  category: string;
-  freshness_status: string;
-  enabled: boolean;
-}
-
-export interface EvidencePassportProvenance {
-  sourceName: string;
-  category: string;
-  freshnessLabel: string;
-  freshnessTone: EvidenceStateDescriptor["tone"];
-}
 
 export interface EvidencePassportRow {
   key: string;
@@ -42,7 +24,6 @@ export interface EvidencePassportRow {
   tone: EvidenceStateDescriptor["tone"];
   reason: string | null;
   gapCount: number;
-  provenance: EvidencePassportProvenance | null;
 }
 
 const FAMILY_LABELS: Record<string, string> = {
@@ -70,32 +51,8 @@ const FAMILY_GAP_GROUP_LABELS: Record<string, readonly string[]> = {
   elo: ["Team strength ratings"],
 };
 
-/**
- * sources/freshness categories (backend/src/connectors/source_registry.py)
- * that correspond to a field_availability family. Only "market" has a
- * registered source today (odds-market-features -> "betting_market").
- */
-const FAMILY_SOURCE_CATEGORY: Record<string, string> = {
-  market: "betting_market",
-};
-
 function titleCase(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/**
- * evidence-state.ts's dictionary already covers STALE and DATA_GAP exactly as
- * sources/freshness emits them. LIVE/RECENT are unique to source freshness
- * (fixture-list evidence never uses them), so they're layered on top instead
- * of duplicating the whole fail-closed dictionary.
- */
-const FRESHNESS_TOKEN_OVERRIDES: Record<string, EvidenceStateDescriptor> = {
-  LIVE: { label: "Fresh", tone: "positive" },
-  RECENT: { label: "Recent", tone: "warning" },
-};
-
-function freshnessDescriptor(token: string): EvidenceStateDescriptor {
-  return FRESHNESS_TOKEN_OVERRIDES[String(token).toUpperCase()] ?? evidenceStateFor(token);
 }
 
 export function formatEvidenceAge(seconds: number | null): string {
@@ -110,9 +67,8 @@ export function buildEvidencePassport(input: {
   fieldAvailability: Record<string, boolean>;
   unavailableReasons: Record<string, string>;
   advisoryGaps: readonly string[];
-  sources: readonly SourceFreshnessItem[];
 }): EvidencePassportRow[] {
-  const { fieldAvailability, unavailableReasons, advisoryGaps, sources } = input;
+  const { fieldAvailability, unavailableReasons, advisoryGaps } = input;
   const gapCountByLabel = new Map(groupEvidenceGaps(advisoryGaps).map((g) => [g.label, g.count]));
 
   const keys = Object.keys(fieldAvailability);
@@ -128,17 +84,6 @@ export function buildEvidencePassport(input: {
       0,
     );
 
-    const category = FAMILY_SOURCE_CATEGORY[key];
-    const source = category ? sources.find((s) => s.category === category) : undefined;
-    const provenance: EvidencePassportProvenance | null = source
-      ? {
-          sourceName: source.name,
-          category: titleCase(source.category),
-          freshnessLabel: freshnessDescriptor(source.freshness_status).label,
-          freshnessTone: freshnessDescriptor(source.freshness_status).tone,
-        }
-      : null;
-
     return {
       key,
       label: FAMILY_LABELS[key] ?? titleCase(key),
@@ -147,7 +92,6 @@ export function buildEvidencePassport(input: {
       tone: resolved ? "positive" : "warning",
       reason: resolved ? null : unavailableReasons[key] ?? "Evidence unavailable for this family.",
       gapCount,
-      provenance,
     };
   });
 }

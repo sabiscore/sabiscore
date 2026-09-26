@@ -166,6 +166,27 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
       expect(screen.getByRole("img", { name: /no bet/i })).toBeInTheDocument();
     });
 
+    it("states each outcome's gap once when the backend sends the market block", async () => {
+      const outcomes: NonNullable<FullMatchAnalysisResponse["market"]>["outcomes"] = [
+        { outcome: "home_win", odds: 2.15, implied: 0.465, fair: 0.465, model_prob: 0.52, edge: 0.055, expected_value: null },
+        { outcome: "draw", odds: 3.4, implied: 0.294, fair: 0.28, model_prob: 0.26, edge: -0.02, expected_value: null },
+        { outcome: "away_win", odds: 3.8, implied: 0.263, fair: 0.255, model_prob: 0.22, edge: -0.035, expected_value: null },
+      ];
+      vi.mocked(api.getFullAnalysis).mockResolvedValue(
+        createMockAnalysis({
+          stake_permitted: false,
+          market: { devig_method: "proportional", overround: 1.022, evaluable: false, outcomes },
+        }),
+      );
+
+      renderWithClient(<FullAnalysisDashboard matchId="Arsenal vs Chelsea" league="EPL" />);
+
+      await screen.findByRole("region", { name: /model vs fair market/i });
+      expect(screen.queryByText("Edge Delta")).not.toBeInTheDocument();
+      expect(screen.queryByText("Market Edge")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Live market odds unavailable/)).not.toBeInTheDocument();
+    });
+
     it("falls back to 'Watchlist' messaging when verdict is SPECULATIVE", async () => {
       const mockData = createMockAnalysis({
         verdict: "SPECULATIVE",

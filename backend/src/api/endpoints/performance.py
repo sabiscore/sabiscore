@@ -407,7 +407,7 @@ async def model_performance(
     league: Optional[str] = Query(None),
     window: int = Query(30, ge=7, le=180),
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any] | JSONResponse:
+) -> Dict[str, Any]:
     result = await _walk_forward_summary(db, league=league, window=window)
     records, validation = result["records"], result["validation"]
     model_version = str(result["model_version"])
@@ -426,20 +426,21 @@ async def model_performance(
     clv = compute_clv_summary(clv_records)
     vs_close = compute_model_vs_close(clv_records)
 
+    # "Nothing has settled yet" is a correct answer, not an outage: 200 with the
+    # status in the body (directive v9 L2). A 503 here put a 5xx in the log on
+    # every header refresh and would trip any 5xx-rate alert. Real failures still
+    # raise and surface as 5xx.
     if not records or validation.get("skipped"):
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "METRICS_UNAVAILABLE",
-                "reason": "insufficient_settled_predictions",
-                "league": league,
-                "window": window,
-                "settled_predictions": len(records),
-                "model_close_gap_argmax": clv,
-                "model_vs_close": vs_close,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        return {
+            "status": "METRICS_UNAVAILABLE",
+            "reason": "insufficient_settled_predictions",
+            "league": league,
+            "window": window,
+            "settled_predictions": len(records),
+            "model_close_gap_argmax": clv,
+            "model_vs_close": vs_close,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     return {
         "status": "OK",
@@ -462,7 +463,7 @@ async def model_performance(
 @router.get("/model-performance/summary", response_model=None)
 async def model_performance_summary(
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any] | JSONResponse:
+) -> Dict[str, Any]:
     result = await _walk_forward_summary(db, league=None, window=None)
     records, validation = result["records"], result["validation"]
     # Same independence as the sibling handler: CLV has its own data floor, so
@@ -472,18 +473,15 @@ async def model_performance_summary(
     clv = compute_clv_summary(clv_records)
     vs_close = compute_model_vs_close(clv_records)
 
-    if not records or validation.get("skipped"):
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "METRICS_UNAVAILABLE",
-                "reason": "insufficient_settled_predictions",
-                "settled_predictions": len(records),
-                "model_close_gap_argmax": clv,
-                "model_vs_close": vs_close,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+    if not records or validation.get("skipped"):  # 200: see model_performance
+        return {
+            "status": "METRICS_UNAVAILABLE",
+            "reason": "insufficient_settled_predictions",
+            "settled_predictions": len(records),
+            "model_close_gap_argmax": clv,
+            "model_vs_close": vs_close,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     return {
         "status": "OK",
@@ -614,7 +612,7 @@ async def model_performance_calibration(
     n_bins: int = Query(10, ge=5, le=20),
     window: Optional[int] = Query(None, ge=7, le=365),
     db: AsyncSession = Depends(get_async_session),
-) -> Dict[str, Any] | JSONResponse:
+) -> Dict[str, Any]:
     """Expose binned probability calibration curves, Murphy Brier score decomposition,
     Multiclass ECE, and Künsch block bootstrap confidence intervals for public trust transparency.
 
@@ -643,17 +641,9 @@ async def model_performance_calibration(
         model_version=model_version,
     )
 
-    if not records:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "METRICS_UNAVAILABLE",
-                "reason": "insufficient_settled_predictions",
-                "sample_size": 0,
-                "league": league,
-                "model_version": model_version,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
+    if not records:  # 200: see model_performance
+        return _compute_calibration_metrics(
+            records, league=league, model_version=model_version
         )
 
     # Three bootstraps: off the event loop for the same reason as walk-forward.

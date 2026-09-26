@@ -189,6 +189,8 @@ async def test_latest_verified_evidence_fails_closed_after_freshness_boundary(
     observed_at = datetime(2026, 8, 17, 0, 0, tzinfo=timezone.utc)
     result = _result(ProviderStatus.VERIFIED)
     result.acquired_at = observed_at
+    # An on-demand stream: scheduled streams are judged against their schedule.
+    result.request_context = {"competition": "EPL", "query_intent": "STANDINGS"}
 
     with patch("src.db.session.AsyncSessionLocal", new=factory):
         await recorder.record_result(result, duration_ms=10.0, circuit_open=False)
@@ -339,3 +341,61 @@ async def test_evidence_query_never_sorts_the_whole_log(factory) -> None:
     assert not any("over (" in sql for sql in statements)
     detail_reads = [sql for sql in statements if "provider_health_log.details" in sql]
     assert detail_reads and all(" limit " in sql for sql in detail_reads)
+
+
+async def _record(factory, *, intent: str, at: datetime, records: list) -> None:
+    result = _result(ProviderStatus.PARTIAL if not records else ProviderStatus.VERIFIED)
+    result.acquired_at = at
+    result.records = records
+    result.http_status_code = 200  # an empty answer is still a successful call
+    result.request_context = {"competition": "EPL", "query_intent": intent}
+    with patch("src.db.session.AsyncSessionLocal", new=factory):
+        await ProviderEvidenceRecorder().record_result(
+            result, duration_ms=5.0, circuit_open=False
+        )
+
+
+async def test_a_scheduled_stream_is_stale_only_once_it_misses_its_schedule(factory) -> None:
+    from src.services.provider_evidence_service import _SCHEDULED_STREAM_INTERVAL_SECONDS
+
+    observed_at = datetime(2026, 9, 26, 0, 0, tzinfo=timezone.utc)
+    await _record(factory, intent="UPCOMING", at=observed_at, records=[{"coherent": True}])
+    limit = _SCHEDULED_STREAM_INTERVAL_SECONDS["UPCOMING"] + PROVIDER_EVIDENCE_STALE_SECONDS
+
+    async with factory() as session:
+        between_syncs = await latest_provider_evidence(
+            session, ["test_provider"], now=observed_at + timedelta(hours=2)
+        )
+        missed = await latest_provider_evidence(
+            session, ["test_provider"], now=observed_at + timedelta(seconds=limit + 1)
+        )
+
+    assert between_syncs["test_provider"]["state"] == "LIVE_VERIFIED"
+    assert between_syncs["test_provider"]["stale_after_seconds"] == limit
+    assert missed["test_provider"]["state"] == "STALE"
+
+
+async def test_healthy_provider_between_syncs_is_not_degraded(factory) -> None:
+    """Live 2026-09-26: hourly RESULTS were fresh and empty (international break),
+    6-hourly UPCOMING were 100 minutes old, and the provider read DEGRADED."""
+    now = datetime(2026, 9, 26, 8, 0, tzinfo=timezone.utc)
+    await _record(
+        factory, intent="UPCOMING", at=now - timedelta(minutes=100), records=[{"coherent": True}]
+    )
+    await _record(factory, intent="RESULTS", at=now - timedelta(minutes=39), records=[])
+
+    async with factory() as session:
+        evidence = await latest_provider_evidence(session, ["test_provider"], now=now)
+
+    assert evidence["test_provider"]["context_count"] == 2
+    assert evidence["test_provider"]["state"] == "LIVE_VERIFIED"
+
+
+def test_scheduled_stream_intervals_match_the_schedule() -> None:
+    from src.api import main
+    from src.services.provider_evidence_service import _SCHEDULED_STREAM_INTERVAL_SECONDS
+
+    assert _SCHEDULED_STREAM_INTERVAL_SECONDS == {
+        "UPCOMING": main._FIXTURE_SYNC_INTERVAL_SECONDS,
+        "RESULTS": main._SETTLEMENT_SYNC_INTERVAL_SECONDS,
+    }

@@ -1,7 +1,7 @@
 """Unit tests for the calibration endpoint's sample-floor honesty and cache.
 
 Sibling coverage lives in ``test_model_performance_calibration_endpoint.py``
-(pure-function OK-path assertions and the empty-records 503 fallback). This
+(pure-function OK-path assertions and the empty-records pending fallback). This
 file covers the three additions from the calibration-honesty fix: the
 below-floor signal, empty-bin fail-closed nulls, and the 6h cache.
 """

@@ -49,14 +49,17 @@ describe("GET /api/model-performance/summary", () => {
   });
 
   it("forwards the backend's own body untouched when it answers", async () => {
-    // "No settled predictions yet" is a 503 the backend answers on purpose. It
-    // must not be rewritten into an infrastructure error, or a healthy backend
-    // reads as an outage.
-    const payload = { status: "METRICS_UNAVAILABLE", reason: "no_settled_predictions" };
+    // "No settled predictions yet" is a 200 the backend answers on purpose
+    // (directive v9 L2). It must not be rewritten into an infrastructure error,
+    // or a healthy backend reads as an outage.
+    const payload = {
+      status: "METRICS_UNAVAILABLE",
+      reason: "insufficient_settled_predictions",
+    };
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
-        status: 503,
+        status: 200,
         text: async () => JSON.stringify(payload),
       }),
     );
@@ -64,6 +67,7 @@ describe("GET /api/model-performance/summary", () => {
     const response = await GET();
     const body = await response.json();
 
-    expect(body.reason).toBe("no_settled_predictions");
+    expect(response.status).toBe(200);
+    expect(body).toEqual(payload);
   });
 });

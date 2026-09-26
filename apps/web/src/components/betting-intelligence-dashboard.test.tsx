@@ -254,6 +254,27 @@ describe("BettingIntelligenceDashboard fail-closed states", () => {
   });
 });
 
+describe("research snapshot confirmation preview", () => {
+  it("previews nothing until the bookmaker and all three prices are entered", async () => {
+    render(<BettingIntelligenceDashboard />);
+    // Selecting the loaded fixture resets the form; type after it settles.
+    await screen.findAllByText(/Arsenal/);
+    // Live 2026-09-26: "Bookmaker unavailable | H Unavailable D Unavailable A
+    // Unavailable" rendered before any input (directive v9 U3).
+    expect(screen.queryByText(/Confirmation preview/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Bookmaker/), { target: { value: "Bet365" } });
+    fireEvent.change(screen.getByLabelText(/^Home odds/), { target: { value: "1.50" } });
+    fireEvent.change(screen.getByLabelText(/^Draw odds/), { target: { value: "4.20" } });
+    expect(screen.queryByText(/Confirmation preview/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Away odds/), { target: { value: "6.00" } });
+    const preview = screen.getByText(/Confirmation preview/i);
+    expect(preview).toHaveTextContent(/Bet365 \| H 1\.50 D 4\.20 A 6\.00/);
+    expect(preview).not.toHaveTextContent(/unavailable/i);
+  });
+});
+
 describe("parseOddsInput", () => {
   it("treats an empty field as unavailable, never as a 0.00 price", () => {
     expect(Number.isNaN(parseOddsInput(""))).toBe(true);

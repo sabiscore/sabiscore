@@ -48,7 +48,7 @@ async function fetchModelPerformance(
   const params = new URLSearchParams({ window: String(window) });
   if (league) params.set("league", league);
   const res = await fetch(`/api/model-performance?${params}`, { cache: "no-store" });
-  // 503 here is normally "nothing has settled in this window yet" — a correct
+  // METRICS_UNAVAILABLE is normally "nothing has settled in this window yet" — a correct
   // answer with a reason in the body, not a failure. Let the component say which.
   return (await res.json()) as ModelPerformanceResponse;
 }

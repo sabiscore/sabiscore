@@ -17,6 +17,7 @@ import {
   type FullMatchEloContext,
   type FullMatchUncertainty,
   type FullMatchRLRecommendation,
+  type FullMatchMarket,
   type FullMatchOddsEdge,
   type MatchActionability,
   type DecisionState,
@@ -65,6 +66,9 @@ const VERDICT_META = VERDICT_TOKENS;
 
 const pct = (v: number, d = 1) => `${(Math.max(0, v) * 100).toFixed(d)}%`;
 const fmt = (v: number, d = 0) => v.toFixed(d);
+// Signed display of a backend value; pct() clamps negatives to zero.
+const signed = (v: number, unit: "pp" | "%") =>
+  `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toFixed(1)}${unit}`;
 const toLabel = (k: string) =>
   k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -196,7 +200,7 @@ function ProbabilityOrb({ label, value, strokeColor, isTop, available = true }: 
 
 // ─── Enhanced match hero (E.1) ────────────────────────────────────────────────
 
-function EnhancedMatchHero({
+export function EnhancedMatchHero({
   matchId,
   data,
   presentation,
@@ -364,13 +368,14 @@ function EnhancedMatchHero({
             >
               Historical data only
             </span>
-          ) : (
+          ) : data.staleness_available ? (
             <FreshnessPill
               tag={data.freshness_tag}
               stalenessSecs={data.staleness_seconds}
               available={data.staleness_available}
             />
-          )}
+          ) : null /* Nothing measured, nothing to say: a bare "Unknown" pill named
+                      no quantity (directive v9 §3.1, the fixture-row rule). */}
           <PredictionAgePill generatedAt={data.generated_at} />
           {/* Phase F: UCL soft-coverage badge */}
           {league === "UCL" && (
@@ -456,8 +461,7 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
   const p = presentation.topOutcomeProbability;
   const outcome = presentation.topOutcome?.replaceAll("_", " ");
   const ci = data.uncertainty?.credible_interval;
-  const caveats = data.actionability?.caveats ?? [];
-  const advisory = data.evidence_quality.advisory_gaps;
+  const advisoryCount = data.evidence_quality.advisory_gaps.length;
   const critical = data.evidence_quality.critical_gaps;
   const edge = data.odds_edge;
   const uncertifiedEdge =
@@ -500,13 +504,14 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
           Calibration is judged per serving model once 200 forecasts have settled; the Performance page
           shows the live figures.
         </li>
-        {caveats.map((caveat) => (
-          <li key={caveat}>{caveat}</li>
-        ))}
-        {advisory.length > 0 && (
+        {/* The advisory banner below itemizes these, and the status card above
+            lists the blocking gaps. actionability.caveats restates both in
+            prose, so the same gaps appeared up to three times with two
+            different counts (8 here, 9 in the banner, live 2026-09-26). */}
+        {advisoryCount > 0 && (
           <li>
-            Missing, non-blocking evidence: {advisory.slice(0, 3).map(describeEvidenceCode).join("; ")}
-            {advisory.length > 3 ? `, and ${advisory.length - 3} more` : ""}.
+            {advisoryCount} non-blocking input{advisoryCount === 1 ? " is" : "s are"} missing
+            (listed under advisory gaps below), which makes this forecast less reliable.
           </li>
         )}
       </ul>
@@ -1033,7 +1038,7 @@ export function OddsEdgeCard({
       <p className="text-xs uppercase tracking-wider text-slate-400">Market Edge</p>
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs sm:text-sm">
-          <span className="text-slate-400">Market</span>
+          <span className="text-slate-400">Outcome</span>
           <span className="font-semibold text-slate-200">{toLabel(edge.market)}</span>
         </div>
         <div className="flex justify-between text-xs sm:text-sm">
@@ -1054,10 +1059,87 @@ export function OddsEdgeCard({
             Kelly
             <KellyTooltip />
           </span>
-          <span className="font-semibold tabular-nums text-slate-200">{pct(edge.kelly_stake, 2)}</span>
+          {/* A zero Kelly beside a positive gap reads as a sized recommendation
+              that happens to be zero; it is a withheld one (directive v9 U2). */}
+          <span className="font-semibold tabular-nums text-slate-200">
+            {stakePermitted ? pct(edge.kelly_stake, 2) : "Withheld"}
+          </span>
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Model vs fair market, all three outcomes (directive v9 U1) ──────────────
+
+// Every number is the backend's: the web never de-vigs or computes EV (v8 §3.6).
+// Neutral unless the backend permits a stake; expected return appears only when
+// the fixture is evaluable (PLAY or PASS), never beside an uncertified forecast.
+export function MarketComparisonTable({
+  market,
+  stakePermitted = false,
+}: {
+  market: FullMatchMarket;
+  stakePermitted?: boolean;
+}) {
+  const hasModel = market.outcomes.some((row) => row.model_prob !== null);
+  return (
+    <section
+      aria-labelledby="market-comparison-heading"
+      className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3.5 sm:p-4 space-y-2.5"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <p id="market-comparison-heading" className="text-xs uppercase tracking-wider text-slate-400">
+          Model vs fair market
+        </p>
+        <span className="text-[10px] tabular-nums text-slate-400">Overround {pct(market.overround)}</span>
+      </div>
+      <table className="w-full text-xs sm:text-sm tabular-nums">
+        <caption className="sr-only">Bookmaker price, de-vigged fair probability and model probability for each outcome</caption>
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wider text-slate-400">
+            <th scope="col" className="text-left font-medium pb-1">Outcome</th>
+            <th scope="col" className="text-right font-medium pb-1">Price</th>
+            <th scope="col" className="text-right font-medium pb-1">Fair</th>
+            <th scope="col" className="text-right font-medium pb-1">Model</th>
+            <th scope="col" className="text-right font-medium pb-1">Gap</th>
+            {market.evaluable && (
+              <th scope="col" className="text-right font-medium pb-1">Expected return</th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="text-slate-200">
+          {market.outcomes.map((row) => (
+            <tr key={row.outcome} className="border-t border-slate-800/50">
+              <th scope="row" className="py-1 text-left font-medium text-slate-300">{toLabel(row.outcome)}</th>
+              <td className="py-1 text-right">{fmt(row.odds, 2)}</td>
+              <td className="py-1 text-right">{pct(row.fair)}</td>
+              <td className="py-1 text-right">{row.model_prob === null ? "—" : pct(row.model_prob)}</td>
+              <td
+                className={cn(
+                  "py-1 text-right font-semibold",
+                  stakePermitted && row.edge !== null && row.edge > 0 ? "text-emerald-400" : "text-slate-300",
+                )}
+              >
+                {row.edge === null ? "—" : signed(row.edge, "pp")}
+              </td>
+              {market.evaluable && (
+                <td className="py-1 text-right">
+                  {row.expected_value === null ? "—" : signed(row.expected_value, "%")}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-[11px] text-slate-400">
+        {!hasModel
+          ? "Market only: there is no measured forecast to compare against it."
+          : market.evaluable
+            ? "Expected return is per unit staked at the listed price, before any stake cap."
+            : "This model has not passed certification against the market, so a gap here is not evidence of value and no expected return is shown."}
+      </p>
+    </section>
   );
 }
 
@@ -1141,7 +1223,7 @@ export function EdgeDeltaBar({
   // Same rule as OddsEdgeCard: colour carries the decision, so a gap the
   // backend will not stake on stays neutral whatever its sign.
   const barColor = !stakePermitted
-    ? "bg-slate-500"
+    ? "bg-[hsl(var(--state-withheld))]"
     : isNeutral
     ? "bg-amber-500"
     : isPositive
@@ -1689,15 +1771,19 @@ function FullAnalysisDashboardInner({
         <UncertaintyCard unc={data.uncertainty} available={presentation.predictionAvailable} />
       </div>
 
-      {/* ── Edge delta bar (CE-2): model vs market gap ── */}
-      {data.odds_edge && (
+      {/* ── Model vs market. The per-outcome table covers every outcome, so the
+          single-outcome bar and card would repeat one of its rows (the PSV draw
+          gap rendered three times). Without the block (an older backend) they
+          remain; with it, the card stays only to show a permitted Kelly stake. ── */}
+      {data.odds_edge && !data.market && (
         <EdgeDeltaBar oddsEdge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
       )}
-
-      {/* ── Odds edge ── */}
-      {data.odds_edge ? (
+      {data.odds_edge && (!data.market || presentation.stakePermitted) && (
         <OddsEdgeCard edge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
-      ) : (
+      )}
+      {data.market ? (
+        <MarketComparisonTable market={data.market} stakePermitted={presentation.stakePermitted} />
+      ) : !data.odds_edge && (
         <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-3">
           <svg className="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

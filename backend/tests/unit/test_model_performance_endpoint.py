@@ -1,8 +1,9 @@
 """Unit tests for GET /model-performance and /model-performance/summary.
 
 Contracts verified:
-  1. Below walk_forward_validate's data floor (n_splits*2=10 records) -> 503
-     with reason="insufficient_settled_predictions" (the honest, corrected
+  1. Below walk_forward_validate's data floor (n_splits*2=10 records) -> 200
+     with status METRICS_UNAVAILABLE, reason="insufficient_settled_predictions"
+     (directive v9 L2: "pending" is a correct answer, not an outage) (the honest, corrected
      reason — not the old, now-false "not_yet_integrated" string).
   2. Once enough settled+logged predictions exist -> 200 with a real payload.
   3. league= accepts the canonical vocabulary (e.g. "EREDIVISIE") even though
@@ -153,14 +154,15 @@ def _status_and_body(response) -> tuple[int, dict]:
     return 200, response
 
 
-async def test_model_performance_503_below_floor(session: AsyncSession) -> None:
+async def test_model_performance_pending_is_200_below_floor(session: AsyncSession) -> None:
     from src.api.endpoints.performance import model_performance
 
     await _seed(session, n=3)
     response = await model_performance(league=None, window=180, db=session)
     status, body = _status_and_body(response)
 
-    assert status == 503
+    assert status == 200
+    assert body["status"] == "METRICS_UNAVAILABLE"
     assert body["reason"] == "insufficient_settled_predictions"
 
 
@@ -264,30 +266,31 @@ async def test_model_performance_clv_not_gated_by_walk_forward_floor(
     session: AsyncSession,
 ) -> None:
     """clv and walk_forward are independent data floors in the same response:
-    enough captured closing lines but zero finished matches must still 503
-    on walk-forward while clv itself reports a real, non-skipped result."""
+    enough captured closing lines but zero finished matches must still report
+    walk-forward as pending while clv itself reports a real, non-skipped result."""
     from src.api.endpoints.performance import model_performance
 
     await _seed_with_closing_lines(session, n=10, finished=False)
     response = await model_performance(league=None, window=180, db=session)
     status, body = _status_and_body(response)
 
-    assert status == 503
+    assert (status, body["status"]) == (200, "METRICS_UNAVAILABLE")
     assert body["model_close_gap_argmax"]["skipped"] is False
     assert body["model_close_gap_argmax"]["n"] == 10
 
 
-async def test_model_performance_summary_503_below_floor(session: AsyncSession) -> None:
+async def test_model_performance_summary_pending_is_200_below_floor(session: AsyncSession) -> None:
     from src.api.endpoints.performance import model_performance_summary
 
     await _seed(session, n=2)
     response = await model_performance_summary(db=session)
     status, body = _status_and_body(response)
 
-    assert status == 503
+    assert status == 200
+    assert body["status"] == "METRICS_UNAVAILABLE"
     assert body["reason"] == "insufficient_settled_predictions"
     # CLV has its own floor, independent of walk-forward's. The /performance page
-    # reads it from this endpoint, so it must be present on the 503 body too —
+    # reads it from this endpoint, so it must be present on the pending body too —
     # otherwise the tile can only ever say "0 of 10" while the join is working.
     assert "model_close_gap_argmax" in body
 
