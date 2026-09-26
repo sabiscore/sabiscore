@@ -62,7 +62,7 @@ are, so both are O7/O8 decisions, not code fixes.
 
 **Verification (2026-09-27, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
 469/469; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, no route changed size);
-ruff clean on every touched Python file; focused backend tests pass. Full backend suite: see the PR.
+ruff clean on every touched Python file; backend 2,802 passed, 19 skipped, 1 xfailed, 0 failed (8.5 min); mypy 755, unchanged (ceiling 784; the moved psutil import had added one, now cleared); Playwright desktop and mobile 4/4. Every new guard was watched failing on the old code.
 
 ## 159. Directive v11 pass: #248's sign-in fix never ran live, every share link was dead, and the cookie banner's choices were ignored — RESOLVED in code (verify after deploy)
 
