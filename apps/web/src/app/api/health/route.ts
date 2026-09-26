@@ -12,7 +12,7 @@ import {
 } from "@/lib/health-status";
 import { isHtmlBody } from "@/lib/proxy-utils";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.SABISCORE_BACKEND_URL;

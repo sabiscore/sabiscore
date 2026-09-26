@@ -109,8 +109,8 @@ The site header polls `/api/health` every 30 s, and each call fans out to four b
 | ID | Item | Status |
 | --- | --- | --- |
 | L1 | Bound `latest_provider_evidence`: one `ORDER BY checked_at DESC, id DESC LIMIT 128` query per provider on `ix_provider_health_provider_time`. It replaces two `row_number()` windows that sorted every row, `details` JSON included. | **Done in this pass** |
-| L2 | "Pending" is not an outage. `/model-performance`, `/summary` and `/calibration` return 503 for `insufficient_settled_predictions`, which puts a 5xx in the log every 30 s per tab and would trip any 5xx-rate alert. Return 200 with the same body (`status: METRICS_UNAVAILABLE`), and keep 503 for real failures. Update the three web proxies and their tests together. | Open |
-| L3 | `apps/web/src/app/api/health/route.ts` declares `runtime = "edge"`, which Vercel has deprecated. Move it to the default Node runtime. | Open, low priority |
+| L2 | "Pending" is not an outage. `/model-performance`, `/summary` and `/calibration` return 503 for `insufficient_settled_predictions`, which puts a 5xx in the log every 30 s per tab and would trip any 5xx-rate alert. Return 200 with the same body (`status: METRICS_UNAVAILABLE`), and keep 503 for real failures. Update the three web proxies and their tests together. | **Done 2026-09-26** (DEBT 157) |
+| L3 | `apps/web/src/app/api/health/route.ts` declares `runtime = "edge"`, which Vercel has deprecated. Move it to the default Node runtime. | **Done 2026-09-26**, all eight Edge routes (DEBT 157) |
 
 ### 2.3 The loop has no guaranteed input (new)
 
@@ -283,7 +283,7 @@ Show EV only in PLAY and PASS, where the generation is certified and the fixture
 An uncertified 21.1% draw at 7.36 would print +55% "expected return", which is a number the model
 has not earned.
 
-### 3.3 Open items
+### 3.3 Open items (all four done 2026-09-26, DEBT 157; superseded by v10)
 
 | ID | Item | Why |
 | --- | --- | --- |
@@ -333,9 +333,9 @@ backfill-shaped work left runs forward in time (L4). Retroactive prediction capt
 | Phase | Work | Exit gate |
 | --- | --- | --- |
 | 0: this PR | the §3.1 fixes, L1, this directive, DEBT 154 | CI green; operator approves the merge |
-| 1: before 9 Oct | L4, then L2, then R2 | the first post-break round has one log row per fixture under the served identity |
+| 1: before 9 Oct | L4, then L2, then R2 — **code done 2026-09-26 (DEBT 157)** | the first post-break round has one log row per fixture under the served identity (verify from 9 Oct) |
 | W: independent of 1–3 | **Done 2026-09-26:** W1 landed, W2 was null, W4 applied | Met: the guards failed first, the protocol was pushed before the fetch, and the registry records `REJECT` |
-| 2 | U1 (backend first), then U2–U4 and R1 | lint, typecheck, Vitest, build, Playwright desktop and mobile all pass; all fixtures still WITHHELD |
+| 2 | U1 (backend first), then U2–U4 and R1 — **done 2026-09-26 (DEBT 157)** | Met locally: lint, typecheck, Vitest 431/431, build, Playwright 4/4; all fixtures still WITHHELD |
 | 3 | C6 evaluation under a frozen protocol | 200 settled; `model_vs_close` CI reported |
 
 ### Operator decisions (none can be made by an agent)

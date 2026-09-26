@@ -5,9 +5,9 @@ import { canonicalLeagueId } from '@/lib/league';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** See the sibling summary route: the backend's own 503 body distinguishes
- *  "no settled predictions yet" from a real outage, so it is forwarded intact
- *  rather than overwritten with a fabricated empty series. */
+/** See the sibling summary route: the backend's own body distinguishes
+ *  "no settled predictions yet" (200, METRICS_UNAVAILABLE) from a real outage,
+ *  so it is forwarded intact rather than overwritten with a fabricated series. */
 function infrastructureError(
   message: string,
   status: number,

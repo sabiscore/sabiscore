@@ -28,6 +28,11 @@
     --signal-stale:     260 40% 55%;
     --signal-data-gap:  0 0% 40%;
 
+    /* Decision-state tokens (Obsidian Nocturne v2, directive v8 §3.1 / v9 U4).
+       WITHHELD is the neutral of a comparison the backend will not act on:
+       never green, never red, whatever the sign. First consumer: EdgeDeltaBar. */
+    --state-withheld:   215 16% 47%;
+
     /* Readiness ring tokens (CE-1) */
     --readiness-ready:  145 63% 45%;
     --readiness-watch:  38 92% 50%;

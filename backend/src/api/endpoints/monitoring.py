@@ -21,6 +21,7 @@ from ...db.session import check_db_connection
 from ...db.session import _alembic_head_revision
 from ...db.session import get_async_session
 from ...services.clv_capture_service import last_clv_capture_result
+from ...services.prediction_capture_service import last_prediction_capture_result
 from ...services.fixture_sync_service import last_fixture_sync_result
 from ...services.notification_dispatch_service import last_notification_dispatch_result
 from ...services.settlement_service import last_settlement_result
@@ -166,7 +167,7 @@ def health_check() -> Dict[str, Any]:
     """
     db_status = get_db_status()
 
-    health_status = {
+    health_status: Dict[str, Any] = {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "1.0.0",
@@ -332,6 +333,16 @@ def health_check() -> Dict[str, Any]:
         }
     except Exception as _clv_exc:
         logger.debug("CLV capture snapshot unavailable: %s", _clv_exc)
+
+    # Scheduled pre-kickoff prediction capture (directive v9 L4) — same
+    # informational-only convention. Never sets degraded=True.
+    try:
+        health_status["components"]["prediction_capture"] = {
+            "status": "informational",
+            **last_prediction_capture_result(),
+        }
+    except Exception as _capture_exc:
+        logger.debug("Prediction capture snapshot unavailable: %s", _capture_exc)
 
     # Notification dispatch snapshot — same informational-only convention as
     # settlement/clv_capture above. Never sets degraded=True.

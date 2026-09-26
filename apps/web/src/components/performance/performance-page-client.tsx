@@ -185,7 +185,7 @@ export function PerformancePageClient() {
     queryKey: ["model-performance-summary"],
     queryFn: async () => {
       const res = await fetch("/api/model-performance/summary", { cache: "no-store" });
-      // A 503 here is usually the backend answering correctly that nothing has
+      // A non-OK body here is usually the backend answering that nothing has
       // settled yet, not an outage — the body says which. Throwing on !res.ok
       // would collapse both into one unexplained blank panel.
       return (await res.json()) as PerfSummary;

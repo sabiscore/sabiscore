@@ -447,6 +447,77 @@ async def _fetch_market_odds(
     return odds
 
 
+_OUTCOMES = ("home_win", "draw", "away_win")
+
+
+def _devig(
+    odds: Optional[Dict[str, float]],
+) -> Optional[tuple[Dict[str, float], Dict[str, float], Dict[str, float], float]]:
+    """(prices, implied, fair, overround) for a coherent 1X2 snapshot, else None.
+
+    Proportional de-vig. The one place the backend turns a price into a
+    probability, shared by the single-outcome edge and the per-outcome block.
+    """
+    if not odds:
+        return None
+    try:
+        prices = {
+            "home_win": float(odds.get("home_win", odds.get("home", 0.0)) or 0.0),
+            "draw": float(odds.get("draw", 0.0) or 0.0),
+            "away_win": float(odds.get("away_win", odds.get("away", 0.0)) or 0.0),
+        }
+    except (TypeError, ValueError):
+        return None
+    if any(not math.isfinite(price) or price <= 1.0 for price in prices.values()):
+        return None
+    implied = {outcome: 1.0 / price for outcome, price in prices.items()}
+    overround = sum(implied.values())
+    fair = {outcome: value / overround for outcome, value in implied.items()}
+    return prices, implied, fair, overround
+
+
+def _market_block(
+    odds: Optional[Dict[str, float]],
+    *,
+    model_probs: Optional[Dict[str, float]],
+    evaluable: bool,
+) -> Optional[Dict[str, Any]]:
+    """Directive v9 U1: the market for all three outcomes, de-vigged here only.
+
+    ``model_probs`` is None unless a real forecast exists, so no gap is ever
+    differenced against the diagnostic prior. ``expected_value`` is published
+    only when the fixture is evaluable (certified generation, a forecast, no
+    critical gap or conflict): an uncertified 21% draw at 7.36 would otherwise
+    print +55% "expected return", a number the model has not earned (v9 §3.2).
+    """
+    devigged = _devig(odds)
+    if devigged is None:
+        return None
+    prices, implied, fair, overround = devigged
+    outcomes = []
+    for outcome in _OUTCOMES:
+        p = model_probs.get(outcome) if model_probs is not None else None
+        outcomes.append(
+            {
+                "outcome": outcome,
+                "odds": prices[outcome],
+                "implied": implied[outcome],
+                "fair": fair[outcome],
+                "model_prob": p,
+                "edge": (p - fair[outcome]) if p is not None else None,
+                "expected_value": (
+                    p * prices[outcome] - 1.0 if p is not None and evaluable else None
+                ),
+            }
+        )
+    return {
+        "devig_method": "proportional",
+        "overround": overround,
+        "evaluable": bool(evaluable and model_probs is not None),
+        "outcomes": outcomes,
+    }
+
+
 def _odds_edge_from_features(
     ensemble: EnsemblePrediction,
     odds: Optional[Dict[str, float]],
@@ -477,24 +548,10 @@ def _odds_edge_from_features(
     """
     if prediction_status != PredictionStatus.AVAILABLE:
         return None
-    if odds is None:
+    devigged = _devig(odds)
+    if devigged is None:
         return None
-
-    normalized_odds = {
-        "home_win": float(odds.get("home_win", odds.get("home", 0.0)) or 0.0),
-        "draw": float(odds.get("draw", 0.0) or 0.0),
-        "away_win": float(odds.get("away_win", odds.get("away", 0.0)) or 0.0),
-    }
-    if any(value <= 1.0 for value in normalized_odds.values()):
-        return None
-
-    raw_implied = {market: 1.0 / price for market, price in normalized_odds.items()}
-    overround = sum(raw_implied.values())
-    if overround <= 0:
-        return None
-    fair_market = {
-        market: implied / overround for market, implied in raw_implied.items()
-    }
+    normalized_odds, _implied, fair_market, _overround = devigged
     model_probs = {
         "home_win": ensemble.home_win_prob,
         "draw": ensemble.draw_prob,
@@ -943,10 +1000,26 @@ async def get_full_analysis(
     # MODEL_PREDICTION_UNAVAILABLE is already recorded above, is the true
     # reason no comparison is shown, and already forces `partial` — so
     # withholding this gap here cannot loosen any staking gate.
-    if odds_edge is None and prediction_status == PredictionStatus.AVAILABLE:
+    #
+    # The gap is about the market's existence, not about value in it. It used
+    # to fire whenever odds_edge was None, which also happens when a coherent
+    # market simply offers no positive-EV outcome, so "no value at this price"
+    # (PASS) was reported as "no market" (a critical gap, WITHHELD): the two
+    # states v8 §3.2 says must never collapse.
+    market_coherent = _devig(market_odds) is not None
+    if not market_coherent and prediction_status == PredictionStatus.AVAILABLE:
         critical_gaps.append("COHERENT_1X2_MARKET_UNAVAILABLE")
 
-    if prediction_status != PredictionStatus.AVAILABLE or critical_gaps or conflicts:
+    # No positive-EV outcome is no bet, but not missing evidence. This keeps the
+    # stake gate exactly where the false gap used to hold it (EV > 0 implies a
+    # positive edge, so odds_edge is None here means no outcome has value).
+    no_value_at_price = market_coherent and odds_edge is None
+    if (
+        prediction_status != PredictionStatus.AVAILABLE
+        or critical_gaps
+        or conflicts
+        or no_value_at_price
+    ):
         rl_rec = RLRecommendationPayload(
             stake_fraction=0.0,
             abstain=True,
@@ -957,7 +1030,14 @@ async def get_full_analysis(
                 "R_risk": 0.0,
                 "R_abs": 0.05,
             },
-            reason="Abstained: insufficient verified evidence",
+            reason=(
+                "Abstained: no outcome offers value at the current price"
+                if no_value_at_price
+                and prediction_status == PredictionStatus.AVAILABLE
+                and not critical_gaps
+                and not conflicts
+                else "Abstained: insufficient verified evidence"
+            ),
         )
         # Retain a measured market comparison for explanation, while the
         # synthesizer zeroes Kelly and every public stake for this closed gate.
@@ -1028,6 +1108,25 @@ async def get_full_analysis(
     )
 
     result = response.to_dict()
+    quality = result.get("evidence_quality") or {}
+    result["market"] = _market_block(
+        market_odds,
+        model_probs=(
+            {
+                "home_win": ensemble.home_win_prob,
+                "draw": ensemble.draw_prob,
+                "away_win": ensemble.away_win_prob,
+            }
+            if prediction_status == PredictionStatus.AVAILABLE
+            else None
+        ),
+        evaluable=(
+            active_generation_is_certified()
+            and prediction_status == PredictionStatus.AVAILABLE
+            and not quality.get("critical_gaps")
+            and not quality.get("conflicts")
+        ),
+    )
 
     # Capture the real model snapshot that settlement and CLV evaluate later.
     # Matchup strings, diagnostic baselines, invalid simplexes, non-scheduled

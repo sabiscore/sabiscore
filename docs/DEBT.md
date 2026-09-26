@@ -1,5 +1,117 @@
 # SabiScore Debt Ledger
 
+## 157. Directive v9 phases 1–2: scheduled prediction capture, honest pending metrics, bounded evidence tables, and five more places the pages said something unmeasured — RESOLVED (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-26. Verify on production after deploy (checks at the end).
+**Found:** directive v9 §5 phases 1–2, plus 21 screenshots of `web-8lccentfm-oversabis-projects.vercel.app`
+(`fc7749c`, which is also the production SHA for both web and backend, so these are current) and
+a Render log excerpt from 07:36–07:51 UTC.
+
+**Phase 1 (before the 9 Oct fixtures):**
+
+1. **L4 — scheduled pre-kickoff capture.** `services/prediction_capture_service.py` runs on the
+   five-minute CLV tick, after the CLV capture and in its own `try`, so a capture failure cannot
+   cost the CLV capture (`api/main.py` `_clv_capture_tick`). It selects scheduled fixtures in the
+   served generation's leagues (from `active_generation.json` artifacts, so UCL is excluded) with
+   kickoff in [now + 15 min, now + 3 h] and no log row under the served identity. It then calls
+   `get_full_analysis` itself, which persists through `persist_prediction_log` with
+   `require_scheduled_pre_kickoff=True`. One fixture's failure is rolled back and counted, and the
+   rest of the round continues. `/health` → `components.prediction_capture` reports each pass,
+   including its `duration_ms` (a matchday burst runs sequentially inside the CLV tick).
+   Guards: `tests/unit/test_prediction_capture_service.py` (7 tests, each watched failing on a
+   targeted mutation of the rule it pins). **Cost:** each capture reads the league odds board
+   (120 s cache, shared with the CLV fetch in the same tick), so about one Odds API request per
+   league per kickoff slot, roughly 30 per round. The quota read 236 remaining (264 used) on
+   2026-09-26; the provider reports no reset time (`reset_at: null`). Measure a full round's cost
+   before relying on October's budget.
+2. **L2 — "pending" is 200, not 503.** `/model-performance`, `/summary` and `/calibration` return
+   200 with `status: METRICS_UNAVAILABLE` when nothing has settled. Real failures still raise.
+   Every web consumer already branched on the body `status`, so only comments and one proxy test
+   changed. The Render log showed a 503 on every header refresh (about 2 per minute per tab).
+3. **R2 — evidence retention.** All three evidence tables gain about 250 rows a day. On
+   2026-09-26 each held about 9,900 rows, 2,680 of them older than 30 days.
+   `prune_provider_evidence` runs after each hourly settlement pass. ⚠️ **The directive's literal
+   rule was not used.** "Keep the newest row per (provider, context)" deletes the rows between two
+   old contexts, which can pull a stale context back into the reader's 128-row window and change the
+   aggregate state. The rule shipped keeps every row `latest_provider_evidence` can read (the newest
+   128 per provider), so its output is identical apart from `observations`, which now counts
+   retained rows (no page displays it). `provider_request_summaries` and
+   `provider_quota_observations` have no reader in `src`; each keeps its newest row per provider.
+   Guards: `tests/unit/test_provider_evidence_retention.py`; the before/after comparison fails when
+   the keep set is shrunk.
+
+**Phase 2:**
+
+4. **R1** — `StatsBombAggregator._load_cache` reads nothing unless
+   `ENABLE_STATSBOMB_ENRICHMENT=true`. Production has no parquet engine, and the five columns are
+   `ALWAYS_DATA_GAP`, so the read bought nothing and logged a warning. ⚠️ The first version of
+   this guard could not fail: `_load_cache` catches every exception, including the stub's
+   `AssertionError`. The test now records calls instead.
+5. **U1 — all three outcomes, and a false market gap removed.** The response carries `market`:
+   price, implied, fair (proportional de-vig), model, gap and expected value for each outcome.
+   `expected_value` is null unless the fixture is evaluable (certified generation, a forecast, no
+   critical gap or conflict), and the Pydantic schema and the Zod contract both refuse otherwise.
+   ⚠️ **Defect found while building it:** `COHERENT_1X2_MARKET_UNAVAILABLE` fired whenever
+   `odds_edge` was None. That is also the case for a coherent market with no positive-EV outcome,
+   so "no value at this price" (PASS) was reported as "no market" (a critical gap, WITHHELD), the
+   two states v8 §3.2 says must never collapse. Today `MODEL_GENERATION_UNCERTIFIED` masks it; after
+   certification every no-value fixture would have been withheld with a false reason. The gap now
+   follows market coherence. That false gap had also been what kept the stake gate shut on no-value
+   markets (EV > 0 implies edge > 0), so an explicit abstain, "no outcome offers value at the
+   current price", replaces it. Guards in `tests/test_staleness_and_market_wiring.py`, including one
+   with every other gate open. The web renders `MarketComparisonTable`, from backend values only.
+   When the block is present it replaces `EdgeDeltaBar` and `OddsEdgeCard`, which repeated one of
+   its rows (the PSV draw gap would otherwise have appeared three times); the card remains only
+   to show a permitted Kelly stake.
+6. **U2** — `OddsEdgeCard` reads "Outcome", not "Market", and Kelly reads "Withheld" rather than
+   `0.00%` when no stake is permitted.
+7. **U3** — the `/intelligence` snapshot form shows no confirmation preview until the bookmaker and
+   all three prices are entered.
+8. **U4** — `--state-withheld` token; `EdgeDeltaBar`'s neutral fill uses it (its first consumer).
+9. **L3** — all eight `runtime = "edge"` routes, not only `/api/health`, now run on Node. None used
+   an Edge-only API.
+
+**Found in the screenshots, not in the directive:**
+
+10. **football-data.org read DEGRADED while healthy, and the header's live-validated count flapped
+    (1 at 08:37 WAT, 2 at 08:39).** One 1-hour staleness clock was applied to every stream, but
+    fixture sync observes UPCOMING only every 6 h, so those contexts read STALE five hours in every
+    six. Fresh-but-empty RESULTS contexts (no finished matches during an international break) mixed
+    with them, and the aggregate became DEGRADED. Scheduled streams are now judged against their own
+    schedule plus the default window (`_SCHEDULED_STREAM_INTERVAL_SECONDS`), pinned to
+    `api/main.py`'s interval constants by a test. The Odds API's own flapping is left as is: odds
+    are fetched on demand, so "not observed in the last hour" is a true statement about traffic.
+11. **The counter-case listed the gaps up to three times, with two counts ("8 live data gap(s)",
+    then "and 6 more" = 9), and repeated the uncertainty gap #244 had removed.** Both came from
+    `actionability.caveats`, which restates the structured fields in prose. The counter-case now
+    renders one line pointing at the advisory banner below it.
+12. **"UNKNOWN" freshness pill on every real fixture.** `staleness_seconds` measures only the
+    StatsBomb parquet, which R1 now never reads. The pill is shown only when something was measured
+    (the #244 fixture-row rule, applied to the match page).
+13. **The Evidence Passport printed "Data unavailable" under "Market Price · Resolved".** The
+    sub-line came from `/sources/freshness`, populated by `record_source_check`, which has zero
+    callers, so every source always reads `never_checked`. The passport now reads only this
+    fixture's evidence, and the orphaned web proxy route is deleted. The backend endpoint stays; it
+    reports `never_checked` honestly.
+
+**Verification (2026-09-26, local, sequential):** backend 2,779 passed, 19 skipped, 1 xfailed,
+0 failed (5 min 41 s); mypy 755, down from 769 (ceiling 784) because annotating `health_status`
+once cleared a whole class of `/health` errors, including the one this pass added; ruff clean;
+web lint 0, typecheck 0, Vitest 431/431 (432 with the consolidation test added after),
+`NODE_ENV=production` build exit 0 (shared first-load
+JS 198 kB), Playwright desktop and mobile 4/4. One Vitest run failed
+`performance-page-client` "distinguishes a real outage" under full-suite load (an 8.6 s test
+against a 1 s `findBy` default); it passed alone, on the unchanged component, and in the next full
+run. A load flake, not this change.
+
+**Checks after deploy:**
+- `/health` → `components.prediction_capture.outcome == "ok"`. From 9 Oct, `captured > 0`
+  within 3 h of the first kickoff.
+- `/api/v1/model-performance/summary` returns 200 with `METRICS_UNAVAILABLE`.
+- football-data.org reads `LIVE_VERIFIED` between fixture syncs on `/api/health`.
+- The first hourly retention pass deletes about 2,680 health-log rows (Render log
+  `provider_evidence_retention deleted=`).
+
 ## 156. Weather closed: F3b (wind, gusts, heavy rain) is null as well — CLOSED / REJECT
 
 **Tier:** `CLOSED` — 2026-09-26. Registry entries F3 and F3b are both `CLOSED` / `REJECT`.
@@ -108,6 +220,7 @@ was re-checked against the production alias or the live API.
    The served generation has 0 settled predictions, and settled volume follows traffic rather than
    fixtures, so C6 (200 under one identity) may never arrive. Fix: directive v9 L4, a pre-kickoff
    capture on the CLV tick. Deadline: the 9 Oct fixtures.
+   *(Shipped in item 157, 2026-09-26: `prediction_capture_service.py`.)*
 
 Also recorded: the fixture list never measures freshness (`include_predictions=false`), so its
 chip read "Unknown" on every row. The chip is now shown only when freshness was measured.

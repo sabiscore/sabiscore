@@ -61,7 +61,7 @@ async def test_calibration_endpoint_empty_fallback() -> None:
                 new=AsyncMock(return_value=[]),
             ):
                 response = await client.get("/api/v1/model-performance/calibration")
-                assert response.status_code == 503
+                assert response.status_code == 200  # pending, not an outage (v9 L2)
                 data = response.json()
                 assert data["status"] == "METRICS_UNAVAILABLE"
                 assert data["reason"] == "insufficient_settled_predictions"

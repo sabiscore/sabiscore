@@ -5,10 +5,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * "No settled predictions yet" is a 503 the backend answers correctly and on
- * purpose — it is not an outage. Forward its body verbatim so the page can say
- * which of the two happened. Synthesizing a shape here previously did two
- * harmful things: it reported a healthy backend as unavailable, and it filled
+ * "No settled predictions yet" is a 200 with `status: METRICS_UNAVAILABLE` in
+ * the body (directive v9 L2) — a correct answer, not an outage. Forward the
+ * backend's status and body verbatim so the page can say which happened.
+ * Synthesizing a shape here previously did two harmful things: it reported a healthy backend as unavailable, and it filled
  * accuracy/CLV/ROI with literal zeros, which read as measurements rather than
  * as absence (INV-01).
  */

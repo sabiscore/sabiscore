@@ -118,7 +118,12 @@ class StatsBombAggregator:
     _cache_failure_reported: bool = False
 
     def _load_cache(self) -> pd.DataFrame:
-        if not self.cache_path.exists():
+        # Directive v9 R1: nothing reads these features unless enrichment is on,
+        # and the five tactical columns are ALWAYS_DATA_GAP anyway (coverage
+        # 23.58% < 85%). Reading the parquet would need pyarrow (~RSS we don't
+        # have on a 512 MB instance) to buy nothing; skip it. An empty table
+        # yields the same five gaps and a None age.
+        if not settings.enable_statsbomb_enrichment or not self.cache_path.exists():
             return pd.DataFrame()
         try:
             return pd.read_parquet(self.cache_path)

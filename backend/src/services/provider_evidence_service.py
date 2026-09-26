@@ -14,10 +14,10 @@ never interpreted as provider health.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from ..core.redaction import redact_text
 from ..db.models import (
@@ -42,6 +42,14 @@ logger = logging.getLogger(__name__)
 # last underlying provider status; that raw status remains separately visible.
 PROVIDER_EVIDENCE_STALE_SECONDS = 3600
 
+# Scheduled streams are judged against their own schedule (api/main.py), plus
+# the default window as grace: fixture sync observes UPCOMING every 6 h and
+# settlement observes RESULTS hourly. One 1 h clock read UPCOMING as STALE five
+# hours in every six, so football-data.org showed DEGRADED on a healthy day
+# and the header's live-validated count flapped (2026-09-26 screenshots).
+# On-demand streams (odds, standings, anything else) keep the default.
+_SCHEDULED_STREAM_INTERVAL_SECONDS = {"UPCOMING": 21600, "RESULTS": 3600}
+
 # Context is intentionally tiny and whitelisted. Providers may attach only these
 # non-secret request dimensions; everything else is dropped before persistence.
 _PROVIDER_REQUEST_CONTEXT_KEYS = (
@@ -57,6 +65,11 @@ _PROVIDER_REQUEST_CONTEXT_KEYS = (
 # of operation/competition/intent streams. Bound the query so telemetry cannot
 # turn a health request into an unbounded historical scan.
 _PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER = 128
+
+# One row per provider operation lands in each of the three evidence tables
+# (~250 rows/day each, measured 2026-09-26). Older rows answer no question the
+# service asks, so they are pruned hourly (directive v9 R2).
+PROVIDER_EVIDENCE_RETENTION_DAYS = 30
 
 
 def _utc_naive(value: datetime | None) -> datetime | None:
@@ -346,6 +359,16 @@ def _materialize_evidence_row(
             str(row.get("status") or "").upper() == ProviderStatus.RATE_LIMITED.value
         )
 
+    request_context_raw = details.get("request_context")
+    request_context = _safe_request_context(
+        request_context_raw if isinstance(request_context_raw, Mapping) else None
+    )
+    stream_interval = _SCHEDULED_STREAM_INTERVAL_SECONDS.get(
+        str(request_context.get("query_intent") or "").upper()
+    )
+    if stream_interval is not None:
+        stale_after_seconds = stream_interval + stale_after_seconds
+
     state = _evidence_state(row.get("status"), transport=transport, coverage=coverage)
     is_stale = age_seconds is not None and age_seconds > stale_after_seconds
     if is_stale:
@@ -357,11 +380,6 @@ def _materialize_evidence_row(
         if source_latest_at is not None
         else None
     )
-    request_context_raw = details.get("request_context")
-    request_context = _safe_request_context(
-        request_context_raw if isinstance(request_context_raw, Mapping) else None
-    )
-
     return {
         "state": state,
         "status": row.get("status"),
@@ -811,8 +829,111 @@ def _http_status_category(status_code: int) -> str:
     return "UNKNOWN"
 
 
+async def _newest_ids(
+    session: Any, model: Any, time_column: Any, provider: str, limit: int
+) -> list[int]:
+    result = await session.execute(
+        select(model.id)
+        .where(model.provider == provider)
+        .order_by(time_column.desc(), model.id.desc())
+        .limit(limit)
+    )
+    return [int(row) for row in result.scalars().all()]
+
+
+async def prune_provider_evidence(
+    session: Any,
+    *,
+    now: datetime | None = None,
+    retention_days: int = PROVIDER_EVIDENCE_RETENTION_DAYS,
+) -> dict[str, int]:
+    """Delete evidence older than the retention window without changing any read.
+
+    ``provider_health_log`` keeps every row ``latest_provider_evidence`` can
+    read — the newest ``_PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER`` per provider —
+    so its output is unchanged except ``observations``, which becomes a count of
+    retained rows. (Keeping only the newest row per context was the first idea,
+    but deleting the rows between two old contexts can pull a stale context back
+    into the reader's window and change the aggregate state.) The other two
+    tables have no reader in the service; each keeps its newest row per provider.
+    The caller commits.
+    """
+    if retention_days <= 0:
+        raise ValueError("retention_days must be positive")
+    reference_now = _utc_naive(now or datetime.now(timezone.utc))
+    if reference_now is None:  # unreachable: the argument is never None
+        raise RuntimeError("unable to derive retention reference time")
+    cutoff = reference_now - timedelta(days=retention_days)
+    targets = (
+        (
+            ProviderHealthLog,
+            ProviderHealthLog.checked_at,
+            _PROVIDER_CONTEXT_LOOKBACK_PER_PROVIDER,
+        ),
+        (ProviderRequestSummary, ProviderRequestSummary.acquired_at, 1),
+        (ProviderQuotaObservation, ProviderQuotaObservation.observed_at, 1),
+    )
+    deleted: dict[str, int] = {}
+    for model, time_column, keep_per_provider in targets:
+        providers = (
+            (
+                await session.execute(
+                    select(model.provider).where(time_column < cutoff).distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        keep: list[int] = []
+        for provider in providers:
+            keep.extend(
+                await _newest_ids(
+                    session, model, time_column, provider, keep_per_provider
+                )
+            )
+        statement = delete(model).where(time_column < cutoff)
+        if keep:
+            statement = statement.where(model.id.notin_(keep))
+        result = await session.execute(
+            statement.execution_options(synchronize_session=False)
+        )
+        deleted[model.__tablename__] = int(result.rowcount or 0)
+    return deleted
+
+
+async def run_provider_evidence_retention() -> dict[str, Any]:
+    """One pruning pass in a short-lived session; logs and never raises."""
+    from ..db.session import AsyncSessionLocal
+    from ..monitoring.metrics import metrics_collector
+
+    if AsyncSessionLocal is None:
+        return {"outcome": "db_not_ready"}
+    try:
+        async with AsyncSessionLocal() as session:
+            try:
+                deleted = await prune_provider_evidence(session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+    except Exception as exc:
+        metrics_collector.increment("provider_evidence.retention.error")
+        logger.warning("provider_evidence_retention_failed error=%s", redact_text(exc))
+        return {"outcome": "error"}
+    for table, count in deleted.items():
+        if count:
+            metrics_collector.increment(
+                f"provider_evidence.retention.deleted.{table}", count
+            )
+    logger.info("provider_evidence_retention deleted=%s", deleted)
+    return {"outcome": "ok", "deleted": deleted}
+
+
 __all__ = [
+    "PROVIDER_EVIDENCE_RETENTION_DAYS",
     "PROVIDER_EVIDENCE_STALE_SECONDS",
     "ProviderEvidenceRecorder",
     "latest_provider_evidence",
+    "prune_provider_evidence",
+    "run_provider_evidence_retention",
 ]

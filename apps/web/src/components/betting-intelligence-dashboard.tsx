@@ -311,15 +311,17 @@ export function BettingIntelligenceDashboard() {
     }),
     [oddsForm.away, oddsForm.draw, oddsForm.home],
   );
+  // A preview of nothing read "Bookmaker unavailable | H Unavailable D
+  // Unavailable A Unavailable" before any input (directive v9 U3). There is
+  // nothing to confirm until the bookmaker and all three prices are entered.
+  const previewReady =
+    oddsForm.bookmaker.trim().length >= 2
+    && [parsedOdds.home, parsedOdds.draw, parsedOdds.away].every(
+      (price) => Number.isFinite(price) && price > 1,
+    );
   const oddsFormValid = Boolean(
     selectedFixtureId
-    && oddsForm.bookmaker.trim().length >= 2
-    && Number.isFinite(parsedOdds.home)
-    && parsedOdds.home > 1
-    && Number.isFinite(parsedOdds.draw)
-    && parsedOdds.draw > 1
-    && Number.isFinite(parsedOdds.away)
-    && parsedOdds.away > 1
+    && previewReady
     && oddsForm.observedAt
     && oddsForm.confirmed,
   );
@@ -734,9 +736,11 @@ export function BettingIntelligenceDashboard() {
                 <label className="bi-label">Observed timestamp<input className="bi-input" type="datetime-local" value={oddsForm.observedAt} onChange={(e) => setOddsForm((f) => ({ ...f, observedAt: e.target.value }))} required /></label>
                 <label className="bi-label">Source label or page reference<input className="bi-input" value={oddsForm.sourceLabel} onChange={(e) => setOddsForm((f) => ({ ...f, sourceLabel: e.target.value }))} /></label>
                 <label className="bi-label">Optional URL label<input className="bi-input" type="url" value={oddsForm.sourceUrl} onChange={(e) => setOddsForm((f) => ({ ...f, sourceUrl: e.target.value }))} /></label>
-                <div className="bi-note" style={{ marginTop: 12 }}>
-                  Confirmation preview: {oddsForm.bookmaker || "Bookmaker unavailable"} | H {fmtOdds(parsedOdds.home)} D {fmtOdds(parsedOdds.draw)} A {fmtOdds(parsedOdds.away)}
-                </div>
+                {previewReady && (
+                  <div className="bi-note" style={{ marginTop: 12 }}>
+                    Confirmation preview: {oddsForm.bookmaker.trim()} | H {fmtOdds(parsedOdds.home)} D {fmtOdds(parsedOdds.draw)} A {fmtOdds(parsedOdds.away)}
+                  </div>
+                )}
                 <label className="bi-confirm">
                   <input type="checkbox" checked={oddsForm.confirmed} onChange={(e) => setOddsForm((f) => ({ ...f, confirmed: e.target.checked }))} />
                   I confirm these three prices are from one bookmaker and one fixture snapshot for this research comparison.

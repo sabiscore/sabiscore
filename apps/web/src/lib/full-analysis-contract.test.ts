@@ -286,6 +286,22 @@ describe("full-analysis Zod contract and presentation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts the per-outcome market block and refuses EV on a non-evaluable fixture", () => {
+    const valid = payload();
+    const outcomes = [
+      { outcome: "home_win", odds: 2.5, implied: 0.4, fair: 0.39, model_prob: 0.45, edge: 0.06, expected_value: 0.125 },
+      { outcome: "draw", odds: 3.3, implied: 0.303, fair: 0.295, model_prob: 0.28, edge: -0.015, expected_value: -0.076 },
+      { outcome: "away_win", odds: 3.1, implied: 0.323, fair: 0.315, model_prob: 0.27, edge: -0.045, expected_value: -0.163 },
+    ];
+    const market = { devig_method: "proportional", overround: 1.026, evaluable: true, outcomes };
+    expect(fullMatchAnalysisSchema.safeParse({ ...valid, market }).success).toBe(true);
+    expect(fullMatchAnalysisSchema.safeParse({ ...valid, market: null }).success).toBe(true);
+    // Directive v9 §3.2: no expected return beside a forecast that is not evaluable.
+    expect(
+      fullMatchAnalysisSchema.safeParse({ ...valid, market: { ...market, evaluable: false } }).success,
+    ).toBe(false);
+  });
+
   it("rejects any positive compatibility stake when the public gate is closed", () => {
     const valid = payload();
     const result = fullMatchAnalysisSchema.safeParse({

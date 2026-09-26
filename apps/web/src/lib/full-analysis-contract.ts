@@ -154,6 +154,29 @@ export const fullMatchAnalysisSchema = z
         kelly_stake: z.number().min(0),
       })
       .nullable(),
+    // Directive v9 U1: all three outcomes, de-vigged by the backend only.
+    // expected_value is null unless the fixture is evaluable (§3.2).
+    market: z
+      .object({
+        devig_method: z.literal("proportional"),
+        overround: z.number().positive(),
+        evaluable: z.boolean(),
+        outcomes: z
+          .array(
+            z.object({
+              outcome: z.enum(["home_win", "draw", "away_win"]),
+              odds: z.number().gt(1),
+              implied: z.number().gt(0).lt(1),
+              fair: z.number().gt(0).lt(1),
+              model_prob: z.number().min(0).max(1).nullable(),
+              edge: z.number().nullable(),
+              expected_value: z.number().nullable(),
+            }),
+          )
+          .length(3),
+      })
+      .nullable()
+      .optional(),
     narrative: z.string().max(280),
     partial_intelligence: z.boolean(),
     data_gaps: z.array(z.string()),
@@ -282,6 +305,22 @@ export const fullMatchAnalysisSchema = z
         message: "is inconsistent with the evidence and verdict gates",
       });
     }
+    if (value.market) {
+      if (value.market.evaluable && blocked) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["market", "evaluable"],
+          message: "requires a gap-free forecast",
+        });
+      }
+      if (!value.market.evaluable && value.market.outcomes.some((row) => row.expected_value !== null)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["market", "outcomes"],
+          message: "expected_value is published only when the fixture is evaluable",
+        });
+      }
+    }
     if (!value.stake_permitted) {
       if (value.rl_recommendation.stake_fraction > 0) {
         ctx.addIssue({
@@ -313,6 +352,7 @@ export type FullMatchUncertainty = FullMatchAnalysisResponse["uncertainty"];
 export type FullMatchRLRecommendation = FullMatchAnalysisResponse["rl_recommendation"];
 export type FullMatchEloContext = FullMatchAnalysisResponse["elo_context"];
 export type FullMatchOddsEdge = NonNullable<FullMatchAnalysisResponse["odds_edge"]>;
+export type FullMatchMarket = NonNullable<FullMatchAnalysisResponse["market"]>;
 export type MatchActionability = NonNullable<FullMatchAnalysisResponse["actionability"]>;
 
 export type AnalysisErrorCategory =
