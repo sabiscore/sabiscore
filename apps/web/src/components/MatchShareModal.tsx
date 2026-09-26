@@ -6,8 +6,9 @@ import { Share2, Copy, Check, X, Twitter, MessageCircle, Send } from "lucide-rea
 import { analytics } from "@/lib/analytics";
 import { VERDICT_TOKENS, type Verdict } from "@/lib/verdict-tokens";
 import { certificationLabel } from "@/lib/model-identity";
+import { siteUrl } from "@/lib/site-url";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://sabiscore.com").replace(/\/$/, "");
+const SITE_URL = siteUrl();
 
 interface MatchShareModalBaseProps {
   open: boolean;

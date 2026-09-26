@@ -2,10 +2,9 @@ import type { MetadataRoute } from "next";
 
 import { CANONICAL_LEAGUES } from "@/lib/league";
 import { getSitemapFixtures } from "@/lib/sitemap-fixtures-server";
+import { siteUrl } from "@/lib/site-url";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://sabiscore.com");
+const SITE_URL = siteUrl();
 
 // Fixture listing is a bounded, cheap DB read (no provider calls, no model
 // inference) — 1h keeps sitemap traffic off the hot path while staying fresh
