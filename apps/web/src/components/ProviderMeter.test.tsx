@@ -40,4 +40,24 @@ describe("statusBadge", () => {
   it("still reports a disabled provider as not configured", () => {
     expect(statusBadge({ enabled: false, state: "VERIFIED" }).label).toBe("Not configured");
   });
+
+  // Directive v10 U7. ESPN read an amber "Stale" (live 2026-09-26): its one
+  // observation was six days old because it runs only when a person asks for
+  // evidence. The age of an on-demand call measures traffic, not health.
+  it("shows an on-demand provider's age, never Stale", () => {
+    const badge = statusBadge({
+      enabled: true, state: "STALE", cadence: "on_demand", observations: 1, age_seconds: 559_595,
+    });
+    expect(badge.label).toBe("Last checked 6d ago");
+    expect(badge.className).toBe("pm-unverified");
+    expect(
+      statusBadge({ enabled: true, state: "UNKNOWN", cadence: "on_demand", observations: 0 }).label,
+    ).toBe("Not yet used");
+  });
+
+  it("still calls a scheduled provider Stale once it misses its schedule", () => {
+    const badge = statusBadge({ enabled: true, state: "STALE", cadence: "scheduled", age_seconds: 90_000 });
+    expect(badge.label).toBe("Stale");
+    expect(badge.className).toBe("pm-stale");
+  });
 });

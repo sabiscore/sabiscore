@@ -75,6 +75,22 @@ def devig_probabilities(
     )
 
 
+# One bookmaker rule for every reader of the board (directive v11 §2). The price
+# a forecast records, the first sighting and the close must come from the same
+# book, or "model vs close" compares two books. The close is also the benchmark
+# for "sharper than the close", so it should be the sharpest book quoted, not
+# the one listed first (live path) or whose key sorts first (capture): "betclic"
+# sorts before "pinnacle". Pinnacle first, then key order, so the pick is
+# deterministic when Pinnacle does not quote a fixture.
+SHARP_BOOKMAKERS = ("pinnacle",)
+
+
+def bookmaker_preference(bookmaker: object) -> tuple[int, str]:
+    """Sort key: a sharp book before every other, then bookmaker key order."""
+    key = str(bookmaker or "").lower()
+    return (0 if key in SHARP_BOOKMAKERS else 1, key)
+
+
 # ---------------------------------------------------------------------------
 # Canonical market record
 # ---------------------------------------------------------------------------

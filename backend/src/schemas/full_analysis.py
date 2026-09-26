@@ -108,6 +108,17 @@ class MarketOutcomeResponse(BaseModel):
     expected_value: Optional[float] = None
 
 
+class MarketFirstSightingResponse(BaseModel):
+    """Directive v10 U6: the earliest pre-kickoff price the same bookmaker quoted
+    for this fixture. The first sighting, never the opening line."""
+
+    bookmaker: str
+    captured_at: datetime
+    home_win: float = Field(gt=1.0)
+    draw: float = Field(gt=1.0)
+    away_win: float = Field(gt=1.0)
+
+
 class FullMatchMarketResponse(BaseModel):
     """Directive v9 U1: all three outcomes, de-vigged by the backend only."""
 
@@ -115,6 +126,7 @@ class FullMatchMarketResponse(BaseModel):
     overround: float = Field(gt=0.0)
     evaluable: bool
     outcomes: List[MarketOutcomeResponse] = Field(min_length=3, max_length=3)
+    first_seen: Optional[MarketFirstSightingResponse] = None
 
     @model_validator(mode="after")
     def validate_publication(self) -> "FullMatchMarketResponse":

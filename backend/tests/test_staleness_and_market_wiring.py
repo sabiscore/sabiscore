@@ -292,6 +292,44 @@ async def test_an_uncertified_generation_never_publishes_expected_value(monkeypa
     _validates(payload)
 
 
+@pytest.mark.asyncio
+async def test_the_first_sighting_is_read_for_the_same_fixture_and_bookmaker(monkeypatch):
+    """Directive v10 U6: the counter-case's price-movement line comes from the
+    earliest captured price of the SAME book for this fixture."""
+    kickoff = "2026-10-09T18:00:00+00:00"
+    _install(
+        monkeypatch,
+        _live(kickoff_utc=kickoff),
+        odds={"home_win": 2.50, "draw": 3.30, "away_win": 3.10, "bookmaker": "pinnacle"},
+    )
+    seen = {
+        "bookmaker": "pinnacle",
+        "captured_at": "2026-10-09T13:00:00+00:00",
+        "home_win": 2.40,
+        "draw": 3.40,
+        "away_win": 3.20,
+    }
+    calls = []
+
+    async def _recorded(_db, **kwargs):
+        calls.append(kwargs)
+        return seen
+
+    monkeypatch.setattr(endpoint, "_first_sighting", _recorded)
+
+    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+
+    assert calls == [
+        {
+            "match_id": "real-fixture-1",
+            "bookmaker": "pinnacle",
+            "kickoff": endpoint._utc_aware_datetime(kickoff),
+        }
+    ]
+    assert payload["market"]["first_seen"] == seen
+    _validates(payload)
+
+
 def _validates(payload: dict) -> None:
     """The route declares this schema as its response_model; hold the payload to it."""
     from src.schemas.full_analysis import FullMatchAnalysisResponseSchema

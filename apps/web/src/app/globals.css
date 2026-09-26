@@ -32,6 +32,10 @@
        WITHHELD is the neutral of a comparison the backend will not act on:
        never green, never red, whatever the sign. First consumer: EdgeDeltaBar. */
     --state-withheld:   215 16% 47%;
+    /* v10 U8: the badge's second consumer. The word and icon carry the state;
+       these only repeat it. Amber stays reserved for the counter-case. */
+    --state-play:       145 63% 45%;
+    --state-pass:       215 20% 65%;
 
     /* Readiness ring tokens (CE-1) */
     --readiness-ready:  145 63% 45%;

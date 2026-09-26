@@ -1,5 +1,112 @@
 # SabiScore Debt Ledger
 
+## 158. Directive v10 live pass: the close came from a soft book, kickoffs read an hour early in Lagos, and the Sentry SDK doubled every page's JS — RESOLVED in code (verify after deploy); C6 drafted, awaiting O8
+
+**Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v10-live-pass`. C6 is a DRAFT
+(registry state `PROPOSED`) until the operator approves it (O8).
+**Found:** 26 screenshots of `web-qjzuzffsd-oversabis-projects.vercel.app` (serves `63f9bf2`,
+the production SHA for web and backend, so they are current), a Render log from 11:16–12:13 UTC,
+and live probes of production.
+
+**#247 post-deploy checks:** all four pass. `prediction_capture.outcome` is `ok`;
+`/model-performance/summary` returns 200 `METRICS_UNAVAILABLE`; football-data.org reads
+`LIVE_VERIFIED`; the first retention pass (11:30:17 UTC) deleted 2,701 health-log rows, 2,701
+request summaries and 2,662 quota observations, and provider states were unchanged.
+
+1. **The close was whichever bookmaker's key sorts first, and the forecast-time price was a
+   different book.** `market_observation_service` kept `min(bookmaker key)` per event
+   ("betclic" sorts before "pinnacle"). `odds_service.get_match_odds` took the first record in
+   the provider's listing order, which v10 recorded as Pinnacle for PSV. C6 judges "sharper than
+   the close" against that close, so a soft book's wider, noisier close would have flattered the
+   model, and "model vs close" could compare two books. Both paths now use one rule,
+   `the_odds_api.bookmaker_preference` (Pinnacle, then key order). Guards: one test per path;
+   both failed on the old code. ⚠️ **This is part of C6's population, so it must deploy before
+   the first capture (2026-10-09 15:00 UTC) and be approved with the protocol.** Changing it after
+   a result exists is forbidden. The 1,024 older snapshots keep their old books; none belong to
+   the served identity's C6 population.
+2. **Kickoffs on the fixture lists read an hour early for a Lagos visitor.** The list row builder
+   (`upcoming_match_service`) and the team page (`team_intelligence`) serialised the naive UTC
+   `match_date` with no offset. Browsers parse an offset-less timestamp as *local* time, so PSV's
+   18:00 UTC kickoff (19:00 WAT) rendered "Fri 9 Oct · 18:00 WAT" on the homepage and `/match`,
+   and a UTC server render disagreed with the browser. New `utils/db_time.to_utc_iso` (the
+   read-side counterpart of `to_naive_utc`) at both sites; the row's date is pinned to
+   `Africa/Lagos` like the time beside it. Guards: the row-builder schema test now asserts the
+   offset (failed first), and 2 helper tests. ⚠️ Other naive `isoformat()` sites exist (repair
+   manifests, audit services). None is on a consumer page, and the manifest ones feed hashed
+   digests, so they were deliberately left alone.
+3. **The Sentry browser SDK was in the JS every page loads, with no DSN set.**
+   `instrumentation-client.ts` (added in #228) imported `@sentry/nextjs` statically and checked
+   the DSN afterwards. Measured on the build: 179 of the 324 modules in the shared chunk were
+   Sentry (about 273 KB raw), reached only through that file. The import is now inside the DSN
+   branch, which the build removes when no DSN is set. **Shared first-load JS 198 kB → 103 kB**
+   (the vΩ.25 baseline). Every route fell by 93–95 kB: `/` 319 → 226, `/match` 308 → 215,
+   `/match/[id]` 267 → 173, `/intelligence` 250 → 156, `/performance` 241 → 148. Error capture
+   (`lib/error-utils.ts`) was already lazy; v10's "the client SDK is loaded lazily" was true of
+   that file only. v10 U9.
+4. **Google sign-in fails on the canonical alias too.** Following
+   `https://sabiscore.vercel.app/api/auth/google/start` through Google ends on its error page with
+   `redirect_uri_mismatch` (2 of 3 probes; the third timed out). So O2 is still open: register
+   `https://sabiscore.vercel.app/api/auth/google/callback` for client `117341339397-…` in Google
+   Cloud. Code: a per-deployment URL can never be registered, so a production deployment now sends
+   `/api/auth/google/start` to `NEXT_PUBLIC_SITE_URL` before setting any cookie; previews keep
+   their own origin. Guards: 2 tests (1 failed first).
+5. **U6: the price move since SabiScore first saw it.** `market.first_seen` is the earliest
+   pre-kickoff snapshot of the same fixture from the same bookmaker (`_first_sighting`, inside a
+   savepoint so a failed read cannot abort the prediction-log write). The counter-case says
+   "moved from X to Y since SabiScore first saw it at this bookmaker". It never says "opening":
+   nothing observes when a market opened. It is omitted when no snapshot exists or the bookmaker
+   is unknown. Guards: 5 backend tests, a wiring test that fails with the call removed, and 3 web
+   tests.
+6. **U5: `ProbabilityDumbbell`** above the market table (inline SVG, backend values only, neutral
+   unless a stake is permitted; the table stays the accessible text). 8 tests, 3 watched failing.
+   Screenshots of the live PSV payload at 1280 and 360 px show no horizontal overflow.
+7. **U7: on-demand providers.** ESPN read an amber "Stale" (one observation, 6.5 days old) though
+   it runs only when evidence is retrieved. The backend now reports `cadence` per provider
+   (`scheduled` for football-data.org and The Odds API, the two that `api/main.py`'s tasks call),
+   and the meter shows "Last checked 6d ago" or "Not yet used". The meter's footer said live
+   validation "appears only after an explicit operator probe"; football-data.org is live-validated
+   by routine syncs, so that line is corrected, as is a stale header-pill comment. Guards: 1
+   backend and 2 web tests.
+8. **U8:** decision-state badge colours come only from `--state-*` tokens (new `--state-play`,
+   `--state-pass`). ⚠️ Visible change: the WITHHELD badge is neutral slate, not amber; amber stays
+   reserved for the counter-case. 3 tests.
+9. **U10:** vitest's default 5 s test timeout equalled the explicit 5 s `findBy` wait, so the wait
+   could never fire first. The describe block now allows 10 s. 21 clean runs after one failure on
+   the first run after the edit.
+10. **Copy with no measurement behind it.** "Provider unavailable" on every `/intelligence` fixture
+    row beside "The Odds API · Live-validated": the token means the fixture has no stored odds row,
+    so it now reads "No odds snapshot". `/match` defined CLV as "expected price movement" and said a
+    critical gap withholds the forecast (PSV has 2 critical gaps and a forecast; a critical gap
+    withholds the stake). A "SIGMOID" calibration chip sat beside "Top outcome probability:
+    Unavailable" on a hypothetical matchup; it now needs a published forecast (1 test).
+11. **Capture history for D1.** `/health` → `components.prediction_capture.recent` keeps the last
+    48 passes that had work to do, each with `duration_ms`, counts and process RSS, so the 9 Oct
+    burst can be read afterwards instead of by polling every five minutes. Lost on restart. 1 test.
+12. **Memory: a correction to v10 D1, not a defect.** One process read RSS 398 / working set 437 /
+    headroom 74 MB at 12:24 UTC (`/health` degraded; its line is 15% of 512 MB = 77 MB), then RSS
+    354 / working set 344 / headroom 167 MB at 15:32 UTC with no restart. The low reading followed
+    a burst of about 30 concurrent requests from two open tabs at 12:05. Import cost is unchanged
+    between `fc7749c` and `63f9bf2` (450 MB locally for both; 3,754 vs 3,755 modules). Render
+    recorded no `server_failed` event in 7 days. So headroom must be judged at its peak during
+    the burst, split into anon and file memory (the breakdown another session added to `/health`,
+    not yet merged), not from one reading.
+13. **C6 drafted (v10 P1).** `reports/research/c6-served-generation-vs-close-protocol.json`,
+    sha256 `6dc8a2d6c883edc9d16db7562e963ce53ea8a885f36b6943eeee5f8d2d9f1d63`, registry entry `C6`
+    in state `PROPOSED` (the registry has no `PROTOCOL_FROZEN` state). Open for O8: which log
+    writers count (only `interactive_full_analysis` captures pass the pre-kickoff check), the seed
+    (42 proposed), the milestone sample cut, whether `/model-performance` shows `model_vs_close`
+    before 200 (it does from 10 joined rows, at 2,000 replicates and seed 0), the bookmaker rule
+    (item 1), and three unadjusted looks.
+
+**Odds API quota:** 222 remaining and 278 used at 15:32 UTC (236 and 264 that morning), with no
+reset time reported. About 14 requests went on page views during the day.
+
+**Verification (2026-09-26, local, one heavy step at a time):** backend 2,773 passed, 18 skipped,
+1 xfailed, 0 failed (6 min 16 s); ruff clean; mypy 755, unchanged (ceiling 784); registry validator
+17 experiments, 0 warnings; web lint 0, typecheck 0, Vitest 452/452 across 66 files;
+`NODE_ENV=production` build exit 0 (shared first-load JS 103 kB); Playwright desktop and mobile
+4/4; screenshots of the live PSV payload at 1280 and 360 px with 0 px horizontal overflow.
+
 ## 157. Directive v9 phases 1–2: scheduled prediction capture, honest pending metrics, bounded evidence tables, and five more places the pages said something unmeasured — RESOLVED (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-26. Verify on production after deploy (checks at the end).

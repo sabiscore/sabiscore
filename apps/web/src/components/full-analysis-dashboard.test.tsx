@@ -441,6 +441,17 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     },
   );
 
+  it.each(["PLAY", "PASS", "WITHHELD"] as const)(
+    "colours the %s badge only through its state token (directive v10 U8)",
+    (state) => {
+      const html = render(<DecisionStateBadge state={state} />).container.innerHTML;
+      expect(html).toContain(`--state-${state.toLowerCase()}`);
+      // No palette hue carries the state; the label text stays neutral.
+      expect(html).not.toMatch(/(?:border|bg)-(?:emerald|amber|slate|rose)-\d/);
+      expect(html).not.toMatch(/text-(?:emerald|amber|rose)-\d/);
+    },
+  );
+
   it("stays visible when EvidenceStatusCard renders nothing (stakePermitted path)", () => {
     const statusCard = render(<EvidenceStatusCard data={stakePermittedData} />);
     expect(statusCard.container).toBeEmptyDOMElement();
@@ -587,6 +598,49 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     },
   } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
 
+  describe("price movement since SabiScore first saw it (directive v10 U6)", () => {
+    const outcome = { implied: 0.5, fair: 0.48, model_prob: 0.5, edge: 0.02, expected_value: null };
+    const market = (first_seen: unknown) => ({
+      ...withheldWithForecast,
+      market: {
+        devig_method: "proportional",
+        overround: 1.058,
+        evaluable: false,
+        outcomes: [
+          { ...outcome, outcome: "home_win", odds: 1.24 },
+          { ...outcome, outcome: "draw", odds: 7.36 },
+          { ...outcome, outcome: "away_win", odds: 8.65 },
+        ],
+        first_seen,
+      },
+    }) as typeof withheldWithForecast;
+    const seen = (home_win: number) => ({
+      bookmaker: "pinnacle",
+      captured_at: "2026-10-09T13:00:00Z",
+      home_win,
+      draw: 7.36,
+      away_win: 8.65,
+    });
+
+    it("states the move for the top outcome, from the same book", () => {
+      const text = render(<CounterCase data={market(seen(1.28))} />).container.textContent ?? "";
+      expect(text).toMatch(/price for home win moved from 1\.28 to 1\.24 since SabiScore first saw it/);
+      // A first sighting is not an opening line: nothing observed the market opening.
+      expect(text).not.toMatch(/open/i);
+    });
+
+    it("says an unchanged price is unchanged", () => {
+      const text = render(<CounterCase data={market(seen(1.24))} />).container.textContent ?? "";
+      expect(text).toMatch(/price for home win has not moved \(1\.24\) since SabiScore first saw it/);
+    });
+
+    it("says nothing about movement without a captured price", () => {
+      for (const data of [market(null), withheldWithForecast]) {
+        expect(render(<CounterCase data={data} />).container.textContent).not.toMatch(/first saw it/);
+      }
+    });
+  });
+
   it("titles the status card for the missing stake, not a missing prediction", () => {
     render(<EvidenceStatusCard data={withheldWithForecast} />);
     expect(screen.getByRole("region", { name: /why no stake/i })).toBeInTheDocument();
@@ -672,6 +726,31 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     // The neutral is a named decision state, not an incidental grey (v9 U4).
     expect(render(<EdgeDeltaBar oddsEdge={edge} />).container.innerHTML).toMatch(/--state-withheld/);
   });
+
+  it("names no calibration method when no forecast is published", () => {
+    // Live 2026-09-26: the hypothetical Arsenal v Bournemouth page read
+    // "Top outcome probability: Unavailable" beside a SIGMOID chip.
+    const calibrated = { ...withheldWithForecast.ensemble, calibration_applied: true, calibration_method: "sigmoid" };
+    const noForecast = {
+      ...withheldWithForecast,
+      prediction_status: "REDUCED_EVIDENCE_BASELINE",
+      probabilities_available: false,
+      is_reduced_evidence_baseline: true,
+      ensemble: { ...calibrated, probabilities_available: false },
+    } as typeof withheldWithForecast;
+    const hero = render(
+      <EnhancedMatchHero
+        matchId="Arsenal vs Bournemouth"
+        data={noForecast}
+        presentation={mapFullAnalysisPresentation(noForecast)}
+        league="EPL"
+      />,
+    ).container;
+    const card = render(<EnsembleCard data={noForecast.ensemble} />).container;
+    for (const container of [hero, card]) expect(container.textContent).not.toMatch(/sigmoid/i);
+    // A published forecast still reports the method applied to it.
+    expect(render(<EnsembleCard data={calibrated} />).container.textContent).toMatch(/sigmoid/i);
+  });
 });
 
 
@@ -692,6 +771,13 @@ describe("MarketComparisonTable (directive v9 U1)", () => {
     expect(text).not.toMatch(/Expected return/);
     expect(container.innerHTML).not.toMatch(/emerald/);
     expect(text).toMatch(/not evidence of value/);
+  });
+
+  it("draws the dumbbell above the table, which stays the accessible text (directive v10 U5)", () => {
+    const { container } = render(<MarketComparisonTable market={withheld} />);
+    const chart = container.querySelector("svg[aria-hidden='true']");
+    expect(chart?.querySelectorAll("[data-outcome]")).toHaveLength(3);
+    expect(screen.getAllByRole("row")).toHaveLength(4);
   });
 
   it("adds expected return only when the fixture is evaluable", () => {

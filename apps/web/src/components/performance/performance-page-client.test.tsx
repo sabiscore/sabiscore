@@ -12,6 +12,10 @@ vi.mock("@/components/value-bet-scanner", () => ({
   ValueBetScanner: () => <div data-testid="scanner-stub" />,
 }));
 
+// Under full-suite load one findBy exceeded the 1 s default (an 8.6 s test on
+// 2026-09-26) while passing alone. The wait is explicit, not the default.
+const LOAD = { timeout: 5_000 };
+
 function renderWithClient() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -34,7 +38,9 @@ function mockSummary(body: unknown, status = 200) {
   );
 }
 
-describe("PerformancePageClient summary", () => {
+// The test timeout sits above LOAD, or the explicit wait could never fire
+// before vitest's own 5 s default did.
+describe("PerformancePageClient summary", { timeout: 10_000 }, () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.unstubAllGlobals());
 
@@ -50,7 +56,7 @@ describe("PerformancePageClient summary", () => {
 
     renderWithClient();
 
-    expect(await screen.findByText("47.6%")).toBeInTheDocument();
+    expect(await screen.findByText("47.6%", undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText("0.198")).toBeInTheDocument();
     expect(screen.getByText("42")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
@@ -72,7 +78,7 @@ describe("PerformancePageClient summary", () => {
 
     renderWithClient();
 
-    const notice = await screen.findByTestId("performance-summary-notice");
+    const notice = await screen.findByTestId("performance-summary-notice", undefined, LOAD);
     expect(notice).toHaveTextContent(/awaiting settled predictions/i);
     expect(notice).toHaveTextContent(/none have settled yet/i);
     expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
@@ -87,7 +93,7 @@ describe("PerformancePageClient summary", () => {
 
     renderWithClient();
 
-    const notice = await screen.findByTestId("performance-summary-notice");
+    const notice = await screen.findByTestId("performance-summary-notice", undefined, LOAD);
     expect(notice).toHaveTextContent(/unreachable/i);
     expect(notice).toHaveAttribute("role", "alert");
   });
@@ -102,13 +108,13 @@ describe("PerformancePageClient summary", () => {
     });
 
     renderWithClient();
-    await screen.findByText("48.0%");
+    await screen.findByText("48.0%", undefined, LOAD);
 
     // No stake is ever placed (NO_BET / shadow only), so ROI has no referent at
     // all — unlike CLV below, which is a real capability still filling up.
     await waitFor(() => {
       expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
-    });
+    }, LOAD);
   });
 
   // This case previously asserted CLV was never shown, on the rationale that
@@ -128,7 +134,7 @@ describe("PerformancePageClient summary", () => {
 
     renderWithClient();
 
-    expect(await screen.findByText(/market belief differential/i)).toBeInTheDocument();
+    expect(await screen.findByText(/market belief differential/i, undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(/6 of 10 joined predictions/i)).toBeInTheDocument();
     expect(screen.queryByText(/pp$/)).not.toBeInTheDocument();
   });
@@ -145,7 +151,7 @@ describe("PerformancePageClient summary", () => {
 
     renderWithClient();
 
-    const value = await screen.findByText("+2.3pp");
+    const value = await screen.findByText("+2.3pp", undefined, LOAD);
     // A no-skill model scores positive on this too (DEBT item 152): never green.
     expect(value.className).not.toMatch(/emerald/);
     expect(

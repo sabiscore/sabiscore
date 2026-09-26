@@ -174,6 +174,18 @@ export const fullMatchAnalysisSchema = z
             }),
           )
           .length(3),
+        // Directive v10 U6: the earliest pre-kickoff price the same bookmaker
+        // quoted for this fixture. A first sighting, never an opening line.
+        first_seen: z
+          .object({
+            bookmaker: z.string(),
+            captured_at: z.string().datetime({ offset: true }),
+            home_win: z.number().gt(1),
+            draw: z.number().gt(1),
+            away_win: z.number().gt(1),
+          })
+          .nullable()
+          .optional(),
       })
       .nullable()
       .optional(),

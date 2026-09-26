@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { EvidencePassport } from "@/components/evidence-passport";
+import { ProbabilityDumbbell } from "@/components/probability-dumbbell";
 import { MatchShareModal } from "@/components/MatchShareModal";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
@@ -324,7 +325,9 @@ export function EnhancedMatchHero({
       </div>
 
       {/* ── Model provenance strip (Phase D) ── */}
-      {(ensemble.calibration_applied || ensemble.overlay_applied) && (
+      {/* A calibration method describes a published forecast; with none, the
+          chip described a computation the reader cannot see (live 2026-09-26). */}
+      {presentation.predictionAvailable && (ensemble.calibration_applied || ensemble.overlay_applied) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2.5">
           <span className="text-[9px] uppercase tracking-widest text-slate-400 mr-0.5">Model</span>
           {ensemble.calibration_applied && (
@@ -412,7 +415,8 @@ export function EnhancedMatchHero({
 
 // Directive v8 §3.2: the state is carried by the word and the icon's shape
 // (filled check / bar / dashed ring); colour only repeats it, so the three
-// states stay distinguishable without colour vision.
+// states stay distinguishable without colour vision. Colours come only from the
+// --state-* tokens (v10 U8); the label stays neutral for contrast.
 const DECISION_STATE_META: Record<
   DecisionState,
   { label: string; Icon: typeof CheckCircle2; className: string }
@@ -420,17 +424,17 @@ const DECISION_STATE_META: Record<
   PLAY: {
     label: "Play",
     Icon: CheckCircle2,
-    className: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
+    className: "border-[hsl(var(--state-play)/0.4)] bg-[hsl(var(--state-play)/0.1)] [&>svg]:text-[hsl(var(--state-play))]",
   },
   PASS: {
     label: "Pass",
     Icon: MinusCircle,
-    className: "border-slate-400/40 bg-slate-500/10 text-slate-200",
+    className: "border-[hsl(var(--state-pass)/0.4)] bg-[hsl(var(--state-pass)/0.1)] [&>svg]:text-[hsl(var(--state-pass))]",
   },
   WITHHELD: {
     label: "Withheld",
     Icon: CircleDashed,
-    className: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+    className: "border-[hsl(var(--state-withheld)/0.5)] bg-[hsl(var(--state-withheld)/0.15)] [&>svg]:text-[hsl(var(--state-withheld))]",
   },
 };
 
@@ -440,7 +444,7 @@ export function DecisionStateBadge({ state }: { state: DecisionState }) {
     <span
       data-decision-state={state}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold text-slate-100",
         className,
       )}
     >
@@ -470,6 +474,11 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
   // a blocking uncertainty gap; saying it twice is noise.
   const uncertaintyListedAbove =
     !presentation.stakePermitted && critical.includes("MODEL_UNCERTAINTY_UNAVAILABLE");
+  // Directive v10 U6: the earliest price the same book quoted, as SabiScore
+  // captured it. A first sighting, not an opening line.
+  const firstSeen = data.market?.first_seen;
+  const topRow = data.market?.outcomes.find((row) => row.outcome === presentation.topOutcome);
+  const firstPrice = firstSeen && topRow ? firstSeen[topRow.outcome] : null;
 
   return (
     <section
@@ -484,6 +493,14 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
           <li>
             The model gives <strong className="text-white">{outcome}</strong> a {pct(p)} chance, so it
             loses {pct(1 - p)} of the time.
+          </li>
+        )}
+        {firstSeen && topRow && firstPrice != null && outcome && (
+          <li>
+            {firstPrice === topRow.odds
+              ? `The price for ${outcome} has not moved (${topRow.odds.toFixed(2)})`
+              : `The price for ${outcome} moved from ${firstPrice.toFixed(2)} to ${topRow.odds.toFixed(2)}`}{" "}
+            since SabiScore first saw it at this bookmaker ({formatLagosTimestamp(firstSeen.captured_at)} WAT).
           </li>
         )}
         {uncertifiedEdge && edge && (
@@ -762,7 +779,7 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-400">{generationLabel(data.model_version)}</span>
           <div className="flex items-center gap-1">
-            {data.calibration_applied && (
+            {available && data.calibration_applied && (
               <span
                 className="rounded-full border border-violet-500/25 bg-violet-500/10 px-1.5 py-px text-[9px] font-semibold text-violet-400"
                 title={`Calibration: ${data.calibration_method ?? "cal"}`}
@@ -770,7 +787,7 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
                 {data.calibration_method ?? "cal"}
               </span>
             )}
-            {data.overlay_applied && (
+            {available && data.overlay_applied && (
               <span
                 className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-px text-[9px] font-semibold text-cyan-400"
                 title="Bivariate Poisson draw overlay"
@@ -1094,6 +1111,7 @@ export function MarketComparisonTable({
         </p>
         <span className="text-[10px] tabular-nums text-slate-400">Overround {pct(market.overround)}</span>
       </div>
+      <ProbabilityDumbbell market={market} stakePermitted={stakePermitted} />
       <table className="w-full text-xs sm:text-sm tabular-nums">
         <caption className="sr-only">Bookmaker price, de-vigged fair probability and model probability for each outcome</caption>
         <thead>

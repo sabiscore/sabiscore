@@ -157,7 +157,9 @@ function leagueChip(league: string) {
 function formatMatchDate(dateStr: string) {
   try {
     const d = new Date(dateStr);
-    return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    // Same zone as the "WAT" time printed beside it, or a late kickoff could
+    // show one day with the next day's time.
+    return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "Africa/Lagos" });
   } catch {
     return dateStr;
   }
