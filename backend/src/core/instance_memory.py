@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 try:
-    import psutil
+    import psutil  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover - depends on optional system package
     psutil = None  # type: ignore[assignment]
 
