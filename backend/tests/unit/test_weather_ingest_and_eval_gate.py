@@ -112,12 +112,14 @@ class TestHourlyIndexing:
         }
         indexed = index_hourly(payload)
         # A 19:00 kickoff must read the 17:00 row, not the 19:00 one.
-        assert indexed["2024-03-01T17:00"] == (9.0, 0.5)
+        assert indexed["2024-03-01T17:00"]["temperature_2m"] == 9.0
+        assert indexed["2024-03-01T17:00"]["precipitation"] == 0.5
+        # Wind was not requested in this payload: absent, never zero.
+        assert indexed["2024-03-01T17:00"]["wind_gusts_10m"] is None
 
     def test_absent_variables_do_not_raise(self) -> None:
-        assert index_hourly({"hourly": {"time": ["2024-03-01T17:00"]}}) == {
-            "2024-03-01T17:00": (None, None)
-        }
+        row = index_hourly({"hourly": {"time": ["2024-03-01T17:00"]}})["2024-03-01T17:00"]
+        assert set(row.values()) == {None}
 
     @pytest.mark.parametrize(
         ("raw", "expected"),

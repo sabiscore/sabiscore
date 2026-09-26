@@ -25,6 +25,7 @@ def _hourly(stamp: str = "2026-08-16T15:00") -> dict:
             "temperature_2m": [17.1, 18.4, 18.0],
             "precipitation": [0.0, 0.3, 0.1],
             "wind_speed_10m": [11.0, 12.5, 13.0],
+            "wind_gusts_10m": [20.0, 22.5, 23.0],
             "relative_humidity_2m": [70.0, 72.0, 74.0],
         }
     }
@@ -48,25 +49,26 @@ class _StubProvider(OpenMeteoProvider):
         return self._payload, {}
 
 
-def test_parses_the_exact_kickoff_hour() -> None:
+def test_parses_the_exact_requested_hour() -> None:
     reading = _parse_hourly(
-        _hourly(), kickoff_utc=KICKOFF, latitude=53.4, longitude=-2.9, source="archive"
+        _hourly(), hour_utc=KICKOFF, latitude=53.4, longitude=-2.9, source="historical_forecast"
     )
     assert reading is not None
     assert reading.temperature_c == 18.4
     assert reading.precipitation_mm == 0.3
     assert reading.wind_speed_kmh == 12.5
-    assert reading.source == "archive"
+    assert reading.wind_gusts_kmh == 22.5
+    assert reading.source == "historical_forecast"
     assert reading.observed_for_utc == KICKOFF
 
 
-def test_a_missing_kickoff_hour_is_absent_not_nearest_neighbour() -> None:
+def test_a_missing_hour_is_absent_not_nearest_neighbour() -> None:
     """A gap in the series must stay a gap; the 14:00 reading is not 15:00's."""
     payload = _hourly()
     payload["hourly"]["time"] = ["2026-08-16T14:00", "2026-08-16T16:00"]
     assert (
         _parse_hourly(
-            payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
+            payload, hour_utc=KICKOFF, latitude=0.0, longitude=0.0, source="historical_forecast"
         )
         is None
     )
@@ -104,20 +106,22 @@ def test_partial_or_malformed_responses_yield_nothing(mutate) -> None:
     mutate(payload)
     assert (
         _parse_hourly(
-            payload, kickoff_utc=KICKOFF, latitude=0.0, longitude=0.0, source="archive"
+            payload, hour_utc=KICKOFF, latitude=0.0, longitude=0.0, source="historical_forecast"
         )
         is None
     )
 
 
 @pytest.mark.asyncio
-async def test_a_past_kickoff_reads_the_archive() -> None:
+async def test_a_past_kickoff_reads_the_archived_forecast_two_hours_before() -> None:
     provider = _StubProvider(_hourly())
+    # A 17:00 kickoff reads the 15:00 row (DEBT 155; same hour as the F3 dataset).
     reading = await provider.weather_at_kickoff(
-        latitude=53.4, longitude=-2.9, kickoff_utc=KICKOFF
+        latitude=53.4, longitude=-2.9, kickoff_utc=KICKOFF + timedelta(hours=2)
     )
-    assert reading is not None and reading.source == "archive"
-    assert "archive-api" in (provider.last_url or "")
+    assert reading is not None and reading.source == "historical_forecast"
+    assert reading.observed_for_utc == KICKOFF
+    assert "historical-forecast-api" in (provider.last_url or "")
     assert provider.last_params["start_date"] == "2026-08-16"
 
 
@@ -126,13 +130,14 @@ async def test_a_future_kickoff_reads_the_forecast() -> None:
     soon = datetime.now(timezone.utc).replace(
         minute=0, second=0, microsecond=0
     ) + timedelta(days=2)
-    stamp = soon.strftime("%Y-%m-%dT%H:00")
+    stamp = (soon - timedelta(hours=2)).strftime("%Y-%m-%dT%H:00")
     payload = {
         "hourly": {
             "time": [stamp],
             "temperature_2m": [15.0],
             "precipitation": [0.0],
             "wind_speed_10m": [9.0],
+            "wind_gusts_10m": [14.0],
             "relative_humidity_2m": [65.0],
         }
     }

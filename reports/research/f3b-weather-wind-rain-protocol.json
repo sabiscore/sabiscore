@@ -1,0 +1,53 @@
+{
+  "protocol": "f3b-weather-wind-rain",
+  "version": "1.0.0",
+  "registered_at": "2026-09-26",
+  "status": "PRE-REGISTERED — frozen before any F3b weather data was fetched",
+  "question": "Does the kickoff - 2 h forecast of wind and heavy rain add information about the 1X2 result beyond the de-vigged market?",
+  "why_new": "F3 (reports/research/portfolio-f3-weather-incremental-value.json) tested temperature and precipitation amount only and was null: all 6 pooled paired RPS intervals straddled zero. Wind speed and gusts, the variables with the most direct mechanism on ball flight and scoring, were never fetched. F3's own robustness note also leaves thresholded (rather than linear) rain untested.",
+  "prior": "Low. The market prices a public forecast published before kickoff, so only a mispriced effect can show. This test is run because it is cheap and it closes the weather family either way.",
+  "data": {
+    "source": "Open-Meteo Historical Forecast API (archived forecasts, not ERA5 reanalysis)",
+    "endpoint_constant": "src.providers.open_meteo.HISTORICAL_FORECAST_BASE",
+    "acquisition_script": "backend/scripts/ingest_openmeteo_weather.py --out backend/data/cache/weather_forecasts_f3b.parquet --report reports/research/portfolio-f3b-weather-forecast-gates.json --experiment-id F3b",
+    "hourly_variables_constant": "src.providers.open_meteo.HOURLY_VARIABLES (temperature_2m, precipitation, wind_speed_10m, wind_gusts_10m, relative_humidity_2m)",
+    "archive_cutoff": "2022-03-01 (src.providers.open_meteo.FORECAST_ARCHIVE_START); earlier fixtures are refused, never filled from reanalysis",
+    "valid_hour": "src.providers.open_meteo.forecast_valid_hour: kickoff - 2 h floored to the hour, venue-local (corpus Time assumed venue-local, as in F3)",
+    "venues": "VERIFIED clubs in reports/research/portfolio-f-venue-location-manifest.json at fetch time (115 at registration)",
+    "f3_dataset": "backend/data/cache/weather_forecasts_f1.parquet is not modified"
+  },
+  "candidate_features": {
+    "wind_speed_10m_kmh": "Open-Meteo wind_speed_10m at the valid hour, km/h, as returned",
+    "wind_gusts_10m_kmh": "Open-Meteo wind_gusts_10m at the valid hour (maximum of the preceding hour), km/h, as returned",
+    "heavy_rain": "1.0 if precipitation_mm (sum of the preceding hour) >= 2.5 else 0.0; 2.5 mm/h is the light/moderate boundary of the standard rain-rate scale; fixed here and never tuned"
+  },
+  "baseline": "de-vigged Bet365 1X2 [P(home), P(draw), P(away)] from scripts/_incremental_value_harness.load_fixtures_with_market, identical to F3",
+  "candidate": "baseline + the three candidate_features",
+  "raw_reference": "the de-vigged market itself, unmodeled (Rule 6), scored alongside",
+  "exclusions": [
+    "fixtures with no coherent Bet365 price (as F3)",
+    "fixtures missing any of the three candidate features; excluded from BOTH arms so the comparison stays paired"
+  ],
+  "split": {
+    "method": "expanding-window walk-forward, identical to F3 (study_f3_weather_incremental_value._FOLDS)",
+    "folds": [
+      {"train_seasons": [2021, 2022], "test_season": 2023},
+      {"train_seasons": [2021, 2022, 2023], "test_season": 2024},
+      {"train_seasons": [2021, 2022, 2023, 2024], "test_season": 2025}
+    ]
+  },
+  "learner": "multinomial logistic only (_incremental_value_harness.fit_multinomial_logistic), seed 42. XGBoost is not run: F3 measured it worse than logistic at this feature count (RPS ~0.203 vs ~0.197), the §26 ladder.",
+  "metrics": {
+    "primary": "RPS",
+    "secondary_descriptive": ["log_loss", "ECE"]
+  },
+  "inference": "paired block bootstrap on the per-fixture RPS difference (candidate - baseline), non-overlapping blocks of 10, as implemented in scripts/_incremental_value_harness.py",
+  "decision_rule": {
+    "ADOPT": "every one of the 3 pooled folds has a paired 95% CI on candidate - baseline RPS entirely below zero (the F3 bar, not loosened)",
+    "REJECT": "anything else. On REJECT, F3 and F3b are both set to CLOSED / REJECT under §51 and weather is removed from open-lever lists.",
+    "per_league_slices": "reported for completeness only; never evidence, never a reason to re-run",
+    "no_reruns": "no re-run with changed features, threshold, learner, folds or venue set may be reported as F3b"
+  },
+  "on_adopt": "Not a promotion. Weather becomes a candidate for a new feature_schema_version under the gated route in docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V9.md §2.5 W3, which still needs the G1 coverage decision (OG-06) and a commercial licence before customer-facing serving.",
+  "licence_note": "Open-Meteo free API: non-commercial use, 10,000 calls per day. This research run uses about 105 calls."
+}

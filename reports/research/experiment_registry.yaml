@@ -957,6 +957,69 @@ experiments:
       cost and a live Open-Meteo dependency for no accuracy.
 
   # =========================================================================
+  - experiment_id: F3b
+    title: "Contextual weather: wind and heavy rain (F3 follow-up)"
+    portfolio: "F"
+    hypothesis: >-
+      The kickoff - 2 h forecast of wind speed, wind gusts and heavy rain
+      (>= 2.5 mm in the hour) adds information about 1X2 beyond the de-vigged
+      market.
+    migrated_retrospectively: false
+    state: SOURCE_QUALIFIED
+    decision: HOLD
+    decision_detail: >-
+      PRE-REGISTERED 2026-09-26 before any F3b data was fetched; protocol
+      reports/research/f3b-weather-wind-rain-protocol.json. Same source as F3
+      (already qualified). The decision rule is fixed in the protocol: ADOPT
+      only if all 3 pooled folds clear F3's bar, otherwise F3 and F3b both
+      close as REJECT.
+    information_source: "Open-Meteo Historical Forecast API (historical-forecast-api.open-meteo.com)"
+    source_version: "as F3; constants owned by src/providers/open_meteo.py (DEBT 155)"
+    source_license_class: L0
+    source_coverage: UNDECLARED
+    historical_window: "archived forecasts from 2022-03-01; earlier fixtures refused"
+    prediction_cutoff: "T-2h before kickoff (forecast valid time)"
+    dataset_version: "backend/data/cache/weather_forecasts_f3b.parquet"
+    feature_version: null
+    representation_version: "wind_speed_10m_kmh, wind_gusts_10m_kmh, heavy_rain (>= 2.5 mm)"
+    model_version: "not a production artifact - study-local fits only"
+    parameters: "Level 1 multinomial logistic only (F3 showed XGBoost worse at this feature count)"
+    seed: 42
+    training_window: "as F3: expanding window, folds train 2021-2022 / 2021-2023 / 2021-2024"
+    validation_windows: "as F3: test seasons 2023/24, 2024/25, 2025/26"
+    final_holdout: >-
+      None reserved, as F3: an information test with no model selection to
+      protect.
+    baseline_models:
+      - "de-vigged Bet365 1X2 -> multinomial logistic"
+      - "raw de-vigged Bet365 1X2, unmodeled (Rule 6 reference)"
+    market_baseline: "the baseline arm itself (Rule 7)"
+    primary_metrics: [RPS]
+    secondary_metrics: [log_loss, ECE]
+    bootstrap_method: "as F3: paired block bootstrap, non-overlapping blocks of 10"
+    statistical_test: "every pooled fold's paired 95% CI on candidate - baseline RPS entirely below zero"
+    multiple_testing_family: "3 pooled folds (1 learner x 3 origins); per-league slices descriptive only"
+    effect_size: UNDECLARED
+    confidence_interval: UNDECLARED
+    sample_size: UNDECLARED
+    result: UNDECLARED
+    robustness: UNDECLARED
+    failure_modes:
+      - "as F3: reanalysis fallback before 2022-03-01 (guarded by a hard cutoff)"
+      - "as F3: corpus kickoff clock assumed venue-local"
+    compute: "stdlib urllib + polars; about 105 requests, one per venue-window"
+    peak_rss: UNDECLARED
+    runtime: UNDECLARED
+    artifact_location: "reports/research/portfolio-f3b-weather-incremental-value.json"
+    provenance:
+      - "reports/research/f3b-weather-wind-rain-protocol.json"
+      - "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V9.md"
+      - "docs/DEBT.md#155"
+      - "backend/scripts/study_f3b_wind_rain_incremental_value.py"
+    reviewer: UNDECLARED
+    certification_status: "not a candidate until the protocol's ADOPT condition holds"
+
+  # =========================================================================
   - experiment_id: E6
     title: "Dynamic team state (state-space latent strength)"
     portfolio: null

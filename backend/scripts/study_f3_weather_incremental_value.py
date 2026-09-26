@@ -132,8 +132,18 @@ def fit_xgboost(X: np.ndarray, y: np.ndarray) -> Any:
     return model
 
 
-def build_rows() -> list[dict[str, Any]]:
+def build_rows(
+    parquet: Path = _WEATHER_PARQUET,
+    features: tuple[str, ...] = _WEATHER_FEATURES,
+    derive: Any = None,
+) -> list[dict[str, Any]]:
     """Join the T-2h forecasts onto the corpus fixtures that carry a market price.
+
+    `parquet`, `features` and `derive` exist for F3b
+    (`study_f3b_wind_rain_incremental_value.py`); the defaults are F3 exactly.
+    `derive(row) -> {feature: value}` builds features that are not raw columns.
+    A weather row missing any feature is dropped before the join, so both arms
+    see the same fixtures.
 
     The join is exact on (league, date, home, away): both sides are derived
     from the same `fd_*.csv` files, so team spellings agree by construction and
@@ -141,13 +151,18 @@ def build_rows() -> list[dict[str, Any]]:
     Bet365 price is dropped — Rule 7's bar is defined against the market, so a
     fixture without one cannot participate in the test.
     """
-    weather = pl.read_parquet(_WEATHER_PARQUET)
-    by_key: dict[tuple[str, str, str, str], dict[str, float]] = {
-        (r["league"], str(r["kickoff_date"]), r["home_team"], r["away_team"]): {
-            name: float(r[name]) for name in _WEATHER_FEATURES
-        }
-        for r in weather.iter_rows(named=True)
-    }
+    weather = pl.read_parquet(parquet)
+    by_key: dict[tuple[str, str, str, str], dict[str, float]] = {}
+    missing_feature = 0
+    for r in weather.iter_rows(named=True):
+        values = derive(r) if derive is not None else {n: r.get(n) for n in features}
+        if any(values.get(n) is None for n in features):
+            missing_feature += 1
+            continue
+        key = (r["league"], str(r["kickoff_date"]), r["home_team"], r["away_team"])
+        by_key[key] = {n: float(values[n]) for n in features}
+    if missing_feature:
+        print(f"weather rows missing a feature, excluded from both arms: {missing_feature}")
 
     rows: list[dict[str, Any]] = []
     matched_keys: set[tuple[str, str, str, str]] = set()
@@ -190,14 +205,19 @@ def build_rows() -> list[dict[str, Any]]:
     return rows
 
 
-def run_arm(rows: list[dict[str, Any]], label: str, fitter: Any) -> dict[str, Any]:
+def run_arm(
+    rows: list[dict[str, Any]],
+    label: str,
+    fitter: Any,
+    features: tuple[str, ...] = _WEATHER_FEATURES,
+) -> dict[str, Any]:
     folds: dict[str, Any] = {}
     for train_seasons, test_season in _FOLDS:
         folds[f"test_{test_season}"] = run_incremental_value_study(
             rows,
             baseline_features=lambda r: list(r["market_probs"]),
             candidate_features=lambda r: (
-                list(r["market_probs"]) + [r[name] for name in _WEATHER_FEATURES]
+                list(r["market_probs"]) + [r[name] for name in features]
             ),
             train_seasons=train_seasons,
             test_season=test_season,

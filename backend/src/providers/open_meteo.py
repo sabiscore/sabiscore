@@ -8,13 +8,21 @@ kicked off yet. A source that offers only one half teaches the model to lean on
 a signal serving can never supply — the train/serve skew that forced the vΩ.46
 retrain. Open-Meteo is the only free option that satisfies both:
 
-* ``archive-api.open-meteo.com/v1/archive`` — reanalysis back to 1940, for the
-  12,765-match corpus in ``backend/data/cache``.
+* ``historical-forecast-api.open-meteo.com/v1/forecast`` — the forecasts that
+  were actually published, archived from 2022-03-01 (DEBT 84), for a kickoff in
+  the past.
 * ``api.open-meteo.com/v1/forecast`` — up to 16 days ahead, for an upcoming
   fixture.
 
 Both return an identical ``hourly`` block, so ONE parser serves both paths and
 the two cannot drift. Neither needs an API key.
+
+⚠️ NOT ``archive-api.open-meteo.com`` (DEBT 155). That is ERA5 reanalysis: the
+weather that actually happened, known only after the match. This adapter read
+it for past kickoffs until 2026-09-26, while the research dataset F3 was scored
+on read archived forecasts, so a training backfill through here would have
+leaked. The cutoff, lead time and variable set below are imported by
+``scripts/ingest_openmeteo_weather.py`` so training and serving cannot diverge.
 
 Rejected: Visual Crossing requires a key and caps the free tier at 1,000
 records/day, which does not cover a 12,765-match backfill. NOAA/NWS is
@@ -42,7 +50,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping, Optional, Sequence
 from urllib.parse import urlsplit
 
@@ -50,7 +58,7 @@ from .base import BaseProvider, ProviderStatus, TrustTier
 
 # Both hosts must be present in the egress allowlist. They are distinct
 # services on distinct hosts, exactly like ESPN's two bases.
-_ARCHIVE_BASE = "https://archive-api.open-meteo.com/v1/archive"
+HISTORICAL_FORECAST_BASE = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 _FORECAST_BASE = "https://api.open-meteo.com/v1/forecast"
 _GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search"
 
@@ -58,7 +66,7 @@ _GEOCODING_BASE = "https://geocoding-api.open-meteo.com/v1/search"
 # this adapter may reach these three hosts over HTTPS and nothing else.
 _ALLOWED_HOSTS = frozenset(
     {
-        "archive-api.open-meteo.com",
+        "historical-forecast-api.open-meteo.com",
         "api.open-meteo.com",
         "geocoding-api.open-meteo.com",
     }
@@ -68,16 +76,38 @@ _ALLOWED_HOSTS = frozenset(
 # has no forecast yet; that is an absence to report, never one to interpolate.
 FORECAST_HORIZON_DAYS = 16
 
+# Measured, not assumed (DEBT 84): before this date the historical-forecast
+# endpoint silently returns ERA5 reanalysis with HTTP 200. Identical to
+# reanalysis through 2022-01-01, divergent from 2022-03-01; this is the
+# conservative side. Nothing earlier is ever returned as a forecast.
+FORECAST_ARCHIVE_START = date(2022, 3, 1)
+
+# The forecast stands in for the kickoff at kickoff - 2 h (Rule 3: pre-match
+# information only). Training and serving read this same hour.
+FORECAST_LEAD_HOURS = 2
+
 # Kept deliberately small. Every variable added here becomes a column that a
-# future feature schema must resolve for all 12,765 historical matches AND for
-# an unplayed fixture, so the set is the intersection of "plausibly affects a
-# football result" and "the archive and forecast endpoints both return it".
-_HOURLY_VARIABLES = (
+# future feature schema must resolve for historical matches AND for an unplayed
+# fixture, so the set is the intersection of "plausibly affects a football
+# result" and "the historical-forecast and forecast endpoints both return it".
+HOURLY_VARIABLES = (
     "temperature_2m",
     "precipitation",
     "wind_speed_10m",
+    "wind_gusts_10m",
     "relative_humidity_2m",
 )
+
+
+def forecast_valid_hour(kickoff: datetime) -> datetime:
+    """The whole hour whose forecast stands in for this kickoff.
+
+    Timezone-agnostic: pass a UTC kickoff to get a UTC hour, or a venue-local
+    kickoff to get a venue-local hour. The research ingest and this adapter
+    both call it, so they cannot read different hours for the same fixture.
+    """
+    lead = kickoff - timedelta(hours=FORECAST_LEAD_HOURS)
+    return lead.replace(minute=0, second=0, microsecond=0)
 
 
 @dataclass(frozen=True)
@@ -92,11 +122,11 @@ class GeoPoint:
 
 @dataclass(frozen=True)
 class MatchWeather:
-    """Weather at one kickoff hour.
+    """The forecast valid at ``forecast_valid_hour(kickoff)``.
 
-    ``source`` records which endpoint answered, so a stored observation always
-    says whether it is a reanalysis or a forecast — they are not equivalent
-    evidence and must never be silently interchanged.
+    ``source`` records which endpoint answered: an archived forecast for a
+    past kickoff, or a live forecast for an upcoming one. Both are forecasts;
+    reanalysis is never read (DEBT 155).
     """
 
     latitude: float
@@ -105,8 +135,9 @@ class MatchWeather:
     temperature_c: float
     precipitation_mm: float
     wind_speed_kmh: float
+    wind_gusts_kmh: float
     relative_humidity_pct: float
-    source: str  # "archive" | "forecast"
+    source: str  # "historical_forecast" | "forecast"
     acquired_at: datetime
 
 
@@ -185,28 +216,33 @@ class OpenMeteoProvider(BaseProvider):
         longitude: float,
         kickoff_utc: datetime,
     ) -> Optional[MatchWeather]:
-        """Weather for the kickoff hour, from the archive or the forecast.
+        """The forecast valid at kickoff - 2 h, archived or live, or None.
 
-        Endpoint choice is by the kickoff's own position in time, not by a
+        Endpoint choice is by that hour's own position in time, not by a
         caller flag, so a historical backfill and a live request cannot end up
         reading different sources for the same match.
         """
-        kickoff = _as_utc(kickoff_utc)
+        valid = forecast_valid_hour(_as_utc(kickoff_utc))
+        if valid.date() < FORECAST_ARCHIVE_START:
+            # Only reanalysis exists this early; it is not a forecast.
+            return None
         now = datetime.now(timezone.utc)
-        is_past = kickoff < now
 
-        day = kickoff.date().isoformat()
         params: dict[str, Any] = {
             "latitude": latitude,
             "longitude": longitude,
-            "hourly": ",".join(_HOURLY_VARIABLES),
+            "hourly": ",".join(HOURLY_VARIABLES),
             "timezone": "UTC",
         }
-        if is_past:
-            base, source = _ARCHIVE_BASE, "archive"
+        if valid < now:
+            # ponytail: if the archive has not ingested a very recent hour yet,
+            # the hour is missing and this returns None (a gap). Switch to the
+            # live endpoint's past_days if near-kickoff capture needs it.
+            base, source = HISTORICAL_FORECAST_BASE, "historical_forecast"
+            day = valid.date().isoformat()
             params |= {"start_date": day, "end_date": day}
         else:
-            if (kickoff - now).days > FORECAST_HORIZON_DAYS:
+            if (valid - now).days > FORECAST_HORIZON_DAYS:
                 return None  # beyond the published horizon — absent, not zero
             base, source = _FORECAST_BASE, "forecast"
             params["forecast_days"] = FORECAST_HORIZON_DAYS
@@ -214,7 +250,7 @@ class OpenMeteoProvider(BaseProvider):
         payload, _ = await self._get_json(base, params=params)
         return _parse_hourly(
             payload,
-            kickoff_utc=kickoff,
+            hour_utc=valid,
             latitude=latitude,
             longitude=longitude,
             source=source,
@@ -230,7 +266,7 @@ class OpenMeteoProvider(BaseProvider):
 def _parse_hourly(
     payload: Any,
     *,
-    kickoff_utc: datetime,
+    hour_utc: datetime,
     latitude: float,
     longitude: float,
     source: str,
@@ -245,9 +281,9 @@ def _parse_hourly(
     if not times:
         return None
 
-    # The API returns whole hours; match the kickoff hour exactly rather than
+    # The API returns whole hours; match the requested hour exactly rather than
     # picking a nearest neighbour, so a gap in the series stays a gap.
-    target = kickoff_utc.replace(minute=0, second=0, microsecond=0)
+    target = hour_utc.replace(minute=0, second=0, microsecond=0)
     stamp = target.strftime("%Y-%m-%dT%H:00")
     try:
         idx = times.index(stamp)
@@ -255,7 +291,7 @@ def _parse_hourly(
         return None
 
     values: dict[str, float] = {}
-    for variable in _HOURLY_VARIABLES:
+    for variable in HOURLY_VARIABLES:
         series = _require_list(hourly, variable)
         if series is None or idx >= len(series) or not _is_finite_number(series[idx]):
             return None
@@ -268,6 +304,7 @@ def _parse_hourly(
         temperature_c=values["temperature_2m"],
         precipitation_mm=values["precipitation"],
         wind_speed_kmh=values["wind_speed_10m"],
+        wind_gusts_kmh=values["wind_gusts_10m"],
         relative_humidity_pct=values["relative_humidity_2m"],
         source=source,
         acquired_at=datetime.now(timezone.utc),
