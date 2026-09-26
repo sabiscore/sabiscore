@@ -1,6 +1,6 @@
 # SabiScore — Production Executive Directive v9.0
 
-### Delta on v8: truthful decision surfaces, bounded evidence plumbing, and an input for the calibration loop
+### Delta on v8: truthful decision surfaces, bounded evidence plumbing, an input for the calibration loop, and one decisive weather test
 
 Date: 2026-09-26. v8 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md`) stays in force: its §1–§7
 architecture, three readiness tiers, decision states and standard of evidence all still apply.
@@ -14,6 +14,7 @@ Three premises need restating against today's numbers:
 | 8 GB Windows is the absolute constraint | Serving runs in 512 MB on Render, with 164 MB of headroom. The 8 GB laptop limits only training, tests and builds. | Every runtime dependency is budgeted against 164 MB, not 8 GB (§1.2). |
 | The loop keeps the model sharper than the closing line | 0 settled predictions under the served generation, and nothing captures predictions unless a person opens a fixture (§2.3). | The loop is measurement only, and today it has no input. L4 gives it one. |
 | Every insight ends in "Play" or "Pass" | Every fixture is WITHHELD: the generation is `UNVERIFIED` and staking is `permitted: false`. | WITHHELD is the correct output, not a defect. PLAY and PASS need `ACTIONABLE_CERTIFIED`. |
+| A free weather API will improve predictions | The free API (Open-Meteo) is already integrated and was tested (F3): the T-2h forecast temperature and precipitation added nothing measurable beyond the market (all 6 paired RPS confidence intervals straddle zero, 4,921 fixtures). | Weather enters the model only if F3b, a pre-registered wind and heavy-rain test, clears the same bar. Otherwise the weather family closes (§2.5). |
 
 ---
 
@@ -33,6 +34,7 @@ Three premises need restating against today's numbers:
 | Fixtures in the 14-day window | 4, all on 9 Oct (international break) | `/api/upcoming` |
 | Google sign-in | `/api/auth/google/start` returns 307 to `accounts.google.com` with `redirect_uri=https://sabiscore.vercel.app/api/auth/google/callback` | `curl` |
 | StatsBomb cache | present on Render but unreadable: `pyarrow` is not in `requirements.runtime.txt` | Render log 19:05:08Z |
+| Weather (Portfolio F3) | Open-Meteo integration is live-verified. 115 of 160 corpus venues are geocoded as VERIFIED. 5,402 archived T-2h forecasts exist, from 2022-03-01 onwards. The information test is null. The registry entry is at `INFORMATION_TEST` with decision `HOLD`: REJECT was indicated but never taken. | `reports/research/portfolio-f3-weather-incremental-value.json`; `reports/research/experiment_registry.yaml` (F3); `docs/DEBT.md` items 44, 84, 103 |
 
 ### Readiness tiers (v8 terms)
 
@@ -84,6 +86,7 @@ until an operator enables it.
 | Market capture (opening, intermediate, closing) | `clv_capture_service` | every 5 min | `due: 0`: no fixture is near kickoff |
 | Settlement | `settlement_service` | hourly | 0 finished matches during the break |
 | Prediction capture | request-time only | **none** | the gap §2.3 closes |
+| Weather forecast | `providers/open_meteo.py` (live-verified, called by nothing); `scripts/ingest_openmeteo_weather.py` (research, one-off) | none | not a model input; see §2.5 |
 
 Chunking the 11 MB corpus is still not needed (v8 D6 sets the trigger for when it is).
 
@@ -156,6 +159,89 @@ Deadline: ship before the 9 Oct fixtures, or the first round after the break is 
 
 Earliest evaluation: C6 needs 200 settled predictions, and a full round yields at most 57. That
 means no earlier than the fourth full round after L4 ships.
+
+### 2.5 Weather: the free API is already integrated; one test decides whether it enters the model
+
+**W0: what already exists (do not rebuild it).**
+
+| Piece | File | State |
+| --- | --- | --- |
+| Provider | `backend/src/providers/open_meteo.py` | Keyless, HTTPS-only, own host allowlist, live-verified (`probe` → `VERIFIED`). Called by nothing. |
+| Venue coordinates | `scripts/qualify_venue_locations.py` → `reports/research/portfolio-f-venue-location-manifest.json` | Derived through Open-Meteo's geocoder, never hand-entered: 115 of 160 clubs `VERIFIED`, with an isolation check that caught Espanyol resolving to Tenerife (DEBT 101). |
+| Training data | `scripts/ingest_openmeteo_weather.py` → `backend/data/cache/weather_forecasts_f1.parquet` | 5,402 rows of the archived forecast valid at kickoff − 2 h, from `historical-forecast-api.open-meteo.com`, cut off before 2022-03-01 |
+| Information test | `scripts/study_f3_weather_incremental_value.py` | Candidate = market + temperature + precipitation. Null: largest favourable pooled movement −0.00038 RPS, and all 6 CIs straddle zero. |
+| Storage | `match_contexts.weather_*` (migration 0010) | Read by `advanced_insights_service`, written by nothing |
+
+Why the result is null, and what F3 did not test:
+
+- The market already prices a public forecast published two hours before kickoff. Weather can
+  only add information where the market misprices it.
+- F3 tested temperature and precipitation only. Wind, the weather variable with the most direct
+  mechanism on ball flight and scoring, was never fetched.
+- The effect of weather on 1X2 also runs mostly through goal totals and the draw, so any real
+  effect is small.
+
+**W1: remove the dormant leak in the provider (do this now, whatever F3b decides; DEBT 155).** For a
+kickoff in the past, `weather_at_kickoff()` reads `archive-api.open-meteo.com`. That is ERA5
+reanalysis: the weather that actually happened, known only after the match. It also reads the
+kickoff hour. The research dataset reads the archived forecast from
+`historical-forecast-api.open-meteo.com` for kickoff − 2 h, and refuses fixtures before
+2022-03-01 (DEBT 84). Nothing calls the provider today, so this is a trap waiting for the first
+caller, not an active leak.
+
+Fix: give both paths one source of truth. Move `_FORECAST_ARCHIVE_START`, the valid-hour offset
+(−2 h) and `_HOURLY_VARIABLES` into the provider module, and import them from
+`ingest_openmeteo_weather.py`. Point the past path at the historical-forecast host, and return
+`None` before the cutoff. Replace `archive-api` with the historical-forecast host in
+`_ALLOWED_HOSTS`. Guards, each watched failing first:
+
+- a past kickoff never requests `archive-api`;
+- a kickoff before 2022-03-01 returns `None`;
+- the provider and the ingest script read the same hour for the same fixture.
+
+**W2: F3b, one pre-registered test of what F3 left out.** Register F3b in
+`reports/research/experiment_registry.yaml` and hash its protocol (the G18 pattern) **before**
+any data is fetched.
+
+| Element | Frozen value |
+| --- | --- |
+| Hypothesis | The kickoff − 2 h forecast of wind and heavy rain adds information about 1X2 beyond the de-vigged market |
+| Candidate features | `wind_speed_10m_kmh`, `wind_gusts_10m_kmh`, `heavy_rain = precipitation_mm ≥ 2.5` (2.5 mm/h is the light/moderate boundary of the standard rain-rate scale; fixed now and never tuned) |
+| Baseline | de-vigged Bet365 1X2, the same as F3 |
+| Data | Re-run `ingest_openmeteo_weather.py` with `wind_speed_10m,wind_gusts_10m` added to the hourly variables: the same 115 venues, the same 2022-03-01 cutoff and the same hour convention. Write to a new `weather_forecasts_f3b.parquet` and leave F3's file untouched. |
+| Split | F3's expanding window: test 2023, 2024 and 2025, each trained only on earlier seasons |
+| Learner | Multinomial logistic only. F3 showed XGBoost is worse at this feature count (RPS about 0.203 vs 0.197): the §26 ladder. |
+| Decision bar | Unchanged from F3: every pooled fold's paired block-bootstrap 95% CI on ΔRPS must exclude zero in the candidate's favour. Per-league slices are reported but are not evidence. |
+| Power | F3's logistic CI half-widths were about 0.0005 RPS, so an improvement of about 0.001 would show |
+
+Cost: about 105 API calls (one per venue and date window, as in F3's run), which is about 1% of
+the free tier's 10,000 calls per day. The output is under 100 KB, it runs on the laptop in
+seconds, and nothing changes in production. Expect a null. The test is worth running because it
+is cheap and it closes the question either way.
+
+**W3: only if F3b clears the bar.** Weather becomes a model feature through the normal gated
+route, with nothing skipped:
+
+1. A new `feature_schema_version`, a regenerated `feature_contract.json` (the Render build gate
+   checks it), a retrain, and certification.
+2. Coverage stays capped: G1 is 42.32% of the corpus against an 85% bar, because no archived
+   forecasts exist before 2022-03-01 (DEBT 103). Training on the covered window only, or with an
+   explicit missing indicator, is an OG-06 scope decision for the operator. **Never fill the
+   earlier seasons from reanalysis.**
+3. Serving fetches weather inside the L4 capture tick (§2.3), one request per venue, reading the
+   same kickoff − 2 h hour. No new dependency: JSON over the existing `httpx` client.
+4. A missing reading or an unverified venue is an **advisory** gap, never a critical one. The
+   trust tier is `OPEN_DATA`, and weather is not football evidence (DEBT 44).
+5. **Licence:** Open-Meteo's free API is limited to non-commercial use, and commercial use needs a
+   paid API key. Any serving use in a commercial product needs that key first (operator item O6).
+
+**W4: if F3b does not clear the bar (the expected result).**
+
+- Take the §51 `REJECT` for F3 and F3b together, set both registry entries to `REJECT`, and
+  remove weather from open-lever lists so nobody proposes it again.
+- Keep the acquisition code, with W1 applied.
+- Do not show weather on consumer pages. A variable the model ignores, displayed next to its
+  forecast, reads as a reason for the forecast.
 
 ---
 
@@ -236,6 +322,7 @@ backfill-shaped work left runs forward in time (L4). Retroactive prediction capt
 | --- | --- | --- |
 | 0: this PR | the §3.1 fixes, L1, this directive, DEBT 154 | CI green; operator approves the merge |
 | 1: before 9 Oct | L4, then L2, then R2 | the first post-break round has one log row per fixture under the served identity |
+| W: independent of 1–3 | W1 now. W2 once O5 authorises it. W3 or W4 by the result. | W1: its three guards watched failing. W2: the protocol hash is committed before the fetch, and the registry records the verdict. |
 | 2 | U1 (backend first), then U2–U4 and R1 | lint, typecheck, Vitest, build, Playwright desktop and mobile all pass; all fixtures still WITHHELD |
 | 3 | C6 evaluation under a frozen protocol | 200 settled; `model_vs_close` CI reported |
 
@@ -247,6 +334,10 @@ backfill-shaped work left runs forward in time (L4). Retroactive prediction capt
   Google Cloud, and set `GOOGLE_OAUTH_CLIENT_ID` on Render. The web half is live (§0).
 - **O3:** use `sabiscore.vercel.app` for checks. A `web-<hash>-…` URL is frozen at its commit.
 - **O4:** item 142, the G18 v2 capture scope, and certification. All unchanged from v8.
+- **O5:** weather. Either authorise F3b (recommended: it costs about 105 API calls and one script
+  run, and closes the question), or take the §51 `REJECT` for F3 now.
+- **O6:** Open-Meteo licence. The free API is non-commercial only. Confirm SabiScore's status, or
+  budget the commercial key, before weather serves a customer-facing page.
 
 ---
 

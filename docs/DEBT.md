@@ -1,5 +1,25 @@
 # SabiScore Debt Ledger
 
+## 155. The Open-Meteo provider's past-kickoff path reads reanalysis, not the forecast archive — OPEN (dormant)
+
+**Tier:** `NEXT` — 2026-09-26. No caller today, so nothing is leaking. It is recorded because the
+first caller would leak.
+
+`OpenMeteoProvider.weather_at_kickoff()` (`backend/src/providers/open_meteo.py`) sends a past
+kickoff to `archive-api.open-meteo.com`, which serves ERA5 reanalysis: the weather that actually
+happened, known only after the match. It also reads the **kickoff hour**. The research dataset
+F3 was scored on (`scripts/ingest_openmeteo_weather.py`) takes a different source and hour: the
+forecast archive (`historical-forecast-api`), read at **kickoff − 2 h**, and it refuses fixtures
+before 2022-03-01 because that API falls back to reanalysis there (item 84). So the two paths
+disagree on both source and hour. A training backfill through the provider would learn from
+post-match weather, and serving would then read a different variable at a different hour.
+
+Fix (directive v9 §2.5 W1): the provider owns the cutoff, the hour offset and the hourly variables,
+and the ingest script imports them. The past path uses the historical-forecast host and returns
+`None` before the cutoff, and `_ALLOWED_HOSTS` drops `archive-api`. Guards: a past kickoff never
+requests `archive-api`; a pre-cutoff kickoff returns `None`; the provider and the script read the
+same hour for the same fixture.
+
 ## 154. A fabricated "Fresh", a green edge with no counter-case, and an evidence query that sorted its whole log — RESOLVED (verify after deploy); prediction capture has no scheduled input — OPEN
 
 **Tier:** `RESOLVED` for items 1–5, `OPEN` for item 6. Date: 2026-09-26.
