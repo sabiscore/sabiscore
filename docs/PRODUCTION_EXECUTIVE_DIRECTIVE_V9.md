@@ -14,7 +14,7 @@ Three premises need restating against today's numbers:
 | 8 GB Windows is the absolute constraint | Serving runs in 512 MB on Render, with 164 MB of headroom. The 8 GB laptop limits only training, tests and builds. | Every runtime dependency is budgeted against 164 MB, not 8 GB (§1.2). |
 | The loop keeps the model sharper than the closing line | 0 settled predictions under the served generation, and nothing captures predictions unless a person opens a fixture (§2.3). | The loop is measurement only, and today it has no input. L4 gives it one. |
 | Every insight ends in "Play" or "Pass" | Every fixture is WITHHELD: the generation is `UNVERIFIED` and staking is `permitted: false`. | WITHHELD is the correct output, not a defect. PLAY and PASS need `ACTIONABLE_CERTIFIED`. |
-| A free weather API will improve predictions | The free API (Open-Meteo) is already integrated and was tested (F3): the T-2h forecast temperature and precipitation added nothing measurable beyond the market (all 6 paired RPS confidence intervals straddle zero, 4,921 fixtures). | Weather enters the model only if F3b, a pre-registered wind and heavy-rain test, clears the same bar. Otherwise the weather family closes (§2.5). |
+| A free weather API will improve predictions | The free API (Open-Meteo) is already integrated and was tested twice. F3 (temperature, precipitation) and F3b (wind speed, gusts, heavy rain; pre-registered) were both null against the market. | **Closed 2026-09-26:** weather is not a model input (§2.5 outcome, DEBT 156). |
 
 ---
 
@@ -243,6 +243,18 @@ route, with nothing skipped:
 - Do not show weather on consumer pages. A variable the model ignores, displayed next to its
   forecast, reads as a reason for the forecast.
 
+**Outcome, 2026-09-26: W1 done, F3b null, W4 applied.**
+
+- **W1** landed at commit `faeaadf`, and all three guards failed on the old provider first.
+- **F3b** ran under its protocol (sha256 `cbe78c1e…`, pushed before the fetch) on 4,866 fixtures.
+  All 3 pooled folds straddle zero: [−0.0001, +0.0010], [−0.0006, +0.0003] and
+  [−0.0003, +0.0007]. ECE rose in every fold.
+- **Decision: `REJECT`** for F3 and F3b together, in the registry and in DEBT 156. The one
+  deviation is disclosed there: 1 of 105 venue requests timed out (60 fixtures).
+- The loading-screen string now states the measured result instead of implying weather can shape
+  a forecast.
+- W3 does not apply, and O5 and O6 are closed.
+
 ---
 
 ## 3. Quantitative UX (Next.js 15)
@@ -322,7 +334,7 @@ backfill-shaped work left runs forward in time (L4). Retroactive prediction capt
 | --- | --- | --- |
 | 0: this PR | the §3.1 fixes, L1, this directive, DEBT 154 | CI green; operator approves the merge |
 | 1: before 9 Oct | L4, then L2, then R2 | the first post-break round has one log row per fixture under the served identity |
-| W: independent of 1–3 | W1 now. W2 once O5 authorises it. W3 or W4 by the result. | W1: its three guards watched failing. W2: the protocol hash is committed before the fetch, and the registry records the verdict. |
+| W: independent of 1–3 | **Done 2026-09-26:** W1 landed, W2 was null, W4 applied | Met: the guards failed first, the protocol was pushed before the fetch, and the registry records `REJECT` |
 | 2 | U1 (backend first), then U2–U4 and R1 | lint, typecheck, Vitest, build, Playwright desktop and mobile all pass; all fixtures still WITHHELD |
 | 3 | C6 evaluation under a frozen protocol | 200 settled; `model_vs_close` CI reported |
 
@@ -334,10 +346,8 @@ backfill-shaped work left runs forward in time (L4). Retroactive prediction capt
   Google Cloud, and set `GOOGLE_OAUTH_CLIENT_ID` on Render. The web half is live (§0).
 - **O3:** use `sabiscore.vercel.app` for checks. A `web-<hash>-…` URL is frozen at its commit.
 - **O4:** item 142, the G18 v2 capture scope, and certification. All unchanged from v8.
-- **O5:** weather. Either authorise F3b (recommended: it costs about 105 API calls and one script
-  run, and closes the question), or take the §51 `REJECT` for F3 now.
-- **O6:** Open-Meteo licence. The free API is non-commercial only. Confirm SabiScore's status, or
-  budget the commercial key, before weather serves a customer-facing page.
+- **O5 and O6:** closed. F3b was authorised and ran, and weather was rejected (DEBT 156). The
+  licence question is moot while nothing serves weather.
 
 ---
 

@@ -1,9 +1,56 @@
 # SabiScore Debt Ledger
 
-## 155. The Open-Meteo provider's past-kickoff path reads reanalysis, not the forecast archive — OPEN (dormant)
+## 156. Weather closed: F3b (wind, gusts, heavy rain) is null as well — CLOSED / REJECT
 
-**Tier:** `NEXT` — 2026-09-26. No caller today, so nothing is leaking. It is recorded because the
-first caller would leak.
+**Tier:** `CLOSED` — 2026-09-26. Registry entries F3 and F3b are both `CLOSED` / `REJECT`.
+
+F3 was null on temperature and precipitation (item 103), but it never fetched wind. F3b tested
+what F3 left out, under a protocol frozen and pushed before any data was fetched
+(`reports/research/f3b-weather-wind-rain-protocol.json`, sha256 `cbe78c1e…`, commit `faeaadf`).
+The candidate added wind speed, gusts and `heavy_rain` (≥ 2.5 mm in the hour) to the de-vigged
+Bet365 market, with F3's folds, bootstrap and bar, and a logistic learner only.
+
+| Fold | n | RPS market-only | RPS + wind/rain | 95% CI on the difference |
+|---|---|---|---|---|
+| test 2023 | 1,179 | 0.18632 | 0.18668 | [−0.0001, +0.0010] |
+| test 2024 | 1,213 | 0.19741 | 0.19731 | [−0.0006, +0.0003] |
+| test 2025 | 888 | 0.19927 | 0.19949 | [−0.0003, +0.0007] |
+
+- **No fold clears the bar,** and two of the three point estimates point the wrong way.
+- **Calibration got slightly worse in every fold** (ECE up by 0.0003–0.0036).
+- **The per-league slices are chance-level:** 1 favourable and 1 unfavourable out of 16, against
+  about 0.8 expected by chance. Under the pre-registered rule the decision is `REJECT` for F3 and
+  F3b together.
+
+**The data was checked before the test was run.** Temperature and precipitation match F3 exactly
+on all 5,342 shared fixtures (maximum absolute difference 0.0). That reproduces the archive and
+confirms that W1's shared `forecast_valid_hour()` reads the same hour F3 read. There are no null
+wind values.
+
+⚠️ **Disclosed deviation.** One venue request, Lorient (60 fixtures), timed out after 3 retries from
+the acquiring machine. It was a transport failure, not a data choice, and it was not re-fetched,
+so F3b ran on 5,342 fixtures where F3 had 5,402.
+
+⚠️ **Limit.** `heavy_rain` is 1 on only 46 of the 4,866 joined fixtures (0.9%), so that feature
+has little power on its own. The threshold was frozen in the protocol and was not changed after
+the fact. Wind speed and gusts, which are continuous, carry the test.
+
+**Consequences:**
+- Weather is not a model input and will not become one on this evidence.
+- The loading-screen string that said weather "should only influence a forecast when a verified
+  source is available" was replaced with the measured result.
+- The provider stays, with W1 applied (item 155), and nothing calls it.
+- **Do not re-propose weather on a different variable or threshold chosen after seeing these
+  results.** Across F3 and F3b, five weather variables in three forms have now been tested
+  against the market with the same machinery, and none of them carries information.
+
+## 155. The Open-Meteo provider's past-kickoff path reads reanalysis, not the forecast archive — RESOLVED (2026-09-26)
+
+**Tier:** `RESOLVED` — 2026-09-26, commit `faeaadf`. The provider now owns the cutoff, lead
+time, `forecast_valid_hour()` and the variable set, and the ingest script imports them. Guards are
+in `tests/unit/test_open_meteo_train_serve_parity.py`; all three failed on the old provider
+(`archive-api` was requested; a 2021 kickoff fetched reanalysis; 11.0 was served where training
+read 9.0). The original finding follows.
 
 `OpenMeteoProvider.weather_at_kickoff()` (`backend/src/providers/open_meteo.py`) sends a past
 kickoff to `archive-api.open-meteo.com`, which serves ERA5 reanalysis: the weather that actually
@@ -8946,7 +8993,8 @@ either overstating it as a win or discarding it as a non-event.
 
 **What would move this further:** Optuna tuning (`--tune`, unused here — the
 baseline hyperparameters were kept so this comparison isolates the Elo effect
-alone) is the next lever with no new data dependency. Family E (weather) has
+alone) is the next lever with no new data dependency. *(2026-09-26: the weather family below
+is CLOSED / REJECT; F3 and F3b were both null, item 156.)* Family E (weather) has
 real, keyless, historically-backfillable data (`docs/DEBT.md` item 44) and is
 the next family with an actual path to real evidence, once its own
 prerequisite chain (team→location mapping with a review step, a persisted

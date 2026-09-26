@@ -46,7 +46,7 @@ export const FUN_FACTS = [
   "The Kelly Criterion is a bankroll-proportional method for sizing stakes relative to estimated edge.",
   "PPDA (Passes Per Defensive Action) measures pressing intensity.",
   "Home advantage can influence match outcomes, but its size varies by competition and season.",
-  "Weather is contextual evidence and should only influence a forecast when a verified source is available.",
+  "Weather forecasts were tested as a model input and added nothing beyond the betting market, so they are not used.",
   "xA (Expected Assists) measures the quality of key passes.",
   "Deep completions track passes into the penalty area.",
   "De-vigging removes the bookmaker margin to reveal fair market probabilities.",
