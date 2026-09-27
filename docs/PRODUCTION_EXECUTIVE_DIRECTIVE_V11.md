@@ -1,5 +1,7 @@
 # SabiScore — Production Executive Directive v11.0
 
+> Superseded for §0 evidence and §5 execution order by `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V12.md` (2026-09-27). The rest stays in force.
+
 ### Delta on v10: one bookmaker for the price and the close, a judge frozen before the first capture, and headroom read at its peak
 
 Date: 2026-09-26 (evening). v8 §1–§7, v9 and v10 stay in force. v11 replaces v10's §0 evidence and
