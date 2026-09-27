@@ -8,9 +8,10 @@ import time
 from typing import Any
 
 import httpx
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 
-GOOGLE_ISSUER = "https://accounts.google.com"
+# Google documents both forms as valid ID-token issuers.
+GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 JWKS_CACHE_TTL_SECONDS = 3600
 
@@ -66,7 +67,9 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
         "yes",
         "on",
     }
-    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+    # A value pasted into a dashboard with its quotes ("117…apps.googleusercontent.com")
+    # matches no token's audience.
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip().strip("\"'").strip()
     if not enabled or not client_id:
         raise GoogleOAuthError("Google authentication is not configured")
     if not id_token or len(id_token) > 8192:
@@ -103,9 +106,22 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
             key,
             algorithms=["RS256"],
             audience=client_id,
-            issuer=GOOGLE_ISSUER,
+            issuer=GOOGLE_ISSUERS,
             options={"require_sub": True, "require_exp": True, "require_iat": True},
         )
+    except ExpiredSignatureError as exc:
+        raise GoogleOAuthError("Google identity token has expired") from exc
+    except jwt.JWTClaimsError as exc:
+        # One message for every claim hid the likeliest production fault: the web
+        # app and the backend configured with different client IDs (2026-09-27).
+        reason = str(exc).lower()
+        if "audience" in reason:
+            raise GoogleOAuthError(
+                "Google token audience does not match GOOGLE_OAUTH_CLIENT_ID"
+            ) from exc
+        if "issuer" in reason:
+            raise GoogleOAuthError("Google token issuer is not Google") from exc
+        raise GoogleOAuthError("Google identity verification failed") from exc
     except JWTError as exc:
         raise GoogleOAuthError("Google identity verification failed") from exc
 

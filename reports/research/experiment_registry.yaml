@@ -1418,16 +1418,17 @@ experiments:
     state: PROPOSED
     decision: null
     decision_detail: >-
-      DRAFT, not frozen: awaiting operator approval (O8). The directive asks for
-      state PROTOCOL_FROZEN, which is not a §39 state and would be false before
-      approval; PROPOSED is the earliest state and says only that the protocol
-      is written. No data exists: 0 settled forecasts under the served identity
-      on 2026-09-26. Protocol draft
+      PRE-REGISTERED 2026-09-27, before any forecast under the served identity
+      settled (0 settled). Operator O8 answered directive v11 §2.3 a-f: count only
+      capture_trigger = interactive_full_analysis; 10,000 replicates, seed 42;
+      whole-kickoff sample cut; only the joined count shown before 200; Pinnacle
+      first as the closing book; decide on 98.33% intervals (0.05 / 3), 95%
+      reported beside. Protocol
       reports/research/c6-served-generation-vs-close-protocol.json, sha256
-      6dc8a2d6c883edc9d16db7562e963ce53ea8a885f36b6943eeee5f8d2d9f1d63. That
-      hash changes if the draft is edited before freezing. Freeze = set the
-      protocol status to PRE-REGISTERED, record the new sha256 here, and commit
-      before 2026-10-09. decision stays null until the first milestone is run.
+      9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7
+      (version 1.1.0; the draft's 6dc8a2d6... is superseded). The state stays
+      PROPOSED, the earliest §39 state, as F3b recorded its freeze. decision stays
+      null until the first milestone is run.
     information_source: >-
       none - no new external source. SabiScore's own match_prediction_logs
       under the served identity, joined on match_id to the existing The Odds
@@ -1455,11 +1456,12 @@ experiments:
     market_baseline: "the de-vigged close is the benchmark itself"
     primary_metrics: ["mean paired RPS(model) - RPS(de-vigged close)"]
     secondary_metrics: [adaptive_ECE, brier_decomposition, per_league_slices, join_rate]
-    bootstrap_method: "ISO-week cluster bootstrap, metrics.week_cluster_ci, 10,000 replicates, seed 42"
+    bootstrap_method: "ISO-week cluster bootstrap, metrics.week_cluster_ci, 10,000 replicates, seed 42, alpha = 0.05 / 3"
     statistical_test: >-
-      sharper than the close only if the 95% CI upper bound < 0; less sharp if
-      the lower bound > 0; otherwise inconclusive
-    multiple_testing_family: "3 milestone looks, each at an unadjusted 95% CI (directive value); per-league slices descriptive only"
+      sharper than the close only if the 98.33% interval's upper bound < 0; less
+      sharp if its lower bound > 0; otherwise inconclusive. The 95% interval from
+      the same draws is reported beside it and decides nothing.
+    multiple_testing_family: "3 milestone looks, Bonferroni: each decides at 98.33% (alpha 0.05 / 3), O8 (f); per-league slices descriptive only"
     effect_size: "PENDING - first evaluation at the 200 milestone"
     confidence_interval: "PENDING - first evaluation at the 200 milestone"
     sample_size: 0
@@ -1467,8 +1469,8 @@ experiments:
     robustness: "per-league slices and join rate, reported only; never evidence"
     failure_modes:
       - "fixtures missing a close are not missing at random (quota, unmatched names, instance asleep at kickoff); join rate < 80% flags possible bias"
-      - "the live /model-performance endpoints show an interim model_vs_close at 2,000 replicates, seed 0; it is not the protocol result"
-      - "get_clv_records does not filter by writer; POST /predictions or analytics rows under the served identity would enter the join unless filtered on payload.capture_trigger (O8)"
+      - "above 200, the live /model-performance endpoints show model_vs_close at 2,000 replicates, seed 0; it is not the protocol result (below 200 they report only the count, O8 d)"
+      - "a milestone run that omits capture_trigger='interactive_full_analysis' would let POST /predictions or analytics rows enter the join (O8 a)"
     compute: "not run yet; the milestone evaluation runs locally, by a person, CPU only"
     peak_rss: "PENDING - record at each milestone run"
     runtime: "PENDING - record at each milestone run"
@@ -1477,10 +1479,11 @@ experiments:
       - "reports/research/c6-served-generation-vs-close-protocol.json"
       - "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V10.md §2.3"
       - "docs/DEBT.md#157"
+      - "docs/DEBT.md#161"
       - "backend/src/services/clv_service.py"
       - "backend/src/models/evaluation/metrics.py"
       - "backend/src/repositories/fixtures.py"
-    reviewer: "operator (O8), pending"
+    reviewer: "operator (O8), approved 2026-09-27"
     certification_status: >-
       not a candidate: an evaluation of the served generation, not a
       promotion or a certification. Certification remains operator decision O4.

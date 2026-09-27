@@ -112,7 +112,11 @@ export async function GET(request: NextRequest) {
     if (!backendResponse.ok) {
       const payload = (await backendResponse.json().catch(() => null)) as { detail?: string } | null;
       const detail = payload?.detail || "google_authentication_failed";
-      const error = detail.includes("not configured") ? "google_not_configured" : "google_authentication_failed";
+      // The only trace of a rejected sign-in: it goes to the server log, never the URL.
+      console.warn("google_oauth_backend_rejected", backendResponse.status, detail);
+      // A client-ID mismatch is configuration too: "try again" cannot fix it.
+      const misconfigured = detail.includes("not configured") || detail.includes("audience does not match");
+      const error = misconfigured ? "google_not_configured" : "google_authentication_failed";
       return clearOAuthCookies(redirectToApp(origin, nextPath, error));
     }
 

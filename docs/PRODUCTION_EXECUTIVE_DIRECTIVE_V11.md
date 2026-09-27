@@ -82,8 +82,11 @@ decide from it, not from the working set.
 
 **M3: the Odds API budget (D2).** 222 requests remain and no reset time is reported. Spending has two
 sources:
-- Capture reads each league's board, cached for 120 s. That is roughly one request per league per
-  kickoff slot, an estimate.
+- Capture reads each league's board. Prediction capture reads through the 120 s board cache,
+  roughly one request per league per kickoff slot. CLV capture fetches fresh on each 5-minute tick
+  while a fixture is within 10 minutes of kickoff, about two requests per league per slot, by
+  design: the close must be the last observation before kickoff (corrected 2026-09-27, DEBT 161).
+  Each request asks for two regions (`uk,eu`).
 - Page views fetch boards on demand; they used about 14 today.
 
 After the 9–10 Oct round, subtract the quota readings, project the month, and bring the result to
@@ -298,3 +301,17 @@ The standard of evidence is v8 §7, unchanged:
 - **O2** is the last step for Google sign-in: every production deployment now starts the flow on `https://sabiscore.vercel.app`, so registering that one callback is enough.
 - O1, O4 and O8 are unchanged.
 
+---
+
+## Status, 2026-09-27 evening (DEBT 161)
+
+| Phase | State |
+| --- | --- |
+| 1: freeze C6 before 9 Oct 15:00 UTC | **Done in code, lands with this PR.** O8 answered §2.3 a–f. The protocol is `PRE-REGISTERED`, sha256 `9d63da25…46ba7`, recorded in the registry. (c) takes the recommendation; the request gave no alternative. The frozen call is runnable: a `capture_trigger` filter on both reader queries and `alpha` on `week_cluster_ci`. A test fails on any edit to the frozen file. |
+| 2: 9–10 Oct | Unchanged: `python scripts/read_capture_burst.py --since 2026-10-09T15:00:00Z` from `backend/`. |
+| 3: U11–U14 | All four done. U12: `/model-performance` shows only the joined count below 200. U14: `tests/e2e/consent-360.spec.ts` at 360×640, watched failing against the old two-step banner. Also: every page's server HTML was a lone spinner; the page now renders on the server. |
+
+**Operator decisions, updated:**
+- **O2 is done; the blocker moved.** Google now redirects back and the code exchange succeeds, but the backend answered `401` twice on 27 Sep. The likeliest cause is that Render's `GOOGLE_OAUTH_CLIENT_ID` is not the web's (`117341339397…`). Set it to the exact value of Vercel's `AUTH_GOOGLE_ID`, without quotes. After deploy, a failed attempt logs `google_oauth_rejected reason=…` on Render, naming the check. Runbook: `docs/AUTHENTICATION_PRODUCTION_SETUP.md` §9.
+- **O7 remains urgent.** 188 credits are left (312 used) and no reset date is reported. Rotating the key replaces the credential, not the monthly allowance. Check the reset date or change the plan. Do not put the production key in the local `.env`: backend tests that reach `odds_service` call the API live.
+- O1 and O4 are unchanged.

@@ -103,3 +103,84 @@ async def test_google_id_token_verifies_signature_audience_issuer_and_nonce(
 
 async def _resolved(value: dict) -> dict:
     return {value["kid"]: value}
+
+
+# --- 2026-09-27: production 401s gave one reason for every claim failure --------
+
+CLIENT_ID = "117-web-client.apps.googleusercontent.com"
+NONCE = "nonce-value-1234567890"
+
+
+def _signed(**overrides):
+    """A Google-shaped ID token signed by a local key, and that key as a JWK."""
+    import base64
+
+    pytest.importorskip("cryptography")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    )
+    numbers = key.public_key().public_numbers()
+
+    def b64(value: int) -> str:
+        raw = value.to_bytes((value.bit_length() + 7) // 8, "big")
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    now = datetime.now(timezone.utc)
+    claims = {
+        "iss": "https://accounts.google.com",
+        "aud": CLIENT_ID,
+        "sub": "google-subject-123",
+        "email": "analyst@example.com",
+        "email_verified": True,
+        "nonce": NONCE,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+        **overrides,
+    }
+    jwk = {"kty": "RSA", "kid": "k1", "use": "sig", "alg": "RS256", "n": b64(numbers.n), "e": b64(numbers.e)}
+    return jwt.encode(claims, pem, algorithm="RS256", headers={"kid": "k1"}), jwk
+
+
+def _configure(monkeypatch: pytest.MonkeyPatch, jwk: dict, client_id: str = CLIENT_ID) -> None:
+    monkeypatch.setenv("GOOGLE_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", client_id)
+    monkeypatch.setattr(google_oauth, "_get_google_jwks", lambda: _resolved(jwk))
+
+
+@pytest.mark.asyncio
+async def test_a_client_id_mismatch_is_named_not_a_generic_failure(monkeypatch) -> None:
+    # Web and backend configured with different client IDs: the token's audience is
+    # the web's id. The 401 must say so, or no log can tell the operator what to fix.
+    token, jwk = _signed(aud="999-other-client.apps.googleusercontent.com")
+    _configure(monkeypatch, jwk)
+    with pytest.raises(GoogleOAuthError, match="audience does not match GOOGLE_OAUTH_CLIENT_ID"):
+        await verify_google_id_token(token, NONCE)
+
+
+@pytest.mark.asyncio
+async def test_the_bare_issuer_google_documents_is_accepted(monkeypatch) -> None:
+    token, jwk = _signed(iss="accounts.google.com")
+    _configure(monkeypatch, jwk)
+    assert (await verify_google_id_token(token, NONCE))["sub"] == "google-subject-123"
+
+
+@pytest.mark.asyncio
+async def test_a_quoted_client_id_from_a_dashboard_paste_still_matches(monkeypatch) -> None:
+    token, jwk = _signed()
+    _configure(monkeypatch, jwk, client_id=f'"{CLIENT_ID}"')
+    assert (await verify_google_id_token(token, NONCE))["email"] == "analyst@example.com"
+
+
+@pytest.mark.asyncio
+async def test_an_expired_token_says_expired(monkeypatch) -> None:
+    past = datetime.now(timezone.utc) - timedelta(hours=2)
+    token, jwk = _signed(iat=int(past.timestamp()), exp=int((past + timedelta(minutes=5)).timestamp()))
+    _configure(monkeypatch, jwk)
+    with pytest.raises(GoogleOAuthError, match="expired"):
+        await verify_google_id_token(token, NONCE)

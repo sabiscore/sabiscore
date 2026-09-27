@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { analyticsConsented, CONSENT_STORAGE_KEY } from "@/lib/consent";
 
-import { ConsentBanner } from "./consent-banner";
+import { ConsentBanner, ConsentProvider } from "./consent-banner";
 
 afterEach(() => localStorage.clear());
 
@@ -31,5 +32,30 @@ describe("ConsentBanner", () => {
     render(<ConsentBanner />);
     await screen.findByRole("dialog");
     expect(screen.queryByText(/advertisement|marketing/i)).toBeNull();
+  });
+});
+
+describe("ConsentProvider", () => {
+  // Live 2026-09-27: every page's server HTML was a lone spinner (no <h1>), so
+  // first paint waited for hydration while the content sat unused in the RSC
+  // payload of the same response.
+  it("server-renders the page, not a spinner in its place", () => {
+    const html = renderToString(
+      <ConsentProvider>
+        <h1>Upcoming verified fixtures</h1>
+      </ConsentProvider>,
+    );
+    expect(html).toContain("<h1>Upcoming verified fixtures</h1>");
+    expect(html).not.toContain("animate-spin");
+  });
+
+  it("still asks a first-time visitor once the stored choice is read", async () => {
+    render(
+      <ConsentProvider>
+        <h1>Page</h1>
+      </ConsentProvider>,
+    );
+    expect(await screen.findAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Page" })).toBeInTheDocument();
   });
 });
