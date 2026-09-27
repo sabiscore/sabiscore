@@ -132,3 +132,27 @@ def test_model_orchestrator_import_performs_no_redis_connection():
         importlib.reload(module)
 
     from_url.assert_not_called()
+
+
+def test_a_failed_first_ping_recovers_on_a_later_readiness_probe(monkeypatch):
+    # f6e9063, 2026-09-27: one failed ping at startup left redis_client None for
+    # good, so /health/ready answered 503 for 14 minutes and Render abandoned the
+    # deploy while Redis itself was healthy.
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "redis_enabled", True)
+    monkeypatch.setattr(settings, "app_env", "development")
+    down, up = MagicMock(spec=redis.Redis), MagicMock(spec=redis.Redis)
+    down.ping.side_effect = redis.ConnectionError("connect timed out")
+    up.ping.return_value = True
+
+    with patch("redis.Redis.from_url", side_effect=[down, up]) as from_url:
+        cache = RedisCache()
+        assert cache.production_ready() is False  # inside the retry interval
+        assert from_url.call_count == 1
+
+        cache._next_connect_at = 0.0  # the interval has passed
+        assert cache.production_ready() is True
+
+    assert cache.redis_client is up
+    assert cache.metrics_snapshot()["tier1_redis_available"] is True

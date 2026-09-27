@@ -1,5 +1,41 @@
 # SabiScore Debt Ledger
 
+## 162. The `f6e9063` backend deploy timed out: one failed Redis ping at startup was permanent — RESOLVED in code (verify on the next deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/redis-reconnect-directive-v12`.
+
+**What happened (Render log, 27 Sep):**
+- #251 merged at 18:57 UTC. The backend build succeeded (6 hash-locked artifacts verified), and
+  startup completed at 20:12:40.
+- `/health/ready` then answered 503 every 10 s until Render reported "Timed Out" at 20:26:07, and
+  kept `b8d3a4c`.
+- The new instance logged `fixture_sync: external Redis unavailable`. The serving instance reported
+  `External Redis connected` at the same time.
+- So #251's backend half (named sign-in rejections, U12, the C6 reader code) is not live. The web
+  half is.
+
+**Root defect:** `RedisCache.__init__` (`core/cache.py`) pinged Redis once at import. On failure it
+set `redis_client = None` for the life of the process, and nothing retried.
+`production_ready()` returned False while the client was None, so readiness stayed 503 however long
+Redis had been healthy. Fixture sync, which reads the same `cache.redis_client`, was also switched
+off for that process. The capture and settlement jobs do not depend on it.
+
+**Fix:** the connect logic is `_connect_tier1()`. Readiness calls it again when the client is None,
+at most once per 30 s. A transient failure at cold start now recovers on a later probe.
+`test_a_failed_first_ping_recovers_on_a_later_readiness_probe` pins both the recovery and the
+throttle; it was watched failing on the old cache.
+
+⚠️ **Not known: why the first ping failed.** The excerpt did not include the deploy log's
+`Redis unavailable at …: <reason>` line.
+- A timeout or a DNS or TLS blip recovers with this fix.
+- `max number of clients reached` would not. During a Render deploy two instances overlap, each
+  with a pool of up to `redis_max_connections` (default 50) plus other clients. The Redis plan's
+  cap or a lower pool size is then an operator decision (directive v12, O9).
+
+⚠️ **Green CI does not mean deployed.** After every merge that touches `backend/`, compare `/health`
+→ `sha` with the merge SHA. If it has not changed within 45 minutes, read the deploy log rather than
+waiting on a slow build.
+
 ## 161. v11 Phase 1 and 3 close-out: sign-in now fails after Google, C6 frozen, the interim interval withheld, and every page's server HTML was a spinner — RESOLVED in code (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/v11-phase1-3-closeout`.
