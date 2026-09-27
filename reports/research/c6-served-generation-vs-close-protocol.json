@@ -1,11 +1,11 @@
 {
   "protocol": "c6-served-generation-vs-close",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "drafted_at": "2026-09-26",
-  "registered_at": null,
-  "status": "DRAFT — awaiting operator approval (O8); not frozen. Freeze = set status to PRE-REGISTERED, record this file's sha256 in the registry entry, and commit before 2026-10-09.",
+  "registered_at": "2026-09-27",
+  "status": "PRE-REGISTERED — frozen 2026-09-27, before any forecast under the served identity settled (production /health components.settlement.settled_predictions_total = 0). Approved by the operator (O8), answering directive v11 §2.3 a-f as recorded under approval.",
   "directive": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V10.md §2.3 (P1, C6). Where this draft and the directive's frozen values table disagree, the directive governs; every disagreement is listed under deviations_from_directive.",
-  "code_state": "Every file:line cited below was read at commit bebe52e. The cited files are byte-identical at 63f9bf2, the SHA production /health reported on 2026-09-26.",
+  "code_state": "File:line citations were read at commit bebe52e (byte-identical at 63f9bf2, the production SHA on 2026-09-26). Between 63f9bf2 and the freeze commit the cited files changed only as follows: full_analysis.py gained the first-sighting read and the market block's bookmaker/captured_at (display only); prediction_capture_service.py records cgroup memory per pass (observability only); the_odds_api.py and market_observation_service.py gained bookmaker_preference (Pinnacle first), which is part of this population (O8 e). The freeze commit itself adds the capture_trigger filter to repositories/fixtures.py (O8 a), the alpha parameter to metrics.week_cluster_ci (O8 f) and the interim withholding in clv_service.compute_model_vs_close (O8 d); each defaults to the prior behaviour for every other caller. Line numbers in the freeze commit may differ from the citations; the named functions govern.",
   "question": "Are the served generation's pre-kickoff forecasts sharper than the de-vigged closing 1X2 line, measured by paired RPS on the same settled fixtures?",
   "why_now": "Zero settled forecasts exist under the served identity: production /health components.settlement reported settled_predictions_total = 0 and model_version = v5_phase7-20260922@417b9b8ff7ce563d on 2026-09-26 (sha 63f9bf2). Scheduled pre-kickoff capture (L4, DEBT 157) shipped; the first scheduled captures are expected on 2026-10-09 (directive v10 §2.2). A full round across the 6 served leagues is at most 57 fixtures (EPL, LA_LIGA, SERIE_A 10 each; BUNDESLIGA, LIGUE_1, EREDIVISIE 9 each), so the first milestone of 200 settled forecasts with a close is about 4 rounds away, no earlier than the first week of November. ESTIMATE: it assumes every fixture is captured, closed and joined, and ignores international breaks. Freezing the rule now means it predates every data point it will judge.",
   "prior": "Low that the model is sharper than the close. No generation measured in this repo has shown a paired CI below zero against the de-vigged market on the 2526 holdout (0 of 6 leagues, docs/DEBT.md item 62), and the pre-registered G18 market-residual track was negative (docs/DEBT.md item 150). The close is also a harder benchmark than an opening price: it is observed at most 5 minutes before kickoff (market_observation_service._CLOSING_WINDOW_MINUTES = 5), while an L4 forecast is made about 3 hours before (prediction_capture_service.CAPTURE_WINDOW_END). 'Less sharp' or 'inconclusive' is the expected answer. The test is worth running because the rule is fixed before the data exists.",
@@ -14,7 +14,8 @@
       "table": "match_prediction_logs (db.models.MatchPredictionLog)",
       "writer": "persist_prediction_log, backend/src/services/prediction_log_service.py:93. It stamps the served identity whenever the caller passes the family label v5_phase7 (lines 124-130) and sets created_at to the caller's evaluated_at, not a database insert time (line 172).",
       "l4_capture": "capture_due_predictions, backend/src/services/prediction_capture_service.py:88, run on the five-minute CLV tick. It selects scheduled fixtures with kickoff in [now + 15 min, now + 3 h] (CAPTURE_WINDOW_START / CAPTURE_WINDOW_END, lines 43-44; query lines 102-110), so each fixture is captured once in [kickoff - 3 h, kickoff - 15 min], normally on the first tick after kickoff - 3 h. It calls get_full_analysis itself, so the stored forecast is what a user would have been served. It skips a fixture that already has any log under the served identity (_identity_has_log, line 137).",
-      "interactive_capture": "get_full_analysis, backend/src/api/endpoints/full_analysis.py:1243, passes require_scheduled_pre_kickoff=True (line 1268), so persist_prediction_log refuses a non-scheduled fixture and any evaluated_at at or after kickoff (prediction_log_service.py:132-143). Both L4 and interactive rows carry payload.capture_trigger = 'interactive_full_analysis' (full_analysis.py _shadow_log_payload)."
+      "interactive_capture": "get_full_analysis, backend/src/api/endpoints/full_analysis.py:1243, passes require_scheduled_pre_kickoff=True (line 1268), so persist_prediction_log refuses a non-scheduled fixture and any evaluated_at at or after kickoff (prediction_log_service.py:132-143). Both L4 and interactive rows carry payload.capture_trigger = 'interactive_full_analysis' (full_analysis.py _shadow_log_payload).",
+      "writer_filter": "O8 (a): only rows with payload.capture_trigger = 'interactive_full_analysis' count, in the numerator and the join-rate denominator. L4 scheduled capture and interactive /full-analysis both write that value (full_analysis._shadow_log_payload); POST /predictions ('prediction_endpoint') and the analytics service ('certified_analytics') do not, and they skip the pre-kickoff check. The filter is applied inside each per-match ranking (repositories.fixtures._capture_trigger_filter), so a newer row from another writer cannot win the rank and drop the fixture."
     },
     "closing_line": {
       "table": "market_snapshots (db.models.MarketSnapshot) rows with is_closing_line = True",
@@ -27,7 +28,7 @@
   },
   "population": {
     "served_identity": "v5_phase7-20260922@417b9b8ff7ce563d. This is served_identity(manifest) (backend/src/models/active_generation.py:154, hashing the fields at lines 131-137) applied to the committed backend/models/active_generation.json, verified locally on 2026-09-26, and it equals production /health components.settlement.model_version on the same day.",
-    "definition": "Settled fixtures that have (a) a match_prediction_logs row under the served identity captured strictly before kickoff by L4 or by an interactive /full-analysis request, and (b) a strict pre-kickoff closing snapshot (is_closing_line = True, captured_at < kickoff). One forecast per fixture: the latest such log captured before the closing snapshot, as selected by get_clv_records.",
+    "definition": "Settled fixtures that have (a) a match_prediction_logs row under the served identity with payload.capture_trigger = 'interactive_full_analysis', captured strictly before kickoff by L4 or by an interactive /full-analysis request, and (b) a strict pre-kickoff closing snapshot (is_closing_line = True, captured_at < kickoff). One forecast per fixture: the latest such log captured before the closing snapshot, as selected by get_clv_records with capture_trigger='interactive_full_analysis'.",
     "one_identity_only": "Rows under any other model_version are never pooled in (build_clv_records_query filters model_version on the forecast, fixtures.py:325 and 388). If the served generation changes before a milestone is reached, accumulation under this identity stops there and nothing from the new identity counts toward it. This follows from the frozen population; it is not a separate rule."
   },
   "exclusions": [
@@ -38,9 +39,9 @@
     "UCL fixtures: never captured, the served generation has no UCL artifact (prediction_capture_service._supported_leagues, lines 63-71)"
   ],
   "join_rate": {
-    "definition": "numerator / denominator at the same milestone cut. Numerator: fixtures in the milestone sample (population above). Denominator: settled fixtures with a forecast under the served identity captured strictly before kickoff, whether or not a close exists, i.e. the records get_settled_predictions (fixtures.py:199, query build_settled_predictions_query at line 115, created_at < match_date at line 143) returns for model_version = the served identity, cut at the same match_date.",
+    "definition": "numerator / denominator at the same milestone cut. Numerator: fixtures in the milestone sample (population above). Denominator: settled fixtures with a forecast under the served identity and capture_trigger = 'interactive_full_analysis', captured strictly before kickoff, whether or not a close exists: get_settled_predictions(session, model_version=<served identity>, capture_trigger='interactive_full_analysis', limit=5000), cut at the same match_date.",
     "threshold": "Reported with every result. A join rate under 80% flags the result as possibly biased: fixtures missing a close are not missing at random (Odds API quota or outage, unmatched or ambiguous team names, or the instance asleep at kickoff - 5 min, DEBT 153).",
-    "not_computed_today": "No existing function returns this ratio; the milestone run computes it from the two queries above."
+    "not_computed_today": "No existing function returns this ratio; the milestone run computes it from the two calls above."
   },
   "primary_metric": {
     "definition": "Per fixture, RPS(model) - RPS(de-vigged close), both scored against the same outcome. Negative means the model scored better.",
@@ -48,19 +49,21 @@
     "statistic": "the mean of the per-fixture differences over the milestone sample"
   },
   "inference": {
-    "method": "ISO-week cluster bootstrap 95% percentile CI: week_cluster_ci, backend/src/models/evaluation/metrics.py:395. Rows are grouped by the ISO (year, week) of Match.match_date, a naive UTC column (line 403); whole weeks are resampled with replacement (line 408); each replicate is sum(delta) / count over the resampled weeks, so weeks weigh by fixture count (line 409); the interval is np.percentile at 2.5 and 97.5 (line 410).",
+    "method": "ISO-week cluster bootstrap percentile interval: week_cluster_ci, backend/src/models/evaluation/metrics.py. Rows are grouped by the ISO (year, week) of Match.match_date, a naive UTC column; whole weeks are resampled with replacement; each replicate is sum(delta) / count over the resampled weeks, so weeks weigh by fixture count. The decision interval is the 98.33% percentile interval (alpha = 0.05 / 3, O8 f), returned as ci; the 95% interval from the same draws is returned as ci95 and reported beside it.",
     "replicates": 10000,
     "seed": 42,
-    "seed_source": "The directive fixes only 'a fixed seed'. 42 is proposed to match the G18 protocol (backend/scripts/research_g18_market_residual.py:202) and F3b. O8 may change it before freezing, never after.",
-    "exact_call": "records = await get_clv_records(session, model_version='v5_phase7-20260922@417b9b8ff7ce563d', limit=5000) with no league, started_at or ended_at; keep records exactly as compute_model_vs_close does (clv_service.py:84-94); cut to the milestone sample; y = outcomes; delta = ranked_probability_score_rowwise(y, model_probs) - ranked_probability_score_rowwise(y, closing_probs); dates = datetime.fromisoformat(match_date); result = week_cluster_ci(delta, dates, n_boot=10000, seed=42).",
+    "seed_source": "Approved by O8 (b) on 2026-09-27: 10,000 replicates, seed 42 (matching the G18 protocol, backend/scripts/research_g18_market_residual.py, and F3b). Fixed; never changed after freezing.",
+    "exact_call": "records = await get_clv_records(session, model_version='v5_phase7-20260922@417b9b8ff7ce563d', capture_trigger='interactive_full_analysis', limit=5000) with no league, started_at or ended_at; keep records exactly as compute_model_vs_close does (outcome in {0, 1, 2}, three finite probabilities on each side); cut to the milestone sample; y = outcomes; delta = ranked_probability_score_rowwise(y, model_probs) - ranked_probability_score_rowwise(y, closing_probs); dates = datetime.fromisoformat(match_date); result = week_cluster_ci(delta, dates, n_boot=10000, seed=42, alpha=0.05 / 3).",
     "not_the_live_endpoint": "Do not read the milestone result from /model-performance or /model-performance/summary. Their model_vs_close calls compute_model_vs_close, which runs week_cluster_ci with n_boot=2000, seed=0 (clv_service.py:119), and /model-performance also windows to the last 30 days by default (performance.py:408 and 417-424).",
     "determinism": "Weeks are indexed in sorted order (metrics.py:404), so the draw depends on the set of (week, delta) pairs, not on row order. The same data, replicate count and seed give the same interval.",
-    "multiplicity": "Three looks (200, 500, 1,000), each at an unadjusted 95% CI, as the directive specifies. No correction is applied. Under equal sharpness, the chance that at least one of three looks excludes zero is above 5%; every look is reported with its milestone number."
+    "multiplicity": "Three looks (200, 500, 1,000). O8 (f): each look decides on the 98.33% interval (Bonferroni, alpha = 0.05 / 3), so the family-wise false-claim rate across the three looks stays at or below 5%. The unadjusted 95% interval from the same draws is reported beside it and carries no decision weight. Every look is reported with its milestone number.",
+    "alpha": "0.05 / 3 (= 0.016667), passed exactly as 0.05 / 3"
   },
   "decision_rule": {
-    "sharper_than_the_close": "the CI upper bound is below 0 (week_cluster_ci field beats_market, metrics.py:416)",
-    "less_sharp": "the CI lower bound is above 0 (field worse_than_market, metrics.py:417)",
+    "sharper_than_the_close": "the 98.33% interval (week_cluster_ci field ci, alpha = 0.05 / 3) has its upper bound below 0 (field beats_market)",
+    "less_sharp": "the 98.33% interval has its lower bound above 0 (field worse_than_market)",
     "inconclusive": "anything else, including an interval that touches 0",
+    "reported_beside": "the 95% interval (field ci95) from the same draws; it decides nothing",
     "comparison": "on the unrounded floats week_cluster_ci returns",
     "field_names": "The code's field names beats_market / worse_than_market do not change the reading. 'Sharper than the close' is a statement about forecast accuracy, not a betting edge and not closing-line value (clv_service.py docstring, lines 1-10)."
   },
@@ -78,15 +81,15 @@
       1000
     ],
     "unit": "settled forecasts with a close, as defined in population",
-    "sample_cut": "Proposed (the directive does not specify a cut): at milestone N the sample is every settled joined forecast whose match_date is on or before the match_date of the N-th one in match_date order. Fixtures sharing that kickoff are included whole, never split, so n can slightly exceed N. The same cut applies to the join-rate denominator.",
-    "between_milestones": "Nothing is evaluated between milestones. A weekly routine may read the settled count and notify the operator at 200, 500 or 1,000; it evaluates nothing (directive v10 §4.3). The milestone run is local, by a person.",
+    "sample_cut": "Approved by O8 (c) on 2026-09-27: at milestone N the sample is every settled joined forecast whose match_date is on or before the match_date of the N-th one in match_date order. Fixtures sharing that kickoff are included whole, never split, so n can slightly exceed N. The same cut applies to the join-rate denominator.",
+    "between_milestones": "Nothing is evaluated between milestones. O8 (d): until the first milestone, /model-performance and /model-performance/summary report only the joined count (clv_service.compute_model_vs_close withholds the interval and the mean below C6_FIRST_MILESTONE = 200). A weekly routine may read the settled count and notify the operator at 200, 500 or 1,000; it evaluates nothing. The milestone run is local, by a person.",
     "later_milestones": "Each milestone is run and reported. A later milestone does not retract an earlier one."
   },
   "forbidden": [
     "refitting any model in the served generation after seeing any result",
     "recalibrating, or changing the calibrator, after seeing any result",
-    "moving a threshold: the 0 bound, the 95% level, the 80% join-rate flag, the replicate count, the seed or the milestone counts",
-    "changing the population: the served identity, the capture window, the closing definition, the de-vig method, the bookmaker selection or the exclusions",
+    "moving a threshold: the 0 bound, the 98.33% decision level (alpha = 0.05 / 3), the 80% join-rate flag, the replicate count, the seed or the milestone counts",
+    "changing the population: the served identity, the capture window, the closing definition, the de-vig method, the bookmaker selection, the writer filter or the exclusions",
     "backfill: a forecast captured at or after kickoff is excluded, never repaired",
     "reporting a re-run with any of the above changed as C6"
   ],
@@ -102,30 +105,44 @@
       "item": "the live endpoint shows an interim result",
       "directive": "no evaluation between milestones",
       "existing_code": "/model-performance and /model-performance/summary compute model_vs_close on every request once 10 settled joined records exist (clv_service._MIN_CLV_SAMPLE_SIZE = 10; performance.py:420-427 and 472-474)",
-      "governs": "Seeing that number carries no decision weight and may prompt none of the forbidden actions. Whether to hide it until 200 is an O8 question; this draft changes no code."
+      "governs": "Resolved by O8 (d): compute_model_vs_close withholds the interval and the mean below 200 settled joined forecasts and reports only the count, so the live endpoint shows no interim result. Above 200 it remains a monitoring display at 2,000 / seed 0 and is never the result."
     },
     {
       "item": "writers other than L4 and /full-analysis",
       "directive": "L4 or interactive capture",
       "existing_code": "get_clv_records and get_settled_predictions select on model_version only. Two more writers call persist_prediction_log without require_scheduled_pre_kickoff: POST /predictions (backend/src/api/endpoints/predictions.py:439, payload.capture_trigger = 'prediction_endpoint', a separate inference path) and the analytics service (backend/src/services/analytics.py:207). A row from either that is stamped with the served identity would enter the join and could be selected over an L4 row for the same fixture.",
-      "governs": "The directive's population governs. The milestone run must keep only rows with payload.capture_trigger = 'interactive_full_analysis' (L4 and interactive /full-analysis both write that value), in both the numerator and the join-rate denominator. The existing queries cannot apply this filter; O8 decides before freezing whether a reader change lands before 200, or whether all writers stay in."
+      "governs": "Resolved by O8 (a): the milestone run passes capture_trigger='interactive_full_analysis' to get_clv_records and get_settled_predictions, which filter inside the per-match ranking. The live endpoints keep every writer."
     },
     {
       "item": "registry state",
       "directive": "PROTOCOL_FROZEN",
       "existing_code": "not a §39 state in reports/research/experiment_registry.yaml, and the protocol is not frozen",
-      "governs": "The registry entry uses PROPOSED until freezing."
+      "governs": "The registry entry stays PROPOSED, the earliest §39 state; the freeze is recorded as the protocol status PRE-REGISTERED and its sha256 in decision_detail, as F3b did."
+    },
+    {
+      "item": "multiplicity",
+      "directive": "directive v10 §2.3: three looks, each at an unadjusted 95% CI",
+      "existing_code": "week_cluster_ci returned only the 95% interval",
+      "governs": "O8 (f), directive v11 §2.3: decide at 98.33% (alpha = 0.05 / 3) and report the 95% beside it. week_cluster_ci gained an alpha parameter (default 0.05, so every other caller is unchanged)."
     }
   ],
   "implementation_notes": [
     "'Strictly before kickoff' is judged on created_at, which is the caller's evaluated_at (prediction_log_service.py:172), not a database clock. For L4 and /full-analysis the write also re-checks evaluated_at < kickoff under a row lock (lines 132-143).",
-    "The close is one bookmaker's price, not a market consensus. Until 2026-09-26 market capture took the key that sorted first ('betclic' before 'pinnacle') while the live price took the provider's listing order, so the benchmark could be a soft book and a different book from the forecast-time price. Both now use bookmaker_preference (Pinnacle first). This must be deployed before the first captured round (2026-10-09) and approved with the protocol (O8); after any served-identity result exists it is a forbidden population change.",
+    "The close is one bookmaker's price, not a market consensus. Until 2026-09-26 market capture took the key that sorted first ('betclic' before 'pinnacle') while the live price took the provider's listing order, so the benchmark could be a soft book and a different book from the forecast-time price. Both now use bookmaker_preference (Pinnacle first). Deployed before the first captured round: on 2026-09-27 production's market row for fd-558881 read 'Pinnacle · captured 27 Sept 2026, 15:20 WAT'. Approved with the protocol (O8 e); changing it is now a forbidden population change.",
     "Forecast lead times differ: L4 captures at about kickoff - 3 h, an interactive capture can be days earlier, and L4 skips any fixture that already has a log under the identity. The directive's population includes both, so no lead-time exclusion is applied.",
     "Nothing here is CLV. True CLV needs the price at forecast time (payload.recommendation_market) and is not part of C6."
   ],
   "approval": {
     "required": "operator O8",
-    "approved_by": null,
-    "approved_at": null
+    "approved_by": "operator (O8), in the session request of 2026-09-27",
+    "approved_at": "2026-09-27",
+    "answers": {
+      "a_writers": "Count only payload.capture_trigger == 'interactive_full_analysis', applied in the milestone run's queries.",
+      "b_replicates_seed": "10,000 replicates, seed 42, for the milestone.",
+      "c_sample_cut": "As recommended in directive v11 §2.3 (c): every settled joined forecast up to the N-th one's kickoff, whole kickoff groups. The request named 'these six points' and gave no alternative.",
+      "d_interim_display": "Show only the joined count until 200 (directive v11 U12).",
+      "e_closing_book": "Pinnacle first (bookmaker_preference, directive v11 §2.2).",
+      "f_looks": "Decide on 98.33% intervals (0.05 / 3) for the three looks; report the 95% interval beside them."
+    }
   }
 }

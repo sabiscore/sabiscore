@@ -140,3 +140,20 @@ The Google authorization code, ID token, and SabiScore JWT never appear in the b
 - [ ] Logout invalidates the browser session cookie.
 - [ ] OAuth cancellation returns to the originating application route with a recoverable error.
 - [ ] Invalid state/nonce/code cannot establish a session.
+
+## 9. Troubleshooting a failed Google sign-in (added 2026-09-27)
+
+Find where the flow stopped. Each stage leaves a different trace.
+
+| What the visitor sees | Where it stopped | Fix |
+| --- | --- | --- |
+| Google's own page: `Error 400: redirect_uri_mismatch` | Google rejected the callback before any SabiScore code ran | Google Cloud Console → APIs & Services → Credentials → the OAuth 2.0 Client ID whose ID the start route sends → **Authorized redirect URIs** → add exactly `https://sabiscore.vercel.app/api/auth/google/callback` (https, no trailing slash, no path after `callback`). Save; it can take a few minutes. |
+| SabiScore: "Google sign-in is not configured for this deployment yet." | Either the web has no client ID, or the backend rejected the token because its `GOOGLE_OAUTH_CLIENT_ID` differs from the web's | Render log line `google_oauth_rejected reason=Google token audience does not match GOOGLE_OAUTH_CLIENT_ID` means the second. Set Render's `GOOGLE_OAUTH_CLIENT_ID` to the web's value exactly: the same string as Vercel's `GOOGLE_OAUTH_CLIENT_ID` or `AUTH_GOOGLE_ID`, ending `.apps.googleusercontent.com`, no quotes. Redeploy the backend. |
+| SabiScore: "Google sign-in could not be completed. Please try again." | Backend rejected the token for another reason | Read the Render line `google_oauth_rejected reason=…` (and Vercel's `google_oauth_backend_rejected`): nonce, expiry, unverified email, or Google's keys unreachable. |
+
+Read the client ID the web actually sends without opening any dashboard: request
+`https://sabiscore.vercel.app/api/auth/google/start` without following redirects and read `client_id`
+in the `Location` header. Client IDs are public; the secret never appears there.
+
+A Render log line reading `POST /api/v1/auth/oauth/google 401` proves the redirect URI is registered:
+Google redirected back, and the code exchange (which also checks the redirect URI) succeeded.

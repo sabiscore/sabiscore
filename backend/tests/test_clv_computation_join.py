@@ -314,3 +314,31 @@ async def test_league_filter_narrows_via_match_join(session: AsyncSession) -> No
 
     records = await get_clv_records(session, model_version="v5_phase7", league="EPL")
     assert len(records) == 1
+
+
+async def test_c6_writer_filter_keeps_the_l4_row_behind_a_newer_foreign_writer(
+    session: AsyncSession,
+) -> None:
+    """C6 (a), frozen 2026-09-27: only ``interactive_full_analysis`` rows count.
+
+    POST /predictions writes the same table without the pre-kickoff check. A newer
+    row from it must not win the per-match rank and then drop the fixture: the
+    filter sits inside the ranking, like model_version.
+    """
+    match_date = datetime(2026, 10, 9, 18, 0)
+    await _seed_match(session, "c6-1", match_date=match_date, status="finished")
+    l4 = _prediction("c6-1", match_date - timedelta(hours=3), home=0.61, draw=0.22, away=0.17)
+    l4.payload = {"capture_trigger": "interactive_full_analysis"}
+    foreign = _prediction("c6-1", match_date - timedelta(hours=1), home=0.20, draw=0.30, away=0.50)
+    foreign.payload = {"capture_trigger": "prediction_endpoint"}
+    session.add_all([l4, foreign, _closing_snapshot("c6-1", match_date - timedelta(minutes=4))])
+    await session.commit()
+
+    unfiltered = await get_clv_records(session, model_version="v5_phase7")
+    filtered = await get_clv_records(
+        session, model_version="v5_phase7", capture_trigger="interactive_full_analysis"
+    )
+
+    assert unfiltered[0]["model_probs"] == pytest.approx([0.20, 0.30, 0.50])
+    assert len(filtered) == 1
+    assert filtered[0]["model_probs"] == pytest.approx([0.61, 0.22, 0.17])

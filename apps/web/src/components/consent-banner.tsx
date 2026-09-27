@@ -207,17 +207,14 @@ interface ConsentProviderProps {
 }
 
 export function ConsentProvider({ children, requireConsent = true }: ConsentProviderProps) {
-  const { hasConsented, isLoading } = useConsent();
+  const { hasConsented } = useConsent();
 
-  // Show loading state briefly
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-      </div>
-    );
-  }
-
+  // Children always render. A spinner used to stand in for them until the
+  // client read localStorage, so every page's server HTML was only that spinner
+  // (live 2026-09-27: no <h1> on /, /intelligence or /performance) and first
+  // paint waited for hydration. It gated nothing: the same response already
+  // carries the page as its RSC payload. ConsentBanner renders nothing until
+  // the stored choice is read, so server and client markup still match.
   return (
     <>
       {children}

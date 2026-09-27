@@ -1,5 +1,84 @@
 # SabiScore Debt Ledger
 
+## 161. v11 Phase 1 and 3 close-out: sign-in now fails after Google, C6 frozen, the interim interval withheld, and every page's server HTML was a spinner — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/v11-phase1-3-closeout`.
+
+1. **Google sign-in fails after Google, not at it.** The Render log shows
+   `POST /api/v1/auth/oauth/google 401` at 14:16:37 and 14:17:54 UTC. Google redirected back and
+   the web's code exchange succeeded (that exchange also checks the redirect URI), so the callback
+   URL is registered and O2 is done for `sabiscore.vercel.app`. A probe shows the backend is
+   configured: a length-valid token with a real Google key id gets "Google identity verification
+   failed", an unknown key id gets "signing key is unavailable". So the rejection is a claim check
+   after the signature. The second attempt took 5 ms, so Google's keys were already cached.
+   - Every claim failure raised the same message and the web callback discarded it, so no log could
+     say which check failed.
+   - The likeliest cause: Render's `GOOGLE_OAUTH_CLIENT_ID` is not the web's client id
+     (`117341339397…`, public in the authorize URL), or it was pasted with quotes.
+   - Fixed:
+     - the audience, issuer and expiry failures are now named;
+     - both issuer forms Google documents are accepted (the check accepted only
+       `https://accounts.google.com`);
+     - surrounding quotes are stripped from the configured id;
+     - the backend logs `google_oauth_rejected reason=…`, the web logs
+       `google_oauth_backend_rejected`, and an audience mismatch maps to `google_not_configured`,
+       because a retry cannot fix it.
+   - ⚠️ **Not proven:** confirming the cause needs one real sign-in after deploy. The log line will
+     name it.
+2. **C6 frozen (O8).** `reports/research/c6-served-generation-vs-close-protocol.json` v1.1.0 is
+   `PRE-REGISTERED`, sha256 `9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7`,
+   recorded in the registry (state stays `PROPOSED`, as F3b did). The answers to §2.3:
+   - (a) count only `capture_trigger = interactive_full_analysis`;
+   - (b) 10,000 replicates, seed 42;
+   - (d) only the count below 200;
+   - (e) Pinnacle first;
+   - (f) decide at 98.33% (0.05 / 3), with the 95% interval reported beside it;
+   - (c), the sample cut, was not stated in the request, which named "these six points" and gave
+     no alternative. The recommendation is recorded as the answer and flagged in the protocol.
+   - The code the frozen call names now exists. `get_clv_records` and `get_settled_predictions`
+     take `capture_trigger`, filtered inside each per-match ranking so a newer
+     `POST /predictions` row cannot win the rank and drop the fixture. `week_cluster_ci` takes
+     `alpha` (default 0.05; `ci95` is always beside it).
+   - `test_c6_protocol_frozen.py` fails on any edit to the frozen file. It was watched failing on a
+     one-character change (seed 42 → 43).
+3. **U12.** `compute_model_vs_close` withholds the interval and the mean below 200 settled joined
+   forecasts and reports the count. No web page renders `model_vs_close`, so the endpoint was the
+   only surface.
+4. **Every page's server HTML was a spinner.** `ConsentProvider` rendered a spinner in place of
+   the page until the client read localStorage. Live `/`, `/intelligence` and `/performance` HTML
+   had no `<h1>`, so first paint waited for hydration. It gated nothing: `/intelligence`'s text was
+   already in the same response's RSC payload. Children now always render, and the consent step
+   still appears after hydration. This predates #249.
+5. **U14 evidence.** `tests/e2e/consent-360.spec.ts` runs at 360×640 and checks:
+   - one dialog, no horizontal overflow, and the last action reachable;
+   - a screenshot is attached;
+   - after accepting, nothing fixed and tall is left at the bottom edge.
+   It was watched failing against `a8b5a5c`'s banner: it named that banner's
+   `fixed inset-x-0 bottom-0 …` bar. It passes on the desktop and mobile projects.
+6. **O7 audit.** `bookmaker_preference` (Pinnacle first) picks the book for the forecast-time
+   price, the first sighting and the close. Both the price and the close were already pinned by
+   tests.
+   - A new test pins the 120 s board cache: one fetch per TTL, TTL 120.
+   - ⚠️ v11 M3 said capture reads are cached for 120 s. That is true for prediction capture and
+     page views, but not for CLV capture. CLV capture calls the provider once per league per
+     5-minute tick while a fixture is within 10 minutes of kickoff. This is correct: a close must
+     be the last observation before kickoff, and a 120 s TTL could never hit across 5-minute ticks.
+   - **Quota now: 188 remaining, 312 used** (a 500 allowance, by sum), no reset date.
+   - Rotating a key replaces the credential, not the monthly allowance, so it adds no credits. See
+     the reset date or change the plan.
+   - ⚠️ Do not put the production key in the local `.env`. Backend tests that reach `odds_service`
+     make live calls (2026-09-23 note), which would spend the shared 500.
+7. **U11 and U13 re-verified.** The homepage glossary defines PLAY, PASS and WITHHELD before the
+   verdict tiers. The live market row reads "Pinnacle · captured 27 Sept 2026, 15:20 WAT".
+
+⚠️ **Tooling:** a `sed` revert check (`ttl=120)` → `ttl=60)` and back) also rewrote a second,
+original `ttl=60)` line. It was restored from git. Use `git stash` for revert checks, never a
+reversible-looking substitution.
+
+**Verification (2026-09-27, local, one heavy step at a time):** backend 2,816 passed, 19 skipped, 1 xfailed, 0 failed; ruff 0 on `src/` and `scripts/` and on every touched test; mypy 755, unchanged (ceiling 784; importing `jose.exceptions` had added one, cleared by using `jwt.JWTClaimsError`); experiment registry valid (17). Web lint 0, typecheck 0, Vitest 474/474; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB); Playwright `consent-360` and `/intelligence` smoke 6/6 on desktop and mobile. Every new guard was watched failing on the old code.
+
+**Found in CI, fixed before merge:** SonarCloud failed on new-code coverage, 75.9% against 80%, with no issues and no hotspots (read from its public API). The uncovered new code was the wrong-issuer branch, the generic claim-failure branch and the endpoint's log line. Three tests now cover them.
+
 ## 160. Post-#249 pass: two method names that never ship, a stale settled count, unlabelled times, and the 9 Oct burst made readable — RESOLVED in code (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/post-249-hardening`.

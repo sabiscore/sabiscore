@@ -19,6 +19,12 @@ from typing import Any
 # inventing a second magic number in the same /model-performance response.
 _MIN_CLV_SAMPLE_SIZE = 10
 
+# C6's first milestone (reports/research/c6-served-generation-vs-close-protocol.json,
+# O8 (d), frozen 2026-09-27). Below it the model-vs-close figures are withheld and
+# only the count is reported: a visible interim interval invites the peeking the
+# pre-registered protocol forbids.
+C6_FIRST_MILESTONE = 200
+
 
 def compute_clv_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
     """records: [{"model_probs": [h,d,a], "closing_probs": [h,d,a]}, ...] from
@@ -98,12 +104,16 @@ def compute_model_vs_close(records: list[dict[str, Any]]) -> dict[str, Any]:
         "median_closing_lag_seconds": float(np.median(lags)) if lags else None,
     }
     n = len(settled)
-    if n < _MIN_CLV_SAMPLE_SIZE:
+    if n < C6_FIRST_MILESTONE:
         return {
             **base,
             "skipped": True,
-            "reason": f"need >= {_MIN_CLV_SAMPLE_SIZE} settled joined predictions, got {n}",
+            "reason": (
+                f"withheld until {C6_FIRST_MILESTONE} settled joined forecasts "
+                f"(C6 pre-registered milestone); {n} so far"
+            ),
             "n": n,
+            "milestone": C6_FIRST_MILESTONE,
         }
 
     y = np.array([r["outcome"] for r in settled])

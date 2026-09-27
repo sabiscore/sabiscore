@@ -243,3 +243,27 @@ async def test_match_lookup_refuses_a_price_not_proven_pre_kickoff(captured_at, 
 
     assert odds["source"] == "unavailable"
     assert "home_win" not in odds
+
+
+@pytest.mark.asyncio
+async def test_a_board_is_fetched_once_and_cached_for_120_seconds():
+    # Directive v11 M3 / O7: the Odds API quota is 500 a month, shared by capture
+    # and page views. A board read within its 120 s TTL must not spend a request.
+    class _TtlCache(_StubCache):
+        def __init__(self):
+            super().__init__()
+            self.ttls: list = []
+
+        def set(self, key, value, ttl=None):
+            self.ttls.append(ttl)
+            super().set(key, value, ttl)
+
+    cache = _TtlCache()
+    service = OddsService(cache_backend=cache)
+    service.provider = _StubProvider(ProviderStatus.VERIFIED, [{"bookmaker": "pinnacle"}])
+
+    await service.fetch_live_odds(competition="EPL")
+    await service.fetch_live_odds(competition="EPL")
+
+    assert len(service.provider.calls) == 1
+    assert cache.ttls == [120]
