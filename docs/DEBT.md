@@ -77,6 +77,8 @@ reversible-looking substitution.
 
 **Verification (2026-09-27, local, one heavy step at a time):** backend 2,816 passed, 19 skipped, 1 xfailed, 0 failed; ruff 0 on `src/` and `scripts/` and on every touched test; mypy 755, unchanged (ceiling 784; importing `jose.exceptions` had added one, cleared by using `jwt.JWTClaimsError`); experiment registry valid (17). Web lint 0, typecheck 0, Vitest 474/474; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB); Playwright `consent-360` and `/intelligence` smoke 6/6 on desktop and mobile. Every new guard was watched failing on the old code.
 
+**Found in CI, fixed before merge:** SonarCloud failed on new-code coverage, 75.9% against 80%, with no issues and no hotspots (read from its public API). The uncovered new code was the wrong-issuer branch, the generic claim-failure branch and the endpoint's log line. Three tests now cover them.
+
 ## 160. Post-#249 pass: two method names that never ship, a stale settled count, unlabelled times, and the 9 Oct burst made readable — RESOLVED in code (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/post-249-hardening`.

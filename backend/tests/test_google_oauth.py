@@ -184,3 +184,44 @@ async def test_an_expired_token_says_expired(monkeypatch) -> None:
     _configure(monkeypatch, jwk)
     with pytest.raises(GoogleOAuthError, match="expired"):
         await verify_google_id_token(token, NONCE)
+
+
+@pytest.mark.asyncio
+async def test_a_token_from_another_issuer_is_named(monkeypatch) -> None:
+    token, jwk = _signed(iss="https://evil.example.com")
+    _configure(monkeypatch, jwk)
+    with pytest.raises(GoogleOAuthError, match="issuer is not Google"):
+        await verify_google_id_token(token, NONCE)
+
+
+@pytest.mark.asyncio
+async def test_any_other_claim_failure_stays_generic(monkeypatch) -> None:
+    token, jwk = _signed(iat="not-a-number")
+    _configure(monkeypatch, jwk)
+    with pytest.raises(GoogleOAuthError, match="^Google identity verification failed$"):
+        await verify_google_id_token(token, NONCE)
+
+
+@pytest.mark.asyncio
+async def test_the_endpoint_logs_the_reason_it_answers_401(monkeypatch, caplog) -> None:
+    # The web callback turns the detail into a code; this log line is what names it.
+    import logging
+
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from src.api.endpoints import auth
+    from src.schemas.auth import GoogleOAuthRequest
+
+    async def reject(_token, _nonce):
+        raise GoogleOAuthError("Google token audience does not match GOOGLE_OAUTH_CLIENT_ID")
+
+    monkeypatch.setattr(auth, "verify_google_id_token", reject)
+    request = Request({"type": "http", "headers": [], "client": ("203.0.113.9", 1)})
+    payload = GoogleOAuthRequest(id_token="x" * 120, nonce="n" * 16)
+
+    with caplog.at_level(logging.WARNING, logger=auth.logger.name), pytest.raises(HTTPException) as exc:
+        await auth.login_with_google(payload, request, None, None)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 401
+    assert "google_oauth_rejected reason=Google token audience does not match" in caplog.text
