@@ -50,6 +50,20 @@ def test_a_restart_during_the_burst_fails():
     assert report["verdict"] == "FAIL"
 
 
+def test_a_naive_since_is_read_as_utc_not_a_crash():
+    # /health's timestamp is aware; a --since without Z used to raise TypeError.
+    report = summarize(_health([_pass()]), since="2026-10-09T15:00:00")
+    assert report["checks"]["no_restart_since"] is True
+    assert report["verdict"] == "PASS"
+
+
+def test_an_unanswerable_restart_check_is_incomplete_not_a_pass():
+    # A malformed --since used to drop the check silently and still PASS.
+    report = summarize(_health([_pass()]), since="not-a-time")
+    assert report["checks"]["no_restart_since"] is None
+    assert report["verdict"] == "INCOMPLETE"
+
+
 def test_missing_memory_figures_are_incomplete_not_a_pass():
     passes = [{"due": 1, "captured": 1, "headroom_mb": None}]
     assert summarize(_health(passes))["verdict"] == "INCOMPLETE"

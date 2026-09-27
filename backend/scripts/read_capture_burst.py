@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.request import Request, urlopen
 
@@ -35,9 +35,11 @@ def _parse(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # /health's timestamp is aware; a naive --since is read as UTC, not a crash.
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _ints(passes: list[dict[str, Any]], key: str) -> list[int]:
@@ -59,9 +61,16 @@ def summarize(
         "captured_equals_due": captured == due if due else None,
         "peak_headroom_ok": min(headroom) >= HEADROOM_FLOOR_MB if headroom else None,
     }
-    start, now, uptime = _parse(since), _parse(health.get("timestamp")), health.get("uptime_seconds")
-    if start and now and isinstance(uptime, (int, float)):
-        checks["no_restart_since"] = uptime >= (now - start).total_seconds()
+    uptime = health.get("uptime_seconds")
+    if since is not None:
+        # Asked for but not answerable (unparsable --since, no timestamp or
+        # uptime) is None, so the verdict is INCOMPLETE, never a silent PASS.
+        start, now = _parse(since), _parse(health.get("timestamp"))
+        checks["no_restart_since"] = (
+            uptime >= (now - start).total_seconds()
+            if start and now and isinstance(uptime, (int, float))
+            else None
+        )
 
     quota = (((evidence or {}).get("providers") or {}).get("the_odds_api") or {}).get("quota") or {}
     if not passes:
@@ -99,6 +108,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--backend", default=DEFAULT_BACKEND)
     parser.add_argument("--since", help="ISO time the burst began, for the restart check")
     args = parser.parse_args(argv)
+    if args.since and _parse(args.since) is None:
+        parser.error("--since must be an ISO time, e.g. 2026-10-09T15:00:00Z")
     health = _get(f"{args.backend}/health")
     try:
         evidence: Optional[dict[str, Any]] = _get(f"{args.backend}/api/v1/providers/evidence")
