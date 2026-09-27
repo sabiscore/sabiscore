@@ -64,6 +64,8 @@ are, so both are O7/O8 decisions, not code fixes.
 469/469; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, no route changed size);
 ruff clean on every touched Python file; backend 2,802 passed, 19 skipped, 1 xfailed, 0 failed (8.5 min); mypy 755, unchanged (ceiling 784; the moved psutil import had added one, now cleared); Playwright desktop and mobile 4/4. Every new guard was watched failing on the old code.
 
+**Found in review, fixed before merge:** an independent review agent found that a `--since` without a zone crashed the burst reader and a malformed one dropped the restart check but could still PASS (both fixed, with tests that fail on the old script). SonarCloud then failed the PR on one Major vulnerability, `pythonsecurity:S8703` (SSRF): the reader's `--backend` option passed a caller-supplied URL to `urlopen`, which fetches any host or scheme. The option is removed; the script reads a constant HTTPS production URL. ⚠️ SonarCloud's public API answered from this machine (`/api/issues/search?pullRequest=N&types=VULNERABILITY`), so a failing quality gate can be read directly instead of guessed at.
+
 ## 159. Directive v11 pass: #248's sign-in fix never ran live, every share link was dead, and the cookie banner's choices were ignored — RESOLVED in code (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v11-pass`.
