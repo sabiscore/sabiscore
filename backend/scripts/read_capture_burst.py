@@ -28,7 +28,11 @@ from typing import Any, Optional
 from urllib.request import Request, urlopen
 
 HEADROOM_FLOOR_MB = 100  # directive v11 M2
-DEFAULT_BACKEND = "https://sabiscore-api-bav1.onrender.com"
+# A constant, not an argument: a caller-supplied URL reached urlopen, which
+# fetches any host or scheme (SonarCloud S8703, SSRF). Egress stays HTTPS to the
+# one production host, as CLAUDE.md requires of every provider call.
+BACKEND = "https://sabiscore-api-bav1.onrender.com"
+_PATHS = {"health": "/health", "evidence": "/api/v1/providers/evidence"}
 
 
 def _parse(value: Optional[str]) -> Optional[datetime]:
@@ -98,21 +102,21 @@ def summarize(
     }
 
 
-def _get(url: str) -> dict[str, Any]:
+def _get(endpoint: str) -> dict[str, Any]:
+    url = BACKEND + _PATHS[endpoint]
     with urlopen(Request(url, headers={"Accept": "application/json"}), timeout=90) as response:
         return json.load(response)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--backend", default=DEFAULT_BACKEND)
     parser.add_argument("--since", help="ISO time the burst began, for the restart check")
     args = parser.parse_args(argv)
     if args.since and _parse(args.since) is None:
         parser.error("--since must be an ISO time, e.g. 2026-10-09T15:00:00Z")
-    health = _get(f"{args.backend}/health")
+    health = _get("health")
     try:
-        evidence: Optional[dict[str, Any]] = _get(f"{args.backend}/api/v1/providers/evidence")
+        evidence: Optional[dict[str, Any]] = _get("evidence")
     except Exception:  # the quota is context for M3, not part of M2's verdict
         evidence = None
     report = summarize(health, evidence, args.since)
