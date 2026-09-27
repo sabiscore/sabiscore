@@ -767,7 +767,9 @@ export function RLCard({
 
   return (
     <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4 border border-slate-800/60">
-      <p className="text-xs uppercase tracking-wider text-slate-400">RL Bet Recommendation</p>
+      {/* Not "RL": no reinforcement-learning policy ships (no stable-baselines3,
+          no artifact), so production always sizes with the fractional-Kelly rule. */}
+      <p className="text-xs uppercase tracking-wider text-slate-400">Stake recommendation</p>
 
       <div className="flex items-center gap-5">
         <svg viewBox="0 0 92 54" className="w-28 flex-shrink-0" aria-label={!stakePermitted ? "No bet" : `Stake ${pct(rec.stake_fraction, 2)} of ${pct(effectiveKellyCap)} cap`} role="img">

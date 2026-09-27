@@ -22,6 +22,18 @@ const CLV_MISLABEL = /label=["']Closing[- ]line[- ]value["']/i;
 const UNSUPPORTED_OUTCOME_CLAIMS =
   /\b(maximi[sz]e (?:your )?betting edge|beat(?:s|ing)? (?:the market|the odds)|win more|winning picks?|highly accurate predictions?|profitable predictions?|guaranteed returns?)\b/i;
 
+// Method names for models that do not ship. No reinforcement-learning policy is
+// installed (no stable-baselines3, no artifact) and no Bayesian network exists
+// (DEBT 42), yet cards read "RL Bet Recommendation" and "BNN Uncertainty"
+// (DEBT 159, 160). A hard-coded settled count ("live with 59 settled
+// predictions") went false when the served generation changed.
+const UNSHIPPED_METHOD_CLAIMS =
+  /\b(RL (bet|betting|abstention)|BNN uncertainty|Bayesian Neural Network)\b/i;
+const HARDCODED_SETTLED_COUNT = /live with \d+ settled/i;
+// Times in the viewer's own zone, unlabelled: /intelligence printed "12:30 PM"
+// beside pages that say "12:30 WAT" (DEBT 160). Use @/lib/lagos-time.
+const BROWSER_ZONE_TIME = /toLocaleTimeString\(\s*\[\]|DateTimeFormat\(\s*undefined/;
+
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -57,5 +69,14 @@ describe("public copy contract", () => {
 
   it("does not mislabel the model–market belief differential as closing-line value", () => {
     expect(matchingFiles(CLV_MISLABEL)).toEqual([]);
+  });
+
+  it("names no model method that does not ship, and hard-codes no settled count", () => {
+    expect(matchingFiles(UNSHIPPED_METHOD_CLAIMS)).toEqual([]);
+    expect(matchingFiles(HARDCODED_SETTLED_COUNT)).toEqual([]);
+  });
+
+  it("prints no time in the viewer's own zone without a label", () => {
+    expect(matchingFiles(BROWSER_ZONE_TIME)).toEqual([]);
   });
 });

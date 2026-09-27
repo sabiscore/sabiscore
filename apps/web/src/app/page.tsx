@@ -32,12 +32,12 @@ const TRUST_BADGES = ["Verified fixtures first", "Explicit evidence gaps", "Zero
 const PREMIUM_VALUE_STREAM = [
   {
     title: "Edge telemetry",
-    description: "Evidence checks across configured providers with automatic fallbacks and DATA_GAP surfacing.",
+    description: "Evidence checks across configured providers. A missing input is shown as a gap, never filled in.",
     icon: BarChart3,
     footer: "Fail-closed evidence checks",
   },
   {
-    title: "Phase 8 candidate enrichment",
+    title: "Candidate feature research",
     description: "Candidate feature vector remains shadow-only pending model validation and promotion evidence.",
     icon: Microscope,
     footer: "Shadow evaluation only",
@@ -70,18 +70,18 @@ const PREMIUM_PILLARS = [
 
 const LEGACY_FEATURES = [
   {
-    title: "Phase 8 Candidate Enrichment",
+    title: "Candidate Feature Research",
     description: "Candidate feature intelligence is available for shadow evaluation only and is not active in production verdicts.",
     icon: Database,
   },
   {
     title: "CLV + Edge Quality",
-    description: "Edge quality scored 0-1 per fixture. Model–market belief differential tracked per prediction. Fractional Kelly + RL abstention gate on every bet.",
+    description: "Edge quality scored 0-1 per fixture. Model–market belief differential tracked per prediction. Quarter-Kelly sizing behind an abstention gate: no stake unless every gate passes.",
     icon: Target,
   },
   {
     title: "Promotion-Gated Validation",
-    description: "Candidate RPS must improve over the incumbent; walk-forward evidence is live with 59 settled predictions.",
+    description: "Candidate RPS must improve over the incumbent, scored walk-forward on settled forecasts as they accumulate.",
     icon: CheckCircle2,
   },
 ] satisfies Array<{ title: string; description: string; icon: LucideIcon }>;

@@ -37,6 +37,7 @@ import { describeEvidenceCode, groupEvidenceGaps } from "@/lib/full-analysis-con
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { evidenceStateFor } from "@/lib/evidence-state";
 import { formatEvidenceAge } from "@/lib/evidence-passport";
+import { formatLagosTimestamp } from "@/lib/lagos-time";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
@@ -85,11 +86,10 @@ export const parseOddsInput = (raw: string) => (raw.trim() === "" ? Number.NaN :
 const fmtOdds = (value?: number | null) =>
   value == null || !Number.isFinite(value) ? "Unavailable" : value.toFixed(2);
 
+// Lagos time, labelled, like every other surface (it used the browser's own
+// zone and locale, unlabelled).
 const fmtDate = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value)) : "Kickoff unavailable";
+  value ? `${formatLagosTimestamp(value)} WAT` : "Kickoff unavailable";
 
 const recordNumber = (record: Record<string, unknown> | null | undefined, key: string) => {
   const value = record?.[key];

@@ -281,3 +281,20 @@ The standard of evidence is v8 §7, unchanged:
 - a guard counts only after it has been watched failing;
 - a number counts only with a dated measurement;
 - an estimate is replaced by a measurement before any decision depends on it.
+
+---
+
+## Status, 2026-09-27 (DEBT 159, 160)
+
+| Phase | State |
+| --- | --- |
+| 0: merge and deploy | Done. #248 and #249 merged; web and backend serve `655ca2a`. Every §5 post-deploy check passes, re-run on the newest production deployment's own URL (a pinned `web-<hash>` URL is frozen at its commit). |
+| 1: freeze C6 before 9 Oct 15:00 UTC | **Open: needs O8.** The protocol is still `PROPOSED`. U12 waits on O8 (d). |
+| 2: 9–10 Oct | Ready to measure. Each capture pass now records working-set, anon and headroom memory; `python scripts/read_capture_burst.py --since 2026-10-09T15:00:00Z` (from `backend/`) gives the M2 verdict and the quota for M3. First M1 reading: working set 337 MB, anon 289 MB, headroom 174 MB. |
+| 3: U11–U14 | U11, U13 and U14 done in #249; U12 waits on O8. |
+
+**Operator decisions, updated:**
+- **O7 is now urgent.** The Odds API reported 236 credits left on the morning of 26 Sep and 194 at about 23:00 UTC (306 used), with no reset date. If the monthly reset is not before 9 Oct, the first captures may have no forecast-time price. Check the reset date in the account.
+- **O2** is the last step for Google sign-in: every production deployment now starts the flow on `https://sabiscore.vercel.app`, so registering that one callback is enough.
+- O1, O4 and O8 are unchanged.
+

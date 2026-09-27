@@ -39,6 +39,7 @@ import {
   type ProviderHealthRow,
 } from "@/lib/health-status";
 import { formatEvidenceAge } from "@/lib/evidence-passport";
+import { formatLagosTime } from "@/lib/lagos-time";
 
 // Canonical display order matching directive registry
 const CANONICAL_ORDER = [
@@ -129,7 +130,7 @@ export function ProviderMeter() {
         <span className="pm-title">Evidence Sources</span>
         {lastChecked && (
           <time className="pm-ts" dateTime={lastChecked} title={`Last checked ${lastChecked}`}>
-            {new Date(lastChecked).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {formatLagosTime(lastChecked)} WAT
           </time>
         )}
       </div>

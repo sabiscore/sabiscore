@@ -77,7 +77,8 @@ class TransfermarktScraper(BaseScraper):
         Fetch team valuation data.
 
         Note: Full implementation requires handling Transfermarkt's
-        anti-bot measures. Uses simulated data for development.
+        anti-bot measures, which is not implemented. Returns a recent cached
+        value or None; it never simulates data.
         """
         logger.info(f"Fetching Transfermarkt data for {team}")
 

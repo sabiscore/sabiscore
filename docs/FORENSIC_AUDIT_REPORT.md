@@ -1,5 +1,7 @@
 # SabiScore Forensic Audit & Integration Report
 
+> ⚠️ **Historical document, unverified figures (banner added 2026-09-27, DEBT 160).** The accuracy, ROI, Brier, match-count, value-bet and "production-ready" figures below were never measured by code in this repository, and current evidence contradicts them: the served generation has 0 settled forecasts, 0 of 6 leagues beat the de-vigged market (DEBT 62), and live calibration fails its gate. Do not quote them. The verified state is in `CLAUDE.md` (Verified Ground Truth) and `docs/DEBT.md`. The backend host it names (`sabiscore-api.onrender.com`) is suspended; production is `sabiscore-api-bav1.onrender.com`. The scrapers it lists fail closed (they return `None`) and never simulate data.
+
 ## Executive Summary
 
 **Date:** November 25, 2025  

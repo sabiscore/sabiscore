@@ -42,8 +42,8 @@ class FlashscoreScraper(BaseScraper):
         """
         Fetch match data from Flashscore.
 
-        In development, returns simulated match data.
-        Production would use Playwright for JS rendering.
+        Returns None: Flashscore needs a headless browser, which is not
+        implemented. It never simulates data.
         """
         logger.info(f"Fetching Flashscore data for {home_team} vs {away_team}")
         # Flashscore requires a headless browser (Playwright/Selenium); not yet implemented.

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CheckCheck } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
+import { formatLagosTime } from "@/lib/lagos-time";
 
 interface InAppNotification {
   id: string;
@@ -140,7 +141,7 @@ export function NotificationCenter() {
                     </div>
                     <p className="text-[11px] leading-relaxed text-slate-300">{notif.message}</p>
                     <p className="text-[10px] text-slate-500">
-                      {new Date(notif.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {formatLagosTime(notif.created_at)} WAT
                     </p>
                   </div>
 

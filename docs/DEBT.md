@@ -1,5 +1,71 @@
 # SabiScore Debt Ledger
 
+## 160. Post-#249 pass: two method names that never ship, a stale settled count, unlabelled times, and the 9 Oct burst made readable — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/post-249-hardening`.
+
+**#249 post-deploy checks:** all pass. Web and backend serve `655ca2a`. `robots.txt` and `og:url`
+name `sabiscore.vercel.app`. The PSV market block carries `bookmaker: pinnacle` and `captured_at`.
+The new production deployment's own URL (`web-d2v2boqc5-…`) redirects `/api/auth/google/start` to
+the canonical host before any cookie. ⚠️ An older pinned URL (`web-ac2qmk2dr-…`) still sends its own
+host to Google: **a `web-<hash>` URL is frozen at its commit**, so test sign-in on the newest
+deployment's URL (GitHub → Deployments → Production), never on one taken from an old screenshot.
+Sign-in still stops at Google until O2 is done.
+
+**First M1 reading** (about 65 min after a start): working set 337 MB = anon 289 + active file 14 +
+kernel and other; headroom 174 MB. Process memory, not page cache, is most of the working set.
+
+1. **"RL Bet Recommendation" and "RL Betting Agent" named a method that never runs.**
+   `RLBettingAgent` uses a SAC policy only when `settings.rl_agent_path` exists *and*
+   stable-baselines3 is installed; neither requirements file lists it and no artifact is tracked, so
+   production always sizes with the fractional-Kelly rule. Both cards now read "Stake
+   recommendation"; the panel footer no longer shows `settings.rl_agent_path`. Same class as the
+   "BNN" label (item 159).
+2. **The homepage hard-coded "walk-forward evidence is live with 59 settled predictions"** (the
+   fallback feature list shown when the premium flag is off). The served generation has 0 settled.
+   Also "RL abstention gate on every bet" (no bet has been placed), "Phase 8 candidate enrichment" and
+   "DATA_GAP surfacing" (internal names). All replaced with plain statements.
+3. **Times in the viewer's own zone, unlabelled.** `/intelligence` kickoffs and the evidence-sources
+   time, the calibration chart, the insights panel, the tease strip and notifications used the
+   browser's zone (one also the browser's locale) with no label, beside pages that print "WAT".
+   `lib/lagos-time.ts` formats all of them; the contract re-exports the old helper.
+4. **Guards:** `copy-contract.test.ts` bans unshipped method names, a hard-coded settled count, and
+   browser-zone time formatting. Each was watched failing on an old file. ⚠️ The first draft of the
+   method guard had `\b` written as a backspace byte (a shell-to-Python escaping slip) and could not
+   match; it passed until run against the old agent panel alone. A control-character scan of `src`
+   and `docs` found no other instance.
+5. **Scraper docstrings claimed simulated data.** Four said they "return simulated data in
+   development"; all four return `None`. Betfair matters because `_merge_exchange_odds` fills
+   missing match odds from its features. Its old test accepted "None or any valid structure"; a
+   strict test now fails when `_fetch_remote` returns a price.
+6. **The 9 Oct burst can now be judged.** Each capture pass recorded only process RSS, but M2 is
+   judged on working-set headroom and M1 on anon memory (RSS read 400 MB against a 365 MB cgroup).
+   The cgroup reader moved to `core/instance_memory.py`; each pass records `working_set_mb`,
+   `anon_mb` and `headroom_mb`. `scripts/read_capture_burst.py --since 2026-10-09T15:00:00Z` applies
+   M2's acceptance and reports the Odds API quota. Live today: `NO_DATA`.
+7. **Four documents presented unmeasured figures as fact** (`FORENSIC_AUDIT_REPORT.md`: 86.3%
+   accuracy, +21.7% ROI, "Ready for Production Use"; `RELEASE_NOTES.md` v3.2 and older; the PRD's
+   "+18.4% ROI ensemble… beats Pinnacle's closing line"; `INTEGRATION_PLAN.md`'s accuracy badge).
+   Each now carries a dated banner; history is kept.
+
+⚠️ **O7 is urgent, operator only.** The Odds API reported 236 credits left on the morning of 26 Sep,
+222 at 15:32 UTC and **194 at about 23:00 UTC** (306 used), with no reset date in the response. Each
+board fetch requests two regions (`uk,eu`), and page views spend credits. If the monthly reset is not
+before 9 Oct, the balance may run out before the first capture, and captures would then have no
+forecast-time price. Check the reset date in the Odds API account. Halving the cost (one region) or
+lengthening the board cache would change which bookmakers C6 compares against or how fresh its prices
+are, so both are O7/O8 decisions, not code fixes.
+
+8. **Two ledger entries were stale:** item 22 still read "REGRESSED: HTTP 401" while The Odds API is live-verified with quota observed; item 118 was open for a disclosure of an override that #228 removed. Both now carry dated status lines. Item 152 was checked and is accurately PARTIAL.
+
+**Not built:** U12 and the C6 freeze (O8). O1, O2, O4 unchanged.
+
+**Verification (2026-09-27, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
+469/469; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, no route changed size);
+ruff clean on every touched Python file; backend 2,802 passed, 19 skipped, 1 xfailed, 0 failed (8.5 min); mypy 755, unchanged (ceiling 784; the moved psutil import had added one, now cleared); Playwright desktop and mobile 4/4. Every new guard was watched failing on the old code.
+
+**Found in review, fixed before merge:** an independent review agent found that a `--since` without a zone crashed the burst reader and a malformed one dropped the restart check but could still PASS (both fixed, with tests that fail on the old script). SonarCloud then failed the PR on one Major vulnerability, `pythonsecurity:S8703` (SSRF): the reader's `--backend` option passed a caller-supplied URL to `urlopen`, which fetches any host or scheme. The option is removed; the script reads a constant HTTPS production URL. ⚠️ SonarCloud's public API answered from this machine (`/api/issues/search?pullRequest=N&types=VULNERABILITY`), so a failing quality gate can be read directly instead of guessed at.
+
 ## 159. Directive v11 pass: #248's sign-in fix never ran live, every share link was dead, and the cookie banner's choices were ignored — RESOLVED in code (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v11-pass`.
@@ -2173,7 +2239,7 @@ other three pass against a completely unfixed component.
 
 ## 118. The ADR-0011 per-fixture staking disclosure is inert in production: the panel that renders it asks for no predictions
 
-**Tier:** `OPEN — OPERATOR DECISION` (found 2026-09-20)
+**Tier:** `CLOSED — SUPERSEDED` 2026-09-27 (found 2026-09-20). The ADR-0011 operator override was removed in #228; live `/health` staking reads `basis: NONE`, `is_override: false`, so there is no override for a per-fixture chip to disclose. Reopen only if an override is authorized again.
 **Files:** `apps/web/src/lib/api.ts:943`, `apps/web/src/app/api/upcoming/route.ts`
 
 Decision: OPTION_A
@@ -12190,7 +12256,9 @@ done and tested. `--apply`, done and verified.
 
 ---
 
-## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **REGRESSED 2026-09-13: live production again reports HTTP 401**
+## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **REGRESSED 2026-09-13: live production again reports HTTP 401** — working again, live-verified 2026-09-27
+
+**Status, 2026-09-27 (DEBT 160):** the 401 regression below is over. Live `/api/v1/providers/evidence` reports `the_odds_api` quota observed (194 remaining, 306 used) and the PSV full analysis carries a Pinnacle price captured 2026-09-26T22:59Z. The key works in production; the remaining Odds API risk is quota (O7), not authentication. The local `.env` key still returns 401 (a different key).
 
 **⚠️ Status correction, 2026-09-13 (directive v7.3 P16 deployment-integrity
 check):** the 2026-08-17 "RESOLVED" verdict below is **contradicted by fresh
