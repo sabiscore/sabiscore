@@ -107,7 +107,16 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
             algorithms=["RS256"],
             audience=client_id,
             issuer=GOOGLE_ISSUERS,
-            options={"require_sub": True, "require_exp": True, "require_iat": True},
+            # at_hash binds Google's access token to this ID token. The web callback
+            # never forwards that token and nothing here uses it, so python-jose's
+            # default check rejected every real code-flow sign-in (2026-09-27).
+            # OIDC Core 3.1.3.6 makes the check optional for the code flow.
+            options={
+                "require_sub": True,
+                "require_exp": True,
+                "require_iat": True,
+                "verify_at_hash": False,
+            },
         )
     except ExpiredSignatureError as exc:
         raise GoogleOAuthError("Google identity token has expired") from exc
@@ -121,9 +130,10 @@ async def verify_google_id_token(id_token: str, expected_nonce: str) -> dict[str
             ) from exc
         if "issuer" in reason:
             raise GoogleOAuthError("Google token issuer is not Google") from exc
-        raise GoogleOAuthError("Google identity verification failed") from exc
+        # Keep the library's reason: a bare "failed" hid the at_hash rejection.
+        raise GoogleOAuthError(f"Google identity verification failed: {exc}") from exc
     except JWTError as exc:
-        raise GoogleOAuthError("Google identity verification failed") from exc
+        raise GoogleOAuthError(f"Google identity verification failed: {exc}") from exc
 
     if claims.get("nonce") != expected_nonce:
         raise GoogleOAuthError("Google OAuth nonce verification failed")

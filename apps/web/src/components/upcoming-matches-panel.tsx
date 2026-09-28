@@ -182,10 +182,15 @@ export function freshnessLabel(stalenessSeconds?: number | null, available?: boo
 const VISIBLE_WINDOW_DAYS = 14;
 /** Fixtures rendered in the panel. */
 const VISIBLE_MATCH_LIMIT = 12;
-/** Fetched from the backend — a margin above what's rendered so the
- *  "showing N of M" count is meaningful. Cheap: this call always sets
+/** The backend's maximum (`le=50`). Its `total` is the length it returned, not a
+ *  count, so a full page only proves "at least this many" (live 2026-09-27: 50
+ *  synced, the panel fetched 24 and said "of 24"). Cheap: this call always sets
  *  include_predictions=false, so it is a bounded DB read with no model work. */
-const FETCH_MATCH_LIMIT = 24;
+const FETCH_MATCH_LIMIT = 50;
+
+function fixtureCount(n: number): string {
+  return n >= FETCH_MATCH_LIMIT ? `${n}+` : String(n);
+}
 
 async function fetchUpcoming(league?: string): Promise<UpcomingMatchesResponse> {
   return getUpcomingMatches({
@@ -579,7 +584,7 @@ function UpcomingMatchesPanelInner({ league: leagueProp, title = "Upcoming Fixtu
           </div>
           <div className="flex flex-col items-center justify-center gap-2 pt-0.5 sm:flex-row">
             <p aria-live="polite" className="text-center text-[11px] text-slate-300">
-              Showing {showAll ? data.upcoming_matches.length : Math.min(VISIBLE_MATCH_LIMIT, data.upcoming_matches.length)} of {data.upcoming_matches.length} fixtures
+              Showing {showAll ? data.upcoming_matches.length : Math.min(VISIBLE_MATCH_LIMIT, data.upcoming_matches.length)} of {fixtureCount(data.upcoming_matches.length)} fixtures
               {!selectedLeague && !showAll && data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && " · expand the list or filter by league"}
             </p>
             {data.upcoming_matches.length > VISIBLE_MATCH_LIMIT && (

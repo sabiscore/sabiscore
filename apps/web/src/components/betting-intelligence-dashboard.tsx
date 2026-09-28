@@ -554,7 +554,7 @@ export function BettingIntelligenceDashboard() {
         <ResearchModeBanner className="mb-2.5 sm:mb-3" />
         <header className="bi-top">
           <div>
-            <h1 className="bi-title">Betting Intelligence</h1>
+            <h2 className="bi-title">Betting Intelligence</h2>
             <p className="bi-sub">Evidence-first value analysis. The backend owns probabilities, market math, verdicts, and stake policy.</p>
           </div>
           <div className="bi-note"><ShieldCheck size={16} /> {policy}</div>

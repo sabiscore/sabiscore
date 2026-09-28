@@ -462,7 +462,7 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     expect(screen.getByText("Model Prediction")).toBeInTheDocument();
     expect(screen.getByText("Team Strength (Elo)")).toBeInTheDocument();
     // A resolved family can still carry advisory gaps; the count is in the
-    // row's text ("1 field missing"), not the chip.
+    // row's text ("1 advisory field missing"), not the chip.
     expect(screen.getAllByText(/^Resolved/).length).toBe(5);
     expect(screen.queryByText(/^Gapped/)).toBeNull();
   });

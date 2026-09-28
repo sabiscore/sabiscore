@@ -223,3 +223,11 @@ recalibrating, moving any threshold, editing the certification state, and editin
 - **O8 is done.** C6 is frozen. Confirm (c) before the first capture if you wanted a different cut.
 - **O9 (new, only if R1 shows a connection-cap error):** the Redis plan or `redis_max_connections`.
 - O1 (keep the instance awake) and O4 (certification, item 142) are unchanged.
+
+**Status, 2026-09-28 (DEBT 163):**
+- Phase 0 is done. The backend serves `369bd9d` with readiness 200 and Redis connected.
+- The Google half of Phase 1 is superseded. The 401 was python-jose's default `at_hash` check,
+  not a client-ID mismatch, and is fixed in code. The client IDs need no change unless the log
+  names an audience mismatch after that deploy.
+- U15, U16 and U17 are closed.
+- R3: a low headroom with a flat `cgroup_anon_mb` is page cache, not a failure.
