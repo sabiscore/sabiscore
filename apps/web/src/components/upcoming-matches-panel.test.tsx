@@ -115,6 +115,29 @@ describe("UpcomingMatchesPanel fixture reachability", () => {
   });
 
 
+  it("never quotes its own fetch limit as the fixture count", async () => {
+    // Live 2026-09-27: 50 fixtures synced, the panel fetched 24 and said "12 of 24".
+    // The backend's total is the length it returned, so a full page means "at least".
+    const requested: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        requested.push(url);
+        return new Response(
+          JSON.stringify(url.startsWith("/api/leagues") ? LEAGUES : upcomingResponse(50)),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    renderPanel();
+
+    await waitFor(() => expect(screen.getAllByRole("link")).toHaveLength(12));
+    expect(requested.some((url) => url.includes("limit=50"))).toBe(true);
+    expect(screen.getByText(/Showing 12 of 50\+ fixtures/)).toBeInTheDocument();
+  });
+
   it("never shows a legacy zero age as Fresh when availability is false", async () => {
     const response = upcomingResponse(1);
     response.upcoming_matches[0].staleness_seconds = 0;

@@ -78,7 +78,7 @@ describe("buildEvidencePassport", () => {
     });
     const market = rows.find((r) => r.key === "market");
     expect(market?.statusLabel).toBe("Resolved");
-    expect(market?.reason).toBe("2 fields missing");
+    expect(market?.reason).toBe("2 advisory fields missing");
     expect(JSON.stringify(market)).not.toMatch(/unavailable/i);
   });
 
@@ -94,8 +94,10 @@ describe("buildEvidencePassport", () => {
     const market = rows.find((r) => r.key === "market");
     expect(market?.reason).toMatch(/^Pinnacle · captured .*2026.* WAT$/);
     expect(market?.reason).toMatch(/16:02 WAT$/); // 15:02 UTC is 16:02 in Lagos
-    // The count carries a unit instead of riding bare in the chip.
-    expect(rows.find((r) => r.key === "elo")?.reason).toBe("1 field missing");
+    // The count carries a unit instead of riding bare in the chip. On a resolved
+    // row it is qualified: live 2026-09-27 "RESOLVED" sat beside a bare
+    // "1 field missing" (elo_league_adjusted, a permanent advisory gap; v12 U16).
+    expect(rows.find((r) => r.key === "elo")?.reason).toBe("1 advisory field missing");
   });
 
   it("names nothing it does not know about the market source", () => {

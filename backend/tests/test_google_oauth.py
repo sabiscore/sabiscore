@@ -195,10 +195,23 @@ async def test_a_token_from_another_issuer_is_named(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_any_other_claim_failure_stays_generic(monkeypatch) -> None:
+async def test_a_code_flow_token_carrying_at_hash_is_accepted(monkeypatch) -> None:
+    # Google's token endpoint returns an ID token with at_hash beside the access
+    # token. The web callback forwards only the ID token, so python-jose's default
+    # at_hash check rejected every real sign-in (401, 2026-09-27). Fixtures without
+    # at_hash never exercised it.
+    token, jwk = _signed(at_hash="HK6E_P6Dh8Y93mRNtsDB1Q")
+    _configure(monkeypatch, jwk)
+    assert (await verify_google_id_token(token, NONCE))["sub"] == "google-subject-123"
+
+
+@pytest.mark.asyncio
+async def test_any_other_claim_failure_carries_the_library_reason(monkeypatch) -> None:
     token, jwk = _signed(iat="not-a-number")
     _configure(monkeypatch, jwk)
-    with pytest.raises(GoogleOAuthError, match="^Google identity verification failed$"):
+    with pytest.raises(
+        GoogleOAuthError, match=r"^Google identity verification failed: Issued At claim \(iat\)"
+    ):
         await verify_google_id_token(token, NONCE)
 
 

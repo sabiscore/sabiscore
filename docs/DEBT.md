@@ -1,5 +1,67 @@
 # SabiScore Debt Ledger
 
+## 163. Google sign-in never worked: python-jose rejected every real token on `at_hash` — RESOLVED in code (verify after deploy); v12 R1, U15, U16, U17 closed
+
+**Tier:** `RESOLVED` in code, 2026-09-28, branch `fix/directive-v12-google-at-hash`.
+
+**R1 verified live.** #252 deployed: backend `/health` → `sha: 369bd9d`, Redis `tier1_redis_available:
+true`, readiness 200. The Render log shows "Your service is live" 90 s after "Deploying".
+
+**Google sign-in: the recorded hypothesis was wrong.** v12 blamed a Render/Vercel client-ID
+mismatch. A mismatch now logs "audience does not match GOOGLE_OAUTH_CLIENT_ID" (#251). The live log
+(23:25 and 23:26 UTC) instead read `google_oauth_rejected reason=Google identity verification
+failed`, the catch-all.
+- **Cause:** the web callback exchanges the code at Google's token endpoint and forwards only the
+  `id_token`. Google's code-flow ID tokens carry `at_hash`. python-jose 3.3.0 verifies `at_hash` by
+  default, and without `access_token=` it raises "No access_token provided to compare against at_hash
+  claim". That message names neither audience nor issuer, so it fell to the generic branch.
+- **Why the suite was green:** no fixture token carried `at_hash`.
+- **Fix:** `verify_at_hash: False`. We never use Google's access token; OIDC Core 3.1.3.6 makes the
+  check optional for the code flow. Signature, audience, issuer, expiry, nonce and `azp` are still
+  verified. The catch-all now keeps the library's reason (`…failed: {jose message}`).
+- `test_a_code_flow_token_carrying_at_hash_is_accepted` reproduced the production message verbatim
+  before the fix.
+- ⚠️ **Verify after deploy:** one real sign-in succeeds. If it still fails, the log line now names
+  the exact reason.
+
+**U15, one `<h1>` per page.** The layout's "Prediction and market intelligence" is now a `<p>`. The
+home page also had a second `<h1>` (the "Edge-first" hero), now an `<h2>`. `/intelligence` already
+hid its dashboard's legacy heading. `heading-contract.test.ts` pins both rules and was watched
+failing on each reverted fix. Its first run also failed on this fix's own comment, which spelled
+the tag; the comment was reworded rather than the scan loosened.
+
+**U16.** A resolved passport row now says "1 advisory field missing", not a bare "1 field
+missing". The web app does not hardcode the backend's permanent-gap list: a second copy of that
+policy is how the two-vocabulary bugs started.
+
+**New: "Showing 12 of 24 fixtures" was the panel's own fetch limit.** 50 fixtures were synced. The
+backend's `total` is the length it returned, not a count. The panel now fetches the backend's
+maximum (50) and says "50+" when a page comes back full, because a full page only proves "at
+least".
+
+**U17.** `/model-performance` reads `skipped: true, milestone: 200` live. The sign-in half is
+superseded by the root cause above.
+
+**Checked, not a defect:**
+- `/intelligence` "No odds snapshot" beside a Pinnacle price on the match page. The label means no
+  *stored* snapshot. Capture writes one only within 10 minutes of kickoff (DEBT 47); the match
+  page's price is fetched live per view.
+- ⚠️ **Memory: `/health` read `degraded`, 69 MB headroom, 30 min after boot.** Working set 442 MB =
+  anon 292 + active file cache 117 (+ about 33 other). Anon is lower than earlier boots (304), so
+  this is not process growth, and D1's fallback does not apply.
+  - Hypothesis refuted: the six model pickles total 11 MB, so the SHA-256 plus unpickle double
+    read cannot explain 117 MB.
+  - Consistent instead: RSS − anon = 104 MB, which is file-backed mapped pages (shared libraries).
+    The 19.4 h reading (working set 327, anon 304) shows that cache decaying without a restart.
+  - The 9 Oct burst verdict (R3) must read `cgroup_anon_mb` beside headroom. A low headroom with a
+    flat anon is page cache, not a failure.
+- **R2 evidence, before the round:** the 23:06 sync logged `received=53 … returned=50 (cap=50)`.
+  Three fixtures of the 9–11 Oct round are over the cap: one each from Serie A, La Liga and
+  Ligue 1, which are the Sunday-evening kickoffs. The sync accepts only SCHEDULED/TIMED and keeps
+  the 50 earliest. As Friday's and Saturday's games kick off, they leave that set, and the next
+  6-hourly sync takes the three in, before kickoff − 3 h opens their capture window. So there is no
+  change now; R2's post-round check stands.
+
 ## 162. The `f6e9063` backend deploy timed out: one failed Redis ping at startup was permanent — RESOLVED in code (verify on the next deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/redis-reconnect-directive-v12`.

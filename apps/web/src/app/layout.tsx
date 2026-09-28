@@ -189,9 +189,12 @@ export default function RootLayout({
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
                             Live workspace
                           </p>
-                          <h1 className="text-sm font-semibold text-white sm:text-base">
+                          {/* Not a heading: every page supplies its own level-one
+                              heading, and this one made two on each once pages
+                              rendered on the server (heading-contract.test.ts). */}
+                          <p className="text-sm font-semibold text-white sm:text-base">
                             Prediction and market intelligence
-                          </h1>
+                          </p>
                         </div>
                       </div>
 

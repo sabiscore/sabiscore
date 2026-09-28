@@ -101,8 +101,11 @@ export function buildEvidencePassport(input: {
       0,
     );
 
-    // The count used to ride in the chip as "Resolved · 1", with no unit.
-    const gapNote = gapCount > 0 ? `${gapCount} field${gapCount === 1 ? "" : "s"} missing` : null;
+    // The count used to ride in the chip as "Resolved · 1", with no unit. On a
+    // resolved row the gaps are advisory by construction, and a bare "missing"
+    // beside "Resolved" read as a contradiction (live 2026-09-27, v12 U16).
+    const unit = `${resolved ? "advisory " : ""}field${gapCount === 1 ? "" : "s"}`;
+    const gapNote = gapCount > 0 ? `${gapCount} ${unit} missing` : null;
     const parts = resolved
       ? [key === "market" ? marketSourceLine(marketSource) : null, gapNote]
       : [unavailableReasons[key] ?? "Evidence unavailable for this family.", gapNote];

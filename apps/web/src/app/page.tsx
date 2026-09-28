@@ -249,9 +249,9 @@ function PremiumHome() {
               <Activity size={11} aria-hidden="true" />
               Evidence-first intelligence
             </span>
-            <h1 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl md:text-3xl">
+            <h2 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl md:text-3xl">
               Edge-first football intelligence for analysts
-            </h1>
+            </h2>
             <p className="max-w-2xl text-xs leading-relaxed text-slate-300">
               Model forecasts, market context, and bankroll-aware decision support appear only
               when the backend confirms the required evidence.
