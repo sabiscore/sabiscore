@@ -168,41 +168,46 @@ class RedisCache:
 
         # Tier-2: Upstash (optional; no-op if not configured)
         self._upstash = UpstashTier()
+        self._last_reconnect_attempt = 0.0
 
         if self._enabled:
-            try:
-                if (
-                    settings.app_env == "production"
-                    and not settings.redis_url.startswith("rediss://")
-                ):
-                    raise ValueError("production Redis requires a rediss:// URL")
-                client = redis.Redis.from_url(
-                    settings.redis_url,
-                    max_connections=settings.redis_max_connections,
-                    decode_responses=False,
-                    health_check_interval=30,
-                    socket_timeout=5,
-                    socket_connect_timeout=5,
-                    retry_on_timeout=True,
-                    retry_on_error=[ConnectionError],
-                )
-                client.ping()
-                self.redis_client = client
-                self._redis_available = True
-                logger.info("Redis (tier-1) connection established successfully")
-            except (RedisError, ConnectionError, TimeoutError, ValueError) as exc:
-                logger.warning(
-                    "Redis unavailable at %s, falling back through tier-2/3: %s",
-                    safe_endpoint(settings.redis_url),
-                    redact_text(exc),
-                )
-                logger.info(
-                    "In-memory cache active with %d entry limit. "
-                    "Set REDIS_ENABLED=false to suppress Redis connection attempts.",
-                    self._max_memory_entries,
-                )
-                self.metrics.record_error()
-                self.redis_client = None
+            self._connect_tier1()
+
+    def _connect_tier1(self) -> None:
+        try:
+            if (
+                settings.app_env == "production"
+                and not settings.redis_url.startswith("rediss://")
+            ):
+                raise ValueError("production Redis requires a rediss:// URL")
+            client = redis.Redis.from_url(
+                settings.redis_url,
+                max_connections=settings.redis_max_connections,
+                decode_responses=False,
+                health_check_interval=30,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+                retry_on_timeout=True,
+                retry_on_error=[ConnectionError],
+            )
+            client.ping()
+            self.redis_client = client
+            self._redis_available = True
+            logger.info("Redis (tier-1) connection established successfully")
+        except (RedisError, ConnectionError, TimeoutError, ValueError) as exc:
+            self._last_reconnect_attempt = time.time()
+            logger.warning(
+                "Redis unavailable at %s, falling back through tier-2/3: %s",
+                safe_endpoint(settings.redis_url),
+                redact_text(exc),
+            )
+            logger.info(
+                "In-memory cache active with %d entry limit. "
+                "Set REDIS_ENABLED=false to suppress Redis connection attempts.",
+                self._max_memory_entries,
+            )
+            self.metrics.record_error()
+            self.redis_client = None
 
     # Internal helpers -------------------------------------------------
     def _is_circuit_open(self) -> bool:
@@ -390,12 +395,19 @@ class RedisCache:
         if not self._enabled:
             return True
         if not self.redis_client:
-            self._redis_available = False
-            return False
+            if time.time() - self._last_reconnect_attempt >= 30.0:
+                logger.info("Attempting to reconnect tier-1 Redis for readiness...")
+                self._connect_tier1()
+            
+            if not self.redis_client:
+                self._redis_available = False
+                return False
+                
         try:
             self._redis_available = bool(self.redis_client.ping())
         except (RedisError, ConnectionError, TimeoutError):
             self._redis_available = False
+            self.redis_client = None  # Force a full reconnect attempt next time
         return self._redis_available
 
     def metrics_snapshot(self) -> Dict[str, Any]:

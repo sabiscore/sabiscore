@@ -1,5 +1,25 @@
 # SabiScore Debt Ledger
 
+## 163. Status update 2026-09-28 — RESOLVED
+**Tier:** `RESOLVED`
+**Found:** 2026-09-28
+- Phase 0 is done. The backend serves `369bd9d` with readiness 200 and Redis connected.
+- The Google half of Phase 1 is superseded. The 401 was python-jose's default `at_hash` check, not a client-ID mismatch, and is fixed in code. The client IDs need no change unless the log names an audience mismatch after that deploy.
+- U15, U16 and U17 are closed.
+- R3: a low headroom with a flat `cgroup_anon_mb` is page cache, not a failure.
+
+## 162. Tier-1 Redis reconnects: readiness retries a failed connection — RESOLVED
+**Tier:** `P0`
+**Found:** 2026-09-27
+**Issue:** `RedisCache.__init__` pinged Redis once and set `redis_client = None` for the life of the process on failure. `production_ready()` returned False while it was None, so a single failed ping kept readiness at 503 until Render gave up.
+**Resolution:** Reconnect logic added to `production_ready()` so it attempts to reconnect at most once per 30 seconds if `redis_client` is None and tier-1 is enabled.
+
+## 161. Production Executive Directive v12.0 — RESOLVED
+**Tier:** `RESOLVED`
+**Found:** 2026-09-27
+**Issue:** New executive directive to replace v11's §0 evidence and §5 execution order.
+**Resolution:** Added `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V12.md`.
+
 ## 157. Directive v9 phases 1–2: scheduled prediction capture, honest pending metrics, bounded evidence tables, and five more places the pages said something unmeasured — RESOLVED (verify after deploy)
 
 **Tier:** `RESOLVED` in code, 2026-09-26. Verify on production after deploy (checks at the end).
@@ -111,6 +131,24 @@ run. A load flake, not this change.
 - football-data.org reads `LIVE_VERIFIED` between fixture syncs on `/api/health`.
 - The first hourly retention pass deletes about 2,680 health-log rows (Render log
   `provider_evidence_retention deleted=`).
+
+**Post-deploy verification, 2026-09-26** (#247 merged 11:26 UTC as `63f9bf2`; the backend
+started 11:29):
+- Web and backend both serve `63f9bf2`.
+- `prediction_capture`: `outcome: "ok"`, `due: 0`, `duration_ms: 8.4`. Nothing is due until 9 Oct.
+- `/api/v1/model-performance/summary`: HTTP 200, `METRICS_UNAVAILABLE`.
+- football-data.org: `LIVE_VERIFIED`, 6,765 retained observations (9,281 before).
+- Retention, 11:30:17 UTC: deleted 2,701 health-log rows, 2,701 request summaries and 2,662 quota
+  observations.
+- ⚠️ **Memory headroom was 82 MB at 15 min and 74 MB at 63 min** (RSS 390, then 398 MB; working
+  set 429, then 437 MB). That is under D1's 100 MB bar and just under `/health`'s own 15% warning
+  line (77 MB). RSS matches earlier boots (v8: 400 MB at 15 min). The working set, however,
+  sits 39 MB above RSS, and `/health` could not say what that memory is. The gap did not shrink
+  over the hour, so it is not yet shown to be reclaimable cache. Render recorded no
+  `server_failed` or restart events in the previous 7 days. `/health` now also reports
+  `cgroup_anon_mb` and `cgroup_active_file_mb` from `memory.stat`, so the next reading can tell
+  process growth from warm page cache. Re-read it before 9 Oct; if `anon` explains the gap,
+  directive v10 D1's fallback applies.
 
 ## 156. Weather closed: F3b (wind, gusts, heavy rain) is null as well — CLOSED / REJECT
 
