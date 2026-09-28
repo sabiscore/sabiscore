@@ -25,9 +25,12 @@ failed`, the catch-all.
   the exact reason.
 
 **U15, one `<h1>` per page.** The layout's "Prediction and market intelligence" is now a `<p>`. The
-home page also had a second `<h1>` (the "Edge-first" hero), now an `<h2>`. `/intelligence` already
-hid its dashboard's legacy heading. `heading-contract.test.ts` pins both rules and was watched
-failing on each reverted fix. Its first run also failed on this fix's own comment, which spelled
+home page also had a second `<h1>` (the "Edge-first" hero), now an `<h2>`. `/intelligence` hid its
+dashboard's legacy "Betting Intelligence" `<h1>` with CSS only, so the PR preview's server HTML
+still carried two; the dashboard's heading is now an `<h2>`. `heading-contract.test.ts` pins three
+rules (no `<h1>` in the layout or in `components/`, at most one per page component) and was
+watched failing on each reverted fix. The component rule was added after the preview caught what
+the page-only scan missed. Its first run also failed on this fix's own comment, which spelled
 the tag; the comment was reworded rather than the scan loosened.
 
 **U16.** A resolved passport row now says "1 advisory field missing", not a bare "1 field

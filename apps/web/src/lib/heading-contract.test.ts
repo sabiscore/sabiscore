@@ -10,6 +10,16 @@ import { describe, expect, it } from "vitest";
  */
 const APP_ROOT = join(process.cwd(), "src", "app");
 const H1 = /<h1[\s>]/g;
+// Non-global twin for .test(): a /g regex carries lastIndex between calls.
+const HAS_H1 = /<h1[\s>]/;
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.tsx$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name) ? [path] : [];
+  });
+}
 
 function pageFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -31,6 +41,16 @@ describe("heading contract", () => {
   it("the root layout renders no <h1>", () => {
     const layout = readFileSync(join(APP_ROOT, "layout.tsx"), "utf8");
     expect(layout.match(H1)).toBeNull();
+  });
+
+  it("no shared component renders an <h1>: the page owns it", () => {
+    // /intelligence served two in its HTML: the dashboard's legacy heading was an
+    // <h1> hidden only by CSS, which crawlers and the raw HTML still count.
+    const componentsRoot = join(process.cwd(), "src", "components");
+    const offenders = sourceFiles(componentsRoot)
+      .filter((path) => HAS_H1.test(readFileSync(path, "utf8")))
+      .map((path) => path.slice(componentsRoot.length + 1).replace(/\\/g, "/"));
+    expect(offenders).toEqual([]);
   });
 
   it("no page component renders more than one <h1>", () => {
