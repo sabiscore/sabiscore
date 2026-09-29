@@ -25,10 +25,9 @@ import { MobilePlatformSummary } from "../components/mobile-platform-summary";
 import { SabiScoreBrand } from "../components/brand/sabiscore-brand";
 import { NotificationCenter } from "../components/NotificationCenter";
 import { UserNav } from "../components/auth/user-nav";
+import { siteUrl } from "@/lib/site-url";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://sabiscore.com");
+const SITE_URL = siteUrl();
 
 const WORKSPACE_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Intelligence", href: "/intelligence", icon: Sparkles },
@@ -190,9 +189,12 @@ export default function RootLayout({
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
                             Live workspace
                           </p>
-                          <h1 className="text-sm font-semibold text-white sm:text-base">
+                          {/* Not a heading: every page supplies its own level-one
+                              heading, and this one made two on each once pages
+                              rendered on the server (heading-contract.test.ts). */}
+                          <p className="text-sm font-semibold text-white sm:text-base">
                             Prediction and market intelligence
-                          </h1>
+                          </p>
                         </div>
                       </div>
 

@@ -12,12 +12,12 @@ import {
   EvidenceStatusCard,
   MarketComparisonTable,
   CounterCase,
-  DecisionStateBadge,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
   UncertaintyCard,
 } from "./full-analysis-dashboard";
+import { DecisionStateBadge } from "./decision-state-badge";
 import { EvidencePassport } from "./evidence-passport";
 import { mapFullAnalysisPresentation, type FullMatchMarket } from "@/lib/full-analysis-contract";
 
@@ -246,7 +246,7 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
     expect(screen.getByText(/Kelly Criterion suggests optimal bet sizing/i)).toBeInTheDocument();
   });
 
-  it("exposes the UncertaintyCard BNN/Epistemic/Aleatoric/CI explainers via focus", () => {
+  it("exposes the UncertaintyCard method/Epistemic/Aleatoric/CI explainers via focus", () => {
     const unc = {
       epistemic_unc: 0.12,
       aleatoric_unc: 0.2,
@@ -257,7 +257,7 @@ describe("beginner-friendly jargon explainers (vΩ.28)", () => {
     render(<UncertaintyCard unc={unc} available />);
     const triggers = screen.getAllByRole("button");
     const expectedText = [
-      /Bayesian Neural Network/i,
+      /ensemble's trees disagree/i,
       /Unknown-unknowns/i,
       /Irreducible randomness/i,
       /95% credible interval/i,
@@ -441,6 +441,17 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     },
   );
 
+  it.each(["PLAY", "PASS", "WITHHELD"] as const)(
+    "colours the %s badge only through its state token (directive v10 U8)",
+    (state) => {
+      const html = render(<DecisionStateBadge state={state} />).container.innerHTML;
+      expect(html).toContain(`--state-${state.toLowerCase()}`);
+      // No palette hue carries the state; the label text stays neutral.
+      expect(html).not.toMatch(/(?:border|bg)-(?:emerald|amber|slate|rose)-\d/);
+      expect(html).not.toMatch(/text-(?:emerald|amber|rose)-\d/);
+    },
+  );
+
   it("stays visible when EvidenceStatusCard renders nothing (stakePermitted path)", () => {
     const statusCard = render(<EvidenceStatusCard data={stakePermittedData} />);
     expect(statusCard.container).toBeEmptyDOMElement();
@@ -450,9 +461,8 @@ describe("EvidencePassport (Phase 5 §5)", () => {
     expect(screen.getByText("Fixture Identity")).toBeInTheDocument();
     expect(screen.getByText("Model Prediction")).toBeInTheDocument();
     expect(screen.getByText("Team Strength (Elo)")).toBeInTheDocument();
-    // A resolved family can still carry advisory gaps — the market row's chip
-    // reads "Resolved · 1" from this fixture's one advisory gap, which is
-    // the honest rendering, so match the status prefix rather than exact text.
+    // A resolved family can still carry advisory gaps; the count is in the
+    // row's text ("1 advisory field missing"), not the chip.
     expect(screen.getAllByText(/^Resolved/).length).toBe(5);
     expect(screen.queryByText(/^Gapped/)).toBeNull();
   });
@@ -587,6 +597,49 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     },
   } as unknown as Parameters<typeof EvidenceStatusCard>[0]["data"];
 
+  describe("price movement since SabiScore first saw it (directive v10 U6)", () => {
+    const outcome = { implied: 0.5, fair: 0.48, model_prob: 0.5, edge: 0.02, expected_value: null };
+    const market = (first_seen: unknown) => ({
+      ...withheldWithForecast,
+      market: {
+        devig_method: "proportional",
+        overround: 1.058,
+        evaluable: false,
+        outcomes: [
+          { ...outcome, outcome: "home_win", odds: 1.24 },
+          { ...outcome, outcome: "draw", odds: 7.36 },
+          { ...outcome, outcome: "away_win", odds: 8.65 },
+        ],
+        first_seen,
+      },
+    }) as typeof withheldWithForecast;
+    const seen = (home_win: number) => ({
+      bookmaker: "pinnacle",
+      captured_at: "2026-10-09T13:00:00Z",
+      home_win,
+      draw: 7.36,
+      away_win: 8.65,
+    });
+
+    it("states the move for the top outcome, from the same book", () => {
+      const text = render(<CounterCase data={market(seen(1.28))} />).container.textContent ?? "";
+      expect(text).toMatch(/price for home win moved from 1\.28 to 1\.24 since SabiScore first saw it/);
+      // A first sighting is not an opening line: nothing observed the market opening.
+      expect(text).not.toMatch(/open/i);
+    });
+
+    it("says an unchanged price is unchanged", () => {
+      const text = render(<CounterCase data={market(seen(1.24))} />).container.textContent ?? "";
+      expect(text).toMatch(/price for home win has not moved \(1\.24\) since SabiScore first saw it/);
+    });
+
+    it("says nothing about movement without a captured price", () => {
+      for (const data of [market(null), withheldWithForecast]) {
+        expect(render(<CounterCase data={data} />).container.textContent).not.toMatch(/first saw it/);
+      }
+    });
+  });
+
   it("titles the status card for the missing stake, not a missing prediction", () => {
     render(<EvidenceStatusCard data={withheldWithForecast} />);
     expect(screen.getByRole("region", { name: /why no stake/i })).toBeInTheDocument();
@@ -672,6 +725,54 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
     // The neutral is a named decision state, not an incidental grey (v9 U4).
     expect(render(<EdgeDeltaBar oddsEdge={edge} />).container.innerHTML).toMatch(/--state-withheld/);
   });
+
+  // v11 U11. Live 2026-09-26 the PSV card read "Withheld · Partial Data · Not
+  // evaluable" (three state words) over "Not enough verified data — this model
+  // hasn't passed certification yet", with a resolved market and a forecast.
+  it("shows one decision state, says why, and keeps the verdict in the evidence line", () => {
+    render(
+      <EnhancedMatchHero
+        matchId="fd-558881"
+        data={withheldWithForecast}
+        presentation={mapFullAnalysisPresentation(withheldWithForecast)}
+        league="EREDIVISIE"
+        homeTeam="PSV"
+        awayTeam="SC Heerenveen"
+      />,
+    );
+    const decision = screen.getByRole("region", { name: /decision/i });
+    expect(decision.querySelectorAll("[data-decision-state]")).toHaveLength(1);
+    expect(decision.textContent).toMatch(/This model hasn't passed certification yet\./);
+    expect(decision.textContent).not.toMatch(/Not evaluable|Not enough verified data/);
+    expect(decision.textContent).toMatch(/Verdict: .+ · 2 critical gaps/);
+    // The reason is the headline; it is not printed a second time beneath it.
+    expect(decision.textContent!.match(/passed certification/g)).toHaveLength(1);
+  });
+
+  it("names no calibration method when no forecast is published", () => {
+    // Live 2026-09-26: the hypothetical Arsenal v Bournemouth page read
+    // "Top outcome probability: Unavailable" beside a SIGMOID chip.
+    const calibrated = { ...withheldWithForecast.ensemble, calibration_applied: true, calibration_method: "sigmoid" };
+    const noForecast = {
+      ...withheldWithForecast,
+      prediction_status: "REDUCED_EVIDENCE_BASELINE",
+      probabilities_available: false,
+      is_reduced_evidence_baseline: true,
+      ensemble: { ...calibrated, probabilities_available: false },
+    } as typeof withheldWithForecast;
+    const hero = render(
+      <EnhancedMatchHero
+        matchId="Arsenal vs Bournemouth"
+        data={noForecast}
+        presentation={mapFullAnalysisPresentation(noForecast)}
+        league="EPL"
+      />,
+    ).container;
+    const card = render(<EnsembleCard data={noForecast.ensemble} />).container;
+    for (const container of [hero, card]) expect(container.textContent).not.toMatch(/sigmoid/i);
+    // A published forecast still reports the method applied to it.
+    expect(render(<EnsembleCard data={calibrated} />).container.textContent).toMatch(/sigmoid/i);
+  });
 });
 
 
@@ -692,6 +793,13 @@ describe("MarketComparisonTable (directive v9 U1)", () => {
     expect(text).not.toMatch(/Expected return/);
     expect(container.innerHTML).not.toMatch(/emerald/);
     expect(text).toMatch(/not evidence of value/);
+  });
+
+  it("draws the dumbbell above the table, which stays the accessible text (directive v10 U5)", () => {
+    const { container } = render(<MarketComparisonTable market={withheld} />);
+    const chart = container.querySelector("svg[aria-hidden='true']");
+    expect(chart?.querySelectorAll("[data-outcome]")).toHaveLength(3);
+    expect(screen.getAllByRole("row")).toHaveLength(4);
   });
 
   it("adds expected return only when the fixture is evaluable", () => {

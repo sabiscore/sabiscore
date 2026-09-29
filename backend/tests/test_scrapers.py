@@ -113,6 +113,20 @@ class TestFootballDataScraper:
 class TestBetfairScraper:
     """Tests for Betfair exchange scraper."""
 
+    def test_without_credentials_yields_no_odds_and_no_features(self, tmp_path, monkeypatch):
+        """Strict: no credentials means no price at all, never a simulated one.
+
+        `PredictionService._merge_exchange_odds` fills missing match odds from these
+        features, so a simulated price here would pass the fail-closed odds check.
+        The cache path is redirected so no stray local file can answer instead.
+        """
+        scraper = BetfairExchangeScraper()
+        monkeypatch.setattr(scraper, "local_processed_path", tmp_path / "betfair_odds.json")
+        monkeypatch.setattr(scraper, "local_raw_path", tmp_path / "raw.json", raising=False)
+
+        assert scraper.get_match_odds("Arsenal", "Chelsea", "EPL") is None
+        assert scraper.calculate_exchange_features("Arsenal", "Chelsea", "EPL") == {}
+
     def test_exchange_odds_structure(self):
         """Test exchange odds response structure.  Without credentials, adapter returns None."""
         scraper = BetfairExchangeScraper()

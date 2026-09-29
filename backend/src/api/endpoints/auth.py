@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
@@ -32,6 +33,8 @@ from ...services.auth_service import (
 from ...services.google_oauth import GoogleOAuthError, verify_google_id_token
 
 install_social_user_fields(UserAccount)
+
+logger = logging.getLogger(__name__)
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 users_router = APIRouter(prefix="/users", tags=["users"])
@@ -324,6 +327,9 @@ async def login_with_google(
     try:
         claims = await verify_google_id_token(payload.id_token, payload.nonce)
     except GoogleOAuthError as exc:
+        # The web callback maps this to a generic code, so without this line a
+        # rejected sign-in left no reason anywhere (401s on 2026-09-27).
+        logger.warning("google_oauth_rejected reason=%s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
         ) from exc

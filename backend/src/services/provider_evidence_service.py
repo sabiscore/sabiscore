@@ -50,6 +50,13 @@ PROVIDER_EVIDENCE_STALE_SECONDS = 3600
 # On-demand streams (odds, standings, anything else) keep the default.
 _SCHEDULED_STREAM_INTERVAL_SECONDS = {"UPCOMING": 21600, "RESULTS": 3600}
 
+# Providers a background task in api/main.py calls on a schedule: fixture sync
+# and settlement (football-data.org) and the CLV tick (The Odds API). Every other
+# provider runs only when a person asks for evidence, so its observation age
+# measures traffic, not health; the web shows that age instead of "Stale"
+# (directive v10 U7). Add a provider here when a scheduled task starts calling it.
+_SCHEDULED_PROVIDERS = frozenset({"football_data_org", "the_odds_api"})
+
 # Context is intentionally tiny and whitelisted. Providers may attach only these
 # non-secret request dimensions; everything else is dropped before persistence.
 _PROVIDER_REQUEST_CONTEXT_KEYS = (
@@ -690,6 +697,7 @@ async def latest_provider_evidence(
         provider: {
             "state": "UNKNOWN",
             "status": None,
+            "cadence": "scheduled" if provider in _SCHEDULED_PROVIDERS else "on_demand",
             "observations": 0,
             "last_observed_at": None,
             "age_seconds": None,

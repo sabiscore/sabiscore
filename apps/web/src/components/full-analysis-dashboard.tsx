@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useState, useEffect, useCallback } from "react";
-import { CheckCircle2, CircleDashed, HelpCircle, MinusCircle, Share2 } from "lucide-react";
+import { HelpCircle, Share2 } from "lucide-react";
+import { DecisionStateBadge } from "./decision-state-badge";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -20,11 +21,11 @@ import {
   type FullMatchMarket,
   type FullMatchOddsEdge,
   type MatchActionability,
-  type DecisionState,
 } from "@/lib/full-analysis-contract";
 import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { EvidencePassport } from "@/components/evidence-passport";
+import { ProbabilityDumbbell } from "@/components/probability-dumbbell";
 import { MatchShareModal } from "@/components/MatchShareModal";
 import { Tooltip, KellyTooltip, EdgeTooltip } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
@@ -57,7 +58,6 @@ interface FullAnalysisDashboardProps {
 
 // ─── Verdict config ───────────────────────────────────────────────────────────
 
-type Verdict = FullMatchAnalysisResponse["verdict"];
 type FullAnalysisPresentation = ReturnType<typeof mapFullAnalysisPresentation>;
 
 const VERDICT_META = VERDICT_TOKENS;
@@ -241,12 +241,14 @@ export function EnhancedMatchHero({
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-2.5">
           <DecisionStateBadge state={presentation.decisionState} />
-          <VerdictBadge verdict={data.verdict} />
           <strong className="text-sm sm:text-base text-white">{presentation.decisionHeadline}</strong>
         </div>
-        <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
+        {presentation.reason !== presentation.decisionHeadline && (
+          <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
+        )}
+        {/* v11 U11: the verdict tier is evidence detail, not a second headline state. */}
         <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
-          Evidence quality: {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
+          Verdict: <span className="text-slate-300">{meta.label}</span> · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
         </p>
       </section>
       {/* ── Teams clash ── */}
@@ -324,7 +326,9 @@ export function EnhancedMatchHero({
       </div>
 
       {/* ── Model provenance strip (Phase D) ── */}
-      {(ensemble.calibration_applied || ensemble.overlay_applied) && (
+      {/* A calibration method describes a published forecast; with none, the
+          chip described a computation the reader cannot see (live 2026-09-26). */}
+      {presentation.predictionAvailable && (ensemble.calibration_applied || ensemble.overlay_applied) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/40 pt-2.5">
           <span className="text-[9px] uppercase tracking-widest text-slate-400 mr-0.5">Model</span>
           {ensemble.calibration_applied && (
@@ -410,46 +414,6 @@ export function EnhancedMatchHero({
   );
 }
 
-// Directive v8 §3.2: the state is carried by the word and the icon's shape
-// (filled check / bar / dashed ring); colour only repeats it, so the three
-// states stay distinguishable without colour vision.
-const DECISION_STATE_META: Record<
-  DecisionState,
-  { label: string; Icon: typeof CheckCircle2; className: string }
-> = {
-  PLAY: {
-    label: "Play",
-    Icon: CheckCircle2,
-    className: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
-  },
-  PASS: {
-    label: "Pass",
-    Icon: MinusCircle,
-    className: "border-slate-400/40 bg-slate-500/10 text-slate-200",
-  },
-  WITHHELD: {
-    label: "Withheld",
-    Icon: CircleDashed,
-    className: "border-amber-400/40 bg-amber-500/10 text-amber-200",
-  },
-};
-
-export function DecisionStateBadge({ state }: { state: DecisionState }) {
-  const { label, Icon, className } = DECISION_STATE_META[state];
-  return (
-    <span
-      data-decision-state={state}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold",
-        className,
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {label}
-    </span>
-  );
-}
-
 // Directive v8 §3.5: why this forecast might fail, from backend fields only.
 // Shown whenever a forecast exists. A WITHHELD fixture can still carry one
 // (withheld because the generation is uncertified), and that is when a positive
@@ -470,6 +434,11 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
   // a blocking uncertainty gap; saying it twice is noise.
   const uncertaintyListedAbove =
     !presentation.stakePermitted && critical.includes("MODEL_UNCERTAINTY_UNAVAILABLE");
+  // Directive v10 U6: the earliest price the same book quoted, as SabiScore
+  // captured it. A first sighting, not an opening line.
+  const firstSeen = data.market?.first_seen;
+  const topRow = data.market?.outcomes.find((row) => row.outcome === presentation.topOutcome);
+  const firstPrice = firstSeen && topRow ? firstSeen[topRow.outcome] : null;
 
   return (
     <section
@@ -484,6 +453,14 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
           <li>
             The model gives <strong className="text-white">{outcome}</strong> a {pct(p)} chance, so it
             loses {pct(1 - p)} of the time.
+          </li>
+        )}
+        {firstSeen && topRow && firstPrice != null && outcome && (
+          <li>
+            {firstPrice === topRow.odds
+              ? `The price for ${outcome} has not moved (${topRow.odds.toFixed(2)})`
+              : `The price for ${outcome} moved from ${firstPrice.toFixed(2)} to ${topRow.odds.toFixed(2)}`}{" "}
+            since SabiScore first saw it at this bookmaker ({formatLagosTimestamp(firstSeen.captured_at)} WAT).
           </li>
         )}
         {uncertifiedEdge && edge && (
@@ -644,28 +621,6 @@ function PredictionAgePill({ generatedAt }: { generatedAt: string }) {
   );
 }
 
-// ─── Verdict badge ────────────────────────────────────────────────────────────
-
-function VerdictBadge({ verdict }: { verdict: Verdict }) {
-  const meta = VERDICT_META[verdict];
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold",
-        meta.bg,
-        meta.border,
-        meta.color
-      )}
-    >
-      <span
-        className={cn("h-2 w-2 rounded-full", meta.dot)}
-        aria-hidden="true"
-      />
-      {meta.label}
-    </span>
-  );
-}
-
 // ─── Prob bar ────────────────────────────────────────────────────────────────
 
 function ProbBar({
@@ -762,7 +717,7 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-slate-400">{generationLabel(data.model_version)}</span>
           <div className="flex items-center gap-1">
-            {data.calibration_applied && (
+            {available && data.calibration_applied && (
               <span
                 className="rounded-full border border-violet-500/25 bg-violet-500/10 px-1.5 py-px text-[9px] font-semibold text-violet-400"
                 title={`Calibration: ${data.calibration_method ?? "cal"}`}
@@ -770,7 +725,7 @@ export function EnsembleCard({ data }: { data: FullMatchAnalysisResponse["ensemb
                 {data.calibration_method ?? "cal"}
               </span>
             )}
-            {data.overlay_applied && (
+            {available && data.overlay_applied && (
               <span
                 className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-px text-[9px] font-semibold text-cyan-400"
                 title="Bivariate Poisson draw overlay"
@@ -812,7 +767,9 @@ export function RLCard({
 
   return (
     <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4 border border-slate-800/60">
-      <p className="text-xs uppercase tracking-wider text-slate-400">RL Bet Recommendation</p>
+      {/* Not "RL": no reinforcement-learning policy ships (no stable-baselines3,
+          no artifact), so production always sizes with the fractional-Kelly rule. */}
+      <p className="text-xs uppercase tracking-wider text-slate-400">Stake recommendation</p>
 
       <div className="flex items-center gap-5">
         <svg viewBox="0 0 92 54" className="w-28 flex-shrink-0" aria-label={!stakePermitted ? "No bet" : `Stake ${pct(rec.stake_fraction, 2)} of ${pct(effectiveKellyCap)} cap`} role="img">
@@ -948,7 +905,7 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
   if (!unc) {
     return (
       <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
-        <p className="text-xs uppercase tracking-wider text-slate-400">BNN Uncertainty</p>
+        <p className="text-xs uppercase tracking-wider text-slate-400">Model uncertainty</p>
         <p className="text-sm font-semibold text-slate-300">Unavailable</p>
       </div>
     );
@@ -958,8 +915,10 @@ export function UncertaintyCard({ unc, available }: { unc: FullMatchUncertainty;
     <div className="rounded-xl bg-slate-900/60 border border-slate-800/60 p-3.5 sm:p-4.5 space-y-2.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-400">
-          BNN Uncertainty
-          <Tooltip content="Bayesian Neural Network — instead of one number, the model reports a range reflecting what it doesn't know.">
+          {/* Not "BNN": no Bayesian network exists (DEBT 42). The method is
+              ensemble dispersion over the random forest's trees (ADR 0009). */}
+          Model uncertainty
+          <Tooltip content="How much the ensemble's trees disagree: instead of one number, the model reports a range reflecting what it doesn't know.">
             <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-300" />
           </Tooltip>
         </div>
@@ -1094,6 +1053,7 @@ export function MarketComparisonTable({
         </p>
         <span className="text-[10px] tabular-nums text-slate-400">Overround {pct(market.overround)}</span>
       </div>
+      <ProbabilityDumbbell market={market} stakePermitted={stakePermitted} />
       <table className="w-full text-xs sm:text-sm tabular-nums">
         <caption className="sr-only">Bookmaker price, de-vigged fair probability and model probability for each outcome</caption>
         <thead>

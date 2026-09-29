@@ -12,6 +12,7 @@ import {
   Zap,
   CheckCircle2,
 } from "lucide-react";
+import { siteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 import { formatLagosTimestamp } from "@/lib/full-analysis-contract";
 
@@ -77,7 +78,7 @@ export default function DeveloperPage() {
 
   // Examples use the host the reader is on (sabiscore.com does not resolve).
   // Set after mount so the server and client render the same text.
-  const [origin, setOrigin] = useState("https://sabiscore.vercel.app");
+  const [origin, setOrigin] = useState(siteUrl);
   useEffect(() => setOrigin(window.location.origin), []);
 
   // Create Key Mutation

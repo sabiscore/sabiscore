@@ -678,6 +678,8 @@ Completes the Phase 5 milestone: sixth-league model training, production-grade 3
 
 ## v3.2.0 - Enhanced Scraping Infrastructure & Production Optimization (Nov 2025)
 
+> ⚠️ **Historical document, unverified figures (banner added 2026-09-27, DEBT 160).** The accuracy, ROI, Brier, match-count, value-bet and "production-ready" figures below were never measured by code in this repository, and current evidence contradicts them: the served generation has 0 settled forecasts, 0 of 6 leagues beat the de-vigged market (DEBT 62), and live calibration fails its gate. Do not quote them. The verified state is in `CLAUDE.md` (Verified Ground Truth) and `docs/DEBT.md`. This applies to this entry and every older entry below it.
+
 ### 🎯 Performance Improvements
 | Metric | v3.0 | v3.2 | Improvement |
 |--------|------|------|-------------|

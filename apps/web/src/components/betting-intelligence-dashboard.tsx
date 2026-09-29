@@ -37,6 +37,7 @@ import { describeEvidenceCode, groupEvidenceGaps } from "@/lib/full-analysis-con
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { evidenceStateFor } from "@/lib/evidence-state";
 import { formatEvidenceAge } from "@/lib/evidence-passport";
+import { formatLagosTimestamp } from "@/lib/lagos-time";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
@@ -85,11 +86,10 @@ export const parseOddsInput = (raw: string) => (raw.trim() === "" ? Number.NaN :
 const fmtOdds = (value?: number | null) =>
   value == null || !Number.isFinite(value) ? "Unavailable" : value.toFixed(2);
 
+// Lagos time, labelled, like every other surface (it used the browser's own
+// zone and locale, unlabelled).
 const fmtDate = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value)) : "Kickoff unavailable";
+  value ? `${formatLagosTimestamp(value)} WAT` : "Kickoff unavailable";
 
 const recordNumber = (record: Record<string, unknown> | null | undefined, key: string) => {
   const value = record?.[key];
@@ -129,8 +129,13 @@ const defaultOddsForm = (): OddsForm => {
   };
 };
 
-function statusText(evidence?: FixtureEvidenceResponse | null) {
-  if (!evidence) return "Select a fixture to retrieve evidence.";
+function statusText(evidence: FixtureEvidenceResponse | null | undefined, hasFixture: boolean) {
+  // Live 2026-09-26 this read "Select a fixture" under a selected fixture's name.
+  if (!evidence) {
+    return hasFixture
+      ? "Evidence has not been retrieved for this fixture yet."
+      : "Select a fixture to retrieve evidence.";
+  }
   if (Object.values(evidence.source_status).some((statusValue) => statusValue === "CONFLICTING")) {
     return "Source conflict detected. The engine will fail closed until the conflict is resolved.";
   }
@@ -166,7 +171,9 @@ function stateBadge(
   if (result) {
     return { label: VERDICT_LABEL[result.verdict].action, tone: VERDICT_LABEL[result.verdict].tone, detail: result.explanation };
   }
-  return { label: "FORECAST ONLY", tone: "neutral", detail: "Retrieve evidence, then submit one coherent odds snapshot before value analysis." };
+  // Not a second copy of the next-action line below it ("Retrieve evidence,
+  // confirm odds, then run analysis."): this line is the consequence.
+  return { label: "FORECAST ONLY", tone: "neutral", detail: "Market value stays unavailable until one coherent odds snapshot is confirmed." };
 }
 
 function nextActionText(
@@ -547,7 +554,7 @@ export function BettingIntelligenceDashboard() {
         <ResearchModeBanner className="mb-2.5 sm:mb-3" />
         <header className="bi-top">
           <div>
-            <h1 className="bi-title">Betting Intelligence</h1>
+            <h2 className="bi-title">Betting Intelligence</h2>
             <p className="bi-sub">Evidence-first value analysis. The backend owns probabilities, market math, verdicts, and stake policy.</p>
           </div>
           <div className="bi-note"><ShieldCheck size={16} /> {policy}</div>
@@ -620,7 +627,7 @@ export function BettingIntelligenceDashboard() {
               <div>
                 <div className="bi-panel-title"><CheckCircle2 size={16} /> Current State</div>
                 <strong>{selectedFixture ? `${selectedFixture.home_team} vs ${selectedFixture.away_team}` : "No fixture selected"}</strong>
-                <p className="bi-muted">{statusText(evidence)}</p>
+                <p className="bi-muted">{statusText(evidence, Boolean(selectedFixture))}</p>
                 <p className="bi-muted">{currentState.detail}</p>
                 <p className="bi-next-action">{nextAction}</p>
               </div>

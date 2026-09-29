@@ -23,7 +23,7 @@ describe("buildEvidencePassport", () => {
     expect(market).toBeDefined();
     expect(market?.resolved).toBe(false);
     expect(market?.statusLabel).toBe("Gapped");
-    expect(market?.reason).toBe("Coherent single-bookmaker 1X2 snapshot unavailable");
+    expect(market?.reason).toBe("Coherent single-bookmaker 1X2 snapshot unavailable · 2 fields missing");
   });
 
   it("keeps a resolved family in the array with a resolved status even with zero associated gaps", () => {
@@ -78,8 +78,36 @@ describe("buildEvidencePassport", () => {
     });
     const market = rows.find((r) => r.key === "market");
     expect(market?.statusLabel).toBe("Resolved");
-    expect(market?.reason).toBeNull();
+    expect(market?.reason).toBe("2 advisory fields missing");
     expect(JSON.stringify(market)).not.toMatch(/unavailable/i);
+  });
+
+  // v11 U13. Live 2026-09-26 PSV's market row read "Resolved" with no word on
+  // whose price the table showed or when it was captured (Pinnacle).
+  it("names the book and capture time of the displayed price on a resolved market row", () => {
+    const rows = buildEvidencePassport({
+      fieldAvailability: { market: true, elo: true },
+      unavailableReasons: {},
+      advisoryGaps: ["elo_league_adjusted"],
+      marketSource: { bookmaker: "pinnacle", capturedAt: "2026-10-09T15:02:00+00:00" },
+    });
+    const market = rows.find((r) => r.key === "market");
+    expect(market?.reason).toMatch(/^Pinnacle · captured .*2026.* WAT$/);
+    expect(market?.reason).toMatch(/16:02 WAT$/); // 15:02 UTC is 16:02 in Lagos
+    // The count carries a unit instead of riding bare in the chip. On a resolved
+    // row it is qualified: live 2026-09-27 "RESOLVED" sat beside a bare
+    // "1 field missing" (elo_league_adjusted, a permanent advisory gap; v12 U16).
+    expect(rows.find((r) => r.key === "elo")?.reason).toBe("1 advisory field missing");
+  });
+
+  it("names nothing it does not know about the market source", () => {
+    const rows = buildEvidencePassport({
+      fieldAvailability: { market: true },
+      unavailableReasons: {},
+      advisoryGaps: [],
+      marketSource: { bookmaker: null, capturedAt: null },
+    });
+    expect(rows[0].reason).toBeNull();
   });
 
   it("never leaks a raw backend token through gap or freshness labels", () => {

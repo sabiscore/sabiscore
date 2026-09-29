@@ -99,7 +99,7 @@ export function InsightsErrorState({ errorType, matchup }: InsightsErrorStatePro
       : errorType === "invalid_response"
       ? `The response for ${matchup} failed contract validation and was not displayed.`
       : errorType === "insufficient_evidence"
-      ? `Required inputs for ${matchup} — recent form, head-to-head record and a coherent 1X2 market — are not available, so no probabilities or stake are produced.`
+      ? `An input required for ${matchup} is not available (recent form, a head-to-head record or a 1X2 market price), so no probabilities or stake are produced.`
       : errorType === "backend_internal_error"
       ? `The prediction service is temporarily unavailable for ${matchup}. This usually resolves within a few minutes.`
       : `Something unexpected happened while generating insights for ${matchup}. This usually resolves on retry.`;

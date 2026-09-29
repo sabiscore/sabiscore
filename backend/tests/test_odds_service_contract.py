@@ -148,6 +148,40 @@ async def test_match_lookup_consumes_one_normalized_bookmaker_snapshot():
 
 
 @pytest.mark.asyncio
+async def test_match_lookup_prefers_pinnacle_over_board_order():
+    # One bookmaker rule for the whole pipeline (directive v11 §2): the price a
+    # forecast records and the close it is judged against must come from the
+    # same book, and that book should be the sharpest one quoted, not whichever
+    # the provider happened to list first.
+    base = {
+        "provider": "the_odds_api",
+        "provider_event_id": "evt-1",
+        "home_team": "Arsenal",
+        "away_team": "Brighton",
+        "draw_odds": 3.5,
+        "away_odds": 4.4,
+        "captured_at": "2026-08-09T08:00:00Z",
+        "provider_event_timestamp": "2026-08-09T14:00:00Z",
+        "bookmaker_last_update": "2026-08-09T07:59:00Z",
+        "coherent": True,
+        "executable": True,
+    }
+    service = OddsService(cache_backend=_StubCache())
+    service.provider = _StubProvider(
+        ProviderStatus.VERIFIED,
+        [
+            {**base, "bookmaker": "betclic", "home_odds": 1.8},
+            {**base, "bookmaker": "pinnacle", "home_odds": 1.9},
+        ],
+    )
+
+    odds = await service.get_match_odds("Arsenal FC", "Brighton FC", "EPL")
+
+    assert odds["bookmaker"] == "pinnacle"
+    assert odds["home_win"] == 1.9
+
+
+@pytest.mark.asyncio
 async def test_match_lookup_rejects_cross_fixture_or_incoherent_records():
     records = [
         {
@@ -209,3 +243,27 @@ async def test_match_lookup_refuses_a_price_not_proven_pre_kickoff(captured_at, 
 
     assert odds["source"] == "unavailable"
     assert "home_win" not in odds
+
+
+@pytest.mark.asyncio
+async def test_a_board_is_fetched_once_and_cached_for_120_seconds():
+    # Directive v11 M3 / O7: the Odds API quota is 500 a month, shared by capture
+    # and page views. A board read within its 120 s TTL must not spend a request.
+    class _TtlCache(_StubCache):
+        def __init__(self):
+            super().__init__()
+            self.ttls: list = []
+
+        def set(self, key, value, ttl=None):
+            self.ttls.append(ttl)
+            super().set(key, value, ttl)
+
+    cache = _TtlCache()
+    service = OddsService(cache_backend=cache)
+    service.provider = _StubProvider(ProviderStatus.VERIFIED, [{"bookmaker": "pinnacle"}])
+
+    await service.fetch_live_odds(competition="EPL")
+    await service.fetch_live_odds(competition="EPL")
+
+    assert len(service.provider.calls) == 1
+    assert cache.ttls == [120]

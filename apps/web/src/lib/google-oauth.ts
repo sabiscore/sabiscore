@@ -1,3 +1,5 @@
+import { siteUrl } from "@/lib/site-url";
+
 // Server-only Google OAuth settings shared by /api/auth/google/{start,callback}.
 //
 // The Vercel project carries the Auth.js names (AUTH_GOOGLE_ID/_SECRET); the
@@ -15,7 +17,25 @@ export function googleClientSecret(): string | undefined {
 // The flow must start and finish on the host the visitor is on: the state,
 // nonce and PKCE cookies are host-only. VERCEL_URL is the per-deployment host,
 // so a visitor on a production alias was sent back to a host that had none of
-// those cookies. Each alias used for sign-in must be registered with Google.
+// those cookies. In production only the canonical host needs registering with
+// Google (canonicalSignInOrigin); a preview's own host must be registered to sign in there.
 export function googleRedirectUri(origin: string): string {
   return `${origin}/api/auth/google/callback`;
+}
+
+// Per-deployment URLs (web-<hash>-…vercel.app) can never be registered, so on a
+// production deployment the flow starts on the canonical host (siteUrl()) before
+// any cookie is set. Previews and local dev keep their own origin. Reading the
+// bare env var here made new URL("") throw on production, where it is unset, and
+// the catch skipped the redirect: the fix never ran live (2026-09-26).
+export function canonicalSignInOrigin(requestOrigin: string): string | null {
+  if (process.env.VERCEL_ENV !== "production") return null;
+  try {
+    // Compare hosts, not origins: a proxy reporting http:// for the canonical
+    // host must not redirect to itself forever.
+    const canonical = new URL(siteUrl());
+    return canonical.host === new URL(requestOrigin).host ? null : canonical.origin;
+  } catch {
+    return null;
+  }
 }

@@ -8,7 +8,10 @@ describe("evidence state mapping (Mandate 2 R3 / APEX §15.2)", () => {
     expect(evidenceStateFor("STALE")).toEqual({ label: "Stale", tone: "warning" });
     expect(evidenceStateFor("CONFLICTING")).toEqual({ label: "Limited evidence", tone: "warning" });
     expect(evidenceStateFor("DATA_GAP")).toEqual({ label: "Data unavailable", tone: "neutral" });
-    expect(evidenceStateFor("DATA_UNAVAILABLE")).toEqual({ label: "Provider unavailable", tone: "neutral" });
+    // fixtures.py emits DATA_UNAVAILABLE when the fixture has no stored odds row;
+    // it says nothing about provider health. "Provider unavailable" sat beside
+    // "The Odds API · Live-validated" on /intelligence (live 2026-09-26).
+    expect(evidenceStateFor("DATA_UNAVAILABLE")).toEqual({ label: "No odds snapshot", tone: "neutral" });
     expect(evidenceStateFor("MODEL_UNAVAILABLE")).toEqual({ label: "Model unavailable", tone: "neutral" });
     expect(evidenceStateFor("RESEARCH_ONLY")).toEqual({ label: "Research mode", tone: "info" });
   });

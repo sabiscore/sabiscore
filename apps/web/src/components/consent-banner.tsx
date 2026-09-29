@@ -2,7 +2,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Cookie, Shield, AlertTriangle, Check } from "lucide-react";
+import { Shield, AlertTriangle } from "lucide-react";
+
+import { CONSENT_STORAGE_KEY, CONSENT_VERSION } from "@/lib/consent";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,9 +21,7 @@ interface ConsentPreferences {
   version: string;
 }
 
-const CONSENT_STORAGE_KEY = "sabiscore_consent_v1";
 const AGE_GATE_STORAGE_KEY = "sabiscore_age_gate_accepted_v1";
-const CONSENT_VERSION = "1.0.0";
 
 // ---------------------------------------------------------------------------
 // Hook: useConsent
@@ -77,40 +77,40 @@ interface ConsentBannerProps {
 }
 
 export function ConsentBanner({ onConsentGiven }: ConsentBannerProps) {
-  const { consent: _consent, saveConsent, isLoading, hasConsented } = useConsent();
-  const [showDetails, setShowDetails] = useState(false);
-  const [showAgeGate, setShowAgeGate] = useState(true);
-  const [preferences, setPreferences] = useState({
-    analytics: true,
-    marketing: false,
-    personalization: true,
-  });
+  const { saveConsent, isLoading, hasConsented } = useConsent();
 
-  useEffect(() => {
-    try {
-      const accepted = localStorage.getItem(AGE_GATE_STORAGE_KEY) === "true";
-      if (accepted) setShowAgeGate(false);
-    } catch {
-      // ignore storage errors (e.g., privacy mode)
-    }
-  }, []);
-
-  // Don't render if already consented or still loading
   if (isLoading || hasConsented) {
     return null;
   }
 
-  // Age verification gate first
-  if (showAgeGate) {
-    return (
-      <div 
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="age-gate-title"
-        aria-describedby="age-gate-desc"
-      >
-        <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
+  // v11 U14: one consent step. The age gate used to be followed by a bottom
+  // cookie banner that covered the market table at 360 px, and its analytics,
+  // marketing and personalization toggles were read by nothing. There is no
+  // advertising, and the only optional processing is first-party usage counts.
+  const accept = (analytics: boolean) => {
+    const prefs = {
+      necessary: true,
+      analytics,
+      marketing: false,
+      personalization: true,
+      ageVerified: true,
+      responsibleGambling: true,
+    };
+    saveConsent(prefs);
+    onConsentGiven?.(prefs as ConsentPreferences);
+  };
+
+  return (
+    <div
+      // m-auto on the card, not items-center here: a flex-centred child taller
+      // than a 360 px viewport is clipped at the top and cannot be scrolled to.
+      className="fixed inset-0 z-[100] flex overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="age-gate-title"
+      aria-describedby="age-gate-desc"
+    >
+        <div className="m-auto w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-slate-900 to-slate-950 p-6 shadow-2xl">
             {/* Header */}
             <div className="mb-6 flex items-center justify-center gap-3">
@@ -165,24 +165,28 @@ export function ConsentBanner({ onConsentGiven }: ConsentBannerProps) {
               </div>
             </div>
 
+            <p className="mb-4 text-xs leading-relaxed text-slate-400">
+              SabiScore counts anonymous page events on its own servers to improve the product. There is
+              no advertising. You can decline and still use everything.
+            </p>
+
             {/* Actions */}
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => {
-                  try {
-                    localStorage.setItem(AGE_GATE_STORAGE_KEY, "true");
-                  } catch {
-                    // ignore storage errors
-                  }
-                  setShowAgeGate(false);
-                }}
+                onClick={() => accept(true)}
                 className="w-full rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-3 font-semibold text-white shadow-lg transition hover:from-emerald-500 hover:to-emerald-400"
               >
-                I am 18+ and accept responsible gambling guidelines
+                I am 18+ · allow anonymous usage counts
               </button>
               <button
-                onClick={() => window.location.href = "https://www.begambleaware.org"}
-                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-6 py-3 font-semibold text-slate-300 transition hover:bg-slate-700"
+                onClick={() => accept(false)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-800 px-6 py-3 font-semibold text-slate-200 transition hover:bg-slate-700"
+              >
+                I am 18+ · essential only
+              </button>
+              <button
+                onClick={() => (window.location.href = "https://www.begambleaware.org")}
+                className="w-full px-6 py-2 text-sm text-slate-400 underline transition hover:text-slate-300"
               >
                 I am under 18 / Exit
               </button>
@@ -190,202 +194,6 @@ export function ConsentBanner({ onConsentGiven }: ConsentBannerProps) {
           </div>
         </div>
       </div>
-    );
-  }
-
-  // GDPR Cookie Consent Banner
-  const handleAcceptAll = () => {
-    const fullConsent = {
-      necessary: true,
-      analytics: true,
-      marketing: true,
-      personalization: true,
-      ageVerified: true,
-      responsibleGambling: true,
-    };
-    saveConsent(fullConsent);
-    onConsentGiven?.(fullConsent as ConsentPreferences);
-  };
-
-  const handleAcceptSelected = () => {
-    const selectedConsent = {
-      necessary: true,
-      ...preferences,
-      ageVerified: true,
-      responsibleGambling: true,
-    };
-    saveConsent(selectedConsent);
-    onConsentGiven?.(selectedConsent as ConsentPreferences);
-  };
-
-  const handleRejectNonEssential = () => {
-    const minimalConsent = {
-      necessary: true,
-      analytics: false,
-      marketing: false,
-      personalization: false,
-      ageVerified: true,
-      responsibleGambling: true,
-    };
-    saveConsent(minimalConsent);
-    onConsentGiven?.(minimalConsent as ConsentPreferences);
-  };
-
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-[100] p-4 animate-in slide-in-from-bottom duration-300">
-      <div className="mx-auto max-w-4xl rounded-2xl border border-slate-700 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-md">
-        {/* Header */}
-        <div className="mb-4 flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Cookie className="h-6 w-6 text-amber-400" />
-            <h2 className="text-lg font-bold text-white">Cookie & Privacy Settings</h2>
-          </div>
-        </div>
-
-        {/* Description */}
-        <p className="mb-4 text-sm text-slate-400">
-          We use cookies to enhance your experience, analyze site traffic, and personalize content.
-          You can customize your preferences below or accept all cookies.
-        </p>
-
-        {/* Detailed preferences (toggle) */}
-        {showDetails && (
-          <div className="mb-4 space-y-3 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-            {/* Necessary - always on */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-200">Essential Cookies</p>
-                <p className="text-xs text-slate-500">Required for the site to function</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-emerald-400" />
-                <span className="text-xs text-slate-500">Always on</span>
-              </div>
-            </div>
-
-            {/* Analytics */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-200">Analytics</p>
-                <p className="text-xs text-slate-500">Help us improve by tracking usage patterns</p>
-              </div>
-              {preferences.analytics ? (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, analytics: !p.analytics }))}
-                  aria-label="Toggle analytics cookies: currently enabled"
-                  aria-pressed="true"
-                  className="relative h-6 w-11 rounded-full transition bg-emerald-500"
-                >
-                  <span className="absolute top-0.5 left-5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, analytics: !p.analytics }))}
-                  aria-label="Toggle analytics cookies: currently disabled"
-                  aria-pressed="false"
-                  className="relative h-6 w-11 rounded-full transition bg-slate-600"
-                >
-                  <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              )}
-            </div>
-
-            {/* Marketing */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-200">Marketing</p>
-                <p className="text-xs text-slate-500">Allow personalized advertisements</p>
-              </div>
-              {preferences.marketing ? (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, marketing: !p.marketing }))}
-                  aria-label="Toggle marketing cookies: currently enabled"
-                  aria-pressed="true"
-                  className="relative h-6 w-11 rounded-full transition bg-emerald-500"
-                >
-                  <span className="absolute top-0.5 left-5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, marketing: !p.marketing }))}
-                  aria-label="Toggle marketing cookies: currently disabled"
-                  aria-pressed="false"
-                  className="relative h-6 w-11 rounded-full transition bg-slate-600"
-                >
-                  <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              )}
-            </div>
-
-            {/* Personalization */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-200">Personalization</p>
-                <p className="text-xs text-slate-500">Remember your preferences and settings</p>
-              </div>
-              {preferences.personalization ? (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, personalization: !p.personalization }))}
-                  aria-label="Toggle personalization cookies: currently enabled"
-                  aria-pressed="true"
-                  className="relative h-6 w-11 rounded-full transition bg-emerald-500"
-                >
-                  <span className="absolute top-0.5 left-5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPreferences(p => ({ ...p, personalization: !p.personalization }))}
-                  aria-label="Toggle personalization cookies: currently disabled"
-                  aria-pressed="false"
-                  className="relative h-6 w-11 rounded-full transition bg-slate-600"
-                >
-                  <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleAcceptAll}
-            className="rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-2.5 font-semibold text-white shadow transition hover:from-emerald-500 hover:to-emerald-400"
-          >
-            Accept All
-          </button>
-          <button
-            onClick={handleRejectNonEssential}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-5 py-2.5 font-semibold text-slate-300 transition hover:bg-slate-700"
-          >
-            Essential Only
-          </button>
-          {showDetails ? (
-            <button
-              onClick={handleAcceptSelected}
-              className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-            >
-              Save Preferences
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowDetails(true)}
-              className="text-sm text-slate-400 underline hover:text-slate-300"
-            >
-              Customize
-            </button>
-          )}
-          
-          {/* Privacy Policy Link */}
-          <a
-            href="/privacy"
-            className="ml-auto text-sm text-slate-500 hover:text-slate-400 hover:underline"
-          >
-            Privacy Policy
-          </a>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -399,17 +207,14 @@ interface ConsentProviderProps {
 }
 
 export function ConsentProvider({ children, requireConsent = true }: ConsentProviderProps) {
-  const { hasConsented, isLoading } = useConsent();
+  const { hasConsented } = useConsent();
 
-  // Show loading state briefly
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-      </div>
-    );
-  }
-
+  // Children always render. A spinner used to stand in for them until the
+  // client read localStorage, so every page's server HTML was only that spinner
+  // (live 2026-09-27: no page heading on /, /intelligence or /performance) and first
+  // paint waited for hydration. It gated nothing: the same response already
+  // carries the page as its RSC payload. ConsentBanner renders nothing until
+  // the stored choice is read, so server and client markup still match.
   return (
     <>
       {children}

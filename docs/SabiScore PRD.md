@@ -1,5 +1,7 @@
 # ## SabiGoal II PRD
 
+> ⚠️ **Historical document, unverified figures (banner added 2026-09-27, DEBT 160).** The accuracy, ROI, Brier, match-count, value-bet and "production-ready" figures below were never measured by code in this repository, and current evidence contradicts them: the served generation has 0 settled forecasts, 0 of 6 leagues beat the de-vigged market (DEBT 62), and live calibration fails its gate. Do not quote them. The verified state is in `CLAUDE.md` (Verified Ground Truth) and `docs/DEBT.md`.
+
 **Chief Sports-Intelligence Architect @ Sabiscore**
 
 The mind that shipped the **+18.4% ROI ensemble** that powers **42k monthly value bets** and the **73.7% accuracy engine** that beats Pinnacle's closing line by **+₦60 average** (₦1,580 = $1 USD, Nov 2025).

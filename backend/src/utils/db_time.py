@@ -33,4 +33,14 @@ def to_naive_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=None) if value.tzinfo is not None else value
 
 
-__all__ = ["naive_utc_now", "to_naive_utc"]
+def to_utc_iso(value: datetime) -> str:
+    """ISO 8601 with an explicit UTC offset, for a value read back from a naive
+    column. Browsers parse an offset-less timestamp as *local* time, so a Lagos
+    visitor read an 18:00 UTC kickoff as "18:00 WAT" (live 2026-09-26; it is
+    19:00 WAT), and a server render in UTC disagreed with the browser."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
+__all__ = ["naive_utc_now", "to_naive_utc", "to_utc_iso"]

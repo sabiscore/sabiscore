@@ -21,6 +21,7 @@ import { MatchSelector } from "@/components/match-selector";
 import { ModelMetadataPanel } from "@/components/model-metadata-panel";
 import { MobilePlatformSummary } from "@/components/mobile-platform-summary";
 import { PlatformHealthPills } from "@/components/platform-health-pills";
+import { DecisionStateBadge } from "@/components/decision-state-badge";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
@@ -31,12 +32,12 @@ const TRUST_BADGES = ["Verified fixtures first", "Explicit evidence gaps", "Zero
 const PREMIUM_VALUE_STREAM = [
   {
     title: "Edge telemetry",
-    description: "Evidence checks across configured providers with automatic fallbacks and DATA_GAP surfacing.",
+    description: "Evidence checks across configured providers. A missing input is shown as a gap, never filled in.",
     icon: BarChart3,
     footer: "Fail-closed evidence checks",
   },
   {
-    title: "Phase 8 candidate enrichment",
+    title: "Candidate feature research",
     description: "Candidate feature vector remains shadow-only pending model validation and promotion evidence.",
     icon: Microscope,
     footer: "Shadow evaluation only",
@@ -69,18 +70,18 @@ const PREMIUM_PILLARS = [
 
 const LEGACY_FEATURES = [
   {
-    title: "Phase 8 Candidate Enrichment",
+    title: "Candidate Feature Research",
     description: "Candidate feature intelligence is available for shadow evaluation only and is not active in production verdicts.",
     icon: Database,
   },
   {
     title: "CLV + Edge Quality",
-    description: "Edge quality scored 0-1 per fixture. Model–market belief differential tracked per prediction. Fractional Kelly + RL abstention gate on every bet.",
+    description: "Edge quality scored 0-1 per fixture. Model–market belief differential tracked per prediction. Quarter-Kelly sizing behind an abstention gate: no stake unless every gate passes.",
     icon: Target,
   },
   {
     title: "Promotion-Gated Validation",
-    description: "Candidate RPS must improve over the incumbent; walk-forward evidence is live with 59 settled predictions.",
+    description: "Candidate RPS must improve over the incumbent, scored walk-forward on settled forecasts as they accumulate.",
     icon: CheckCircle2,
   },
 ] satisfies Array<{ title: string; description: string; icon: LucideIcon }>;
@@ -120,6 +121,21 @@ const PIPELINE_STEPS = [
 ] satisfies Array<{ step: string; label: string; detail: string; icon: LucideIcon }>;
 
 // Verdict definitions
+// v11 U11: match cards lead with a decision state, so the glossary defines it
+// before the verdict tiers. Directive v8 §3.2; PASS and WITHHELD never merge.
+const DECISION_STATE_DEFINITIONS = [
+  {
+    state: "PLAY",
+    detail:
+      "A stake is permitted: a certified forecast, complete evidence, and a price with positive expected return.",
+  },
+  { state: "PASS", detail: "Evaluated, and the price offers no value. No stake." },
+  {
+    state: "WITHHELD",
+    detail: "Not evaluable: a blocking gap, such as an uncertified model or a missing price. No stake.",
+  },
+] as const;
+
 const VERDICT_DEFINITIONS = [
   {
     enum: "PARTIAL",
@@ -233,9 +249,9 @@ function PremiumHome() {
               <Activity size={11} aria-hidden="true" />
               Evidence-first intelligence
             </span>
-            <h1 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl md:text-3xl">
+            <h2 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl md:text-3xl">
               Edge-first football intelligence for analysts
-            </h1>
+            </h2>
             <p className="max-w-2xl text-xs leading-relaxed text-slate-300">
               Model forecasts, market context, and bankroll-aware decision support appear only
               when the backend confirms the required evidence.
@@ -365,6 +381,19 @@ function PremiumHome() {
       {/* Verdict education */}
       <section className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 sm:p-4">
         <h2 className="mb-0.5 text-base font-bold text-white sm:text-lg">Understanding verdicts</h2>
+        <p className="mb-2.5 text-xs text-slate-400">
+          Every match card leads with one decision state. The verdict tier beneath it describes the evidence.
+        </p>
+        <dl className="mb-3 grid gap-2 sm:grid-cols-3">
+          {DECISION_STATE_DEFINITIONS.map((d) => (
+            <div key={d.state} className="rounded-xl border border-white/10 bg-slate-900/60 p-2.5">
+              <dt>
+                <DecisionStateBadge state={d.state} />
+              </dt>
+              <dd className="mt-1.5 text-[10px] leading-normal text-slate-400">{d.detail}</dd>
+            </div>
+          ))}
+        </dl>
         <p className="mb-2.5 text-xs text-slate-400">
           Each verdict is an evidence gate, not a confidence dial. Stronger labels require more independent sources.
         </p>

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getUpcomingMatches, type UpcomingMatch } from "@/lib/api";
 import { edgeQualityLabel } from "@/lib/edge-quality";
 import { cn } from "@/lib/utils";
+import { formatLagosTime } from "@/lib/lagos-time";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -38,8 +39,8 @@ function buildCards(matchId: string, league: string, match: UpcomingMatch | null
     const d = new Date(match.match_date);
     cards.push({
       label: "Kickoff",
-      value: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }),
-      sub: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      value: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Africa/Lagos" }),
+      sub: `${formatLagosTime(match.match_date)} WAT`,
       accent: "text-amber-300",
     });
   } else {

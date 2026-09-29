@@ -1,5 +1,7 @@
 # SabiScore v6.1: Comprehensive Production Audit & Seamless Integration Plan
 
+> ⚠️ **Historical document, unverified figures (banner added 2026-09-27, DEBT 160).** The accuracy, ROI, Brier, match-count, value-bet and "production-ready" figures below were never measured by code in this repository, and current evidence contradicts them: the served generation has 0 settled forecasts, 0 of 6 leagues beat the de-vigged market (DEBT 62), and live calibration fails its gate. Do not quote them. The verified state is in `CLAUDE.md` (Verified Ground Truth) and `docs/DEBT.md`. That includes the README draft embedded below and its accuracy badge.
+
 ## EXECUTIVE SUMMARY
 
 **Your Role:** Chief Sports-Intelligence Architect at SabiScore  

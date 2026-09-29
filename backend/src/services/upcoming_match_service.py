@@ -20,6 +20,7 @@ from ..core.portfolio_exposure import compute_portfolio_exposure
 from ..data.loaders.football_data_api import FootballDataAPIClient
 from ..db.models import Match, Team
 from ..monitoring.metrics import metrics_collector
+from ..utils.db_time import to_utc_iso
 from .upcoming_match_feature_service import UpcomingMatchFeatureProjector
 from ..models.active_generation import staking_authorization
 from ..models.ensemble_uncertainty import compute_ensemble_uncertainty
@@ -265,7 +266,7 @@ class UpcomingMatchService:
                     "home_team": home_team_name or "Unknown home team",
                     "away_team": away_team_name or "Unknown away team",
                     "league": match.league_id,
-                    "match_date": match.match_date.isoformat()
+                    "match_date": to_utc_iso(match.match_date)
                     if match.match_date
                     else None,
                     "venue": match.venue,

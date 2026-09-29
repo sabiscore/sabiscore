@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
 
@@ -34,6 +35,7 @@ from ..models.active_generation import (
     served_identity,
 )
 from ..monitoring.metrics import metrics_collector
+from ..core.instance_memory import instance_memory
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +49,32 @@ Analyze = Callable[..., Awaitable[Any]]
 
 _last_result: dict[str, Any] = {"outcome": "never_run"}
 
+# Directive v11 §1: the matchday burst is read after the fact, not by polling
+# /health every five minutes. Passes that had work to do (or failed), with the
+# memory after each; idle passes are skipped, so 48 entries cover a whole
+# matchday window (about 45 five-minute ticks). Lost on restart, like _last_result.
+# M2 is judged on working-set headroom and M1 on anon memory, so each entry
+# carries those cgroup figures; process RSS alone answered neither (live it read
+# 400 MB against a 365 MB cgroup).
+_RECENT_PASSES: deque[dict[str, Any]] = deque(maxlen=48)
+
+
+def _pass_memory() -> dict[str, Optional[int]]:
+    try:
+        memory = instance_memory()
+    except Exception:  # a memory read must never fail a capture pass
+        memory = {}
+    return {
+        "rss_mb": memory.get("process_rss_mb"),
+        "working_set_mb": memory.get("cgroup_working_set_mb"),
+        "anon_mb": memory.get("cgroup_anon_mb"),
+        "headroom_mb": memory.get("headroom_mb"),
+    }
+
 
 def last_prediction_capture_result() -> dict[str, Any]:
     """Sync accessor for /health; return a copy, never the live result dict."""
-    return dict(_last_result)
+    return {**_last_result, "recent": list(_RECENT_PASSES)}
 
 
 def _utc_naive(value: datetime) -> datetime:
@@ -215,6 +239,14 @@ async def run_prediction_capture_pass(
     # Directive v10 D1: a matchday burst runs sequentially inside the CLV tick,
     # so its wall time is what to watch against the five-minute cadence.
     _last_result["duration_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    if _last_result.get("due") or _last_result["outcome"] != "ok":
+        _RECENT_PASSES.append(
+            {
+                key: _last_result.get(key)
+                for key in ("checked_at", "outcome", "due", "captured", "errors", "duration_ms")
+            }
+            | _pass_memory()
+        )
     return _last_result
 
 

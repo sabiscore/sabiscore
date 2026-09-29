@@ -439,3 +439,33 @@ async def test_full_analysis_capture_flows_into_settlement_join(
     assert len(records) == 1
     assert records[0]["outcome"] == 0
     assert records[0]["probs"] == pytest.approx([0.55, 0.25, 0.20])
+
+
+async def test_c6_writer_filter_applies_to_the_join_rate_denominator(
+    session: AsyncSession,
+) -> None:
+    # C6 (a) filters the join-rate denominator the same way as the numerator.
+    match_date = datetime(2026, 10, 9, 18, 0)
+    await _seed_settled_match(session, "c6-2", home_score=1, away_score=1, match_date=match_date)
+    for hours, trigger, home in ((3, "interactive_full_analysis", 0.40), (1, "prediction_endpoint", 0.70)):
+        session.add(
+            MatchPredictionLog(
+                match_id="c6-2",
+                canonical_fixture_id=None,
+                model_version="served",
+                calibration_method=None,
+                home_probability=home,
+                draw_probability=0.2,
+                away_probability=0.8 - home,
+                confidence=home,
+                created_at=match_date - timedelta(hours=hours),
+                payload={"capture_trigger": trigger},
+            )
+        )
+    await session.commit()
+
+    records = await get_settled_predictions(
+        session, model_version="served", capture_trigger="interactive_full_analysis"
+    )
+
+    assert [r["probs"][0] for r in records] == pytest.approx([0.40])

@@ -106,7 +106,17 @@ async def get_settled_fixtures(
 # canonical_season() operate on. canonical_fixture_id targets the separate
 # canonical_fixtures spine, which nothing in this codebase populates today, so
 # joining through it here would silently return zero rows forever.
-#
+
+
+def _capture_trigger_filter(capture_trigger: str | None) -> list[Any]:
+    """C6 (a): keep only rows one writer stamped. Applied inside the per-match
+    ranking, like model_version, so a newer row from another writer cannot win
+    the rank and then drop the fixture. None keeps every writer (live endpoints)."""
+    if capture_trigger is None:
+        return []
+    return [MatchPredictionLog.payload["capture_trigger"].as_string() == capture_trigger]
+
+
 # A prediction is eligible only when it was created before kickoff. This is
 # enforced inside ranked_per_match so the chosen row cannot be a post-kickoff
 # re-request.
@@ -119,6 +129,7 @@ def build_settled_predictions_query(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    capture_trigger: str | None = None,
 ) -> Select[Any]:
     """Join the most recent logged prediction per settled fixture to its result.
 
@@ -142,6 +153,7 @@ def build_settled_predictions_query(
     latest_per_match_filters = [
         MatchPredictionLog.created_at < Match.match_date,
         MatchPredictionLog.model_version == validated_model_version,
+        *_capture_trigger_filter(capture_trigger),
     ]
 
     ranked_per_match = (
@@ -204,6 +216,7 @@ async def get_settled_predictions(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    capture_trigger: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return settled-fixture records shaped for
     ``model_registry.ModelRegistry.walk_forward_validate()``:
@@ -222,6 +235,7 @@ async def get_settled_predictions(
             league=league,
             started_at=started_at,
             ended_at=ended_at,
+            capture_trigger=capture_trigger,
         )
     )
 
@@ -276,6 +290,7 @@ def build_clv_records_query(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    capture_trigger: str | None = None,
 ) -> Select[Any]:
     """Join the most recent pre-close prediction per match to its latest valid
     pre-kickoff closing line.
@@ -323,6 +338,7 @@ def build_clv_records_query(
     latest_prediction_filters = [
         MatchPredictionLog.created_at < latest_closing_line.c.captured_at,
         MatchPredictionLog.model_version == validated_model_version,
+        *_capture_trigger_filter(capture_trigger),
     ]
     ranked_prediction = (
         select(
@@ -406,6 +422,7 @@ async def get_clv_records(
     league: str | None = None,
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
+    capture_trigger: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Return prediction/closing-line pairs shaped for
     ``services.clv_service.compute_clv_summary()``:
@@ -422,6 +439,7 @@ async def get_clv_records(
             league=league,
             started_at=started_at,
             ended_at=ended_at,
+            capture_trigger=capture_trigger,
         )
     )
 

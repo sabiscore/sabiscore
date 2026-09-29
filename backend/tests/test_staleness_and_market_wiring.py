@@ -292,6 +292,44 @@ async def test_an_uncertified_generation_never_publishes_expected_value(monkeypa
     _validates(payload)
 
 
+@pytest.mark.asyncio
+async def test_the_first_sighting_is_read_for_the_same_fixture_and_bookmaker(monkeypatch):
+    """Directive v10 U6: the counter-case's price-movement line comes from the
+    earliest captured price of the SAME book for this fixture."""
+    kickoff = "2026-10-09T18:00:00+00:00"
+    _install(
+        monkeypatch,
+        _live(kickoff_utc=kickoff),
+        odds={"home_win": 2.50, "draw": 3.30, "away_win": 3.10, "bookmaker": "pinnacle"},
+    )
+    seen = {
+        "bookmaker": "pinnacle",
+        "captured_at": "2026-10-09T13:00:00+00:00",
+        "home_win": 2.40,
+        "draw": 3.40,
+        "away_win": 3.20,
+    }
+    calls = []
+
+    async def _recorded(_db, **kwargs):
+        calls.append(kwargs)
+        return seen
+
+    monkeypatch.setattr(endpoint, "_first_sighting", _recorded)
+
+    payload = await endpoint.get_full_analysis("real-fixture-1", league="EPL", db=object())
+
+    assert calls == [
+        {
+            "match_id": "real-fixture-1",
+            "bookmaker": "pinnacle",
+            "kickoff": endpoint._utc_aware_datetime(kickoff),
+        }
+    ]
+    assert payload["market"]["first_seen"] == seen
+    _validates(payload)
+
+
 def _validates(payload: dict) -> None:
     """The route declares this schema as its response_model; hold the payload to it."""
     from src.schemas.full_analysis import FullMatchAnalysisResponseSchema
@@ -313,6 +351,29 @@ def test_market_block_publishes_expected_value_only_when_evaluable():
     assert no_forecast["evaluable"] is False
     assert all(r["model_prob"] is None and r["edge"] is None for r in no_forecast["outcomes"])
     assert endpoint._market_block({"home_win": 1.0, "draw": 3, "away_win": 3}, model_probs=probs, evaluable=True) is None
+
+
+def test_market_block_names_the_book_and_capture_time_of_its_prices():
+    """v11 U13: the passport's market row names who quoted the displayed price
+    and when SabiScore captured it. Unknown stays None, never a substitute."""
+    from src.schemas.full_analysis import FullMatchMarketResponse
+
+    odds = {
+        "home_win": 1.24,
+        "draw": 7.36,
+        "away_win": 8.65,
+        "bookmaker": "pinnacle",
+        "timestamp": "2026-10-09T15:02:00Z",
+    }
+    block = endpoint._market_block(odds, model_probs=None, evaluable=False)
+    assert block["bookmaker"] == "pinnacle"
+    assert block["captured_at"] == "2026-10-09T15:02:00+00:00"
+    FullMatchMarketResponse.model_validate(block)
+
+    bare = endpoint._market_block(
+        {"home_win": 1.24, "draw": 7.36, "away_win": 8.65}, model_probs=None, evaluable=False
+    )
+    assert bare["bookmaker"] is None and bare["captured_at"] is None
 
 
 def test_schema_refuses_expected_value_on_a_non_evaluable_market():

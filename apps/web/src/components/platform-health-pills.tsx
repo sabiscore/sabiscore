@@ -59,9 +59,9 @@ export function PlatformHealthPills() {
       />
       {/*
         Shows live-validated vs configured count. "Live-validated" means the
-        provider returned a successful response during the last explicit probe
-        (PROVIDER_LIVE_TESTS=true). Production keeps probes off by default to
-        preserve quota, so this may read 0 even when providers are working.
+        provider's latest recorded request (routine syncs included) returned
+        VERIFIED within its freshness window. Providers that run only on demand
+        count only after someone has retrieved evidence recently.
       */}
       <HealthPill
         icon={Activity}

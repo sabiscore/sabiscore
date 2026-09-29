@@ -1,24 +1,425 @@
 # SabiScore Debt Ledger
 
-## 163. Status update 2026-09-28 — RESOLVED
-**Tier:** `RESOLVED`
-**Found:** 2026-09-28
-- Phase 0 is done. The backend serves `369bd9d` with readiness 200 and Redis connected.
-- The Google half of Phase 1 is superseded. The 401 was python-jose's default `at_hash` check, not a client-ID mismatch, and is fixed in code. The client IDs need no change unless the log names an audience mismatch after that deploy.
-- U15, U16 and U17 are closed.
-- R3: a low headroom with a flat `cgroup_anon_mb` is page cache, not a failure.
+## 163. Google sign-in never worked: python-jose rejected every real token on `at_hash` — RESOLVED in code (verify after deploy); v12 R1, U15, U16, U17 closed
 
-## 162. Tier-1 Redis reconnects: readiness retries a failed connection — RESOLVED
-**Tier:** `P0`
-**Found:** 2026-09-27
-**Issue:** `RedisCache.__init__` pinged Redis once and set `redis_client = None` for the life of the process on failure. `production_ready()` returned False while it was None, so a single failed ping kept readiness at 503 until Render gave up.
-**Resolution:** Reconnect logic added to `production_ready()` so it attempts to reconnect at most once per 30 seconds if `redis_client` is None and tier-1 is enabled.
+**Tier:** `RESOLVED` in code, 2026-09-28, branch `fix/directive-v12-google-at-hash`.
 
-## 161. Production Executive Directive v12.0 — RESOLVED
-**Tier:** `RESOLVED`
-**Found:** 2026-09-27
-**Issue:** New executive directive to replace v11's §0 evidence and §5 execution order.
-**Resolution:** Added `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V12.md`.
+**R1 verified live.** #252 deployed: backend `/health` → `sha: 369bd9d`, Redis `tier1_redis_available:
+true`, readiness 200. The Render log shows "Your service is live" 90 s after "Deploying".
+
+**Google sign-in: the recorded hypothesis was wrong.** v12 blamed a Render/Vercel client-ID
+mismatch. A mismatch now logs "audience does not match GOOGLE_OAUTH_CLIENT_ID" (#251). The live log
+(23:25 and 23:26 UTC) instead read `google_oauth_rejected reason=Google identity verification
+failed`, the catch-all.
+- **Cause:** the web callback exchanges the code at Google's token endpoint and forwards only the
+  `id_token`. Google's code-flow ID tokens carry `at_hash`. python-jose 3.3.0 verifies `at_hash` by
+  default, and without `access_token=` it raises "No access_token provided to compare against at_hash
+  claim". That message names neither audience nor issuer, so it fell to the generic branch.
+- **Why the suite was green:** no fixture token carried `at_hash`.
+- **Fix:** `verify_at_hash: False`. We never use Google's access token; OIDC Core 3.1.3.6 makes the
+  check optional for the code flow. Signature, audience, issuer, expiry, nonce and `azp` are still
+  verified. The catch-all now keeps the library's reason (`…failed: {jose message}`).
+- `test_a_code_flow_token_carrying_at_hash_is_accepted` reproduced the production message verbatim
+  before the fix.
+- ⚠️ **Verify after deploy:** one real sign-in succeeds. If it still fails, the log line now names
+  the exact reason.
+
+**U15, one `<h1>` per page.** The layout's "Prediction and market intelligence" is now a `<p>`. The
+home page also had a second `<h1>` (the "Edge-first" hero), now an `<h2>`. `/intelligence` hid its
+dashboard's legacy "Betting Intelligence" `<h1>` with CSS only, so the PR preview's server HTML
+still carried two; the dashboard's heading is now an `<h2>`. `heading-contract.test.ts` pins three
+rules (no `<h1>` in the layout or in `components/`, at most one per page component) and was
+watched failing on each reverted fix. The component rule was added after the preview caught what
+the page-only scan missed. Its first run also failed on this fix's own comment, which spelled
+the tag; the comment was reworded rather than the scan loosened.
+
+**U16.** A resolved passport row now says "1 advisory field missing", not a bare "1 field
+missing". The web app does not hardcode the backend's permanent-gap list: a second copy of that
+policy is how the two-vocabulary bugs started.
+
+**New: "Showing 12 of 24 fixtures" was the panel's own fetch limit.** 50 fixtures were synced. The
+backend's `total` is the length it returned, not a count. The panel now fetches the backend's
+maximum (50) and says "50+" when a page comes back full, because a full page only proves "at
+least".
+
+**U17.** `/model-performance` reads `skipped: true, milestone: 200` live. The sign-in half is
+superseded by the root cause above.
+
+**Checked, not a defect:**
+- `/intelligence` "No odds snapshot" beside a Pinnacle price on the match page. The label means no
+  *stored* snapshot. Capture writes one only within 10 minutes of kickoff (DEBT 47); the match
+  page's price is fetched live per view.
+- ⚠️ **Memory: `/health` read `degraded`, 69 MB headroom, 30 min after boot.** Working set 442 MB =
+  anon 292 + active file cache 117 (+ about 33 other). Anon is lower than earlier boots (304), so
+  this is not process growth, and D1's fallback does not apply.
+  - Hypothesis refuted: the six model pickles total 11 MB, so the SHA-256 plus unpickle double
+    read cannot explain 117 MB.
+  - Consistent instead: RSS − anon = 104 MB, which is file-backed mapped pages (shared libraries).
+    The 19.4 h reading (working set 327, anon 304) shows that cache decaying without a restart.
+  - The 9 Oct burst verdict (R3) must read `cgroup_anon_mb` beside headroom. A low headroom with a
+    flat anon is page cache, not a failure.
+- **R2 evidence, before the round:** the 23:06 sync logged `received=53 … returned=50 (cap=50)`.
+  Three fixtures of the 9–11 Oct round are over the cap: one each from Serie A, La Liga and
+  Ligue 1, which are the Sunday-evening kickoffs. The sync accepts only SCHEDULED/TIMED and keeps
+  the 50 earliest. As Friday's and Saturday's games kick off, they leave that set, and the next
+  6-hourly sync takes the three in, before kickoff − 3 h opens their capture window. So there is no
+  change now; R2's post-round check stands.
+
+## 162. The `f6e9063` backend deploy timed out: one failed Redis ping at startup was permanent — RESOLVED in code (verify on the next deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/redis-reconnect-directive-v12`.
+
+**What happened (Render log, 27 Sep):**
+- #251 merged at 18:57 UTC. The backend build succeeded (6 hash-locked artifacts verified), and
+  startup completed at 20:12:40.
+- `/health/ready` then answered 503 every 10 s until Render reported "Timed Out" at 20:26:07, and
+  kept `b8d3a4c`.
+- The new instance logged `fixture_sync: external Redis unavailable`. The serving instance reported
+  `External Redis connected` at the same time.
+- So #251's backend half (named sign-in rejections, U12, the C6 reader code) is not live. The web
+  half is.
+
+**Root defect:** `RedisCache.__init__` (`core/cache.py`) pinged Redis once at import. On failure it
+set `redis_client = None` for the life of the process, and nothing retried.
+`production_ready()` returned False while the client was None, so readiness stayed 503 however long
+Redis had been healthy. Fixture sync, which reads the same `cache.redis_client`, was also switched
+off for that process. The capture and settlement jobs do not depend on it.
+
+**Fix:** the connect logic is `_connect_tier1()`. Readiness calls it again when the client is None,
+at most once per 30 s. A transient failure at cold start now recovers on a later probe.
+`test_a_failed_first_ping_recovers_on_a_later_readiness_probe` pins both the recovery and the
+throttle; it was watched failing on the old cache.
+
+⚠️ **Not known: why the first ping failed.** The excerpt did not include the deploy log's
+`Redis unavailable at …: <reason>` line.
+- A timeout or a DNS or TLS blip recovers with this fix.
+- `max number of clients reached` would not. During a Render deploy two instances overlap, each
+  with a pool of up to `redis_max_connections` (default 50) plus other clients. The Redis plan's
+  cap or a lower pool size is then an operator decision (directive v12, O9).
+
+⚠️ **Green CI does not mean deployed.** After every merge that touches `backend/`, compare `/health`
+→ `sha` with the merge SHA. If it has not changed within 45 minutes, read the deploy log rather than
+waiting on a slow build.
+
+## 161. v11 Phase 1 and 3 close-out: sign-in now fails after Google, C6 frozen, the interim interval withheld, and every page's server HTML was a spinner — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/v11-phase1-3-closeout`.
+
+1. **Google sign-in fails after Google, not at it.** The Render log shows
+   `POST /api/v1/auth/oauth/google 401` at 14:16:37 and 14:17:54 UTC. Google redirected back and
+   the web's code exchange succeeded (that exchange also checks the redirect URI), so the callback
+   URL is registered and O2 is done for `sabiscore.vercel.app`. A probe shows the backend is
+   configured: a length-valid token with a real Google key id gets "Google identity verification
+   failed", an unknown key id gets "signing key is unavailable". So the rejection is a claim check
+   after the signature. The second attempt took 5 ms, so Google's keys were already cached.
+   - Every claim failure raised the same message and the web callback discarded it, so no log could
+     say which check failed.
+   - The likeliest cause: Render's `GOOGLE_OAUTH_CLIENT_ID` is not the web's client id
+     (`117341339397…`, public in the authorize URL), or it was pasted with quotes.
+   - Fixed:
+     - the audience, issuer and expiry failures are now named;
+     - both issuer forms Google documents are accepted (the check accepted only
+       `https://accounts.google.com`);
+     - surrounding quotes are stripped from the configured id;
+     - the backend logs `google_oauth_rejected reason=…`, the web logs
+       `google_oauth_backend_rejected`, and an audience mismatch maps to `google_not_configured`,
+       because a retry cannot fix it.
+   - ⚠️ **Not proven:** confirming the cause needs one real sign-in after deploy. The log line will
+     name it.
+2. **C6 frozen (O8).** `reports/research/c6-served-generation-vs-close-protocol.json` v1.1.0 is
+   `PRE-REGISTERED`, sha256 `9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7`,
+   recorded in the registry (state stays `PROPOSED`, as F3b did). The answers to §2.3:
+   - (a) count only `capture_trigger = interactive_full_analysis`;
+   - (b) 10,000 replicates, seed 42;
+   - (d) only the count below 200;
+   - (e) Pinnacle first;
+   - (f) decide at 98.33% (0.05 / 3), with the 95% interval reported beside it;
+   - (c), the sample cut, was not stated in the request, which named "these six points" and gave
+     no alternative. The recommendation is recorded as the answer and flagged in the protocol.
+   - The code the frozen call names now exists. `get_clv_records` and `get_settled_predictions`
+     take `capture_trigger`, filtered inside each per-match ranking so a newer
+     `POST /predictions` row cannot win the rank and drop the fixture. `week_cluster_ci` takes
+     `alpha` (default 0.05; `ci95` is always beside it).
+   - `test_c6_protocol_frozen.py` fails on any edit to the frozen file. It was watched failing on a
+     one-character change (seed 42 → 43).
+3. **U12.** `compute_model_vs_close` withholds the interval and the mean below 200 settled joined
+   forecasts and reports the count. No web page renders `model_vs_close`, so the endpoint was the
+   only surface.
+4. **Every page's server HTML was a spinner.** `ConsentProvider` rendered a spinner in place of
+   the page until the client read localStorage. Live `/`, `/intelligence` and `/performance` HTML
+   had no `<h1>`, so first paint waited for hydration. It gated nothing: `/intelligence`'s text was
+   already in the same response's RSC payload. Children now always render, and the consent step
+   still appears after hydration. This predates #249.
+5. **U14 evidence.** `tests/e2e/consent-360.spec.ts` runs at 360×640 and checks:
+   - one dialog, no horizontal overflow, and the last action reachable;
+   - a screenshot is attached;
+   - after accepting, nothing fixed and tall is left at the bottom edge.
+   It was watched failing against `a8b5a5c`'s banner: it named that banner's
+   `fixed inset-x-0 bottom-0 …` bar. It passes on the desktop and mobile projects.
+6. **O7 audit.** `bookmaker_preference` (Pinnacle first) picks the book for the forecast-time
+   price, the first sighting and the close. Both the price and the close were already pinned by
+   tests.
+   - A new test pins the 120 s board cache: one fetch per TTL, TTL 120.
+   - ⚠️ v11 M3 said capture reads are cached for 120 s. That is true for prediction capture and
+     page views, but not for CLV capture. CLV capture calls the provider once per league per
+     5-minute tick while a fixture is within 10 minutes of kickoff. This is correct: a close must
+     be the last observation before kickoff, and a 120 s TTL could never hit across 5-minute ticks.
+   - **Quota now: 188 remaining, 312 used** (a 500 allowance, by sum), no reset date.
+   - Rotating a key replaces the credential, not the monthly allowance, so it adds no credits. See
+     the reset date or change the plan.
+   - ⚠️ Do not put the production key in the local `.env`. Backend tests that reach `odds_service`
+     make live calls (2026-09-23 note), which would spend the shared 500.
+7. **U11 and U13 re-verified.** The homepage glossary defines PLAY, PASS and WITHHELD before the
+   verdict tiers. The live market row reads "Pinnacle · captured 27 Sept 2026, 15:20 WAT".
+
+⚠️ **Tooling:** a `sed` revert check (`ttl=120)` → `ttl=60)` and back) also rewrote a second,
+original `ttl=60)` line. It was restored from git. Use `git stash` for revert checks, never a
+reversible-looking substitution.
+
+**Verification (2026-09-27, local, one heavy step at a time):** backend 2,816 passed, 19 skipped, 1 xfailed, 0 failed; ruff 0 on `src/` and `scripts/` and on every touched test; mypy 755, unchanged (ceiling 784; importing `jose.exceptions` had added one, cleared by using `jwt.JWTClaimsError`); experiment registry valid (17). Web lint 0, typecheck 0, Vitest 474/474; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB); Playwright `consent-360` and `/intelligence` smoke 6/6 on desktop and mobile. Every new guard was watched failing on the old code.
+
+**Found in CI, fixed before merge:** SonarCloud failed on new-code coverage, 75.9% against 80%, with no issues and no hotspots (read from its public API). The uncovered new code was the wrong-issuer branch, the generic claim-failure branch and the endpoint's log line. Three tests now cover them.
+
+## 160. Post-#249 pass: two method names that never ship, a stale settled count, unlabelled times, and the 9 Oct burst made readable — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-27, branch `fix/post-249-hardening`.
+
+**#249 post-deploy checks:** all pass. Web and backend serve `655ca2a`. `robots.txt` and `og:url`
+name `sabiscore.vercel.app`. The PSV market block carries `bookmaker: pinnacle` and `captured_at`.
+The new production deployment's own URL (`web-d2v2boqc5-…`) redirects `/api/auth/google/start` to
+the canonical host before any cookie. ⚠️ An older pinned URL (`web-ac2qmk2dr-…`) still sends its own
+host to Google: **a `web-<hash>` URL is frozen at its commit**, so test sign-in on the newest
+deployment's URL (GitHub → Deployments → Production), never on one taken from an old screenshot.
+Sign-in still stops at Google until O2 is done.
+
+**First M1 reading** (about 65 min after a start): working set 337 MB = anon 289 + active file 14 +
+kernel and other; headroom 174 MB. Process memory, not page cache, is most of the working set.
+
+1. **"RL Bet Recommendation" and "RL Betting Agent" named a method that never runs.**
+   `RLBettingAgent` uses a SAC policy only when `settings.rl_agent_path` exists *and*
+   stable-baselines3 is installed; neither requirements file lists it and no artifact is tracked, so
+   production always sizes with the fractional-Kelly rule. Both cards now read "Stake
+   recommendation"; the panel footer no longer shows `settings.rl_agent_path`. Same class as the
+   "BNN" label (item 159).
+2. **The homepage hard-coded "walk-forward evidence is live with 59 settled predictions"** (the
+   fallback feature list shown when the premium flag is off). The served generation has 0 settled.
+   Also "RL abstention gate on every bet" (no bet has been placed), "Phase 8 candidate enrichment" and
+   "DATA_GAP surfacing" (internal names). All replaced with plain statements.
+3. **Times in the viewer's own zone, unlabelled.** `/intelligence` kickoffs and the evidence-sources
+   time, the calibration chart, the insights panel, the tease strip and notifications used the
+   browser's zone (one also the browser's locale) with no label, beside pages that print "WAT".
+   `lib/lagos-time.ts` formats all of them; the contract re-exports the old helper.
+4. **Guards:** `copy-contract.test.ts` bans unshipped method names, a hard-coded settled count, and
+   browser-zone time formatting. Each was watched failing on an old file. ⚠️ The first draft of the
+   method guard had `\b` written as a backspace byte (a shell-to-Python escaping slip) and could not
+   match; it passed until run against the old agent panel alone. A control-character scan of `src`
+   and `docs` found no other instance.
+5. **Scraper docstrings claimed simulated data.** Four said they "return simulated data in
+   development"; all four return `None`. Betfair matters because `_merge_exchange_odds` fills
+   missing match odds from its features. Its old test accepted "None or any valid structure"; a
+   strict test now fails when `_fetch_remote` returns a price.
+6. **The 9 Oct burst can now be judged.** Each capture pass recorded only process RSS, but M2 is
+   judged on working-set headroom and M1 on anon memory (RSS read 400 MB against a 365 MB cgroup).
+   The cgroup reader moved to `core/instance_memory.py`; each pass records `working_set_mb`,
+   `anon_mb` and `headroom_mb`. `scripts/read_capture_burst.py --since 2026-10-09T15:00:00Z` applies
+   M2's acceptance and reports the Odds API quota. Live today: `NO_DATA`.
+7. **Four documents presented unmeasured figures as fact** (`FORENSIC_AUDIT_REPORT.md`: 86.3%
+   accuracy, +21.7% ROI, "Ready for Production Use"; `RELEASE_NOTES.md` v3.2 and older; the PRD's
+   "+18.4% ROI ensemble… beats Pinnacle's closing line"; `INTEGRATION_PLAN.md`'s accuracy badge).
+   Each now carries a dated banner; history is kept.
+
+⚠️ **O7 is urgent, operator only.** The Odds API reported 236 credits left on the morning of 26 Sep,
+222 at 15:32 UTC and **194 at about 23:00 UTC** (306 used), with no reset date in the response. Each
+board fetch requests two regions (`uk,eu`), and page views spend credits. If the monthly reset is not
+before 9 Oct, the balance may run out before the first capture, and captures would then have no
+forecast-time price. Check the reset date in the Odds API account. Halving the cost (one region) or
+lengthening the board cache would change which bookmakers C6 compares against or how fresh its prices
+are, so both are O7/O8 decisions, not code fixes.
+
+8. **Two ledger entries were stale:** item 22 still read "REGRESSED: HTTP 401" while The Odds API is live-verified with quota observed; item 118 was open for a disclosure of an override that #228 removed. Both now carry dated status lines. Item 152 was checked and is accurately PARTIAL.
+
+**Not built:** U12 and the C6 freeze (O8). O1, O2, O4 unchanged.
+
+**Verification (2026-09-27, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
+469/469; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, no route changed size);
+ruff clean on every touched Python file; backend 2,802 passed, 19 skipped, 1 xfailed, 0 failed (8.5 min); mypy 755, unchanged (ceiling 784; the moved psutil import had added one, now cleared); Playwright desktop and mobile 4/4. Every new guard was watched failing on the old code.
+
+**Found in review, fixed before merge:** an independent review agent found that a `--since` without a zone crashed the burst reader and a malformed one dropped the restart check but could still PASS (both fixed, with tests that fail on the old script). SonarCloud then failed the PR on one Major vulnerability, `pythonsecurity:S8703` (SSRF): the reader's `--backend` option passed a caller-supplied URL to `urlopen`, which fetches any host or scheme. The option is removed; the script reads a constant HTTPS production URL. ⚠️ SonarCloud's public API answered from this machine (`/api/issues/search?pullRequest=N&types=VULNERABILITY`), so a failing quality gate can be read directly instead of guessed at.
+
+## 159. Directive v11 pass: #248's sign-in fix never ran live, every share link was dead, and the cookie banner's choices were ignored — RESOLVED in code (verify after deploy)
+
+**Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v11-pass`.
+**Found:** 21 screenshots of `web-ac2qmk2dr-oversabis-projects.vercel.app` (footer `a8b5a5c`, which is
+the production SHA for web and backend, so they are current), a Render log from 16:07–16:41 UTC, and
+live probes.
+
+**#248 post-deploy checks (v11 §5):** 1 pass (`match_date` ends `+00:00`; PSV reads 19:00 WAT);
+2 pass (no `NextjsClientStackFrameNormalization` in any of the homepage's 26 chunks); 3 pass (`cadence`
+per provider); 4 pass (`prediction_capture.recent` is `[]`); **5 fails**; 6 pass ("No odds snapshot").
+Memory at the probe: RSS 400 MB, working set 332 of 512 MB, headroom 179 MB.
+
+1. **Check 5: the pinned host still sent its own URL to Google.** `/api/auth/google/start` on
+   `web-ac2qmk2dr` returned 307 straight to Google with that host as `redirect_uri`, which is the
+   `redirect_uri_mismatch` in the screenshots. Root cause: **the Vercel project builds from `apps/web`
+   and never reads the root `vercel.json`**, where `NEXT_PUBLIC_SITE_URL` is declared (live
+   `X-Frame-Options` is `apps/web/vercel.json`'s `DENY`, not the root file's `SAMEORIGIN`). With the
+   variable unset, `canonicalSignInOrigin` parsed `""`, threw, and its `catch` skipped the redirect.
+   Every existing test stubbed the variable production lacks. The same unset variable put the
+   per-deployment host in `og:url` and `robots.txt`, and sent share links and match/team JSON-LD to
+   `sabiscore.com`, which does not resolve. `lib/site-url.ts` `siteUrl()` now reads it in one place
+   and defaults to `https://sabiscore.vercel.app`, never `VERCEL_URL` and never an unresolved domain.
+   Guards: a sign-in test with the variable unset (failed on the old helper), and a scan that names
+   any second reader of the variable (watched naming `MatchShareModal.tsx`). ⚠️ O2 still applies:
+   Google must also have `https://sabiscore.vercel.app/api/auth/google/callback` registered. The root
+   `vercel.json` is dead configuration for this project; left in place, flagged here.
+2. **M1 committed.** `/health` → `resources.memory` gains `cgroup_anon_mb` and
+   `cgroup_active_file_mb` (from `memory.stat`; absent keys report `None`). Recovered from the
+   uncommitted change another session left in the main checkout; both assertions fail with the
+   source reverted.
+3. **U11: one decision state per card.** PSV read "Withheld · Partial Data · Not evaluable" over
+   "Not enough verified data — this model hasn't passed certification yet", with a forecast and a
+   resolved market. The badge is the state; a withheld card's headline is its first blocking reason
+   (no "not enough data" prefix, which was false for certification and uncertainty codes); the verdict
+   tier is in the evidence line. The homepage glossary defines Play, Pass and Withheld. The badge
+   moved to `components/decision-state-badge.tsx` so the homepage does not load the dashboard.
+4. **U13: the passport names its price.** The market block carries `bookmaker` and `captured_at`
+   from the odds record (kept through the cache); the market row reads "Pinnacle · captured 9 Oct
+   2026, 16:02 WAT". "Resolved · 1" had no unit; the count is now "1 field missing" in the row text.
+5. **U14: one consent step, and the choice is honoured.** The 18+ gate was followed by a bottom
+   cookie banner over the market table at 360 px. Its analytics, marketing and personalization toggles
+   were read by nothing: `lib/analytics.ts` sent events to `/api/analytics/events` whatever the visitor
+   chose, the site has no advertising, and its Privacy Policy link was a 404. The gate now asks once
+   (18+ with usage counts, 18+ essential only, or exit), and `analytics.track()` sends only with an
+   explicit yes. ⚠️ Visible change: analytics now counts only visitors who opt in.
+6. **Statements with no measurement behind them:**
+   - `REQUIRED_MODEL_INPUTS_UNAVAILABLE` said form, head-to-head **and** market were missing. It fires
+     when either side has no history **or** the market was a placeholder; the hypothetical
+     Arsenal–Bournemouth had form and head-to-head, and only market fields were gapped. Same and/or
+     error in the insights 422 state.
+   - "BNN Uncertainty": no Bayesian network exists (item 42); the method is ensemble dispersion
+     (ADR 0009). Now "Model uncertainty".
+   - `/intelligence` said "Select a fixture" under a selected fixture's name, then gave one
+     instruction twice.
+   - The loading footer said "calibrated per league · verified evidence only". The served calibrator
+     worsens RPS (item 142), and a hypothetical is not verified evidence.
+7. **Not built:** U12 (waits on O8 d) and the C6 freeze (O8). Unchanged: every fixture is Withheld.
+
+**Verification (2026-09-26, local, one heavy step at a time):** web lint 0, typecheck 0, Vitest
+465/465 across 68 files; `NODE_ENV=production` build exit 0 (shared first-load JS 103 kB, `/` 227 kB).
+Every new or changed guard was watched failing on the old code. Backend 2,793 passed, 19 skipped,
+1 xfailed, 0 failed (40 min in this worktree); ruff clean; mypy 755, unchanged (ceiling 784).
+Playwright desktop and mobile 4/4. A local production build against the live backend showed one
+consent dialog at 360 px (top not clipped, scrolls to its buttons), the PSV card as `[Withheld] This
+model hasn't passed certification yet.` with 0 px horizontal overflow, the new required-inputs copy
+on the hypothetical, and `robots.txt` naming `sabiscore.vercel.app`. An independent review agent
+found no verified defects; its one nit (a duplicated host literal on `/developer`) is fixed.
+
+## 158. Directive v10 live pass: the close came from a soft book, kickoffs read an hour early in Lagos, and the Sentry SDK doubled every page's JS — RESOLVED in code (verify after deploy); C6 drafted, awaiting O8
+
+**Tier:** `RESOLVED` in code, 2026-09-26, branch `fix/directive-v10-live-pass`. C6 is a DRAFT
+(registry state `PROPOSED`) until the operator approves it (O8).
+**Found:** 26 screenshots of `web-qjzuzffsd-oversabis-projects.vercel.app` (serves `63f9bf2`,
+the production SHA for web and backend, so they are current), a Render log from 11:16–12:13 UTC,
+and live probes of production.
+
+**#247 post-deploy checks:** all four pass. `prediction_capture.outcome` is `ok`;
+`/model-performance/summary` returns 200 `METRICS_UNAVAILABLE`; football-data.org reads
+`LIVE_VERIFIED`; the first retention pass (11:30:17 UTC) deleted 2,701 health-log rows, 2,701
+request summaries and 2,662 quota observations, and provider states were unchanged.
+
+1. **The close was whichever bookmaker's key sorts first, and the forecast-time price was a
+   different book.** `market_observation_service` kept `min(bookmaker key)` per event
+   ("betclic" sorts before "pinnacle"). `odds_service.get_match_odds` took the first record in
+   the provider's listing order, which v10 recorded as Pinnacle for PSV. C6 judges "sharper than
+   the close" against that close, so a soft book's wider, noisier close would have flattered the
+   model, and "model vs close" could compare two books. Both paths now use one rule,
+   `the_odds_api.bookmaker_preference` (Pinnacle, then key order). Guards: one test per path;
+   both failed on the old code. ⚠️ **This is part of C6's population, so it must deploy before
+   the first capture (2026-10-09 15:00 UTC) and be approved with the protocol.** Changing it after
+   a result exists is forbidden. The 1,024 older snapshots keep their old books; none belong to
+   the served identity's C6 population.
+2. **Kickoffs on the fixture lists read an hour early for a Lagos visitor.** The list row builder
+   (`upcoming_match_service`) and the team page (`team_intelligence`) serialised the naive UTC
+   `match_date` with no offset. Browsers parse an offset-less timestamp as *local* time, so PSV's
+   18:00 UTC kickoff (19:00 WAT) rendered "Fri 9 Oct · 18:00 WAT" on the homepage and `/match`,
+   and a UTC server render disagreed with the browser. New `utils/db_time.to_utc_iso` (the
+   read-side counterpart of `to_naive_utc`) at both sites; the row's date is pinned to
+   `Africa/Lagos` like the time beside it. Guards: the row-builder schema test now asserts the
+   offset (failed first), and 2 helper tests. ⚠️ Other naive `isoformat()` sites exist (repair
+   manifests, audit services). None is on a consumer page, and the manifest ones feed hashed
+   digests, so they were deliberately left alone.
+3. **The Sentry browser SDK was in the JS every page loads, with no DSN set.**
+   `instrumentation-client.ts` (added in #228) imported `@sentry/nextjs` statically and checked
+   the DSN afterwards. Measured on the build: 179 of the 324 modules in the shared chunk were
+   Sentry (about 273 KB raw), reached only through that file. The import is now inside the DSN
+   branch, which the build removes when no DSN is set. **Shared first-load JS 198 kB → 103 kB**
+   (the vΩ.25 baseline). Every route fell by 93–95 kB: `/` 319 → 226, `/match` 308 → 215,
+   `/match/[id]` 267 → 173, `/intelligence` 250 → 156, `/performance` 241 → 148. Error capture
+   (`lib/error-utils.ts`) was already lazy; v10's "the client SDK is loaded lazily" was true of
+   that file only. v10 U9.
+4. **Google sign-in fails on the canonical alias too.** Following
+   `https://sabiscore.vercel.app/api/auth/google/start` through Google ends on its error page with
+   `redirect_uri_mismatch` (2 of 3 probes; the third timed out). So O2 is still open: register
+   `https://sabiscore.vercel.app/api/auth/google/callback` for client `117341339397-…` in Google
+   Cloud. Code: a per-deployment URL can never be registered, so a production deployment now sends
+   `/api/auth/google/start` to `NEXT_PUBLIC_SITE_URL` before setting any cookie; previews keep
+   their own origin. Guards: 2 tests (1 failed first).
+5. **U6: the price move since SabiScore first saw it.** `market.first_seen` is the earliest
+   pre-kickoff snapshot of the same fixture from the same bookmaker (`_first_sighting`, inside a
+   savepoint so a failed read cannot abort the prediction-log write). The counter-case says
+   "moved from X to Y since SabiScore first saw it at this bookmaker". It never says "opening":
+   nothing observes when a market opened. It is omitted when no snapshot exists or the bookmaker
+   is unknown. Guards: 5 backend tests, a wiring test that fails with the call removed, and 3 web
+   tests.
+6. **U5: `ProbabilityDumbbell`** above the market table (inline SVG, backend values only, neutral
+   unless a stake is permitted; the table stays the accessible text). 8 tests, 3 watched failing.
+   Screenshots of the live PSV payload at 1280 and 360 px show no horizontal overflow.
+7. **U7: on-demand providers.** ESPN read an amber "Stale" (one observation, 6.5 days old) though
+   it runs only when evidence is retrieved. The backend now reports `cadence` per provider
+   (`scheduled` for football-data.org and The Odds API, the two that `api/main.py`'s tasks call),
+   and the meter shows "Last checked 6d ago" or "Not yet used". The meter's footer said live
+   validation "appears only after an explicit operator probe"; football-data.org is live-validated
+   by routine syncs, so that line is corrected, as is a stale header-pill comment. Guards: 1
+   backend and 2 web tests.
+8. **U8:** decision-state badge colours come only from `--state-*` tokens (new `--state-play`,
+   `--state-pass`). ⚠️ Visible change: the WITHHELD badge is neutral slate, not amber; amber stays
+   reserved for the counter-case. 3 tests.
+9. **U10:** vitest's default 5 s test timeout equalled the explicit 5 s `findBy` wait, so the wait
+   could never fire first. The describe block now allows 10 s. 21 clean runs after one failure on
+   the first run after the edit.
+10. **Copy with no measurement behind it.** "Provider unavailable" on every `/intelligence` fixture
+    row beside "The Odds API · Live-validated": the token means the fixture has no stored odds row,
+    so it now reads "No odds snapshot". `/match` defined CLV as "expected price movement" and said a
+    critical gap withholds the forecast (PSV has 2 critical gaps and a forecast; a critical gap
+    withholds the stake). A "SIGMOID" calibration chip sat beside "Top outcome probability:
+    Unavailable" on a hypothetical matchup; it now needs a published forecast (1 test).
+11. **Capture history for D1.** `/health` → `components.prediction_capture.recent` keeps the last
+    48 passes that had work to do, each with `duration_ms`, counts and process RSS, so the 9 Oct
+    burst can be read afterwards instead of by polling every five minutes. Lost on restart. 1 test.
+12. **Memory: a correction to v10 D1, not a defect.** One process read RSS 398 / working set 437 /
+    headroom 74 MB at 12:24 UTC (`/health` degraded; its line is 15% of 512 MB = 77 MB), then RSS
+    354 / working set 344 / headroom 167 MB at 15:32 UTC with no restart. The low reading followed
+    a burst of about 30 concurrent requests from two open tabs at 12:05. Import cost is unchanged
+    between `fc7749c` and `63f9bf2` (450 MB locally for both; 3,754 vs 3,755 modules). Render
+    recorded no `server_failed` event in 7 days. So headroom must be judged at its peak during
+    the burst, split into anon and file memory (the breakdown another session added to `/health`,
+    not yet merged), not from one reading.
+13. **C6 drafted (v10 P1).** `reports/research/c6-served-generation-vs-close-protocol.json`,
+    sha256 `6dc8a2d6c883edc9d16db7562e963ce53ea8a885f36b6943eeee5f8d2d9f1d63`, registry entry `C6`
+    in state `PROPOSED` (the registry has no `PROTOCOL_FROZEN` state). Open for O8: which log
+    writers count (only `interactive_full_analysis` captures pass the pre-kickoff check), the seed
+    (42 proposed), the milestone sample cut, whether `/model-performance` shows `model_vs_close`
+    before 200 (it does from 10 joined rows, at 2,000 replicates and seed 0), the bookmaker rule
+    (item 1), and three unadjusted looks.
+
+**Odds API quota:** 222 remaining and 278 used at 15:32 UTC (236 and 264 that morning), with no
+reset time reported. About 14 requests went on page views during the day.
+
+**Verification (2026-09-26, local, one heavy step at a time):** backend 2,773 passed, 18 skipped,
+1 xfailed, 0 failed (6 min 16 s); ruff clean; mypy 755, unchanged (ceiling 784); registry validator
+17 experiments, 0 warnings; web lint 0, typecheck 0, Vitest 452/452 across 66 files;
+`NODE_ENV=production` build exit 0 (shared first-load JS 103 kB); Playwright desktop and mobile
+4/4; screenshots of the live PSV payload at 1280 and 360 px with 0 px horizontal overflow.
 
 ## 157. Directive v9 phases 1–2: scheduled prediction capture, honest pending metrics, bounded evidence tables, and five more places the pages said something unmeasured — RESOLVED (verify after deploy)
 
@@ -131,24 +532,6 @@ run. A load flake, not this change.
 - football-data.org reads `LIVE_VERIFIED` between fixture syncs on `/api/health`.
 - The first hourly retention pass deletes about 2,680 health-log rows (Render log
   `provider_evidence_retention deleted=`).
-
-**Post-deploy verification, 2026-09-26** (#247 merged 11:26 UTC as `63f9bf2`; the backend
-started 11:29):
-- Web and backend both serve `63f9bf2`.
-- `prediction_capture`: `outcome: "ok"`, `due: 0`, `duration_ms: 8.4`. Nothing is due until 9 Oct.
-- `/api/v1/model-performance/summary`: HTTP 200, `METRICS_UNAVAILABLE`.
-- football-data.org: `LIVE_VERIFIED`, 6,765 retained observations (9,281 before).
-- Retention, 11:30:17 UTC: deleted 2,701 health-log rows, 2,701 request summaries and 2,662 quota
-  observations.
-- ⚠️ **Memory headroom was 82 MB at 15 min and 74 MB at 63 min** (RSS 390, then 398 MB; working
-  set 429, then 437 MB). That is under D1's 100 MB bar and just under `/health`'s own 15% warning
-  line (77 MB). RSS matches earlier boots (v8: 400 MB at 15 min). The working set, however,
-  sits 39 MB above RSS, and `/health` could not say what that memory is. The gap did not shrink
-  over the hour, so it is not yet shown to be reclaimable cache. Render recorded no
-  `server_failed` or restart events in the previous 7 days. `/health` now also reports
-  `cgroup_anon_mb` and `cgroup_active_file_mb` from `memory.stat`, so the next reading can tell
-  process growth from warm page cache. Re-read it before 9 Oct; if `anon` explains the gap,
-  directive v10 D1's fallback applies.
 
 ## 156. Weather closed: F3b (wind, gusts, heavy rain) is null as well — CLOSED / REJECT
 
@@ -2036,7 +2419,7 @@ other three pass against a completely unfixed component.
 
 ## 118. The ADR-0011 per-fixture staking disclosure is inert in production: the panel that renders it asks for no predictions
 
-**Tier:** `OPEN — OPERATOR DECISION` (found 2026-09-20)
+**Tier:** `CLOSED — SUPERSEDED` 2026-09-27 (found 2026-09-20). The ADR-0011 operator override was removed in #228; live `/health` staking reads `basis: NONE`, `is_override: false`, so there is no override for a per-fixture chip to disclose. Reopen only if an override is authorized again.
 **Files:** `apps/web/src/lib/api.ts:943`, `apps/web/src/app/api/upcoming/route.ts`
 
 Decision: OPTION_A
@@ -12053,7 +12436,9 @@ done and tested. `--apply`, done and verified.
 
 ---
 
-## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **REGRESSED 2026-09-13: live production again reports HTTP 401**
+## 22. `the_odds_api` API key leaked in production logs (fixed) + confirmed invalid (401) — **REGRESSED 2026-09-13: live production again reports HTTP 401** — working again, live-verified 2026-09-27
+
+**Status, 2026-09-27 (DEBT 160):** the 401 regression below is over. Live `/api/v1/providers/evidence` reports `the_odds_api` quota observed (194 remaining, 306 used) and the PSV full analysis carries a Pinnacle price captured 2026-09-26T22:59Z. The key works in production; the remaining Odds API risk is quota (O7), not authentication. The local `.env` key still returns 401 (a different key).
 
 **⚠️ Status correction, 2026-09-13 (directive v7.3 P16 deployment-integrity
 check):** the 2026-08-17 "RESOLVED" verdict below is **contradicted by fresh

@@ -173,7 +173,10 @@ describe("full-analysis Zod contract and presentation", () => {
     }));
     expect(view.primaryDecision).toBe("No bet");
     expect(view.decisionState).toBe("WITHHELD");
-    expect(view.decisionHeadline).toBe("Not evaluable");
+    // v11 U11: the headline says why (the badge carries the state), and a
+    // blocking code is never mislabelled "not enough data".
+    expect(view.decisionHeadline).toBe(view.reason);
+    expect(view.decisionHeadline).not.toMatch(/Not evaluable|Not enough verified data/);
     expect(view.stakeFraction).toBe(0);
     expect(view.kellyGaugeRatio).toBe(0);
   });

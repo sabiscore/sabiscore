@@ -1,3 +1,5 @@
+import { siteUrl as canonicalSiteUrl } from "@/lib/site-url";
+
 /**
  * Programmatic Schema.org Structured Data Generators for SabiScore SEO.
  * Strictly adheres to Google Search Central specifications for SportsEvent,
@@ -18,7 +20,7 @@ export interface SportsEventData {
 }
 
 export function generateSportsEventJsonLd(data: SportsEventData) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sabiscore.com";
+  const siteUrl = canonicalSiteUrl();
   const eventUrl = data.url || `${siteUrl}/match/${encodeURIComponent(data.matchId)}?league=${encodeURIComponent(data.league)}`;
 
   return {
@@ -59,7 +61,7 @@ export interface SportsTeamData {
 }
 
 export function generateSportsTeamJsonLd(data: SportsTeamData) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sabiscore.com";
+  const siteUrl = canonicalSiteUrl();
   return {
     "@context": "https://schema.org",
     "@type": "SportsTeam",
@@ -80,7 +82,7 @@ export interface BreadcrumbItem {
 }
 
 export function generateBreadcrumbJsonLd(items: BreadcrumbItem[]) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://sabiscore.com";
+  const siteUrl = canonicalSiteUrl();
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

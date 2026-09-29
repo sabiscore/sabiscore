@@ -399,3 +399,23 @@ def test_scheduled_stream_intervals_match_the_schedule() -> None:
         "UPCOMING": main._FIXTURE_SYNC_INTERVAL_SECONDS,
         "RESULTS": main._SETTLEMENT_SYNC_INTERVAL_SECONDS,
     }
+
+
+async def test_cadence_names_the_providers_a_scheduled_task_calls(factory) -> None:
+    # Directive v10 U7: ESPN, API-Football and Sportmonks are called only when a
+    # person asks for evidence, so ESPN's six-day-old observation (live
+    # 2026-09-26) measures traffic, not an outage. Fixture sync and settlement
+    # call football-data.org; the CLV tick calls The Odds API.
+    providers = ["football_data_org", "the_odds_api", "espn", "api_football", "sportmonks"]
+    async with factory() as session:
+        evidence = await latest_provider_evidence(
+            session, providers, now=datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
+        )
+
+    assert {p: evidence[p]["cadence"] for p in providers} == {
+        "football_data_org": "scheduled",
+        "the_odds_api": "scheduled",
+        "espn": "on_demand",
+        "api_football": "on_demand",
+        "sportmonks": "on_demand",
+    }

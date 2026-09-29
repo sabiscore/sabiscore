@@ -14,7 +14,7 @@ from ..core.redaction import redact_text
 from ..db.models import Odds
 from ..monitoring.metrics import metrics_collector
 from ..providers.base import ProviderStatus
-from ..providers.the_odds_api import TheOddsAPIProvider
+from ..providers.the_odds_api import TheOddsAPIProvider, bookmaker_preference
 from .market_observation_service import _parse_datetime
 from .team_identity import select_unique_by_team_names
 
@@ -198,7 +198,11 @@ class OddsService:
             )
         if matched is not None:
             _event_teams, event_records = matched
-            for record in event_records:
+            # Same bookmaker rule as market capture, so the price a forecast
+            # records and the close it is judged against are one book.
+            for record in sorted(
+                event_records, key=lambda r: bookmaker_preference(r.get("bookmaker"))
+            ):
                 odds = self._coherent_snapshot(record)
                 if odds is not None:
                     self.cache.set(cache_key, odds, ttl=300)

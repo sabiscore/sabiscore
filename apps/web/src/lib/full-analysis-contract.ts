@@ -1,3 +1,4 @@
+import { formatLagosTimestamp } from "./lagos-time";
 import { z } from "zod";
 
 const verdictSchema = z.enum([
@@ -174,6 +175,21 @@ export const fullMatchAnalysisSchema = z
             }),
           )
           .length(3),
+        // Directive v10 U6: the earliest pre-kickoff price the same bookmaker
+        // quoted for this fixture. A first sighting, never an opening line.
+        first_seen: z
+          .object({
+            bookmaker: z.string(),
+            captured_at: z.string().datetime({ offset: true }),
+            home_win: z.number().gt(1),
+            draw: z.number().gt(1),
+            away_win: z.number().gt(1),
+          })
+          .nullable()
+          .optional(),
+        // v11 U13: the book and capture time of the prices above, when known.
+        bookmaker: z.string().nullable().optional(),
+        captured_at: z.string().datetime({ offset: true }).nullable().optional(),
       })
       .nullable()
       .optional(),
@@ -413,13 +429,7 @@ function relativeTime(iso: string, now: Date): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function formatLagosTimestamp(iso: string): string {
-  return new Intl.DateTimeFormat("en-NG", {
-    timeZone: "Africa/Lagos",
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
-}
+export { formatLagosTimestamp };
 
 /**
  * Plain-language readings of the backend's evidence codes.
@@ -434,11 +444,19 @@ export function formatLagosTimestamp(iso: string): string {
  * reason. Keep in sync with the `critical_gaps.append(...)` sites in
  * `backend/src/api/endpoints/full_analysis.py` and `upcoming_match_service.py`.
  */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 const EVIDENCE_CODE_COPY: Record<string, string> = {
   FIXTURE_IDENTITY_UNVERIFIED:
     "this matchup could not be tied to a scheduled fixture, so team history cannot be verified",
+  // is_synthetic: EITHER side has no match history OR the market inputs were
+  // placeholders. It used to say form, head-to-head AND market were all missing;
+  // live 2026-09-26 a hypothetical Arsenal–Bournemouth had form and head-to-head,
+  // and only the market fields were gapped.
   REQUIRED_MODEL_INPUTS_UNAVAILABLE:
-    "the inputs the model requires — recent form, head-to-head, and a coherent market — are not available",
+    "an input the model requires is missing: a team's match history or a usable market price",
   MODEL_PREDICTION_UNAVAILABLE: "the certified model could not produce a prediction",
   MODEL_GENERATION_UNCERTIFIED: "this model hasn't passed certification yet",
   MODEL_UNCERTAINTY_UNAVAILABLE: "confidence range not available for this fixture",
@@ -453,7 +471,7 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
 
   // ── Feature-level evidence gap codes (emitted by full_analysis.py and upcoming_match_service.py)
   // Convention: lowercase clause fragment, interpolated after an em-dash by the caller.
-  // e.g. `Not enough verified data — ${describeEvidenceCode(code)}.`
+  // e.g. `Sources disagree — ${describeEvidenceCode(code)}.`
   ppda_ratio: "pressing-intensity data is not published for this match",
   progressive_carry_diff: "ball-carrying data is not published for this match",
   set_piece_xg_diff: "set-piece chance quality is not available yet",
@@ -471,7 +489,7 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   // leaks to the user. The canonical UPPERCASE entries above are the authoritative copies.
   model_generation_uncertified: "this model hasn't passed certification yet",
   required_model_inputs_unavailable:
-    "the inputs the model requires — recent form, head-to-head, and a coherent market — are not available",
+    "an input the model requires is missing: a team's match history or a usable market price",
 
   // ── Staking disclosure codes (ADR-0011, emitted by upcoming_match_service.py)
   // These are not evidence gaps: they describe WHY a stake is or is not shown,
@@ -577,7 +595,10 @@ export function mapFullAnalysisPresentation(
   const reason = data.evidence_quality.conflicts[0]
     ? `Sources disagree — ${describeEvidenceCode(data.evidence_quality.conflicts[0])}.`
     : data.evidence_quality.critical_gaps[0]
-      ? `Not enough verified data — ${describeEvidenceCode(data.evidence_quality.critical_gaps[0])}.`
+      ? // Not "Not enough verified data —": most blocking codes are not data
+        // (certification, uncertainty), and PSV read "not enough data" with a
+        // resolved market and forecast (2026-09-26).
+        `${sentenceCase(describeEvidenceCode(data.evidence_quality.critical_gaps[0]))}.`
       : !predictionAvailable
         ? data.is_reduced_evidence_baseline
           ? "Official probabilities are unavailable because only a diagnostic baseline was produced."
@@ -602,6 +623,12 @@ export function mapFullAnalysisPresentation(
       : blocked || !data.odds_edge
         ? "WITHHELD"
         : "PASS";
+  const decisionReason =
+    decisionState === "WITHHELD" && !blocked
+      ? "No verified market price is available to evaluate this forecast against."
+      : reason;
+  // v11 U11: the card showed three state words at once ("Withheld · Partial Data ·
+  // Not evaluable"). The badge is the state; a withheld card's headline is why.
   const decisionHeadline =
     decisionState === "PLAY"
       ? `Qualifies · stake ${(effectiveStake * 100).toFixed(1)}% of bankroll`
@@ -609,11 +636,7 @@ export function mapFullAnalysisPresentation(
         ? watchlistOnly
           ? "Watchlist only — no stake"
           : "No value at this price"
-        : "Not evaluable";
-  const decisionReason =
-    decisionState === "WITHHELD" && !blocked
-      ? "No verified market price is available to evaluate this forecast against."
-      : reason;
+        : decisionReason;
 
   return {
     primaryDecision,

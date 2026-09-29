@@ -27,9 +27,9 @@ class BetfairExchangeScraper(BaseScraper):
     """
     Scraper for Betfair Exchange odds.
 
-    Note: Full Betfair API requires authentication. This scraper
-    provides a fallback using public data sources and simulation
-    for development purposes.
+    Note: Full Betfair API requires authentication. Without credentials and a
+    finished API integration this scraper fails closed (returns None); it never
+    simulates odds, so nothing can reach `_merge_exchange_odds` as a price.
 
     In production, integrate with official Betfair Exchange API:
     https://developer.betfair.com/exchange-api/
@@ -61,8 +61,8 @@ class BetfairExchangeScraper(BaseScraper):
         """
         Fetch exchange odds for a match.
 
-        In development mode, returns simulated odds based on
-        typical exchange spreads and liquidity patterns.
+        Returns None unless the official API is configured and implemented.
+        It never simulates odds.
         """
         # If API credentials available, use official API
         if self.api_key and self.session_token:

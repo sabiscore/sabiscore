@@ -6,6 +6,14 @@ Date: 2026-09-26. v8 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V8.md`) §1–§7 and
 v10 replaces v9's §0 evidence and §5 execution order. v9's phases 1 and 2 are done in code
 (`docs/DEBT.md` item 157) on branch `fix/directive-v9-phase1-2`, which is not yet merged.
 
+**Status, 2026-09-26 evening (superseded by `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V11.md`):**
+- Phase 0 is done: #247 merged as `63f9bf2`, and all four post-deploy checks pass.
+- P1 is drafted: C6 is `PROPOSED`, awaiting O8.
+- U5–U10 are done (`docs/DEBT.md` item 158).
+- Correction to §3: the client Sentry SDK was *not* loaded lazily. `instrumentation-client.ts` imported
+  it statically, and that was the 198 kB shared bundle; it is now 103 kB.
+- v11 replaces §0 and §5.
+
 The brief behind v10 is the same one v8 and v9 answered, so their corrected premises still hold.
 Here they are against today's numbers:
 

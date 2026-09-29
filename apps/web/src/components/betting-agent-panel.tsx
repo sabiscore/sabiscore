@@ -172,7 +172,7 @@ function BettingAgentPanelInner({
 
   return (
     <section
-      aria-label="RL betting agent recommendation"
+      aria-label="Stake recommendation"
       className={cn(
         "glass-card p-8 space-y-6 border",
         premiumVisuals
@@ -190,7 +190,7 @@ function BettingAgentPanelInner({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
               d="M12 8c-1.657 0-3 1.12-3 2.5S10.343 13 12 13s3 1.12 3 2.5S13.657 18 12 18m0-10V6m0 12v-2m8-4a8 8 0 11-16 0 8 8 0 0116 0z" />
           </svg>
-          RL Betting Agent
+          Stake recommendation
         </h2>
         <span className={cn("text-xs px-2.5 py-1 rounded-full border font-semibold", decisionPill)}>
           {decisionBadgeText}
@@ -269,9 +269,10 @@ function BettingAgentPanelInner({
 
       {/* Disclaimer */}
       <p className="text-[10px] text-slate-600 leading-relaxed border-t border-slate-800/50 pt-3">
-        Advisory only — research mode active. This recommendation does not place bets and staking controls are disabled. Kelly-fraction fallback is
-        active when no trained SAC model is present at{" "}
-        <code className="text-slate-500">settings.rl_agent_path</code>.
+        {/* No trained policy ships (DEBT 160), so the fractional-Kelly rule sizes
+            every stake; the old line named an internal config path instead. */}
+        Advisory only — research mode active. This recommendation does not place bets, and staking stays disabled
+        until the model generation is certified. Stakes follow a fractional-Kelly rule.
       </p>
     </section>
   );

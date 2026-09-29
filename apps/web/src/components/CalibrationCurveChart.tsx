@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { ShieldCheck, Info, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatLagosTimestamp } from "@/lib/lagos-time";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 // Shapes below are read directly from `_compute_calibration_metrics()` /
@@ -530,7 +531,7 @@ export function CalibrationCurveChart({
           <div>
             <dt className="text-slate-500">Generated</dt>
             <dd className="mt-0.5 text-slate-300">
-              {hasValidGeneratedAt ? <time dateTime={data.generated_at}>{generatedAt.toLocaleString()}</time> : "Unknown"}
+              {hasValidGeneratedAt ? <time dateTime={data.generated_at}>{formatLagosTimestamp(generatedAt)} WAT</time> : "Unknown"}
             </dd>
           </div>
         </dl>
