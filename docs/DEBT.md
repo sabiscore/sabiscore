@@ -1,5 +1,17 @@
 # SabiScore Debt Ledger
 
+## 170. Production Executive Directive V16.0 — Authoritative Production Governance Finalized
+
+**Tier:** `RESOLVED` in documentation and test verification, 2026-09-30.
+
+- Established comprehensive operational, quantitative, and architectural governance in `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V16.md`, superseding Directive V15.0.
+- Consolidated all four core architectural realities:
+  1. Resource-constrained data and feature engineering (512 MB cgroup v2 Linux container on Render, 8 GB local workstation budget, single-thread CPU runtime clamping `OMP_NUM_THREADS="1"`, memory-profiled Crawlee Node.js worker with `--max-old-space-size=384`).
+  2. Model serving and continuous calibration loop (6-league stacked ensembles, closed-form Platt scaling sigmoid arithmetic, 8-model in-memory LRU cache retention, frozen C6 Protocol with ISO-week cluster bootstrap, Shin de-vigging bisection to $10^{-12}$).
+  3. Quantitative UX (Next.js 15, Obsidian Nocturne v2 design language, true vs. fair vs. implied probability dumbbell, tri-state PLAY/PASS/WITHHELD verdict, unconditional CounterCase panel, W3C distributed trace context propagation).
+  4. NEXUS agent orchestration (deterministic Python asyncio production loops vs. offline multi-agent supervisor-planner-worker-evaluator protocols with file-and-hash handoffs and 8GB RAM protection).
+- Created `scripts/verify-directive-v16.mjs` and verified against all 11 verification commands in the authoritative matrix.
+
 ## 169. V15.2 Production Deep Audit — P2/P3 Artifact Version Drift Observations
 
 **Tier:** `TRACKED` — deferred to next model generation retraining cycle, 2026-09-30.
