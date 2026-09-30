@@ -10,7 +10,7 @@
   2. Model serving and continuous calibration loop (6-league stacked ensembles, closed-form Platt scaling, 8-model in-memory cache retention, frozen C6 Protocol, Shin de-vigging bisection).
   3. Quantitative UX (Next.js 15, Obsidian Nocturne v2 design language, true vs. fair vs. implied probability dumbbell, tri-state PLAY/PASS/WITHHELD verdict, unconditional CounterCase panel, W3C distributed trace context propagation).
   4. NEXUS agent orchestration (deterministic Python asyncio production loops vs. offline multi-agent supervisor/worker protocols with file-and-hash handoffs).
-- Verified against all 11 verification commands in the authoritative matrix.
+- Verified against all 11 verification commands in the authoritative matrix via `scripts/verify-directive-v15.mjs`, `scripts/verify-directive-v15.sh`, and `pnpm verify:directive`.
 
 ## 167. Hardware-constrained ML inference CPU thread contention & multi-league LRU cache eviction churn
 

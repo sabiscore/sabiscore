@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "repository_sha": "d0951dfc944b28d4be8b35cb622335a7ec7ddd73",
+  "deployment_sha": "a004dd98906d786eee3360086d6ce15347782999",
+  "model_generation": "v5_phase7-20260922@417b9b8ff7ce563d",
+  "feature_schema": "apex_v1_68",
+  "certification_state": "UNVERIFIED",
+  "promotion_state": "CANDIDATE",
+  "certification_policy_hash": "60f0da446690e35f75e04b0a9e78ef22ffe6ccf1b5e298e745b18715b97",
+  "c6_protocol_hash": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+  "migration_head": "0014_social_auth_identities",
+  "provider_status": {
+    "football_data_org": "healthy",
+    "the_odds_api": "healthy",
+    "espn": "supplementary",
+    "statsbomb": "cached",
+    "understat": "supplementary"
+  },
+  "fixture_status": {
+    "upcoming_scheduled_matches": 10,
+    "lookahead_days": 30,
+    "leagues_covered": ["EREDIVISIE", "BUNDESLIGA", "LIGUE_1", "LA_LIGA", "EPL", "SERIE_A"],
+    "next_verified_kickoff": "2026-10-09T18:00:00Z"
+  },
+  "test_status": {
+    "runner": "scripts/verify-directive-v15.mjs",
+    "total": 11,
+    "passed": 11,
+    "failed": 0,
+    "status": "ALL_PASSED"
+  },
+  "security_status": {
+    "secrets_in_repo": "NONE",
+    "redaction_active": true,
+    "auth_tokens_verified": true,
+    "w3c_trace_propagation": true,
+    "csp_eval_banned": true
+  },
+  "observability_status": {
+    "sentry_configured": true,
+    "opentelemetry_initialized": true,
+    "structured_logging": true,
+    "cgroup_memory_monitoring": true
+  },
+  "release_status": "READY — ANALYTICAL / STAKING WITHHELD"
+}

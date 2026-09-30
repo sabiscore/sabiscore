@@ -456,10 +456,10 @@ Executes all 11 verification steps sequentially, automatically resolves local Py
 pnpm verify:directive
 
 # Or directly via Node:
-node scripts/verify-directive-v14.mjs
+node scripts/verify-directive-v15.mjs
 
 # Or in Git Bash / Linux / macOS:
-bash scripts/verify-directive-v14.sh
+bash scripts/verify-directive-v15.sh
 ```
 
 ### Option B: Individual Verification Commands (Portable & Safe)

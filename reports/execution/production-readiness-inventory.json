@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-09-30T15:35:00Z",
+  "inventory_version": "15.0.0",
+  "repository": {
+    "name": "sabiscore/sabiscore",
+    "branch": "perf/directive-v14-hardware-hardening",
+    "head_sha": "d0951dfc944b28d4be8b35cb622335a7ec7ddd73",
+    "clean_worktree": false,
+    "divergence_from_master": "1 commit ahead (d0951df)"
+  },
+  "deployment": {
+    "backend_provider": "Render",
+    "backend_url": "https://sabiscore-api-bav1.onrender.com",
+    "deployed_sha": "a004dd98906d786eee3360086d6ce15347782999",
+    "status": "healthy",
+    "uptime_seconds": 8102,
+    "frontend_provider": "Vercel",
+    "frontend_url": "https://web-32ahwz29p-oversabis-projects.vercel.app"
+  },
+  "quantitative_model": {
+    "generation": "v5_phase7-20260922@417b9b8ff7ce563d",
+    "version": "v5_phase7",
+    "certification_state": "UNVERIFIED",
+    "promotion_state": "CANDIDATE",
+    "staking_permitted": false,
+    "staking_basis": "NONE",
+    "feature_schema": "apex_v1_68",
+    "feature_count": 68,
+    "target_leagues": [
+      "epl",
+      "la_liga",
+      "bundesliga",
+      "serie_a",
+      "ligue_1",
+      "eredivisie"
+    ],
+    "model_cache_limit": 8,
+    "artifacts_on_disk": 12,
+    "resident_heap_mb": 55,
+    "active_generation_manifest": "backend/models/active_generation.json"
+  },
+  "protocols_and_governance": {
+    "active_directive": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V15.md",
+    "supersedes": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V14.md",
+    "debt_ledger": "docs/DEBT.md (Items 1-168)",
+    "c6_protocol": {
+      "path": "reports/research/c6-served-generation-vs-close-protocol.json",
+      "version": "C6-2026-09-27",
+      "sha256": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+      "multiplicity_correction": "Bonferroni alpha = 0.05 / 3 = 0.016667 (98.33% CI)",
+      "cluster_bootstrap": "ISO-week, 10,000 replicates, seed 42",
+      "milestones": [200, 500, 1000]
+    },
+    "certification_policy_hash": "60f0da446690e35f75e04b0a9e78ef22ffe6ccf1b5e298e745b18715b97"
+  },
+  "infrastructure": {
+    "database": {
+      "type": "PostgreSQL 16",
+      "migration_head": "0014_social_auth_identities",
+      "status": "ready",
+      "applied_head": "0014_social_auth_identities"
+    },
+    "cache": {
+      "type": "Redis 7 (External Upstash/Render)",
+      "status": "ready",
+      "tier1_redis_enabled": true,
+      "tier1_redis_available": true,
+      "tier1_circuit_open": false
+    },
+    "cgroup_memory": {
+      "limit_mb": 512,
+      "working_set_mb": 334,
+      "process_rss_mb": 329,
+      "headroom_mb": 177
+    }
+  },
+  "provider_status": {
+    "football_data_org": {
+      "status": "healthy",
+      "enabled": true,
+      "role": "Fixture identity, schedules, match scores",
+      "candidates_received": 50
+    },
+    "the_odds_api": {
+      "status": "healthy",
+      "enabled": true,
+      "role": "Market prices, Pinnacle closing odds capture",
+      "live_validated": true
+    },
+    "espn": {
+      "status": "supplementary",
+      "enabled": true,
+      "role": "Lowest precedence unauthenticated supplemental metrics"
+    },
+    "statsbomb": {
+      "status": "cached",
+      "enabled": true,
+      "role": "Tactical features offline cache"
+    }
+  },
+  "fixture_and_settlement_evidence": {
+    "total_candidates_received": 50,
+    "upcoming_scheduled_matches": 10,
+    "settled_joined_predictions_under_v5": 0,
+    "interim_metric_state": "METRICS_UNAVAILABLE",
+    "reason": "Joined sample count (0) is below frozen C6 minimum milestone threshold of 200 settled pairs"
+  },
+  "verification_suite": {
+    "runner": "scripts/verify-directive-v15.mjs",
+    "command": "pnpm verify:directive",
+    "total_steps": 11,
+    "passed_steps": 11,
+    "failed_steps": 0,
+    "status": "ALL_PASSED"
+  },
+  "unresolved_blockers": [],
+  "operator_only_blockers": [
+    {
+      "id": "OP-01",
+      "type": "TIME/VOLUME_BLOCKER",
+      "description": "Accumulation of 200 settled pre-kickoff joined forecasts against Pinnacle closing lines to trigger first formal C6 bootstrap evaluation",
+      "current_count": 0,
+      "threshold": 200,
+      "impact": "Staking remains withheld; performance metrics report METRICS_UNAVAILABLE"
+    },
+    {
+      "id": "OP-02",
+      "type": "OPERATOR_BLOCKER",
+      "description": "Formal human operator review and sign-off before modifying certification_state in backend/models/active_generation.json",
+      "impact": "Autonomous agents are prohibited from modifying certification_state"
+    }
+  ],
+  "stale_documentation_detected": [
+    {
+      "file": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V14.md",
+      "status": "SUPERSEDED",
+      "superseded_by": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V15.md"
+    },
+    {
+      "file": "scripts/verify-directive-v14.mjs",
+      "status": "MAINTAINED_FOR_BACKWARDS_COMPATIBILITY",
+      "canonical_runner": "scripts/verify-directive-v15.mjs"
+    }
+  ]
+}
