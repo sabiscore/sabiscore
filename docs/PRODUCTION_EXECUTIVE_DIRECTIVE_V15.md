@@ -4,7 +4,7 @@
 **Date**: 2026-09-30  
 **Status**: ACTIVE / MANDATORY PRODUCTION DIRECTIVE  
 **Supersedes**: Directive V14.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V14.md`), Directive V13.0, and all predecessor directives.  
-**Ground Truth Authorities**: `docs/DEBT.md` (Items 1–167), `backend/src/api/main.py`, `backend/models/active_generation.json`, `apps/web/src/`, `NEXUS.md`, `AGENTS.md`.
+**Ground Truth Authorities**: `docs/DEBT.md` (Items 1–168), `backend/src/api/main.py`, `backend/models/active_generation.json`, `apps/web/src/`, `NEXUS.md`, `AGENTS.md`.
 
 ---
 

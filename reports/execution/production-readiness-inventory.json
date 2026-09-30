@@ -1,20 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "generated_at": "2026-09-30T15:35:00Z",
-  "inventory_version": "15.0.0",
+  "generated_at": "2026-09-30T17:50:00Z",
+  "inventory_version": "15.1.0",
   "repository": {
     "name": "sabiscore/sabiscore",
-    "branch": "perf/directive-v14-hardware-hardening",
-    "head_sha": "d0951dfc944b28d4be8b35cb622335a7ec7ddd73",
-    "clean_worktree": false,
-    "divergence_from_master": "1 commit ahead (d0951df)"
+    "branch": "master",
+    "head_sha": "6d48175c373226452eb51bbf0a415a9a33db98d1",
+    "clean_worktree": true,
+    "divergence_from_master": "0 commits (HEAD is master)"
   },
   "deployment": {
     "backend_provider": "Render",
     "backend_url": "https://sabiscore-api-bav1.onrender.com",
     "deployed_sha": "a004dd98906d786eee3360086d6ce15347782999",
     "status": "healthy",
-    "uptime_seconds": 8102,
+    "uptime_seconds": 13222,
     "frontend_provider": "Vercel",
     "frontend_url": "https://web-32ahwz29p-oversabis-projects.vercel.app"
   },
@@ -70,9 +70,9 @@
     },
     "cgroup_memory": {
       "limit_mb": 512,
-      "working_set_mb": 334,
-      "process_rss_mb": 329,
-      "headroom_mb": 177
+      "working_set_mb": 317,
+      "process_rss_mb": 311,
+      "headroom_mb": 194
     }
   },
   "provider_status": {

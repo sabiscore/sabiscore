@@ -1,7 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "repository_sha": "d0951dfc944b28d4be8b35cb622335a7ec7ddd73",
+  "repository_sha": "6d48175c373226452eb51bbf0a415a9a33db98d1",
+  "base_sha": "a004dd98906d786eee3360086d6ce15347782999",
   "deployment_sha": "a004dd98906d786eee3360086d6ce15347782999",
+  "deployment_verified_at": "2026-09-30T16:50:31Z",
   "model_generation": "v5_phase7-20260922@417b9b8ff7ce563d",
   "feature_schema": "apex_v1_68",
   "certification_state": "UNVERIFIED",

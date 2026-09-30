@@ -18,8 +18,10 @@ The platform is **fully operational** across its end-to-end production path (dat
 ## 2. 24-Phase Audit & Verification Summary
 
 ### Phase 0: Workspace & Repository Forensics
-- **Repository SHA**: `d0951dfc944b28d4be8b35cb622335a7ec7ddd73`
-- **Branch**: `perf/directive-v14-hardware-hardening` (1 commit ahead of master: `d0951df`)
+- **Repository SHA**: `6d48175c373226452eb51bbf0a415a9a33db98d1`
+- **Branch**: `master` (Clean worktree, up to date with origin/master)
+- **Base SHA**: `a004dd98906d786eee3360086d6ce15347782999` (Deployed SHA on Render)
+- **Deployment Parity**: Functional parity established — commit `6d48175` contains zero backend Python or web frontend application changes (`git diff a004dd9..6d48175` affects only docs, reports, and scripts).
 - **Inventory Artifact**: Generated `reports/execution/production-readiness-inventory.json`.
 
 ### Phase 1: Governance Reconciliation
