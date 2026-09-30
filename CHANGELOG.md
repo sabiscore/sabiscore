@@ -5,7 +5,19 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased — Directive v8 Phases 1–3: memory headroom, model-vs-close evidence, decision states (2026-09-25)
+## Unreleased — Directive V14.0 Production Readiness & Engineering Council Hardening (2026-09-30)
+
+### Performance & Hardware Constraints
+
+- **Single-Thread CPU Inference Clamping**: Pinned `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `VECLIB_MAXIMUM_THREADS`, and `NUMEXPR_NUM_THREADS` to `"1"` at backend startup to eliminate CPU thread contention on low-VRAM CPU environments and Render 512 MB cgroup containers (DEBT 167).
+- **Multi-League Cache Retention**: Expanded `MAX_CACHED_MODELS` in `PredictionService` from 5 to 8, eliminating LRU cache thrashing across all 6 canonical European domestic leagues (DEBT 167).
+
+### Observability & Resilience
+
+- **W3C Distributed Tracing Propagation**: Augmented `proxyHeaders` in `@sabiscore/web` to forward incoming `X-Request-ID`, `traceparent`, and `tracestate` headers across Next.js API route proxies to FastAPI, with unit test coverage in `src/lib/proxy-utils.test.ts` (DEBT 167).
+- **Cross-Platform Verification Matrix**: Added portable automated verification runner `verify-directive-v14.mjs` and `verify:directive` script validating all 11 core architectural gates (DEBT 166).
+
+## Directive v8 Phases 1–3: memory headroom, model-vs-close evidence, decision states (2026-09-25)
 
 ### Fixed
 

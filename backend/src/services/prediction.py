@@ -50,7 +50,7 @@ class PredictionService:
     _metadata_cache: Dict[str, Dict[str, Any]] = {}
     _cache_lock = threading.Lock()
     _cache_access_times: Dict[str, float] = {}  # Track LRU
-    MAX_CACHED_MODELS = 5  # Limit memory footprint
+    MAX_CACHED_MODELS = 8  # Retain all 6 canonical domestic leagues + cups to prevent LRU thrashing
     LEAGUE_DISPLAY_NAMES = {
         "epl": "EPL",
         "bundesliga": "Bundesliga",

@@ -1,5 +1,22 @@
 # SabiScore Debt Ledger
 
+## 167. Hardware-constrained ML inference CPU thread contention & multi-league LRU cache eviction churn
+
+**Tier:** `RESOLVED` in code and configuration, 2026-09-30.
+
+- **Defect 1 (OpenMP/BLAS thread contention on CPU-only hardware)**:
+  - *Context*: Serving concurrent API inference requests on low-VRAM CPU developer environments and Render 512 MB cgroup containers.
+  - *Root Cause*: Native C extensions (OpenMP, OpenBLAS, MKL, NumExpr) default to spawning worker threads equal to total physical CPU cores for single-row matrix multiplication, inducing thread context switching latency and transient heap expansion.
+  - *Remedy*: Pinned runtime single-thread defaults (`OMP_NUM_THREADS="1"`, `OPENBLAS_NUM_THREADS="1"`, `MKL_NUM_THREADS="1"`, `VECLIB_MAXIMUM_THREADS="1"`, `NUMEXPR_NUM_THREADS="1"`) at the entrypoint of `backend/src/api/main.py`.
+- **Defect 2 (LRU cache eviction under 6-league round queries)**:
+  - *Context*: `PredictionService._ensemble_cache` in `backend/src/services/prediction.py`.
+  - *Root Cause*: `MAX_CACHED_MODELS` was hardcoded to 5. When a client queried all 6 canonical domestic leagues (EPL, La Liga, Bundesliga, Serie A, Ligue 1, Eredivisie), the 6th league evicted the 1st league, forcing redundant disk deserialization on subsequent requests.
+  - *Remedy*: Expanded `MAX_CACHED_MODELS` to 8, allowing all 6 domestic leagues and cup models to reside comfortably within memory (each ensemble is ~1.8 MB, total footprint ~11 MB).
+- **Defect 3 (Distributed tracing gap between Next.js proxy and FastAPI)**:
+  - *Context*: API proxies in Next.js (`/api/predict`, `/api/upcoming`).
+  - *Root Cause*: `proxyHeaders()` generated static authentication headers, dropping incoming W3C `traceparent`, `tracestate`, and `X-Request-ID` correlation headers.
+  - *Remedy*: Augmented `proxyHeaders(incoming)` to inspect incoming headers and propagate correlation IDs and W3C trace context to FastAPI, verified by new unit tests in `apps/web/src/lib/proxy-utils.test.ts`.
+
 ## 166. Verification matrix shell portability defects — bare `pytest` PATH absence on Windows/MSYS2 and working directory mutation under `cd apps/web`
 
 **Tier:** `RESOLVED` in tooling and documentation, 2026-09-30.
