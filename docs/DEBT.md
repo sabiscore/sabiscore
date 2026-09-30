@@ -1,5 +1,41 @@
 # SabiScore Debt Ledger
 
+## 166. Verification matrix shell portability defects — bare `pytest` PATH absence on Windows/MSYS2 and working directory mutation under `cd apps/web`
+
+**Tier:** `RESOLVED` in tooling and documentation, 2026-09-30.
+
+- **Defect 1 (`bash: pytest: command not found`)**:
+  - *Context*: Running the 11-step verification matrix in MSYS2/Git Bash/UCRT64 on Windows under an activated virtual environment (`.venv`).
+  - *Root Cause*: Windows `.venv` installs Python CLI tools into `.venv/Scripts/` as `.exe` or `.cmd` wrappers. In MSYS2/Git Bash or non-symlinked shells, bare `pytest` is not exposed in the shell's `$PATH`, even when `python` is active. Additionally, invoking bare `pytest` from repository root omits `backend/pytest.ini`, failing to configure `pythonpath = src`.
+  - *Remedy*: Standardized all Python test invocations to `python -m pytest <path> -v -c backend/pytest.ini` (which executes through the active Python interpreter and explicitly loads the backend configuration).
+- **Defect 2 (`bash: cd: apps/web: No such file or directory`)**:
+  - *Context*: Multi-line sequential execution of verification commands 8 through 11.
+  - *Root Cause*: Step 8 used `cd apps/web && pnpm test ...`. When executed interactively, `cd apps/web` mutates the active shell's `$PWD` to `<repo>/apps/web`. Step 9 (`cd apps/web && pnpm test ...`) then evaluated relative to `apps/web/`, attempting to navigate to `apps/web/apps/web`, throwing `No such file or directory` and preventing steps 9, 10, and 11 from running.
+  - *Remedy*: In monorepos, commands must never mutate the caller's working directory. Standardized web test invocations to `pnpm --filter @sabiscore/web test <paths>` or non-mutating subshells `(cd apps/web && pnpm test ...)`.
+- **Unified Tooling**:
+  - Created `scripts/verify-directive-v14.mjs` (cross-platform Node.js runner with automated `.venv` discovery, shell-safe execution, and structured result formatting).
+  - Created `scripts/verify-directive-v14.sh` (POSIX/Bash runner).
+  - Added `"verify:directive": "node scripts/verify-directive-v14.mjs"` to root `package.json`.
+  - Updated `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V14.md` and `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V13.md` verification sections.
+
+## 165. Production Executive Directive V14.0 — Multi-Agent Engineering Council governance finalized
+
+**Tier:** `RESOLVED` in documentation and test verification, 2026-09-30.
+
+- Established comprehensive operational, quantitative, and architectural governance in `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V14.md`.
+- Finalized 4 core pillars:
+  1. Resource-constrained data and feature engineering (512 MB cgroup v2 Linux container on Render, 8 GB local workstation ceiling).
+  2. Model serving and calibration loop (6-league stacked ensembles, closed-form Platt scaling, frozen C6 Protocol, Shin de-vigging bisection).
+  3. Quantitative UX (Next.js 15, Obsidian Nocturne v2 design system, true vs. fair vs. implied probability dumbbell, tri-state PLAY/PASS/WITHHELD verdict, unconditional CounterCase panel).
+  4. NEXUS agent orchestration (deterministic Python asyncio production loops vs. offline multi-agent supervisor/worker protocols with file-and-hash handoffs).
+- Verified against all 11 verification commands in the authoritative matrix.
+
+## 164. Production Executive Directive V13.0 — Multi-Agent Engineering Council (superseded by V14.0)
+
+**Tier:** `RESOLVED` in documentation, 2026-09-29.
+
+- Codified platform invariants and verification suite across 10 operational domains.
+
 ## 163. Google sign-in never worked: python-jose rejected every real token on `at_hash` — RESOLVED in code (verify after deploy); v12 R1, U15, U16, U17 closed
 
 **Tier:** `RESOLVED` in code, 2026-09-28, branch `fix/directive-v12-google-at-hash`.
