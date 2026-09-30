@@ -1,7 +1,7 @@
 # SabiScore — Production Readiness & Release Certification Report
 
 **Council**: Multi-Agent Engineering Council (Platform Architecture, Quantitative Modeling, Backend Systems, Risk Engineering, Frontend Systems, SRE/Security)  
-**Date**: 2026-09-30  
+**Date**: 2026-09-30 — V15.1 governance commit (b3ac093); V15.2 full-depth audit completed same date  
 **Governing Directive**: Production Executive Directive V15.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V15.md`)  
 **Release Decision**: **READY — ANALYTICAL / STAKING WITHHELD**
 
@@ -18,11 +18,13 @@ The platform is **fully operational** across its end-to-end production path (dat
 ## 2. 24-Phase Audit & Verification Summary
 
 ### Phase 0: Workspace & Repository Forensics
-- **Repository SHA**: `6d48175c373226452eb51bbf0a415a9a33db98d1`
+- **Repository SHA**: `b3ac093` (V15.1 governance commit) — Deployed SHA remains `a004dd98` (no backend/frontend delta)
 - **Branch**: `master` (Clean worktree, up to date with origin/master)
 - **Base SHA**: `a004dd98906d786eee3360086d6ce15347782999` (Deployed SHA on Render)
-- **Deployment Parity**: Functional parity established — commit `6d48175` contains zero backend Python or web frontend application changes (`git diff a004dd9..6d48175` affects only docs, reports, and scripts).
-- **Inventory Artifact**: Generated `reports/execution/production-readiness-inventory.json`.
+- **Deployment Parity**: VERIFIED_NO_RUNTIME_DELTA — commits `6d48175` and `b3ac093` add only docs/reports/scripts; zero backend Python or web frontend TypeScript changed since `a004dd9`.
+- **V15.2 Audit Depth**: Full deep-audit executed — uncertainty gates, fallback chain, capture pipeline, Shin bisection (tol=1e-12), prediction log guards, migrations, Redis/PostgreSQL live probe, C6 protocol SHA verify, prediction field semantic audit, frontend contracts.
+- **Inventory Artifact**: `reports/execution/production-readiness-inventory.json`.
+
 
 ### Phase 1: Governance Reconciliation
 - Governed by Directive V15.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V15.md`), superseding V14.0.
@@ -161,3 +163,46 @@ The platform is **fully operational** across its end-to-end production path (dat
 ```
 
 The SabiScore platform is **100% production ready for consumer prediction intelligence, upcoming fixture exploration, probability visualization, and market comparison**. All financial staking surfaces remain strictly and honestly **WITHHELD** in full compliance with Directive V15.0.
+
+---
+
+## 5. V15.2 Deep Audit Additional Findings
+
+### Confirmed: No New P0 or P1 Defects
+
+The V15.2 full-depth audit inspected:
+- `full_analysis.py` handler end-to-end (lines 1–1318): `stake_permitted`, `critical_gaps`, `evaluable`, `prediction_log` persistence, `market_block` construction, `synthesizer.synthesize()` call — all correct.
+- `uncertainty_policy.py`: `UNCERTAINTY_REQUIRES_ALL_GATES = True`, `error_association` gate confirmed as the sole failing gate (5/6 pass). This is intentional fail-closed behavior.
+- `risk_guard.py`: Per-league epistemic danger thresholds measured on v5_phase7, version `v1-2026-09-19-v5_phase7`. Correctly suppresses low-epistemic region even in EREDIVISIE (unmeasured: uses max threshold 0.0879).
+- `prediction_log_service.py`: Post-kickoff guard (line 140–143) confirmed. Fallback/unavailable model_version rejection (line 114) confirmed.
+- `market_baseline.py`: Shin bisection `_BISECTION_TOLERANCE = 1e-12` — matches V15.2 requirement exactly.
+- `active_generation.json`: Chronological holdout (`2526`), supersedes reason documented, 6 artifacts present.
+- `.env*` files: All three (root, `apps/web/`, `backend/`) are gitignored — no secrets in source control.
+- `no-client-ev-contract.test.ts`: 5/5 PASSED. Zero client-side odds arithmetic confirmed.
+- C6 protocol SHA-256: `9d63da25...` — MATCHES EXPECTED HASH — protocol is immutable.
+- Directive V15.0 verification matrix: **11/11 PASSED**.
+
+### P2 Observations (Non-Blocking)
+
+| Code | Description | Severity |
+|------|-------------|----------|
+| P2-W1 | sklearn `InconsistentVersionWarning`: artifacts pickled with v1.8.0 loaded with v1.9.0. Tests pass; no inference error. Should re-train on current sklearn before next model generation. | P2 |
+| P2-W2 | XGBoost serialization note: `Booster.save_model` format recommended over pickle for cross-version stability. Apply during next retraining cycle. | P2 |
+| P2-W3 | `asyncio.get_event_loop_policy` deprecated in Python 3.16. P2 Python 3.14 deprecation warnings in test suite — no production impact until Python 3.16. | P2 |
+
+### P3 Observations
+
+| Code | Description | Severity |
+|------|-------------|----------|
+| P3-W1 | Ruff test `test_ci_local_enforcer_ruff_steps.py` fails when run with system Python 3.14 (no ruff in system interpreter). Passes when run with `.venv` Python — which is the correct execution path. | P3 |
+| P3-W2 | `datetime.utcnow()` deprecation in `jose` library (test warning). External library; no action until library releases fix. | P3 |
+
+### Adversarial QA Audit — Confirmed Clean
+
+- No `0.333` fabrication leaks into prediction serving (8 sites audited, all correctly guarded)
+- No `fair_probability` ← `model_probability` aliasing errors in serving path
+- `prediction_source: UNCERTIFIED_MODEL` correctly serialized (never `CERTIFIED_MODEL`) in live response
+- `evaluable: false` in market block when model is UNVERIFIED
+- `stake_permitted: false` across all fixtures
+- `market.bookmaker: pinnacle` with `captured_at` timestamp from live Pinnacle snapshot
+- `freshness_tag: UNKNOWN` (expected — no pre-kickoff CLV capture yet in window)

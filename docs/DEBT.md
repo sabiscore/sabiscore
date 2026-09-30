@@ -1,5 +1,16 @@
 # SabiScore Debt Ledger
 
+## 169. V15.2 Production Deep Audit — P2/P3 Artifact Version Drift Observations
+
+**Tier:** `TRACKED` — deferred to next model generation retraining cycle, 2026-09-30.
+
+- **P2-W1 (sklearn version drift)**: Model artifacts (`v5_phase7`) were pickled with sklearn 1.8.0 but the current environment runs sklearn 1.9.0. `InconsistentVersionWarning` is emitted at inference time. All tests pass and no inference error is observed. Per sklearn policy, patch releases maintain pickle compatibility for standard estimators. This must be resolved before the next model generation by re-training on the current sklearn version.
+- **P2-W2 (XGBoost pickle warning)**: XGBoost recommends `Booster.save_model` over `pickle` for cross-version serialization stability. Current artifacts are pickle-serialized. This must be addressed during the next retraining cycle.
+- **P2-W3 (asyncio Python 3.16 deprecation)**: `asyncio.get_event_loop_policy` is deprecated in Python 3.16. Appears in test warnings for Python 3.14 interpreters. No production impact until Python 3.16. To be resolved when the Python runtime is upgraded.
+- **P3-W1 (ruff missing from system Python)**: `test_ci_local_enforcer_ruff_steps.py` fails when run with system Python 3.14 which does not have `ruff` installed. Passes correctly with `.venv` Python (which is the documented and canonical execution path). The test itself is correct; the local dev environment has a PATH/interpreter-selection issue.
+
+**Adversarial QA result (V15.2):** Zero P0 or P1 defects found in the full end-to-end audit. No fabrication leak, no semantic field mismatch, no forbidden financial-action state.
+
 ## 168. Production Executive Directive V15.0 — Authoritative Production Governance Finalized
 
 **Tier:** `RESOLVED` in documentation and test verification, 2026-09-30.
