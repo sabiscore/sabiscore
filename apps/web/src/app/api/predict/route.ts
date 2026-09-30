@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       `${resolveBackendBaseUrl()}/api/v1/fixtures/${encodeURIComponent(matchId)}/analyze`,
       {
         method: "POST",
-        headers: proxyHeaders(),
+        headers: proxyHeaders(request),
         cache: "no-store",
         signal: AbortSignal.timeout(8000),
       },

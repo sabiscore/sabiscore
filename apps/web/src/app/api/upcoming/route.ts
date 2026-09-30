@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     url.searchParams.set('include_value_bets', String(includeValueBets));
 
     const response = await fetch(url.toString(), {
-      headers: proxyHeaders(),
+      headers: proxyHeaders(request),
       cache: 'no-store',
       signal: AbortSignal.timeout(BACKEND_DEADLINE_MS),
     });

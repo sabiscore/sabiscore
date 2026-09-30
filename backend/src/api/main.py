@@ -1,3 +1,14 @@
+import os
+
+# Hardware constraint protection (low-VRAM CPU execution environment / 512 MB cgroup):
+# Clamp OpenMP, BLAS, MKL, and NumExpr thread allocation to 1 thread per worker
+# to eliminate thread contention, context switching latency, and heap fragmentation.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
 import asyncio
 import json
 from contextlib import asynccontextmanager

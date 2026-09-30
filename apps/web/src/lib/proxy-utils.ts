@@ -65,12 +65,57 @@ export const ERROR_CACHE_HEADERS: HeadersInit = {
 
 /**
  * Standard headers added to every proxied backend request.
+ * Automatically forwards correlation (X-Request-ID) and W3C distributed trace
+ * context (traceparent, tracestate) headers when present on the incoming request.
  */
-export function proxyHeaders(): HeadersInit {
-  return {
+export function proxyHeaders(
+  incoming?:
+    | Request
+    | Headers
+    | Record<string, string | string[] | undefined>
+    | { headers?: Headers | Record<string, string | string[] | undefined> }
+): HeadersInit {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
     Authorization: `Bearer ${BACKEND_TOKEN}`,
     "User-Agent": "SabiScore-Proxy/2.0",
   };
+
+  if (incoming) {
+    const getHeader = (name: string): string | null => {
+      try {
+        if (incoming instanceof Headers) {
+          return incoming.get(name);
+        }
+        if (typeof (incoming as { headers?: { get?: (k: string) => string | null } }).headers?.get === "function") {
+          return (incoming as { headers: { get: (k: string) => string | null } }).headers.get(name);
+        }
+        if ((incoming as { headers?: Record<string, unknown> }).headers && typeof (incoming as { headers: Record<string, unknown> }).headers === "object") {
+          const h = (incoming as { headers: Record<string, unknown> }).headers;
+          const val = h[name] ?? h[name.toLowerCase()] ?? h[name.toUpperCase()];
+          return Array.isArray(val) ? (val[0] as string) : (typeof val === "string" ? val : null);
+        }
+        if (typeof incoming === "object") {
+          const rec = incoming as Record<string, unknown>;
+          const val = rec[name] ?? rec[name.toLowerCase()] ?? rec[name.toUpperCase()];
+          return typeof val === "string" ? val : Array.isArray(val) && typeof val[0] === "string" ? (val[0] as string) : null;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    };
+
+    const requestId = getHeader("x-request-id");
+    if (requestId) headers["X-Request-ID"] = requestId;
+
+    const traceparent = getHeader("traceparent");
+    if (traceparent) headers["traceparent"] = traceparent;
+
+    const tracestate = getHeader("tracestate");
+    if (tracestate) headers["tracestate"] = tracestate;
+  }
+
+  return headers;
 }
