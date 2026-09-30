@@ -1,10 +1,10 @@
-# SabiScore — Production Executive Directive V13.0
+# SabiScore — Production Executive Directive V14.0
 
 **Author**: Multi-Agent Engineering Council (Architecture, Quantitative Modeling, Frontend Systems, Orchestration)  
-**Date**: 2026-09-29  
+**Date**: 2026-09-30  
 **Status**: ACTIVE / MANDATORY PRODUCTION DIRECTIVE  
-**Supersedes**: Directive V12.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V12.md`) and all predecessor directives.  
-**Ground Truth Authorities**: `docs/DEBT.md` (Items 1–163), `backend/src/api/main.py`, `backend/models/active_generation.json`, `apps/web/src/`, `NEXUS.md`, `AGENTS.md`.
+**Supersedes**: Directive V13.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V13.md`) and all predecessor directives.  
+**Ground Truth Authorities**: `docs/DEBT.md` (Items 1–164), `backend/src/api/main.py`, `backend/models/active_generation.json`, `apps/web/src/`, `NEXUS.md`, `AGENTS.md`.
 
 ---
 
@@ -20,13 +20,13 @@ All systems, agents, and engineers must strictly adhere to four non-negotiable a
 
 ---
 
-# Section 1: Resource-Constrained Data & Architecture (Architecture & Memory Constraints)
+# Section 1: Resource-Constrained Data & Feature Engineering
 
-### 1.1 Ingestion Reality: Python Asyncio vs. Dormant Node.js Scraper
+### 1.1 Ingestion Reality: Python Asyncio vs. Offline Node.js Scraper
 
-A fundamental misconception addressed in `docs/DEBT.md` (Item 18, 160) is that Node.js workers ingest real-time production data. In SabiScore, **no Node.js worker or crawler runs in the live ingestion loop**. 
+A fundamental architectural invariant of SabiScore is that **no Node.js worker or crawler runs in the live ingestion loop**. 
 
-Production ingestion is executed entirely in-process by the FastAPI application runtime (`backend/src/api/main.py`) via async lifespan background tasks initialized during server startup (lines 250–350):
+Production ingestion is executed entirely in-process by the FastAPI application runtime (`backend/src/api/main.py`) via async lifespan background tasks initialized during server startup:
 
 ```
 FastAPI Application Lifespan (Python 3.11, Single Uvicorn Worker)
@@ -50,13 +50,20 @@ FastAPI Application Lifespan (Python 3.11, Single Uvicorn Worker)
 #### Network & Concurrency Invariants
 - **Lifespan HTTP Client**: All provider egress traffic shares a single application-lifespan `httpx.AsyncClient` with strictly configured connection pooling:
   $$\text{Limits}(\text{max\_connections} = 20, \, \text{max\_keepalive\_connections} = 10), \quad \text{timeout} = 8.0\text{s}$$
-- **Distributed Lease Locking**: During rolling deployments on Render, two container instances temporarily overlap. To prevent concurrent executions from double-billing paid API quotas (The Odds API, football-data.org) or triggering HTTP 429 rate limits, `fixture_sync_service.py` acquires an atomic distributed lease key in Redis (`sabiscore:job:fixture_sync:lease`, TTL 600s) using a Lua script before initiating synchronization.
+- **Distributed Lease Locking**: During rolling deployments on Render, two container instances temporarily overlap. To prevent concurrent executions from double-billing paid API quotas (The Odds API, football-data.org) or triggering HTTP 429 rate limits, `fixture_sync_service.py` acquires an atomic distributed lease key in Redis (`sabiscore:job:fixture_sync:lease`, TTL 600s) using a Lua script before initiating synchronization:
+```lua
+if redis.call('set', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) then
+  return 1
+else
+  return 0
+end
+```
 
 ---
 
 ### 1.2 Mathematical Allocation of 8GB Local Workstation Memory
 
-Local engineering environments (Windows 11 / Linux developer workstations, CI runners) are strictly budgeted within an **8,192 MB (8.0 GB)** physical RAM ceiling. Developers must run local databases, backend services, web applications, and language servers without inducing OS page swapping or out-of-memory thrashing.
+Local engineering environments (Windows 11 / Linux developer workstations, CI runners) are strictly budgeted within an **8,192 MB (8.0 GB)** physical RAM ceiling. Heavy execution must not induce OS paging or out-of-memory thrashing.
 
 #### Local Workstation Memory Budget Table (8,192 MB Total)
 
@@ -81,9 +88,9 @@ In `backend/scripts/_resource_guard.py`, SabiScore implements an active memory w
   2. Emits structured diagnostic JSON to `stderr`:
      `{"error": "rss_ceiling_exceeded", "peak_rss_mb": ..., "rss_ceiling_mb": 3072.0}`
   3. Halts the process abruptly via `os._exit(137)` to protect the host operating system from swap lockup.
-- **Parallelism Clamping (`SABISCORE_MAX_JOBS`)**: Scikit-learn defaults to `n_jobs=-1`, which spawns one worker process per CPU core, duplicating memory. In `enhanced_training.py` (lines 187, 204), `n_jobs` is clamped to `SABISCORE_MAX_JOBS` (default: **2** locally).
-- **Sequential League Training (Directive D4)**: Training across the 6 leagues executes sequentially with explicit `del model` and `gc.collect()` between leagues, guaranteeing peak RSS remains under 3.0 GB.
-- **Docker Desktop Prohibition**: Docker Desktop's WSL2 VM reservation consumes 2.5–4.0 GB of RAM. Running Docker Desktop concurrently with heavy model training or `next build` violates the 8 GB budget. Heavy training must execute natively in the local Python virtual environment.
+- **Parallelism Clamping (`SABISCORE_MAX_JOBS`)**: Scikit-learn defaults to `n_jobs=-1`, which spawns one worker process per CPU core, duplicating memory. In `train_on_real_matches.py` (lines 1464–1466), `n_jobs` is clamped to `SABISCORE_MAX_JOBS` (default: **2** locally).
+- **Sequential League Training (Directive D4)**: Training across the 6 leagues executes sequentially with explicit `del bundle` and `gc.collect()` between leagues, guaranteeing peak RSS remains under 3.0 GB.
+- **Docker Desktop Prohibition**: Running Docker Desktop concurrently with heavy model training or `next build` violates the 8 GB budget. Heavy training must execute natively in the local Python virtual environment.
 
 ---
 
@@ -99,7 +106,6 @@ $$\text{cgroup\_current} = \text{anon} + \text{file} + \text{kernel}$$
 $$\text{working\_set} = \max(0, \, \text{memory.current} - \text{inactive\_file}) = \text{anon} + \text{active\_file} + \text{kernel}$$
 $$\text{headroom} = \text{cgroup\_limit} - \text{working\_set}$$
 
-#### The Crucial Empirical Discovery from DEBT Item 152 & 163
 Raw `cgroup_current` includes reclaimable OS page cache (`inactive_file`). Under steady-state operations, dynamic shared library reads cause `cgroup_current` to climb to 480–507 MB out of 512 MB. However, when anonymous memory expands, the Linux kernel reclaims inactive file pages instantaneously without terminating the process. 
 Judging instance health against raw `cgroup_current` creates false alarms. SabiScore computes health and headroom strictly against **working set**.
 
@@ -118,23 +124,13 @@ Judging instance health against raw `cgroup_current` creates false alarms. SabiS
 | **HEADROOM** | **Operational Safety Headroom to Cgroup Ceiling** | **145 MB** | **512 MB** | **`headroom_mb`** |
 | **Layer 7** | Inactive File Page Cache (Reclaimed automatically by kernel) | ~30–100 MB | Overlaps headroom | `inactive_file` |
 
-#### Live Telemetry Ranges Observed in Production
-Across `docs/DEBT.md` (Items 152, 159, 160, 163):
-- **Process RSS**: 325 MB – 400 MB
-- **Anonymous Memory (`cgroup_anon_mb`)**: 289 MB – 304 MB
-- **Active File Cache (`cgroup_active_file_mb`)**: 14 MB – 117 MB
-- **Working Set (`cgroup_working_set_mb`)**: 327 MB – 442 MB
-- **Measured Operational Headroom (`headroom_mb`)**: 69 MB – 174 MB
-- **Degraded Status Threshold**: Triggered when headroom is less than 15% of 512 MB ($512 \times 0.15 = 76.8\text{ MB} \approx 77\text{ MB}$).
-
 #### Architectural Protections for the 512 MB Container Limit
-1. **Single-Process Serving**: Stacking a separate model server (Triton/TorchServe) or running multiple Uvicorn workers (`--workers 2`) would duplicate the ~300 MB anonymous heap, causing an immediate container OOM (exit code 137). Serving is strictly single-process (`uvicorn --workers 1`).
+1. **Single-Process Serving**: Serving is strictly single-process (`uvicorn --workers 1`). Running multiple workers duplicates the ~300 MB anonymous heap, causing an instant container OOM (exit code 137).
 2. **Heavy Job Mutual Exclusion (`core.heavy_jobs.run_heavy`)**: 10,000-replicate bootstraps and settlement scoring passes are offloaded from the event loop via `asyncio.to_thread` and serialized behind a single `threading.Lock()` lane, eliminating parallel bootstrap allocation spikes.
 3. **Lazy SDK Loading**: Bulky cloud SDKs like `boto3` consume ~20 MB of resident memory at import. In `backend/src/core/model_fetcher.py`, `boto3` is loaded lazily inside the artifact download path only, verified by `test_boto3_is_not_imported_at_startup`.
 4. **Connection Pool Bounds**: In `backend/src/core/config.py`:
    - `database_pool_size = 20`, `database_max_overflow = 30`
    - `redis_max_connections = 50`
-   During Render rolling deploys, two container instances overlap. Total DB connections are bounded to $2 \times 50 = 100$, well within PostgreSQL's default `max_connections = 200`.
 
 ---
 
@@ -142,7 +138,6 @@ Across `docs/DEBT.md` (Items 152, 159, 160, 163):
 
 The scraper in `apps/scraper/` is packaged via `Dockerfile.worker` and scheduled as a bi-weekly cron job (`"0 3 * * 1,4"` in `render.yaml`). It is strictly gated by `SCRAPER_PRODUCTION_ENABLED="false"`. If enabled by operator approval (OG-04), it must adhere to strict profiling and execution constraints:
 
-#### Mandatory Memory Configuration Flags
 ```yaml
 # render.yaml lines 221-226
 - key: NODE_OPTIONS
@@ -151,25 +146,21 @@ The scraper in `apps/scraper/` is packaged via `Dockerfile.worker` and scheduled
   value: "512"
 ```
 
-#### Rationale for Configuration
-1. `CRAWLEE_MEMORY_MBYTES=512`: Instructs Crawlee's `AutoscaledPool` of the host container limit so it can throttle internal request queues. Crawlee does not enforce V8 heap limits.
-2. `--max-old-space-size=384`: Hard-caps the V8 JavaScript heap at 384 MB. This guarantees $512\text{ MB} - 384\text{ MB} = 128\text{ MB}$ of container headroom for native C++ bindings, libuv thread pools, OpenSSL buffers, and OS page cache. Without this flag, 64-bit Node.js defaults to a 1.4 GB heap, causing an instant cgroup SIGKILL.
-3. `--heapsnapshot-near-heap-limit=1`: Directs V8 to write an emergency heap snapshot file to disk immediately prior to an out-of-memory crash, enabling offline post-mortem analysis in Chrome DevTools.
+1. `CRAWLEE_MEMORY_MBYTES=512`: Instructs Crawlee's `AutoscaledPool` of the host container limit so it can throttle internal request queues.
+2. `--max-old-space-size=384`: Hard-caps the V8 JavaScript heap at 384 MB, guaranteeing $512\text{ MB} - 384\text{ MB} = 128\text{ MB}$ of container headroom for native C++ bindings, libuv thread pools, and OpenSSL buffers.
+3. `--heapsnapshot-near-heap-limit=1`: Directs V8 to write an emergency heap snapshot file to disk immediately prior to an out-of-memory crash.
 4. **Single Concurrency & Zero Session Pool**: In `apps/scraper/src/http.mjs` (lines 43–56), `PublicHttpClient` constrains Crawlee to:
    - `minConcurrency: 1`, `maxConcurrency: 1`, `maxRequestsPerCrawl: 1`
    - `sameDomainDelaySecs: 3`, `maxRequestsPerMinute: 6`, `maxRequestRetries: 2`
-   - `useSessionPool: false` (eliminates session pool memory overhead)
+   - `useSessionPool: false`
 5. **In-Process Request Boundary Sampling (`sampleHeap`)**: In `apps/scraper/src/storage.mjs` (lines 389–425), `sampleHeap()` samples `process.memoryUsage().heapUsed` across request lifecycle hooks. Every generated manifest records measured `peak_rss_mb` and `peak_heap_used_mb`.
-6. **Sampling Heap Profiles**: Prior to scheduling any new crawl source, operators must execute `node --heap-prof src/cli.mjs scrape` to generate a `.heapprofile` verifying zero heap growth across crawl iterations.
 
 ---
 
 ### 1.5 Data Chunking and Streaming Architecture
 
 #### The 200 MB File Chunking Trigger Rule (Directive D6 & DEBT Item 88)
-A recurring anti-pattern is mandating complex chunked streaming for tiny datasets. SabiScore's entire 6-league historical training corpus (`backend/data/cache/fd_*.csv`) comprises 36 CSV files totaling **10.9 MB on disk** (12,765 matches across seasons 2019/20 through 2024/25). Peak traced RAM during evaluation is under 1.0 MB (0.617 MB).
-
-In `docs/DEBT.md` (Item 88), a proposal to chunk the walk-forward evaluation pipeline was officially rejected as `NOT_JUSTIFIED`. Chunking adds generator complexity and boundary bugs without saving meaningful memory on an 11 MB corpus.
+SabiScore's entire 6-league historical training corpus (`backend/data/cache/fd_*.csv`) comprises 36 CSV files totaling **6.0 MB on disk** (~11 MB uncompressed, 12,765 matches). Peak traced RAM during evaluation is under 1.0 MB (0.617 MB).
 
 **The Directive Rule**:
 - **Chunking is a trigger, not a universal mandate.**
@@ -177,7 +168,11 @@ In `docs/DEBT.md` (Item 88), a proposal to chunk the walk-forward evaluation pip
 - Datasets below 200 MB must be loaded in a single vector operation.
 
 #### Database Streaming (Directive D5)
-When querying historical match archives or Elo state histories, SQLAlchemy async streaming must use:
+When querying historical match archives or Elo state histories, queries must enforce pagination or chunked streaming:
+```python
+query = select(Match).order_by(Match.match_date.asc()).limit(500)
+```
+Or when processing unbounded sets:
 ```python
 query = select(Match).execution_options(yield_per=500)
 async for partition in (await session.stream(query)).partitions():
@@ -186,14 +181,11 @@ async for partition in (await session.stream(query)).partitions():
 ```
 This bounds ORM identity map resident memory to 500 instances at a time.
 
-#### File Streaming (Directive N3)
-In `apps/scraper/src/storage.mjs`, all raw snapshots and manifests are written atomically using streaming buffers and temporary file renames (`atomicWrite`), ensuring strings are never concatenated unboundedly in V8 heap memory.
-
 ---
 
 ### 1.6 The 6 Canonical Target Leagues and UCL Structural Cap
 
-SabiScore predicts and models exactly **6 domestic leagues**. In `backend/models/active_generation.json` and `backend/src/services/historical_backfill_service.py` (lines 59–66), the canonical league metadata and model artifacts are pinned:
+SabiScore predicts and models exactly **6 domestic leagues**:
 
 | # | Canonical League ID | Country | Division Code | League Name (`football-data.org`) | Active Model Artifact |
 | :-: | :--- | :--- | :-: | :--- | :--- |
@@ -235,25 +227,23 @@ Model inference in SabiScore is centralized in `backend/src/models/prediction.py
   6. Simplex validation: Verifies $\sum_{k=0}^2 p_k = 1.0 \pm 10^{-6}$.
 
 #### Closed-Form Platt Scaling (Resolution of DEBT Item 133)
-In `docs/DEBT.md` (Item 133), scikit-learn version drift between development (Python 3.14 / sklearn 1.8) and production Render (Python 3.11 / sklearn 1.3.2) caused unpickled `LogisticRegression` objects to crash with `AttributeError: 'LogisticRegression' object has no attribute 'multi_class'` inside `predict_proba`. This previously forced all 6 leagues into uncalibrated raw serving (ECE 10.51%).
-
 To achieve permanent stability across Python/scikit-learn runtime versions, `backend/src/models/calibration.py` (lines 209–249) implements **direct closed-form sigmoid arithmetic**:
 $$\text{logit} = \text{clip}\left(w \cdot p + b, \, -30.0, \, 30.0\right)$$
 $$P(y = 1 \mid p) = \sigma(\text{logit}) = \frac{1}{1 + e^{-\text{logit}}}$$
 Where $w$ and $b$ are extracted as raw NumPy floats from `calibrator.coef_[0]` and `calibrator.intercept_[0]`.
 
 #### Resolution Path for DEBT Item 142 (Model Selection Discrepancy)
-In `docs/DEBT.md` (Item 142), empirical evaluation revealed that the served post-hoc calibrator was originally fitted on the base-learner equal-weight average, whereas `PredictionEngine` serves the stacked meta-model with that calibrator applied on top. Stacking a calibrator onto an already scaled meta-model worsened holdout RPS in 6 of 6 leagues (e.g. Bundesliga RPS degraded from 0.1994 to 0.2101).
+In `docs/DEBT.md` (Item 142), empirical evaluation revealed that the served post-hoc calibrator was originally fitted on the base-learner equal-weight average, whereas `PredictionEngine` serves the stacked meta-model with that calibrator applied on top. Stacking a calibrator onto an already scaled meta-model worsened holdout RPS in 6 of 6 leagues.
 
 **The Council Directive for DEBT 142**:
-1. During the upcoming model retraining cycle, operators must evaluate holdout performance on the 2024/25 chronological season under two candidate architectures:
+1. During model retraining, evaluate holdout performance on the 2024/25 chronological season under two candidate architectures:
    - **Candidate A**: Refit post-hoc calibrators directly on the 9-dimensional output of the served stacked meta-model head.
    - **Candidate B**: Formally remove the post-hoc calibrator wrapper where the meta-model wrapper (`TemperatureScaledMetaModel` or `VectorScaledMetaModel`) already achieves ECE $\le 0.03$.
 2. In accordance with the DEBT-83 fail-closed hardening contract: if the meta-model fails at runtime, the engine **must never** substitute the base-learner average under a serialized calibrator; it must fail closed to the fallback simplex ($[0.333, 0.333, 0.334]$) with `calibration_method="uniform"`.
 
 ---
 
-### 2.2 The Continuous Calibration Loop & Frozen C6 Protocol
+### 2.2 Continuous Calibration Loop & Frozen C6 Protocol
 
 To mathematically verify that SabiScore's model probabilities remain sharper than market closing prices, SabiScore enforces the **Frozen C6 Protocol** (`reports/research/c6-served-generation-vs-close-protocol.json`, SHA-256 `9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7`).
 
@@ -276,45 +266,12 @@ To mathematically verify that SabiScore's model probabilities remain sharper tha
 
 ---
 
-### 2.3 Exact Mathematical Formulations
-
-#### 1. Multiclass 10-Bin Expected Calibration Error (ECE)
-Predictions are partitioned into $M=10$ equal-width bins $B_{m, c} = \left( \frac{m-1}{M}, \, \frac{m}{M} \right]$ for each outcome class $c \in \{0, 1, 2\}$ ($\text{Home}=0, \text{Draw}=1, \text{Away}=2$):
-$$ECE_c = \sum_{m=1}^M \frac{|B_{m, c}|}{N} \left| \text{acc}(B_{m, c}) - \text{conf}(B_{m, c}) \right|$$
-$$ECE_{\text{mean}} = \frac{1}{C} \sum_{c=0}^{C-1} ECE_c$$
-Where:
-$$\text{acc}(B_{m, c}) = \frac{1}{|B_{m, c}|} \sum_{i \in B_{m, c}} \mathbf{1}(y_i = c), \quad \text{conf}(B_{m, c}) = \frac{1}{|B_{m, c}|} \sum_{i \in B_{m, c}} p_{ic}$$
-
-#### 2. Multiclass Brier Score & Murphy (1973) 3-Term Decomposition
-Multiclass Brier score across $N$ matches:
-$$BS = \frac{1}{N} \sum_{i=1}^N \sum_{c=0}^{C-1} (p_{ic} - y_{ic})^2$$
-Where $y_{ic} = \mathbf{1}(y_i = c)$.
-
-Murphy (1973) partition into Reliability, Resolution, and Uncertainty:
-$$BS = \text{Reliability} - \text{Resolution} + \text{Uncertainty}$$
-$$\text{Reliability} = \frac{1}{N} \sum_{m=1}^M |B_m| \sum_{c=0}^{C-1} (\bar{p}_{mc} - \bar{o}_{mc})^2 \quad (\text{Calibration error; lower is better, } 0 = \text{perfect})$$
-$$\text{Resolution} = \frac{1}{N} \sum_{m=1}^M |B_m| \sum_{c=0}^{C-1} (\bar{o}_{mc} - \bar{o}_c)^2 \quad (\text{Discriminative sharpness; higher is better})$$
-$$\text{Uncertainty} = \sum_{c=0}^{C-1} \bar{o}_c (1 - \bar{o}_c) \quad (\text{Irreducible environmental base-rate variance})$$
-
-#### 3. Ranked Probability Score (RPS)
-For 3 ordered football outcomes ($0=\text{Home}, 1=\text{Draw}, 2=\text{Away}$):
-$$RPS = \frac{1}{K - 1} \sum_{r=1}^{K-1} \left( \sum_{j=1}^r p_j - \sum_{j=1}^r y_j \right)^2 = \frac{1}{2} \sum_{r=0}^1 \left( \sum_{j=0}^r p_j - \sum_{j=0}^r y_j \right)^2$$
-Evaluated in `backend/src/models/evaluation/metrics.py` via cumulative sums (`np.cumsum`) for high-throughput vectorized execution.
-
-#### 4. Walk-Forward Validation Strategies
-- **Expanding Window Splits (`dt.to_period("A-JUL")`)**: Expanding seasons ending in July to match European football calendars (`backend/src/models/evaluation/temporal_splits.py`). Requires at least 3 initial seasons for training.
-- **Purging**: Enforces a 48-hour exclusion buffer between training and test sets to eliminate simultaneous gameweek shocks and shared weather/referee conditions.
-- **Embargoing**: Imposes a 7-day post-training evaluation blackout window to ensure rolling form features (e.g. 5-match exponential moving averages) do not leak future information across splits.
-
----
-
-### 2.4 Market De-Vigging Algorithms
+### 2.3 Market De-Vigging Algorithms
 
 Bookmakers build an overround $\Pi = \sum_{i=1}^3 q_i > 1$ into decimal odds $O_i$, where gross implied probability is $q_i = \frac{1}{O_i}$. SabiScore extracts true fair probabilities $p_i$ through two formal de-vigging algorithms:
 
 #### 1. Proportional Normalization (Active in live API serving paths)
 $$p_i = \frac{q_i}{\Pi} = \frac{1 / O_i}{\sum_{j=1}^3 (1 / O_j)}$$
-*Limitation*: Assumes margin is distributed evenly. In reality, bookmakers bias margin toward longshots (the Favourite-Longshot Bias), leading proportional de-vigging to slightly overstate longshot probabilities.
 
 #### 2. Shin's Method (1992, 1993) (Canonical G18 Certification Baseline)
 Models prices as equilibrium betting quotes in the presence of an insider trading proportion $z \in [0, 1)$:
@@ -322,11 +279,11 @@ $$p_i(z) = \frac{\sqrt{z^2 + 4(1 - z) \frac{q_i^2}{\Pi}} - z}{2(1 - z)}$$
 Subject to the exact simplex constraint:
 $$\sum_{i=1}^3 p_i(z) = 1$$
 - Implemented in `backend/src/models/evaluation/market_baseline.py`.
-- **Provable Bisection Convergence**: The residual function $f(z) = \sum_{i=1}^3 p_i(z) - 1$ is strictly continuous on $[0, 1)$. At $z=0$, $f(0) = \sqrt{\Pi} - 1 > 0$ for any vigged market ($\Pi > 1$). As $z \to 1$, $f(1-) < 0$. The bisection solver converges unconditionally to tolerance $10^{-12}$ in under 200 iterations, removing the Favourite-Longshot Bias.
+- **Provable Bisection Convergence**: The residual function $f(z) = \sum_{i=1}^3 p_i(z) - 1$ converges unconditionally to tolerance $10^{-12}$ in under 200 iterations, removing the Favourite-Longshot Bias.
 
 ---
 
-### 2.5 Expected Value (+EV) and Fractional Kelly Staking
+### 2.4 Expected Value (+EV) and Fractional Kelly Staking
 
 SabiScore adheres strictly to mathematical positive expectancy (+EV) against de-vigged fair market probabilities:
 
@@ -350,85 +307,7 @@ $$f_{\text{recommended}} = \min\left(0.25 \times f^*, \, \text{LeagueCap}, \, 0.
 
 ---
 
-### 2.6 Six-Tier Verdict Hierarchy & Abstention Logic
-
-SabiScore enforces a 6-tier, fail-closed decision hierarchy:
-
-```
-                          Match Evidence Evaluated
-                                     │
-                 ┌───────────────────┴───────────────────┐
-                 ▼                                       ▼
-      Critical Gaps Present?                  Zero Critical Gaps
-                 │                                       │
-       YES ──────┴──────► [PARTIAL]                      ▼
-                            (Withheld)          Both EV > 0 & Edge > 0?
-                                                         │
-                                              NO ────────┴──────► [NO_BET]
-                                                         │          (Pass)
-                                                YES ─────┘
-                                                         │
-                                           Execution Blockers Present?
-                                           (Stale, Low Tier, 1 Provider,
-                                            Unconfirmed Lineups ≤ 90m)
-                                                         │
-                                              YES ───────┴──────► [HOLD]
-                                                         │          (Pass)
-                                               NO ───────┘
-                                                         │
-                                               Edge < 4.2% Threshold?
-                                                         │
-                                              YES ───────┴──────► [SPECULATIVE]
-                                                         │          (Watchlist Only)
-                                               NO ───────┘
-                                                         │
-                                       UCL Competition OR Providers < 4?
-                                                         │
-                                              YES ───────┴──────► [ACTIONABLE]
-                                                         │          (Play)
-                                               NO ───────┘
-                                                         │
-                                           Edge ≥ 6.2% & Epistemic ≤ 0.05
-                                           & Confirmed Lineups & Providers ≥ 4
-                                                         │
-                                              YES ──────────────► [HIGH_CONVICTION]
-                                                                    (Play)
-```
-
-#### Exact Tier Definitions & Rules
-1. **`PARTIAL` (WITHHELD)**: Critical data gap present (missing metadata, uncertified model generation, 0 verified providers, market overround outside $[1.00, 1.25]$, or simplex violation). Staking is strictly Withheld.
-2. **`NO_BET` (PASS)**: Clean data, but market price yields $\text{EV} \le 0$ or $\text{Edge} \le 0$. Staking is 0.0%.
-3. **`HOLD` (PASS / ABSTAIN)**: Positive edge exists, but execution is blocked by operational risk:
-   - Single-provider ceiling: `verified_provider_count == 1` caps verdict at `HOLD` (minimum 2 providers required to bet).
-   - Market snapshot is `STALE` (>15 minutes old).
-   - Kickoff is within 90 minutes and lineups are unconfirmed.
-   - Low evidence confidence tier or conflicting sharp market movement.
-4. **`SPECULATIVE` (WATCHLIST ONLY)**: Sub-threshold positive edge ($\text{Edge} < 4.2$ pp) supported by sharp market confirmation. Excluded from top opportunities. Staking is strictly 0.0%.
-5. **`ACTIONABLE` (PLAY)**: Clean evidence, $\text{Edge} \ge 4.2$ pp, positive EV, fresh market odds, 2–3 independent verified providers, or UCL. Sized via Quarter-Kelly up to league cap.
-6. **`HIGH_CONVICTION` (PLAY)**: $\text{Edge} \ge 6.2$ pp, epistemic uncertainty $\le 0.05$, market fresh ($\le 15$ min), confirmed starting lineups, $\ge 4$ independent verified providers, and **strictly NOT UCL**. Sized via Quarter-Kelly up to league cap.
-
----
-
-### 2.7 Reconciliation of the Three Betting Engines
-
-The codebase contains three distinct evaluation services that must be formally reconciled:
-
-| Architectural Property | `betting_intelligence.py` | `core_engine.py` | `rl_betting_agent.py` |
-| :--- | :--- | :--- | :--- |
-| **Contract Version** | Contract v1.2.0 (`BettingIntelligenceService`) | Engine v2.1.0-prod (`CoreEngine`) | Phase 6-C Advisory Prototype (`RLBettingAgent`) |
-| **Primary Route** | `/api/v1/betting-intelligence/analyze` | `/api/v1/core-engine/evaluate` | `/api/v1/rl-agent/recommend` |
-| **Verdict Taxonomy** | 6 Tiers: `PARTIAL`, `NO_BET`, `HOLD`, `SPECULATIVE`, `ACTIONABLE`, `HIGH_CONVICTION` | 6 String Tiers: `PARTIAL`, `NO_BET`, `HOLD`, `SPECULATIVE`, `ACTIONABLE`, `HIGH_CONVICTION` | **No shared taxonomy**: Returns binary `abstain` and float `stake_fraction` |
-| **Outcome Optimization** | Evaluates all 3 outcomes (1X2), selects best via Confidence-Adjusted Value ($CAV$) | Evaluates all 3 outcomes, ranks by $CAV$ | Fallback picks argmax probability (`_pick_market`); SAC uses 4-logit argmax |
-| **De-vigging Method** | Proportional (`_compute_devig`) | Proportional | **No de-vigging**: Evaluates raw $1/O$ |
-| **Kelly Staking** | Quarter-Kelly: $0.25 \times \frac{EV}{O - 1}$, capped $\le 5\%$ | Quarter-Kelly: $0.25 \times \frac{EV}{O - 1}$, capped $\le 5\%$ | Raw Kelly: $\frac{p \cdot O - 1}{O - 1}$, capped at `rl_max_kelly_cap` (0.05) |
-| **Production Status** | **Unified Production Authority** | **Unified Production Authority** | **Advisory Only / Never Runs Live** (No stable-baselines3, no artifact; DEBT 160) |
-
-**Directive Reconciliation Mandate**:
-`betting_intelligence.py` and `core_engine.py` represent the unified, deterministic production authorities. `rl_betting_agent.py` is an uncertified research prototype that must remain strictly advisory and isolated from production betting decision paths.
-
----
-
-# Section 3: Quantitative UX (Next.js 15)
+# Section 3: Quantitative UX & Actionable Insights (Next.js 15)
 
 ### 3.1 Technology Stack & Architectural Boundaries
 
@@ -440,9 +319,9 @@ The codebase contains three distinct evaluation services that must be formally r
 - **Server Components (RSC) by Default**:
   - `app/match/[id]/page.tsx` is an async React Server Component with `export const dynamic = "force-dynamic"` and `export const runtime = "nodejs"`. It renders semantic HTML, breadcrumbs, structured SEO JSON-LD (`generateSportsEventJsonLd`), and exactly one `<h1>` (`matchupLabelFor(...)`, resolving DEBT Item 163 U15).
 - **Client Dynamic Import Boundaries**:
-  - `FullAnalysisSection` dynamically loads `FullAnalysisDashboard` with `{ ssr: false, loading: () => <FullAnalysisSkeleton /> }`. This boundary decreased the shared first-load JS bundle from 198 kB to **103 kB** and route JS from 267 kB to **173 kB** (DEBT Item 158).
+  - `FullAnalysisSection` dynamically loads `FullAnalysisDashboard` with `{ ssr: false, loading: () => <FullAnalysisSkeleton /> }`. This boundary keeps the shared first-load JS bundle at **103 kB** and route JS at **173 kB** (DEBT Item 158).
 - **SSR Hydration Defense**:
-  - Resolving DEBT Item 161: `ConsentProvider` must render child content on the server unconditionally. Deferring content rendering behind client `localStorage` checks destroys server HTML and wipes out SEO headings. The 18+ consent modal appears post-hydration without blocking initial paint.
+  - `ConsentProvider` renders child content on the server unconditionally. Deferring content rendering behind client `localStorage` checks destroys server HTML and wipes out SEO headings. The 18+ consent modal appears post-hydration without blocking initial paint.
 
 ---
 
@@ -457,8 +336,7 @@ const ODDS_ARITHMETIC = [
 ];
 ```
 
-#### Rationale
-Historical attempts to compute odds math in the browser produced conflicting values between components (e.g. vigged implied probability in one widget vs. de-vigged fair price in another). The FastAPI backend is the sole authority for de-vigging, EV, and Kelly sizing; the frontend merely projects backend fields.
+The FastAPI backend is the sole authority for de-vigging, EV, and Kelly sizing; the frontend merely projects backend fields.
 
 ---
 
@@ -480,7 +358,7 @@ Defined across `apps/web/src/app/globals.css`, `tailwind.config.ts`, and Directi
 | `:focus-visible` | `outline: 2px solid hsl(var(--conviction-actionable))` | WCAG 2.4.7 keyboard accessibility without per-component duplication. |
 
 #### Redundant Triple-Encoding for Complete Color-Blind Accessibility
-Decision state is **never communicated by color alone**. SabiScore enforces simultaneous redundant encoding across all badges:
+Decision state is **never communicated by color alone**:
 - `PLAY`: Text "Play" + `CheckCircle2` icon + emerald token (`--state-play`).
 - `PASS`: Text "Pass" + `MinusCircle` icon + slate token (`--state-pass`).
 - `WITHHELD`: Text "Withheld" + `CircleDashed` icon + neutral dark slate token (`--state-withheld`).
@@ -502,12 +380,12 @@ Rendered as an accessible, lightweight inline SVG (`viewBox="-2 0 104 30"`), add
 Accessible companion table displaying Outcome, Bookmaker Price ($O_k$), Fair Market Probability ($\text{fair}_k$), Model Probability ($p_k$), Gap ($p_k - \text{fair}_k$ in pp), and Expected Return per unit staked ($EV$).
 
 **The Decisive Truth Rule**:
-If the active model generation is uncertified (e.g. `MODEL_GENERATION_UNCERTIFIED`):
+If the active model generation is uncertified:
 - The edge gap is rendered in neutral slate (`text-slate-300`).
 - Expected Return is suppressed (`—`).
 - The table renders the mandatory disclosure:
   > *"This model has not passed certification against the market, so a gap here is not evidence of value and no expected return is shown."*
-- Staking display: In `OddsEdgeCard`, Kelly stake displays `"Withheld"`, **never `0.00%`** (Directive v9 U2).
+- Staking display: In `OddsEdgeCard`, Kelly stake displays `"Withheld"`, **never `0.00%`**.
 
 ---
 
@@ -538,7 +416,7 @@ const decisionState = stakePermitted && data.odds_edge
 ### 3.6 Mandatory Counter-Case Panel ("Why this might fail")
 
 Implemented in `CounterCase` (`apps/web/src/components/full-analysis-dashboard.tsx:422`):
-- **Unconditional Display**: Renders whenever a forecast exists, including on `PLAY` recommendations. Sports betting is inherently stochastic; presenting only positive EV generates overconfidence.
+- **Unconditional Display**: Renders whenever a forecast exists, including on `PLAY` recommendations.
 - **Visual Styling**: Muted amber frame (`border border-amber-500/20 bg-amber-500/[0.04]`), heading `Why this might fail`.
 - **Structured Evidence Chain (in strict order)**:
   1. **Loss Probability**: `"The model gives {outcome} a {p}% chance, so it loses {1 - p}% of the time."`
@@ -550,22 +428,10 @@ Implemented in `CounterCase` (`apps/web/src/components/full-analysis-dashboard.t
 
 ---
 
-### 3.7 Responsible Gambling Compliance
-
-Governed by `apps/web/src/lib/copy-contract.test.ts` and `evidence-copy-contract.test.ts`:
-- **Prohibited Certainty Terms**: Automatic AST rejection for `lock`, `banker`, `guaranteed`, `sure bet`, `free money`, `execute immediately`.
-- **Prohibited Promotional Claims**: `maximize your betting edge`, `beat the market`, `win more`, `winning pick`, `highly accurate predictions`, `profitable predictions`, `guaranteed returns`.
-- **Prohibited Unshipped Method Names**: `RL Bet Recommendation`, `RL betting`, `BNN uncertainty`, `Bayesian Neural Network` (DEBT Items 159, 160).
-- **Prohibited Staking Claims**: `1/8 Kelly`, `eighth-kelly` (banned; SabiScore public staking is strictly Quarter-Kelly).
-- **Mandatory Timezone Labeling**: Unlabeled browser-zone times (`toLocaleTimeString()`) are banned; all user-facing times must be formatted in West Africa Time (`WAT`) via `@/lib/lagos-time.ts`.
-
----
-
 # Section 4: NEXUS Agent Orchestration
 
 ### 4.1 The Strict Operational Boundary
 
-As codified across Directives v8 §4.1, v9 §4.1, and v12 §4:
 > **LLM agents NEVER run inside production calibration, settlement, CLV capture, or data ingestion loops.**
 
 - **Production Loops**: Production loops are deterministic, idempotent Python `asyncio` background tasks inside `backend/src/api/main.py`.
@@ -598,7 +464,7 @@ To prevent workstation freezing or swapping during agent-driven development:
 1. **The Heavy Process Mutex**:
    - **Exactly one heavy process may run at any time.**
    - Heavy processes:
-     - Full backend test suite (`pytest`, ~8.5 minutes, peak ~1.2 GB RSS)
+     - Full backend test suite (`pytest`, peak ~1.2 GB RSS)
      - Next.js production build (`next build`, peak ~1.8 GB RSS)
      - End-to-end browser suite (`playwright test`, peak ~1.5 GB RSS)
      - Full typechecking (`mypy` or `tsc --noEmit`)
@@ -627,17 +493,26 @@ To prevent workstation freezing or swapping during agent-driven development:
 
 ## Directive Attestation & Operational Verification Matrix
 
-To independently verify all architectural claims, constraints, and contracts in this directive, run either the unified single-command matrix runner (`pnpm verify:directive`) or the portable individual commands below.
+To independently verify all architectural claims, constraints, and contracts in this directive, run either the unified single-command matrix runner or the portable individual commands below.
 
 ### Option A: Unified Automated Matrix Runner (Recommended)
 
+Executes all 11 verification steps sequentially, automatically resolves local Python/.venv environments, and runs without mutating the terminal's working directory:
+
 ```bash
+# Via pnpm / npm:
 pnpm verify:directive
-# or: node scripts/verify-directive-v14.mjs
-# or: bash scripts/verify-directive-v14.sh
+
+# Or directly via Node:
+node scripts/verify-directive-v14.mjs
+
+# Or in Git Bash / Linux / macOS:
+bash scripts/verify-directive-v14.sh
 ```
 
 ### Option B: Individual Verification Commands (Portable & Safe)
+
+*Note: In multi-package workspaces, commands must never mutate the caller's working directory (`$PWD`) and must invoke `python -m pytest` with `-c backend/pytest.ini` for deterministic environment and path resolution across Windows (PowerShell/UCRT64/Git Bash) and Linux.*
 
 ```bash
 # 1. Verify Memory Watchdog Implementation (D1)
@@ -675,7 +550,7 @@ pnpm --filter @sabiscore/web test src/lib/heading-contract.test.ts
 pnpm --filter @sabiscore/web test src/components/probability-dumbbell.test.tsx src/components/full-analysis-dashboard.test.tsx
 ```
 
-*(Note: For shells preferring directory changes, subshell syntax `(cd apps/web && pnpm test ...)` ensures working directory isolation).*
+*(Note for shells executing subshells: `(cd apps/web && pnpm test ...)` is also supported as subshells preserve the parent working directory).*
 
 ---
-*Signed by the Multi-Agent Engineering Council on this 29th day of September, 2026.*
+*Signed by the Multi-Agent Engineering Council on this 30th day of September, 2026.*
