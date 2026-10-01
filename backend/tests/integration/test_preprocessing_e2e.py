@@ -18,7 +18,6 @@ import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.data.transformers import FeatureTransformer
 from src.models.feature_registry import CANONICAL_FEATURES_68
@@ -40,7 +39,7 @@ def test_preprocessing_e2e_real_scraped_data():
     assert epl_result is not None, "EPL results not found in manifest"
     
     artefact = epl_result["artefacts"][0]
-    parquet_rel_path = artefact["matches"]
+    parquet_rel_path = artefact["matches"].replace("\\", "/")
     parquet_path = Path(__file__).resolve().parents[2] / parquet_rel_path
     
     # Handle Windows/POSIX slash in path
@@ -55,7 +54,7 @@ def test_preprocessing_e2e_real_scraped_data():
     assert len(df) >= 10, f"Expected matches in real parquet, found {len(df)}"
     
     # Pick a real match with results
-    played_matches = df[df["is_result"] == True]
+    played_matches = df[df["is_result"].astype(bool)]
     assert len(played_matches) >= 5, "Expected played matches in real parquet"
     target_match = played_matches.iloc[0].to_dict()
     
