@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -310,3 +312,137 @@ def test_gate_60_canary_is_blocked_without_empirical_certification():
     report = json.loads((ROOT / "reports/release/v21-promotion-attestation.json").read_text())
     assert report["decision"] == "CERTIFICATION_BLOCKED"
     assert report["gate_7_v21_state"] == "NOT_RUN"
+
+
+@pytest.mark.asyncio
+async def test_clv_capture_tick_with_c6_collector(monkeypatch):
+    from src.api.main import _clv_capture_tick
+
+    mock_collector = MagicMock()
+    mock_collector.capture_pre_kickoff_predictions = AsyncMock(
+        return_value={"captured": 5}
+    )
+    mock_provider = MagicMock()
+    mock_odds = MagicMock()
+
+    monkeypatch.setattr(
+        "src.services.clv_capture_service.run_clv_capture_pass", AsyncMock()
+    )
+
+    await _clv_capture_tick(
+        provider=mock_provider,
+        odds_service=mock_odds,
+        c6_collector=mock_collector,
+    )
+    assert mock_collector.last_capture == {"captured": 5}
+    mock_collector.capture_pre_kickoff_predictions.assert_awaited_once_with(
+        odds_service=mock_odds
+    )
+
+
+@pytest.mark.asyncio
+async def test_clv_capture_tick_handles_collector_exception(monkeypatch):
+    from src.api.main import _clv_capture_tick
+
+    mock_collector = MagicMock()
+    mock_collector.capture_pre_kickoff_predictions = AsyncMock(
+        side_effect=RuntimeError("collector err")
+    )
+    monkeypatch.setattr(
+        "src.services.clv_capture_service.run_clv_capture_pass",
+        AsyncMock(side_effect=RuntimeError("clv err")),
+    )
+
+    # Should safely swallow exceptions and not crash
+    await _clv_capture_tick(
+        provider=None, odds_service=None, c6_collector=mock_collector
+    )
+
+
+@pytest.mark.asyncio
+async def test_background_settlement_sync_with_c6_collector(monkeypatch):
+    from src.api.main import _background_settlement_sync, _FIXTURE_SYNC_COMPLETED
+
+    _FIXTURE_SYNC_COMPLETED.set()
+    mock_collector = MagicMock()
+    mock_collector.settle_predictions = AsyncMock(
+        return_value={"status": "OK", "live_n": 42}
+    )
+    monkeypatch.setattr(
+        "src.services.settlement_service.run_settlement_pass", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "src.services.provider_evidence_service.run_provider_evidence_retention",
+        AsyncMock(),
+    )
+
+    tick_count = 0
+
+    async def fake_sleep(sec):
+        nonlocal tick_count
+        tick_count += 1
+        if tick_count > 1:
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _background_settlement_sync(c6_collector=mock_collector)
+
+    assert mock_collector.last_telemetry == {"status": "OK", "live_n": 42}
+
+
+@pytest.mark.asyncio
+async def test_background_settlement_sync_handles_exception(monkeypatch):
+    from src.api.main import _background_settlement_sync, _FIXTURE_SYNC_COMPLETED
+
+    _FIXTURE_SYNC_COMPLETED.set()
+    mock_collector = MagicMock()
+    mock_collector.settle_predictions = AsyncMock(
+        side_effect=RuntimeError("c6 telemetry failed")
+    )
+    monkeypatch.setattr(
+        "src.services.settlement_service.run_settlement_pass",
+        AsyncMock(side_effect=RuntimeError("settle failed")),
+    )
+    monkeypatch.setattr(
+        "src.services.provider_evidence_service.run_provider_evidence_retention",
+        AsyncMock(),
+    )
+
+    tick_count = 0
+
+    async def fake_sleep(sec):
+        nonlocal tick_count
+        tick_count += 1
+        if tick_count > 1:
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _background_settlement_sync(c6_collector=mock_collector)
+
+
+@pytest.mark.asyncio
+async def test_background_clv_capture(monkeypatch):
+    from src.api.main import _background_clv_capture
+
+    mock_tick = AsyncMock()
+    monkeypatch.setattr("src.api.main._clv_capture_tick", mock_tick)
+
+    tick_count = 0
+
+    async def fake_sleep(sec):
+        nonlocal tick_count
+        tick_count += 1
+        if tick_count > 1:
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _background_clv_capture(provider=None, odds_service=None, c6_collector=None)
+
+    assert mock_tick.await_count == 1
+

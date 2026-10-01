@@ -25,14 +25,23 @@ REPORTS = ROOT / "reports"
 
 def _read_json(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        resolved = path.resolve()
+        if not resolved.is_relative_to(ROOT.resolve()):
+            return None
+        with open(resolved, "r", encoding="utf-8") as f:
+            return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    resolved = path.resolve()
+    reports_base = REPORTS.resolve()
+    if not resolved.is_relative_to(reports_base):
+        raise ValueError(f"Path traversal detected: {path} is outside {REPORTS}")
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    with open(resolved, "w", encoding="utf-8") as f:
+        f.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def _sha(path: Path) -> str | None:
