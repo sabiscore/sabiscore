@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY src/ ./src/
 COPY serving/ ./serving/
 COPY workers/ ./workers/
+COPY models/candidates/v6_phase8-candidate/training_manifest_v6_phase8.json ./models/candidates/v6_phase8-candidate/training_manifest_v6_phase8.json
 
 # Expose port
 EXPOSE 8000
@@ -69,6 +70,7 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
 COPY src/ ./src/
 COPY serving/ ./serving/
 COPY workers/ ./workers/
+COPY models/candidates/v6_phase8-candidate/training_manifest_v6_phase8.json ./models/candidates/v6_phase8-candidate/training_manifest_v6_phase8.json
 
 # Install Python dependencies in production
 COPY requirements.runtime.txt .
