@@ -9,8 +9,10 @@ complete and point-in-time safe.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from datetime import datetime, timezone
 from math import isfinite
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 try:  # Container runtime exposes backend/src as the top-level ``src`` package.
@@ -42,6 +44,52 @@ def _utc(value: Any, field: str) -> datetime:
     if parsed.tzinfo is None:
         raise FeatureBridgeRejected(f"{field} must include a timezone")
     return parsed.astimezone(timezone.utc)
+
+
+_CANDIDATE_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "models"
+    / "candidates"
+    / "v6_phase8-candidate"
+    / "training_manifest_v6_phase8.json"
+)
+
+
+def persisted_candidate_schema_hash(
+    *,
+    schema_id: str = "apex_v1_89",
+    feature_count: int = 89,
+    manifest_path: Path | None = None,
+) -> str:
+    """Read the candidate's independently persisted training schema identity.
+
+    Missing or malformed metadata is a candidate admission failure; the serving
+    registry's own digest is never accepted as its expected training digest.
+    """
+    path = manifest_path or _CANDIDATE_MANIFEST_PATH
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FeatureBridgeRejected("candidate training manifest is unavailable or invalid") from exc
+
+    if not isinstance(manifest, Mapping):
+        raise FeatureBridgeRejected("candidate training manifest is invalid")
+    features = manifest.get("features")
+    if not isinstance(features, Mapping):
+        raise FeatureBridgeRejected("candidate training manifest has no feature contract")
+    if features.get("feature_schema_version") != schema_id:
+        raise FeatureBridgeRejected("candidate training manifest schema id does not match")
+    if features.get("feature_count") != feature_count:
+        raise FeatureBridgeRejected("candidate training manifest feature count does not match")
+
+    schema_hash = features.get("feature_contract_sha256")
+    if (
+        not isinstance(schema_hash, str)
+        or len(schema_hash) != 64
+        or any(character not in "0123456789abcdef" for character in schema_hash)
+    ):
+        raise FeatureBridgeRejected("candidate training manifest schema hash is invalid")
+    return schema_hash
 
 
 class FeatureBridge:
@@ -149,4 +197,9 @@ class FeatureBridge:
         raise FeatureBridgeRejected("fallback vector has no semantic evidence or lineage")
 
 
-__all__ = ["BridgedFeatures", "FeatureBridge", "FeatureBridgeRejected"]
+__all__ = [
+    "BridgedFeatures",
+    "FeatureBridge",
+    "FeatureBridgeRejected",
+    "persisted_candidate_schema_hash",
+]
