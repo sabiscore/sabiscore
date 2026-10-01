@@ -28,6 +28,18 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   - Strengthened `.gitignore` rules for candidate model training binaries (`backend/models/candidates/**/*.pkl`) and joblib caches (`backend/data/cache/*.joblib`).
   - Audited scraper boundaries: verified zero imports or leaks from `apps/scraper/` into production serving routes (`backend/src/api/` or `apps/web/src/app/`).
 - **Release Artifacts**: Generated and attested `reports/release/v21-audit-manifest.json`, `reports/research/v21-market-evaluation-protocol.json` (SHA-256: `43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c`), `reports/audits/v20-claim-reconciliation.json`, and `reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md`.
+- **CI Pipeline Green Parity & Security Remediation (PR #262)**:
+  - **GitHub Actions Workflows**: 100% green across all suites on `feat/v21-certification-recovery`:
+    - `CI - Canonical Platform` (Backend Lint, Typecheck, Tests; Web Lint, Typecheck, Build; Playwright Smoke; Playwright Tier 1-4; Scraper Validate & Tests; Secret Scan; Skill Registry Drift Check).
+    - `Validate Model Artifacts` (validate-models).
+    - `Block large files` (Reject repository hygiene violations).
+    - `Secret Scan` (Gitleaks, Secret Scan).
+    - `Vercel Preview Deployment`: Successful live deployment.
+  - **Ruff & Scopes Parity**: Cleaned all `E4,E7,E9,F` lint findings across `backend/scripts/` (unused imports, list comprehension variable naming, sys.path import ordering).
+  - **Candidate Artifact CI Parity**: `test_gate_20_candidate_lineage_and_artifacts` verifies manifest SHA-256 digests across all 6 leagues and conditionally verifies file size when binary `.pkl` models exist on disk, aligning with `.gitignore` binary model exclusion on CI runners.
+  - **LF Checksum Normalization**: Declared `*.sha256 text eol=lf` in `.gitattributes`, normalized `reports/research/v19-evaluation-protocol.json` and `.sha256` to LF hash, and added newline normalization in `test_gate_22`.
+  - **SonarCloud Security Resolution**: Resolved CWE-22/CWE-99 (S2083) path traversal vulnerability in `backend/scripts/v21_certification.py` using strict `resolve()` / `is_relative_to(REPORTS)` validation and safe context manager file writing. Verified `CLOSED` / `FIXED` on SonarCloud.
+  - **Background Collector Async Coverage**: Added unit tests for `_clv_capture_tick`, `_background_settlement_sync`, and `_background_clv_capture` in `test_v21_certification_recovery.py`.
 
 ## Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0, 2026-10-01
 
