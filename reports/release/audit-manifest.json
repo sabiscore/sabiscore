@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01T01:14:00Z",
+  "generated_at": "2026-10-01T01:23:00Z",
   "directive": "V18.0",
   "files": {
     "backend/src/evidence/__init__.py": {
@@ -55,12 +55,12 @@
       "size_bytes": 4543
     },
     "apps/web/src/components/evidence-drawer.tsx": {
-      "sha256": "cdee7297864d4cc3cbd6fe5117c3149ddbbda642e05e610217e6dbc475bf6cc6",
-      "size_bytes": 7996
+      "sha256": "7ca8229c33ccca66ea7db58bc42e34aad543be06ad4b1b50bef4541804c421d8",
+      "size_bytes": 7962
     },
     "apps/web/src/components/full-analysis-dashboard.tsx": {
-      "sha256": "f745ff262182a8e566d39234fcd351a489f7b521483ee27864bea39e8f1eaad9",
-      "size_bytes": 85566
+      "sha256": "6f003a761f0bd6f5fe289436d7b177950a50f5efee6e03b8545cf9644fd195d7",
+      "size_bytes": 85531
     },
     "reports/audits/repo-cartography.json": {
       "sha256": "1708f23e48ee16526b89d28f16a28ffe808735948e7fa38fbbf833cdb64a3919",

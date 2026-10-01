@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { X, ShieldAlert, CheckCircle, Clock, AlertTriangle, Layers, ExternalLink } from "lucide-react";
+import { X, ShieldAlert, AlertTriangle, Layers } from "lucide-react";
 import { formatLagosTimestamp } from "@/lib/lagos-time";
 import { cn } from "@/lib/utils";
 

@@ -33,9 +33,7 @@ import {
   Tooltip,
   KellyTooltip,
   EdgeTooltip,
-  EvTooltip,
   FairProbTooltip,
-  ImpliedProbTooltip,
 } from "@/components/ui/ResponsibleGamblingTooltip";
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { mapEvidenceFreshness } from "@/lib/freshness";
