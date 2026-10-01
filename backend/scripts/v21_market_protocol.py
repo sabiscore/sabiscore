@@ -131,7 +131,9 @@ def evaluate_market_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             scores.append(float(ranked_probability_score(int(outcome), list(probabilities))))
     if not ids or len(ids) != len(set(ids)):
         raise ValueError("evaluation rows must be non-empty and unique by fixture")
-    mean = lambda scores: sum(scores) / len(scores)
+    def mean(s_list: list[float]) -> float:
+        return sum(s_list) / len(s_list)
+
     return {
         "fixture_count": len(ids),
         "fixture_ids_sha256": hashlib.sha256("\n".join(sorted(ids)).encode()).hexdigest(),

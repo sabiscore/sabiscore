@@ -65,8 +65,8 @@
       "status": "CLAIM_EXCEEDS_IMPLEMENTATION"
     }
   ],
-  "generated_at": "2026-10-01T08:11:48.601779+00:00",
+  "generated_at": "2026-10-01T10:17:26.558213+00:00",
   "release_state": "ACTIVE_FAIL_CLOSED",
   "report_id": "v20-claim-reconciliation",
-  "repository_head": "e830535c9e6a3b1aefe08bd53186aa6e6c0a851d"
+  "repository_head": "20e2988c64a55de72d18e5dc7346c6c70bb8d00b"
 }

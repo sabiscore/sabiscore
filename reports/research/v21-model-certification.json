@@ -63,7 +63,7 @@
     "gate_8": "FAIL",
     "gate_9": "UNVERIFIED"
   },
-  "generated_at": "2026-10-01T08:11:48.601779+00:00",
+  "generated_at": "2026-10-01T10:17:26.558213+00:00",
   "incumbent_retained": true,
   "overall_decision": "CERTIFICATION_BLOCKED",
   "protocol_sha256": "43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c",

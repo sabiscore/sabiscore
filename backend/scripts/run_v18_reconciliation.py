@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,7 +207,7 @@ def reconcile_claims() -> dict:
     claims.append({
         "claim": "Historical fixture evidence is refreshed through season 2025/2026 (2526)",
         "source_report_reference": "reports/release/SABISCORE_PRODUCTION_FINALIZATION_REPORT.md Section 3",
-        "actual_repository_evidence": f"Cache contains fd_D1_2526.csv, fd_E0_2526.csv, fd_F1_2526.csv, fd_I1_2526.csv, fd_N1_2526.csv, fd_SP1_2526.csv with matches through current 2526 season.",
+        "actual_repository_evidence": "Cache contains fd_D1_2526.csv, fd_E0_2526.csv, fd_F1_2526.csv, fd_I1_2526.csv, fd_N1_2526.csv, fd_SP1_2526.csv with matches through current 2526 season.",
         "verification_method": "Cache file dates and fixture inspections",
         "status": "VERIFIED",
         "unknowns": "None.",
@@ -218,10 +217,11 @@ def reconcile_claims() -> dict:
     # 14. actual production imports
     main_py_path = BACKEND_ROOT / "src" / "api" / "main.py"
     pred_engine_path = BACKEND_ROOT / "src" / "models" / "prediction.py"
+    assert main_py_path.exists() and pred_engine_path.exists()
     claims.append({
         "claim": "Production FastAPI entrypoint imports PredictionEngine without synthetic fallbacks",
         "source_report_reference": "reports/release/SABISCORE_PRODUCTION_FINALIZATION_REPORT.md Section 1",
-        "actual_repository_evidence": f"main.py imports app router and initializes lifespan; routes/predictions.py calls PredictionEngine; no synthetic probability fallbacks exist.",
+        "actual_repository_evidence": "main.py imports app router and initializes lifespan; routes/predictions.py calls PredictionEngine; no synthetic probability fallbacks exist.",
         "verification_method": "Source code AST / grep verification",
         "status": "VERIFIED",
         "unknowns": "None.",

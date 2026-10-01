@@ -6,17 +6,13 @@ Produces all mandated research, evidence, and release artifacts under ResourceGu
 
 from __future__ import annotations
 
-import gc
 import hashlib
 import json
 import logging
-import math
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -27,23 +23,18 @@ BACKEND_ROOT = REPO_ROOT / "backend"
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from scripts.train_on_real_matches import (
-    _DIV_TO_LEAGUE,
+from scripts.train_on_real_matches import (  # noqa: E402
     _LEAGUE_TO_SLUG,
-    _SCHEMAS,
     _schema_for,
     _build_meta_features,
     build_dataset,
-    derive_apex_market_features,
     evaluate,
     load_matches,
 )
-from scripts._resource_guard import ResourceGuard
-from src.models.evaluation.metrics import (
+from scripts._resource_guard import ResourceGuard  # noqa: E402
+from src.models.evaluation.metrics import (  # noqa: E402
     accuracy_and_per_class,
     brier_score_decomposition,
-    expected_calibration_error,
-    log_loss_multiclass,
     ranked_probability_score,
     ranked_probability_score_rowwise,
     week_cluster_ci,
@@ -282,7 +273,6 @@ def run_pipeline():
     # PHASE 7 & 8: Primary Predictive Performance & Calibration Diagnostics
     # -------------------------------------------------------------------------
     logger.info("\n--- PHASE 7 & 8: Predictive Performance & Calibration Certification ---")
-    eval_baseline_manifest = json.loads(eval_baseline_manifest_path.read_text("utf-8"))
     eval_baseline_dir = eval_baseline_manifest_path.parent
 
     predictive_performance = {
@@ -451,7 +441,7 @@ def run_pipeline():
         "mean_market_rps": round(mean_mkt_rps, 5),
         "overall_candidate_beats_incumbent": mean_cand_rps < mean_inc_rps,
         "overall_candidate_beats_market": mean_cand_rps < mean_mkt_rps,
-        "leagues_beating_market": sum(1 for l in predictive_performance["leagues"].values() if l["comparisons"]["candidate_beats_market"])
+        "leagues_beating_market": sum(1 for league_data in predictive_performance["leagues"].values() if league_data["comparisons"]["candidate_beats_market"])
     }
 
     pred_out = REPO_ROOT / "reports" / "research" / "v19-predictive-performance.json"
@@ -546,7 +536,7 @@ def run_pipeline():
             "sample_size": len(per_match_records),
             "metric": "expected_calibration_error_10bin",
             "threshold": "ECE < 0.08 on chronological holdout",
-            "result": f"PASSED (mean holdout ECE = {np.mean([l['candidate']['calibration_error'] for l in predictive_performance['leagues'].values()]):.4f})",
+            "result": f"PASSED (mean holdout ECE = {np.mean([league_data['candidate']['calibration_error'] for league_data in predictive_performance['leagues'].values()]):.4f})",
             "evidence_artifact": "reports/research/v19-calibration-performance.json"
         },
         "C7-D_predictive_performance": {

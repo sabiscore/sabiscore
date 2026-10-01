@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import csv
 import json
-import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = REPO_ROOT / "backend"
@@ -247,8 +246,8 @@ def run_dataset_fitness_audit() -> Tuple[dict, dict]:
             }
         }
 
-    total_all_fixtures = sum(l["total_fixtures"] for l in league_summaries.values())
-    total_all_settled = sum(l["settled_matches"] for l in league_summaries.values())
+    total_all_fixtures = sum(entry["total_fixtures"] for entry in league_summaries.values())
+    total_all_settled = sum(entry["settled_matches"] for entry in league_summaries.values())
 
     coverage_report = {
         "report_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -269,8 +268,8 @@ def run_dataset_fitness_audit() -> Tuple[dict, dict]:
         },
         "leagues": league_summaries,
         "fitness_evaluation": {
-            "duplicate_rate_acceptable": sum(l["duplicates"] for l in league_summaries.values()) == 0,
-            "label_integrity_acceptable": all(l["missing_labels"] == 0 for l in league_summaries.values()),
+            "duplicate_rate_acceptable": sum(entry["duplicates"] for entry in league_summaries.values()) == 0,
+            "label_integrity_acceptable": all(entry["missing_labels"] == 0 for entry in league_summaries.values()),
             "temporal_ordering_strictly_observed": True,
             "class_balance_stable": True,
             "certification_status": "FIT_FOR_CHRONOLOGICAL_EVALUATION"
