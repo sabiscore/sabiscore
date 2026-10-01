@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-10-01T01:14:00Z",
+  "directive": "V18.0",
+  "files": {
+    "backend/src/evidence/__init__.py": {
+      "sha256": "3881d2566832ce52ab113508a43f7f2add82eac753e38f74fdfd3f49c40b2331",
+      "size_bytes": 592
+    },
+    "backend/src/evidence/envelope.py": {
+      "sha256": "f9ed8a9491ae6a8983889b82e2cbd6799f23b2a3e9677e32ba6038ae9d555bed",
+      "size_bytes": 5708
+    },
+    "backend/src/evidence/temporal.py": {
+      "sha256": "f5c28adefeeed43cf04bd55355d2d38abf992c9d2cec3f9de2acc9991f9d6fde",
+      "size_bytes": 6493
+    },
+    "backend/src/evidence/curator.py": {
+      "sha256": "b952e860ee2ed78990f789f600c9ea89bddf7357ba1071006bd50a92a09c2d54",
+      "size_bytes": 5325
+    },
+    "backend/src/models/certification_state.py": {
+      "sha256": "7ca8cf51ab6dc9bd6071433f113ae02450e309723b59a383dc67336b6d2a632b",
+      "size_bytes": 4783
+    },
+    "backend/src/models/c7_certification.py": {
+      "sha256": "d0360ac550bd83d6218f36484e8aef135dc840dcaa06cafee4af7ecff4d4fbc7",
+      "size_bytes": 6296
+    },
+    "backend/src/services/orchestrator.py": {
+      "sha256": "9a8dc0d103c561611a2786d84c21c899461e548ab8fb78fa4c30ee0df6e0691e",
+      "size_bytes": 25724
+    },
+    "backend/src/core/cache.py": {
+      "sha256": "25e2cbd9130628efe6bc77708dd6dbfbe227d65b4470132357fbd937a22021fc",
+      "size_bytes": 22526
+    },
+    "backend/tests/unit/test_pit_leakage_sentinel.py": {
+      "sha256": "15859c3cb1fa48260e891722f5d494f3dc5940f30a72bd3e59c62f10870fa585",
+      "size_bytes": 3384
+    },
+    "backend/tests/unit/test_evidence_curator.py": {
+      "sha256": "b0ad8442b56b95b27e924d2675585b85f3c6d2c79cde22ca7d6477fc42922a68",
+      "size_bytes": 2594
+    },
+    "backend/tests/unit/test_legacy_orchestrator_deprecation.py": {
+      "sha256": "8410c2e7900fd4d81f6f06dd2830221e7b31ce40856eff989c1debca11cb671e",
+      "size_bytes": 1179
+    },
+    "backend/tests/integration/test_preprocessing_e2e.py": {
+      "sha256": "d3201d62b4c2294c7eeeb4350a4ab4d5516ee72be28341aba953ab5009c1d31c",
+      "size_bytes": 6133
+    },
+    "apps/web/src/components/evidence-provenance-strip.tsx": {
+      "sha256": "6ad70eb8c6eb16179a8307fdea87253b6de5f0882826e90631a4d2e0c00002b4",
+      "size_bytes": 4543
+    },
+    "apps/web/src/components/evidence-drawer.tsx": {
+      "sha256": "cdee7297864d4cc3cbd6fe5117c3149ddbbda642e05e610217e6dbc475bf6cc6",
+      "size_bytes": 7996
+    },
+    "apps/web/src/components/full-analysis-dashboard.tsx": {
+      "sha256": "f745ff262182a8e566d39234fcd351a489f7b521483ee27864bea39e8f1eaad9",
+      "size_bytes": 85566
+    },
+    "reports/audits/repo-cartography.json": {
+      "sha256": "1708f23e48ee16526b89d28f16a28ffe808735948e7fa38fbbf833cdb64a3919",
+      "size_bytes": 5249
+    },
+    "reports/audits/v17-drift-report.json": {
+      "sha256": "c760cf58d66ddda63cd69a06a5234aa2403589c725e64c6d8467bc9b4c8b0c7f",
+      "size_bytes": 5813
+    },
+    "reports/evidence/apex-feature-lineage.json": {
+      "sha256": "58824a491c2250f0c60e5aeccbacf94640c026c63eefe8dd6d453b9ca82c82a8",
+      "size_bytes": 37359
+    },
+    "reports/evidence/provider-capability-ledger.json": {
+      "sha256": "1781682ae9d32c21c84b1357be34a6afe716c8abae269b01c17577cc3da6966a",
+      "size_bytes": 4768
+    },
+    "reports/evidence/data-gap-budget.json": {
+      "sha256": "8ab44982cc66a77a3e9646c9b61a69a4ae13a005315400a67afc057cf0ab0db2",
+      "size_bytes": 9487
+    },
+    "reports/research/pit-leakage-report.json": {
+      "sha256": "fe8d1144e29e544b5b0d40f2718291df978694410a24becf9e0d3a64dc39eacc",
+      "size_bytes": 1787
+    },
+    "reports/monitoring/model-drift-policy.json": {
+      "sha256": "119822f978203918e45ca758efe817d1efb7c0f2536e22c5760dc0d9549ec089",
+      "size_bytes": 4094
+    },
+    "reports/release/promotion-attestation.json": {
+      "sha256": "679188f91868398ece1e060d7db62a9d27166cb4509cab687079da470117ccdb",
+      "size_bytes": 2612
+    },
+    "reports/release/SABISCORE_PRODUCTION_FINALIZATION_REPORT.md": {
+      "sha256": "1fa403dd9560c08f8c9dda1f204370c3e22e608c90dbe344e7bb9a708aece078",
+      "size_bytes": 9477
+    },
+    "scripts/verify-directive-v18.mjs": {
+      "sha256": "b6c3e48bba24f6f0cdc12e546d9a6e7186e4073a8a17166e1c34ed6924bd7a1b",
+      "size_bytes": 8339
+    },
+    "docs/DEBT.md": {
+      "sha256": "a0e6145818f87fe3aa40d07e45498d2cb6008919a6614505bea239b4c458e564",
+      "size_bytes": 887292
+    },
+    "docs/ai/CODEX_VERIFIED_STATE.md": {
+      "sha256": "e173fec554f9c6110a7d175107891c9b22a5c6ec2374ed5877ae70b6e83b0019",
+      "size_bytes": 49904
+    },
+    "package.json": {
+      "sha256": "4101c51207cb8a5551d2a582b668f63ba3b3eda6f2cefa23c74e7f8625c564be",
+      "size_bytes": 3941
+    }
+  }
+}

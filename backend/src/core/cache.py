@@ -291,8 +291,23 @@ class RedisCache:
         self.metrics.record_miss()
         return None
 
+    def _bounded_jitter_ttl(self, key: str, ttl_value: int) -> int:
+        """Deterministic bounded anti-stampede TTL jitter (Directive V18 Section 8.7).
+
+        Applies a deterministic +/- 5% jitter based on the SHA-256 digest of the key.
+        Prevents synchronized expiration across cache tiers while remaining 100%
+        reproducible across test runs and distributed processes.
+        """
+        if ttl_value <= 10:
+            return ttl_value
+        max_delta = max(1, int(ttl_value * 0.05))
+        key_hash = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16)
+        offset = (key_hash % (2 * max_delta + 1)) - max_delta
+        return max(1, ttl_value + offset)
+
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        ttl_value = ttl or self.ttl
+        base_ttl = ttl or self.ttl
+        ttl_value = self._bounded_jitter_ttl(key, base_ttl)
         payload = self._serialize(value)
 
         # Write to all available tiers (best-effort)

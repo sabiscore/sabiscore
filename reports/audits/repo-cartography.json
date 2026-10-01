@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:33:00Z",
+  "repository_revision": "c01cc8bd9887febff44fb8b301b067e058973eae",
+  "default_branch": "master",
+  "worktree_clean_at_start": false,
+  "applications": [
+    {
+      "name": "backend",
+      "path": "backend",
+      "runtime": "Python 3.11+",
+      "framework": "FastAPI",
+      "role": "Authoritative prediction, evidence reconciliation, betting intelligence, and API service"
+    },
+    {
+      "name": "web",
+      "path": "apps/web",
+      "runtime": "Node.js 20+ / pnpm",
+      "framework": "Next.js 15.5.6 / React 18.3.1 / Tailwind CSS v4",
+      "role": "Deterministic public UI presentation and backend API proxy"
+    },
+    {
+      "name": "scraper",
+      "path": "apps/scraper",
+      "runtime": "Node.js 20+ / Crawlee",
+      "framework": "Crawlee / Playwright",
+      "role": "Offline batch data extraction and raw manifest generation (strictly deactivated in production)"
+    }
+  ],
+  "production_entrypoints": [
+    "backend/src/api/main.py",
+    "apps/web/src/middleware.ts",
+    "apps/web/src/app"
+  ],
+  "offline_entrypoints": [
+    "apps/scraper/src/main.mjs",
+    "backend/src/data/train_on_real_matches.py",
+    "backend/scripts/run_heavy_job.py"
+  ],
+  "model_artifacts": [
+    {
+      "league": "bundesliga",
+      "artifact": "backend/models/bundesliga_ensemble_v5_phase7.pkl",
+      "sha256": "0d1a09c1a3883e751a0bdfda84eab9e975188987ee951789e382aad10621d7ad"
+    },
+    {
+      "league": "epl",
+      "artifact": "backend/models/epl_ensemble_v5_phase7.pkl",
+      "sha256": "24a59fd71e3f5a0ed8532d215e3acc232188f88073773d1b48576994dc8ac222"
+    },
+    {
+      "league": "eredivisie",
+      "artifact": "backend/models/eredivisie_ensemble_v5_phase7.pkl",
+      "sha256": "2a85ec356fe9c42e54983344cb8f0633e3f56b5a1563eedfc3e1d52a29d2689a"
+    },
+    {
+      "league": "la_liga",
+      "artifact": "backend/models/la_liga_ensemble_v5_phase7.pkl",
+      "sha256": "8626f3976bec88039beb330db1da93a8bb30dc141011ec5bb28f3d5e122a374a"
+    },
+    {
+      "league": "ligue_1",
+      "artifact": "backend/models/ligue_1_ensemble_v5_phase7.pkl",
+      "sha256": "8071c831786ac375316507ec107b4e005df2748d315fc8fa60b04cfbcf193bfd"
+    },
+    {
+      "league": "serie_a",
+      "artifact": "backend/models/serie_a_ensemble_v5_phase7.pkl",
+      "sha256": "923b7fc4ac99624687fc8f8bc4547ecf42e770bbce1152fa79ead3a838e698ec"
+    }
+  ],
+  "data_providers": [
+    {
+      "id": "football-data",
+      "name": "football-data.org",
+      "role": "Primary fixture backbone, match results, standings, and historical domestic results",
+      "auth_required": true,
+      "production_allowed": true
+    },
+    {
+      "id": "the-odds-api",
+      "name": "The Odds API",
+      "role": "Multi-bookmaker odds snapshots, market movements, closing line value capture",
+      "auth_required": true,
+      "production_allowed": true
+    },
+    {
+      "id": "api-football",
+      "name": "API-Football (API-Sports)",
+      "role": "Secondary enrichment: injuries, lineups, player statistics",
+      "auth_required": true,
+      "production_allowed": true
+    },
+    {
+      "id": "statsbomb-open-data",
+      "name": "StatsBomb Open Data",
+      "role": "Offline feature research, causal ablation, historical calibration reference",
+      "auth_required": false,
+      "production_allowed": false
+    }
+  ],
+  "critical_dependencies": [
+    "fastapi>=0.110.0",
+    "pydantic>=2.7.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "scikit-learn>=1.8.0",
+    "xgboost>=2.0.0",
+    "lightgbm>=4.3.0",
+    "next@15.5.6",
+    "react@18.3.1",
+    "tailwindcss@4.0.0",
+    "crawlee@3.8.0"
+  ],
+  "frozen_protocols": [
+    {
+      "protocol_id": "C6",
+      "title": "Served Generation vs Pinnacle Close Protocol",
+      "file": "reports/research/c6-served-generation-vs-close-protocol.json",
+      "sha256": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+      "frozen_date": "2026-09-27",
+      "replicates": 10000,
+      "seed": 42
+    }
+  ],
+  "verification_commands": [
+    "node scripts/verify-directive-v17.mjs",
+    "node scripts/verify-directive-v18.mjs"
+  ],
+  "legacy_paths": [
+    "backend/src/services/orchestrator.py",
+    "backend/src/models/orchestrator.py"
+  ],
+  "suspected_orphans": [
+    "apps/web/src/components/live-prediction-flow.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/prediction-card.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/prediction-error-boundary.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/prediction-loading.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/prediction-skeleton.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/insights-display-wrapper.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/insights-display.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/insights-error-state.tsx (unreferenced, pruned in V17 audit)",
+    "apps/web/src/components/insights-error-state.test.tsx (unreferenced, pruned in V17 audit)",
+    "backend/models/training_log.txt (0-byte file, pruned in V17 audit)"
+  ],
+  "unknowns": []
+}

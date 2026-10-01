@@ -82,7 +82,10 @@ export function ProbabilityDumbbell({
           );
         })}
       </svg>
-      <p className="whitespace-pre text-[10px] text-slate-400">● model  ○ fair  | break-even</p>
+      <p className="whitespace-pre text-[10px] font-medium text-slate-400">● model  ○ fair  | break-even</p>
+      <p className="text-[10px] text-slate-500 leading-tight">
+        Value Edge is visualized where model likelihood (●) exceeds bookmaker fair probability (○) and market hurdle (|).
+      </p>
     </div>
   );
 }

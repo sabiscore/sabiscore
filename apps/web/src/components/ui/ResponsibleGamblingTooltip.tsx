@@ -117,7 +117,7 @@ export function ResponsibleGamblingBanner({ compact = false }: ResponsibleGambli
 export function KellyTooltip() {
   return (
     <Tooltip 
-      content="Kelly Criterion suggests optimal bet sizing based on edge and probability. We recommend using 1/4 Kelly (shown here) for safer bankroll management."
+      content="Kelly Criterion suggests optimal bet sizing based on statistical edge and calibrated probability. SabiScore applies Quarter-Kelly (1/4 Kelly, capped at 5.0%) for disciplined capital and bankroll preservation."
       type="help"
     >
       <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
@@ -131,7 +131,49 @@ export function KellyTooltip() {
 export function EdgeTooltip() {
   return (
     <Tooltip 
-      content="Edge is our model's probability minus the bookmaker's fair probability — the price with the bookmaker's margin removed, not the raw odds. A positive edge means the model rates the outcome higher than the fair market does."
+      content="Value Edge is the model's calibrated probability minus the bookmaker's fair probability (the market price with margin removed). A positive edge indicates long-term positive expected value (+EV)."
+      type="info"
+    >
+      <Info className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+    </Tooltip>
+  );
+}
+
+/**
+ * Expected Return / Expected Value (+EV) Explainer Tooltip
+ */
+export function EvTooltip() {
+  return (
+    <Tooltip 
+      content="Expected Return (+EV): The projected mathematical return per unit staked over hundreds of iterations if the current market price remains available. Shown only on certified model forecasts."
+      type="info"
+    >
+      <Info className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+    </Tooltip>
+  );
+}
+
+/**
+ * Implied / Break-Even Probability Explainer Tooltip
+ */
+export function ImpliedProbTooltip() {
+  return (
+    <Tooltip 
+      content="Break-Even Probability: The raw win rate required by the bookmaker's current price (1 / decimal odds) to break even over time. A positive edge exists when the model likelihood exceeds this threshold."
+      type="info"
+    >
+      <Info className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+    </Tooltip>
+  );
+}
+
+/**
+ * Fair Market Probability Explainer Tooltip
+ */
+export function FairProbTooltip() {
+  return (
+    <Tooltip 
+      content="Fair Market Probability: The consensus market probability with the bookmaker's margin (overround) mathematically removed using proportional normalization or Shin's method."
       type="info"
     >
       <Info className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />

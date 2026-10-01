@@ -1,0 +1,1395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "feature_schema": "apex_v1_68",
+  "total_features": 68,
+  "generated_at": "2026-10-01T00:34:00Z",
+  "directive": "V18.0 Section 2.3",
+  "features": [
+    {
+      "feature_name": "home_form_last5_home",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "points_avg",
+      "unit": "points",
+      "expected_range": [
+        0.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_wins_last5_home",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "wins",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_draws_last5_home",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "draws",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_losses_last5_home",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "losses",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_form_last5_away",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "points_avg",
+      "unit": "points",
+      "expected_range": [
+        0.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_wins_last5_away",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "wins",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_draws_last5_away",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "draws",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_losses_last5_away",
+      "feature_family": "form",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "sum",
+      "unit": "losses",
+      "expected_range": [
+        0,
+        5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_goals_for_avg",
+      "feature_family": "scoring",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "mean",
+      "unit": "goals/match",
+      "expected_range": [
+        0.0,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_goals_against_avg",
+      "feature_family": "scoring",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "mean",
+      "unit": "goals/match",
+      "expected_range": [
+        0.0,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_goals_for_avg",
+      "feature_family": "scoring",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "mean",
+      "unit": "goals/match",
+      "expected_range": [
+        0.0,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_goals_against_avg",
+      "feature_family": "scoring",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "mean",
+      "unit": "goals/match",
+      "expected_range": [
+        0.0,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "total_goals_expected",
+      "feature_family": "scoring",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "bivariate_poisson",
+      "unit": "expected_goals",
+      "expected_range": [
+        0.5,
+        6.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_gd_recent",
+      "feature_family": "goal_diff",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "diff",
+      "unit": "goals",
+      "expected_range": [
+        -15,
+        15
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_gd_recent",
+      "feature_family": "goal_diff",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "diff",
+      "unit": "goals",
+      "expected_range": [
+        -15,
+        15
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "combined_attack",
+      "feature_family": "strength",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "additive_ratio",
+      "unit": "index",
+      "expected_range": [
+        0.2,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "combined_defense_weakness",
+      "feature_family": "strength",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "additive_ratio",
+      "unit": "index",
+      "expected_range": [
+        0.2,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "market_prob_home",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "critical",
+      "transformation": "shin_devig",
+      "unit": "probability",
+      "expected_range": [
+        0.01,
+        0.99
+      ],
+      "leakage_risk": "medium_if_post_close"
+    },
+    {
+      "feature_name": "market_prob_draw",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "critical",
+      "transformation": "shin_devig",
+      "unit": "probability",
+      "expected_range": [
+        0.01,
+        0.99
+      ],
+      "leakage_risk": "medium_if_post_close"
+    },
+    {
+      "feature_name": "market_prob_away",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "critical",
+      "transformation": "shin_devig",
+      "unit": "probability",
+      "expected_range": [
+        0.01,
+        0.99
+      ],
+      "leakage_risk": "medium_if_post_close"
+    },
+    {
+      "feature_name": "market_edge_home",
+      "feature_family": "market",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "the-odds-api"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "prob_minus_implied",
+      "unit": "probability_delta",
+      "expected_range": [
+        -0.5,
+        0.5
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "market_favorite",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "argmin_odds",
+      "unit": "categorical_int",
+      "expected_range": [
+        -1,
+        1
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "odds_ratio",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "ratio",
+      "unit": "ratio",
+      "expected_range": [
+        0.05,
+        20.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "log_odds_home",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "log1p",
+      "unit": "log_odds",
+      "expected_range": [
+        0.01,
+        4.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "log_odds_draw",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "log1p",
+      "unit": "log_odds",
+      "expected_range": [
+        0.01,
+        4.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "log_odds_away",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "log1p",
+      "unit": "log_odds",
+      "expected_range": [
+        0.01,
+        4.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "draw_probability",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "shin_devig_draw",
+      "unit": "probability",
+      "expected_range": [
+        0.05,
+        0.6
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "market_confidence",
+      "feature_family": "market",
+      "source_priority": [
+        "the-odds-api"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "entropy_inverse",
+      "unit": "confidence_index",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "ev_home",
+      "feature_family": "market",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "the-odds-api"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "p_times_odds_minus_1",
+      "unit": "ratio",
+      "expected_range": [
+        -1.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "ev_draw",
+      "feature_family": "market",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "the-odds-api"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "p_times_odds_minus_1",
+      "unit": "ratio",
+      "expected_range": [
+        -1.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "ev_away",
+      "feature_family": "market",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "the-odds-api"
+      ],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "p_times_odds_minus_1",
+      "unit": "ratio",
+      "expected_range": [
+        -1.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_home_wins",
+      "feature_family": "h2h",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 604800,
+      "information_cutoff_rule": "t_h2h <= t_cutoff - 2h",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "count",
+      "unit": "matches",
+      "expected_range": [
+        0,
+        20
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_away_wins",
+      "feature_family": "h2h",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 604800,
+      "information_cutoff_rule": "t_h2h <= t_cutoff - 2h",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "count",
+      "unit": "matches",
+      "expected_range": [
+        0,
+        20
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_draws",
+      "feature_family": "h2h",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 604800,
+      "information_cutoff_rule": "t_h2h <= t_cutoff - 2h",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "count",
+      "unit": "matches",
+      "expected_range": [
+        0,
+        20
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_matches",
+      "feature_family": "h2h",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 604800,
+      "information_cutoff_rule": "t_h2h <= t_cutoff - 2h",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "count",
+      "unit": "matches",
+      "expected_range": [
+        0,
+        30
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_dominance",
+      "feature_family": "h2h",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 604800,
+      "information_cutoff_rule": "t_h2h <= t_cutoff - 2h",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "win_rate_diff",
+      "unit": "index",
+      "expected_range": [
+        -1.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_venue_win_rate",
+      "feature_family": "venue",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "rate",
+      "unit": "probability",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_venue_draw_rate",
+      "feature_family": "venue",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "rate",
+      "unit": "probability",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_venue_loss_rate",
+      "feature_family": "venue",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "api-football"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "rate",
+      "unit": "probability",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_advantage_strength",
+      "feature_family": "venue",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [
+        "football-data.org"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "home_ppg_minus_away_ppg",
+      "unit": "points",
+      "expected_range": [
+        -2.0,
+        3.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "day_of_week",
+      "feature_family": "calendar",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "weekday_int",
+      "unit": "day",
+      "expected_range": [
+        0,
+        6
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "is_weekend",
+      "feature_family": "calendar",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "boolean_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "month",
+      "feature_family": "calendar",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "month_int",
+      "unit": "month",
+      "expected_range": [
+        1,
+        12
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "season_phase",
+      "feature_family": "calendar",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "matchday_fraction",
+      "unit": "progress",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "league_home_rate",
+      "feature_family": "league",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "historical_corpus"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_matches <= t_cutoff - 2h",
+      "minimum_coverage": 0.98,
+      "critical_or_advisory": "critical",
+      "transformation": "rate",
+      "unit": "probability",
+      "expected_range": [
+        0.25,
+        0.65
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "league_avg_goals",
+      "feature_family": "league",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "historical_corpus"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_matches <= t_cutoff - 2h",
+      "minimum_coverage": 0.98,
+      "critical_or_advisory": "critical",
+      "transformation": "mean",
+      "unit": "goals/match",
+      "expected_range": [
+        1.8,
+        3.8
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "league_draw_rate",
+      "feature_family": "league",
+      "source_priority": [
+        "football-data.org"
+      ],
+      "fallback_sources": [
+        "historical_corpus"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_matches <= t_cutoff - 2h",
+      "minimum_coverage": 0.98,
+      "critical_or_advisory": "critical",
+      "transformation": "rate",
+      "unit": "probability",
+      "expected_range": [
+        0.15,
+        0.4
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "form_market_agreement_home",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "sign_concordance",
+      "unit": "indicator",
+      "expected_range": [
+        -1,
+        1
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "form_market_disagreement",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "abs_diff",
+      "unit": "index",
+      "expected_range": [
+        0.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_attack_vs_away_defense",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "multiplication",
+      "unit": "ratio",
+      "expected_range": [
+        0.1,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "away_attack_vs_home_defense",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "multiplication",
+      "unit": "ratio",
+      "expected_range": [
+        0.1,
+        5.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "venue_market_combo",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.9,
+      "critical_or_advisory": "advisory",
+      "transformation": "weighted_sum",
+      "unit": "index",
+      "expected_range": [
+        -1.0,
+        1.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "h2h_market_agreement",
+      "feature_family": "composite",
+      "source_priority": [
+        "derived"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 3600,
+      "information_cutoff_rule": "t_quote <= t_cutoff",
+      "minimum_coverage": 0.8,
+      "critical_or_advisory": "advisory",
+      "transformation": "sign_concordance",
+      "unit": "indicator",
+      "expected_range": [
+        -1,
+        1
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "league_Bundesliga",
+      "feature_family": "onehot",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "onehot_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "league_EPL",
+      "feature_family": "onehot",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "onehot_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "league_La_Liga",
+      "feature_family": "onehot",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "onehot_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "league_Ligue_1",
+      "feature_family": "onehot",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "onehot_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "league_Serie_A",
+      "feature_family": "onehot",
+      "source_priority": [
+        "fixture_schedule"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "deterministic",
+      "minimum_coverage": 1.0,
+      "critical_or_advisory": "critical",
+      "transformation": "onehot_int",
+      "unit": "flag",
+      "expected_range": [
+        0,
+        1
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "elo_difference",
+      "feature_family": "elo",
+      "source_priority": [
+        "elo_replay"
+      ],
+      "fallback_sources": [
+        "historical_results"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "critical",
+      "transformation": "elo_home_minus_away",
+      "unit": "elo_points",
+      "expected_range": [
+        -600.0,
+        600.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "elo_home_trend_5",
+      "feature_family": "elo",
+      "source_priority": [
+        "elo_replay"
+      ],
+      "fallback_sources": [
+        "historical_results"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "elo_delta_last5",
+      "unit": "elo_points",
+      "expected_range": [
+        -200.0,
+        200.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "elo_away_trend_5",
+      "feature_family": "elo",
+      "source_priority": [
+        "elo_replay"
+      ],
+      "fallback_sources": [
+        "historical_results"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "elo_delta_last5",
+      "unit": "elo_points",
+      "expected_range": [
+        -200.0,
+        200.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "elo_league_adjusted",
+      "feature_family": "elo",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.0",
+      "unit": "elo_points",
+      "expected_range": [
+        0.0,
+        0.0
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "elo_momentum_cross",
+      "feature_family": "elo",
+      "source_priority": [
+        "elo_replay"
+      ],
+      "fallback_sources": [
+        "historical_results"
+      ],
+      "freshness_limit_seconds": 86400,
+      "information_cutoff_rule": "t_match <= t_cutoff - 2h",
+      "minimum_coverage": 0.95,
+      "critical_or_advisory": "advisory",
+      "transformation": "trend_difference",
+      "unit": "elo_points",
+      "expected_range": [
+        -300.0,
+        300.0
+      ],
+      "leakage_risk": "low"
+    },
+    {
+      "feature_name": "home_pressing_intensity",
+      "feature_family": "tactical",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.55",
+      "unit": "ppda_ratio",
+      "expected_range": [
+        0.55,
+        0.55
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "progressive_carry_diff",
+      "feature_family": "tactical",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.0",
+      "unit": "carries",
+      "expected_range": [
+        0.0,
+        0.0
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "shot_quality_diff",
+      "feature_family": "tactical",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.0",
+      "unit": "xg_diff",
+      "expected_range": [
+        0.0,
+        0.0
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "key_passes_under_pressure_diff",
+      "feature_family": "tactical",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.0",
+      "unit": "passes",
+      "expected_range": [
+        0.0,
+        0.0
+      ],
+      "leakage_risk": "zero"
+    },
+    {
+      "feature_name": "set_piece_xg_diff",
+      "feature_family": "tactical",
+      "source_priority": [
+        "permanent_data_gap"
+      ],
+      "fallback_sources": [],
+      "freshness_limit_seconds": 0,
+      "information_cutoff_rule": "permanent_gap_slot",
+      "minimum_coverage": 0.0,
+      "critical_or_advisory": "advisory",
+      "transformation": "registry_default_0.0",
+      "unit": "xg_diff",
+      "expected_range": [
+        0.0,
+        0.0
+      ],
+      "leakage_risk": "zero"
+    }
+  ]
+}
