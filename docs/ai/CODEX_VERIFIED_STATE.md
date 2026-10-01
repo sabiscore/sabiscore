@@ -38,8 +38,12 @@ tests, Git history, and runtime configuration. Update it only with fresh evidenc
   - **Ruff & Scopes Parity**: Cleaned all `E4,E7,E9,F` lint findings across `backend/scripts/` (unused imports, list comprehension variable naming, sys.path import ordering).
   - **Candidate Artifact CI Parity**: `test_gate_20_candidate_lineage_and_artifacts` verifies manifest SHA-256 digests across all 6 leagues and conditionally verifies file size when binary `.pkl` models exist on disk, aligning with `.gitignore` binary model exclusion on CI runners.
   - **LF Checksum Normalization**: Declared `*.sha256 text eol=lf` in `.gitattributes`, normalized `reports/research/v19-evaluation-protocol.json` and `.sha256` to LF hash, and added newline normalization in `test_gate_22`.
-  - **SonarCloud Security Resolution**: Resolved CWE-22/CWE-99 (S2083) path traversal vulnerability in `backend/scripts/v21_certification.py` using strict `resolve()` / `is_relative_to(REPORTS)` validation and safe context manager file writing. Verified `CLOSED` / `FIXED` on SonarCloud.
-  - **Background Collector Async Coverage**: Added unit tests for `_clv_capture_tick`, `_background_settlement_sync`, and `_background_clv_capture` in `test_v21_certification_recovery.py`.
+  - **SonarCloud Quality Gate SUCCESS & Security Resolution**:
+    - Resolved CWE-22/CWE-99 (S2083) path traversal vulnerability in `backend/scripts/v21_certification.py` using strict `resolve()` / `is_relative_to(REPORTS)` validation and safe context manager file writing. Verified `CLOSED` / `FIXED` on SonarCloud.
+    - Expanded unit test coverage in `test_v21_certification_recovery.py` and `test_prediction_capture_service.py` across `lifespan(app)` collector initialization and cleanup, `get_full_analysis` candidate feature bridge admission and error branches, and `capture_due_predictions` session info trigger preservation.
+    - SonarCloud Code Analysis on PR #262: **SUCCESS (Quality Gate Passed)**.
+    - GitHub PR #262 Rollup: `mergeStateStatus: "CLEAN"`, `mergeable: "MERGEABLE"`, 100% of CI checks green.
+
 
 ## Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0, 2026-10-01
 
