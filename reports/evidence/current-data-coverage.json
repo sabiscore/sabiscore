@@ -1,0 +1,588 @@
+{
+  "report_timestamp": "2026-10-01T01:18:03.077176+00:00",
+  "directive": "V19.0 Phase 3 Dataset Fitness Certification",
+  "dataset_scope": {
+    "canonical_domestic_leagues": [
+      "BUNDESLIGA",
+      "EPL",
+      "EREDIVISIE",
+      "LA_LIGA",
+      "LIGUE_1",
+      "SERIE_A"
+    ],
+    "seasons_analyzed": [
+      "1920",
+      "2021",
+      "2122",
+      "2223",
+      "2324",
+      "2425",
+      "2526"
+    ],
+    "total_fixtures": 12765,
+    "total_settled_matches": 12765,
+    "overall_settlement_rate": 1.0,
+    "unique_teams_registered": 160
+  },
+  "data_sources": {
+    "primary_results_and_odds": "football-data.co.uk (verified cache)",
+    "auxiliary_weather": "open-meteo API (venue geopoint matched)",
+    "auxiliary_xg": "Understat / FBref rolling shot-quality rollups",
+    "auxiliary_market": "The Odds API (opening & closing lines)"
+  },
+  "leagues": {
+    "BUNDESLIGA": {
+      "total_fixtures": 2142,
+      "settled_matches": 2142,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 1.0,
+      "closing_odds_coverage": 1.0,
+      "class_distribution": {
+        "HOME": 0.4323,
+        "DRAW": 0.2474,
+        "AWAY": 0.3203
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "1920": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 123,
+            "DRAW": 68,
+            "AWAY": 115
+          }
+        },
+        "2021": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 129,
+            "DRAW": 81,
+            "AWAY": 96
+          }
+        },
+        "2122": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 143,
+            "DRAW": 73,
+            "AWAY": 90
+          }
+        },
+        "2223": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 145,
+            "DRAW": 75,
+            "AWAY": 86
+          }
+        },
+        "2324": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 134,
+            "DRAW": 81,
+            "AWAY": 91
+          }
+        },
+        "2425": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 118,
+            "DRAW": 77,
+            "AWAY": 111
+          }
+        },
+        "2526": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 134,
+            "DRAW": 75,
+            "AWAY": 97
+          }
+        }
+      }
+    },
+    "EPL": {
+      "total_fixtures": 2660,
+      "settled_matches": 2660,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 1.0,
+      "closing_odds_coverage": 1.0,
+      "class_distribution": {
+        "HOME": 0.4342,
+        "DRAW": 0.2365,
+        "AWAY": 0.3293
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "1920": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 172,
+            "DRAW": 92,
+            "AWAY": 116
+          }
+        },
+        "2021": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 144,
+            "DRAW": 83,
+            "AWAY": 153
+          }
+        },
+        "2122": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 163,
+            "DRAW": 88,
+            "AWAY": 129
+          }
+        },
+        "2223": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 184,
+            "DRAW": 87,
+            "AWAY": 109
+          }
+        },
+        "2324": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 175,
+            "DRAW": 82,
+            "AWAY": 123
+          }
+        },
+        "2425": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 155,
+            "DRAW": 93,
+            "AWAY": 132
+          }
+        },
+        "2526": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 162,
+            "DRAW": 104,
+            "AWAY": 114
+          }
+        }
+      }
+    },
+    "EREDIVISIE": {
+      "total_fixtures": 306,
+      "settled_matches": 306,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 1.0,
+      "closing_odds_coverage": 1.0,
+      "class_distribution": {
+        "HOME": 0.4444,
+        "DRAW": 0.2614,
+        "AWAY": 0.2941
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "2526": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 136,
+            "DRAW": 80,
+            "AWAY": 90
+          }
+        }
+      }
+    },
+    "LA_LIGA": {
+      "total_fixtures": 2660,
+      "settled_matches": 2660,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 1.0,
+      "closing_odds_coverage": 1.0,
+      "class_distribution": {
+        "HOME": 0.4515,
+        "DRAW": 0.2673,
+        "AWAY": 0.2812
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "1920": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 174,
+            "DRAW": 105,
+            "AWAY": 101
+          }
+        },
+        "2021": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 158,
+            "DRAW": 109,
+            "AWAY": 113
+          }
+        },
+        "2122": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 165,
+            "DRAW": 111,
+            "AWAY": 104
+          }
+        },
+        "2223": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 182,
+            "DRAW": 89,
+            "AWAY": 109
+          }
+        },
+        "2324": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 167,
+            "DRAW": 107,
+            "AWAY": 106
+          }
+        },
+        "2425": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 169,
+            "DRAW": 97,
+            "AWAY": 114
+          }
+        },
+        "2526": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 186,
+            "DRAW": 93,
+            "AWAY": 101
+          }
+        }
+      }
+    },
+    "LIGUE_1": {
+      "total_fixtures": 2337,
+      "settled_matches": 2337,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 0.9996,
+      "closing_odds_coverage": 0.9996,
+      "class_distribution": {
+        "HOME": 0.43,
+        "DRAW": 0.2469,
+        "AWAY": 0.3231
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0004,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "1920": {
+          "fixtures": 279,
+          "settled": 279,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 134,
+            "DRAW": 70,
+            "AWAY": 75
+          }
+        },
+        "2021": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 0.9974,
+          "closing_odds_coverage": 0.9974,
+          "class_balance": {
+            "HOME": 142,
+            "DRAW": 95,
+            "AWAY": 143
+          }
+        },
+        "2122": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 162,
+            "DRAW": 102,
+            "AWAY": 116
+          }
+        },
+        "2223": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 163,
+            "DRAW": 92,
+            "AWAY": 125
+          }
+        },
+        "2324": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 120,
+            "DRAW": 81,
+            "AWAY": 105
+          }
+        },
+        "2425": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 143,
+            "DRAW": 62,
+            "AWAY": 101
+          }
+        },
+        "2526": {
+          "fixtures": 306,
+          "settled": 306,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 141,
+            "DRAW": 75,
+            "AWAY": 90
+          }
+        }
+      }
+    },
+    "SERIE_A": {
+      "total_fixtures": 2660,
+      "settled_matches": 2660,
+      "settlement_rate": 1.0,
+      "missing_labels": 0,
+      "duplicates": 0,
+      "conflicting_fixtures": 0,
+      "opening_odds_coverage": 0.9989,
+      "closing_odds_coverage": 1.0,
+      "class_distribution": {
+        "HOME": 0.406,
+        "DRAW": 0.2628,
+        "AWAY": 0.3312
+      },
+      "critical_gaps": {
+        "missing_settlement_label_rate": 0.0,
+        "conflicting_records": 0
+      },
+      "advisory_gaps": {
+        "closing_price_missing_rate": 0.0,
+        "unresolved_team_identities": 0
+      },
+      "seasons": {
+        "1920": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 158,
+            "DRAW": 85,
+            "AWAY": 137
+          }
+        },
+        "2021": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 0.9947,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 155,
+            "DRAW": 97,
+            "AWAY": 128
+          }
+        },
+        "2122": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 0.9974,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 148,
+            "DRAW": 98,
+            "AWAY": 134
+          }
+        },
+        "2223": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 161,
+            "DRAW": 100,
+            "AWAY": 119
+          }
+        },
+        "2324": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 159,
+            "DRAW": 112,
+            "AWAY": 109
+          }
+        },
+        "2425": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 151,
+            "DRAW": 108,
+            "AWAY": 121
+          }
+        },
+        "2526": {
+          "fixtures": 380,
+          "settled": 380,
+          "opening_odds_coverage": 1.0,
+          "closing_odds_coverage": 1.0,
+          "class_balance": {
+            "HOME": 148,
+            "DRAW": 99,
+            "AWAY": 133
+          }
+        }
+      }
+    }
+  },
+  "fitness_evaluation": {
+    "duplicate_rate_acceptable": true,
+    "label_integrity_acceptable": true,
+    "temporal_ordering_strictly_observed": true,
+    "class_balance_stable": true,
+    "certification_status": "FIT_FOR_CHRONOLOGICAL_EVALUATION"
+  }
+}

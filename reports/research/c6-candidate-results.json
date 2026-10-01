@@ -1,0 +1,32 @@
+{
+  "protocol": "c6-served-generation-vs-close",
+  "protocol_sha256": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+  "evaluation_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "candidate_generation": "v6_phase8-candidate",
+  "c6_status": "INSUFFICIENT_SAMPLE",
+  "milestone_gate_required": 200,
+  "live_settled_sample_count": 0,
+  "historical_holdout_sample_size": 1987,
+  "historical_paired_results": {
+    "mean_delta_rps": 0.002924,
+    "98.33_percent_CI": [
+      0.000444,
+      0.005319
+    ],
+    "95_percent_CI": [
+      0.000889,
+      0.004868
+    ],
+    "beats_market_statistically": false,
+    "worse_than_market_statistically": true,
+    "alpha": 0.016666666666666666,
+    "n_weeks": 37
+  },
+  "benchmark_identity": {
+    "provider": "the_odds_api / football-data.co.uk",
+    "primary_bookmaker": "Pinnacle / Bet365",
+    "de_vig_method": "Shin bisection inversion & proportional normalization",
+    "quote_type": "pre_match_opening_and_closing"
+  },
+  "decision": "INSUFFICIENT_SAMPLE (Under fail-closed C6 protocol rule: live settled sample N < 200 must be marked INSUFFICIENT_SAMPLE, not PASS)."
+}

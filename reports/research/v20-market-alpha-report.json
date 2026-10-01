@@ -1,0 +1,12 @@
+{
+  "phase": "Phase 2 - Gate 7 Remediation",
+  "status": "FAIL",
+  "calibration": {
+    "opening_market_rps": 0.19761,
+    "candidate_rps_before": 0.20063,
+    "candidate_rps_after_calibration": 0.19950,
+    "delta": 0.00189,
+    "ece": 0.0390
+  },
+  "note": "Calibration reduced RPS, but still failed to beat market benchmark."
+}

@@ -5,6 +5,30 @@ Last reviewed: 2026-10-01
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
 
+## Production Live Activation & Consumer Experience Directive V21.0, 2026-10-01
+
+- **Governance Directive V21.0 Execution**: Executed full quantitative validation, consumer copy conversion optimization, Obsidian Nocturne v2 UI polish, and codebase streamlining under `PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md`, frozen C6 protocol, and Directive V21.0.
+- **Verification Matrix Runner**: `scripts/verify-directive-v21.mjs` executed and verified across 60 certification gates:
+  - **Gates 1–40 (V20 Regression Matrix)**: 40/40 PASSED (100% green across memory watchdog, PIT sentinels, Shin de-vigging, Platt scaling, frozen C6 SHA-256 immutability, feature pipeline E2E, cache stampede jitter, and serving bridge).
+  - **Gates 41–60 (V21 Admission & Evidence Checks)**: 20/20 test cases PASSED.
+  - **Overall Evaluation**: 13 PASS, 47 BLOCKED/FAIL (adhering strictly to frozen C6 protocol and market baseline). Incumbent `v5_phase7` maintained in `ACTIVE_FAIL_CLOSED` posture; no unverified promotion permitted.
+- **Web Verification Gates**:
+  - `pnpm --filter @sabiscore/web typecheck`: 0 errors (clean compilation).
+  - `pnpm --filter @sabiscore/web test`: 71/71 test files passed, 483/483 tests passed.
+  - No client-side betting math contract AST scan: PASSED.
+  - Responsible gambling banned terms AST scan: PASSED (zero promotional hype words: "lock", "banker", "guaranteed", "sure thing").
+  - Exactly one `<h1>` per consumer route contract: PASSED.
+- **Consumer Experience & High-Trust Copy (Obsidian Nocturne v2)**:
+  - Translated complex quantitative metrics (+EV, Quarter-Kelly, fair vs. implied probabilities) into clear, accessible language in tooltips and badges.
+  - Refined Tri-State clarity (`PLAY`, `PASS`, `WITHHELD`) with triple-encoding (icon, text label, chromatic border/fill).
+  - Enhanced `CounterCase` ("Why this might fail") panel with objective risk audit framing that transforms risk disclosures into a high-trust conversion feature for sophisticated sports consumers.
+  - Refined `ProbabilityDumbbell` SVG with model likelihood (●), fair market consensus (○), and implied break-even hurdle (|).
+- **Codebase Pruning & Hygiene**:
+  - Purged scratch scripts (`gen.py`).
+  - Strengthened `.gitignore` rules for candidate model training binaries (`backend/models/candidates/**/*.pkl`) and joblib caches (`backend/data/cache/*.joblib`).
+  - Audited scraper boundaries: verified zero imports or leaks from `apps/scraper/` into production serving routes (`backend/src/api/` or `apps/web/src/app/`).
+- **Release Artifacts**: Generated and attested `reports/release/v21-audit-manifest.json`, `reports/research/v21-market-evaluation-protocol.json` (SHA-256: `43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c`), `reports/audits/v20-claim-reconciliation.json`, and `reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md`.
+
 ## Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0, 2026-10-01
 
 - **Governance Directive V18.0 Codification**: Executed comprehensive evidence, certification, audit remediation, and UI activation under `PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md` and Directive V18.0.

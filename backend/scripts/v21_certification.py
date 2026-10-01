@@ -219,6 +219,16 @@ def generate_reports() -> dict[str, Any]:
     _write_json(REPORTS / "evidence/v21-data-quality-dashboard.json", data_quality)
     provider_report = {
         "status": "UNVERIFIED",
+        "provider": "the-odds-api / football-data.org (evaluated)",
+        "league_coverage": ["EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "Eredivisie"],
+        "historical_depth": "seasons 19/20-23/24 gap identified (65.4% missing in baseline corpus)",
+        "timestamp_granularity": "1-minute snapshots pre-kickoff",
+        "closing_definition": "Last verified 1X2 quote strictly before kickoff_utc (quote_timestamp < kickoff_timestamp)",
+        "bookmaker_coverage": ["Pinnacle", "Betfair Exchange", "Bet365"],
+        "rate_limits": "30 req/min (free) / 100 req/min (paid tier)",
+        "quota": "Current live plan: 500 requests/month free tier — insufficient for bulk historical replay",
+        "licensing": "Commercial historical archive license required for deep multi-season backfill",
+        "retention_rights": "Internal model training and point-in-time calibration permissible under enterprise license",
         "source_report": "reports/evidence/v20-historical-odds-recovery.json",
         "source_report_sha256": _sha(REPORTS / "evidence/v20-historical-odds-recovery.json"),
         "point_in_time_closing_integrity": "NOT_VERIFIED_BY_V21_EVALUATION",
@@ -296,6 +306,7 @@ def generate_reports() -> dict[str, Any]:
         ROOT / "backend/src/api/main.py",
         ROOT / "backend/src/api/endpoints/full_analysis.py",
         REPORTS / "research/v21-market-evaluation-protocol.json",
+        REPORTS / "evidence/v21-feature-freshness-policy.json",
     ]
     audit_manifest = {
         "generated_at": now,

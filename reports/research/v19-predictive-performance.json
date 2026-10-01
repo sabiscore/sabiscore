@@ -1,0 +1,500 @@
+{
+  "evaluation_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 7 Predictive Performance Certification",
+  "holdout_season": "2526",
+  "candidate_generation": "v6_phase8-candidate",
+  "incumbent_generation": "v11_clean2526",
+  "leagues": {
+    "BUNDESLIGA": {
+      "sample_size": 301,
+      "candidate": {
+        "rps": 0.19602,
+        "log_loss": 0.96769,
+        "brier": 0.57545,
+        "accuracy": 0.5382,
+        "calibration_error": 0.03913,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.6942,
+            "recall": 0.6364,
+            "f1": 0.664,
+            "support": 132
+          },
+          "class_1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 73
+          },
+          "class_2": {
+            "precision": 0.4407,
+            "recall": 0.8125,
+            "f1": 0.5714,
+            "support": 96
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.21152,
+        "log_loss": 1.0174,
+        "brier": 0.60886,
+        "accuracy": 0.5083,
+        "calibration_error": 0.07452
+      },
+      "market_baseline": {
+        "rps": 0.19084,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.015501,
+        "candidate_beats_market": false,
+        "delta_rps_vs_market": 0.005181
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            84,
+            1,
+            47
+          ],
+          [
+            21,
+            0,
+            52
+          ],
+          [
+            16,
+            2,
+            78
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 51,
+            "acc": 0.3529
+          },
+          "mid_confidence_40to60": {
+            "n": 172,
+            "acc": 0.4942
+          },
+          "high_confidence_above60": {
+            "n": 78,
+            "acc": 0.7564
+          }
+        }
+      }
+    },
+    "EPL": {
+      "sample_size": 375,
+      "candidate": {
+        "rps": 0.20444,
+        "log_loss": 1.01299,
+        "brier": 0.60773,
+        "accuracy": 0.4933,
+        "calibration_error": 0.05805,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.5142,
+            "recall": 0.7987,
+            "f1": 0.6256,
+            "support": 159
+          },
+          "class_1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 102
+          },
+          "class_2": {
+            "precision": 0.4531,
+            "recall": 0.5088,
+            "f1": 0.4793,
+            "support": 114
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.21387,
+        "log_loss": 1.04019,
+        "brier": 0.62516,
+        "accuracy": 0.4533,
+        "calibration_error": 0.06373
+      },
+      "market_baseline": {
+        "rps": 0.20537,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.009434,
+        "candidate_beats_market": true,
+        "delta_rps_vs_market": -0.000931
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            127,
+            0,
+            32
+          ],
+          [
+            64,
+            0,
+            38
+          ],
+          [
+            56,
+            0,
+            58
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 35,
+            "acc": 0.3429
+          },
+          "mid_confidence_40to60": {
+            "n": 220,
+            "acc": 0.4318
+          },
+          "high_confidence_above60": {
+            "n": 120,
+            "acc": 0.65
+          }
+        }
+      }
+    },
+    "EREDIVISIE": {
+      "sample_size": 260,
+      "candidate": {
+        "rps": 0.19938,
+        "log_loss": 0.9961,
+        "brier": 0.59457,
+        "accuracy": 0.5231,
+        "calibration_error": 0.04761,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.5402,
+            "recall": 0.8174,
+            "f1": 0.6505,
+            "support": 115
+          },
+          "class_1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 71
+          },
+          "class_2": {
+            "precision": 0.4884,
+            "recall": 0.5676,
+            "f1": 0.525,
+            "support": 74
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.20962,
+        "log_loss": 1.02955,
+        "brier": 0.61678,
+        "accuracy": 0.5,
+        "calibration_error": 0.06656
+      },
+      "market_baseline": {
+        "rps": 0.19692,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.010238,
+        "candidate_beats_market": false,
+        "delta_rps_vs_market": 0.002458
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            94,
+            0,
+            21
+          ],
+          [
+            48,
+            0,
+            23
+          ],
+          [
+            32,
+            0,
+            42
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 40,
+            "acc": 0.45
+          },
+          "mid_confidence_40to60": {
+            "n": 137,
+            "acc": 0.438
+          },
+          "high_confidence_above60": {
+            "n": 83,
+            "acc": 0.6988
+          }
+        }
+      }
+    },
+    "LA_LIGA": {
+      "sample_size": 375,
+      "candidate": {
+        "rps": 0.19846,
+        "log_loss": 0.97288,
+        "brier": 0.57727,
+        "accuracy": 0.5173,
+        "calibration_error": 0.04389,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.5918,
+            "recall": 0.7967,
+            "f1": 0.6792,
+            "support": 182
+          },
+          "class_1": {
+            "precision": 0.1111,
+            "recall": 0.0108,
+            "f1": 0.0196,
+            "support": 93
+          },
+          "class_2": {
+            "precision": 0.3967,
+            "recall": 0.48,
+            "f1": 0.4344,
+            "support": 100
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.21699,
+        "log_loss": 1.03415,
+        "brier": 0.62116,
+        "accuracy": 0.512,
+        "calibration_error": 0.09654
+      },
+      "market_baseline": {
+        "rps": 0.19628,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.018532,
+        "candidate_beats_market": false,
+        "delta_rps_vs_market": 0.00217
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            145,
+            4,
+            33
+          ],
+          [
+            52,
+            1,
+            40
+          ],
+          [
+            48,
+            4,
+            48
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 87,
+            "acc": 0.3218
+          },
+          "mid_confidence_40to60": {
+            "n": 181,
+            "acc": 0.4862
+          },
+          "high_confidence_above60": {
+            "n": 107,
+            "acc": 0.729
+          }
+        }
+      }
+    },
+    "LIGUE_1": {
+      "sample_size": 301,
+      "candidate": {
+        "rps": 0.20346,
+        "log_loss": 0.99476,
+        "brier": 0.59221,
+        "accuracy": 0.515,
+        "calibration_error": 0.03849,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.5843,
+            "recall": 0.7029,
+            "f1": 0.6382,
+            "support": 138
+          },
+          "class_1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 75
+          },
+          "class_2": {
+            "precision": 0.4296,
+            "recall": 0.6591,
+            "f1": 0.5202,
+            "support": 88
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.21521,
+        "log_loss": 1.03103,
+        "brier": 0.61748,
+        "accuracy": 0.5017,
+        "calibration_error": 0.06204
+      },
+      "market_baseline": {
+        "rps": 0.19913,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.011745,
+        "candidate_beats_market": false,
+        "delta_rps_vs_market": 0.004335
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            97,
+            0,
+            41
+          ],
+          [
+            39,
+            0,
+            36
+          ],
+          [
+            30,
+            0,
+            58
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 17,
+            "acc": 0.2941
+          },
+          "mid_confidence_40to60": {
+            "n": 202,
+            "acc": 0.4554
+          },
+          "high_confidence_above60": {
+            "n": 82,
+            "acc": 0.7073
+          }
+        }
+      }
+    },
+    "SERIE_A": {
+      "sample_size": 375,
+      "candidate": {
+        "rps": 0.20205,
+        "log_loss": 1.00182,
+        "brier": 0.597,
+        "accuracy": 0.5307,
+        "calibration_error": 0.02087,
+        "class_accuracy": {
+          "class_0": {
+            "precision": 0.49,
+            "recall": 0.8299,
+            "f1": 0.6162,
+            "support": 147
+          },
+          "class_1": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 97
+          },
+          "class_2": {
+            "precision": 0.616,
+            "recall": 0.5878,
+            "f1": 0.6016,
+            "support": 131
+          }
+        }
+      },
+      "incumbent": {
+        "rps": 0.20914,
+        "log_loss": 1.02012,
+        "brier": 0.61135,
+        "accuracy": 0.528,
+        "calibration_error": 0.09571
+      },
+      "market_baseline": {
+        "rps": 0.19714,
+        "quote_source": "opening_1x2_bet365_then_pinnacle"
+      },
+      "comparisons": {
+        "candidate_beats_incumbent": true,
+        "candidate_rps_improvement": 0.007085,
+        "candidate_beats_market": false,
+        "delta_rps_vs_market": 0.004911
+      },
+      "diagnostics": {
+        "confusion_matrix": [
+          [
+            122,
+            1,
+            24
+          ],
+          [
+            73,
+            0,
+            24
+          ],
+          [
+            54,
+            0,
+            77
+          ]
+        ],
+        "probability_bands": {
+          "low_confidence_sub40": {
+            "n": 57,
+            "acc": 0.3684
+          },
+          "mid_confidence_40to60": {
+            "n": 179,
+            "acc": 0.5084
+          },
+          "high_confidence_above60": {
+            "n": 139,
+            "acc": 0.6259
+          }
+        }
+      }
+    }
+  },
+  "overall_summary": {
+    "leagues_evaluated": 6,
+    "candidate_league_wins_vs_incumbent": 6,
+    "no_league_regression_passed": true,
+    "mean_candidate_rps": 0.20063,
+    "mean_incumbent_rps": 0.21272,
+    "mean_market_rps": 0.19761,
+    "overall_candidate_beats_incumbent": true,
+    "overall_candidate_beats_market": false,
+    "leagues_beating_market": 1
+  }
+}

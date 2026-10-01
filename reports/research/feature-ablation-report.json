@@ -1,0 +1,98 @@
+{
+  "report_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 5 Feature Ablation Report",
+  "holdout_season": "2526",
+  "ablation_evaluations": [
+    {
+      "feature_family": "CORE_BASELINE_68",
+      "description": "Core APEX 68 features without dynamic ratings",
+      "mean_holdout_rps": 0.2033,
+      "delta_rps_vs_baseline": 0.0,
+      "leagues": {
+        "EPL": {
+          "rps": 0.20645,
+          "log_loss": 1.02065,
+          "brier": 0.61196,
+          "calibration_error": 0.04189,
+          "accuracy": 0.488
+        },
+        "BUNDESLIGA": {
+          "rps": 0.20587,
+          "log_loss": 0.99528,
+          "brier": 0.59552,
+          "calibration_error": 0.05295,
+          "accuracy": 0.5249
+        },
+        "LA_LIGA": {
+          "rps": 0.19758,
+          "log_loss": 0.97438,
+          "brier": 0.5775,
+          "calibration_error": 0.05673,
+          "accuracy": 0.528
+        }
+      },
+      "incremental_value_decision": "RETAIN"
+    },
+    {
+      "feature_family": "ELO_REPLAY_M2A",
+      "description": "APEX 68 + Dynamic Elo Replay (FastEloReplay)",
+      "mean_holdout_rps": 0.2033,
+      "delta_rps_vs_baseline": 0.0,
+      "leagues": {
+        "EPL": {
+          "rps": 0.20645,
+          "log_loss": 1.02065,
+          "brier": 0.61196,
+          "calibration_error": 0.04189,
+          "accuracy": 0.488
+        },
+        "BUNDESLIGA": {
+          "rps": 0.20587,
+          "log_loss": 0.99528,
+          "brier": 0.59552,
+          "calibration_error": 0.05295,
+          "accuracy": 0.5249
+        },
+        "LA_LIGA": {
+          "rps": 0.19758,
+          "log_loss": 0.97438,
+          "brier": 0.5775,
+          "calibration_error": 0.05673,
+          "accuracy": 0.528
+        }
+      },
+      "incremental_value_decision": "RETAIN"
+    },
+    {
+      "feature_family": "PHASE8_RATING_FORM_89",
+      "description": "APEX 68 + Elo + Phase 8 Berrar/Pi/Form Ratings (89 features)",
+      "mean_holdout_rps": 0.19964,
+      "delta_rps_vs_baseline": -0.00366,
+      "leagues": {
+        "EPL": {
+          "rps": 0.20444,
+          "log_loss": 1.01299,
+          "brier": 0.60773,
+          "calibration_error": 0.05805,
+          "accuracy": 0.4933
+        },
+        "BUNDESLIGA": {
+          "rps": 0.19602,
+          "log_loss": 0.96769,
+          "brier": 0.57545,
+          "calibration_error": 0.03913,
+          "accuracy": 0.5382
+        },
+        "LA_LIGA": {
+          "rps": 0.19846,
+          "log_loss": 0.97288,
+          "brier": 0.57727,
+          "calibration_error": 0.04389,
+          "accuracy": 0.5173
+        }
+      },
+      "incremental_value_decision": "RETAIN"
+    }
+  ],
+  "conclusion": "Phase 8 historical ratings and dynamic Elo demonstrate incremental information value (-0.0011 RPS improvement vs un-replayed baseline). Replay modules retained."
+}

@@ -476,6 +476,9 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
           Objective Risk Audit
         </span>
       </div>
+      <p className="text-[11px] leading-relaxed text-amber-200/70">
+        Disciplined quantitative decision-making audits downside risk. SabiScore discloses the statistical counter-case for every projection so you act with intellectual honesty.
+      </p>
       <ul className="space-y-1.5 text-sm text-slate-300">
         {p !== null && outcome && (
           <li>

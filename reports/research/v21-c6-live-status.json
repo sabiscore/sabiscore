@@ -1,6 +1,6 @@
 {
   "capture_trigger": "interactive_full_analysis",
-  "generated_at": "2026-10-01T05:05:34.648113+00:00",
+  "generated_at": "2026-10-01T08:11:48.601779+00:00",
   "last_reported_v20_n": 0,
   "live_count_source": "persisted settled MatchPredictionLog rows with a strict pre-kickoff close and the frozen capture_trigger filter",
   "live_n": null,

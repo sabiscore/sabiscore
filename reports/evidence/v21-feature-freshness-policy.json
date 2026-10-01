@@ -1,0 +1,55 @@
+{
+  "policy_version": "v21.0",
+  "generated_at": "2026-10-01T06:00:00Z",
+  "description": "Evidence-specific Time-To-Live (TTL) and freshness guardrails for SabiScore V21 feature families. Universal 72-hour fallback is prohibited.",
+  "policies": {
+    "live_ratings": {
+      "max_age_seconds": 3600,
+      "ttl_rationale": "Dynamic Elo ratings update on match settlement; stale beyond 1 hour when matchdays are in flight.",
+      "criticality": "advisory",
+      "stale_treatment": "withhold_dynamic_adjustment"
+    },
+    "team_form": {
+      "max_age_seconds": 1209600,
+      "ttl_rationale": "Form reflects the last 5 competitive fixtures over a rolling 14-day window; invalid if older than 14 days without an active season context.",
+      "criticality": "critical",
+      "stale_treatment": "critical_gap_flag"
+    },
+    "standings": {
+      "max_age_seconds": 86400,
+      "ttl_rationale": "League tables update per matchday tick; 24-hour TTL guarantees table points, goal difference, and positions reflect the latest matchday.",
+      "criticality": "critical",
+      "stale_treatment": "critical_gap_flag"
+    },
+    "injuries": {
+      "max_age_seconds": 14400,
+      "ttl_rationale": "Injury reports require fresh verification within 4 hours of matchday build.",
+      "criticality": "advisory",
+      "stale_treatment": "downgrade_confidence"
+    },
+    "lineups": {
+      "max_age_seconds": 7200,
+      "ttl_rationale": "Official team sheets are released 60-75 minutes before kickoff; provisional lineups expire at T-75m.",
+      "criticality": "advisory",
+      "stale_treatment": "revert_to_expected_lineup_advisory"
+    },
+    "player_status": {
+      "max_age_seconds": 21600,
+      "ttl_rationale": "Suspensions and squad availability must be verified within 6 hours of kickoff.",
+      "criticality": "advisory",
+      "stale_treatment": "flag_advisory_gap"
+    },
+    "league_context": {
+      "max_age_seconds": 604800,
+      "ttl_rationale": "League-wide baseline averages (goals/game, draw rate, home advantage) are season-scale statistics valid for 7 days.",
+      "criticality": "advisory",
+      "stale_treatment": "use_season_prior"
+    },
+    "market_prices": {
+      "max_age_seconds": 300,
+      "ttl_rationale": "Live 1X2 market quotes fluctuate continuously; any price snapshot older than 300 seconds (5 minutes) is considered stale for execution.",
+      "criticality": "critical",
+      "stale_treatment": "withhold_market_edge"
+    }
+  }
+}

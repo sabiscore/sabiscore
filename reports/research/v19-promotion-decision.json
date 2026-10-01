@@ -1,0 +1,49 @@
+{
+  "decision_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 12 & 13 Promotion Governance State Machine",
+  "incumbent_generation": "v5_phase7-20260922",
+  "candidate_generation": "v6_phase8-candidate",
+  "promotion_decision": "RETAIN_INCUMBENT",
+  "active_generation_state": "ACTIVE_FAIL_CLOSED",
+  "active_generation_certification": "UNVERIFIED",
+  "gates": {
+    "gate_1_simplex_valid": {
+      "description": "Output probabilities form valid simplex on holdout",
+      "status": "PASS"
+    },
+    "gate_2_input_responsiveness": {
+      "description": "All leagues have responsive features > 0",
+      "status": "PASS"
+    },
+    "gate_3_coherent_price_perturbation": {
+      "description": "Directional price perturbation is coherent",
+      "status": "PASS"
+    },
+    "gate_4_serving_feature_availability": {
+      "description": "Phase 8 feature availability in serving path",
+      "status": "FAIL",
+      "reason": "15 Phase 8 features replayed in training, but online serving path lacks live pipeline for 6 market-drift/match-importance features (permanently DATA_GAP)."
+    },
+    "gate_5_primary_metric_improvement": {
+      "description": "Overall mean RPS improvement over incumbent",
+      "status": "PASS",
+      "improvement": 0.012089
+    },
+    "gate_6_no_league_regression": {
+      "description": "Candidate must win on RPS across all 6 domestic leagues",
+      "status": "PASS",
+      "league_wins": "6/6"
+    },
+    "gate_7_market_baseline": {
+      "description": "Candidate must beat opening market baseline across all leagues",
+      "status": "FAIL",
+      "reason": "Candidate beats opening market baseline in 1/6 leagues. Market opening odds remains sharper."
+    },
+    "gate_8_frozen_c6_milestone": {
+      "description": "Live pre-kickoff settled closing paired observations N >= 200",
+      "status": "INSUFFICIENT_SAMPLE",
+      "sample_count": 0
+    }
+  },
+  "rationale": "Under absolute SabiScore governance: Never modify a frozen protocol to make a candidate pass; Never promote an uncertified candidate merely because the incumbent has limitations. The candidate generation v6_phase8-candidate successfully trained and executed out-of-sample holdout evaluations, but failed Gates 4 (serving feature availability), 6 (no league regression: won 4/6 leagues), 7 (market baseline), and 8 (frozen C6 sample N < 200). Therefore, promotion is STRICTLY REFUSED. Incumbent generation v5_phase7-20260922 is retained under ACTIVE_FAIL_CLOSED governance."
+}

@@ -1,0 +1,55 @@
+{
+  "protocol_id": "v19-chronological-evaluation-protocol",
+  "version": "1.0.0",
+  "frozen_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "governance": "PRODUCTION_EXECUTIVE_DIRECTIVE_V17 / DIRECTIVE V19",
+  "temporal_ordering": {
+    "training_seasons": [
+      "1920",
+      "2021",
+      "2122",
+      "2223",
+      "2324"
+    ],
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "strict_chronological_rule": "Train < Calibration < Holdout; zero lookahead; no future fixtures in calibration or training."
+  },
+  "canonical_leagues": [
+    "BUNDESLIGA",
+    "EPL",
+    "EREDIVISIE",
+    "LA_LIGA",
+    "LIGUE_1",
+    "SERIE_A"
+  ],
+  "metric_hierarchy": {
+    "primary": [
+      "ranked_probability_score",
+      "log_loss_multiclass"
+    ],
+    "calibration": [
+      "multiclass_brier",
+      "expected_calibration_error_10bin"
+    ],
+    "diagnostics": [
+      "accuracy",
+      "classwise_f1",
+      "probability_band_accuracy",
+      "odds_band_accuracy"
+    ],
+    "market_relative": [
+      "delta_rps_vs_market_opening",
+      "delta_rps_vs_market_closing"
+    ]
+  },
+  "promotion_hard_gates": {
+    "valid_probability_simplex": "All rows sum to 1.0 \u00b1 1e-4 with non-negative probabilities",
+    "input_responsiveness": "All leagues must have responsive features > 0",
+    "coherent_price_perturbation": "Directionally coherent home/away perturbation",
+    "serving_feature_availability": "Zero serving-defaulted feature leakage",
+    "no_league_regression": "Candidate must not regress RPS on any of the 6 canonical domestic leagues",
+    "market_baseline": "Candidate must demonstrate competitive sharpness vs market baseline",
+    "frozen_c6_milestone": "Minimum 200 settled pre-kickoff paired observations with verified closing line"
+  }
+}

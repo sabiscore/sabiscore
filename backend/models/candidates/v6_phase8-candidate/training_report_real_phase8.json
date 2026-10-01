@@ -1,0 +1,680 @@
+{
+  "BUNDESLIGA": {
+    "accuracy": 0.5049833887043189,
+    "rps": 0.19845764601196494,
+    "brier": 0.5933430145588969,
+    "log_loss": 1.002782041256756,
+    "calibration_error": 0.06229486387848747,
+    "n": 301,
+    "stacked": {
+      "accuracy": 0.5382059800664452,
+      "rps": 0.1960200728887366,
+      "brier": 0.575447669026401,
+      "log_loss": 0.9676935186410134,
+      "calibration_error": 0.03912934099031957,
+      "n": 301
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 1455,
+    "calibration_n": 296,
+    "evaluation_n": 301,
+    "responsive_features": 57,
+    "baseline_accuracy_home": 0.43853820598006643,
+    "baseline_rps_trainprior": 0.2317386552251736,
+    "baseline_rps_market": 0.19083929061889648,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0089,
+        "resolution": 0.0238
+      },
+      "isotonic": {
+        "reliability": 0.0012,
+        "resolution": 0.0255
+      },
+      "vector": {
+        "reliability": 0.0018,
+        "resolution": 0.0228
+      },
+      "beta": {
+        "reliability": 0.003,
+        "resolution": 0.0265
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.0076,
+          "resolution": 0.0279
+        },
+        "isotonic": {
+          "reliability": 0.0067,
+          "resolution": 0.0265
+        },
+        "vector": {
+          "reliability": 0.0066,
+          "resolution": 0.0302
+        },
+        "beta": {
+          "reliability": 0.0066,
+          "resolution": 0.0292
+        },
+        "conclusion_persists": true
+      },
+      "chosen": "beta",
+      "reason": "reliability_improved_resolution_held_and_persisted_on_holdout"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0,
+      "calibration_draw_f1_after": 0.0,
+      "calibration_brier_before": 0.588,
+      "calibration_brier_after": 0.588,
+      "holdout_draw_f1_before": 0.0,
+      "holdout_draw_f1_after": 0.0,
+      "holdout_brier_before": 0.5754,
+      "holdout_brier_after": 0.5754
+    },
+    "training_window": {
+      "start": "2019-09-27",
+      "end": "2024-05-18"
+    },
+    "calibration_window": {
+      "start": "2024-08-23",
+      "end": "2025-05-17"
+    },
+    "evaluation_window": {
+      "start": "2025-08-22",
+      "end": "2026-05-16"
+    }
+  },
+  "EPL": {
+    "accuracy": 0.49333333333333335,
+    "rps": 0.2104653841681083,
+    "brier": 0.6328679272162884,
+    "log_loss": 1.056285464048428,
+    "calibration_error": 0.09995550491366315,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.49333333333333335,
+      "rps": 0.20443516795793273,
+      "brier": 0.60772961336689,
+      "log_loss": 1.0129881097909534,
+      "calibration_error": 0.0580539728581238,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 1821,
+    "calibration_n": 375,
+    "evaluation_n": 375,
+    "responsive_features": 62,
+    "baseline_accuracy_home": 0.424,
+    "baseline_rps_trainprior": 0.22849150417621494,
+    "baseline_rps_market": 0.2053660899400711,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0017,
+        "resolution": 0.0254
+      },
+      "isotonic": {
+        "reliability": 0.0008,
+        "resolution": 0.0287
+      },
+      "vector": {
+        "reliability": 0.0011,
+        "resolution": 0.0269
+      },
+      "beta": {
+        "reliability": 0.0016,
+        "resolution": 0.0274
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.0044,
+          "resolution": 0.0197
+        },
+        "isotonic": {
+          "reliability": 0.0027,
+          "resolution": 0.0162
+        },
+        "vector": {
+          "reliability": 0.0037,
+          "resolution": 0.018
+        },
+        "beta": {
+          "reliability": 0.0036,
+          "resolution": 0.0182
+        },
+        "conclusion_persists": false
+      },
+      "chosen": "temperature",
+      "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0,
+      "calibration_draw_f1_after": 0.0,
+      "calibration_brier_before": 0.5776,
+      "calibration_brier_after": 0.5776,
+      "holdout_draw_f1_before": 0.0,
+      "holdout_draw_f1_after": 0.0,
+      "holdout_brier_before": 0.6077,
+      "holdout_brier_after": 0.6077
+    },
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-05-19"
+    },
+    "calibration_window": {
+      "start": "2024-08-16",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  },
+  "LA_LIGA": {
+    "accuracy": 0.5226666666666666,
+    "rps": 0.19889701804552623,
+    "brier": 0.5842553203376432,
+    "log_loss": 0.9922418100220866,
+    "calibration_error": 0.04529642518015068,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.5173333333333333,
+      "rps": 0.1984551473350529,
+      "brier": 0.5772704393012388,
+      "log_loss": 0.9728846271996657,
+      "calibration_error": 0.04388939948446701,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 1817,
+    "calibration_n": 380,
+    "evaluation_n": 375,
+    "responsive_features": 63,
+    "baseline_accuracy_home": 0.48533333333333334,
+    "baseline_rps_trainprior": 0.22345809865387004,
+    "baseline_rps_market": 0.19628490507602692,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0056,
+        "resolution": 0.0306
+      },
+      "isotonic": {
+        "reliability": 0.0024,
+        "resolution": 0.0372
+      },
+      "vector": {
+        "reliability": 0.0052,
+        "resolution": 0.0305
+      },
+      "beta": {
+        "reliability": 0.0037,
+        "resolution": 0.0308
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.004,
+          "resolution": 0.0209
+        },
+        "isotonic": {
+          "reliability": 0.0052,
+          "resolution": 0.0216
+        },
+        "vector": {
+          "reliability": 0.004,
+          "resolution": 0.0209
+        },
+        "beta": {
+          "reliability": 0.0036,
+          "resolution": 0.021
+        },
+        "conclusion_persists": false
+      },
+      "chosen": "beta",
+      "reason": "reliability_improved_resolution_held_and_persisted_on_holdout"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0909,
+      "calibration_draw_f1_after": 0.0909,
+      "calibration_brier_before": 0.5648,
+      "calibration_brier_after": 0.5648,
+      "holdout_draw_f1_before": 0.0196,
+      "holdout_draw_f1_after": 0.0196,
+      "holdout_brier_before": 0.5773,
+      "holdout_brier_after": 0.5773
+    },
+    "training_window": {
+      "start": "2019-09-24",
+      "end": "2024-05-26"
+    },
+    "calibration_window": {
+      "start": "2024-08-15",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  },
+  "LIGUE_1": {
+    "accuracy": 0.4850498338870432,
+    "rps": 0.20051076410023563,
+    "brier": 0.596331858554527,
+    "log_loss": 1.0012888487996803,
+    "calibration_error": 0.08900690925959175,
+    "n": 301,
+    "stacked": {
+      "accuracy": 0.5149501661129569,
+      "rps": 0.20346139183390655,
+      "brier": 0.5922128856664932,
+      "log_loss": 0.9947643449629682,
+      "calibration_error": 0.03848566711650456,
+      "n": 301
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 1641,
+    "calibration_n": 306,
+    "evaluation_n": 301,
+    "responsive_features": 61,
+    "baseline_accuracy_home": 0.4584717607973422,
+    "baseline_rps_trainprior": 0.22926811378159884,
+    "baseline_rps_market": 0.19912628829479218,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0042,
+        "resolution": 0.0219
+      },
+      "isotonic": {
+        "reliability": 0.0019,
+        "resolution": 0.0223
+      },
+      "vector": {
+        "reliability": 0.0028,
+        "resolution": 0.0227
+      },
+      "beta": {
+        "reliability": 0.0026,
+        "resolution": 0.0221
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.0054,
+          "resolution": 0.0216
+        },
+        "isotonic": {
+          "reliability": 0.0071,
+          "resolution": 0.0178
+        },
+        "vector": {
+          "reliability": 0.0044,
+          "resolution": 0.0196
+        },
+        "beta": {
+          "reliability": 0.0051,
+          "resolution": 0.0214
+        },
+        "conclusion_persists": false
+      },
+      "chosen": "temperature",
+      "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0,
+      "calibration_draw_f1_after": 0.0,
+      "calibration_brier_before": 0.5819,
+      "calibration_brier_after": 0.5819,
+      "holdout_draw_f1_before": 0.0,
+      "holdout_draw_f1_after": 0.0,
+      "holdout_brier_before": 0.5922,
+      "holdout_brier_after": 0.5922
+    },
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-05-19"
+    },
+    "calibration_window": {
+      "start": "2024-08-16",
+      "end": "2025-05-17"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-17"
+    }
+  },
+  "SERIE_A": {
+    "accuracy": 0.5226666666666666,
+    "rps": 0.20874118521611307,
+    "brier": 0.6200283826167678,
+    "log_loss": 1.0405386026581762,
+    "calibration_error": 0.04819502508837401,
+    "n": 375,
+    "stacked": {
+      "accuracy": 0.5306666666666666,
+      "rps": 0.20205214784201933,
+      "brier": 0.5969958942765502,
+      "log_loss": 1.0018225307297075,
+      "calibration_error": 0.020870848728775326,
+      "n": 375
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 1803,
+    "calibration_n": 375,
+    "evaluation_n": 375,
+    "responsive_features": 63,
+    "baseline_accuracy_home": 0.392,
+    "baseline_rps_trainprior": 0.2332832744095393,
+    "baseline_rps_market": 0.19714131951332092,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0033,
+        "resolution": 0.0304
+      },
+      "isotonic": {
+        "reliability": 0.0006,
+        "resolution": 0.029
+      },
+      "vector": {
+        "reliability": 0.0019,
+        "resolution": 0.0295
+      },
+      "beta": {
+        "reliability": 0.0019,
+        "resolution": 0.0299
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.0035,
+          "resolution": 0.0226
+        },
+        "isotonic": {
+          "reliability": 0.008,
+          "resolution": 0.0217
+        },
+        "vector": {
+          "reliability": 0.003,
+          "resolution": 0.0233
+        },
+        "beta": {
+          "reliability": 0.0034,
+          "resolution": 0.0248
+        },
+        "conclusion_persists": true
+      },
+      "chosen": "temperature",
+      "reason": "isotonic_degraded_resolution"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0182,
+      "calibration_draw_f1_after": 0.0182,
+      "calibration_brier_before": 0.574,
+      "calibration_brier_after": 0.574,
+      "holdout_draw_f1_before": 0.0,
+      "holdout_draw_f1_after": 0.0,
+      "holdout_brier_before": 0.597,
+      "holdout_brier_after": 0.597
+    },
+    "training_window": {
+      "start": "2019-09-28",
+      "end": "2024-06-02"
+    },
+    "calibration_window": {
+      "start": "2024-08-17",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-23",
+      "end": "2026-05-24"
+    }
+  },
+  "POOLED": {
+    "accuracy": 0.5279315551082033,
+    "rps": 0.19960788583931316,
+    "brier": 0.5910802245104436,
+    "log_loss": 0.9937887559821257,
+    "calibration_error": 0.02865979508180935,
+    "n": 1987,
+    "stacked": {
+      "accuracy": 0.5314544539506794,
+      "rps": 0.19848787379087088,
+      "brier": 0.5856147383260927,
+      "log_loss": 0.9835614588056482,
+      "calibration_error": 0.015314905736687933,
+      "n": 1987
+    },
+    "hyperparameters": {
+      "random_forest": {
+        "n_estimators": 300,
+        "max_depth": 8,
+        "min_samples_leaf": 15
+      },
+      "xgboost": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      },
+      "lightgbm": {
+        "n_estimators": 250,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "subsample": 0.85,
+        "colsample_bytree": 0.85,
+        "reg_lambda": 2.0
+      }
+    },
+    "hyperparameter_source": "baseline_hardcoded",
+    "train_n": 8537,
+    "calibration_n": 1732,
+    "evaluation_n": 1987,
+    "responsive_features": 69,
+    "baseline_accuracy_home": 0.4393558127830901,
+    "baseline_rps_trainprior": 0.22896537429419572,
+    "baseline_rps_market": 0.19784937798976898,
+    "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+    "calibration_season": "2425",
+    "holdout_season": "2526",
+    "calibration_selection": {
+      "temperature": {
+        "reliability": 0.0011,
+        "resolution": 0.0259
+      },
+      "isotonic": {
+        "reliability": 0.0002,
+        "resolution": 0.0275
+      },
+      "vector": {
+        "reliability": 0.0005,
+        "resolution": 0.0254
+      },
+      "beta": {
+        "reliability": 0.0004,
+        "resolution": 0.0254
+      },
+      "held_out_persistence": {
+        "temperature": {
+          "reliability": 0.0004,
+          "resolution": 0.0207
+        },
+        "isotonic": {
+          "reliability": 0.0017,
+          "resolution": 0.0205
+        },
+        "vector": {
+          "reliability": 0.0011,
+          "resolution": 0.0212
+        },
+        "beta": {
+          "reliability": 0.0012,
+          "resolution": 0.0208
+        },
+        "conclusion_persists": false
+      },
+      "chosen": "temperature",
+      "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout"
+    },
+    "bivariate_poisson_overlay": {
+      "alpha": 0.0,
+      "gate_passed": true,
+      "calibration_draw_f1_before": 0.0,
+      "calibration_draw_f1_after": 0.0,
+      "calibration_brier_before": 0.5765,
+      "calibration_brier_after": 0.5765,
+      "holdout_draw_f1_before": 0.0,
+      "holdout_draw_f1_after": 0.0,
+      "holdout_brier_before": 0.5856,
+      "holdout_brier_after": 0.5856
+    },
+    "training_window": {
+      "start": "2019-09-20",
+      "end": "2024-06-02"
+    },
+    "calibration_window": {
+      "start": "2024-08-15",
+      "end": "2025-05-25"
+    },
+    "evaluation_window": {
+      "start": "2025-08-15",
+      "end": "2026-05-24"
+    }
+  }
+}

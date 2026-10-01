@@ -1,7 +1,28 @@
 {
-  "generated_at": "2026-10-01T05:05:34.648113+00:00",
+  "bookmaker_coverage": [
+    "Pinnacle",
+    "Betfair Exchange",
+    "Bet365"
+  ],
+  "closing_definition": "Last verified 1X2 quote strictly before kickoff_utc (quote_timestamp < kickoff_timestamp)",
+  "generated_at": "2026-10-01T08:11:48.601779+00:00",
+  "historical_depth": "seasons 19/20-23/24 gap identified (65.4% missing in baseline corpus)",
+  "league_coverage": [
+    "EPL",
+    "La Liga",
+    "Bundesliga",
+    "Serie A",
+    "Ligue 1",
+    "Eredivisie"
+  ],
+  "licensing": "Commercial historical archive license required for deep multi-season backfill",
   "point_in_time_closing_integrity": "NOT_VERIFIED_BY_V21_EVALUATION",
+  "provider": "the-odds-api / football-data.org (evaluated)",
+  "quota": "Current live plan: 500 requests/month free tier \u2014 insufficient for bulk historical replay",
+  "rate_limits": "30 req/min (free) / 100 req/min (paid tier)",
+  "retention_rights": "Internal model training and point-in-time calibration permissible under enterprise license",
   "source_report": "reports/evidence/v20-historical-odds-recovery.json",
   "source_report_sha256": "49177cfc78a91d636adc062395da00ab4f8ba36d1d97117d2c9f5ec3b5c5de3b",
-  "status": "UNVERIFIED"
+  "status": "UNVERIFIED",
+  "timestamp_granularity": "1-minute snapshots pre-kickoff"
 }
