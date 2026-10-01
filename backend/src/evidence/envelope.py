@@ -8,7 +8,7 @@ distinctions, and independent evidence states.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 import hashlib
 import json
