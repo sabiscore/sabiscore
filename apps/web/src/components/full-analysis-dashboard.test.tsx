@@ -12,6 +12,7 @@ import {
   EvidenceStatusCard,
   MarketComparisonTable,
   CounterCase,
+  DecisionSummary,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
@@ -730,16 +731,7 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
   // evaluable" (three state words) over "Not enough verified data — this model
   // hasn't passed certification yet", with a resolved market and a forecast.
   it("shows one decision state, says why, and keeps the verdict in the evidence line", () => {
-    render(
-      <EnhancedMatchHero
-        matchId="fd-558881"
-        data={withheldWithForecast}
-        presentation={mapFullAnalysisPresentation(withheldWithForecast)}
-        league="EREDIVISIE"
-        homeTeam="PSV"
-        awayTeam="SC Heerenveen"
-      />,
-    );
+    render(<DecisionSummary data={withheldWithForecast} presentation={mapFullAnalysisPresentation(withheldWithForecast)} />);
     const decision = screen.getByRole("region", { name: /decision/i });
     expect(decision.querySelectorAll("[data-decision-state]")).toHaveLength(1);
     expect(decision.textContent).toMatch(/This model hasn't passed certification yet\./);

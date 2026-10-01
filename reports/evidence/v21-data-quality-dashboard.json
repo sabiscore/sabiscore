@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-10-01T04:39:00.213633+00:00",
+  "leagues": {
+    "Bundesliga": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    },
+    "EPL": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    },
+    "Eredivisie": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    },
+    "La Liga": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    },
+    "Ligue 1": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    },
+    "Serie A": {
+      "advisory_gap_rate": null,
+      "critical_gap_rate": null,
+      "feature_coverage": null,
+      "fixture_count": null,
+      "identity_conflict_rate": null,
+      "market_coverage": null,
+      "provider_agreement": null,
+      "settled_count": null,
+      "stale_rate": null
+    }
+  },
+  "status": "NOT_MEASURED"
+}

@@ -112,6 +112,11 @@ class _Analyze:
                 away_probability=0.2,
                 input_hash=f"inputs-{match_id}",
                 evaluated_at=NOW,
+                payload={
+                    "capture_trigger": db.info.get(
+                        "capture_trigger", "interactive_full_analysis"
+                    )
+                },
             ),
             require_scheduled_pre_kickoff=True,
         )

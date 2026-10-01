@@ -1,0 +1,80 @@
+{
+  "benchmarks": [
+    {
+      "name": "opening_market",
+      "reported_separately": true
+    },
+    {
+      "name": "closing_market",
+      "reported_separately": true
+    }
+  ],
+  "c6": {
+    "capture_trigger": "interactive_full_analysis",
+    "live_sample_target": 200,
+    "milestone_inference": "98.33% ISO-week cluster bootstrap, 10000 replicates, seed 42, alpha=0.05/3",
+    "milestones": [
+      200,
+      500,
+      1000
+    ],
+    "protocol_source": "reports/research/c6-served-generation-vs-close-protocol.json",
+    "replay_counts": false,
+    "sample_cut": "whole kickoff groups through the Nth joined observation"
+  },
+  "candidate_tracks": {
+    "Candidate-M": {
+      "market_fields_forbidden": [
+        "odds",
+        "implied_probabilities",
+        "devigged_probabilities",
+        "market_movement",
+        "closing_prices"
+      ],
+      "market_inputs_allowed": false
+    },
+    "Candidate-MA": {
+      "certified_as_independent_alpha": false,
+      "market_inputs_allowed": true
+    }
+  },
+  "cohorts": [
+    "all_holdout_fixtures",
+    "market_available_fixtures",
+    "c6_eligible_fixtures",
+    "complete_evidence_fixtures"
+  ],
+  "comparison_requirements": [
+    "same_fixture_ids",
+    "same_outcomes",
+    "same_timestamp_class",
+    "same_benchmark_definition",
+    "same_scoring_rule",
+    "same_exclusion_rules"
+  ],
+  "frozen": true,
+  "gate_7": {
+    "comparison": "paired_identical_cohort_for_opening_and_closing_benchmarks_reported_separately",
+    "market_blend_is_certification_input": false,
+    "rule": "candidate_rps_must_not_exceed_the_corresponding_frozen_market_rps"
+  },
+  "inherited_protocols": [
+    {
+      "path": "reports/research/v19-evaluation-protocol.json",
+      "sha256": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"
+    },
+    {
+      "path": "reports/research/c6-served-generation-vs-close-protocol.json",
+      "sha256": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7"
+    }
+  ],
+  "metrics": [
+    "rps",
+    "log_loss",
+    "brier",
+    "ece",
+    "reliability",
+    "classwise_calibration"
+  ],
+  "protocol_id": "sabiscore-v21-market-evaluation-v1"
+}

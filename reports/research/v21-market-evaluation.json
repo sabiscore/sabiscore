@@ -1,0 +1,59 @@
+{
+  "candidate_m": {
+    "existing_apex_v1_89_market_features": [
+      "market_prob_home",
+      "market_prob_draw",
+      "market_prob_away",
+      "market_overround",
+      "market_favorite_home",
+      "market_favorite_draw",
+      "market_favorite_away",
+      "log_odds_home",
+      "log_odds_draw",
+      "log_odds_away",
+      "market_probability_margin",
+      "market_normalized_entropy",
+      "market_home_away_probability_diff",
+      "odds_ratio",
+      "form_market_agreement_home",
+      "form_market_disagreement",
+      "venue_market_combo",
+      "h2h_market_agreement",
+      "odds_drift_home",
+      "odds_drift_draw",
+      "odds_drift_away",
+      "max_abs_odds_drift",
+      "sharp_money_direction"
+    ],
+    "input_market_features": null,
+    "market_feature_exclusion_verified": false,
+    "rps": null
+  },
+  "candidate_ma": {
+    "certification_eligible_as_independent_alpha": false,
+    "rps": null
+  },
+  "cohort_hashes": {},
+  "gate_7": "FAIL",
+  "gate_7_basis": "legacy V20 report only; not independently accepted as a V21 market evaluation",
+  "generated_at": "2026-10-01T04:39:00.213633+00:00",
+  "inherited_protocol_sha256": {
+    "reports/research/c6-served-generation-vs-close-protocol.json": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+    "reports/research/v19-evaluation-protocol.json": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"
+  },
+  "market_baselines": {
+    "closing": null,
+    "opening": null
+  },
+  "prior_v20_report_values_unverified": {
+    "candidate_rps_after_calibration": 0.1995,
+    "reported_market_rps": 0.19761
+  },
+  "protocol_sha256": "43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c",
+  "reason": "No attributable V21 paired fixture IDs, outcomes, point-in-time closing market provenance, and candidate manifest were available.",
+  "research_market_blend": {
+    "certification_eligible": false,
+    "rps": 0.1995
+  },
+  "status": "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT"
+}

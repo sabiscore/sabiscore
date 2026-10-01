@@ -30,6 +30,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Copy source code
 COPY src/ ./src/
+COPY serving/ ./serving/
+COPY workers/ ./workers/
 
 # Expose port
 EXPOSE 8000
@@ -65,6 +67,8 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
 # production build install the minimal dependencies before installing the full
 # production requirements below, duplicating network and disk work.
 COPY src/ ./src/
+COPY serving/ ./serving/
+COPY workers/ ./workers/
 
 # Install Python dependencies in production
 COPY requirements.runtime.txt .
