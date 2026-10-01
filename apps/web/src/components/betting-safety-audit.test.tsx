@@ -203,8 +203,10 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
         expect(screen.getByText(/Watchlist only\. No stake is permitted without stronger evidence\./i)).toBeInTheDocument();
       });
 
-      expect(screen.getAllByText("Speculative").length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("Watchlist only — no stake")).toBeInTheDocument();
+      expect(screen.getByText("Withheld")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: /^decision$/i })).toHaveTextContent(
+        "Verdict: SPECULATIVE",
+      );
       expect(container.querySelectorAll("input")).toHaveLength(0);
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
@@ -226,7 +228,10 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
         expect(screen.getByText(/Verified data is available, but no market currently offers positive value\./i)).toBeInTheDocument();
       });
 
-      expect(screen.getAllByText("No Bet").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("Withheld")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: /^decision$/i })).toHaveTextContent(
+        "Verdict: NO_BET",
+      );
       expect(container.querySelectorAll("input")).toHaveLength(0);
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
@@ -248,7 +253,10 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
         expect(screen.getByText(/Model and market are aligned\. No edge above threshold\./i)).toBeInTheDocument();
       });
 
-      expect(screen.getAllByText("Hold").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("Withheld")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: /^decision$/i })).toHaveTextContent(
+        "Verdict: HOLD",
+      );
       expect(container.querySelectorAll("input")).toHaveLength(0);
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();
@@ -280,10 +288,12 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
         expect(screen.getByText(/No bet\. Critical evidence gaps or conflicts block action\./i)).toBeInTheDocument();
       });
 
-      // The verdict badge carries PARTIAL; the separate "Partial" chip that
-      // restated it beside the badge was removed as a duplicate.
-      expect(screen.getAllByText("Partial Data").length).toBeGreaterThanOrEqual(1);
-      expect(screen.queryByText("Partial")).not.toBeInTheDocument();
+      // Critical gaps withhold the decision; the raw engine verdict remains
+      // visible as provenance without replacing the fail-closed state.
+      expect(screen.getAllByText("Withheld").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole("region", { name: /^decision$/i })).toHaveTextContent(
+        "Verdict: PARTIAL",
+      );
       expect(screen.getByRole("region", { name: /why no stake — evidence status/i })).toBeInTheDocument();
       expect(screen.getAllByText(/odds data unavailable/i).length).toBeGreaterThanOrEqual(1);
 
@@ -309,10 +319,10 @@ describe("P9 Frontend Betting Safety Audit — Default-Deny Research Mode", () =
       );
 
       await waitFor(() => {
-        expect(screen.getAllByText("Actionable").length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText("Withheld")).toBeInTheDocument();
       });
 
-      // UCL capped: no execute or place bet controls, no wager inputs
+      // UCL remains non-executable when the response carries critical gaps.
       expect(container.querySelectorAll("input")).toHaveLength(0);
       expect(screen.queryByRole("button", { name: /execute bet/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /place bet/i })).not.toBeInTheDocument();

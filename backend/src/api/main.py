@@ -28,6 +28,7 @@ from ..core.database import verify_database_connection
 from ..db.session import init_db, close_db
 from ..providers import build_provider_registry
 from ..services.odds_service import OddsService
+from ..monitoring.metrics import metrics_collector
 import os
 from datetime import datetime, timezone
 

@@ -1187,25 +1187,17 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
 
 export function EdgeDeltaBar({
   oddsEdge,
+  fairMarketProbability,
   stakePermitted = false,
 }: {
   oddsEdge: FullMatchOddsEdge;
+  fairMarketProbability?: number | null;
   stakePermitted?: boolean;
 }) {
-  // Every figure here comes from the backend, which owns de-vigging (see
-  // `_odds_edge_from_features`: `fair = (1/odds) / overround`, `edge =
-  // model_prob - fair`). The fair market probability is therefore recoverable
-  // exactly as `model_prob - edge`.
-  //
-  // It must NOT be recomputed as `1 / market_odds` — that is the *vigged*
-  // price. Doing so understated the gap by the book's own margin and made this
-  // card disagree with the `OddsEdgeCard` rendered directly beneath it, which
-  // prints the backend's `edge`. Two different edges for one market, on one
-  // screen. Frontend edge/EV/stake arithmetic is a backend-authority
-  // violation regardless of whether the two happen to agree.
+  // Fair probability and edge arrive from FastAPI. This component only formats
+  // those server-owned values for display; it does not derive a market price.
   const market = oddsEdge.market;
   const modelProb = oddsEdge.model_prob;
-  const fairMarketProb = modelProb - oddsEdge.edge;
   const deltaPct = oddsEdge.edge * 100;
   const absDelta = Math.abs(deltaPct);
 
@@ -1244,7 +1236,7 @@ export function EdgeDeltaBar({
         <div className="flex-1 space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Model {pct(modelProb)}</span>
-            <span className="text-slate-400">Fair market {pct(fairMarketProb)}</span>
+            <span className="text-slate-400">Fair market {fairMarketProbability == null ? "Unavailable" : pct(fairMarketProbability)}</span>
           </div>
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
             <div
@@ -1742,7 +1734,10 @@ function FullAnalysisDashboardInner({
 
       <section aria-label="Market comparison" className="space-y-3">
       {data.odds_edge && !data.market && (
-        <EdgeDeltaBar oddsEdge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
+        <EdgeDeltaBar
+          oddsEdge={data.odds_edge}
+          stakePermitted={presentation.stakePermitted}
+        />
       )}
       {data.odds_edge && (!data.market || presentation.stakePermitted) && (
         <OddsEdgeCard edge={data.odds_edge} stakePermitted={presentation.stakePermitted} />

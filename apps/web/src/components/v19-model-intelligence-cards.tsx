@@ -3,7 +3,11 @@
 import { memo } from "react";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { FullMatchAnalysisResponse } from "@/lib/full-analysis-contract";
+import {
+  formatLagosTimestamp,
+  type FullMatchAnalysisResponse,
+} from "@/lib/full-analysis-contract";
+import { generationLabel } from "@/lib/model-identity";
 
 interface ModelIntelligenceCardsProps {
   data: FullMatchAnalysisResponse;
@@ -24,6 +28,9 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
   data,
   className,
 }: ModelIntelligenceCardsProps) {
+  const modelLabel = generationLabel(
+    data.ensemble.generation ?? data.ensemble.model_version ?? "Unidentified",
+  );
   const certification = data.ensemble.certification_state || "UNVERIFIED";
   const critical = data.evidence_quality.critical_gap_count;
   const advisory = data.evidence_quality.advisory_gap_count;
@@ -41,8 +48,8 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
     <section aria-label="Model, certification, evidence, and market" className={cn("grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4", className)}>
       <article className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3.5">
         <h2 className="text-[11px] font-mono uppercase tracking-wider text-slate-400">Model</h2>
-        <p className="mt-2 truncate font-mono text-sm text-slate-100" title={data.ensemble.generation ?? data.ensemble.model_version}>
-          {data.ensemble.generation ?? data.ensemble.model_version ?? "Unidentified"}
+        <p className="mt-2 truncate font-mono text-sm text-slate-100" title={modelLabel}>
+          {modelLabel}
         </p>
         <p className="mt-1 text-xs text-slate-400">
           {data.ensemble.prediction ?? "Forecast unavailable"}
@@ -97,7 +104,7 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
           <dl className="mt-2 space-y-1 text-xs text-slate-300">
             <div className="flex justify-between gap-2"><dt>Bookmaker</dt><dd className="truncate">{data.market.bookmaker ?? "Unreported"}</dd></div>
             <div className="flex justify-between"><dt>Overround</dt><dd>{data.market.overround.toFixed(3)}</dd></div>
-            <div className="flex justify-between"><dt>Snapshot</dt><dd>{data.market.captured_at ? new Date(data.market.captured_at).toLocaleString() : "Unreported"}</dd></div>
+            <div className="flex justify-between"><dt>Snapshot</dt><dd>{data.market.captured_at ? `${formatLagosTimestamp(data.market.captured_at)} WAT` : "Unreported"}</dd></div>
           </dl>
         ) : (
           <p className="mt-2 text-xs text-slate-400">No verified market snapshot is available for this fixture.</p>
