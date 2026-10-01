@@ -350,3 +350,22 @@ async def test_a_failed_memory_read_never_fails_the_pass(monkeypatch):
     assert result["outcome"] == "ok" and result["captured"] == 1
     entry = prediction_capture_service.last_prediction_capture_result()["recent"][0]
     assert entry["headroom_mb"] is None and entry["anon_mb"] is None  # never a substitute
+
+
+@pytest.mark.asyncio
+async def test_capture_due_predictions_restores_prior_trigger(session: AsyncSession) -> None:
+    await _fixture(session, "m-prior", NOW + timedelta(minutes=15))
+    session.info["capture_trigger"] = "original_existing_trigger"
+
+    class _QuickAnalyze:
+        async def __call__(self, *, match_id: str, league: str, db: AsyncSession, odds_service=None):
+            assert db.info.get("capture_trigger") == "custom_batch"
+
+    await capture_due_predictions(
+        session,
+        analyze=_QuickAnalyze(),
+        now=NOW,
+        capture_trigger="custom_batch",
+    )
+    assert session.info["capture_trigger"] == "original_existing_trigger"
+

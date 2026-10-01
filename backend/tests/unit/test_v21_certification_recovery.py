@@ -4,24 +4,43 @@ import asyncio
 import inspect
 import json
 from pathlib import Path
+import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
-import backend.serving.feature_bridge as feature_bridge_module
-from backend.scripts.v21_market_protocol import (
-    PROTOCOL,
-    compare_cohorts,
-    evaluate_market_rows,
-    protocol_sha256,
-    validate_calibration_split,
-    validate_market_independent_feature_names,
-)
-from backend.workers.c6_live_collector import C6LiveCollector, LIVE_CAPTURE_TRIGGER
-
-
 ROOT = Path(__file__).resolve().parents[3]
+BACKEND_ROOT = ROOT / "backend"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+try:
+    from backend.serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
+    import backend.serving.feature_bridge as feature_bridge_module
+    from backend.scripts.v21_market_protocol import (
+        PROTOCOL,
+        compare_cohorts,
+        evaluate_market_rows,
+        protocol_sha256,
+        validate_calibration_split,
+        validate_market_independent_feature_names,
+    )
+    from backend.workers.c6_live_collector import C6LiveCollector, LIVE_CAPTURE_TRIGGER
+except ModuleNotFoundError:
+    from serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
+    import serving.feature_bridge as feature_bridge_module
+    from scripts.v21_market_protocol import (
+        PROTOCOL,
+        compare_cohorts,
+        evaluate_market_rows,
+        protocol_sha256,
+        validate_calibration_split,
+        validate_market_independent_feature_names,
+    )
+    from workers.c6_live_collector import C6LiveCollector, LIVE_CAPTURE_TRIGGER
+
 
 
 def test_feature_bridge_requires_semantic_lineage_and_freshness():
@@ -445,4 +464,91 @@ async def test_background_clv_capture(monkeypatch):
         await _background_clv_capture(provider=None, odds_service=None, c6_collector=None)
 
     assert mock_tick.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_lifespan_initializes_c6_collector_and_cleans_up(monkeypatch):
+    from fastapi import FastAPI
+    from src.api.main import lifespan
+
+    app = FastAPI()
+    monkeypatch.setattr("src.api.main.verify_database_connection", MagicMock())
+    monkeypatch.setattr("src.api.main.init_db", AsyncMock())
+    monkeypatch.setattr("src.api.main.close_db", AsyncMock())
+    monkeypatch.setattr("src.api.main._background_fixture_sync", AsyncMock())
+    monkeypatch.setattr("src.api.main._background_settlement_sync", AsyncMock())
+    monkeypatch.setattr("src.api.main._background_clv_capture", AsyncMock())
+    monkeypatch.setattr("src.api.main._startup_load_models_strict", MagicMock())
+
+    async with lifespan(app):
+        assert hasattr(app.state, "c6_collector")
+        assert app.state.c6_collector.last_capture == {"outcome": "never_run"}
+        assert app.state.c6_collector.last_telemetry["status"] == "INSUFFICIENT_SAMPLE"
+        assert app.state.c6_collector.last_telemetry["target"] == 200
+        assert app.state.settlement_task is not None
+        assert app.state.clv_capture_task is not None
+
+
+@pytest.mark.asyncio
+async def test_full_analysis_candidate_feature_bridge_branches(monkeypatch):
+    from types import SimpleNamespace
+    from src.api.endpoints import full_analysis as fa_endpoint
+
+    class DummyProjector:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def build_live_feature_vector(self, **_kwargs):
+            raise ValueError("fixture unavailable")
+
+    class DummyPredictionEngine:
+        async def predict(self, **_kwargs):
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "home_win": 0.333,
+                    "draw": 0.333,
+                    "away_win": 0.334,
+                    "model_version": "dummy",
+                    "calibration_method": "raw",
+                }
+            )
+
+    monkeypatch.setattr(fa_endpoint, "UpcomingMatchFeatureProjector", DummyProjector)
+    monkeypatch.setattr(fa_endpoint, "PredictionEngine", DummyPredictionEngine)
+    monkeypatch.setattr(fa_endpoint, "cache", None)
+
+    # Branch 1: FeatureBridge admits candidate features
+    class AdmittingBridge:
+        def __init__(self, schema_id="apex_v1_89"):
+            self.schema_id = schema_id
+            self.schema_hash = "fake-sha"
+            self.feature_order = ["elo_diff"]
+
+        def validate(self, **_kwargs):
+            return SimpleNamespace(
+                schema_id=self.schema_id,
+                schema_hash=self.schema_hash,
+                values=(1.0,),
+                provenance={"elo_diff": "test"},
+            )
+
+    monkeypatch.setattr(fa_endpoint, "FeatureBridge", AdmittingBridge)
+    payload1 = await fa_endpoint.get_full_analysis("f1", league="EPL", db=object())
+    assert payload1["feature_integration"]["status"] == "ADMITTED"
+    assert payload1["feature_integration"]["schema_id"] == "apex_v1_89"
+    assert payload1["feature_integration"]["feature_count"] == 1
+
+    # Branch 2: FeatureBridge raises generic unexpected Exception
+    class CrashingBridge:
+        def __init__(self, schema_id="apex_v1_89"):
+            self.feature_order = ["elo_diff"]
+
+        def validate(self, **_kwargs):
+            raise RuntimeError("Unexpected bridge crash")
+
+    monkeypatch.setattr(fa_endpoint, "FeatureBridge", CrashingBridge)
+    payload2 = await fa_endpoint.get_full_analysis("f2", league="EPL", db=object())
+    assert payload2["feature_integration"]["status"] == "WITHHELD"
+    assert payload2["feature_integration"]["reason"] == "candidate_feature_bridge_error"
+
 
