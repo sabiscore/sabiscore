@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import pytest
@@ -31,7 +30,12 @@ VALID = {
 ])
 @pytest.mark.parametrize("bad_probability", [float("nan"), float("inf"), float("-inf"), True])
 def test_market_rows_reject_non_finite_and_boolean_probabilities(field, bad_probability):
-    row = {**VALID, field: [bad_probability, 0.0, 1.0]}
+    invalid_vector = (
+        [bad_probability, 0.0, 0.0]
+        if isinstance(bad_probability, bool)
+        else [bad_probability, 0.0, 1.0]
+    )
+    row = {**VALID, field: invalid_vector}
     with pytest.raises(ValueError, match="valid 1X2 probability simplex"):
         evaluate_market_rows([row])
 
