@@ -1,9 +1,54 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-09-15
+Last reviewed: 2026-10-01
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0, 2026-10-01
+
+- **Governance Directive V18.0 Codification**: Executed comprehensive evidence, certification, audit remediation, and UI activation under `PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md` and Directive V18.0.
+- **Verification Matrix Runner**: `scripts/verify-directive-v18.mjs` executed and verified across all 18 steps via `pnpm verify:directive`:
+  1. Memory Watchdog Implementation (D1): PASSED (2.83s)
+  2. Instance Memory Cgroup Reader & Headroom Calculation: PASSED (10.00s)
+  3. Heavy Job Single-Lane Serialization (S3): PASSED (2.69s)
+  4. Active League Model Artifacts in `active_generation.json`: PASSED (0.22s)
+  5. Platt Scaling Closed-Form Sigmoid Arithmetic (DEBT 133): PASSED (10.93s)
+  6. Shin De-Vigging Bisection Inversion & Provable Bracketing (G18): PASSED (5.46s)
+  7. Frozen C6 Protocol SHA-256 Immutability: PASSED (1.64s)
+  8. Point-in-Time (PIT) Leakage Sentinel Suite: PASSED (4.51s)
+  9. Offline Evidence Curator Precedence & Conflict Engine: PASSED (1.81s)
+  10. Legacy Orchestrator Deprecation & Fail-Closed Guard: PASSED (6.00s)
+  11. Preprocessing Feature Pipeline E2E Integration: PASSED (5.25s)
+  12. Alembic Metadata Registration & Schema Parity: PASSED (5.82s)
+  13. Cache Stampede Bounded Jitter Engine: PASSED (5.28s)
+  14. No Client-Side Betting Math Contract (Vitest AST Scan): PASSED (5.80s)
+  15. Responsible Gambling Copy Contract & Banned Term AST Scan: PASSED (4.13s)
+  16. Heading Contract (Exactly 1 `<h1>` per page): PASSED (3.43s)
+  17. Probability Dumbbell, Full Dashboard & Evidence Provenance UI Components: PASSED (7.29s)
+  18. Web TypeScript Typecheck Compilation: PASSED (7.84s)
+- **Result**: `18 PASSED, 0 FAILED out of 18 verification steps`. All checks green.
+- **Debt Ledger**: Recorded as Item 172 in `docs/DEBT.md`.
+- **Release Artifacts**: Generated `reports/release/audit-manifest.json`, `reports/release/promotion-attestation.json`, and `reports/release/SABISCORE_PRODUCTION_FINALIZATION_REPORT.md`.
+
+## Production Executive Directive V17.0 Operational Attestation, 2026-10-01
+
+- **Governance Directive V17.0 Codification**: `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md` established as authoritative production directive, superseding Directive V16.0.
+- **Verification Matrix Runner**: `scripts/verify-directive-v17.mjs` executed and verified across all 11 steps via `pnpm verify:directive`:
+  1. Memory Watchdog Implementation (D1): PASSED (14.13s)
+  2. Instance Memory Cgroup Reader & Headroom Calculation: PASSED (17.84s)
+  3. Heavy Job Single-Lane Serialization (S3): PASSED (2.58s)
+  4. Active League Model Artifacts in `active_generation.json`: PASSED (0.17s)
+  5. Platt Scaling Closed-Form Sigmoid Arithmetic (DEBT 133): PASSED (10.52s)
+  6. Shin De-Vigging Bisection Inversion & Provable Bracketing (G18): PASSED (4.90s)
+  7. Frozen C6 Protocol SHA-256 Immutability: PASSED (2.21s)
+  8. No Client-Side Betting Math Contract (Vitest AST Scan): PASSED (5.38s)
+  9. Responsible Gambling Copy Contract & Banned Term AST Scan: PASSED (4.52s)
+  10. Heading Contract (Exactly 1 `<h1>` per page): PASSED (4.43s)
+  11. Probability Dumbbell and Dashboard UI Components: PASSED (6.76s)
+- **Result**: `11 PASSED, 0 FAILED out of 11 verification steps`. All checks green.
+- **Debt Ledger**: Recorded as Item 171 in `docs/DEBT.md`.
+- **Package Scripts**: Added `verify:directive:v17`, updated `verify:directive` default to V17.0 runner.
 
 ## v7.4 Production Hardening Audit, 2026-09-15
 

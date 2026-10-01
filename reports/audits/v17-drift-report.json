@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:34:00Z",
+  "directive_source": "docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md",
+  "verified_commit": "c01cc8bd9887febff44fb8b301b067e058973eae",
+  "discrepancies_found": 0,
+  "verifications": {
+    "ResourceGuard": {
+      "status": "CONFORMANT",
+      "target": "SABISCORE_MAX_RSS_MB=3072",
+      "implementation": "backend/scripts/_resource_guard.py",
+      "evidence": "3072 MB ceiling enforced; test_resource_guard.py PASSED"
+    },
+    "SABISCORE_MAX_RSS_MB": {
+      "status": "CONFORMANT",
+      "target": "3072",
+      "implementation": "backend/src/core/config.py & _resource_guard.py",
+      "evidence": "Enforced in single-lane runner and memory watchdog"
+    },
+    "thread_limits": {
+      "status": "CONFORMANT",
+      "target": "OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, MKL_NUM_THREADS=1",
+      "implementation": "backend/src/api/main.py (lines 6-10)",
+      "evidence": "Environment variables pinned at FastAPI runtime startup"
+    },
+    "heavy_job_serialization": {
+      "status": "CONFORMANT",
+      "target": "Single active heavy job via process mutex",
+      "implementation": "backend/scripts/run_heavy_job.py",
+      "evidence": "test_heavy_jobs.py PASSED (2.72s)"
+    },
+    "FastAPI_lifespan_loops": {
+      "status": "CONFORMANT",
+      "target": "In-process async loops: fixture_sync (6h), clv_capture (5m), settlement (1h)",
+      "implementation": "backend/src/api/main.py",
+      "evidence": "Lifespan context manager starts background tasks with Redis distributed lease"
+    },
+    "node_scraper_production_disablement": {
+      "status": "CONFORMANT",
+      "target": "SCRAPER_PRODUCTION_ENABLED=false, V8 heap 384MB",
+      "implementation": "render.yaml & apps/scraper/src/main.mjs",
+      "evidence": "Scraper is batch-only, worker cron disabled from serving path"
+    },
+    "model_cache_size": {
+      "status": "CONFORMANT",
+      "target": "MAX_CACHED_MODELS=8 (DEBT 167)",
+      "implementation": "backend/src/services/prediction.py",
+      "evidence": "Accommodates all 6 canonical leagues + cups without eviction churn"
+    },
+    "six_league_model_inventory": {
+      "status": "CONFORMANT",
+      "target": "['bundesliga', 'epl', 'eredivisie', 'la_liga', 'ligue_1', 'serie_a']",
+      "implementation": "backend/models/active_generation.json",
+      "evidence": "All 6 league models manifested and SHA-256 verified"
+    },
+    "APEX_feature_count_schema": {
+      "status": "CONFORMANT",
+      "target": "68 features in CANONICAL_FEATURES_68",
+      "implementation": "backend/src/models/feature_registry.py",
+      "evidence": "Exact 68-dim positional ordering; unvalidated slots assigned to ALWAYS_DATA_GAP"
+    },
+    "PIT_boundaries": {
+      "status": "CONFORMANT",
+      "target": "t_feature <= t_evaluation < t_closing < t_kickoff",
+      "implementation": "backend/src/features/pipeline.py & upcoming_match_feature_service.py",
+      "evidence": "Information cutoff enforced; rolling temporal evaluations"
+    },
+    "active_generation": {
+      "status": "CONFORMANT",
+      "target": "v5_phase7-20260922, UNVERIFIED, ACTIVE_FAIL_CLOSED",
+      "implementation": "backend/models/active_generation.json",
+      "evidence": "Fail-closed mode active; no synthetic predictions permitted"
+    },
+    "candidate_generation": {
+      "status": "CONFORMANT",
+      "target": "Isolated in backend/models/candidates/ until certified",
+      "implementation": "backend/models/candidates/",
+      "evidence": "No uncertified candidate serving in production"
+    },
+    "C6_protocol": {
+      "status": "CONFORMANT",
+      "target": "SHA-256 9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+      "implementation": "reports/research/c6-served-generation-vs-close-protocol.json",
+      "evidence": "test_c6_protocol_frozen.py PASSED (2.50s)"
+    },
+    "de_vigging_implementation": {
+      "status": "CONFORMANT",
+      "target": "Shin de-vigging bisection inversion to 1e-12",
+      "implementation": "backend/src/services/odds_service.py",
+      "evidence": "test_market_baseline.py PASSED (12.14s)"
+    },
+    "EV_Kelly_server_authority": {
+      "status": "CONFORMANT",
+      "target": "Zero client-side odds/EV/Kelly math",
+      "implementation": "backend/src/services/betting_intelligence.py & core_engine.py",
+      "evidence": "no-client-ev-contract.test.ts PASSED (12.37s)"
+    },
+    "frontend_zero_math_contract": {
+      "status": "CONFORMANT",
+      "target": "AST scan banning client-side implied/EV calculation",
+      "implementation": "apps/web/src/lib/no-client-ev-contract.test.ts",
+      "evidence": "AST parser verifies 0 forbidden math identifiers across apps/web"
+    },
+    "tri_state_presentation_mapping": {
+      "status": "CONFORMANT",
+      "target": "PLAY, PASS, WITHHELD (distinct, non-collapsed)",
+      "implementation": "apps/web/src/components/decision-state-badge.tsx",
+      "evidence": "Triple-encoded with icons, labels, and accessible styling"
+    },
+    "counter_case_rendering": {
+      "status": "CONFORMANT",
+      "target": "Mandatory 'Why this might fail' panel rendered for every forecast",
+      "implementation": "apps/web/src/components/full-analysis-dashboard.tsx",
+      "evidence": "Renders loss probability, market shift, uncertainty, and gaps"
+    },
+    "current_release_verification_matrix": {
+      "status": "CONFORMANT",
+      "target": "11/11 passing steps in scripts/verify-directive-v17.mjs",
+      "implementation": "scripts/verify-directive-v17.mjs",
+      "evidence": "11 PASSED, 0 FAILED (verified 2026-10-01)"
+    }
+  },
+  "drift_summary": "Zero architectural drift detected between current codebase and Directive V17.0 baseline. All 19 core governance controls are verified conformant."
+}

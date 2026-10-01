@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:35:00Z",
+  "directive": "V18.0 Section 2.8",
+  "providers": [
+    {
+      "provider": "football-data.org",
+      "current_plan": "Tier 1 Developer / Paid",
+      "competitions_supported": [
+        "PL (EPL)",
+        "PD (La Liga)",
+        "BL1 (Bundesliga)",
+        "SA (Serie A)",
+        "FL1 (Ligue 1)",
+        "DED (Eredivisie)",
+        "CL (UCL - withheld/unserved)"
+      ],
+      "feature_families": [
+        "fixtures",
+        "results",
+        "standings",
+        "head_to_head",
+        "recent_form"
+      ],
+      "historical_depth": "Seasons 2019/2020 to 2025/2026",
+      "live_refresh": "Periodic polling (6h fixture sync, 1h settlement)",
+      "rate_limit": "10 requests/minute (free) / 100 requests/minute (paid)",
+      "quota_model": "Monthly allowance with header rate-limiting signals",
+      "cost_model": "Subscription tier",
+      "authentication": "X-Auth-Token header via LIFESPAN HTTP Client",
+      "known_failure_modes": [
+        "HTTP 429 Too Many Requests on burst polling",
+        "Team name aliases differing from betting exchange naming",
+        "Postponed match kickoff timestamp revisions"
+      ],
+      "licensing": "Commercial license active; strict caching and attribution requirements",
+      "production_allowed": true,
+      "fallback_priority": 1
+    },
+    {
+      "provider": "the-odds-api",
+      "current_plan": "Standard / Pro",
+      "competitions_supported": [
+        "soccer_epl",
+        "soccer_spain_la_liga",
+        "soccer_germany_bundesliga",
+        "soccer_italy_serie_a",
+        "soccer_france_ligue_one",
+        "soccer_netherlands_eredivisie"
+      ],
+      "feature_families": [
+        "odds_h2h",
+        "market_closing_lines",
+        "bookmaker_movement",
+        "consensus_spreads"
+      ],
+      "historical_depth": "Historical market snapshots & closing lines (Pinnacle/Betfair)",
+      "live_refresh": "5-minute CLV capture pass",
+      "rate_limit": "50 requests/minute",
+      "quota_model": "Monthly credit allowance deducted per region/market query",
+      "cost_model": "Credit consumption per call",
+      "authentication": "Query parameter `apiKey` strictly redacted by RedactionMiddleware",
+      "known_failure_modes": [
+        "Bookmaker market suspension during live matches",
+        "Discrepancies in outcome keys between bookmakers",
+        "Quota depletion if background loop leaks executions"
+      ],
+      "licensing": "Commercial use permitted; redistribution of raw odds prohibited",
+      "production_allowed": true,
+      "fallback_priority": 1
+    },
+    {
+      "provider": "api-football",
+      "current_plan": "Pro Tier",
+      "competitions_supported": [
+        "Premier League (39)",
+        "La Liga (140)",
+        "Bundesliga (78)",
+        "Serie A (135)",
+        "Ligue 1 (61)",
+        "Eredivisie (88)"
+      ],
+      "feature_families": [
+        "injuries",
+        "lineups",
+        "player_statistics",
+        "fixture_events"
+      ],
+      "historical_depth": "2018 to current",
+      "live_refresh": "On-demand pre-match polling (1h prior to kickoff)",
+      "rate_limit": "300 requests/minute",
+      "quota_model": "Daily request budget",
+      "cost_model": "Tiered monthly plan",
+      "authentication": "x-apisports-key header",
+      "known_failure_modes": [
+        "Late lineup publication (typically 45-60m before kickoff)",
+        "Injury severity ambiguity ('doubtful' vs 'ruled out')"
+      ],
+      "licensing": "Commercial subscription",
+      "production_allowed": true,
+      "fallback_priority": 2
+    },
+    {
+      "provider": "statsbomb-open-data",
+      "current_plan": "Open Research Dataset",
+      "competitions_supported": [
+        "Historical selected seasons (EPL, La Liga historical)"
+      ],
+      "feature_families": [
+        "event_level_shots",
+        "xg_maps",
+        "progressive_carries",
+        "pressure_events"
+      ],
+      "historical_depth": "Selected historical tournament and season samples",
+      "live_refresh": "None (Static offline research dump)",
+      "rate_limit": "N/A (Local git/tarball extraction)",
+      "quota_model": "Unmetered open archive",
+      "cost_model": "Free for non-commercial research",
+      "authentication": "None",
+      "known_failure_modes": [
+        "23.58% crosswalk intersection against Understat/production fixtures (insufficient for live production)",
+        "License prohibits embedding in commercial real-time predictive feeds without enterprise agreement"
+      ],
+      "licensing": "StatsBomb Open Data Terms of Use (Attribution required, Non-commercial)",
+      "production_allowed": false,
+      "fallback_priority": 99
+    }
+  ]
+}

@@ -1,14 +1,14 @@
 # backend/src/services/orchestrator.py
-"""
-Production Orchestrator - Coordinates entire data pipeline for SabiScore
+"""DEPRECATED LEGACY ORCHESTRATOR — DO NOT USE IN PRODUCTION.
 
-This is the central coordinator that wires together:
-1. DataIngestionService - Real-time scraping and streaming
-2. DataProcessingService - Feature engineering
-3. ModelOrchestrator - Prediction generation
+Governed by Directive V18.0 Section 8.1.
+Superseded by:
+1. FastAPI Lifespan Background Loops in `backend/src/api/main.py`
+2. Canonical `PredictionEngine` in `backend/src/models/prediction.py`
+3. Domain Services: `FixtureSyncService`, `OddsService`, `SettlementService`
 
-Pipeline Flow:
-Scrapers → Database → DataProcessingService → ModelOrchestrator → API Response
+This module is retained strictly for offline historical reference and is verified
+to have zero production callers in the served API import graph.
 """
 
 import asyncio
@@ -750,24 +750,11 @@ class MockModelOrchestrator:
     def predict(
         self, league: str, match_data: Dict, odds: Optional[Dict] = None
     ) -> Dict:
-        """Return mock predictions"""
-        import random
-
-        # Generate somewhat realistic probabilities
-        home = random.uniform(0.35, 0.50)
-        away = random.uniform(0.25, 0.40)
-        draw = 1.0 - home - away
-
-        return {
-            "predictions": {
-                "home_win": round(home, 3),
-                "draw": round(draw, 3),
-                "away_win": round(away, 3),
-            },
-            "model_version": "mock_v1.0",
-            "value_bets": [],
-            "has_edge": False,
-        }
+        """Deprecated mock predictions. Fails closed under Directive V18."""
+        raise RuntimeError(
+            "MockModelOrchestrator is deprecated and prohibited under zero-fabrication governance. "
+            "Use canonical PredictionEngine (backend/src/models/prediction.py)."
+        )
 
     def get_league_key(self, league: str) -> str:
         return league.lower().replace(" ", "_")

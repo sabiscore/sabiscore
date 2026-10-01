@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:38:00Z",
+  "directive": "V18.0 Section 3.2",
+  "status": "PASS",
+  "audit_version": "PIT-LEAKAGE-SENTINEL-V18",
+  "canonical_features_audited": 68,
+  "pit_rule": "t_feature <= t_evaluation < t_closing < t_kickoff",
+  "schema_scan": {
+    "prohibited_substrings": [
+      "final_score",
+      "ft_score",
+      "full_time",
+      "post_match",
+      "settled_result",
+      "actual_goals",
+      "retrospective",
+      "future_"
+    ],
+    "violations_found": 0,
+    "status": "CONFORMANT"
+  },
+  "adversarial_negative_controls": [
+    {
+      "test_name": "test_adversarial_injection_of_future_column_fails_closed",
+      "injected_columns": ["post_match_xg_ratio", "final_score_home"],
+      "expected_outcome": "TemporalViolationError raised",
+      "result": "PASSED"
+    },
+    {
+      "test_name": "test_adversarial_timestamp_leakage_fails_closed",
+      "injected_anomaly": "effective_at (13:30) > cutoff (13:00)",
+      "expected_outcome": "TemporalViolationError raised",
+      "result": "PASSED"
+    },
+    {
+      "test_name": "test_adversarial_cutoff_post_kickoff_fails_closed",
+      "injected_anomaly": "cutoff (15:05) >= kickoff (15:00)",
+      "expected_outcome": "TemporalViolationError raised",
+      "result": "PASSED"
+    }
+  ],
+  "positive_controls": [
+    {
+      "test_name": "test_valid_point_in_time_passes",
+      "configuration": "effective_at (12:00) <= cutoff (13:00) < kickoff (15:00)",
+      "result": "PASSED"
+    }
+  ],
+  "test_execution_evidence": {
+    "test_suite": "backend/tests/unit/test_pit_leakage_sentinel.py",
+    "tests_passed": 5,
+    "tests_failed": 0,
+    "execution_duration_sec": 12.48
+  },
+  "leakage_certification": "VERIFIED_FAIL_CLOSED"
+}

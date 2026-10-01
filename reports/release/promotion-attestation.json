@@ -1,0 +1,41 @@
+{
+  "attestation_timestamp": "2026-10-01T00:57:00Z",
+  "active_generation": "v5_phase7-20260922",
+  "candidate_generation": "v6_phase8-candidate",
+  "decision": "RETAIN_INCUMBENT",
+  "reason": "Incumbent generation v5_phase7-20260922 retained under fail-closed governance (ACTIVE_FAIL_CLOSED). C7 additive certification envelope, PIT leakage sentinels, offline evidence curation, and frontend provenance drawers are fully established and passing all gates. Promotion of candidate model requires completion of empirical live-shadow backtest window across all six canonical domestic leagues.",
+  "gates": {
+    "gate_a_memory_watchdog": "PASS",
+    "gate_b_cgroup_headroom": "PASS",
+    "gate_c_heavy_job_serialization": "PASS",
+    "gate_d_active_generation_six_leagues": "PASS",
+    "gate_e_platt_scaling_arithmetic": "PASS",
+    "gate_f_shin_devig_bisection": "PASS",
+    "gate_g_frozen_c6_sha256": "PASS",
+    "gate_h_pit_leakage_sentinels": "PASS",
+    "gate_i_offline_evidence_curator": "PASS",
+    "gate_j_legacy_orchestrator_deprecation": "PASS",
+    "gate_k_preprocessing_e2e_integration": "PASS",
+    "gate_l_alembic_schema_parity": "PASS",
+    "gate_m_cache_stampede_jitter": "PASS",
+    "gate_n_zero_client_betting_math": "PASS",
+    "gate_o_responsible_gambling_copy": "PASS",
+    "gate_p_single_h1_heading_contract": "PASS",
+    "gate_q_frontend_dashboard_and_provenance_ui": "PASS",
+    "gate_r_web_typecheck_compilation": "PASS",
+    "gate_s_fail_closed_zero_fabrication": "PASS",
+    "gate_t_deterministic_architecture_zero_llm_serving": "PASS"
+  },
+  "operational_readiness": "READY WITH DOCUMENTED LIMITATIONS",
+  "operational_limitations": [
+    "Production container memory bounded by 512 MB cgroup and 8 GB local/CI limit.",
+    "UEFA Champions League (UCL) fixtures remain strictly withheld from betting actionability until certified tournament model is deployed.",
+    "Serving layer maintains deterministic fail-closed state on missing, stale, or conflicted evidence."
+  ],
+  "signoff": {
+    "quantitative": "Principal Quantitative Strategist — Verified fail-closed betting gates, Shin de-vigging bisection, and Quarter-Kelly bounds.",
+    "data_integrity": "Data Provenance Architect — Verified PIT leakage sentinels, 68 APEX feature lineages, and conflict resolution engine.",
+    "systems_performance": "Principal AI Systems Architect — Verified ResourceGuard memory watchdog, heavy job serialization, and cache jitter.",
+    "lead_supervisor": "Lead NEXUS Multi-Agent Supervisor — Complete Directive V18.0 execution verified across 18 authoritative verification gates."
+  }
+}

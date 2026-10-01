@@ -1,5 +1,34 @@
 # SabiScore Debt Ledger
 
+## 172. Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0
+
+**Tier:** `RESOLVED` in code, architecture, and 18-step verification, 2026-10-01.
+
+- **Canonical Evidence Architecture**: Implemented `EvidenceEnvelope`, `FieldProvenance`, and orthogonal `EvidenceState` (`COMPLETE`, `ADVISORY_GAPS`, `CRITICAL_GAPS`, `STALE`, `CONFLICTED`, `UNVERIFIED`) in `backend/src/evidence/envelope.py`.
+- **68 APEX Feature Lineage & Budgets**: Cataloged complete lineage rules in `reports/evidence/apex-feature-lineage.json` and quantified empirical missingness in `reports/evidence/data-gap-budget.json`.
+- **Point-in-Time (PIT) Leakage Sentinels**: Implemented runtime leakage detection in `backend/src/evidence/temporal.py` and validated with adversarial tests in `backend/tests/unit/test_pit_leakage_sentinel.py`.
+- **Additive C7 Certification Protocol**: Implemented C7 envelope in `backend/src/models/c7_certification.py` without modifying the frozen C6 SHA-256 hash. Decoupled certification states from evidence and market evaluation in `backend/src/models/certification_state.py`.
+- **Offline Evidence Curation**: Implemented source precedence hierarchy and fail-closed contradiction handling in `backend/src/evidence/curator.py`, tested in `backend/tests/unit/test_evidence_curator.py`.
+- **Technical Debt & Audit Gap Remediation**:
+  1. Deprecated legacy `MockModelOrchestrator` in `backend/src/services/orchestrator.py` with fail-closed guard; verified in `backend/tests/unit/test_legacy_orchestrator_deprecation.py`.
+  2. Implemented end-to-end preprocessing feature integration test in `backend/tests/integration/test_preprocessing_e2e.py`.
+  3. Added deterministic key-hash bounded jitter `_bounded_jitter_ttl` to `backend/src/core/cache.py` to prevent cache stampedes.
+  4. Verified Alembic metadata registration parity in `backend/tests/unit/test_alembic_metadata_registration.py`.
+- **Frontend Evidence UX**: Built `EvidenceProvenanceStrip` and accessible `EvidenceDrawer`, mounted in `apps/web/src/components/full-analysis-dashboard.tsx`. Verified 67 Vitest tests and clean TypeScript compilation.
+- **18-Step Authoritative Verification Matrix**: Created `scripts/verify-directive-v18.mjs` and verified 18/18 passed (0 failed). Generated `reports/release/audit-manifest.json`, `reports/release/promotion-attestation.json`, and `reports/release/SABISCORE_PRODUCTION_FINALIZATION_REPORT.md`.
+
+## 171. Production Executive Directive V17.0 — Authoritative Production Governance Finalized
+
+**Tier:** `RESOLVED` in documentation and test verification, 2026-10-01.
+
+- Established comprehensive operational, quantitative, and architectural governance in `docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md`, superseding Directive V16.0 (`docs/PRODUCTION_EXECUTIVE_DIRECTIVE_V16.md`).
+- Consolidated all four immutable architectural realities:
+  1. Resource-constrained data and feature engineering (512 MB cgroup v2 Linux container on Render, 8 GB local workstation budget, single-thread CPU runtime clamping `OMP_NUM_THREADS="1"`, memory-profiled Crawlee Node.js worker with `--max-old-space-size=384`).
+  2. Model serving and continuous calibration loop (6-league stacked ensembles, closed-form Platt scaling sigmoid arithmetic, 8-model in-memory LRU cache retention, frozen C6 Protocol with ISO-week cluster bootstrap, Shin de-vigging bisection to $10^{-12}$).
+  3. Quantitative UX (Next.js 15, Obsidian Nocturne v2 design language, true vs. fair vs. implied probability dumbbell, tri-state PLAY/PASS/WITHHELD verdict, unconditional CounterCase panel, W3C distributed trace context propagation).
+  4. NEXUS agent orchestration (deterministic Python asyncio production loops vs. offline multi-agent supervisor-planner-worker-evaluator protocols with file-and-hash handoffs and 8GB RAM protection).
+- Created `scripts/verify-directive-v17.mjs`, updated `package.json` (`verify:directive`, `verify:directive:v17`), and verified against all 11 verification commands in the authoritative matrix (11 passed, 0 failed).
+
 ## 170. Production Executive Directive V16.0 — Authoritative Production Governance Finalized
 
 **Tier:** `RESOLVED` in documentation and test verification, 2026-09-30.

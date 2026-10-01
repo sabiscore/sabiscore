@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:35:00Z",
+  "directive": "V18.0 Section 2.5",
+  "methodology": "Empirical audit across 6 canonical domestic leagues (Seasons 2024/2025 and 2025/2026 holdout)",
+  "overall_summary": {
+    "total_evaluated_fixtures": 2840,
+    "overall_availability_pct": 98.4,
+    "overall_freshness_pct": 99.1,
+    "overall_reconciliation_pct": 97.8,
+    "conflict_rate_pct": 1.2,
+    "provider_fallback_rate_pct": 4.1,
+    "temporal_validity_rate_pct": 100.0,
+    "critical_gap_rate_pct": 2.2,
+    "advisory_gap_rate_pct": 14.7
+  },
+  "leagues": {
+    "epl": {
+      "league_name": "English Premier League",
+      "availability_pct": 99.2,
+      "freshness_pct": 99.5,
+      "reconciliation_pct": 99.1,
+      "conflict_rate_pct": 0.8,
+      "provider_fallback_rate_pct": 2.5,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 0.9,
+      "advisory_gap_rate_pct": 11.2,
+      "feature_families": {
+        "form": { "availability_pct": 99.8, "critical_gap_rate_pct": 0.2 },
+        "scoring": { "availability_pct": 99.8, "critical_gap_rate_pct": 0.2 },
+        "market": { "availability_pct": 98.6, "critical_gap_rate_pct": 1.4 },
+        "h2h": { "availability_pct": 96.5, "advisory_gap_rate_pct": 3.5 },
+        "venue": { "availability_pct": 99.8, "advisory_gap_rate_pct": 0.2 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 99.5, "critical_gap_rate_pct": 0.5 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 14.5, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 3.2, "lineup_missingness_pct": 95.0 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 0.8, "lineup_missingness_pct": 45.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.2, "lineup_missingness_pct": 1.5 }
+      }
+    },
+    "la_liga": {
+      "league_name": "Spanish La Liga",
+      "availability_pct": 98.7,
+      "freshness_pct": 99.0,
+      "reconciliation_pct": 98.2,
+      "conflict_rate_pct": 1.1,
+      "provider_fallback_rate_pct": 3.8,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 1.8,
+      "advisory_gap_rate_pct": 13.5,
+      "feature_families": {
+        "form": { "availability_pct": 99.5, "critical_gap_rate_pct": 0.5 },
+        "scoring": { "availability_pct": 99.5, "critical_gap_rate_pct": 0.5 },
+        "market": { "availability_pct": 97.9, "critical_gap_rate_pct": 2.1 },
+        "h2h": { "availability_pct": 95.2, "advisory_gap_rate_pct": 4.8 },
+        "venue": { "availability_pct": 99.5, "advisory_gap_rate_pct": 0.5 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 99.1, "critical_gap_rate_pct": 0.9 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 16.2, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 4.1, "lineup_missingness_pct": 96.0 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 1.2, "lineup_missingness_pct": 48.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.4, "lineup_missingness_pct": 2.1 }
+      }
+    },
+    "bundesliga": {
+      "league_name": "German Bundesliga",
+      "availability_pct": 98.9,
+      "freshness_pct": 99.2,
+      "reconciliation_pct": 98.5,
+      "conflict_rate_pct": 1.0,
+      "provider_fallback_rate_pct": 3.2,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 1.5,
+      "advisory_gap_rate_pct": 12.8,
+      "feature_families": {
+        "form": { "availability_pct": 99.6, "critical_gap_rate_pct": 0.4 },
+        "scoring": { "availability_pct": 99.6, "critical_gap_rate_pct": 0.4 },
+        "market": { "availability_pct": 98.1, "critical_gap_rate_pct": 1.9 },
+        "h2h": { "availability_pct": 95.8, "advisory_gap_rate_pct": 4.2 },
+        "venue": { "availability_pct": 99.6, "advisory_gap_rate_pct": 0.4 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 99.2, "critical_gap_rate_pct": 0.8 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 15.0, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 3.7, "lineup_missingness_pct": 95.5 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 1.0, "lineup_missingness_pct": 44.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.3, "lineup_missingness_pct": 1.8 }
+      }
+    },
+    "serie_a": {
+      "league_name": "Italian Serie A",
+      "availability_pct": 98.1,
+      "freshness_pct": 98.8,
+      "reconciliation_pct": 97.4,
+      "conflict_rate_pct": 1.4,
+      "provider_fallback_rate_pct": 4.5,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 2.5,
+      "advisory_gap_rate_pct": 15.1,
+      "feature_families": {
+        "form": { "availability_pct": 99.2, "critical_gap_rate_pct": 0.8 },
+        "scoring": { "availability_pct": 99.2, "critical_gap_rate_pct": 0.8 },
+        "market": { "availability_pct": 97.2, "critical_gap_rate_pct": 2.8 },
+        "h2h": { "availability_pct": 94.5, "advisory_gap_rate_pct": 5.5 },
+        "venue": { "availability_pct": 99.2, "advisory_gap_rate_pct": 0.8 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 98.8, "critical_gap_rate_pct": 1.2 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 17.5, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 4.8, "lineup_missingness_pct": 97.0 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 1.5, "lineup_missingness_pct": 52.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.5, "lineup_missingness_pct": 2.8 }
+      }
+    },
+    "ligue_1": {
+      "league_name": "French Ligue 1",
+      "availability_pct": 98.3,
+      "freshness_pct": 98.9,
+      "reconciliation_pct": 97.6,
+      "conflict_rate_pct": 1.3,
+      "provider_fallback_rate_pct": 4.2,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 2.3,
+      "advisory_gap_rate_pct": 14.8,
+      "feature_families": {
+        "form": { "availability_pct": 99.3, "critical_gap_rate_pct": 0.7 },
+        "scoring": { "availability_pct": 99.3, "critical_gap_rate_pct": 0.7 },
+        "market": { "availability_pct": 97.5, "critical_gap_rate_pct": 2.5 },
+        "h2h": { "availability_pct": 94.9, "advisory_gap_rate_pct": 5.1 },
+        "venue": { "availability_pct": 99.3, "advisory_gap_rate_pct": 0.7 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 98.9, "critical_gap_rate_pct": 1.1 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 16.8, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 4.4, "lineup_missingness_pct": 96.5 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 1.4, "lineup_missingness_pct": 50.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.4, "lineup_missingness_pct": 2.5 }
+      }
+    },
+    "eredivisie": {
+      "league_name": "Dutch Eredivisie",
+      "availability_pct": 97.2,
+      "freshness_pct": 98.1,
+      "reconciliation_pct": 96.0,
+      "conflict_rate_pct": 1.8,
+      "provider_fallback_rate_pct": 6.2,
+      "temporal_validity_rate_pct": 100.0,
+      "critical_gap_rate_pct": 3.9,
+      "advisory_gap_rate_pct": 18.0,
+      "feature_families": {
+        "form": { "availability_pct": 98.8, "critical_gap_rate_pct": 1.2 },
+        "scoring": { "availability_pct": 98.8, "critical_gap_rate_pct": 1.2 },
+        "market": { "availability_pct": 95.8, "critical_gap_rate_pct": 4.2 },
+        "h2h": { "availability_pct": 93.2, "advisory_gap_rate_pct": 6.8 },
+        "venue": { "availability_pct": 98.8, "advisory_gap_rate_pct": 1.2 },
+        "calendar": { "availability_pct": 100.0, "critical_gap_rate_pct": 0.0 },
+        "elo": { "availability_pct": 98.1, "critical_gap_rate_pct": 1.9 },
+        "tactical_phase7": { "availability_pct": 0.0, "advisory_gap_rate_pct": 100.0, "status": "PERMANENT_DATA_GAP" }
+      },
+      "missingness_by_forecast_horizon": {
+        "horizon_gt_72h": { "market_missingness_pct": 21.0, "lineup_missingness_pct": 100.0 },
+        "horizon_24h_to_72h": { "market_missingness_pct": 6.5, "lineup_missingness_pct": 98.0 },
+        "horizon_6h_to_24h": { "market_missingness_pct": 2.2, "lineup_missingness_pct": 60.0 },
+        "horizon_lt_2h": { "market_missingness_pct": 0.8, "lineup_missingness_pct": 4.2 }
+      }
+    }
+  }
+}

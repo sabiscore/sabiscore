@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "generated_at": "2026-10-01T00:38:00Z",
+  "directive": "V18.0 Section 4.2 (C7-J)",
+  "policy_name": "SabiScore Quantitative Model & Evidence Drift Policy",
+  "version": "1.0.0",
+  "monitors": [
+    {
+      "dimension": "feature_drift",
+      "method": "Two-sample Kolmogorov-Smirnov (KS) test & Population Stability Index (PSI)",
+      "evaluation_window_days": 30,
+      "warning_threshold": "PSI >= 0.10 or KS p-value < 0.05",
+      "critical_threshold": "PSI >= 0.25 or KS p-value < 0.01",
+      "response_states": {
+        "warning": "LOG_ALERT_AND_FLAG_EVIDENCE_DRAWER",
+        "critical": "TRANSITION_TO_DEGRADED_FAIL_CLOSED"
+      }
+    },
+    {
+      "dimension": "class_drift",
+      "method": "Chi-Square goodness-of-fit test on 1X2 outcome distribution",
+      "evaluation_window_matches": 100,
+      "warning_threshold": "p-value < 0.05 vs baseline league prior",
+      "critical_threshold": "p-value < 0.01 vs baseline league prior",
+      "response_states": {
+        "warning": "NOTIFY_QUANT_ENGINEERING",
+        "critical": "TRIGGER_RECERTIFICATION_REVIEW"
+      }
+    },
+    {
+      "dimension": "residual_drift",
+      "method": "Rolling Ranked Probability Score (RPS) cumulative tracking",
+      "evaluation_window_matches": 50,
+      "warning_threshold": "Rolling RPS degradation >= +0.020 vs benchmark",
+      "critical_threshold": "Rolling RPS degradation >= +0.040 vs benchmark",
+      "response_states": {
+        "warning": "THROTTLE_PUBLIC_RECOMMENDATIONS",
+        "critical": "TRANSITION_MODEL_TO_WITHHELD"
+      }
+    },
+    {
+      "dimension": "calibration_drift",
+      "method": "Expected Calibration Error (ECE) on out-of-sample settlements",
+      "evaluation_window_matches": 100,
+      "warning_threshold": "ECE >= 0.060",
+      "critical_threshold": "ECE >= 0.100",
+      "response_states": {
+        "warning": "SCHEDULE_PLATT_REFIT",
+        "critical": "REVOKE_CALIBRATION_CERTIFICATION"
+      }
+    },
+    {
+      "dimension": "provider_coverage_drift",
+      "method": "Missingness rate per canonical league round",
+      "evaluation_window_days": 7,
+      "warning_threshold": "Critical gap rate >= 5.0%",
+      "critical_threshold": "Critical gap rate >= 15.0%",
+      "response_states": {
+        "warning": "FALLBACK_TO_SECONDARY_PROVIDER",
+        "critical": "CIRCUIT_BREAKER_FAIL_CLOSED"
+      }
+    },
+    {
+      "dimension": "bookmaker_coverage_drift",
+      "method": "Availability of Pinnacle & Betfair closing lines in CLV pass",
+      "evaluation_window_days": 14,
+      "warning_threshold": "Missing closing odds rate >= 3.0%",
+      "critical_threshold": "Missing closing odds rate >= 8.0%",
+      "response_states": {
+        "warning": "FLAG_C6_MILESTONE_COLLECTION",
+        "critical": "HALT_C6_SAMPLE_INCREMENTS"
+      }
+    },
+    {
+      "dimension": "data_freshness_drift",
+      "method": "Age of latest retrieved odds and form snapshot at t_cutoff",
+      "evaluation_window_matches": 1,
+      "warning_threshold": "Odds snapshot age >= 45 minutes",
+      "critical_threshold": "Odds snapshot age >= 120 minutes",
+      "response_states": {
+        "warning": "FORCE_ODDS_REFRESH",
+        "critical": "MARK_EVIDENCE_STALE_AND_WITHHOLD"
+      }
+    },
+    {
+      "dimension": "market_disagreement_drift",
+      "method": "Average absolute divergence between model p_k and Shin devigged market",
+      "evaluation_window_matches": 30,
+      "warning_threshold": "Mean divergence >= 15.0 percentage points",
+      "critical_threshold": "Mean divergence >= 25.0 percentage points",
+      "response_states": {
+        "warning": "AUDIT_FEATURE_INPUTS",
+        "critical": "QUARANTINE_AFFECTED_LEAGUE"
+      }
+    }
+  ],
+  "escalation_hierarchy": [
+    "Level 1: Structured Telemetry & Log Alert (no customer interruption)",
+    "Level 2: Automatic Actionability Throttling (PLAY -> PASS / WITHHELD)",
+    "Level 3: Full League Isolation & Model Demotion (State -> DEGRADED / WITHHELD)",
+    "Level 4: Critical Operator PagerDuty & Incident Declaration"
+  ]
+}
