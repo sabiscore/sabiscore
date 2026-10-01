@@ -95,13 +95,17 @@ def _supported_leagues(manifest: dict[str, Any]) -> set[str]:
     return leagues
 
 
-async def _identity_has_log(session: Any, match_id: str, identity: str) -> bool:
+async def _identity_has_log(
+    session: Any, match_id: str, identity: str, capture_trigger: str
+) -> bool:
     row = (
         await session.execute(
             select(MatchPredictionLog.id)
             .where(
                 MatchPredictionLog.match_id == match_id,
                 MatchPredictionLog.model_version == identity,
+                MatchPredictionLog.payload["capture_trigger"].as_string()
+                == capture_trigger,
             )
             .limit(1)
         )
@@ -115,6 +119,7 @@ async def capture_due_predictions(
     analyze: Analyze,
     odds_service: Any = None,
     now: Optional[datetime] = None,
+    capture_trigger: str = "interactive_full_analysis",
 ) -> dict[str, int]:
     """Capture one forecast per due fixture that has none under the served identity."""
 
@@ -158,10 +163,12 @@ async def capture_due_predictions(
         if league not in supported:
             counts["unsupported_league"] += 1
             continue
-        if await _identity_has_log(session, match_id, identity):
+        if await _identity_has_log(session, match_id, identity, capture_trigger):
             counts["already_captured"] += 1
             continue
 
+        prior_trigger = session.info.get("capture_trigger")
+        session.info["capture_trigger"] = capture_trigger
         try:
             await analyze(
                 match_id=match_id, league=league, db=session, odds_service=odds_service
@@ -180,10 +187,15 @@ async def capture_due_predictions(
                 redact_text(exc),
             )
             continue
+        finally:
+            if prior_trigger is None:
+                session.info.pop("capture_trigger", None)
+            else:
+                session.info["capture_trigger"] = prior_trigger
 
         # The endpoint commits its own capture, or declines it (baseline,
         # unverified identity, unavailable prediction). Read which happened.
-        if await _identity_has_log(session, match_id, identity):
+        if await _identity_has_log(session, match_id, identity, capture_trigger):
             counts["captured"] += 1
         else:
             counts["not_captured"] += 1
@@ -195,7 +207,10 @@ async def capture_due_predictions(
 
 
 async def run_prediction_capture_pass(
-    odds_service: Any = None, *, analyze: Optional[Analyze] = None
+    odds_service: Any = None,
+    *,
+    analyze: Optional[Analyze] = None,
+    capture_trigger: str = "interactive_full_analysis",
 ) -> dict[str, Any]:
     """One capture pass in a short-lived session; never raises."""
     global _last_result
@@ -219,7 +234,10 @@ async def run_prediction_capture_pass(
     try:
         async with AsyncSessionLocal() as session:
             counts = await capture_due_predictions(
-                session, analyze=analyze, odds_service=odds_service
+                session,
+                analyze=analyze,
+                odds_service=odds_service,
+                capture_trigger=capture_trigger,
             )
         _last_result = {"outcome": "ok", "checked_at": checked_at, **counts}
     except ActiveGenerationError as exc:

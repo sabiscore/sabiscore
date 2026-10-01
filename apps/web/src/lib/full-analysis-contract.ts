@@ -218,6 +218,15 @@ export const fullMatchAnalysisSchema = z
     // phase9_candidate_features nullability — .optional() alone rejects null and
     // fails the whole parse ("invalid full-analysis contract" on every baseline).
     phase9_shadow_only: z.boolean().nullable().optional(),
+    feature_integration: z.object({
+      candidate: z.string(),
+      schema_id: z.string(),
+      schema_hash: z.string().optional(),
+      feature_count: z.number().int().nonnegative().optional(),
+      status: z.enum(["ADMITTED", "WITHHELD"]),
+      reason: z.string().optional(),
+      provenance: z.record(z.unknown()).optional(),
+    }).nullable().optional(),
   })
   .superRefine((value, ctx) => {
     if (JSON.stringify(value.data_gaps) !== JSON.stringify(value.evidence_quality.all_gaps)) {

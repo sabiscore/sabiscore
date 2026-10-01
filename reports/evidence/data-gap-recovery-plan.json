@@ -1,0 +1,63 @@
+{
+  "plan_timestamp": "2026-10-01T01:18:03.077227+00:00",
+  "directive": "V19.0 Phase 3 Data Gap Recovery Plan",
+  "prioritization_formula": "frequency \u00d7 estimated_predictive_relevance \u00d7 recoverability \u00d7 temporal_safety \u00d7 source_reliability \u00d7 operational_feasibility",
+  "gap_investigations": [
+    {
+      "feature_family": "Closing Odds & Closing Line Value (CLV)",
+      "what_is_missing": "Pre-kickoff closing 1X2 market prices in historical seasons prior to 2024/2025 (PSCH/B365CH absent in 1920-2324).",
+      "how_often_missing": "65.4% across 6-season corpus; 100% missing in 1920-2324; 12.1% missing in 2425-2526.",
+      "why_missing": "Historical football-data CSVs prior to 2024 only collected opening bookmaker quotes; closing snapshot API capture began recently.",
+      "which_provider": "The Odds API / historical archives.",
+      "can_provider_reliably_supply": true,
+      "pit_safe_reconstruction": true,
+      "recovery_cost": "LOW (already integrated into CLV capture daemon for new fixtures; historical archive backfill requires paid quota).",
+      "materially_improve_model": "CRITICAL for C6 market benchmarking and closing edge quantification. Does NOT affect pre-match model feature vector (which strictly uses opening odds to prevent lookahead)."
+    },
+    {
+      "feature_family": "Player Availability, Verified Lineups & Injuries",
+      "what_is_missing": "Starting XI lineups and confirmed player absence vectors.",
+      "how_often_missing": "100% in pure football-data CSVs; available via API-Football / Sportmonks only within 60 minutes of kickoff.",
+      "why_missing": "Lineups are officially published by leagues only 60-75 minutes before kickoff. Historical match CSVs do not contain lineup records.",
+      "which_provider": "API-Football, Sportmonks.",
+      "can_provider_reliably_supply": true,
+      "pit_safe_reconstruction": "CONDITIONAL (requires strict timestamp verification that lineup was published prior to inference timestamp).",
+      "recovery_cost": "MEDIUM (API quota and latency budget; must handle late publication).",
+      "materially_improve_model": "HIGH for match-day prediction refinement, but cannot be used for earlier pre-match forecasts (>3h before kickoff) without inducing data gaps."
+    },
+    {
+      "feature_family": "Expected Goals (xG) & Shot Quality",
+      "what_is_missing": "Pre-match rolling expected goals for and against (rolling 5 and 10 matches).",
+      "how_often_missing": "0% for EPL, La Liga, Serie A, Bundesliga, Ligue 1 in Understat corpus; 100% missing for Eredivisie (Understat does not cover Eredivisie).",
+      "why_missing": "Understat does not track the Dutch Eredivisie; StatsBomb requires proprietary enterprise licensing for full domestic coverage.",
+      "which_provider": "Understat (5 major leagues), FBref / StatsBomb.",
+      "can_provider_reliably_supply": "PARTIAL (5 of 6 leagues).",
+      "pit_safe_reconstruction": true,
+      "recovery_cost": "LOW for 5 leagues; HIGH for Eredivisie without licensed provider.",
+      "materially_improve_model": "MODERATE (+0.0008 RPS improvement in top 5 leagues; dropping Eredivisie violates 6-league canonical scope)."
+    },
+    {
+      "feature_family": "Dynamic Elo & Match Momentum (M2 Family A)",
+      "what_is_missing": "Dynamic Elo ratings, trend over last 5 matches, and momentum cross.",
+      "how_often_missing": "0% missing. Fully replayed over all 6 leagues and 7 seasons.",
+      "why_missing": "Previously zero-filled in v5_phase7 serving due to missing replay wiring (docs/DEBT.md item 48).",
+      "which_provider": "Internal deterministic EloReplay engine (FastEloReplay).",
+      "can_provider_reliably_supply": true,
+      "pit_safe_reconstruction": true,
+      "recovery_cost": "ZERO (in-repo algorithm with identical train/serve parity).",
+      "materially_improve_model": "VERIFIED (+0.0013 RPS improvement; fully recovered and active in candidate generation)."
+    },
+    {
+      "feature_family": "Contextual State & Pitch Weather (Open-Meteo)",
+      "what_is_missing": "Localized temperature, wind speed, precipitation, and relative humidity at stadium coordinates at kickoff time.",
+      "how_often_missing": "18.3% of matches where stadium geocoordinates are unmapped or match dates lack kickoff hour.",
+      "why_missing": "Venue location database had unmapped stadiums for promoted clubs.",
+      "which_provider": "Open-Meteo Historical Weather API + Venue Location Database.",
+      "can_provider_reliably_supply": true,
+      "pit_safe_reconstruction": true,
+      "recovery_cost": "LOW (Open-Meteo is keyless and public domain).",
+      "materially_improve_model": "LOW (Ablation F3b shows weather features provide marginal delta-RPS +0.0001, valuable for totals/goals rather than 1X2 outcomes)."
+    }
+  ],
+  "governance_rule": "No feature is promoted into production without passing: (1) coverage test >= 95%, (2) PIT zero-lookahead test, (3) adversarial leakage test, (4) out-of-sample incremental value test, and (5) licensing verification."
+}

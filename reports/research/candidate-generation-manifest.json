@@ -1,0 +1,32 @@
+{
+  "generation_id": "v6_phase8-candidate",
+  "parent_generation_id": "v5_phase7-20260922",
+  "git_commit": "bcc9d89a114c2d28ba6d5773da4fa3104065b9c7",
+  "schema": "apex_v1_89",
+  "feature_count": 89,
+  "dataset_snapshot_hash": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+  "feature_schema_hash": "7535e55379bc393c02ddd119385409821ce80ed0504c786ddfd7067d3ee7f090",
+  "feature_lineage_hash": "89e073034afd59567d4e16cfa1b1219ce13a3a538e2f3d6c4c3cef64d9288acc",
+  "training_config_hash": "9d4716028e6bf02c1d4f82edbd87a3ddb77e6a14496ffca0433b358fa1a0c460",
+  "calibration_config_hash": "541146ad8972adf1f72b47740e885df6da672ebded0f004436753c64fa3a64c7",
+  "environment_lock_hash": "bda683998ba69095486e6d2b82925242a143333b17cf21e76a1dc87c1dbafe95",
+  "random_seed": 42,
+  "training_start": "2026-10-01T01:12:30Z",
+  "training_end": "2026-10-01T01:17:30Z",
+  "reproducibility_sha256": "0dfb90d91e33da2dd9410ae285b60402f054409efdaf6823df555ad8dceb2cfd",
+  "resources": {
+    "leagues": "sequential_single_process",
+    "peak_rss_mb": 297.1,
+    "rss_ceiling_mb": 3072.0,
+    "runtime_s": 193.3
+  },
+  "artifact_sha256": {
+    "EPL": "0f30123bed612a234dd1d0bc01a84fd9ff72dfc093930f0b802232849f0d63a9",
+    "LA_LIGA": "34a5fce2b6a94dfbc8316bd0e64e01920e6854dcba8149efcfee1a167b9582d2",
+    "BUNDESLIGA": "88b56fcd1acdff64ebb62c307667367388c8e1e403b315fe1d4eaea6aa983c44",
+    "SERIE_A": "1d3899cf8442e1046b7d20e52b14e7f46b14f38ef7bce2fd2b1813dabc3e89f1",
+    "LIGUE_1": "2ef3f418a20f4ce76db0176c378694fdf64cbd0f11635966a8c8b064dd336981",
+    "EREDIVISIE": "e029bbcf08b20b0af4e116a54540f68c1bddb1e6986eb882ab0697ca84ad85b2"
+  },
+  "governance_status": "EMPIRICALLY_TRAINED_AWAITING_HOLDOUT_CERTIFICATION"
+}

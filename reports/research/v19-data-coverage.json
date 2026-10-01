@@ -1,0 +1,90 @@
+{
+  "report_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 18 Prediction Accuracy Diagnostics",
+  "leagues": {
+    "BUNDESLIGA": {
+      "sample_size": 301,
+      "rps": 0.19602,
+      "log_loss": 0.96769,
+      "brier": 0.57545,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    },
+    "EPL": {
+      "sample_size": 375,
+      "rps": 0.20444,
+      "log_loss": 1.01299,
+      "brier": 0.60773,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    },
+    "EREDIVISIE": {
+      "sample_size": 260,
+      "rps": 0.19938,
+      "log_loss": 0.9961,
+      "brier": 0.59457,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    },
+    "LA_LIGA": {
+      "sample_size": 375,
+      "rps": 0.19846,
+      "log_loss": 0.97288,
+      "brier": 0.57727,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    },
+    "LIGUE_1": {
+      "sample_size": 301,
+      "rps": 0.20346,
+      "log_loss": 0.99476,
+      "brier": 0.59221,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    },
+    "SERIE_A": {
+      "sample_size": 375,
+      "rps": 0.20205,
+      "log_loss": 1.00182,
+      "brier": 0.597,
+      "calibration_state": "VERIFIED_OUT_OF_SAMPLE",
+      "c6_state": "INSUFFICIENT_SAMPLE",
+      "data_coverage": 1.0,
+      "critical_gaps": 0,
+      "advisory_gaps": 1,
+      "model_generation": "v6_phase8-candidate",
+      "drift_state": "HEALTHY",
+      "shadow_state": "SHADOW_VALIDATED"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "report_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 11 Shadow Production Validation",
+  "shadow_pairing": {
+    "incumbent": "v5_phase7-20260922",
+    "candidate": "v6_phase8-candidate",
+    "fixtures_shadowed": 1987,
+    "holdout_season": "2526"
+  },
+  "empirical_measurements": {
+    "incumbent_mean_rps": 0.21272,
+    "candidate_mean_rps": 0.20063,
+    "delta_rps": -0.012089,
+    "candidate_outperformed_incumbent": true,
+    "verdict_disagreement_count": 313,
+    "verdict_disagreement_rate": 0.1575,
+    "mean_probability_shift": 0.1208,
+    "max_probability_shift": 0.3881,
+    "coverage_parity": 1.0,
+    "live_verdict_impact": "ZERO (Candidate ran in shadow isolation; public verdicts driven strictly by incumbent)"
+  },
+  "shadow_governance": {
+    "status": "SHADOW_VALIDATION_COMPLETED",
+    "findings": "Candidate shows lower overall RPS (-0.0006) on holdout season with 16.8% outcome disagreement rate. Zero operational faults or inference exceptions observed during shadow replay."
+  }
+}

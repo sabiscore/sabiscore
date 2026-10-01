@@ -1,0 +1,954 @@
+{
+  "artifact_hashes": null,
+  "certification_policy_sha256": "4e050ad00ff6dcf8c00661e8976486025109a63f6144a9afe8e3e60a2387f664",
+  "dataset": {
+    "auxiliary": {},
+    "dataset_sha256": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "file_count": 36,
+    "files": [
+      {
+        "bytes": 147798,
+        "name": "fd_D1_1920.csv",
+        "sha256": "774e8be9ffe8af9aa55ce0dd777038eadb27fdd9de7e9756c8faa3e753674dc7"
+      },
+      {
+        "bytes": 147778,
+        "name": "fd_D1_2021.csv",
+        "sha256": "6bbd7d907379db2676cd76938c111ce953538781a8c5ce0514400dcc6c27fa38"
+      },
+      {
+        "bytes": 147808,
+        "name": "fd_D1_2122.csv",
+        "sha256": "cc4e233cd1529a85e9903f48e6e27e2cf4f24034f90af409a55130df345f121c"
+      },
+      {
+        "bytes": 147615,
+        "name": "fd_D1_2223.csv",
+        "sha256": "6926944279a4653f8f6b79c6fb21d591cf542f2ad1d55c95dcbb7ec3ccc39800"
+      },
+      {
+        "bytes": 144336,
+        "name": "fd_D1_2324.csv",
+        "sha256": "7d579ee93406ae2f3076677512d8a795acbcd3c693488df24e88d59cc3259eb4"
+      },
+      {
+        "bytes": 173558,
+        "name": "fd_D1_2425.csv",
+        "sha256": "4ba269c44ee9be7d4439cb2edc260de1f65f6dc26d2615ac7a2b584856c1830d"
+      },
+      {
+        "bytes": 159944,
+        "name": "fd_D1_2526.csv",
+        "sha256": "618301a4b39918225a8ccc57f0f839d675e1abd92fa3a3ccd9a67acd7c79dd7f"
+      },
+      {
+        "bytes": 183674,
+        "name": "fd_E0_1920.csv",
+        "sha256": "798b609490fb7587cf35168efd77b7071ebbaf1adb422a7164da0b49e5e2e930"
+      },
+      {
+        "bytes": 183566,
+        "name": "fd_E0_2021.csv",
+        "sha256": "b9b335faede849403cb33e70cb2cb6f0053ff5798cbc6e6f3c1af41709642d8b"
+      },
+      {
+        "bytes": 183669,
+        "name": "fd_E0_2122.csv",
+        "sha256": "9a737b6062d3424a2414ba9efcca84555dc087f3b9bb26fea59d5efb6781cc92"
+      },
+      {
+        "bytes": 184013,
+        "name": "fd_E0_2223.csv",
+        "sha256": "9f35dd0d812f5d897c291c5b5fa1960fd136df55c0dc2855864ef64b1dc942ce"
+      },
+      {
+        "bytes": 180299,
+        "name": "fd_E0_2324.csv",
+        "sha256": "4765b34253899846b8b78a145b4d120a32afd6414a472ba0fc66c8697839c4ee"
+      },
+      {
+        "bytes": 205154,
+        "name": "fd_E0_2425.csv",
+        "sha256": "bd4463e23aa53c89bd9409fe7613a42b2abdccfcc568429edb58cf3fc79be29b"
+      },
+      {
+        "bytes": 203438,
+        "name": "fd_E0_2526.csv",
+        "sha256": "3e3a8352f9ada6789c508d6ca184424421fed56a30400904a4a327c583407e62"
+      },
+      {
+        "bytes": 132036,
+        "name": "fd_F1_1920.csv",
+        "sha256": "e8f7dfa45a1693abb774ec40b43cf3c87d13cadd8758af05c3956b394d53e5e8"
+      },
+      {
+        "bytes": 179670,
+        "name": "fd_F1_2021.csv",
+        "sha256": "26befb43282bdcbc99c86360d24f9511e804c8ef9b5711b693c4867a14775835"
+      },
+      {
+        "bytes": 180023,
+        "name": "fd_F1_2122.csv",
+        "sha256": "b04de45df16345c652f3490b3524a5a5e4029b344fb0f326ac308946c3511933"
+      },
+      {
+        "bytes": 180256,
+        "name": "fd_F1_2223.csv",
+        "sha256": "ca0f275e0663e55afdcf4c129601ce9f55da9030a65e1f5c30d8a93c5b8ac379"
+      },
+      {
+        "bytes": 141867,
+        "name": "fd_F1_2324.csv",
+        "sha256": "153bd4bcbebe7b4817323983676f0174011b2bc280ebac6f1bde1a9327c4d5b0"
+      },
+      {
+        "bytes": 162183,
+        "name": "fd_F1_2425.csv",
+        "sha256": "53d08ac85e42531519dec492161b921a3c3a094dd0d04ca9f0c21d6bf183d217"
+      },
+      {
+        "bytes": 158471,
+        "name": "fd_F1_2526.csv",
+        "sha256": "898b7ddcd373cfe955ae353b1a98cf7f1c8757ca10b69d53039f4e098e88f192"
+      },
+      {
+        "bytes": 179737,
+        "name": "fd_I1_1920.csv",
+        "sha256": "9a0338acee8fea4869d2a3f56ad879294d8641d83f7c8ae7e371a4ba29be7774"
+      },
+      {
+        "bytes": 180072,
+        "name": "fd_I1_2021.csv",
+        "sha256": "abf9101d95b1d5f7542ff1016b730e65ceb243f05ea5a9191bef8435683c6756"
+      },
+      {
+        "bytes": 180435,
+        "name": "fd_I1_2122.csv",
+        "sha256": "93da09d3b865e69eb7260df0e02f1d0c999ed5172a1da441371a4ed70fe2710b"
+      },
+      {
+        "bytes": 180508,
+        "name": "fd_I1_2223.csv",
+        "sha256": "b496d0e97375fdb6c2c98ad1f5dbfa05749ccba64f566a041483851724bcb9cf"
+      },
+      {
+        "bytes": 175852,
+        "name": "fd_I1_2324.csv",
+        "sha256": "d7e030f1aa619e3ba7f5e528ae86cbb074d6d988b72a79c35f892d07da32cd1c"
+      },
+      {
+        "bytes": 200918,
+        "name": "fd_I1_2425.csv",
+        "sha256": "4951126181ea6d36f0d9483491c69cc4c1ffcf12e292e014239f345c053daec0"
+      },
+      {
+        "bytes": 196217,
+        "name": "fd_I1_2526.csv",
+        "sha256": "709ae279617d16af226312bcceac941e71241745ddaf950bdac2b83afad4fcbb"
+      },
+      {
+        "bytes": 158364,
+        "name": "fd_N1_2526.csv",
+        "sha256": "dfb092a866e0df4b4c8fde7778d47f41a4307f5c5ac5a6f55d2276e45c80e604"
+      },
+      {
+        "bytes": 180747,
+        "name": "fd_SP1_1920.csv",
+        "sha256": "5d004f84825073adb15c30d4cafbf73e063ecd48224177fc63374aa20f4d1367"
+      },
+      {
+        "bytes": 180860,
+        "name": "fd_SP1_2021.csv",
+        "sha256": "f219f178f8253b01dce92a640be9f7cf5738d592ee9c078196db44c34352a29d"
+      },
+      {
+        "bytes": 181073,
+        "name": "fd_SP1_2122.csv",
+        "sha256": "7cc9972d3880b262c9ae4792c98c351eb149c1e0ad1b2ea10571e3d619911ba4"
+      },
+      {
+        "bytes": 181358,
+        "name": "fd_SP1_2223.csv",
+        "sha256": "235f7aa5f7913d29cb053a2c37312d6970faad289424376b6c5c68374c1c8d5d"
+      },
+      {
+        "bytes": 177195,
+        "name": "fd_SP1_2324.csv",
+        "sha256": "932c8af1c8e54f25e513306cb971b110712e52e0173d47b178b4efb0369cc81e"
+      },
+      {
+        "bytes": 202443,
+        "name": "fd_SP1_2425.csv",
+        "sha256": "61635430d290e42fc37f6bafde0d25c3d1b54bbde65dcea787f62f697dd86cda"
+      },
+      {
+        "bytes": 197653,
+        "name": "fd_SP1_2526.csv",
+        "sha256": "4ca2e285f3ee0702f6bc55fcaa4f5a15cb3aef6220735a1d15398131e21d63f5"
+      }
+    ],
+    "pattern": "fd_*.csv",
+    "source_dir": "C:/Users/UBEC-DC-ANAMBRA/Documents/sabiscore/backend/data/cache",
+    "total_bytes": 6280588
+  },
+  "environment": {
+    "implementation": "CPython",
+    "libraries": {
+      "joblib": "1.5.3",
+      "lightgbm": "4.6.0",
+      "numpy": "2.5.0",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.8.0",
+      "scipy": "1.18.0",
+      "xgboost": "3.3.0"
+    },
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.14.6"
+  },
+  "experiment_id": "v6_phase8-20261001-0dfb90d91e",
+  "features": {
+    "feature_contract_sha256": "1abd0192ad56b84ad0f8d6ffe2301c77eca3ef6e483e37406021e238fa254270",
+    "feature_count": 89,
+    "feature_schema_version": "apex_v1_89",
+    "order_sha256": "708cab717e9a3e9a44f6792af380d0fed0b77ba9b3029a8730af413951ade2e2"
+  },
+  "generated_at": "2026-10-01T01:17:27.920507+00:00",
+  "generation_id": null,
+  "git": {
+    "commit": "bcc9d89a114c2d28ba6d5773da4fa3104065b9c7",
+    "dirty": false
+  },
+  "labels": {
+    "contract": {
+      "encoding": {
+        "0": "home_win",
+        "1": "draw",
+        "2": "away_win"
+      },
+      "generated_from": "final full-time score of a completed match",
+      "missing_label_handling": "a match without a parsed full-time score never becomes a row; it is dropped at parse time rather than imputed",
+      "rule": "0 if home_goals > away_goals else 1 if home_goals == away_goals else 2",
+      "source": "scripts/train_on_real_matches.py:build_dataset()",
+      "task": "3-way 1X2 match outcome"
+    },
+    "sha256": "7a17dd8a4c2afb453ff05103dfbefa3d7018e4dd601c462ed54970dedf96a9ff"
+  },
+  "leagues": {
+    "BUNDESLIGA": {
+      "accuracy": 0.5049833887043189,
+      "baseline_accuracy_home": 0.43853820598006643,
+      "baseline_rps_market": 0.19083929061889648,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.2317386552251736,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.588,
+        "calibration_brier_before": 0.588,
+        "calibration_draw_f1_after": 0.0,
+        "calibration_draw_f1_before": 0.0,
+        "gate_passed": true,
+        "holdout_brier_after": 0.5754,
+        "holdout_brier_before": 0.5754,
+        "holdout_draw_f1_after": 0.0,
+        "holdout_draw_f1_before": 0.0
+      },
+      "brier": 0.5933430145588969,
+      "calibration_error": 0.06229486387848747,
+      "calibration_n": 296,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.003,
+          "resolution": 0.0265
+        },
+        "chosen": "beta",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0066,
+            "resolution": 0.0292
+          },
+          "conclusion_persists": true,
+          "isotonic": {
+            "reliability": 0.0067,
+            "resolution": 0.0265
+          },
+          "temperature": {
+            "reliability": 0.0076,
+            "resolution": 0.0279
+          },
+          "vector": {
+            "reliability": 0.0066,
+            "resolution": 0.0302
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0012,
+          "resolution": 0.0255
+        },
+        "reason": "reliability_improved_resolution_held_and_persisted_on_holdout",
+        "temperature": {
+          "reliability": 0.0089,
+          "resolution": 0.0238
+        },
+        "vector": {
+          "reliability": 0.0018,
+          "resolution": 0.0228
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-17",
+        "start": "2024-08-23"
+      },
+      "evaluation_n": 301,
+      "evaluation_window": {
+        "end": "2026-05-16",
+        "start": "2025-08-22"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 1.002782041256756,
+      "n": 301,
+      "responsive_features": 57,
+      "rps": 0.19845764601196494,
+      "stacked": {
+        "accuracy": 0.5382059800664452,
+        "brier": 0.575447669026401,
+        "calibration_error": 0.03912934099031957,
+        "log_loss": 0.9676935186410134,
+        "n": 301,
+        "rps": 0.1960200728887366
+      },
+      "train_n": 1455,
+      "training_window": {
+        "end": "2024-05-18",
+        "start": "2019-09-27"
+      }
+    },
+    "EPL": {
+      "accuracy": 0.49333333333333335,
+      "baseline_accuracy_home": 0.424,
+      "baseline_rps_market": 0.2053660899400711,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.22849150417621494,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.5776,
+        "calibration_brier_before": 0.5776,
+        "calibration_draw_f1_after": 0.0,
+        "calibration_draw_f1_before": 0.0,
+        "gate_passed": true,
+        "holdout_brier_after": 0.6077,
+        "holdout_brier_before": 0.6077,
+        "holdout_draw_f1_after": 0.0,
+        "holdout_draw_f1_before": 0.0
+      },
+      "brier": 0.6328679272162884,
+      "calibration_error": 0.09995550491366315,
+      "calibration_n": 375,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.0016,
+          "resolution": 0.0274
+        },
+        "chosen": "temperature",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0036,
+            "resolution": 0.0182
+          },
+          "conclusion_persists": false,
+          "isotonic": {
+            "reliability": 0.0027,
+            "resolution": 0.0162
+          },
+          "temperature": {
+            "reliability": 0.0044,
+            "resolution": 0.0197
+          },
+          "vector": {
+            "reliability": 0.0037,
+            "resolution": 0.018
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0008,
+          "resolution": 0.0287
+        },
+        "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
+        "temperature": {
+          "reliability": 0.0017,
+          "resolution": 0.0254
+        },
+        "vector": {
+          "reliability": 0.0011,
+          "resolution": 0.0269
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-16"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 1.056285464048428,
+      "n": 375,
+      "responsive_features": 62,
+      "rps": 0.2104653841681083,
+      "stacked": {
+        "accuracy": 0.49333333333333335,
+        "brier": 0.60772961336689,
+        "calibration_error": 0.0580539728581238,
+        "log_loss": 1.0129881097909534,
+        "n": 375,
+        "rps": 0.20443516795793273
+      },
+      "train_n": 1821,
+      "training_window": {
+        "end": "2024-05-19",
+        "start": "2019-09-20"
+      }
+    },
+    "LA_LIGA": {
+      "accuracy": 0.5226666666666666,
+      "baseline_accuracy_home": 0.48533333333333334,
+      "baseline_rps_market": 0.19628490507602692,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.22345809865387004,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.5648,
+        "calibration_brier_before": 0.5648,
+        "calibration_draw_f1_after": 0.0909,
+        "calibration_draw_f1_before": 0.0909,
+        "gate_passed": true,
+        "holdout_brier_after": 0.5773,
+        "holdout_brier_before": 0.5773,
+        "holdout_draw_f1_after": 0.0196,
+        "holdout_draw_f1_before": 0.0196
+      },
+      "brier": 0.5842553203376432,
+      "calibration_error": 0.04529642518015068,
+      "calibration_n": 380,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.0037,
+          "resolution": 0.0308
+        },
+        "chosen": "beta",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0036,
+            "resolution": 0.021
+          },
+          "conclusion_persists": false,
+          "isotonic": {
+            "reliability": 0.0052,
+            "resolution": 0.0216
+          },
+          "temperature": {
+            "reliability": 0.004,
+            "resolution": 0.0209
+          },
+          "vector": {
+            "reliability": 0.004,
+            "resolution": 0.0209
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0024,
+          "resolution": 0.0372
+        },
+        "reason": "reliability_improved_resolution_held_and_persisted_on_holdout",
+        "temperature": {
+          "reliability": 0.0056,
+          "resolution": 0.0306
+        },
+        "vector": {
+          "reliability": 0.0052,
+          "resolution": 0.0305
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-15"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 0.9922418100220866,
+      "n": 375,
+      "responsive_features": 63,
+      "rps": 0.19889701804552623,
+      "stacked": {
+        "accuracy": 0.5173333333333333,
+        "brier": 0.5772704393012388,
+        "calibration_error": 0.04388939948446701,
+        "log_loss": 0.9728846271996657,
+        "n": 375,
+        "rps": 0.1984551473350529
+      },
+      "train_n": 1817,
+      "training_window": {
+        "end": "2024-05-26",
+        "start": "2019-09-24"
+      }
+    },
+    "LIGUE_1": {
+      "accuracy": 0.4850498338870432,
+      "baseline_accuracy_home": 0.4584717607973422,
+      "baseline_rps_market": 0.19912628829479218,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.22926811378159884,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.5819,
+        "calibration_brier_before": 0.5819,
+        "calibration_draw_f1_after": 0.0,
+        "calibration_draw_f1_before": 0.0,
+        "gate_passed": true,
+        "holdout_brier_after": 0.5922,
+        "holdout_brier_before": 0.5922,
+        "holdout_draw_f1_after": 0.0,
+        "holdout_draw_f1_before": 0.0
+      },
+      "brier": 0.596331858554527,
+      "calibration_error": 0.08900690925959175,
+      "calibration_n": 306,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.0026,
+          "resolution": 0.0221
+        },
+        "chosen": "temperature",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0051,
+            "resolution": 0.0214
+          },
+          "conclusion_persists": false,
+          "isotonic": {
+            "reliability": 0.0071,
+            "resolution": 0.0178
+          },
+          "temperature": {
+            "reliability": 0.0054,
+            "resolution": 0.0216
+          },
+          "vector": {
+            "reliability": 0.0044,
+            "resolution": 0.0196
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0019,
+          "resolution": 0.0223
+        },
+        "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
+        "temperature": {
+          "reliability": 0.0042,
+          "resolution": 0.0219
+        },
+        "vector": {
+          "reliability": 0.0028,
+          "resolution": 0.0227
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-17",
+        "start": "2024-08-16"
+      },
+      "evaluation_n": 301,
+      "evaluation_window": {
+        "end": "2026-05-17",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 1.0012888487996803,
+      "n": 301,
+      "responsive_features": 61,
+      "rps": 0.20051076410023563,
+      "stacked": {
+        "accuracy": 0.5149501661129569,
+        "brier": 0.5922128856664932,
+        "calibration_error": 0.03848566711650456,
+        "log_loss": 0.9947643449629682,
+        "n": 301,
+        "rps": 0.20346139183390655
+      },
+      "train_n": 1641,
+      "training_window": {
+        "end": "2024-05-19",
+        "start": "2019-09-20"
+      }
+    },
+    "POOLED": {
+      "accuracy": 0.5279315551082033,
+      "baseline_accuracy_home": 0.4393558127830901,
+      "baseline_rps_market": 0.19784937798976898,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.22896537429419572,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.5765,
+        "calibration_brier_before": 0.5765,
+        "calibration_draw_f1_after": 0.0,
+        "calibration_draw_f1_before": 0.0,
+        "gate_passed": true,
+        "holdout_brier_after": 0.5856,
+        "holdout_brier_before": 0.5856,
+        "holdout_draw_f1_after": 0.0,
+        "holdout_draw_f1_before": 0.0
+      },
+      "brier": 0.5910802245104436,
+      "calibration_error": 0.02865979508180935,
+      "calibration_n": 1732,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.0004,
+          "resolution": 0.0254
+        },
+        "chosen": "temperature",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0012,
+            "resolution": 0.0208
+          },
+          "conclusion_persists": false,
+          "isotonic": {
+            "reliability": 0.0017,
+            "resolution": 0.0205
+          },
+          "temperature": {
+            "reliability": 0.0004,
+            "resolution": 0.0207
+          },
+          "vector": {
+            "reliability": 0.0011,
+            "resolution": 0.0212
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0002,
+          "resolution": 0.0275
+        },
+        "reason": "isotonic_won_calibration_set_but_did_not_persist_on_holdout",
+        "temperature": {
+          "reliability": 0.0011,
+          "resolution": 0.0259
+        },
+        "vector": {
+          "reliability": 0.0005,
+          "resolution": 0.0254
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-15"
+      },
+      "evaluation_n": 1987,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-15"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 0.9937887559821257,
+      "n": 1987,
+      "responsive_features": 69,
+      "rps": 0.19960788583931316,
+      "stacked": {
+        "accuracy": 0.5314544539506794,
+        "brier": 0.5856147383260927,
+        "calibration_error": 0.015314905736687933,
+        "log_loss": 0.9835614588056482,
+        "n": 1987,
+        "rps": 0.19848787379087088
+      },
+      "train_n": 8537,
+      "training_window": {
+        "end": "2024-06-02",
+        "start": "2019-09-20"
+      }
+    },
+    "SERIE_A": {
+      "accuracy": 0.5226666666666666,
+      "baseline_accuracy_home": 0.392,
+      "baseline_rps_market": 0.19714131951332092,
+      "baseline_rps_market_quote": "opening_1x2_bet365_then_pinnacle",
+      "baseline_rps_trainprior": 0.2332832744095393,
+      "bivariate_poisson_overlay": {
+        "alpha": 0.0,
+        "calibration_brier_after": 0.574,
+        "calibration_brier_before": 0.574,
+        "calibration_draw_f1_after": 0.0182,
+        "calibration_draw_f1_before": 0.0182,
+        "gate_passed": true,
+        "holdout_brier_after": 0.597,
+        "holdout_brier_before": 0.597,
+        "holdout_draw_f1_after": 0.0,
+        "holdout_draw_f1_before": 0.0
+      },
+      "brier": 0.6200283826167678,
+      "calibration_error": 0.04819502508837401,
+      "calibration_n": 375,
+      "calibration_season": "2425",
+      "calibration_selection": {
+        "beta": {
+          "reliability": 0.0019,
+          "resolution": 0.0299
+        },
+        "chosen": "temperature",
+        "held_out_persistence": {
+          "beta": {
+            "reliability": 0.0034,
+            "resolution": 0.0248
+          },
+          "conclusion_persists": true,
+          "isotonic": {
+            "reliability": 0.008,
+            "resolution": 0.0217
+          },
+          "temperature": {
+            "reliability": 0.0035,
+            "resolution": 0.0226
+          },
+          "vector": {
+            "reliability": 0.003,
+            "resolution": 0.0233
+          }
+        },
+        "isotonic": {
+          "reliability": 0.0006,
+          "resolution": 0.029
+        },
+        "reason": "isotonic_degraded_resolution",
+        "temperature": {
+          "reliability": 0.0033,
+          "resolution": 0.0304
+        },
+        "vector": {
+          "reliability": 0.0019,
+          "resolution": 0.0295
+        }
+      },
+      "calibration_window": {
+        "end": "2025-05-25",
+        "start": "2024-08-17"
+      },
+      "evaluation_n": 375,
+      "evaluation_window": {
+        "end": "2026-05-24",
+        "start": "2025-08-23"
+      },
+      "holdout_season": "2526",
+      "hyperparameter_source": "baseline_hardcoded",
+      "hyperparameters": {
+        "lightgbm": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 5,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        },
+        "random_forest": {
+          "max_depth": 8,
+          "min_samples_leaf": 15,
+          "n_estimators": 300
+        },
+        "xgboost": {
+          "colsample_bytree": 0.85,
+          "learning_rate": 0.05,
+          "max_depth": 4,
+          "n_estimators": 250,
+          "reg_lambda": 2.0,
+          "subsample": 0.85
+        }
+      },
+      "log_loss": 1.0405386026581762,
+      "n": 375,
+      "responsive_features": 63,
+      "rps": 0.20874118521611307,
+      "stacked": {
+        "accuracy": 0.5306666666666666,
+        "brier": 0.5969958942765502,
+        "calibration_error": 0.020870848728775326,
+        "log_loss": 1.0018225307297075,
+        "n": 375,
+        "rps": 0.20205214784201933
+      },
+      "train_n": 1803,
+      "training_window": {
+        "end": "2024-06-02",
+        "start": "2019-09-28"
+      }
+    }
+  },
+  "metric_contract_sha256": "7316be7c237fd02a7f35ad73d30b5f744b2cbc24d6b61b66615ea2f5a2c61c73",
+  "model_family": {
+    "architecture": "stacking_ensemble",
+    "base_learners": [
+      "random_forest",
+      "xgboost",
+      "lightgbm"
+    ],
+    "calibration_candidates": [
+      "temperature",
+      "vector",
+      "beta",
+      "isotonic"
+    ],
+    "meta_model": "logistic_regression",
+    "source": "scripts/train_on_real_matches.py"
+  },
+  "provider_versions": {
+    "mode": "offline_corpus",
+    "note": "Training reads cached football-data.co.uk CSV snapshots (see dataset.dataset_sha256 for exact corpus identity); there is no live provider API call at training time, so no API version string applies. The dataset content hash is a stronger per-exact-corpus identity than a provider version number would be."
+  },
+  "reproducibility_sha256": "0dfb90d91e33da2dd9410ae285b60402f054409efdaf6823df555ad8dceb2cfd",
+  "resources": {
+    "leagues": "sequential_single_process",
+    "peak_rss_mb": 297.1,
+    "rss_ceiling_mb": 3072.0,
+    "runtime_s": 193.3
+  },
+  "schema": "sabiscore_training_manifest_v1",
+  "training_config": {
+    "artifact_suffix": "v6_phase8",
+    "calibration": "latest pre-holdout season, disjoint from core training rows",
+    "holdout_season": "2526",
+    "n_jobs": 2,
+    "seed": 42,
+    "split": "chronological; holdout is the most recent season, never random",
+    "tune_trials": 0
+  }
+}

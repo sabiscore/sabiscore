@@ -239,6 +239,7 @@ class FullMatchAnalysisResponseSchema(BaseModel):
     generated_at: datetime
     phase9_candidate_features: Optional[Dict[str, Any]] = None
     phase9_shadow_only: Optional[bool] = None
+    feature_integration: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def validate_availability_and_staking(self) -> "FullMatchAnalysisResponseSchema":

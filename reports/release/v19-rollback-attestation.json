@@ -1,0 +1,23 @@
+{
+  "attestation_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 14 Rollback Attestation",
+  "active_generation": "v5_phase7-20260922",
+  "active_generation_manifest": "backend/models/active_generation.json",
+  "active_generation_sha256": "a2777ab2496c7758ec434e933fbfaa8840ad8745d6f7f8325d1f188de96be802",
+  "candidate_quarantined": "v6_phase8-candidate",
+  "rollback_reference": {
+    "artifact_backup_verified": true,
+    "rollback_procedure": "If unexpected runtime degradation occurs, active_generation.json reverts to v5_phase7-20260922 hash-locked artifacts.",
+    "rollback_trigger_thresholds": {
+      "inference_error_rate_pct": 0.5,
+      "data_gap_rate_pct": 25.0,
+      "p95_latency_ms": 300.0,
+      "memory_ceiling_mb": 512.0
+    }
+  },
+  "canary_configuration": {
+    "mode": "ACTIVE_FAIL_CLOSED_WITH_SHADOW_CANDIDATE",
+    "canary_traffic_pct": 0.0,
+    "public_verdicts_guarded": true
+  }
+}

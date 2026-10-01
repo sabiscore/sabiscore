@@ -1,0 +1,16 @@
+{
+  "branch": "feat/v21-certification-recovery",
+  "files": {
+    "backend\\models\\active_generation.json": "a2777ab2496c7758ec434e933fbfaa8840ad8745d6f7f8325d1f188de96be802",
+    "backend\\serving\\feature_bridge.py": "c584d589adfaa35aeee21128a7d1be5e7da6df08fc478c0ffda3697f452509aa",
+    "backend\\src\\api\\endpoints\\full_analysis.py": "daf561c7680458b9f89ab5d7465f4e94f154f564e06045501584e9828d1a747d",
+    "backend\\src\\api\\main.py": "f136fc972ae479331246af5afc2b2fbe8b22dc769f1badaaec97753262d0b904",
+    "backend\\workers\\c6_live_collector.py": "2965aabaadb39cb7966371ae1f092ab81323da62262ddd7ea8d183846e435a27",
+    "reports\\evidence\\v21-feature-freshness-policy.json": "6b6b816f9ceb41f3547c9a3b61a5a694ad52862e66fb8523d49ed73ab2311f1a",
+    "reports\\research\\v21-market-evaluation-protocol.json": "43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c"
+  },
+  "generated_at": "2026-10-01T10:17:26.558213+00:00",
+  "protocol_sha256": "43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c",
+  "repository_head": "20e2988c64a55de72d18e5dc7346c6c70bb8d00b",
+  "worktree_status": "M .gitattributes\n M backend/scripts/analyze_dataset_fitness.py\n M backend/scripts/run_under_resource_guard.py\n M backend/scripts/run_v18_reconciliation.py\n M backend/scripts/v19_empirical_evaluations.py\n M backend/scripts/v21_market_protocol.py\n M backend/tests/unit/test_directive_v19_certification.py\n M reports/audits/v20-claim-reconciliation.json\n M reports/evidence/v21-data-quality-dashboard.json\n M reports/evidence/v21-historical-market-provider.json\n M reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md\n M reports/release/v21-audit-manifest.json\n M reports/release/v21-promotion-attestation.json\n M reports/release/v21-rollback-attestation.json\n M reports/research/v19-evaluation-protocol.json\n M reports/research/v19-evaluation-protocol.sha256\n M reports/research/v21-c6-live-status.json\n M reports/research/v21-calibration.json\n M reports/research/v21-feature-integration.json\n M reports/research/v21-market-evaluation.json\n M reports/research/v21-model-certification.json\n M reports/research/v21-regime-performance.json"
+}

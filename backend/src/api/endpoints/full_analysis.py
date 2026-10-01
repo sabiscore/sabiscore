@@ -46,6 +46,10 @@ from ...models.causal_selector import CausalFeatureResult
 from ...models.ensemble_uncertainty import compute_ensemble_uncertainty
 from ...models.feature_registry import active_canonical_features
 from ...models.active_generation import active_generation_is_certified
+try:
+    from serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
+except ModuleNotFoundError:
+    from backend.serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
 from ...schemas.full_analysis import (
     FullMatchAnalysisResponseSchema,
     PredictionSource,
@@ -247,6 +251,7 @@ def _shadow_log_payload(
     conflicts: List[str],
     research_uncertainty: Dict[str, Any],
     recommendation_market: Optional[Dict[str, Any]] = None,
+    capture_trigger: str = "interactive_full_analysis",
 ) -> Dict[str, Any]:
     """The immutable shadow snapshot settlement and CLV evaluate later.
 
@@ -267,7 +272,7 @@ def _shadow_log_payload(
     tested against live settled outcomes while nothing stores the number.
     """
     return {
-        "capture_trigger": "interactive_full_analysis",
+        "capture_trigger": capture_trigger,
         "evaluation_at": evaluated_at.isoformat(),
         "prediction_status": prediction_status.value,
         "prediction_source": prediction_source.value,
@@ -822,7 +827,8 @@ async def get_full_analysis(
     started_at = time.perf_counter()
     cache_key = f"full_analysis:v2:{match_id}:{league}"
     cached = cache.get(cache_key) if cache else None
-    if cached:
+    internal_capture = bool(getattr(db, "info", {}).get("capture_trigger"))
+    if cached and not internal_capture:
         try:
             metrics_collector.increment("analysis.cache_hit")
             return json.loads(cached) if isinstance(cached, str) else cached
@@ -845,6 +851,12 @@ async def get_full_analysis(
     _is_matchup = " vs " in match_id or " VS " in match_id
 
     projection_failed = False
+    candidate_feature_integration: Dict[str, Any] = {
+        "candidate": "Candidate-M",
+        "schema_id": "apex_v1_89",
+        "status": "WITHHELD",
+        "reason": "candidate_feature_provenance_unavailable",
+    }
     try:
         if _is_matchup:
             sep = " vs " if " vs " in match_id else " VS "
@@ -897,6 +909,38 @@ async def get_full_analysis(
     if data_quality.get("is_synthetic"):
         reduced_evidence_input = True
         critical_gaps.append("REQUIRED_MODEL_INPUTS_UNAVAILABLE")
+
+    # Run candidate admission through the canonical request path. Candidate-M
+    # cannot borrow the incumbent's feature contract or infer missing metadata;
+    # rejection leaves the incumbent inference path unchanged.
+    try:
+        bridge = FeatureBridge(schema_id="apex_v1_89")
+        source_features = live.get("features_dict") or {}
+        candidate_features = {
+            name: source_features[name]
+            for name in bridge.feature_order
+            if name in source_features
+        }
+        bridged = bridge.validate(
+            features=candidate_features,
+            feature_schema_id="apex_v1_89",
+            schema_hash=bridge.schema_hash,
+            feature_evidence=live.get("feature_evidence") or {},
+            feature_cutoff=str(live.get("feature_cutoff") or ""),
+        )
+        candidate_feature_integration = {
+            "candidate": "Candidate-M",
+            "schema_id": bridged.schema_id,
+            "schema_hash": bridged.schema_hash,
+            "feature_count": len(bridged.values),
+            "status": "ADMITTED",
+            "provenance": dict(bridged.provenance),
+        }
+    except FeatureBridgeRejected as exc:
+        candidate_feature_integration["reason"] = str(exc)
+    except Exception as exc:
+        logger.warning("V21 candidate feature bridge unavailable: %s", type(exc).__name__)
+        candidate_feature_integration["reason"] = "candidate_feature_bridge_error"
     raw_staleness = live.get("staleness_seconds")
     staleness_available = bool(
         live.get("staleness_available", raw_staleness is not None)
@@ -1172,6 +1216,7 @@ async def get_full_analysis(
     )
 
     result = response.to_dict()
+    result["feature_integration"] = candidate_feature_integration
     quality = result.get("evidence_quality") or {}
     result["market"] = _market_block(
         market_odds,
@@ -1230,6 +1275,9 @@ async def get_full_analysis(
                     ensemble.away_win_prob,
                 ],
                 "features": features_dict,
+                "capture_trigger": db.info.get(
+                    "capture_trigger", "interactive_full_analysis"
+                ),
                 "feature_source": dict(live.get("feature_source") or {}),
                 "data_gaps": sorted(set(deduped_gaps)),
                 "critical_gaps": sorted(set(critical_gaps)),
@@ -1270,6 +1318,9 @@ async def get_full_analysis(
                         conflicts=conflicts,
                         research_uncertainty=research_uncertainty,
                         recommendation_market=live.get("odds"),
+                        capture_trigger=db.info.get(
+                            "capture_trigger", "interactive_full_analysis"
+                        ),
                     ),
                 ),
                 require_scheduled_pre_kickoff=True,

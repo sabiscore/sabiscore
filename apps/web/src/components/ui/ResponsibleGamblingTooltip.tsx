@@ -182,6 +182,20 @@ export function FairProbTooltip() {
 }
 
 /**
+ * Tri-State Decision Explainer Tooltip
+ */
+export function DecisionStateTooltip() {
+  return (
+    <Tooltip
+      content="PLAY: Statistical edge identified exceeding fair price hurdles with risk gates passed. PASS: Evaluated fixture has no quantifiable mathematical edge at current prices. WITHHELD: Model abstains due to missing data or uncertified status."
+      type="help"
+    >
+      <HelpCircle className="h-3.5 w-3.5 text-slate-500 hover:text-slate-400" />
+    </Tooltip>
+  );
+}
+
+/**
  * Model Confidence Disclaimer
  */
 export function ConfidenceDisclaimer() {

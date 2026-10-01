@@ -12,6 +12,7 @@ import {
   EvidenceStatusCard,
   MarketComparisonTable,
   CounterCase,
+  DecisionSummary,
   NarrativeBlock,
   OddsEdgeCard,
   RLCard,
@@ -326,24 +327,20 @@ describe("EvidenceStatusCard blocking-gap copy", () => {
   });
 });
 
-describe("EdgeDeltaBar uses the backend's de-vigged edge", () => {
-  // Backend contract (`_odds_edge_from_features`): the book is de-vigged
-  // (`fair = (1/odds) / overround`) and `edge = model_prob - fair`. Here the
-  // book carries a 6% overround, so the vigged price and the fair price are
-  // 1.7pp apart — enough that recomputing `1 / market_odds` in the browser
-  // produces a visibly different card from the backend's own number.
+describe("EdgeDeltaBar displays backend-owned market values", () => {
   const oddsEdge = {
     market: "home_win",
-    market_odds: 3.3, // raw implied 30.303%
+    market_odds: 3.3,
     model_prob: 0.393,
-    edge: 0.10712, // 0.393 − 0.28588 fair
+    edge: 0.10712,
     kelly_stake: 0.02,
   };
 
-  it("shows the fair market probability, not the vigged 1/odds price", () => {
-    const { container } = render(<EdgeDeltaBar oddsEdge={oddsEdge} />);
+  it("shows the server-provided fair market probability", () => {
+    const { container } = render(
+      <EdgeDeltaBar oddsEdge={oddsEdge} fairMarketProbability={0.28588} />,
+    );
     expect(container.textContent).toContain("Fair market 28.6%");
-    // 1 / 3.3 = 30.3% — the bookmaker's margin still in it.
     expect(container.textContent).not.toContain("30.3%");
   });
 
@@ -730,16 +727,7 @@ describe("a withheld fixture that still carries a forecast (live fd-558881, 2026
   // evaluable" (three state words) over "Not enough verified data — this model
   // hasn't passed certification yet", with a resolved market and a forecast.
   it("shows one decision state, says why, and keeps the verdict in the evidence line", () => {
-    render(
-      <EnhancedMatchHero
-        matchId="fd-558881"
-        data={withheldWithForecast}
-        presentation={mapFullAnalysisPresentation(withheldWithForecast)}
-        league="EREDIVISIE"
-        homeTeam="PSV"
-        awayTeam="SC Heerenveen"
-      />,
-    );
+    render(<DecisionSummary data={withheldWithForecast} presentation={mapFullAnalysisPresentation(withheldWithForecast)} />);
     const decision = screen.getByRole("region", { name: /decision/i });
     expect(decision.querySelectorAll("[data-decision-state]")).toHaveLength(1);
     expect(decision.textContent).toMatch(/This model hasn't passed certification yet\./);

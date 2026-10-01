@@ -1,0 +1,72 @@
+{
+  "claims": [
+    {
+      "claim": "FeatureBridge exists",
+      "evidence": [
+        "backend/serving/feature_bridge.py",
+        "sha256:c584d589adfaa35aeee21128a7d1be5e7da6df08fc478c0ffda3697f452509aa"
+      ],
+      "status": "VERIFIED_BUILT"
+    },
+    {
+      "claim": "FeatureBridge participates in canonical full-analysis request handling",
+      "evidence": [
+        "backend/src/api/endpoints/full_analysis.py imports and calls FeatureBridge"
+      ],
+      "limitation": "Candidate-M remains withheld until its 89-feature semantics and live per-field provenance validate.",
+      "status": "WIRED_CANDIDATE_ADMISSION_ONLY"
+    },
+    {
+      "claim": "Candidate has a production-compatible apex_v1_89 schema",
+      "evidence": [
+        "active_generation.feature_schema_version=apex_v1_68",
+        "undeclared_semantics_or_units=89"
+      ],
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "claim": "C6LiveCollector accumulates live sample",
+      "evidence": [
+        "backend/src/api/main.py binds the collector to capture and settlement loops",
+        "live rows are filtered by capture_trigger and kickoff time"
+      ],
+      "frozen_writer_filter": "interactive_full_analysis",
+      "prior_collector_was": "in-memory counter/no-op capture",
+      "status": "V20_CLAIM_REJECTED_FROZEN_PERSISTED_PATH_USED"
+    },
+    {
+      "claim": "V20 live C6 N is current and verified",
+      "evidence": [
+        "legacy report recorded N=0; current database observation was not made by this artifact generator"
+      ],
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "claim": "V20 Gate 7 market comparison is empirical and reproducible",
+      "evidence": [
+        "legacy gate_7=FAIL",
+        "V20 market report contains aggregate values but not a V21 cohort/provenance manifest"
+      ],
+      "legacy_report_values": {
+        "candidate_rps_after_calibration": 0.1995,
+        "candidate_rps_before": 0.20063,
+        "delta": 0.00189,
+        "ece": 0.039,
+        "opening_market_rps": 0.19761
+      },
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "claim": "V20 bridge audit proves semantic compatibility",
+      "evidence": [
+        "legacy fallback_contract_verified=True",
+        "V20 bridge compared vector width and accepted parent fallback; V21 bridge rejects unproven fallback vectors"
+      ],
+      "status": "CLAIM_EXCEEDS_IMPLEMENTATION"
+    }
+  ],
+  "generated_at": "2026-10-01T10:17:26.558213+00:00",
+  "release_state": "ACTIVE_FAIL_CLOSED",
+  "report_id": "v20-claim-reconciliation",
+  "repository_head": "20e2988c64a55de72d18e5dc7346c6c70bb8d00b"
+}
