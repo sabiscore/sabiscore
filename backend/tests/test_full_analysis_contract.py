@@ -245,9 +245,65 @@ async def test_default_projection_fallback_is_non_actionable(monkeypatch) -> Non
     assert "No bet" in parsed.narrative
 
 
+@pytest.mark.asyncio
+async def test_feature_contract_violation_skips_model_inference(monkeypatch) -> None:
+    class InvalidProjector:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def build_live_feature_vector(self, **_kwargs):
+            return {
+                "features": [0.0],  # wrong width for active schema
+                "features_dict": {"only_one": 0.0},
+                "data_gaps": [],
+                "critical_gaps": [],
+                "advisory_gaps": [],
+                "conflicts": [],
+                "fixture_identity_verified": True,
+                "identity_resolution": {
+                    "home_team_resolved": True,
+                    "away_team_resolved": True,
+                },
+                "data_quality": {"is_synthetic": False},
+                "is_reduced_evidence_baseline": False,
+                "staleness_seconds": 0,
+                "league": "EPL",
+                "kickoff_utc": datetime(2026, 8, 14, 18, 0, 0),
+                "odds": None,
+            }
+
+    class ProbePredictionEngine:
+        called = False
+
+        async def predict(self, **_kwargs):
+            type(self).called = True
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "home_win": 0.50,
+                    "draw": 0.30,
+                    "away_win": 0.20,
+                    "model_version": "v5_phase7",
+                    "calibration_method": "raw",
+                }
+            )
+
+    monkeypatch.setattr(endpoint, "UpcomingMatchFeatureProjector", InvalidProjector)
+    monkeypatch.setattr(endpoint, "PredictionEngine", ProbePredictionEngine)
+    monkeypatch.setattr(endpoint, "cache", None)
+
+    payload = await endpoint.get_full_analysis(
+        "real-fixture-contract", league="EPL", db=object()
+    )
+    assert ProbePredictionEngine.called is False
+    assert payload["prediction_status"] == "UNAVAILABLE"
+    assert "FEATURE_CONTRACT_VIOLATION" in payload["evidence_quality"]["critical_gaps"]
+    assert "FEATURE_CONTRACT_VIOLATION" in payload["data_gaps"]
+
+
 def _fake_live_vector(*, fixture_identity_verified: bool) -> dict:
+    _, schema = endpoint.resolve_active_bridge_schema()
     return {
-        "features": [0.0] * 58,
+        "features": [0.0] * len(schema),
         "features_dict": {},  # empty -> _elo_from_features defaults to exact parity
         "data_gaps": [],
         "critical_gaps": [],

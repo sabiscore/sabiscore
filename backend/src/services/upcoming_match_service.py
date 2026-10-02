@@ -16,6 +16,7 @@ from sqlalchemy.orm import aliased
 
 from ..core.cache import cache_manager
 from ..core.config import settings
+from ..core.exceptions import FeatureContractViolationError
 from ..core.portfolio_exposure import compute_portfolio_exposure
 from ..data.loaders.football_data_api import FootballDataAPIClient
 from ..db.models import Match, Team
@@ -23,6 +24,7 @@ from ..monitoring.metrics import metrics_collector
 from ..utils.db_time import to_utc_iso
 from .upcoming_match_feature_service import UpcomingMatchFeatureProjector
 from ..models.active_generation import staking_authorization
+from ..models.feature_bridge import bridge_feature_vector, resolve_active_bridge_schema
 from ..models.ensemble_uncertainty import compute_ensemble_uncertainty
 from ..models.prediction import PredictionEngine
 from .risk_guard import evaluate_staking_risk
@@ -348,6 +350,16 @@ class UpcomingMatchService:
         # answer that is identical every time.
         stake_auth = staking_authorization()
 
+        # Resolve once per request. The active manifest cannot change mid-loop.
+        try:
+            feature_schema_version, feature_schema = resolve_active_bridge_schema()
+        except FeatureContractViolationError:
+            logger.exception(
+                "Unable to resolve active feature schema for upcoming inference"
+            )
+            feature_schema_version = None
+            feature_schema = None
+
         # Get base upcoming matches
         try:
             matches_response = await self.get_upcoming_matches(
@@ -394,7 +406,17 @@ class UpcomingMatchService:
                 features_result = await feature_projector.build_live_feature_vector(
                     match_id=match_id, league=match.get("league", ""), db=db
                 )
-                full_features = _select_feature_vector(features_result)
+                if feature_schema_version is None or feature_schema is None:
+                    raise FeatureContractViolationError(
+                        "active feature schema unavailable for upcoming inference",
+                        context="upcoming_match_service",
+                    )
+                full_features = bridge_feature_vector(
+                    features_result,
+                    schema=feature_schema,
+                    schema_version=feature_schema_version,
+                    context="upcoming_match_service",
+                )
 
                 # 2. Get predictions via canonical PredictionEngine path
                 pred_result = await prediction_engine.predict(
@@ -522,8 +544,13 @@ class UpcomingMatchService:
                 match["value_bets"] = []
                 match["has_value"] = False
                 match["best_value_bet"] = None
+                failure_gap = (
+                    "feature_contract_violation"
+                    if isinstance(e, FeatureContractViolationError)
+                    else "prediction_failed"
+                )
                 match["data_gaps"] = sorted(
-                    set(match.get("data_gaps", [])) | {"prediction_failed"}
+                    set(match.get("data_gaps", [])) | {failure_gap}
                 )
                 match["staleness_seconds"] = None
                 match["staleness_available"] = False

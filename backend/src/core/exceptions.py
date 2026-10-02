@@ -54,3 +54,26 @@ class SchemaMismatchError(DataUnavailableError):
         )
         self.actual_dim = actual_dim
         self.expected_dim = expected_dim
+
+
+class FeatureContractViolationError(DataUnavailableError):
+    """Raised when inference inputs violate the declared feature contract."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        schema_version: str | None = None,
+        expected_dim: int | None = None,
+        actual_dim: int | None = None,
+        context: str = "inference",
+    ):
+        super().__init__(
+            message,
+            provider=context,
+            evidence_type="feature_contract_violation",
+        )
+        self.schema_version = schema_version
+        self.expected_dim = expected_dim
+        self.actual_dim = actual_dim
+        self.context = context

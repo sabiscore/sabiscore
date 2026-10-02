@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.cache import cache
 from ...core.config import settings
+from ...core.exceptions import FeatureContractViolationError
 from ...core.league_policy import LeaguePolicyUnavailableError, get_league_policy
 from ...core.redaction import redact_text
 from ...data.elo_engine import EloContext
@@ -69,6 +70,7 @@ from ...services.prediction_log_service import (
 from ...services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
 from ...services.uncertainty_service import UncertaintyBreakdown
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
+from ...models.feature_bridge import bridge_feature_vector, resolve_active_bridge_schema
 
 logger = logging.getLogger(__name__)
 
@@ -836,10 +838,15 @@ async def get_full_analysis(
     projector = UpcomingMatchFeatureProjector(odds_service=odds_service)
     prediction_engine = PredictionEngine()
     synthesizer = IntelligenceSynthesizer()
-    canonical_features = active_canonical_features(
-        use_phase7=settings.use_phase7_models,
-        use_phase8=settings.phase8_enabled,
-    )
+    try:
+        feature_schema_version, canonical_features = resolve_active_bridge_schema()
+    except FeatureContractViolationError:
+        logger.exception("Unable to resolve active feature schema for full analysis")
+        feature_schema_version = None
+        canonical_features = active_canonical_features(
+            use_phase7=settings.use_phase7_models,
+            use_phase8=settings.phase8_enabled,
+        )
 
     # Detect matchup strings like "Arsenal vs Chelsea"
     _is_matchup = " vs " in match_id or " VS " in match_id
@@ -943,13 +950,16 @@ async def get_full_analysis(
         raw_pred = {}
     else:
         try:
-            full_features = np.asarray(
-                live.get("features")
-                if live.get("features") is not None
-                else np.asarray(
-                    list(live.get("features_dict", {}).values()), dtype=np.float32
-                ),
-                dtype=np.float32,
+            if feature_schema_version is None:
+                raise FeatureContractViolationError(
+                    "active feature schema unavailable for full-analysis inference",
+                    context="full_analysis",
+                )
+            full_features = bridge_feature_vector(
+                live,
+                schema=canonical_features,
+                schema_version=feature_schema_version,
+                context="full_analysis",
             )
             pred_result = await prediction_engine.predict(
                 features=full_features,
@@ -957,6 +967,12 @@ async def get_full_analysis(
                 match_id=match_id,
             )
             raw_pred = pred_result.to_dict()
+        except FeatureContractViolationError as exc:
+            logger.warning(
+                "Feature contract violation for %s: %s", match_id, redact_text(exc)
+            )
+            critical_gaps.append("FEATURE_CONTRACT_VIOLATION")
+            raw_pred = {}
         except Exception as exc:
             logger.warning(
                 "Ensemble prediction failed for %s: %s", match_id, redact_text(exc)
