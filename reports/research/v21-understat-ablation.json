@@ -1,0 +1,399 @@
+{
+  "candidate": {
+    "baseline_features": [
+      "elo_diff",
+      "rest_diff",
+      "form_diff",
+      "attack_defense_diff"
+    ],
+    "features": [
+      "elo_diff",
+      "rest_diff",
+      "form_diff",
+      "attack_defense_diff",
+      "home_roll_xg_for",
+      "away_roll_xg_for",
+      "delta_roll_xg_for",
+      "home_roll_xg_against",
+      "away_roll_xg_against",
+      "delta_roll_xg_against",
+      "home_roll_finishing_eff",
+      "away_roll_finishing_eff",
+      "delta_roll_finishing_eff"
+    ],
+    "market_inputs": false,
+    "model": "multinomial logistic regression + per-class isotonic calibration (fit on the calibration season)",
+    "rolling_window": 5,
+    "serialized": false,
+    "track": "Candidate-U",
+    "understat_rolling_features": [
+      "home_roll_xg_for",
+      "away_roll_xg_for",
+      "delta_roll_xg_for",
+      "home_roll_xg_against",
+      "away_roll_xg_against",
+      "delta_roll_xg_against",
+      "home_roll_finishing_eff",
+      "away_roll_finishing_eff",
+      "delta_roll_finishing_eff"
+    ]
+  },
+  "command": "python backend/scripts/evaluate_understat_ablation.py",
+  "corpus_feature_coverage": {
+    "corpus_unavailable_families": [
+      "xa",
+      "shot_efficiency_shot_count_based",
+      "xpts"
+    ],
+    "note": "The committed Understat corpus carries xG for/against and goals only. xA, true shot-count shot efficiency and xPTS are not present and are reported here as data gaps rather than fabricated.",
+    "observed_families": [
+      "xg_for",
+      "xg_against",
+      "finishing_efficiency_goals_over_xg"
+    ]
+  },
+  "decision": {
+    "beats_close_all_splits": false,
+    "certifies": false,
+    "ece_non_degrading_all_splits": false,
+    "incumbent": "v5_phase7",
+    "outcome": "RETAIN_INCUMBENT",
+    "promote_candidate_u": false,
+    "rule": "promote only if candidate RPS < closing RPS with a 98.33% ISO-week CI strictly below 0 on BOTH the mixed and Pinnacle cohorts, across >=2 consecutive seasons, with no ECE degradation beyond 0.005",
+    "why_not_certifying": "Gate 7 is one of several gates; promotion also requires the frozen 60-gate suite and the live C6 milestone (N_live < 200). This script measures only; it never writes active_generation.json."
+  },
+  "document": "SABISCORE_V23_UNDERSTAT_ROLLING_ABLATION",
+  "generated_at": "2026-10-03T20:41:30.699436+00:00",
+  "git_sha": "978183e4446b8bd3c0212d3c1d42fc1a2e512cca",
+  "input_sha256": {
+    "team_aliases.json": "07c15e1dcfe0b5d9e4e98ab66f69da41393df7665e395a758256d89ac48f6844",
+    "understat_matches_bundesliga_2019.parquet": "89c17a841f35edb6fd8302cc6c1b188292335991de07fc529582ef079b506879",
+    "understat_matches_bundesliga_2020.parquet": "43522df3ca9ea9aef3ee1614d8f4588c5d163bceaa6d35a85286e599d189d3fa",
+    "understat_matches_bundesliga_2021.parquet": "43522df3ca9ea9aef3ee1614d8f4588c5d163bceaa6d35a85286e599d189d3fa",
+    "understat_matches_bundesliga_2022.parquet": "bcc58f73ab80ffb5c01c0883fac2a06f60759062ccefafcb1be2d3c9e3310dc4",
+    "understat_matches_bundesliga_2023.parquet": "daa6cf592b500db971f2a37090f2a474a12b77e4b065b7e5ba862f3efd0847cd",
+    "understat_matches_bundesliga_2024.parquet": "2cf13212e060a1fde12cbefc36f2e8fa0e1d144dbbe4fd5e7cc3e7863b475624",
+    "understat_matches_bundesliga_2025.parquet": "c390fdeda8471ede25b64a4da5e69e7ca1024f097cfbd36e3306204734b8941e",
+    "understat_matches_epl_2019.parquet": "8fcfcd96eee4ec46157cd5351643a4a9ef7462af5b16d612efb4fb8da1d1c9af",
+    "understat_matches_epl_2020.parquet": "12ebde676c79b362857a8d1e3bbb6de8252ee82dd9663361dfdb91dcc59c1c26",
+    "understat_matches_epl_2021.parquet": "12ebde676c79b362857a8d1e3bbb6de8252ee82dd9663361dfdb91dcc59c1c26",
+    "understat_matches_epl_2022.parquet": "8f0ef211a6bf2fc3aab4a8c09c5ba9af705d2a36b10a5f4d8635af3296407506",
+    "understat_matches_epl_2023.parquet": "a1b85211ad780cd8adfa5d7cd36dcf5e93b919ebefb31cc1af01c53e98e64897",
+    "understat_matches_epl_2024.parquet": "8b43b53d1340457e12fee0e134be8967b8e17aab0559533304e7b3ec89175f48",
+    "understat_matches_epl_2025.parquet": "0415b03f0ed262bc91daa644172d969342e612dac4aa2a4ac29899076d5ff87f",
+    "understat_matches_la_liga_2019.parquet": "9cacee40943ed2e3b1a3ae749375d0b7e04393ed59b381b8f09d58c3fbb3d7eb",
+    "understat_matches_la_liga_2020.parquet": "63acb4a2848e9e57a802c30730215bfebb8ad427cf332ebb0db1c65d03ed8fe4",
+    "understat_matches_la_liga_2021.parquet": "63acb4a2848e9e57a802c30730215bfebb8ad427cf332ebb0db1c65d03ed8fe4",
+    "understat_matches_la_liga_2022.parquet": "072420fe59a7af5d18afe75e6fec13767bc5f4594bb344c7ba861a99990c0e20",
+    "understat_matches_la_liga_2023.parquet": "f877481a8f5f2475fc2a49a0abc68f19762ae4e7aadf13b419059eb605020116",
+    "understat_matches_la_liga_2024.parquet": "7d9d8b4c942580111f4ae9f8dc766c150202a930d6dbf7854b4073822d5423d4",
+    "understat_matches_la_liga_2025.parquet": "e63d12b4c482791878296036d35688538cb3b8cf549ea4f48fb96f2dd1515321",
+    "understat_matches_ligue_1_2019.parquet": "13815455c9aece748c18bbb000b8f698d5b33c8b070e37453017698ac3d5ce21",
+    "understat_matches_ligue_1_2020.parquet": "96dbdc06ca719c4e2e69d4485a805b06e9ba384ca0190ec7cc56421c0f67f3aa",
+    "understat_matches_ligue_1_2021.parquet": "96dbdc06ca719c4e2e69d4485a805b06e9ba384ca0190ec7cc56421c0f67f3aa",
+    "understat_matches_ligue_1_2022.parquet": "a7eba7a7b242f98e3347413df522a0c5cac05c8df5f7db2e2c4150b9e8c60fec",
+    "understat_matches_ligue_1_2023.parquet": "759621889853eeb32ab9b03e2028da3e41edfd7c055a3040b91e7b73e02defde",
+    "understat_matches_ligue_1_2024.parquet": "a761be7d70c2243f664051d594e37015ea449cfefb987fb2bec3e4593f6662e2",
+    "understat_matches_ligue_1_2025.parquet": "9ac36d7a4d24e0b83156aab28f6b2f2f659c2e8ca5f1e7e7acc38073095ca653",
+    "understat_matches_serie_a_2019.parquet": "912453f8d471e42bd45350d4a3cc81b74b17417954b7827ad0ab907c26c07705",
+    "understat_matches_serie_a_2020.parquet": "5f2895f9f2880bff9a022af24e6b1158f1598fa4d0e68f6628b35f20f359e3bc",
+    "understat_matches_serie_a_2021.parquet": "5f2895f9f2880bff9a022af24e6b1158f1598fa4d0e68f6628b35f20f359e3bc",
+    "understat_matches_serie_a_2022.parquet": "7d1eab2a52c87e5ae14bae17d7e708337fe4c05a3907f1e8b8fa942d1ec2a3ad",
+    "understat_matches_serie_a_2023.parquet": "5b524b5947de6c85738fc90ac59be19f6ed717b0a6cd080d28c5caff11e7deb7",
+    "understat_matches_serie_a_2024.parquet": "1f57614277c93c9428698c0d5a19b205c2d73d919ceacfe0af9254552ae7c6bb",
+    "understat_matches_serie_a_2025.parquet": "f043f4cb748c9e4ecdebcd9112e808cf7dd44c9f02f94d2c0177b23cfd628574"
+  },
+  "join": {
+    "alias_table": "backend/src/services/understat/team_aliases.json",
+    "aliases_loaded": 33,
+    "corpus_leagues": [
+      "BUNDESLIGA",
+      "EPL",
+      "LA_LIGA",
+      "LIGUE_1",
+      "SERIE_A"
+    ],
+    "corpus_matches": 10633,
+    "corpus_seasons": [
+      2019,
+      2020,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "key": "(canonical league, kickoff date +/- 1 day, home_goals, away_goals) narrowed to a unique match by both-team name agreement",
+    "per_season": {
+      "1920": {
+        "covered_full_history": 1480,
+        "fixtures": 1725,
+        "joined": 1725
+      },
+      "2021": {
+        "covered_full_history": 1765,
+        "fixtures": 1826,
+        "joined": 1826
+      },
+      "2122": {
+        "covered_full_history": 0,
+        "fixtures": 1826,
+        "joined": 0
+      },
+      "2223": {
+        "covered_full_history": 1756,
+        "fixtures": 1826,
+        "joined": 1825
+      },
+      "2324": {
+        "covered_full_history": 1721,
+        "fixtures": 1752,
+        "joined": 1751
+      },
+      "2425": {
+        "covered_full_history": 1726,
+        "fixtures": 1752,
+        "joined": 1751
+      },
+      "2526": {
+        "covered_full_history": 1726,
+        "fixtures": 2058,
+        "joined": 1751
+      }
+    }
+  },
+  "splits": {
+    "2425": {
+      "benchmarks": {
+        "candidate_u_vs_close_mixed": {
+          "candidate_rps": 0.20057942379141355,
+          "ci_95": [
+            0.00423551775276438,
+            0.010054829292959432
+          ],
+          "ci_98_33": [
+            0.003613804209386849,
+            0.010702986453667363
+          ],
+          "close_book_counts": {
+            "bet365": 0,
+            "pinnacle": 1726
+          },
+          "cohort": "mixed_book",
+          "comparison": "candidate_u_minus_closing_market",
+          "iso_weeks": 37,
+          "mean_delta": 0.0071270679201181275,
+          "n": 1726,
+          "reference_rps": 0.19345235587129542
+        },
+        "candidate_u_vs_close_pinnacle": {
+          "candidate_rps": 0.20057942379141355,
+          "ci_95": [
+            0.00423551775276438,
+            0.010054829292959432
+          ],
+          "ci_98_33": [
+            0.003613804209386849,
+            0.010702986453667363
+          ],
+          "cohort": "pinnacle_only",
+          "comparison": "candidate_u_minus_closing_market",
+          "iso_weeks": 37,
+          "mean_delta": 0.0071270679201181275,
+          "n": 1726,
+          "reference_rps": 0.19345235587129542
+        },
+        "candidate_u_vs_tier_a_baseline": {
+          "candidate_rps": 0.20057942379141355,
+          "ci_95": [
+            -0.003649447895589515,
+            0.00032295812189293453
+          ],
+          "ci_98_33": [
+            -0.0040401152699513975,
+            0.0008033677872444251
+          ],
+          "comparison": "candidate_u_minus_tier_a_baseline",
+          "iso_weeks": 37,
+          "mean_delta": -0.0016472084962207225,
+          "n": 1726,
+          "reference_rps": 0.2022266322876343
+        },
+        "tier_a_baseline_vs_close_mixed": {
+          "candidate_rps": 0.2022266322876343,
+          "ci_95": [
+            0.005848187633164218,
+            0.011701876868806829
+          ],
+          "ci_98_33": [
+            0.0052562018014967226,
+            0.012320766958742855
+          ],
+          "cohort": "mixed_book",
+          "comparison": "tier_a_baseline_minus_closing_market",
+          "iso_weeks": 37,
+          "mean_delta": 0.00877427641633885,
+          "n": 1726,
+          "reference_rps": 0.19345235587129542
+        }
+      },
+      "cal_season": [
+        "2324"
+      ],
+      "ece_delta_candidate_minus_baseline": 0.005712142957052465,
+      "eval_season": [
+        "2425"
+      ],
+      "gates": {
+        "candidate_beats_baseline": "FAIL",
+        "candidate_beats_close_mixed": "FAIL",
+        "candidate_beats_close_pinnacle": "FAIL"
+      },
+      "population": {
+        "covered_cal": 1721,
+        "covered_eval": 1726,
+        "covered_train": 5001,
+        "eval_with_close": 1752
+      },
+      "scores": {
+        "candidate_u": {
+          "ece": 0.03600143106086116,
+          "mean_brier": 0.19588684370300977,
+          "mean_log_loss": 1.0062258878694266,
+          "mean_rps": 0.20057942379141355,
+          "sample_size": 1726
+        },
+        "tier_a_baseline": {
+          "ece": 0.030289288103808692,
+          "mean_brier": 0.1972255049952452,
+          "mean_log_loss": 1.028326231309238,
+          "mean_rps": 0.2022266322876343,
+          "sample_size": 1726
+        }
+      },
+      "status": "MEASURED",
+      "train_seasons": [
+        "1920",
+        "2021",
+        "2122",
+        "2223"
+      ]
+    },
+    "2526": {
+      "benchmarks": {
+        "candidate_u_vs_close_mixed": {
+          "candidate_rps": 0.20372859017969686,
+          "ci_95": [
+            0.002757195483426927,
+            0.008652085614501561
+          ],
+          "ci_98_33": [
+            0.0021285348043028453,
+            0.009285476969108135
+          ],
+          "close_book_counts": {
+            "bet365": 853,
+            "pinnacle": 873
+          },
+          "cohort": "mixed_book",
+          "comparison": "candidate_u_minus_closing_market",
+          "iso_weeks": 37,
+          "mean_delta": 0.005752552720224292,
+          "n": 1726,
+          "reference_rps": 0.1979760374594726
+        },
+        "candidate_u_vs_close_pinnacle": {
+          "candidate_rps": 0.19942295412683764,
+          "ci_95": [
+            0.001258702817770526,
+            0.010160220005756535
+          ],
+          "ci_98_33": [
+            0.0002633531475580657,
+            0.011082740327031028
+          ],
+          "cohort": "pinnacle_only",
+          "comparison": "candidate_u_minus_closing_market",
+          "iso_weeks": 20,
+          "mean_delta": 0.0056295153489456995,
+          "n": 873,
+          "reference_rps": 0.19379343877789193
+        },
+        "candidate_u_vs_tier_a_baseline": {
+          "candidate_rps": 0.20372859017969686,
+          "ci_95": [
+            -0.0031722556400565257,
+            0.0013615574466913946
+          ],
+          "ci_98_33": [
+            -0.003679324853654566,
+            0.0018915307941378588
+          ],
+          "comparison": "candidate_u_minus_tier_a_baseline",
+          "iso_weeks": 37,
+          "mean_delta": -0.0008735700409878278,
+          "n": 1726,
+          "reference_rps": 0.20460216022068467
+        },
+        "tier_a_baseline_vs_close_mixed": {
+          "candidate_rps": 0.20460216022068467,
+          "ci_95": [
+            0.003110116225486097,
+            0.010086368691554689
+          ],
+          "ci_98_33": [
+            0.002296259301597548,
+            0.01092938062733353
+          ],
+          "cohort": "mixed_book",
+          "comparison": "tier_a_baseline_minus_closing_market",
+          "iso_weeks": 37,
+          "mean_delta": 0.006626122761212118,
+          "n": 1726,
+          "reference_rps": 0.1979760374594726
+        }
+      },
+      "cal_season": [
+        "2425"
+      ],
+      "ece_delta_candidate_minus_baseline": 0.013342198020766353,
+      "eval_season": [
+        "2526"
+      ],
+      "gates": {
+        "candidate_beats_baseline": "FAIL",
+        "candidate_beats_close_mixed": "FAIL",
+        "candidate_beats_close_pinnacle": "FAIL"
+      },
+      "population": {
+        "covered_cal": 1726,
+        "covered_eval": 1726,
+        "covered_train": 6722,
+        "eval_with_close": 2058
+      },
+      "scores": {
+        "candidate_u": {
+          "ece": 0.03488358853622659,
+          "mean_brier": 0.1987255661045449,
+          "mean_log_loss": 1.037504073330772,
+          "mean_rps": 0.20372859017969686,
+          "sample_size": 1726
+        },
+        "tier_a_baseline": {
+          "ece": 0.021541390515460238,
+          "mean_brier": 0.19920731262782826,
+          "mean_log_loss": 1.040702276953402,
+          "mean_rps": 0.20460216022068467,
+          "sample_size": 1726
+        }
+      },
+      "status": "MEASURED",
+      "train_seasons": [
+        "1920",
+        "2021",
+        "2122",
+        "2223",
+        "2324"
+      ]
+    }
+  }
+}
