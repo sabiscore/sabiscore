@@ -5,6 +5,12 @@ All notable changes to this skill suite are documented here.
 Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased — V21 P0-A: FeatureBridge on the live inference paths (2026-10-02)
+
+### Fixed
+
+- **Live inference now binds to the active feature schema** (`docs/DEBT.md` item 173). A new `models/feature_bridge.py` assembles the model vector by name in the active generation's schema order and rejects non-finite values and width mismatches. Both `/full-analysis` and `/upcoming/matches` use it; a violation yields `FEATURE_CONTRACT_VIOLATION` (full-analysis, model never called) or a per-fixture `feature_contract_violation` gap instead of the generic `prediction_failed`.
+
 ## Directive V21.0 — Live Activation, Market Alpha Validation & Consumer UX (2026-10-01)
 
 ### Added & Enhanced

@@ -733,3 +733,75 @@ async def test_enrichment_failure_rolls_back_session_before_continuing() -> None
 
     fake_db.rollback.assert_awaited_once()
     assert response["upcoming_matches"][0]["data_gaps"] == ["prediction_failed"]
+
+
+async def test_feature_contract_violation_is_reported_explicitly() -> None:
+    future_date = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    fake_db = AsyncMock(name="db")
+
+    class ProbePredictionEngine:
+        called = False
+
+        async def predict(self, **_kwargs):
+            type(self).called = True
+            return MagicMock(
+                to_dict=lambda: {
+                    "home_win": 0.5,
+                    "draw": 0.3,
+                    "away_win": 0.2,
+                    "model_version": "v5_phase7",
+                }
+            )
+
+    with (
+        patch(
+            "src.services.upcoming_match_service.UpcomingMatchFeatureProjector"
+        ) as MockProjector,
+        patch(
+            "src.services.upcoming_match_service.PredictionEngine",
+            return_value=ProbePredictionEngine(),
+        ),
+        patch("src.services.upcoming_match_service.cache_manager") as MockCache,
+    ):
+        MockCache.get.return_value = None
+        MockProjector.return_value.build_live_feature_vector = AsyncMock(
+            return_value={
+                "features": np.array([0.0], dtype=np.float32),  # schema mismatch
+                "data_gaps": [],
+                "data_quality": {"is_synthetic": False},
+                "staleness_seconds": 120,
+            }
+        )
+
+        service = UpcomingMatchService()
+        service.get_upcoming_matches = AsyncMock(
+            return_value={
+                "matches": [
+                    {
+                        "match_id": "fd-contract-1",
+                        "home_team": "Home FC",
+                        "away_team": "Away FC",
+                        "league": "EPL",
+                        "match_date": future_date,
+                        "status": "scheduled",
+                        "source": "database",
+                    }
+                ],
+                "source": "database",
+            }
+        )
+
+        response = await service.get_upcoming_matches_with_predictions(
+            db=fake_db,
+            league="EPL",
+            days_ahead=3,
+            limit=5,
+            include_value_bets=True,
+        )
+
+    enriched = response["upcoming_matches"][0]
+    assert ProbePredictionEngine.called is False
+    assert enriched["predictions"] is None
+    assert "feature_contract_violation" in enriched["data_gaps"]
+    assert "prediction_failed" not in enriched["data_gaps"]
+    fake_db.rollback.assert_awaited_once()

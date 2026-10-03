@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.cache import cache
 from ...core.config import settings
+from ...core.exceptions import FeatureContractViolationError
 from ...core.league_policy import LeaguePolicyUnavailableError, get_league_policy
 from ...core.redaction import redact_text
 from ...data.elo_engine import EloContext
@@ -73,6 +74,7 @@ from ...services.prediction_log_service import (
 from ...services.rl_betting_agent import RLBettingAgent, RLRecommendationPayload
 from ...services.uncertainty_service import UncertaintyBreakdown
 from ...services.upcoming_match_feature_service import UpcomingMatchFeatureProjector
+from ...models.feature_bridge import bridge_feature_vector, resolve_active_bridge_schema
 
 logger = logging.getLogger(__name__)
 
@@ -842,10 +844,19 @@ async def get_full_analysis(
     projector = UpcomingMatchFeatureProjector(odds_service=odds_service)
     prediction_engine = PredictionEngine()
     synthesizer = IntelligenceSynthesizer()
-    canonical_features = active_canonical_features(
-        use_phase7=settings.use_phase7_models,
-        use_phase8=settings.phase8_enabled,
-    )
+    feature_contract_unavailable = False
+    feature_contract_error: Optional[FeatureContractViolationError] = None
+    try:
+        feature_schema_version, canonical_features = resolve_active_bridge_schema()
+    except FeatureContractViolationError as exc:
+        logger.exception("Unable to resolve active feature schema for full analysis")
+        feature_contract_unavailable = True
+        feature_contract_error = exc
+        feature_schema_version = None
+        canonical_features = active_canonical_features(
+            use_phase7=settings.use_phase7_models,
+            use_phase8=settings.phase8_enabled,
+        )
 
     # Detect matchup strings like "Arsenal vs Chelsea"
     _is_matchup = " vs " in match_id or " VS " in match_id
@@ -877,14 +888,31 @@ async def get_full_analysis(
             )
     except Exception as exc:
         projection_failed = True
-        logger.warning(
-            "Feature projection failed for match_id=%r league=%r: %s: %s — "
-            "model inference skipped; all fields marked DATA_GAP",
-            match_id,
-            league,
-            type(exc).__name__,
-            redact_text(exc),
-        )
+        # Schema resolution can fail before projection, then the projector may
+        # independently raise (for example, ActiveGenerationError) while
+        # consulting the same unreadable manifest. Preserve the original
+        # contract failure instead of reducing that chain to a generic gap.
+        if feature_contract_error is not None or isinstance(
+            exc, FeatureContractViolationError
+        ):
+            feature_contract_unavailable = True
+            logger.warning(
+                "Feature contract prevented projection for match_id=%r league=%r: "
+                "%s: %s — model inference skipped",
+                match_id,
+                league,
+                type(feature_contract_error or exc).__name__,
+                redact_text(feature_contract_error or exc),
+            )
+        else:
+            logger.warning(
+                "Feature projection failed for match_id=%r league=%r: %s: %s — "
+                "model inference skipped; all fields marked DATA_GAP",
+                match_id,
+                league,
+                type(exc).__name__,
+                redact_text(exc),
+            )
         # The diagnostic vector is response scaffolding only. It is never sent
         # to a model after a projection failure.
         live = _default_live_vector(league, list(canonical_features))
@@ -892,6 +920,8 @@ async def get_full_analysis(
     league = str(live.get("league", league) or league)
     data_gaps: List[str] = list(live.get("data_gaps", []))
     critical_gaps: List[str] = list(live.get("critical_gaps", []))
+    if feature_contract_unavailable:
+        critical_gaps.append("FEATURE_CONTRACT_VIOLATION")
     if not active_generation_is_certified():
         critical_gaps.append("MODEL_GENERATION_UNCERTIFIED")
     advisory_gaps: List[str] = list(live.get("advisory_gaps", []))
@@ -987,13 +1017,16 @@ async def get_full_analysis(
         raw_pred = {}
     else:
         try:
-            full_features = np.asarray(
-                live.get("features")
-                if live.get("features") is not None
-                else np.asarray(
-                    list(live.get("features_dict", {}).values()), dtype=np.float32
-                ),
-                dtype=np.float32,
+            if feature_schema_version is None:
+                raise FeatureContractViolationError(
+                    "active feature schema unavailable for full-analysis inference",
+                    context="full_analysis",
+                )
+            full_features = bridge_feature_vector(
+                live,
+                schema=canonical_features,
+                schema_version=feature_schema_version,
+                context="full_analysis",
             )
             pred_result = await prediction_engine.predict(
                 features=full_features,
@@ -1001,6 +1034,13 @@ async def get_full_analysis(
                 match_id=match_id,
             )
             raw_pred = pred_result.to_dict()
+        except FeatureContractViolationError as exc:
+            logger.warning(
+                "Feature contract violation for %s: %s", match_id, redact_text(exc)
+            )
+            if "FEATURE_CONTRACT_VIOLATION" not in critical_gaps:
+                critical_gaps.append("FEATURE_CONTRACT_VIOLATION")
+            raw_pred = {}
         except Exception as exc:
             logger.warning(
                 "Ensemble prediction failed for %s: %s", match_id, redact_text(exc)
