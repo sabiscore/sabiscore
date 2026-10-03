@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 
 from ..core.database import (  # noqa: F401
     Base,
@@ -692,7 +693,7 @@ class MatchTelemetry(Base):
     away_xg: Mapped[float | None] = mapped_column(Float, nullable=True)
     home_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
     away_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
-    shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
