@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 
 from ..core.database import (  # noqa: F401
     Base,
@@ -666,6 +667,39 @@ class PushDevice(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class MatchTelemetry(Base):
+    """Understat granular match telemetry: xG, xA, and shot distributions."""
+
+    __tablename__ = "match_telemetry"
+    __table_args__ = (
+        Index("ix_match_telemetry_home_slug", "home_team_slug"),
+        Index("ix_match_telemetry_away_slug", "away_team_slug"),
+        {"extend_existing": True},
+    )
+
+    match_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    home_team_slug: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("teams.id", name="fk_match_telemetry_home_team"),
+        nullable=False,
+    )
+    away_team_slug: Mapped[str] = mapped_column(
+        String(128),
+        ForeignKey("teams.id", name="fk_match_telemetry_away_team"),
+        nullable=False,
+    )
+    home_xg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    away_xg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    home_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    away_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 __all__ = [
     "Base",
     "FeatureVector",
@@ -674,6 +708,7 @@ __all__ = [
     "Match",
     "MatchEvent",
     "MatchStats",
+    "MatchTelemetry",
     "Odds",
     "OddsHistory",
     "Player",

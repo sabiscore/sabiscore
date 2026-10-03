@@ -1,9 +1,35 @@
 # Codex Verified Repository State
 
-Last reviewed: 2026-10-01
+Last reviewed: 2026-10-03
 
 This is a dated navigation aid, not a substitute for inspecting current code,
 tests, Git history, and runtime configuration. Update it only with fresh evidence.
+
+## Production Understat Telemetry Ingestion, Stacked Ensemble & Obsidian Nocturne v2 Full-Stack Integration, 2026-10-03
+
+- **Phase 1-5: Understat Asynchronous Ingestion & Telemetry Pipeline**:
+  - DDL Migration: `backend/migrations/006_match_telemetry.sql` & `backend/alembic/versions/0015_match_telemetry.py` (with FK constraints to `teams.id`).
+  - Canonical Entity Resolution: `backend/src/services/understat/entity_map.py` mapping Understat club names to canonical PostgreSQL slugs with strict `UnmappedEntityError` handling.
+  - Scraper Core: `backend/src/services/understat/scraper.py` extracting `shotsData` / `match_info` script tags via BeautifulSoup and decoding hex unicode-escapes into strict Pydantic v2 `UnderstatMatchPayload`.
+  - Orchestration & Invalidation: `backend/src/services/understat/orchestrator.py` executing `asyncpg` upsert (`ON CONFLICT (match_id) DO UPDATE SET`) and Redis pipeline invalidation for `sabiscore:telemetry:{match_id}` and `sabiscore:rolling_xg:{slug}`.
+  - Memory-Contiguous Tensor Formatter: `backend/src/services/understat/formatter.py` providing `UnderstatTensorFormatter` producing contiguous `np.float32` arrays strictly within the 512MB RAM ceiling.
+  - Test Suite: 12/12 unit and integration tests passing in `backend/tests/test_understat_pipeline.py`.
+
+- **Stacked Ensemble & Live Inference Pipeline**:
+  - Dual-Pipeline Feature Union: `backend/src/models/stacked/data_staging.py` uniting pre-match rolling xG features with de-vigged market lines while eliminating target leakage.
+  - Chronological Walk-Forward Validation: `backend/src/models/stacked/ensemble.py` executing walk-forward training on XGBoost and LightGBM base models (via direct memory `DMatrix` and `Dataset` references) stacked into a multinomial Logistic Regression meta-learner.
+  - Probability Calibration Verification: `backend/src/models/stacked/calibration_evaluation.py` calculating Ranked Probability Score (RPS), Brier Score, and 10-bin Expected Calibration Error (ECE < 5% gate check).
+  - FastAPI Live Inference Route: `backend/src/api/endpoints/predict_live.py` exposing `POST /api/v1/predict/match` with concurrent `asyncio.gather()` Redis/Odds API I/O and Quarter-Kelly staking recommendations capped at 5%.
+  - Test Suite: 10/10 unit and integration tests passing in `backend/tests/test_stacked_pipeline.py` (22/22 total backend tests green).
+
+- **Next.js 15 Frontend Integration & Obsidian Nocturne v2**:
+  - Consumer-Facing Metric Translation: `apps/web/src/components/predict/PredictionCard.tsx` translating raw tensors to visual progress bars (`Home: 55% | Draw: 25% | Away: 20%`), Emerald Green (`#00FF66`) `Actionable Edge: Bet [X]% of your bankroll` vs muted `No Value: Skip this match`, and Recent Attacking Form (Last 5 Matches) with Electric Cyan (`#00F0FF`) momentum indicator.
+  - Server Action & Hydration: `apps/web/src/actions/predict.ts` (`getMatchPrediction`) securely fetching from FastAPI backend with zero credential leakage.
+  - Streaming Suspense: `apps/web/src/components/predict/PredictionSection.tsx` and `PredictionCardSkeleton.tsx` for immediate skeleton loading.
+  - LCP Performance: `apps/web/src/components/Hero.tsx` with explicit Next.js image `priority` tags.
+  - Design Tokens: Obsidian Nocturne palette (`#0E0E10`, `#1B1B1D`, `#2A2A2E`) and Space Grotesk / JetBrains Mono typography integrated in `tailwind.config.ts` and `layout.tsx`.
+  - Frontend Verification: `pnpm --filter @sabiscore/web typecheck` (0 errors), `pnpm --filter @sabiscore/web test` (all unit tests passing), `pnpm --filter @sabiscore/web build` (clean Next.js 15 production build).
+  - E2E Smoke Tests: `tests/e2e/live-prediction.spec.ts` and `apps/web/e2e/live-prediction.spec.ts` verifying homepage load, fixture click, translated simplex, Kelly recommendations, and zero console errors.
 
 ## Production Live Activation & Consumer Experience Directive V21.0, 2026-10-01
 
