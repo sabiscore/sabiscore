@@ -11,11 +11,10 @@ from __future__ import annotations
 import gc
 import logging
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import lightgbm as lgb
 import numpy as np
-import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import TimeSeriesSplit
 import xgboost as xgb

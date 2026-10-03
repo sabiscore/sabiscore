@@ -9,12 +9,11 @@ returns a strictly validated probability simplex formatted for Next.js 15.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any, Literal
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field, field_validator
 
 from ...core.redis import get_redis_client
@@ -190,7 +189,7 @@ async def fetch_live_odds(
     bookmaker = "consensus_sharp"
 
     try:
-        provider = TheOddsAPIProvider()
+        _ = TheOddsAPIProvider()
         # In production with live key, fetch odds concurrently
         # Non-blocking stub fallback for test environments without live API credentials
     except Exception as exc:

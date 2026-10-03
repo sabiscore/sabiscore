@@ -3,32 +3,25 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   BarChart3,
   CheckCircle2,
   Database,
   Filter,
   Microscope,
-  Settings2,
   ShieldCheck,
   Target,
   TrendingUp,
-  WalletCards,
   Zap,
 } from "lucide-react";
 import { BestBetSpotlight } from "@/components/best-bet-spotlight";
 import { MatchSelector } from "@/components/match-selector";
 import { ModelMetadataPanel } from "@/components/model-metadata-panel";
-import { MobilePlatformSummary } from "@/components/mobile-platform-summary";
-import { PlatformHealthPills } from "@/components/platform-health-pills";
 import { DecisionStateBadge } from "@/components/decision-state-badge";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
 import { Hero } from "@/components/Hero";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
 import { VERDICT_TOKENS, type Verdict } from "@/lib/verdict-tokens";
-
-const TRUST_BADGES = ["Verified fixtures first", "Explicit evidence gaps", "Zero stake when blocked"];
 
 const PREMIUM_VALUE_STREAM = [
   {
@@ -50,24 +43,6 @@ const PREMIUM_VALUE_STREAM = [
     footer: "Fail-closed stake gate",
   },
 ] satisfies Array<{ title: string; description: string; icon: LucideIcon; footer: string }>;
-
-const PREMIUM_PILLARS = [
-  {
-    title: "Data integrity",
-    detail: "Configured providers reconciled with explicit gaps and provenance",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Model governance",
-    detail: "Artifact and validation status appear only when backend metadata confirms them",
-    icon: Settings2,
-  },
-  {
-    title: "Value creation",
-    detail: "Quarter-Kelly and CLV tooling remains gated by verified evidence",
-    icon: WalletCards,
-  },
-] satisfies Array<{ title: string; detail: string; icon: LucideIcon }>;
 
 const LEGACY_FEATURES = [
   {
