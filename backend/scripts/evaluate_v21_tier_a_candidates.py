@@ -15,6 +15,7 @@ import csv
 import json
 import logging
 import math
+import sys
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,10 @@ logger = logging.getLogger("evaluate_v21")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 DATA_CACHE = BACKEND_ROOT / "data" / "cache"
 REPORTS_ROOT = BACKEND_ROOT.parent / "reports"
+
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+from scripts._resource_guard import ResourceGuard  # noqa: E402
 
 LEAGUES = ("EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE")
 LEAGUE_DIV_MAP = {
@@ -385,6 +390,27 @@ def run_v21_evaluation() -> Dict[str, Any]:
         book: sum(1 for d in holdout_data if d["close_book"] == book) for book in ("pinnacle", "bet365")
     }
 
+    # Pinnacle-only cohort (V22 section 1.4): the mixed `closing` benchmark above
+    # falls back to Bet365 where Pinnacle is absent. Report the stricter single-book
+    # cohort beside it so the market target is honest. `close_devig` already holds
+    # the Pinnacle devig on `close_book == "pinnacle"` rows, so no reload is needed.
+    pinn_idx = [i for i, d in enumerate(holdout_data) if d["close_book"] == "pinnacle"]
+    if pinn_idx:
+        pinn_cand = cand_rps[pinn_idx]
+        pinn_close = close_rps[pinn_idx]
+        closing_pinnacle = _week_cluster_ci(
+            pinn_cand - pinn_close, [holdout_data[i]["date"] for i in pinn_idx]
+        )
+        closing_pinnacle["market_rps"] = float(np.mean(pinn_close))
+        closing_pinnacle["candidate_rps"] = float(np.mean(pinn_cand))
+        closing_pinnacle["book"] = "pinnacle"
+    else:
+        closing_pinnacle = {
+            "n": 0,
+            "book": "pinnacle",
+            "note": "no Pinnacle closing quotes in the holdout cohort",
+        }
+
     # Opening benchmark only where an opening quote exists: never substitute the close.
     open_idx = [i for i, d in enumerate(holdout_data) if d["open_devig"] is not None]
     open_rps = np.array([rps_3class(holdout_data[i]["open_devig"], y_holdout[i]) for i in open_idx])
@@ -404,6 +430,24 @@ def run_v21_evaluation() -> Dict[str, Any]:
             }
 
     lower, upper = closing["ci_98_33"]
+    if "ci_98_33" in closing_pinnacle:
+        pinn_lower, pinn_upper = closing_pinnacle["ci_98_33"]
+        pinn_gate = {
+            "status": "PASS" if pinn_upper < 0.0 else "FAIL",
+            "rule": "98.33% ISO-week cluster CI upper bound of (candidate RPS - Pinnacle closing RPS) < 0",
+            "worse_than_market": bool(pinn_lower > 0.0),
+            "certifies": False,
+            "cohort": "pinnacle_closing_only",
+            "n": int(closing_pinnacle.get("n", 0)),
+        }
+    else:
+        pinn_gate = {
+            "status": "UNEVALUATED",
+            "rule": "no Pinnacle closing cohort in holdout",
+            "certifies": False,
+            "cohort": "pinnacle_closing_only",
+            "n": 0,
+        }
     git_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=BACKEND_ROOT, capture_output=True, text=True
     ).stdout.strip()
@@ -435,7 +479,11 @@ def run_v21_evaluation() -> Dict[str, Any]:
         },
         "ablation": ablation,
         "calibration": calibration,
-        "benchmarks": {"closing": closing, "opening": opening},
+        "benchmarks": {
+            "closing": closing,
+            "closing_pinnacle_only": closing_pinnacle,
+            "opening": opening,
+        },
         "gate_7_research": {
             "status": "PASS" if upper < 0.0 else "FAIL",
             "rule": "98.33% ISO-week cluster CI upper bound of (candidate RPS - closing RPS) < 0",
@@ -446,6 +494,7 @@ def run_v21_evaluation() -> Dict[str, Any]:
                 "complete_evidence cohorts are not covered"
             ),
         },
+        "gate_7_pinnacle_research": pinn_gate,
         "regimes": regimes,
     }
     out = REPORTS_ROOT / "research" / "v21-candidate-m-evaluation.json"
@@ -455,4 +504,7 @@ def run_v21_evaluation() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    run_v21_evaluation()
+    # Heavy job (LogisticRegression fits + three 10,000-replicate ISO-week
+    # bootstraps): run single-lane under the 3072 MB workstation ceiling.
+    with ResourceGuard():
+        run_v21_evaluation()

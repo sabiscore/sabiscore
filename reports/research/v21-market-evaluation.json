@@ -50,6 +50,22 @@
         "mean_delta": 0.008388297854587777,
         "n": 2058
       },
+      "closing_pinnacle_only": {
+        "book": "pinnacle",
+        "candidate_rps": 0.2004850175388115,
+        "ci_95": [
+          0.002645835798186375,
+          0.013470028026979287
+        ],
+        "ci_98_33": [
+          0.0014778275223037286,
+          0.014667806305618983
+        ],
+        "iso_weeks": 21,
+        "market_rps": 0.1924438319080154,
+        "mean_delta": 0.008041185630796109,
+        "n": 1040
+      },
       "opening": {
         "candidate_rps": 0.20029674858031352,
         "ci_95": [
@@ -73,8 +89,8 @@
       "why_not_certifying": "single cohort (closing-quote holdout); the protocol's c6_eligible and complete_evidence cohorts are not covered",
       "worse_than_market": true
     },
-    "git_sha": "b82b80e18177b5ee87d74b6cb724780941b86760",
-    "sha256": "9e5e707aea59f3e9fcac649a30ffd72f128850d37aa2a02ac3c9a9f804b631c6"
+    "git_sha": "0d20c8212ced8e561ef87c33b27e064f8f7b7d4f",
+    "sha256": "9ca250ae157d061ea163fe5bd19212675cb12070b50137e68d8f523f1d4b132d"
   },
   "candidate_ma": {
     "certification_eligible_as_independent_alpha": false,
@@ -83,7 +99,7 @@
   "cohort_hashes": {},
   "gate_7": "FAIL",
   "gate_7_basis": "measured: reports/research/v21-candidate-m-evaluation.json (closing-quote holdout cohort only)",
-  "generated_at": "2026-10-03T16:06:09.906283+00:00",
+  "generated_at": "2026-10-03T19:13:24.509218+00:00",
   "inherited_protocol_sha256": {
     "reports/research/c6-served-generation-vs-close-protocol.json": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
     "reports/research/v19-evaluation-protocol.json": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"

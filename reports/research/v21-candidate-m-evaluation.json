@@ -75,6 +75,22 @@
       "mean_delta": 0.008388297854587777,
       "n": 2058
     },
+    "closing_pinnacle_only": {
+      "book": "pinnacle",
+      "candidate_rps": 0.2004850175388115,
+      "ci_95": [
+        0.002645835798186375,
+        0.013470028026979287
+      ],
+      "ci_98_33": [
+        0.0014778275223037286,
+        0.014667806305618983
+      ],
+      "iso_weeks": 21,
+      "market_rps": 0.1924438319080154,
+      "mean_delta": 0.008041185630796109,
+      "n": 1040
+    },
     "opening": {
       "candidate_rps": 0.20029674858031352,
       "ci_95": [
@@ -121,6 +137,14 @@
   },
   "command": "python backend/scripts/evaluate_v21_tier_a_candidates.py",
   "document": "SABISCORE_V21_CANDIDATE_M_EVALUATION",
+  "gate_7_pinnacle_research": {
+    "certifies": false,
+    "cohort": "pinnacle_closing_only",
+    "n": 1040,
+    "rule": "98.33% ISO-week cluster CI upper bound of (candidate RPS - Pinnacle closing RPS) < 0",
+    "status": "FAIL",
+    "worse_than_market": true
+  },
   "gate_7_research": {
     "certifies": false,
     "rule": "98.33% ISO-week cluster CI upper bound of (candidate RPS - closing RPS) < 0",
@@ -128,8 +152,8 @@
     "why_not_certifying": "single cohort (closing-quote holdout); the protocol's c6_eligible and complete_evidence cohorts are not covered",
     "worse_than_market": true
   },
-  "generated_at": "2026-10-03T15:42:10.359538+00:00",
-  "git_sha": "b82b80e18177b5ee87d74b6cb724780941b86760",
+  "generated_at": "2026-10-03T19:11:28.500737+00:00",
+  "git_sha": "0d20c8212ced8e561ef87c33b27e064f8f7b7d4f",
   "input_sha256": {
     "fd_D1_1920.csv": "774e8be9ffe8af9aa55ce0dd777038eadb27fdd9de7e9756c8faa3e753674dc7",
     "fd_D1_2021.csv": "6bbd7d907379db2676cd76938c111ce953538781a8c5ce0514400dcc6c27fa38",

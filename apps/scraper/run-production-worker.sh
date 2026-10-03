@@ -15,7 +15,10 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 78
 fi
 
-node /app/apps/scraper/src/cli.mjs scrape
+# V22 section 1.2: cap the worker heap at 512 MB (scoped to this process). A
+# run that needs more is misbehaving; fail rather than raise the cap. peakHeapUsed
+# is recorded into the manifest's `resource` block (storage.mjs / cli.mjs).
+NODE_OPTIONS="--max-old-space-size=512" node /app/apps/scraper/src/cli.mjs scrape
 manifest="$(find /app/data/manifests/node-scraper -type f -name '*.manifest.json' -print | sort | tail -n 1)"
 if [ -z "$manifest" ]; then
   printf '%s\n' '{"status":"FAIL","reason":"completed_manifest_missing"}'
