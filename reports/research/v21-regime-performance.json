@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-03T16:06:09.906283+00:00",
+  "generated_at": "2026-10-03T19:13:24.509218+00:00",
   "regimes": {
     "BUNDESLIGA": {
       "candidate_rps": 0.196518905368051,
@@ -38,6 +38,6 @@
       "n": 380
     }
   },
-  "source_sha256": "9e5e707aea59f3e9fcac649a30ffd72f128850d37aa2a02ac3c9a9f804b631c6",
+  "source_sha256": "9ca250ae157d061ea163fe5bd19212675cb12070b50137e68d8f523f1d4b132d",
   "status": "MEASURED_BY_LEAGUE_ONLY"
 }
