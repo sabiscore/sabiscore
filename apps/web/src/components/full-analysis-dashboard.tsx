@@ -1768,7 +1768,7 @@ function FullAnalysisDashboardInner({
 
       {/* Provenance follows the evidence, comparison, decision, and counter-case. */}
       <EvidenceProvenanceStrip
-        modelVersion={data.ensemble.model_version || generationLabel(data.ensemble.generation)}
+        modelVersion={generationLabel(data.ensemble.generation ?? data.ensemble.model_version)}
         dataAsOf={data.generated_at}
         marketSnapshotAt={data.market?.captured_at}
         evidenceQuality={

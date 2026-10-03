@@ -171,22 +171,45 @@ def generate_reports() -> dict[str, Any]:
     _write_json(REPORTS / "research/v21-feature-integration.json", feature_report)
 
     old_g7 = (v20_evaluation.get("gates") or {}).get("gate_7")
+    # Measured by scripts/evaluate_v21_tier_a_candidates.py, if it has been run.
+    # Fail-closed: a measured FAIL is reported as FAIL; a research PASS cannot
+    # certify (it covers one protocol cohort), so it reads UNVERIFIED here.
+    evaluation_path = REPORTS / "research/v21-candidate-m-evaluation.json"
+    evaluation = _read_json(evaluation_path)
+    measured_g7 = ((evaluation or {}).get("gate_7_research") or {}).get("status")
     old_metrics = v20_alpha.get("calibration") or {}
     market_report = {
-        "status": "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT",
+        "status": "MEASURED_RESEARCH_SINGLE_COHORT" if evaluation else "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT",
         "protocol_sha256": protocol_hash,
         "inherited_protocol_sha256": {item["path"]: item["sha256"] for item in PROTOCOL["inherited_protocols"]},
-        "gate_7": "FAIL" if old_g7 == "FAIL" else "UNVERIFIED",
-        "gate_7_basis": "legacy V20 report only; not independently accepted as a V21 market evaluation",
+        "gate_7": "FAIL" if "FAIL" in (measured_g7, old_g7) else "UNVERIFIED",
+        "gate_7_basis": (
+            "measured: reports/research/v21-candidate-m-evaluation.json (closing-quote holdout cohort only)"
+            if evaluation
+            else "legacy V20 report only; not independently accepted as a V21 market evaluation"
+        ),
+        "candidate_m_evaluation": (
+            {
+                "sha256": _sha(evaluation_path),
+                "git_sha": evaluation.get("git_sha"),
+                "benchmarks": evaluation.get("benchmarks"),
+                "gate_7_research": evaluation.get("gate_7_research"),
+            }
+            if evaluation
+            else None
+        ),
         "candidate_m": {
-            "rps": None,
+            "rps": (((evaluation or {}).get("benchmarks") or {}).get("closing") or {}).get("candidate_rps"),
             "input_market_features": None,
             "market_feature_exclusion_verified": False,
             "existing_apex_v1_89_market_features": market_inputs_in_schema,
         },
         "candidate_ma": {"rps": None, "certification_eligible_as_independent_alpha": False},
         "research_market_blend": {"rps": old_metrics.get("candidate_rps_after_calibration"), "certification_eligible": False},
-        "market_baselines": {"opening": None, "closing": None},
+        "market_baselines": {
+            side: (((evaluation or {}).get("benchmarks") or {}).get(side) or {}).get("market_rps")
+            for side in ("opening", "closing")
+        },
         "cohort_hashes": {},
         "prior_v20_report_values_unverified": {
             "candidate_rps_after_calibration": old_metrics.get("candidate_rps_after_calibration"),
@@ -213,9 +236,19 @@ def generate_reports() -> dict[str, Any]:
     }
     _write_json(REPORTS / "research/v21-c6-live-status.json", c6_report)
 
-    calibration = {"status": "NOT_RUN_NO_V21_CALIBRATION_ARTIFACT", "metrics": None, "split_overlap": None, "generated_at": now}
+    calibration = (
+        {"status": "MEASURED", "metrics": evaluation.get("calibration"), "split": evaluation.get("split"),
+         "source_sha256": _sha(evaluation_path), "generated_at": now}
+        if evaluation
+        else {"status": "NOT_RUN_NO_V21_CALIBRATION_ARTIFACT", "metrics": None, "split_overlap": None, "generated_at": now}
+    )
     _write_json(REPORTS / "research/v21-calibration.json", calibration)
-    regimes = {"status": "NOT_RUN_NO_V21_OUT_OF_SAMPLE_PREDICTIONS", "regimes": None, "generated_at": now}
+    regimes = (
+        {"status": "MEASURED_BY_LEAGUE_ONLY", "regimes": evaluation.get("regimes"),
+         "source_sha256": _sha(evaluation_path), "generated_at": now}
+        if evaluation
+        else {"status": "NOT_RUN_NO_V21_OUT_OF_SAMPLE_PREDICTIONS", "regimes": None, "generated_at": now}
+    )
     _write_json(REPORTS / "research/v21-regime-performance.json", regimes)
     data_quality = {
         "status": "NOT_MEASURED",
@@ -292,7 +325,7 @@ def generate_reports() -> dict[str, Any]:
         "active_model": active.get("generation"),
         "candidate_model": "Candidate-M",
         "gate_7": market_report["gate_7"],
-        "gate_7_v21_state": "NOT_RUN",
+        "gate_7_v21_state": "MEASURED_RESEARCH_ONLY" if evaluation else "NOT_RUN",
         "c6_status": c6_report["status"],
         "c6_live_n": c6_report["live_n"],
         "feature_integration": feature_status,
@@ -329,6 +362,16 @@ def generate_reports() -> dict[str, Any]:
 
     head_sha = _git("rev-parse", "HEAD")
     current_branch = _git("branch", "--show-current")
+    if evaluation:
+        close = (evaluation.get("benchmarks") or {}).get("closing") or {}
+        lo, hi = close.get("ci_98_33") or (None, None)
+        market_summary = (
+            f"Candidate-M RPS {close.get('candidate_rps', 0):.4f} vs closing market {close.get('market_rps', 0):.4f} "
+            f"on {close.get('n')} holdout fixtures; delta 98.33% CI [{lo:+.4f}, {hi:+.4f}] "
+            f"(research measurement, closing-quote cohort only)."
+        )
+    else:
+        market_summary = f"No V21 measurement; legacy V20 Gate 7 was `{old_g7}` (unverified)."
     report = f"""# SabiScore V21 Production Activation Report
 
 Generated: {now}
@@ -342,7 +385,7 @@ Release Posture: ACTIVE_FAIL_CLOSED
 | :--- | :--- | :--- | :--- |
 | **Engineering Integration** | Not measured by this generator: it reads repository files only. Merge, CI, and deployment state must be read from GitHub and the live services. | UNVERIFIED | NOT MEASURED |
 | **Model Quality** | Candidate-M out-of-sample test set (2025/26 holdout season); active generation `{active.get('generation')}` | UNVERIFIED / CERTIFICATION_BLOCKED | BLOCKED |
-| **Market Relative Alpha** | Gate 7 benchmark comparison against opening market RPS (historical FAIL; protocol SHA `{protocol_hash}`) | EMPIRICALLY UNVALIDATED | FAIL / BLOCKED |
+| **Market Relative Alpha** | {market_summary} | {'MEASURED_RESEARCH_ONLY' if evaluation else 'EMPIRICALLY UNVALIDATED'} | {market_report['gate_7']} |
 | **Live C6 Milestone** | Live database sample count `live_n` < 200 settled pre-kickoff predictions; zero historical replay credit | INSUFFICIENT_SAMPLE / UNVERIFIED | FAIL / BLOCKED |
 | **Production Runtime Parity** | Not measured by this generator: it makes no network requests. Compare `/health` `sha` (Render) and `/api/health` `sha`/`backendSha` (Vercel) against the merged master SHA. | UNVERIFIED | NOT MEASURED |
 
@@ -360,7 +403,7 @@ Candidate feature integration: **{feature_status}**. The active generation remai
 
 ## Market Relative Performance
 
-**BLOCKED.** The V20 report recorded Gate 7 as `{old_g7}`; its aggregate values are retained as unverified historical claims. V21 paired cohort evaluation did not run, and the protocol hash is `{protocol_hash}`.
+**{'FAIL' if market_report['gate_7'] == 'FAIL' else 'BLOCKED'}.** {market_summary} The protocol hash is `{protocol_hash}`.
 
 ## Live C6 Certification
 

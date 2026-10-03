@@ -1,0 +1,22 @@
+{
+  "document": "SABISCORE_V21_2_POST_MERGE_RECONCILIATION",
+  "merged_pr": 266,
+  "merge_commit": "b82b80e18177b5ee87d74b6cb724780941b86760",
+  "merge_tree_equals_reviewed_branch_tip": "56d88d8 (git diff 56d88d8 b82b80e is empty)",
+  "probed_at": "2026-10-03T15:25:00Z",
+  "probes": [
+    {"check": "Render backend serving SHA", "command": "GET https://sabiscore-api-bav1.onrender.com/health", "observed": "sha=b82b80e status=healthy", "status": "CONFIRMED"},
+    {"check": "Vercel production alias serving SHA", "command": "GET https://sabiscore.vercel.app/api/health", "observed": "sha=b82b80e backendSha=b82b80e18177b5ee87d74b6cb724780941b86760 backendStatus=ok", "status": "CONFIRMED"},
+    {"check": "Production migration head", "command": "GET https://sabiscore-api-bav1.onrender.com/health/ready", "observed": "migrations head=applied=0016_match_telem_pit", "status": "CONFIRMED"},
+    {"check": "Fabricated /predict/match route removed", "command": "POST https://sabiscore-api-bav1.onrender.com/api/v1/predict/match", "observed": "HTTP 404 (was 200 with ACTIONABLE and kelly_fraction 0.0366 before the merge)", "status": "CONFIRMED"},
+    {"check": "Unauthenticated Understat ingest route off", "command": "POST https://sabiscore-api-bav1.onrender.com/api/v1/telemetry/understat/ingest", "observed": "HTTP 404", "status": "CONFIRMED"},
+    {"check": "One full-analysis request per match page", "command": "headless Chromium on https://sabiscore.vercel.app/match/fd-558881?league=EREDIVISIE&home=PSV&away=SC%20Heerenveen", "observed": "0 browser requests to full-analysis; forecast card and dashboard both rendered; 0 console errors", "status": "CONFIRMED"},
+    {"check": "No raw generation id on consumer surface", "command": "same headless page text", "observed": "'v5_phase7' visible in the provenance strip (full-analysis-dashboard.tsx passed raw model_version first)", "status": "CONTRADICTED", "required_action": "fixed on fix/v21.2-evidence-truth; re-probe after deploy"},
+    {"check": "Live C6 sample (N_live)", "command": "GET https://sabiscore-api-bav1.onrender.com/health components", "observed": "prediction_capture due=0 captured=0; clv_capture due=0; settlement settled_predictions_total=0 for v5_phase7-20260922", "status": "CONFIRMED", "note": "N_live = 0. International break: no fixtures until 2026-10-09. Collectors are bound to the FastAPI lifespan (api/main.py) and running."}
+  ],
+  "directive_claims_not_executed": [
+    {"claim": "Write a newly trained Candidate-M into active_generation.json to enable inference", "status": "REFUSED", "reason": "Promoting an uncertified generation is forbidden by V21.1 sections 43 and 49. The measured Candidate-M is worse than the closing market (reports/research/v21-candidate-m-evaluation.json)."},
+    {"claim": "Bulk-ingest historical Understat telemetry into production match_telemetry", "status": "NOT_EXECUTED", "reason": "Needs production DB write access and a bulk outbound scrape; neither is available or authorized from this session. The ingest route is off by default."},
+    {"claim": "Candidate artifact hashes recorded in v21-c6-live-status.json", "status": "NOT_APPLICABLE", "reason": "No candidate was serialized for serving. Local backend/models/candidate/*.pkl are untracked September research runs, none certified."}
+  ]
+}

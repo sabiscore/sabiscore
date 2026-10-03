@@ -1,5 +1,43 @@
 {
-  "generated_at": "2026-10-03T09:41:56.140397+00:00",
-  "regimes": null,
-  "status": "NOT_RUN_NO_V21_OUT_OF_SAMPLE_PREDICTIONS"
+  "generated_at": "2026-10-03T16:06:09.906283+00:00",
+  "regimes": {
+    "BUNDESLIGA": {
+      "candidate_rps": 0.196518905368051,
+      "delta": 0.006213379195367968,
+      "market_close_rps": 0.190305526172683,
+      "n": 306
+    },
+    "EPL": {
+      "candidate_rps": 0.2095410038524345,
+      "delta": 0.004202312619069199,
+      "market_close_rps": 0.20533869123336526,
+      "n": 380
+    },
+    "EREDIVISIE": {
+      "candidate_rps": 0.21327772601520148,
+      "delta": 0.01766075423557311,
+      "market_close_rps": 0.19561697177962836,
+      "n": 306
+    },
+    "LA_LIGA": {
+      "candidate_rps": 0.20474058366576675,
+      "delta": 0.00891241690170028,
+      "market_close_rps": 0.19582816676406645,
+      "n": 380
+    },
+    "LIGUE_1": {
+      "candidate_rps": 0.20660468876599603,
+      "delta": 0.00578030425188199,
+      "market_close_rps": 0.200824384514114,
+      "n": 306
+    },
+    "SERIE_A": {
+      "candidate_rps": 0.20419685342650337,
+      "delta": 0.008434899568172047,
+      "market_close_rps": 0.19576195385833128,
+      "n": 380
+    }
+  },
+  "source_sha256": "9e5e707aea59f3e9fcac649a30ffd72f128850d37aa2a02ac3c9a9f804b631c6",
+  "status": "MEASURED_BY_LEAGUE_ONLY"
 }

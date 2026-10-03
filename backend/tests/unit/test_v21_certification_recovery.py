@@ -301,10 +301,23 @@ def test_gate_54_candidate_m_has_no_market_inputs():
     test_candidate_m_rejects_market_features()
 
 
+def _candidate_evaluation():
+    path = ROOT / "reports/research/v21-candidate-m-evaluation.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
 def test_gate_55_candidate_evaluation_is_not_inferred_from_artifact_presence():
+    """Candidate RPS appears only when a measurement exists, and then equals it."""
     report = json.loads((ROOT / "reports/research/v21-market-evaluation.json").read_text())
-    assert report["status"] == "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT"
-    assert report["candidate_m"]["rps"] is None
+    evaluation = _candidate_evaluation()
+    if evaluation is None:
+        assert report["status"] == "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT"
+        assert report["candidate_m"]["rps"] is None
+    else:
+        assert report["status"] == "MEASURED_RESEARCH_SINGLE_COHORT"
+        closing = evaluation["benchmarks"]["closing"]
+        assert report["candidate_m"]["rps"] == closing["candidate_rps"]
+        assert report["market_baselines"]["closing"] == closing["market_rps"]
 
 
 def test_gate_56_calibration_split_is_independent():
@@ -313,7 +326,12 @@ def test_gate_56_calibration_split_is_independent():
 
 def test_gate_57_regime_metrics_remain_unverified_until_run():
     report = json.loads((ROOT / "reports/research/v21-regime-performance.json").read_text())
-    assert report["status"] == "NOT_RUN_NO_V21_OUT_OF_SAMPLE_PREDICTIONS"
+    evaluation = _candidate_evaluation()
+    if evaluation is None:
+        assert report["status"] == "NOT_RUN_NO_V21_OUT_OF_SAMPLE_PREDICTIONS"
+    else:
+        assert report["status"] == "MEASURED_BY_LEAGUE_ONLY"
+        assert report["regimes"] == evaluation["regimes"]
 
 
 def test_gate_58_shadow_validation_is_not_claimed_without_observations():
@@ -330,7 +348,9 @@ def test_gate_59_prediction_provenance_tracks_bridge_blocker():
 def test_gate_60_canary_is_blocked_without_empirical_certification():
     report = json.loads((ROOT / "reports/release/v21-promotion-attestation.json").read_text())
     assert report["decision"] == "CERTIFICATION_BLOCKED"
-    assert report["gate_7_v21_state"] == "NOT_RUN"
+    # A research measurement is not certification: it may be recorded, never promoted.
+    assert report["gate_7_v21_state"] in {"NOT_RUN", "MEASURED_RESEARCH_ONLY"}
+    assert report["gate_7"] != "PASS"
 
 
 @pytest.mark.asyncio
