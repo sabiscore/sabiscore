@@ -1,5 +1,16 @@
 # SabiScore Debt Ledger
 
+## 173. V21 P0-A: FeatureBridge now binds both live prediction paths to the active feature schema
+
+**Tier:** `RESOLVED` in code (2026-10-02, verify after deploy). Phases P0-B (Gate 7 market evaluation) and P0-C (C6 live-sample binding) remain `BLOCKED-ON-DATA` / operator — nothing here touches them.
+
+- **Defect class:** both live paths (`full_analysis.py`, `upcoming_match_service.py`) handed `PredictionEngine.predict` whatever vector the projector returned. The upcoming path picked "the widest" vector and the full-analysis path fell back to `list(features_dict.values())` — dict insertion order, not schema order. Width was the only downstream check, so a same-width schema swap (the vΩ.48-era `phase7_68` vs `apex_v1_68` shape) passed silently. A contract failure then collapsed into the generic `prediction_failed` / `ensemble_prediction` gap, hiding its cause.
+- **Fix:** `backend/src/models/feature_bridge.py` resolves the active generation's `feature_schema_version` once per request (`active_feature_schema_version` + `resolve_feature_schema`) and builds the vector by name in schema order, finite-checked. A positional vector is accepted only when its width equals the schema's. Anything else raises `FeatureContractViolationError` (subclass of `DataUnavailableError`).
+- **Surfaces:** full-analysis adds the critical gap `FEATURE_CONTRACT_VIOLATION` and never calls the model; upcoming-matches isolates the fixture (`predictions: None`, gap `feature_contract_violation`, other fixtures unaffected).
+- **Known ceiling:** a complete `features_dict` is preferred, but an *incomplete* dict alongside a correct-width positional vector is still accepted (prior behaviour, kept so existing partial-dict fixtures stay valid). It cannot catch a correct-width, wrong-order positional vector. Tighten by requiring a complete dict once those fixtures are migrated.
+- **Not done / not claimed:** no live verification, no change to staking, certification or gates. The frozen C6 protocol and its SHA-256 are untouched.
+- **Tests:** `tests/unit/test_feature_bridge.py` (6), plus a violation case each in `test_full_analysis_contract.py` and `test_upcoming_match_service.py`.
+
 ## 172. Production Activation, Evidence Intelligence & Quantitative Certification Directive V18.0
 
 **Tier:** `RESOLVED` in code, architecture, and 18-step verification, 2026-10-01.

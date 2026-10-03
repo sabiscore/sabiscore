@@ -522,6 +522,7 @@ async def test_full_analysis_candidate_feature_bridge_branches(monkeypatch):
         def __init__(self, schema_id="apex_v1_89"):
             self.schema_id = schema_id
             self.schema_hash = "fake-sha"
+            self.feature_dim = 89
             self.feature_order = ["elo_diff"]
 
         def validate(self, **_kwargs):
@@ -533,6 +534,7 @@ async def test_full_analysis_candidate_feature_bridge_branches(monkeypatch):
             )
 
     monkeypatch.setattr(fa_endpoint, "FeatureBridge", AdmittingBridge)
+    monkeypatch.setattr(fa_endpoint, "persisted_candidate_schema_hash", lambda **_kwargs: "fake-sha")
     payload1 = await fa_endpoint.get_full_analysis("f1", league="EPL", db=object())
     assert payload1["feature_integration"]["status"] == "ADMITTED"
     assert payload1["feature_integration"]["schema_id"] == "apex_v1_89"

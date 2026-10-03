@@ -207,7 +207,7 @@
   },
   "experiment_id": "v6_phase8-20261001-0dfb90d91e",
   "features": {
-    "feature_contract_sha256": "1abd0192ad56b84ad0f8d6ffe2301c77eca3ef6e483e37406021e238fa254270",
+    "feature_contract_sha256": "401a866d85836da567d341dd6aa0a043ce4bfd5c884d79e3b91a435e5b48bde0",
     "feature_count": 89,
     "feature_schema_version": "apex_v1_89",
     "order_sha256": "708cab717e9a3e9a44f6792af380d0fed0b77ba9b3029a8730af413951ade2e2"
