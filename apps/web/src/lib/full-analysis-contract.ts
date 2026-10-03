@@ -482,6 +482,7 @@ const EVIDENCE_CODE_COPY: Record<string, string> = {
   // Convention: lowercase clause fragment, interpolated after an em-dash by the caller.
   // e.g. `Sources disagree — ${describeEvidenceCode(code)}.`
   ppda_ratio: "pressing-intensity data is not published for this match",
+  home_pressing_intensity: "the home side's pressing-intensity data is not published for this match",
   progressive_carry_diff: "ball-carrying data is not published for this match",
   set_piece_xg_diff: "set-piece chance quality is not available yet",
   shot_quality_diff: "shot-quality breakdown is not available yet",

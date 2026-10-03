@@ -1,5 +1,6 @@
 "use client";
 
+import { bookmakerLabel } from "@/lib/bookmaker";
 import { memo } from "react";
 import { Info, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -161,7 +162,7 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
           </div>
           {market ? (
             <dl className="mt-2 space-y-1 text-xs text-slate-300">
-              <div className="flex justify-between gap-2"><dt>Bookmaker</dt><dd className="truncate">{market.bookmaker ?? "Unreported"}</dd></div>
+              <div className="flex justify-between gap-2"><dt>Bookmaker</dt><dd className="truncate">{market.bookmaker ? bookmakerLabel(market.bookmaker) : "Unreported"}</dd></div>
               <div className="flex justify-between"><dt>Overround</dt><dd>{market.overround.toFixed(3)}</dd></div>
               <div className="flex justify-between"><dt>Snapshot</dt><dd>{market.captured_at ? `${formatLagosTimestamp(market.captured_at)} WAT` : "Unreported"}</dd></div>
             </dl>

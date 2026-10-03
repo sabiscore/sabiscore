@@ -22,7 +22,20 @@ from ...services.understat.orchestrator import ingest_understat_telemetry
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/telemetry/understat", tags=["telemetry", "understat"])
+def _require_understat_endpoints_enabled() -> None:
+    """Understat is a research-only source: every route here 404s unless an operator
+    enables it. The reads were ungated, so ``GET /ingest`` matched ``/{match_id}`` and
+    answered 422 in production (2026-10-03)."""
+    # ponytail: on/off flag only; add operator auth if this ever needs to be on in prod.
+    if not settings.enable_understat_ingest_endpoint:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+
+router = APIRouter(
+    prefix="/telemetry/understat",
+    tags=["telemetry", "understat"],
+    dependencies=[Depends(_require_understat_endpoints_enabled)],
+)
 
 
 class UnderstatIngestRequest(BaseModel):
@@ -72,9 +85,6 @@ async def trigger_understat_ingestion(
 
     Idempotently upserts telemetry to PostgreSQL and invalidates Redis caches.
     """
-    # ponytail: on/off flag only; add operator auth if this ever needs to be on in prod.
-    if not settings.enable_understat_ingest_endpoint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     logger.info("Scheduling telemetry ingestion for %d match IDs", len(payload.match_ids))
     background_tasks.add_task(ingest_understat_telemetry, payload.match_ids)
 

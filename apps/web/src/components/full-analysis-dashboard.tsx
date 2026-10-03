@@ -330,7 +330,8 @@ export function EnhancedMatchHero({
               className="inline-flex items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-400"
               title={`Probability calibration applied — method: ${ensemble.calibration_method ?? "calibrated"}`}
             >
-              {ensemble.calibration_method ?? "calibrated"}
+              {/* "MODEL · SIGMOID" read as the model's name (live 2026-10-03). */}
+              {ensemble.calibration_method ? `${ensemble.calibration_method} calibration` : "calibrated"}
             </span>
           )}
           {ensemble.overlay_applied && (

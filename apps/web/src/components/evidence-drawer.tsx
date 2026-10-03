@@ -1,5 +1,6 @@
 "use client";
 
+import { bookmakerLabel } from "@/lib/bookmaker";
 import { useEffect, useRef } from "react";
 import { X, ShieldAlert, AlertTriangle, Layers } from "lucide-react";
 import { formatLagosTimestamp } from "@/lib/lagos-time";
@@ -100,7 +101,7 @@ export function EvidenceDrawer({
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs font-mono text-slate-400">
               <div>
-                Bookmaker: <span className="text-slate-200">{marketProvenance.bookmaker}</span>
+                Bookmaker: <span className="text-slate-200">{bookmakerLabel(marketProvenance.bookmaker)}</span>
               </div>
               <div>
                 Market: <span className="text-slate-200">{marketProvenance.market}</span>
