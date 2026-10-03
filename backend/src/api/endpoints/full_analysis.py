@@ -48,9 +48,17 @@ from ...models.ensemble_uncertainty import compute_ensemble_uncertainty
 from ...models.feature_registry import active_canonical_features
 from ...models.active_generation import active_generation_is_certified
 try:
-    from serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
-except ModuleNotFoundError:
-    from backend.serving.feature_bridge import FeatureBridge, FeatureBridgeRejected
+    from serving.feature_bridge import (
+        FeatureBridge,
+        FeatureBridgeRejected,
+        persisted_candidate_schema_hash,
+    )
+except ModuleNotFoundError:  # pragma: no cover
+    from backend.serving.feature_bridge import (
+        FeatureBridge,
+        FeatureBridgeRejected,
+        persisted_candidate_schema_hash,
+    )
 from ...schemas.full_analysis import (
     FullMatchAnalysisResponseSchema,
     PredictionSource,
@@ -945,19 +953,14 @@ async def get_full_analysis(
     # rejection leaves the incumbent inference path unchanged.
     try:
         bridge = FeatureBridge(schema_id="apex_v1_89")
+        expected_candidate_schema_hash = persisted_candidate_schema_hash(schema_id=getattr(bridge, "schema_id", "apex_v1_89"), feature_count=getattr(bridge, "feature_dim", 89))
         source_features = live.get("features_dict") or {}
         candidate_features = {
             name: source_features[name]
             for name in bridge.feature_order
             if name in source_features
         }
-        bridged = bridge.validate(
-            features=candidate_features,
-            feature_schema_id="apex_v1_89",
-            schema_hash=bridge.schema_hash,
-            feature_evidence=live.get("feature_evidence") or {},
-            feature_cutoff=str(live.get("feature_cutoff") or ""),
-        )
+        bridged = bridge.validate(features=candidate_features, feature_schema_id="apex_v1_89", schema_hash=bridge.schema_hash, expected_schema_hash=expected_candidate_schema_hash, feature_evidence=live.get("feature_evidence") or {}, feature_cutoff=str(live.get("feature_cutoff") or ""))
         candidate_feature_integration = {
             "candidate": "Candidate-M",
             "schema_id": bridged.schema_id,

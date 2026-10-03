@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from typing import Any, Iterable, Mapping
 
 
@@ -98,6 +99,24 @@ def validate_calibration_split(
         raise ValueError("calibration fixtures overlap test or C6 evaluation populations")
 
 
+def _is_finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        return False
+
+
+def _is_probability_simplex(value: Any) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == 3
+        and all(_is_finite_number(probability) and 0.0 <= probability <= 1.0 for probability in value)
+        and abs(math.fsum(value) - 1.0) <= 1e-6
+    )
+
+
 def evaluate_market_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Score Candidate-M against opening and closing benchmarks on exact rows."""
     from backend.src.models.evaluation.metrics import ranked_probability_score
@@ -111,8 +130,13 @@ def evaluate_market_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     for row in records:
         fixture_id = str(row.get("fixture_id") or "")
         outcome = row.get("outcome")
-        if not fixture_id or outcome not in (0, 1, 2):
-            raise ValueError("fixture_id and 0/1/2 outcome are required")
+        if (
+            not fixture_id
+            or isinstance(outcome, bool)
+            or not isinstance(outcome, int)
+            or outcome not in (0, 1, 2)
+        ):
+            raise ValueError("fixture_id and integer 0/1/2 outcome are required")
         ids.append(fixture_id)
         outcomes.append(int(outcome))
         for key, scores in (
@@ -121,12 +145,7 @@ def evaluate_market_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             ("closing_market_probabilities", closing_scores),
         ):
             probabilities = row.get(key)
-            if (
-                not isinstance(probabilities, (list, tuple))
-                or len(probabilities) != 3
-                or any(not isinstance(p, (int, float)) or p < 0 or p > 1 for p in probabilities)
-                or abs(sum(probabilities) - 1.0) > 1e-6
-            ):
+            if not _is_probability_simplex(probabilities):
                 raise ValueError(f"{key} must be a valid 1X2 probability simplex")
             scores.append(float(ranked_probability_score(int(outcome), list(probabilities))))
     if not ids or len(ids) != len(set(ids)):
@@ -175,8 +194,10 @@ def compare_cohorts(
         raise ValueError("candidate and market benchmark cohorts/outcomes differ")
     if benchmark not in {"opening_market", "closing_market"}:
         raise ValueError("benchmark must be opening_market or closing_market")
+    if not _is_finite_number(candidate_rps) or not _is_finite_number(market_rps):
+        raise ValueError("RPS values must be finite non-negative numbers")
     if candidate_rps < 0 or market_rps < 0:
-        raise ValueError("RPS values must be non-negative")
+        raise ValueError("RPS values must be finite non-negative numbers")
     return {
         "benchmark": benchmark,
         "fixture_count": len(candidate_ids),
