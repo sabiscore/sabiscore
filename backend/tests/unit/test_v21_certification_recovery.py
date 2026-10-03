@@ -553,4 +553,29 @@ async def test_full_analysis_candidate_feature_bridge_branches(monkeypatch):
     assert payload2["feature_integration"]["status"] == "WITHHELD"
     assert payload2["feature_integration"]["reason"] == "candidate_feature_bridge_error"
 
+    # Branch 3: FeatureBridge raises FeatureBridgeRejected
+    class RejectingBridge:
+        def __init__(self, schema_id="apex_v1_89"):
+            self.schema_id = schema_id
+            self.schema_hash = "fake-sha"
+            self.feature_dim = 89
+            self.feature_order = ["elo_diff"]
+
+        def validate(self, **_kwargs):
+            raise fa_endpoint.FeatureBridgeRejected("candidate schema mismatch")
+
+    monkeypatch.setattr(fa_endpoint, "FeatureBridge", RejectingBridge)
+    payload3 = await fa_endpoint.get_full_analysis("f3", league="EPL", db=object())
+    assert payload3["feature_integration"]["status"] == "WITHHELD"
+    assert payload3["feature_integration"]["reason"] == "candidate schema mismatch"
+
+    # Branch 4: persisted_candidate_schema_hash raises FeatureBridgeRejected
+    monkeypatch.setattr(fa_endpoint, "FeatureBridge", AdmittingBridge)
+    def _reject_persisted(**_kwargs):
+        raise fa_endpoint.FeatureBridgeRejected("manifest schema mismatch")
+    monkeypatch.setattr(fa_endpoint, "persisted_candidate_schema_hash", _reject_persisted)
+    payload4 = await fa_endpoint.get_full_analysis("f4", league="EPL", db=object())
+    assert payload4["feature_integration"]["status"] == "WITHHELD"
+    assert payload4["feature_integration"]["reason"] == "manifest schema mismatch"
+
 
