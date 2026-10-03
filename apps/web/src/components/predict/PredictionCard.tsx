@@ -1,225 +1,194 @@
-"use client";
-
 import React from "react";
-import { TrendingUp, AlertTriangle, ShieldCheck, Zap } from "lucide-react";
-import type { PredictionResponse } from "@/types/prediction";
+import {
+  AlertTriangle,
+  CircleSlash,
+  FlaskConical,
+  ShieldAlert,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  TRUTH_STATE_LABEL,
+  type PredictionResult,
+  type PredictionSummary,
+  type TruthState,
+} from "@/lib/prediction-truth";
 
-interface PredictionCardProps {
-  prediction: PredictionResponse;
-  oddsUnavailable?: boolean;
+const STATE_STYLE: Record<TruthState, { icon: LucideIcon; classes: string }> = {
+  RESEARCH_MODE: {
+    icon: FlaskConical,
+    classes: "border-[#00F0FF]/40 bg-[#00F0FF]/10 text-[#00F0FF]",
+  },
+  INSUFFICIENT_VERIFIED_DATA: {
+    icon: AlertTriangle,
+    classes: "border-amber-400/40 bg-amber-400/10 text-amber-200",
+  },
+  NO_VERIFIED_EDGE: {
+    icon: CircleSlash,
+    classes: "border-slate-500/50 bg-slate-500/10 text-slate-200",
+  },
+  POTENTIAL_VALUE: {
+    icon: TrendingUp,
+    classes: "border-emerald-400/40 bg-emerald-400/10 text-emerald-200",
+  },
+  WITHHELD: {
+    icon: ShieldAlert,
+    classes: "border-slate-500/50 bg-slate-500/10 text-slate-200",
+  },
+};
+
+const MARKET_LABEL: Record<PredictionSummary["market"]["health"], string> = {
+  VERIFIED_EVALUABLE: "Verified market snapshot",
+  AVAILABLE_NOT_EVALUABLE: "Market present, not evaluable",
+  UNAVAILABLE: "Market unavailable",
+};
+
+function StateBadge({ state }: { state: TruthState }) {
+  const { icon: Icon, classes } = STATE_STYLE[state];
+  return (
+    <span
+      data-testid="truth-state-badge"
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${classes}`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {TRUTH_STATE_LABEL[state]}
+    </span>
+  );
 }
 
-export function PredictionCard({
-  prediction,
-  oddsUnavailable = false,
-}: PredictionCardProps) {
-  const { home_team, away_team, probabilities, market, recommendation, telemetry } =
-    prediction;
-
-  // Format probabilities as percentages
-  const homePct = Math.round(probabilities.home * 100);
-  const drawPct = Math.round(probabilities.draw * 100);
-  const awayPct = Math.max(0, 100 - homePct - drawPct); // Guarantee sum = 100%
-
-  // Staking logic checks
-  const hasLiveOdds = !oddsUnavailable && (market.odds_available !== false) && market.home_odds > 1.0;
-  const isActionable =
-    hasLiveOdds &&
-    recommendation.action === "ACTIONABLE" &&
-    recommendation.kelly_fraction > 0.0 &&
-    recommendation.edge >= 0.042;
-
-  const kellyPct = (recommendation.kelly_fraction * 100).toFixed(1);
-  const bestBetLabel =
-    recommendation.best_bet === "home"
-      ? `${home_team} (Home)`
-      : recommendation.best_bet === "away"
-        ? `${away_team} (Away)`
-        : recommendation.best_bet === "draw"
-          ? "Draw"
-          : "None";
-
-  // Attacking form momentum
-  const deltaXg = telemetry.delta_rolling_xg;
-  const isPositiveHomeMomentum = deltaXg > 0;
-
+function Shell({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <article
       data-testid="prediction-card"
-      className="w-full rounded-2xl border border-[#2A2A2E] bg-[#1B1B1D] p-5 shadow-2xl transition-all"
-      aria-label={`Match prediction for ${home_team} vs ${away_team}`}
+      className="w-full rounded-2xl border border-[#2A2A2E] bg-[#1B1B1D] p-5 shadow-2xl"
+      aria-label={label}
     >
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#2A2A2E] pb-4 gap-2">
-        <div>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#00F0FF]">
-            <Zap className="h-3 w-3 text-[#00F0FF]" aria-hidden="true" />
-            AI Stacked Match Intelligence
-          </span>
-          <h2 className="font-heading text-lg sm:text-xl font-bold text-white tracking-tight">
-            {home_team} <span className="text-slate-500 font-normal">vs</span> {away_team}
-          </h2>
-        </div>
+      {children}
+    </article>
+  );
+}
 
-        <div className="flex items-center gap-2">
-          {telemetry.source === "redis_cache" ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-              <ShieldCheck className="h-3 w-3" />
-              Verified Telemetry
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300">
-              Fast-Path Inference
-            </span>
-          )}
+function Fact({ term, children }: { term: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-[#2A2A2E] bg-[#0E0E10] p-3">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+        {term}
+      </dt>
+      <dd className="mt-1 font-mono text-xs text-slate-100">{children}</dd>
+    </div>
+  );
+}
+
+export function PredictionCard({ result }: { result: PredictionResult }) {
+  if (result.status !== "OK") {
+    return (
+      <Shell label="Match forecast status">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-heading text-lg font-bold text-white">Match forecast</h2>
+          <StateBadge state={result.truth_state} />
         </div>
+        <p data-testid="withheld-message" className="mt-3 text-sm text-slate-300">
+          {result.message}
+        </p>
+        <p className="mt-1 font-mono text-[11px] text-slate-400">
+          Reason code: {result.reason_code}
+        </p>
+        {result.status === "WITHHELD" && result.data_gaps.length > 0 && (
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-300">
+            {result.data_gaps.map((gap) => (
+              <li key={gap}>{gap}</li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-slate-400">
+          No probabilities, odds or stakes are shown while evidence is missing.
+        </p>
+      </Shell>
+    );
+  }
+
+  const s = result.summary;
+  const homePct = Math.round(s.probabilities.home * 100);
+  const drawPct = Math.round(s.probabilities.draw * 100);
+  const awayPct = Math.max(0, 100 - homePct - drawPct);
+  const home = s.home_team ?? "Home";
+  const away = s.away_team ?? "Away";
+
+  return (
+    <Shell label={`Match forecast for ${home} vs ${away}`}>
+      <div className="flex flex-col gap-2 border-b border-[#2A2A2E] pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="font-heading text-lg font-bold tracking-tight text-white sm:text-xl">
+          {home} <span className="font-normal text-slate-500">vs</span> {away}
+        </h2>
+        <StateBadge state={s.truth_state} />
       </div>
 
-      {/* 1. Win Probabilities Progress Bar */}
       <section className="mt-5 space-y-2" aria-labelledby="prob-heading">
-        <div className="flex items-center justify-between text-xs">
-          <span id="prob-heading" className="font-heading font-semibold text-white">
-            Win Probability Distribution
-          </span>
-          {/* Consumer English Headline */}
-          <span
-            data-testid="translated-probabilities"
-            className="font-mono text-xs font-semibold text-slate-200"
-          >
+        <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+          <h3 id="prob-heading" className="font-heading font-semibold text-white">
+            Outcome probabilities
+          </h3>
+          <span data-testid="translated-probabilities" className="font-mono font-semibold text-slate-100">
             Home: {homePct}% | Draw: {drawPct}% | Away: {awayPct}%
           </span>
         </div>
-
-        {/* Multi-Segment Visual Progress Bar */}
         <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={homePct}
-          aria-label={`Win probabilities: ${home_team} ${homePct}%, Draw ${drawPct}%, ${away_team} ${awayPct}%`}
-          className="relative flex h-3.5 w-full overflow-hidden rounded-full bg-[#0E0E10] border border-[#2A2A2E] p-0.5"
+          role="img"
+          aria-label={`${home} ${homePct}%, Draw ${drawPct}%, ${away} ${awayPct}%`}
+          className="flex h-3.5 w-full overflow-hidden rounded-full border border-[#2A2A2E] bg-[#0E0E10] p-0.5"
         >
-          <div
-            style={{ width: `${homePct}%` }}
-            title={`Home Win: ${homePct}%`}
-            className="h-full rounded-l-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
-          />
-          <div
-            style={{ width: `${drawPct}%` }}
-            title={`Draw: ${drawPct}%`}
-            className="h-full bg-slate-600 transition-all duration-500"
-          />
-          <div
-            style={{ width: `${awayPct}%` }}
-            title={`Away Win: ${awayPct}%`}
-            className="h-full rounded-r-full bg-gradient-to-r from-cyan-400 to-teal-400 transition-all duration-500"
-          />
+          <div style={{ width: `${homePct}%` }} className="h-full rounded-l-full bg-indigo-400" />
+          <div style={{ width: `${drawPct}%` }} className="h-full bg-slate-500" />
+          <div style={{ width: `${awayPct}%` }} className="h-full rounded-r-full bg-teal-300" />
         </div>
-        <div className="flex justify-between text-[11px] text-slate-400 font-mono pt-0.5">
-          <span>{home_team} ({homePct}%)</span>
-          <span>Draw ({drawPct}%)</span>
-          <span>{away_team} ({awayPct}%)</span>
-        </div>
+        <p className="text-[11px] text-slate-400">
+          Model-estimated probabilities, not a prediction of certainty.
+        </p>
       </section>
 
-      {/* Graceful Degradation Alert if Live Odds Fail */}
-      {!hasLiveOdds && (
-        <div
-          data-testid="odds-unavailable-banner"
-          className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex items-center gap-2"
-        >
-          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-          <span>Live odds unavailable. Staking recommendations paused.</span>
-        </div>
+      <dl className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Fact term="Model generation">{s.model.generation ?? "unspecified"}</Fact>
+        <Fact term="Certification">{s.model.certification_state}</Fact>
+        <Fact term="Evidence health">
+          {s.evidence.critical} critical / {s.evidence.advisory} advisory / {s.evidence.conflicts} conflicts
+        </Fact>
+        <Fact term="Market health">{MARKET_LABEL[s.market.health]}</Fact>
+        <Fact term="Data freshness">
+          {s.freshness.tag}
+          {s.freshness.staleness_seconds !== null ? ` (${s.freshness.staleness_seconds}s)` : ""}
+        </Fact>
+        <Fact term="Calibration">
+          {s.model.calibration_applied ? s.model.calibration_method : "raw (uncalibrated)"}
+        </Fact>
+        <Fact term="Verdict">{s.verdict}</Fact>
+        <Fact term="Staking">
+          {s.stake_permitted && s.suggested_stake_pct !== null
+            ? `Backend-computed: ${s.suggested_stake_pct}%`
+            : "Withheld"}
+        </Fact>
+      </dl>
+
+      <section className="mt-5 rounded-xl border border-[#2A2A2E] bg-[#0E0E10] p-4" aria-labelledby="form-heading">
+        <h3 id="form-heading" className="font-heading text-sm font-semibold text-white">
+          Recent Attacking Form (Last 5 Matches)
+        </h3>
+        <p className="mt-1 text-xs text-slate-300">
+          Withheld: point-in-time xG telemetry has no production-authorized source yet.
+        </p>
+      </section>
+
+      {s.counter_case.length > 0 && (
+        <section className="mt-5" aria-labelledby="counter-heading">
+          <h3 id="counter-heading" className="font-heading text-sm font-semibold text-white">
+            Why this might not hold
+          </h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300">
+            {s.counter_case.map((gap) => (
+              <li key={gap}>{gap}</li>
+            ))}
+          </ul>
+        </section>
       )}
-
-      {/* 2. Actionable Staking (Kelly) Section */}
-      <section className="mt-4" aria-labelledby="staking-heading">
-        {isActionable ? (
-          <div
-            data-testid="recommendation-actionable"
-            className="rounded-xl border border-[#00FF66]/40 bg-[#00FF66]/10 p-4 shadow-[0_0_20px_rgba(0,255,102,0.1)] transition-all"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#00FF66]">
-                  Verified Mathematical Edge
-                </span>
-                <p className="font-heading text-base sm:text-lg font-bold text-white mt-0.5">
-                  Actionable Edge: Bet <span className="font-mono text-[#00FF66]">{kellyPct}%</span> of your bankroll.
-                </p>
-                <p className="text-xs text-slate-300 mt-1">
-                  Recommended Selection: <strong className="text-white">{bestBetLabel}</strong>
-                  {recommendation.stake_capped && (
-                    <span className="ml-2 text-[10px] text-slate-400">(Quarter-Kelly hard cap enforced at 5%)</span>
-                  )}
-                </p>
-              </div>
-
-              <div className="text-left sm:text-right font-mono text-xs text-slate-300">
-                <p>
-                  Edge: <span className="text-[#00FF66] font-bold">+{(recommendation.edge * 100).toFixed(1)}%</span>
-                </p>
-                <p>
-                  EV: <span className="text-white font-bold">+{(recommendation.expected_value * 100).toFixed(1)}%</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div
-            data-testid="recommendation-muted"
-            className="rounded-xl border border-[#2A2A2E] bg-[#0E0E10] p-4 text-slate-400 transition-all"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <p className="font-heading text-sm sm:text-base font-bold text-slate-300">
-                  No Value: Skip this match.
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Bookmaker odds match or exceed model projection. Zero edge detected; model abstains from staking.
-                </p>
-              </div>
-              <div className="font-mono text-xs text-slate-400 text-left sm:text-right">
-                <span>Safe Abstention</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 3. Expected Goals (xG) Momentum */}
-      <section className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3" aria-labelledby="xg-heading">
-        <div className="rounded-xl border border-[#2A2A2E] bg-[#0E0E10] p-3.5">
-          <p id="xg-heading" className="text-xs font-semibold text-slate-300">
-            Recent Attacking Form (Last 5 Matches)
-          </p>
-          <div className="mt-2 flex items-center justify-between">
-            <div className="font-mono text-sm text-slate-200">
-              <span className="text-slate-400 text-xs">{home_team}:</span> {telemetry.rolling_xg_home.toFixed(2)} xG
-            </div>
-            <div className="font-mono text-sm text-slate-200">
-              <span className="text-slate-400 text-xs">{away_team}:</span> {telemetry.rolling_xg_away.toFixed(2)} xG
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-[#2A2A2E] bg-[#0E0E10] p-3.5 flex flex-col justify-between">
-          <p className="text-xs font-semibold text-slate-300">Form Momentum Trend</p>
-          <div className="mt-2 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-[#00F0FF] shrink-0" aria-hidden="true" />
-            <span
-              data-testid="xg-trend-indicator"
-              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-xs font-bold text-[#00F0FF] bg-[#00F0FF]/10 border border-[#00F0FF]/30"
-            >
-              {isPositiveHomeMomentum ? `▲ +${deltaXg.toFixed(2)}` : `▼ ${deltaXg.toFixed(2)}`} xG momentum
-            </span>
-            <span className="text-[10px] text-slate-400">
-              ({isPositiveHomeMomentum ? `${home_team} attacking edge` : `${away_team} attacking edge`})
-            </span>
-          </div>
-        </div>
-      </section>
-    </article>
+    </Shell>
   );
 }

@@ -674,6 +674,7 @@ class MatchTelemetry(Base):
     __table_args__ = (
         Index("ix_match_telemetry_home_slug", "home_team_slug"),
         Index("ix_match_telemetry_away_slug", "away_team_slug"),
+        Index("ix_match_telemetry_kickoff", "kickoff_utc"),
         {"extend_existing": True},
     )
 
@@ -695,6 +696,13 @@ class MatchTelemetry(Base):
     away_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
     shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
+    kickoff_utc: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    observation_timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    payload_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_policy: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="AUTHORIZED_PRODUCTION_SOURCE"
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

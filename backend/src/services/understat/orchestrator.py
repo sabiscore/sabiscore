@@ -7,6 +7,7 @@ Designed to be executed directly or scheduled as a FastAPI BackgroundTask.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -37,10 +38,15 @@ INSERT INTO match_telemetry (
     home_xa,
     away_xa,
     shot_telemetry,
+    kickoff_utc,
+    retrieved_at,
+    observation_timestamp,
+    payload_sha256,
+    source_policy,
     created_at,
     updated_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16
 )
 ON CONFLICT (match_id) DO UPDATE SET
     provider_id = EXCLUDED.provider_id,
@@ -51,6 +57,11 @@ ON CONFLICT (match_id) DO UPDATE SET
     home_xa = EXCLUDED.home_xa,
     away_xa = EXCLUDED.away_xa,
     shot_telemetry = EXCLUDED.shot_telemetry,
+    kickoff_utc = EXCLUDED.kickoff_utc,
+    retrieved_at = EXCLUDED.retrieved_at,
+    observation_timestamp = EXCLUDED.observation_timestamp,
+    payload_sha256 = EXCLUDED.payload_sha256,
+    source_policy = EXCLUDED.source_policy,
     updated_at = EXCLUDED.updated_at;
 """
 
@@ -153,6 +164,31 @@ async def ingest_single_match(
     shot_telemetry_json = json.dumps(payload.shots_data.model_dump())
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
+    # Parse kickoff timestamp from Understat match_info
+    kickoff_utc: datetime | None = None
+    if payload.match_info.datetime:
+        try:
+            kickoff_utc = datetime.fromisoformat(payload.match_info.datetime)
+            if kickoff_utc.tzinfo is not None:
+                kickoff_utc = kickoff_utc.astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            try:
+                kickoff_utc = datetime.strptime(
+                    payload.match_info.datetime, "%Y-%m-%d %H:%M:%S"
+                )
+            except Exception:
+                kickoff_utc = None
+
+    retrieved_at = now_utc
+    observation_timestamp = now_utc
+
+    # Cryptographic provenance hash of the underlying payloads
+    raw_for_hash = (
+        shot_telemetry_json + payload.match_info.model_dump_json()
+    ).encode("utf-8")
+    payload_sha256 = hashlib.sha256(raw_for_hash).hexdigest()
+    source_policy = "AUTHORIZED_PRODUCTION_SOURCE"
+
     # Idempotent upsert inside a database transaction
     async with conn.transaction():
         await conn.execute(
@@ -166,6 +202,11 @@ async def ingest_single_match(
             payload.home_xa,
             payload.away_xa,
             shot_telemetry_json,
+            kickoff_utc,
+            retrieved_at,
+            observation_timestamp,
+            payload_sha256,
+            source_policy,
             now_utc,
             now_utc,
         )
@@ -186,6 +227,9 @@ async def ingest_single_match(
         "away_xg": payload.away_xg,
         "home_xa": payload.home_xa,
         "away_xa": payload.away_xa,
+        "kickoff_utc": kickoff_utc.isoformat() if kickoff_utc else None,
+        "payload_sha256": payload_sha256,
+        "source_policy": source_policy,
     }
 
 

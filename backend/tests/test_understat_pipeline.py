@@ -292,6 +292,14 @@ async def test_ingest_single_match_upsert_and_invalidation() -> None:
     assert args[4] == "ac_milan"  # away_team_slug
     assert args[5] == 2.145  # home_xg
     assert args[6] == 1.320  # away_xg
+    assert abs(args[7] - 0.45) < 1e-5  # home_xa
+    assert abs(args[8] - 0.38) < 1e-5  # away_xa
+    assert args[10] is not None  # kickoff_utc
+    assert args[10].year == 2026
+    assert len(args[13]) == 64  # payload_sha256
+    assert args[14] == "AUTHORIZED_PRODUCTION_SOURCE"  # source_policy
+    assert result["payload_sha256"] == args[13]
+    assert result["source_policy"] == "AUTHORIZED_PRODUCTION_SOURCE"
 
 
 @pytest.mark.asyncio

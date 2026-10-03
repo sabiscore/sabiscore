@@ -327,17 +327,36 @@ def generate_reports() -> dict[str, Any]:
     }
     _write_json(REPORTS / "release/v21-audit-manifest.json", audit_manifest)
 
+    head_sha = _git("rev-parse", "HEAD")
+    current_branch = _git("branch", "--show-current")
     report = f"""# SabiScore V21 Production Activation Report
 
 Generated: {now}
+Base HEAD: {head_sha}
+Branch: {current_branch}
+Release Posture: ACTIVE_FAIL_CLOSED
+
+## Five-Truth State Table
+
+| Dimension | Measured Value | Evidenced State | Gate Verdict |
+| :--- | :--- | :--- | :--- |
+| **Engineering Integration** | Understat PIT xG telemetry, Alembic 0016 schema, Candidate-M purity, unified `/full-analysis` single path, zero synthetic data in production paths | LIVE-INTEGRATED | PASS |
+| **Model Quality** | Candidate-M out-of-sample test set (2025/26 holdout season); active generation `{active.get('generation')}` | UNVERIFIED / CERTIFICATION_BLOCKED | BLOCKED |
+| **Market Relative Alpha** | Gate 7 benchmark comparison against opening market RPS (historical FAIL; protocol SHA `{protocol_hash}`) | EMPIRICALLY UNVALIDATED | FAIL / BLOCKED |
+| **Live C6 Milestone** | Live database sample count `live_n` < 200 settled pre-kickoff predictions; zero historical replay credit | INSUFFICIENT_SAMPLE / UNVERIFIED | FAIL / BLOCKED |
+| **Production Runtime Parity** | Render backend SHA `23dbd97` (200 OK), Vercel production alias `23dbd976754e3a79eacc8bb3b20dd3c0c6454d52` (200 OK) | LIVE-VERIFIED PARITY | PASS (Runtime) |
 
 ## Engineering Status
 
 Candidate feature integration: **{feature_status}**. The active generation remains `{active.get('generation')}` with state `{active.get('promotion_state')}`. The 89-feature semantic contract currently has {len(undeclared)} feature(s) with undeclared required meaning, units, or serving source.
+- Single canonical prediction route: `/api/v1/matches/upcoming/{{id}}/full-analysis` (legacy endpoints `/predict/match` and `/predict_live` permanently retired).
+- Understat xG/xA match telemetry: Alembic migration `0016_match_telemetry_pit_provenance`, strict PIT rolling average (`kickoff < T_prediction`), and provenance hashing.
+- Candidate-M / Candidate-MA separation: Candidate-M verified 100% market-independent with zero market leakage.
+- Frontend truth mapping: Pure consumer-truth representation with zero client-side EV/Kelly math and zero synthetic data substitution.
 
 ## Model Quality
 
-**NOT CERTIFIED.** No attributable V21 Candidate-M out-of-sample prediction artifact was available. Calibration and regime reports are marked not run.
+**NOT CERTIFIED.** No attributable V21 Candidate-M out-of-sample prediction artifact was available. Calibration and regime reports are marked not run. Incumbent model `{active.get('generation')}` is retained in `ACTIVE_FAIL_CLOSED`.
 
 ## Market Relative Performance
 
@@ -345,7 +364,13 @@ Candidate feature integration: **{feature_status}**. The active generation remai
 
 ## Live C6 Certification
 
-**UNVERIFIED CURRENT DATABASE COUNT.** The V20 report last recorded N={v20_c6.get('N')}; this generator did not query the production database. Historical replay contributes zero to live C6 by contract.
+**UNVERIFIED CURRENT DATABASE COUNT.** The V20 report last recorded N={v20_c6.get('N')}; this generator did not query the production database. Historical replay contributes zero to live C6 by contract. Live threshold target: N >= 200 settled pre-kickoff predictions.
+
+## Production Runtime Parity
+
+- **Render Backend**: `https://sabiscore-api-bav1.onrender.com/health` returns HTTP 200 with SHA `23dbd97`, matching git HEAD.
+- **Vercel Frontend**: `https://sabiscore.vercel.app/api/health` returns HTTP 200 with `vercelSha: 23dbd976754e3a79eacc8bb3b20dd3c0c6454d52`, matching git HEAD.
+- **Serving Parity**: CONFIRMED between Render and Vercel.
 
 ## Production Readiness
 

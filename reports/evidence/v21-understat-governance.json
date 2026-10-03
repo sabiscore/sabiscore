@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "document": "SABISCORE_V21_UNDERSTAT_SOURCE_GOVERNANCE",
+  "version": "21.1",
+  "status": "AUTHORIZED_PRODUCTION_SOURCE",
+  "attestation_timestamp": "2026-10-03T10:10:00Z",
+  "git_sha": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+  "authorization": {
+    "decision_ref": "DECISION_Q2_CONFIRMED",
+    "authorized_by": "USER",
+    "scope": "public aggregate xG, xA, and shot distributions for completed matches"
+  },
+  "governance_controls": {
+    "legal_basis": "Public factual match statistics and spatial coordinates",
+    "rate_limiting": {
+      "strategy": "tenacity exponential back-off with jitter",
+      "max_attempts": 5,
+      "user_agent_rotation": true,
+      "hot_path_io": "asynchronous non-blocking"
+    },
+    "cache_invalidation": {
+      "atomic": true,
+      "redis_pipeline": [
+        "sabiscore:telemetry:{match_id}",
+        "sabiscore:rolling_xg:{home_slug}",
+        "sabiscore:rolling_xg:{away_slug}"
+      ]
+    },
+    "pit_temporal_guarantee": {
+      "rule": "completed_match_kickoff < T_prediction",
+      "own_match_exclusion": "Current match own xG/xA/shots excluded from its own pre-match feature vector",
+      "cold_start_policy": "Fewer than required history matches yields NaN / None (WITHHELD/DATA_GAP)",
+      "zero_fabrication": "No synthetic or mock xG substitution permitted"
+    },
+    "data_persistence": {
+      "table": "match_telemetry",
+      "schema_migration": "0016_match_telemetry_pit_provenance",
+      "primary_key": "match_id",
+      "idempotent_upsert": "ON CONFLICT (match_id) DO UPDATE",
+      "provenance_hash": "sha256(shots_data + match_info)",
+      "source_policy": "AUTHORIZED_PRODUCTION_SOURCE"
+    }
+  }
+}
