@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { FullAnalysisSection } from "@/components/full-analysis-section";
-import { PredictionSection } from "@/components/predict/PredictionSection";
+import { MatchAnalysisPanels } from "@/components/predict/PredictionSection";
 import { Phase8AnalyticsSection } from "@/components/phase8-analytics-section";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { MatchHeaderActions } from "@/components/match/match-header-actions";
@@ -119,8 +118,7 @@ export default async function MatchInsightsPage({ params, searchParams }: PagePr
         </div>
       </header>
       <ResearchModeBanner />
-      <PredictionSection matchId={rawId} competition={league} />
-      <FullAnalysisSection matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
+      <MatchAnalysisPanels matchId={rawId} league={league} homeTeam={home} awayTeam={away} />
       <details className="group rounded-2xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4">
         <summary className="flex min-h-10 cursor-pointer items-center text-xs font-semibold text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 sm:text-sm">
           Technical feature diagnostics

@@ -79,6 +79,10 @@ export interface PredictionOk {
 
 export type PredictionResult = PredictionOk | PredictionWithheld | PredictionUnavailable;
 
+export type AnalysisFetch =
+  | { status: "OK"; analysis: FullMatchAnalysisResponse }
+  | PredictionUnavailable;
+
 export function unavailable(reason_code: string, message: string): PredictionUnavailable {
   return { status: "UNAVAILABLE", truth_state: "WITHHELD", reason_code, message };
 }

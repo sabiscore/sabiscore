@@ -14432,15 +14432,18 @@ every revision id ≤ 32 characters.
   the generation id, certification enum and gap codes through `generationLabel`,
   `certificationLabel` and `describeEvidenceCode` (APEX §11); internal "Candidate-M" notes removed.
 
+**Resolved the same day (operator rulings, 2026-10-03):**
+- Double fetch: the card is kept. `MatchAnalysisPanels` (`components/predict/PredictionSection.tsx`)
+  makes the page's one `full-analysis` request through `getMatchAnalysis()` and passes the parsed
+  payload to the card (summary) and the dashboard (React Query `initialData`). The dashboard
+  fetches for itself only when the server request produced no data. Pinned by
+  `match-analysis-panels.test.tsx`, watched failing with the `initialData` wiring reverted.
+- Understat: operator confirmed `AUTHORIZED_PRODUCTION_SOURCE`, bound by the V21.1 §11 temporal
+  contract (own-match telemetry never in its own pre-match vector; rolling features only). Code
+  already complies: outside the package only `models/stacked/data_staging.py` reads it, via
+  prior-only `compute_rolling_averages`.
+
 **Still open:**
-- Every match page calls `full-analysis` twice (server-side `PredictionSection` plus the client
-  dashboard; see Render log 11:56:39/11:56:44). The two cards also show overlapping content.
-  Decide whether to keep `PredictionCard`; if kept, pass it the dashboard's data instead of a
-  second inference.
-- `reports/evidence/v21-understat-governance.json` records Understat as
-  `AUTHORIZED_PRODUCTION_SOURCE` (`authorized_by: USER`, `DECISION_Q2_CONFIRMED`). The decision is
-  not in the repository and the UI said the opposite. Migration 0016 also gives `source_policy` a
-  server default of `AUTHORIZED_PRODUCTION_SOURCE` for every row. Operator to confirm or withdraw.
 - `reports/release/v21-audit-manifest.json` hashes a dirty worktree against `repository_head:
   23dbd97`, so it is attributable to no commit.
 

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
 import { ErrorBoundary } from "@/components/error-boundary";
+import type { FullMatchAnalysisResponse } from "@/lib/full-analysis-contract";
 
 const FullAnalysisDashboard = dynamic(
   () =>
@@ -42,6 +43,8 @@ interface FullAnalysisSectionProps {
    * hero card display real team names without re-parsing the opaque ID. */
   homeTeam?: string;
   awayTeam?: string;
+  /** The page-level fetch result; when present the dashboard does not fetch on mount. */
+  initialData?: FullMatchAnalysisResponse;
 }
 
 export function FullAnalysisSection({
@@ -49,6 +52,7 @@ export function FullAnalysisSection({
   league = "EPL",
   homeTeam,
   awayTeam,
+  initialData,
 }: FullAnalysisSectionProps) {
   const enabled = useFeatureFlag(FeatureFlag.FULL_ANALYSIS_V7);
 
@@ -71,6 +75,7 @@ export function FullAnalysisSection({
             league={league}
             homeTeam={homeTeam}
             awayTeam={awayTeam}
+            initialData={initialData}
           />
         </Suspense>
       </ErrorBoundary>

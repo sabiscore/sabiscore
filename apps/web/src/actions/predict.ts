@@ -16,15 +16,22 @@ import { isHtmlBody, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-uti
 import {
   summarizeAnalysis,
   unavailable,
+  type AnalysisFetch,
   type PredictionResult,
 } from "@/lib/prediction-truth";
 
-const REQUEST_TIMEOUT_MS = 10_000;
+// Same budget as the /api/full-analysis proxy route.
+const REQUEST_TIMEOUT_MS = 25_000;
 
-export async function getMatchPrediction(
+/**
+ * The page's single full-analysis request. Its parsed payload feeds both the
+ * forecast card (as a summary) and the dashboard (as React Query initialData),
+ * so a match page costs one backend inference, not two.
+ */
+export async function getMatchAnalysis(
   matchId: string,
   options?: { league?: string },
-): Promise<PredictionResult> {
+): Promise<AnalysisFetch> {
   const id = matchId.trim();
   const league = canonicalLeagueId(options?.league ?? "EPL");
   if (!id || id.length > 240 || league === null) {
@@ -68,5 +75,13 @@ export async function getMatchPrediction(
     return unavailable("SCHEMA_DRIFT", "The backend response did not match the analysis contract.");
   }
 
-  return summarizeAnalysis(parsed.data);
+  return { status: "OK", analysis: parsed.data };
+}
+
+export async function getMatchPrediction(
+  matchId: string,
+  options?: { league?: string },
+): Promise<PredictionResult> {
+  const fetched = await getMatchAnalysis(matchId, options);
+  return fetched.status === "OK" ? summarizeAnalysis(fetched.analysis) : fetched;
 }

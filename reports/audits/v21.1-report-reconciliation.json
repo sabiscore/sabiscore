@@ -81,10 +81,10 @@
     {
       "claim": "Understat is an AUTHORIZED_PRODUCTION_SOURCE (authorized_by USER, decision_ref DECISION_Q2_CONFIRMED)",
       "claim_source": "reports/evidence/v21-understat-governance.json",
-      "current_evidence": "The decision record is not in the repository, and the deployed UI says xG telemetry has no production-authorized source. No serving path reads match_telemetry, so no xG reaches inference either way.",
-      "status": "UNVERIFIED",
+      "current_evidence": "Operator confirmed in session on 2026-10-03 (DECISION_Q2_CONFIRMED), bound by the V21.1 section 11 temporal contract: a fixture's own post-match xG/xA/shots never enter its own pre-match vector; Understat feeds only prior-match rolling features (rolling_xg_5). Code check: outside the understat package only models/stacked/data_staging.py reads it, via compute_rolling_averages (prior matches only).",
+      "status": "CONFIRMED",
       "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
-      "required_action": "Operator to confirm or withdraw the authorization; until confirmed, keep xG out of serving."
+      "required_action": "Keep own-match telemetry out of pre-match vectors; keep the ingest route off until it has operator auth."
     }
   ]
 }
