@@ -693,7 +693,9 @@ class MatchTelemetry(Base):
     away_xg: Mapped[float | None] = mapped_column(Float, nullable=True)
     home_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
     away_xa: Mapped[float | None] = mapped_column(Float, nullable=True)
-    shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    shot_telemetry: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
