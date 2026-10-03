@@ -27,7 +27,7 @@ import re
 from typing import Any
 
 import aiohttp
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field, field_validator
 from tenacity import (
     AsyncRetrying,
@@ -291,6 +291,10 @@ class UnderstatScraper:
                 f"Understat fetch failed after {self._max_attempts} attempts "
                 f"for match_id={match_id}"
             ) from exc
+
+        raise RuntimeError(
+            f"Understat fetch failed unexpectedly for match_id={match_id}"
+        )
 
     @staticmethod
     def _extract_json_payloads(

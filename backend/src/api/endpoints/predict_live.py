@@ -41,7 +41,7 @@ def get_loaded_ensemble() -> StackedMatchEnsemble:
         synthetic_X = np.random.uniform(0.5, 3.5, size=(120, len(FEATURE_COLUMNS))).astype(np.float32)
         synthetic_y = np.random.choice([0, 1, 2], size=120).astype(np.int64)
         from ...models.stacked.data_staging import StagedDataset
-        import pandas as pd
+        import pandas as pd  # type: ignore[import-untyped]
         dataset = StagedDataset(
             X=synthetic_X,
             y=synthetic_y,
@@ -153,11 +153,13 @@ async def fetch_rolling_xg_from_redis(
         key_h = f"sabiscore:rolling_xg:{home_slug}"
         key_a = f"sabiscore:rolling_xg:{away_slug}"
 
-        res_h, res_a = await asyncio.gather(
+        gathered = await asyncio.gather(
             redis_client.get(key_h),
             redis_client.get(key_a),
             return_exceptions=True,
         )
+        res_h: Any = gathered[0]
+        res_a: Any = gathered[1]
 
         if isinstance(res_h, (str, bytes, float, int)) and res_h:
             home_val = float(res_h)
@@ -248,6 +250,7 @@ def compute_kelly_recommendation(
             best_was_capped = was_capped
 
     # Action classification
+    best_bet: Literal["home", "draw", "away", "none"]
     if best_edge >= 0.042 and best_ev > 0:
         action: Literal["ACTIONABLE", "LEAN", "NO_BET", "HOLD"] = "ACTIONABLE"
         best_bet = labels[best_idx]

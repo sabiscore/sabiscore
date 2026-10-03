@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
-import asyncpg
+import asyncpg  # type: ignore[import-untyped]
 import redis.asyncio as aioredis
 
 from ...core.config import settings

@@ -13,7 +13,7 @@ import logging
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
-import asyncpg
+import asyncpg  # type: ignore[import-untyped]
 import numpy as np
 
 logger = logging.getLogger(__name__)

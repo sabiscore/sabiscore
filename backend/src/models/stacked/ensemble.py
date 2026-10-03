@@ -13,10 +13,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-import lightgbm as lgb
+import lightgbm as lgb  # type: ignore[import-untyped]
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.linear_model import LogisticRegression  # type: ignore[import-untyped]
+from sklearn.model_selection import TimeSeriesSplit  # type: ignore[import-untyped]
 import xgboost as xgb
 
 from .data_staging import StagedDataset

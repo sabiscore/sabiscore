@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Generator, Mapping, Sequence
 
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 
 from ...services.understat.formatter import UnderstatTensorFormatter
 
