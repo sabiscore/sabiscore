@@ -337,7 +337,9 @@ async def test_full_analysis_capture_flows_into_settlement_join(
 
         async def build_live_feature_vector(self, **_kwargs):
             return {
-                "features": [0.0] * 58,
+                "features": [0.0] * 68,
+                "features_68": [0.0] * 68,
+                "features_58": [0.0] * 58,
                 "features_dict": {"home_form": 0.4},
                 "data_gaps": [],
                 "critical_gaps": [],

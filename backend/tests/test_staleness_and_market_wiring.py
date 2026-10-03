@@ -59,7 +59,9 @@ def test_model_input_staleness_never_negative_for_a_future_timestamp():
 
 def _live(**overrides) -> dict:
     base = {
-        "features": [0.0] * 58,
+        "features": [0.0] * 68,
+        "features_68": [0.0] * 68,
+        "features_58": [0.0] * 58,
         "features_dict": {},
         "data_gaps": [],
         "critical_gaps": [],

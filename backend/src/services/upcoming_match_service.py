@@ -403,14 +403,14 @@ class UpcomingMatchService:
                 # calling the bare projector directly here produced near-identical
                 # feature vectors across fixtures and left staleness_seconds pinned
                 # at 0 (a key absent from the bare projector's return shape).
-                features_result = await feature_projector.build_live_feature_vector(
-                    match_id=match_id, league=match.get("league", ""), db=db
-                )
                 if feature_schema_version is None or feature_schema is None:
                     raise FeatureContractViolationError(
                         "active feature schema unavailable for upcoming inference",
                         context="upcoming_match_service",
                     )
+                features_result = await feature_projector.build_live_feature_vector(
+                    match_id=match_id, league=match.get("league", ""), db=db
+                )
                 full_features = bridge_feature_vector(
                     features_result,
                     schema=feature_schema,
