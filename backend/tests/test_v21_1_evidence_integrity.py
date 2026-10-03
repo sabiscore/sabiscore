@@ -80,7 +80,14 @@ def test_predict_match_route_is_not_registered() -> None:
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
-@pytest.mark.parametrize("script", ["evaluate_v21_tier_a_candidates.py", "v21_certification.py"])
+@pytest.mark.parametrize(
+    "script",
+    [
+        "evaluate_v21_tier_a_candidates.py",
+        "v21_certification.py",
+        "evaluate_understat_ablation.py",
+    ],
+)
 def test_v21_report_generators_carry_no_hardcoded_verdicts(script: str) -> None:
     """Both V21 generators once printed PASS, canary readiness and parity they never
     measured. A verdict must come from a computation, never from a literal."""
