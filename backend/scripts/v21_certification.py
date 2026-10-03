@@ -340,19 +340,19 @@ Release Posture: ACTIVE_FAIL_CLOSED
 
 | Dimension | Measured Value | Evidenced State | Gate Verdict |
 | :--- | :--- | :--- | :--- |
-| **Engineering Integration** | Understat PIT xG telemetry, Alembic 0016 schema, Candidate-M purity, unified `/full-analysis` single path, zero synthetic data in production paths | LIVE-INTEGRATED | PASS |
+| **Engineering Integration** | Not measured by this generator: it reads repository files only. Merge, CI, and deployment state must be read from GitHub and the live services. | UNVERIFIED | NOT MEASURED |
 | **Model Quality** | Candidate-M out-of-sample test set (2025/26 holdout season); active generation `{active.get('generation')}` | UNVERIFIED / CERTIFICATION_BLOCKED | BLOCKED |
 | **Market Relative Alpha** | Gate 7 benchmark comparison against opening market RPS (historical FAIL; protocol SHA `{protocol_hash}`) | EMPIRICALLY UNVALIDATED | FAIL / BLOCKED |
 | **Live C6 Milestone** | Live database sample count `live_n` < 200 settled pre-kickoff predictions; zero historical replay credit | INSUFFICIENT_SAMPLE / UNVERIFIED | FAIL / BLOCKED |
-| **Production Runtime Parity** | Render backend SHA `23dbd97` (200 OK), Vercel production alias `23dbd976754e3a79eacc8bb3b20dd3c0c6454d52` (200 OK) | LIVE-VERIFIED PARITY | PASS (Runtime) |
+| **Production Runtime Parity** | Not measured by this generator: it makes no network requests. Compare `/health` `sha` (Render) and `/api/health` `sha`/`backendSha` (Vercel) against the merged master SHA. | UNVERIFIED | NOT MEASURED |
 
 ## Engineering Status
 
 Candidate feature integration: **{feature_status}**. The active generation remains `{active.get('generation')}` with state `{active.get('promotion_state')}`. The 89-feature semantic contract currently has {len(undeclared)} feature(s) with undeclared required meaning, units, or serving source.
-- Single canonical prediction route: `/api/v1/matches/upcoming/{{id}}/full-analysis` (legacy endpoints `/predict/match` and `/predict_live` permanently retired).
-- Understat xG/xA match telemetry: Alembic migration `0016_match_telemetry_pit_provenance`, strict PIT rolling average (`kickoff < T_prediction`), and provenance hashing.
-- Candidate-M / Candidate-MA separation: Candidate-M verified 100% market-independent with zero market leakage.
-- Frontend truth mapping: Pure consumer-truth representation with zero client-side EV/Kelly math and zero synthetic data substitution.
+- Single canonical prediction route: `/api/v1/matches/upcoming/{{id}}/full-analysis` (the `/predict/match` endpoint is removed from this branch; whether it is gone from production depends on the deployed SHA).
+- Understat xG/xA match telemetry: Alembic migration `0016_match_telem_pit`, strict PIT rolling average (`kickoff < T_prediction`), and provenance hashing.
+- Candidate-M / Candidate-MA separation: `assert_candidate_m_purity()` rejects market-named columns in the Candidate-M schema at import time (a name check, not an empirical leakage test).
+- Frontend truth mapping: `lib/prediction-truth.ts` maps the backend contract to display states; no client-side EV/Kelly arithmetic.
 
 ## Model Quality
 
@@ -368,9 +368,10 @@ Candidate feature integration: **{feature_status}**. The active generation remai
 
 ## Production Runtime Parity
 
-- **Render Backend**: `https://sabiscore-api-bav1.onrender.com/health` returns HTTP 200 with SHA `23dbd97`, matching git HEAD.
-- **Vercel Frontend**: `https://sabiscore.vercel.app/api/health` returns HTTP 200 with `vercelSha: 23dbd976754e3a79eacc8bb3b20dd3c0c6454d52`, matching git HEAD.
-- **Serving Parity**: CONFIRMED between Render and Vercel.
+**NOT MEASURED.** This generator makes no network requests, so it cannot attest what production serves. Probe the live services after each merge:
+- Render: `https://sabiscore-api-bav1.onrender.com/health` → `sha`
+- Vercel: `https://sabiscore.vercel.app/api/health` → `sha` and `backendSha`
+Parity holds only when both equal the merged master SHA (Render may legitimately lag after a web-only commit; check `git diff --name-only <sha>..HEAD -- backend/`).
 
 ## Production Readiness
 

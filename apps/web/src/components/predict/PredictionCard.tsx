@@ -13,6 +13,8 @@ import {
   type PredictionSummary,
   type TruthState,
 } from "@/lib/prediction-truth";
+import { describeEvidenceCode } from "@/lib/full-analysis-contract";
+import { certificationLabel, generationLabel } from "@/lib/model-identity";
 
 const STATE_STYLE: Record<TruthState, { icon: LucideIcon; classes: string }> = {
   RESEARCH_MODE: {
@@ -90,13 +92,10 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
         <p data-testid="withheld-message" className="mt-3 text-sm text-slate-300">
           {result.message}
         </p>
-        <p className="mt-1 font-mono text-[11px] text-slate-400">
-          Reason code: {result.reason_code}
-        </p>
         {result.status === "WITHHELD" && result.data_gaps.length > 0 && (
           <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-300">
             {result.data_gaps.map((gap) => (
-              <li key={gap}>{gap}</li>
+              <li key={gap}>{describeEvidenceCode(gap)}</li>
             ))}
           </ul>
         )}
@@ -147,8 +146,8 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
       </section>
 
       <dl className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Fact term="Model generation">{s.model.generation ?? "unspecified"}</Fact>
-        <Fact term="Certification">{s.model.certification_state}</Fact>
+        <Fact term="Model generation">{generationLabel(s.model.generation)}</Fact>
+        <Fact term="Certification">{certificationLabel(s.model.certification_state)}</Fact>
         <Fact term="Evidence health">
           {s.evidence.critical} critical / {s.evidence.advisory} advisory / {s.evidence.conflicts} conflicts
         </Fact>
@@ -173,7 +172,7 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
           Recent Attacking Form (Last 5 Matches)
         </h3>
         <p className="mt-1 text-xs text-slate-300">
-          Withheld: point-in-time xG telemetry has no production-authorized source yet.
+          Not shown: recent xG form is not an input to the current forecasting model.
         </p>
       </section>
 
@@ -184,7 +183,7 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
           </h3>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300">
             {s.counter_case.map((gap) => (
-              <li key={gap}>{gap}</li>
+              <li key={gap}>{describeEvidenceCode(gap)}</li>
             ))}
           </ul>
         </section>

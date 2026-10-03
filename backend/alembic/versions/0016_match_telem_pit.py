@@ -1,6 +1,6 @@
 """Add PIT provenance and governance columns to match_telemetry.
 
-Revision ID: 0016_match_telemetry_pit_provenance
+Revision ID: 0016_match_telem_pit
 Revises: 0015_match_telemetry
 Create Date: 2026-10-03
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0016_match_telemetry_pit_provenance"
+revision = "0016_match_telem_pit"
 down_revision = "0015_match_telemetry"
 branch_labels = None
 depends_on = None

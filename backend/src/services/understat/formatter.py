@@ -239,8 +239,10 @@ class UnderstatTensorFormatter:
         )
 
         for i, row in enumerate(records):
-            home_xg = float(row.get("home_xg") or 0.0)
-            away_xg = float(row.get("away_xg") or 0.0)
+            home_xg_raw = row.get("home_xg")
+            away_xg_raw = row.get("away_xg")
+            home_xg = float(home_xg_raw) if home_xg_raw is not None else float("nan")
+            away_xg = float(away_xg_raw) if away_xg_raw is not None else float("nan")
 
             # Directional metrics
             delta_xg = home_xg - away_xg
@@ -248,13 +250,18 @@ class UnderstatTensorFormatter:
 
             # Extract xA from shot_telemetry if not pre-computed or if verify required
             shot_telemetry = row.get("shot_telemetry")
+            # A missing stored xA is unknown (NaN), never 0.0. A 0.0 extracted from
+            # present shot telemetry is a measurement and is kept.
+            stored_home_xa = row.get("home_xa")
+            stored_away_xa = row.get("away_xa")
+            home_xa = float(stored_home_xa) if stored_home_xa is not None else float("nan")
+            away_xa = float(stored_away_xa) if stored_away_xa is not None else float("nan")
             if shot_telemetry is not None:
                 extracted_home_xa, extracted_away_xa = cls.extract_xa_from_shot_telemetry(shot_telemetry)
-                home_xa = extracted_home_xa if extracted_home_xa > 0.0 else float(row.get("home_xa") or 0.0)
-                away_xa = extracted_away_xa if extracted_away_xa > 0.0 else float(row.get("away_xa") or 0.0)
-            else:
-                home_xa = float(row.get("home_xa") or 0.0)
-                away_xa = float(row.get("away_xa") or 0.0)
+                if extracted_home_xa > 0.0 or stored_home_xa is None:
+                    home_xa = extracted_home_xa
+                if extracted_away_xa > 0.0 or stored_away_xa is None:
+                    away_xa = extracted_away_xa
 
             delta_xa = home_xa - away_xa
             total_xa = home_xa + away_xa

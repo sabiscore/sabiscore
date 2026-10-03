@@ -374,6 +374,16 @@ class Settings(BaseSettings):
         default=20.0,
         alias="ELO_K_BASE",
     )
+    enable_understat_ingest_endpoint: bool = Field(
+        default=False,
+        alias="ENABLE_UNDERSTAT_INGEST_ENDPOINT",
+        description=(
+            "Expose POST /api/v1/telemetry/understat/ingest. The route has no "
+            "authentication and fans one request out to up to 500 outbound scrapes "
+            "from the web process, so it stays off (404) unless an operator "
+            "explicitly enables it."
+        ),
+    )
     enable_statsbomb_enrichment: bool = Field(
         default=False,
         alias="ENABLE_STATSBOMB_ENRICHMENT",

@@ -14388,3 +14388,62 @@ changes from `"raw"` to `"sigmoid"` for dict-artifact leagues.
 
 
 
+
+---
+
+## 174. Master shipped a random-fit "live" prediction endpoint; PR #266's migration could never apply; production served an unmerged branch (2026-10-03)
+
+**Tier:** `P0` (production fabrication) — code fixed on `feat/v21.1-evidence-lock` (PR #266), **not live until merged and deployed.**
+
+**What was live, measured 2026-10-03 ~12:30–12:45 UTC:**
+
+1. `POST /api/v1/predict/match` on the Render backend (master `23dbd97`, from #265) returned
+   `action: "ACTIONABLE"`, `kelly_fraction: 0.0366`, `bookmaker: "consensus_sharp"`, odds
+   `2.2/3.3/3.4`, rolling xG `1.35/1.15` (`source: "fallback_estimate"`). The model behind it is
+   fitted at first request on `np.random.uniform` features and `np.random.choice` labels
+   (`predict_live.py:get_loaded_ensemble`), the odds and xG are hardcoded, and nothing calls a
+   provider. This is a staking recommendation from an uncertified, random model. The CI
+   zero-fabrication scan cannot see it: none of its nine patterns covers `np.random`.
+2. Master's `PredictionSection` substitutes `0.45/0.28/0.27` when that call fails, and its card
+   prints "Actionable Edge: Bet X% of your bankroll". Any master deploy to Vercel production
+   restores that UI.
+3. `https://sabiscore.vercel.app/api/health` reported `sha: eed0b35`, the **unmerged** PR #266
+   commit. The production alias was deployed from a branch. The committed activation report
+   claimed "Vercel production alias 23dbd97 … LIVE-VERIFIED PARITY, PASS"; that text was
+   hardcoded in `backend/scripts/v21_certification.py`, which makes no network request.
+4. `POST /api/v1/telemetry/understat/ingest` (from #265) is unauthenticated and enqueues up to
+   500 outbound scrapes per request from the 512 MB web process.
+
+**Why PR #266 never fixed it:** its migration id `0016_match_telemetry_pit_provenance` is 35
+characters; `alembic_version.version_num` is `VARCHAR(32)`. CI run `37114114794` failed at
+`alembic upgrade head`, so the drift check, zero-fab scan, tests and Sonar never ran. A previous
+session widened its **local** `alembic_version` column to `VARCHAR(64)`, which made the local
+upgrade pass and hid the defect. ⚠️ Never widen `alembic_version` to work around a long id; keep
+every revision id ≤ 32 characters.
+
+**Fixed on the branch:**
+- Revision renamed `0016_match_telem_pit`; fresh PostgreSQL `upgrade head`, `alembic check`, and
+  `downgrade -1`/`upgrade head` all pass; full backend suite 3009 passed / 19 skipped / 1 xfailed.
+- Ingest route returns 404 unless `ENABLE_UNDERSTAT_INGEST_ENDPOINT=true` (default false).
+- Formatter: a missing xG **or xA** is NaN, never `0.0`.
+- Certification generator no longer prints PASS for engineering integration or runtime parity it
+  never measured; it prints `NOT MEASURED`.
+- Consumer cards: no-snapshot market reads `UNAVAILABLE` (was `ILLIQUID`); `PredictionCard` maps
+  the generation id, certification enum and gap codes through `generationLabel`,
+  `certificationLabel` and `describeEvidenceCode` (APEX §11); internal "Candidate-M" notes removed.
+
+**Still open:**
+- Every match page calls `full-analysis` twice (server-side `PredictionSection` plus the client
+  dashboard; see Render log 11:56:39/11:56:44). The two cards also show overlapping content.
+  Decide whether to keep `PredictionCard`; if kept, pass it the dashboard's data instead of a
+  second inference.
+- `reports/evidence/v21-understat-governance.json` records Understat as
+  `AUTHORIZED_PRODUCTION_SOURCE` (`authorized_by: USER`, `DECISION_Q2_CONFIRMED`). The decision is
+  not in the repository and the UI said the opposite. Migration 0016 also gives `source_policy` a
+  server default of `AUTHORIZED_PRODUCTION_SOURCE` for every row. Operator to confirm or withdraw.
+- `reports/release/v21-audit-manifest.json` hashes a dirty worktree against `repository_head:
+  23dbd97`, so it is attributable to no commit.
+
+**Verify after merge:** Render `/health` `sha` equals the merge SHA, `/health/ready`
+`migrations.head` is `0016_match_telem_pit`, `POST /api/v1/predict/match` returns 404, and
+`sabiscore.vercel.app/api/health` `sha` equals the merge SHA.

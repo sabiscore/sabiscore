@@ -34,7 +34,7 @@
     },
     "data_persistence": {
       "table": "match_telemetry",
-      "schema_migration": "0016_match_telemetry_pit_provenance",
+      "schema_migration": "0016_match_telem_pit",
       "primary_key": "match_id",
       "idempotent_upsert": "ON CONFLICT (match_id) DO UPDATE",
       "provenance_hash": "sha256(shots_data + match_info)",

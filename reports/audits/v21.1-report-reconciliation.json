@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "document": "SABISCORE_V21_1_REPORT_RECONCILIATION",
-  "verified_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+  "verified_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
   "remote_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
   "working_tree_state": "MODIFIED_IN_PROGRESS",
-  "reconciled_at": "2026-10-03T10:11:00Z",
+  "reconciled_at": "2026-10-03T13:11:08Z",
   "assertions": [
     {
       "claim": "PRODUCTION READY",
@@ -49,10 +49,42 @@
     {
       "claim": "feature integration complete",
       "claim_source": "V20 bridge audit notes",
-      "current_evidence": "Understat ingestion hardened with PIT rolling xG, Alembic 0016 schema, and zero-fabrication guarantees; Candidate-M vs Candidate-MA strict boundary implemented",
-      "status": "CONFIRMED",
+      "current_evidence": "The same commit's own generator reports feature_status BLOCKED (89 features with undeclared meaning/units/serving source). The Alembic 0016 migration had never applied anywhere: CI run 37114114794 failed at `alembic upgrade head` (revision id 35 chars > alembic_version VARCHAR(32)). Understat telemetry is not read by the serving full-analysis path.",
+      "status": "CONTRADICTED",
       "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
-      "required_action": "Maintain Candidate-M market-independent purity and reject any market contamination"
+      "required_action": "Treat feature integration as BLOCKED until the FeatureBridge contract has declared semantics for every candidate feature."
+    },
+    {
+      "claim": "Vercel production alias serves verified master (activation report: LIVE-VERIFIED PARITY, PASS)",
+      "claim_source": "reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md (hardcoded in backend/scripts/v21_certification.py, no probe)",
+      "current_evidence": "Probe 2026-10-03T12:3xZ: https://sabiscore.vercel.app/api/health returned sha=eed0b35 (PR #266 branch, unmerged) with backendSha=23dbd97 (master). Production frontend was deployed from an unverified branch.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Merge PR #266 through review so master's production deploy replaces the branch build; never deploy a branch to the production alias."
+    },
+    {
+      "claim": "Legacy /predict/match endpoint permanently retired; zero synthetic data in production paths",
+      "claim_source": "reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md",
+      "current_evidence": "Probe 2026-10-03T12:4xZ: POST https://sabiscore-api-bav1.onrender.com/api/v1/predict/match returned 200 with action=ACTIONABLE, kelly_fraction=0.0366, bookmaker=consensus_sharp, odds 2.2/3.3/3.4, rolling_xg 1.35/1.15 source=fallback_estimate. On master (23dbd97) the model is fitted on np.random features and labels, and the odds/xG are hardcoded. Deleted on this branch only.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "P0: merge the removal; re-probe the endpoint for 404 after the Render deploy reports the merged sha."
+    },
+    {
+      "claim": "POST /api/v1/telemetry/understat/ingest is safe to expose",
+      "claim_source": "PR #265 (merged)",
+      "current_evidence": "Unauthenticated route on master; one request enqueues up to 500 outbound Understat scrapes with 5 retries each from the 512 MB web process.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Off by default behind ENABLE_UNDERSTAT_INGEST_ENDPOINT (this branch); add operator auth before enabling in production."
+    },
+    {
+      "claim": "Understat is an AUTHORIZED_PRODUCTION_SOURCE (authorized_by USER, decision_ref DECISION_Q2_CONFIRMED)",
+      "claim_source": "reports/evidence/v21-understat-governance.json",
+      "current_evidence": "The decision record is not in the repository, and the deployed UI says xG telemetry has no production-authorized source. No serving path reads match_telemetry, so no xG reaches inference either way.",
+      "status": "UNVERIFIED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Operator to confirm or withdraw the authorization; until confirmed, keep xG out of serving."
     }
   ]
 }

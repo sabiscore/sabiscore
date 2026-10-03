@@ -20,7 +20,19 @@ describe("PredictionCard truth states", () => {
     expect(screen.getByTestId("truth-state-badge")).toHaveTextContent("Withheld");
     expect(screen.queryByTestId("translated-probabilities")).toBeNull();
     expect(screen.getByTestId("withheld-message")).toHaveTextContent("did not respond");
-    expect(screen.getByText(/BACKEND_TIMEOUT/)).toBeInTheDocument();
+    // Internal reason codes are for logs, not readers.
+    expect(screen.queryByText(/BACKEND_TIMEOUT/)).toBeNull();
+  });
+
+  it("never shows raw generation ids, certification enums or gap codes", () => {
+    const fixture = analysisFixture();
+    fixture.ensemble.certification_state = "UNVERIFIED";
+    fixture.evidence_quality.advisory_gaps = ["MODEL_UNCERTAINTY_UNAVAILABLE"];
+    const { container } = render(<PredictionCard result={summarizeAnalysis(fixture)} />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/v5_phase7|UNVERIFIED|MODEL_UNCERTAINTY_UNAVAILABLE/);
+    expect(text).toContain("Generation 5");
+    expect(text).toContain("Research mode");
   });
 
   it("uses no prohibited certainty language", () => {

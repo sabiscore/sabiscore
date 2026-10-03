@@ -39,7 +39,7 @@ test.describe('Match forecast truth-state smoke test', () => {
     } else {
       // Withheld states must not leak any probability, odds or stake figures.
       await expect(card).not.toContainText(/Home: \d+%/);
-      await expect(card).toContainText(/Reason code:/);
+      await expect(card).toContainText(/No probabilities, odds or stakes are shown/);
     }
 
     const fatalErrors = consoleErrors.filter(
