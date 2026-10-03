@@ -14487,3 +14487,33 @@ closing odds are missing for half the holdout; report the book mix with any mark
 **Not done, by design:** the candidate is not serialized or promoted (`active_generation.json`
 untouched); historical Understat is not bulk-loaded into production. N_live is 0: the
 collectors run, but no fixtures exist until 2026-10-09.
+
+## 176. Six consumer-surface defects from the 2026-10-03 production screenshots; the Understat reads were ungated (2026-10-03)
+
+**Status: RESOLVED.** Found on `50f3fd0` (live on both Render and Vercel).
+
+1. **Odds form recorded snapshots an hour early.** `/intelligence`'s "Observed timestamp"
+   defaulted to `toISOString().slice(0, 16)` (UTC) inside a `datetime-local` input, which the
+   browser reads as local time; at 22:23 WAT it showed 21:23 and submitted 20:23 UTC.
+   `lib/lagos-time.ts` `toLagosInputValue` / `fromLagosInputValue` pin the field to WAT both
+   ways, and the label now says WAT. ⚠️ **A `datetime-local` value has no zone: never fill it
+   from `toISOString()` and never parse it with `new Date(value)`.**
+2. **Same probability, two numbers.** `PredictionCard` forced the three integers to sum to
+   100 (`away = 100 - home - draw`), printing Away 26% beside an orb and table showing
+   27% / 26.5%. Each outcome now rounds on its own; bar widths use the unrounded values.
+3. **"Value Edge is visualized"** sat under the model-vs-fair chart while the table beside it
+   said the gap is not evidence of value. The caption is now descriptive, and says so
+   explicitly while staking is withheld.
+4. **Raw codes on consumer surfaces:** `home_pressing_intensity` in "Why this might not hold"
+   (no copy entry), verdict `PARTIAL` and freshness `UNKNOWN` in the forecast card, a
+   calibration chip reading "Model · SIGMOID" (as if the model's name), and bookmaker key
+   `pinnacle`. Fixed via the existing `describeEvidenceCode`, `VERDICT_TOKENS`,
+   `mapEvidenceFreshness`, and a new `lib/bookmaker.ts` `bookmakerLabel`.
+5. **Understat reads were public.** Only the ingest POST checked
+   `ENABLE_UNDERSTAT_INGEST_ENDPOINT`; `GET /{match_id}` and `/features/schema` were open, and
+   `GET /telemetry/understat/ingest` matched `/{match_id}` and answered 422 in the Render log.
+   Understat is research-only (V21.1 §14), so the flag is now a router-level dependency and
+   every route 404s by default. `test_understat_routes_are_off_by_default` drives the real
+   router; it was watched failing (202) with the dependency removed.
+6. **Dead fabrication trap deleted:** `backend/src/data/data_source_adapter.py` had zero
+   importers and filled missing odds with 2.0 / 3.2 / 3.5.

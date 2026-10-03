@@ -1,5 +1,6 @@
 "use client";
 
+import { bookmakerLabel } from "@/lib/bookmaker";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -37,7 +38,7 @@ import { describeEvidenceCode, groupEvidenceGaps } from "@/lib/full-analysis-con
 import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 import { evidenceStateFor } from "@/lib/evidence-state";
 import { formatEvidenceAge } from "@/lib/evidence-passport";
-import { formatLagosTimestamp } from "@/lib/lagos-time";
+import { formatLagosTimestamp, fromLagosInputValue, toLagosInputValue } from "@/lib/lagos-time";
 
 const COMPETITIONS = ["EPL", "LA_LIGA", "SERIE_A", "BUNDESLIGA", "LIGUE_1", "EREDIVISIE", "UCL"];
 
@@ -122,7 +123,7 @@ const defaultOddsForm = (): OddsForm => {
     home: "",
     draw: "",
     away: "",
-    observedAt: now.toISOString().slice(0, 16),
+    observedAt: toLagosInputValue(now),
     sourceLabel: "",
     sourceUrl: "",
     confirmed: false,
@@ -462,7 +463,7 @@ export function BettingIntelligenceDashboard() {
       home: String(candidate.home_odds),
       draw: String(candidate.draw_odds),
       away: String(candidate.away_odds),
-      observedAt: new Date(candidate.captured_at).toISOString().slice(0, 16),
+      observedAt: toLagosInputValue(candidate.captured_at),
       sourceLabel: `${candidate.provider} | ${candidate.bookmaker}`,
       confirmed: false,
     }));
@@ -476,7 +477,7 @@ export function BettingIntelligenceDashboard() {
       home_odds: parsedOdds.home,
       draw_odds: parsedOdds.draw,
       away_odds: parsedOdds.away,
-      observed_at: new Date(oddsForm.observedAt).toISOString(),
+      observed_at: fromLagosInputValue(oddsForm.observedAt),
       source_label: oddsForm.sourceLabel.trim() || null,
       source_url: oddsForm.sourceUrl.trim() || null,
       user_confirmed: oddsForm.confirmed,
@@ -725,7 +726,7 @@ export function BettingIntelligenceDashboard() {
                   {oddsCandidates.map((candidate) => (
                     <div className="bi-candidate" key={`${candidate.bookmaker}-${candidate.captured_at}`}>
                       <span>
-                        <strong>{candidate.bookmaker}</strong>
+                        <strong>{bookmakerLabel(candidate.bookmaker)}</strong>
                         <small className="bi-muted">H {fmtOdds(candidate.home_odds)} D {fmtOdds(candidate.draw_odds)} A {fmtOdds(candidate.away_odds)} | {fmtDate(candidate.captured_at)} | Research only</small>
                       </span>
                       <button className="bi-btn secondary" type="button" onClick={() => previewCandidate(candidate)}>Preview</button>
@@ -740,7 +741,7 @@ export function BettingIntelligenceDashboard() {
                   <label className="bi-label">Draw odds<input className="bi-input" type="number" min="1.01" step="0.01" value={oddsForm.draw} onChange={(e) => setOddsForm((f) => ({ ...f, draw: e.target.value }))} required /></label>
                   <label className="bi-label">Away odds<input className="bi-input" type="number" min="1.01" step="0.01" value={oddsForm.away} onChange={(e) => setOddsForm((f) => ({ ...f, away: e.target.value }))} required /></label>
                 </div>
-                <label className="bi-label">Observed timestamp<input className="bi-input" type="datetime-local" value={oddsForm.observedAt} onChange={(e) => setOddsForm((f) => ({ ...f, observedAt: e.target.value }))} required /></label>
+                <label className="bi-label">Observed timestamp (WAT)<input className="bi-input" type="datetime-local" value={oddsForm.observedAt} onChange={(e) => setOddsForm((f) => ({ ...f, observedAt: e.target.value }))} required /></label>
                 <label className="bi-label">Source label or page reference<input className="bi-input" value={oddsForm.sourceLabel} onChange={(e) => setOddsForm((f) => ({ ...f, sourceLabel: e.target.value }))} /></label>
                 <label className="bi-label">Optional URL label<input className="bi-input" type="url" value={oddsForm.sourceUrl} onChange={(e) => setOddsForm((f) => ({ ...f, sourceUrl: e.target.value }))} /></label>
                 {previewReady && (

@@ -15,6 +15,8 @@ import {
 } from "@/lib/prediction-truth";
 import { describeEvidenceCode } from "@/lib/full-analysis-contract";
 import { certificationLabel, generationLabel } from "@/lib/model-identity";
+import { mapEvidenceFreshness } from "@/lib/freshness";
+import { VERDICT_TOKENS } from "@/lib/verdict-tokens";
 
 const STATE_STYLE: Record<TruthState, { icon: LucideIcon; classes: string }> = {
   RESEARCH_MODE: {
@@ -107,9 +109,12 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
   }
 
   const s = result.summary;
+  // Each outcome rounds on its own, like the orbs and the market table beside
+  // this card: forcing a 100 total printed Away 26% next to an orb reading 27%
+  // for the same 26.5% (live 2026-10-03). Bar widths use the unrounded values.
   const homePct = Math.round(s.probabilities.home * 100);
   const drawPct = Math.round(s.probabilities.draw * 100);
-  const awayPct = Math.max(0, 100 - homePct - drawPct);
+  const awayPct = Math.round(s.probabilities.away * 100);
   const home = s.home_team ?? "Home";
   const away = s.away_team ?? "Away";
 
@@ -136,9 +141,9 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
           aria-label={`${home} ${homePct}%, Draw ${drawPct}%, ${away} ${awayPct}%`}
           className="flex h-3.5 w-full overflow-hidden rounded-full border border-[#2A2A2E] bg-[#0E0E10] p-0.5"
         >
-          <div style={{ width: `${homePct}%` }} className="h-full rounded-l-full bg-indigo-400" />
-          <div style={{ width: `${drawPct}%` }} className="h-full bg-slate-500" />
-          <div style={{ width: `${awayPct}%` }} className="h-full rounded-r-full bg-teal-300" />
+          <div style={{ width: `${s.probabilities.home * 100}%` }} className="h-full rounded-l-full bg-indigo-400" />
+          <div style={{ width: `${s.probabilities.draw * 100}%` }} className="h-full bg-slate-500" />
+          <div style={{ width: `${s.probabilities.away * 100}%` }} className="h-full rounded-r-full bg-teal-300" />
         </div>
         <p className="text-[11px] text-slate-400">
           Model-estimated probabilities, not a prediction of certainty.
@@ -153,13 +158,18 @@ export function PredictionCard({ result }: { result: PredictionResult }) {
         </Fact>
         <Fact term="Market health">{MARKET_LABEL[s.market.health]}</Fact>
         <Fact term="Data freshness">
-          {s.freshness.tag}
-          {s.freshness.staleness_seconds !== null ? ` (${s.freshness.staleness_seconds}s)` : ""}
+          {(() => {
+            const f = mapEvidenceFreshness({
+              stalenessSeconds: s.freshness.staleness_seconds,
+              tag: s.freshness.tag,
+            });
+            return `${f.label}${f.ageLabel}`;
+          })()}
         </Fact>
         <Fact term="Calibration">
-          {s.model.calibration_applied ? s.model.calibration_method : "raw (uncalibrated)"}
+          {s.model.calibration_applied ? `${s.model.calibration_method} calibration` : "raw (uncalibrated)"}
         </Fact>
-        <Fact term="Verdict">{s.verdict}</Fact>
+        <Fact term="Verdict">{VERDICT_TOKENS[s.verdict].label}</Fact>
         <Fact term="Staking">
           {s.stake_permitted && s.suggested_stake_pct !== null
             ? `Backend-computed: ${s.suggested_stake_pct}%`

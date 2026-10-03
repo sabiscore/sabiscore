@@ -35,6 +35,24 @@ describe("PredictionCard truth states", () => {
     expect(text).toContain("Research mode");
   });
 
+  it("rounds each outcome like the orbs and table, and shows readable verdict and freshness", () => {
+    // Live Dortmund-Bremen 2026-10-03: 48.9/24.6/26.5 printed Away 26% beside an orb at 27%.
+    const fixture = analysisFixture();
+    fixture.ensemble.home_win_prob = 0.489;
+    fixture.ensemble.draw_prob = 0.246;
+    fixture.ensemble.away_win_prob = 0.265;
+    fixture.verdict = "PARTIAL";
+    fixture.freshness_tag = "UNKNOWN";
+    fixture.staleness_available = false;
+    const { container } = render(<PredictionCard result={summarizeAnalysis(fixture)} />);
+    expect(screen.getByTestId("translated-probabilities")).toHaveTextContent(
+      "Home: 49% | Draw: 25% | Away: 27%",
+    );
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/PARTIAL|UNKNOWN/);
+    expect(text).toContain("Unknown");
+  });
+
   it("uses no prohibited certainty language", () => {
     const { container } = render(<PredictionCard result={summarizeAnalysis(analysisFixture())} />);
     expect(container.textContent ?? "").not.toMatch(/\b(lock|banker|guaranteed|sure bet|free money)\b/i);

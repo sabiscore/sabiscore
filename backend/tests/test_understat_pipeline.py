@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-import codecs
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-from bs4 import BeautifulSoup
 from fastapi import BackgroundTasks
 
 from src.services.understat.entity_map import (
-    UNDERSTAT_ENTITY_MAP,
     UnmappedEntityError,
     resolve_slug,
 )
 from src.services.understat.formatter import (
-    MAX_MEMORY_BYTES,
     UNDERSTAT_FEATURE_NAMES,
     UnderstatTensorFormatter,
 )
@@ -480,23 +476,27 @@ def test_tensor_formatter_memory_safety_constraint() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_trigger_understat_ingestion_is_off_by_default() -> None:
-    """The route is unauthenticated and fans out to outbound scrapes, so it must
-    404 and enqueue nothing unless an operator explicitly enables it."""
-    from fastapi import HTTPException
+def test_understat_routes_are_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every route is unauthenticated research surface (the POST fans out to outbound
+    scrapes), so all of them 404 and enqueue nothing unless an operator enables it.
+    Production answered GET /ingest with 422 because the read was ungated."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
 
-    from src.api.endpoints.telemetry import UnderstatIngestRequest, trigger_understat_ingestion
+    from src.api.endpoints import telemetry
     from src.core.config import settings
 
     assert settings.enable_understat_ingest_endpoint is False
-    bg_tasks = MagicMock(spec=BackgroundTasks)
-    with pytest.raises(HTTPException) as exc:
-        await trigger_understat_ingestion(
-            payload=UnderstatIngestRequest(match_ids=[11662]), background_tasks=bg_tasks
-        )
-    assert exc.value.status_code == 404
-    bg_tasks.add_task.assert_not_called()
+    enqueued = MagicMock()
+    monkeypatch.setattr(telemetry, "ingest_understat_telemetry", enqueued)
+    app = FastAPI()
+    app.include_router(telemetry.router)
+    client = TestClient(app)
+    assert client.post("/telemetry/understat/ingest", json={"match_ids": [11662]}).status_code == 404
+    assert client.get("/telemetry/understat/ingest").status_code == 404
+    assert client.get("/telemetry/understat/11662").status_code == 404
+    assert client.get("/telemetry/understat/features/schema").status_code == 404
+    enqueued.assert_not_called()
 
 
 @pytest.mark.asyncio

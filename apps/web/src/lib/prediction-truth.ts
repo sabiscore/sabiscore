@@ -47,8 +47,8 @@ export interface PredictionSummary {
     bookmaker: string | null;
     captured_at: string | null;
   };
-  freshness: { tag: string; staleness_seconds: number | null };
-  verdict: string;
+  freshness: { tag: FullMatchAnalysisResponse["freshness_tag"]; staleness_seconds: number | null };
+  verdict: FullMatchAnalysisResponse["verdict"];
   stake_permitted: boolean;
   /** Backend-computed value; null unless the backend permits public staking. */
   suggested_stake_pct: number | null;
