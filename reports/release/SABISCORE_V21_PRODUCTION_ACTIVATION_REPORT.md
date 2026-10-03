@@ -1,8 +1,8 @@
 # SabiScore V21 Production Activation Report
 
-Generated: 2026-10-03T13:09:08.796303+00:00
-Base HEAD: eed0b3570550ef19cef4d5a160b6926a73d9a1b0
-Branch: feat/v21.1-evidence-lock
+Generated: 2026-10-03T15:43:28.963502+00:00
+Base HEAD: b82b80e18177b5ee87d74b6cb724780941b86760
+Branch: fix/v21.2-evidence-truth
 Release Posture: ACTIVE_FAIL_CLOSED
 
 ## Five-Truth State Table
@@ -11,7 +11,7 @@ Release Posture: ACTIVE_FAIL_CLOSED
 | :--- | :--- | :--- | :--- |
 | **Engineering Integration** | Not measured by this generator: it reads repository files only. Merge, CI, and deployment state must be read from GitHub and the live services. | UNVERIFIED | NOT MEASURED |
 | **Model Quality** | Candidate-M out-of-sample test set (2025/26 holdout season); active generation `v5_phase7-20260922` | UNVERIFIED / CERTIFICATION_BLOCKED | BLOCKED |
-| **Market Relative Alpha** | Gate 7 benchmark comparison against opening market RPS (historical FAIL; protocol SHA `43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c`) | EMPIRICALLY UNVALIDATED | FAIL / BLOCKED |
+| **Market Relative Alpha** | Candidate-M RPS 0.2059 vs closing market 0.1975 on 2058 holdout fixtures; delta 98.33% CI [+0.0041, +0.0126] (research measurement, closing-quote cohort only). | MEASURED_RESEARCH_ONLY | FAIL |
 | **Live C6 Milestone** | Live database sample count `live_n` < 200 settled pre-kickoff predictions; zero historical replay credit | INSUFFICIENT_SAMPLE / UNVERIFIED | FAIL / BLOCKED |
 | **Production Runtime Parity** | Not measured by this generator: it makes no network requests. Compare `/health` `sha` (Render) and `/api/health` `sha`/`backendSha` (Vercel) against the merged master SHA. | UNVERIFIED | NOT MEASURED |
 
@@ -29,7 +29,7 @@ Candidate feature integration: **BLOCKED**. The active generation remains `v5_ph
 
 ## Market Relative Performance
 
-**BLOCKED.** The V20 report recorded Gate 7 as `FAIL`; its aggregate values are retained as unverified historical claims. V21 paired cohort evaluation did not run, and the protocol hash is `43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c`.
+**FAIL.** Candidate-M RPS 0.2059 vs closing market 0.1975 on 2058 holdout fixtures; delta 98.33% CI [+0.0041, +0.0126] (research measurement, closing-quote cohort only). The protocol hash is `43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c`.
 
 ## Live C6 Certification
 

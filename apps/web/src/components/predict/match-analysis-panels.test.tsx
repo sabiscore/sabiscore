@@ -56,4 +56,20 @@ describe("one full-analysis request per match page", () => {
     const analysisCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes("full-analysis"));
     expect(analysisCalls).toHaveLength(0);
   });
+
+  it("never shows the raw generation id on the rendered dashboard (APEX section 11)", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const fixture = analysisFixture();
+
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <FullAnalysisDashboard matchId="fd-1" league="EPL" initialData={fixture} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findAllByText(/Home Win/i);
+    expect(fixture.ensemble.model_version).toBe("v5_phase7");
+    expect(container.textContent ?? "").not.toContain("v5_phase7");
+  });
 });

@@ -14450,3 +14450,40 @@ every revision id ≤ 32 characters.
 **Verify after merge:** Render `/health` `sha` equals the merge SHA, `/health/ready`
 `migrations.head` is `0016_match_telem_pit`, `POST /api/v1/predict/match` returns 404, and
 `sabiscore.vercel.app/api/health` `sha` equals the merge SHA.
+
+---
+
+## 175. Both V21 report generators wrote verdicts they never measured; a raw generation id survived on the match page (2026-10-03)
+
+**Tier:** `FIXED` on `fix/v21.2-evidence-truth`.
+
+PR #266 merged as `b82b80e` and was verified live: Render and Vercel both serve
+`b82b80e`, `/health/ready` reports `0016_match_telem_pit`, `POST /api/v1/predict/match`
+and the Understat ingest route return 404, and a headless page load makes zero browser
+requests to full-analysis.
+
+**Found after the merge:**
+- `backend/scripts/evaluate_v21_tier_a_candidates.py` (from #264) hardcoded its whole
+  certification narrative: `"model_quality": "PASS (Candidate-M beats … prior generations)"`,
+  gates 41–54 as literal `"PASS"`, `"canary_ready": True`, a fixed Gate 7 `"FAIL"`, fixed
+  timestamps, and a data-quality dashboard of invented numbers (100% coverage, 98.4% market
+  availability) for every league. Its "opening market" RPS silently used the close where no
+  opening quote existed. It also wrote the same eight report files as `v21_certification.py`,
+  so whichever ran last won. It now writes one file, `reports/research/v21-candidate-m-evaluation.json`,
+  holding only computed values with git sha, input hashes and population sizes;
+  `v21_certification.py` cites it fail-closed (a measured FAIL is FAIL; a research PASS reads
+  UNVERIFIED because it covers one protocol cohort).
+- The provenance strip on `/match/[id]` rendered `model_version` verbatim (`v5_phase7`); the
+  mapped label was only the fallback. ⚠️ `model-identity-contract.test.ts` scans source literals,
+  so it cannot see runtime values. The new guard renders the dashboard and checks its text.
+
+**First real Candidate-M measurement** (train 1920–2324, calibrate 2425, holdout 2526, 2,058
+fixtures with a closing quote): RPS 0.2059 vs closing market 0.1975, delta 98.33% CI
+[+0.0041, +0.0126], so measurably worse than the market, in all six leagues. It beats the
+no-skill prior (0.2291). Isotonic calibration halves ECE (0.029 → 0.014) but worsens RPS and log
+loss. ⚠️ The "closing" benchmark is 1,040 Pinnacle and 1,018 Bet365 closes because Pinnacle
+closing odds are missing for half the holdout; report the book mix with any market comparison.
+
+**Not done, by design:** the candidate is not serialized or promoted (`active_generation.json`
+untouched); historical Understat is not bulk-loaded into production. N_live is 0: the
+collectors run, but no fixtures exist until 2026-10-09.

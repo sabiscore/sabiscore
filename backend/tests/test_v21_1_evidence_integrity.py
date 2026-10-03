@@ -75,3 +75,25 @@ def test_predict_match_route_is_not_registered() -> None:
 
     paths = {getattr(route, "path", "") for route in router.routes}
     assert not any(path.endswith("/predict/match") for path in paths)
+
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+
+
+@pytest.mark.parametrize("script", ["evaluate_v21_tier_a_candidates.py", "v21_certification.py"])
+def test_v21_report_generators_carry_no_hardcoded_verdicts(script: str) -> None:
+    """Both V21 generators once printed PASS, canary readiness and parity they never
+    measured. A verdict must come from a computation, never from a literal."""
+    text = (SCRIPTS / script).read_text(encoding="utf-8")
+    assert '"canary_ready": True' not in text
+    assert "LIVE-VERIFIED PARITY" not in text
+    assert "permanently retired" not in text
+    assert '"verified_at": "20' not in text and '"evaluated_at": "20' not in text
+    assert ': "PASS",' not in text, "a gate literal set to PASS, rather than computed"
+
+
+def test_candidate_evaluator_writes_only_its_own_evidence_file() -> None:
+    """It used to overwrite eight shared reports that v21_certification also writes."""
+    text = (SCRIPTS / "evaluate_v21_tier_a_candidates.py").read_text(encoding="utf-8")
+    assert text.count("write_text(") + text.count("json.dump(") == 1
+    assert "v21-candidate-m-evaluation.json" in text

@@ -29,14 +29,61 @@
     "market_feature_exclusion_verified": false,
     "rps": null
   },
+  "candidate_m_evaluation": {
+    "benchmarks": {
+      "closing": {
+        "candidate_rps": 0.20585063728117484,
+        "ci_95": [
+          0.004878225850314045,
+          0.0118577619421355
+        ],
+        "ci_98_33": [
+          0.004072416417950461,
+          0.01262196712488644
+        ],
+        "close_book_counts": {
+          "bet365": 1018,
+          "pinnacle": 1040
+        },
+        "iso_weeks": 38,
+        "market_rps": 0.19746233942658706,
+        "mean_delta": 0.008388297854587777,
+        "n": 2058
+      },
+      "opening": {
+        "candidate_rps": 0.20029674858031352,
+        "ci_95": [
+          0.00372017658548739,
+          0.01410622842159291
+        ],
+        "ci_98_33": [
+          0.002659917935413174,
+          0.015225581782557888
+        ],
+        "iso_weeks": 21,
+        "market_rps": 0.1914546887032438,
+        "mean_delta": 0.008842059877069694,
+        "n": 1044
+      }
+    },
+    "gate_7_research": {
+      "certifies": false,
+      "rule": "98.33% ISO-week cluster CI upper bound of (candidate RPS - closing RPS) < 0",
+      "status": "FAIL",
+      "why_not_certifying": "single cohort (closing-quote holdout); the protocol's c6_eligible and complete_evidence cohorts are not covered",
+      "worse_than_market": true
+    },
+    "git_sha": "b82b80e18177b5ee87d74b6cb724780941b86760",
+    "sha256": "9e5e707aea59f3e9fcac649a30ffd72f128850d37aa2a02ac3c9a9f804b631c6"
+  },
   "candidate_ma": {
     "certification_eligible_as_independent_alpha": false,
     "rps": null
   },
   "cohort_hashes": {},
   "gate_7": "FAIL",
-  "gate_7_basis": "legacy V20 report only; not independently accepted as a V21 market evaluation",
-  "generated_at": "2026-10-03T09:41:56.140397+00:00",
+  "gate_7_basis": "measured: reports/research/v21-candidate-m-evaluation.json (closing-quote holdout cohort only)",
+  "generated_at": "2026-10-03T15:43:28.963502+00:00",
   "inherited_protocol_sha256": {
     "reports/research/c6-served-generation-vs-close-protocol.json": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
     "reports/research/v19-evaluation-protocol.json": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"

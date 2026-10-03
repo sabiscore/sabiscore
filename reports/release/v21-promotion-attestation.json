@@ -6,7 +6,7 @@
   "decision": "CERTIFICATION_BLOCKED",
   "feature_integration": "BLOCKED",
   "gate_7": "FAIL",
-  "gate_7_v21_state": "NOT_RUN",
-  "generated_at": "2026-10-03T09:41:56.140397+00:00",
+  "gate_7_v21_state": "MEASURED_RESEARCH_ONLY",
+  "generated_at": "2026-10-03T15:43:28.963502+00:00",
   "protocol_sha256": "43d334cd81e7214c491c0863daa6f33dd753f50d5faf71b5b60f03cbc00e7b6c"
 }
