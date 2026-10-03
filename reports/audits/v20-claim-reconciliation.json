@@ -4,7 +4,7 @@
       "claim": "FeatureBridge exists",
       "evidence": [
         "backend/serving/feature_bridge.py",
-        "sha256:c584d589adfaa35aeee21128a7d1be5e7da6df08fc478c0ffda3697f452509aa"
+        "sha256:0b40a82a06e5a74e61fe9bd0ac3e3699c380e495ac1343b8c5e56148b3008a55"
       ],
       "status": "VERIFIED_BUILT"
     },
@@ -65,8 +65,8 @@
       "status": "CLAIM_EXCEEDS_IMPLEMENTATION"
     }
   ],
-  "generated_at": "2026-10-01T10:17:26.558213+00:00",
+  "generated_at": "2026-10-03T09:41:56.140397+00:00",
   "release_state": "ACTIVE_FAIL_CLOSED",
   "report_id": "v20-claim-reconciliation",
-  "repository_head": "20e2988c64a55de72d18e5dc7346c6c70bb8d00b"
+  "repository_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52"
 }

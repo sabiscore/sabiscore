@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Live Prediction Flow & Metric Translation Smoke Test', () => {
-  test('user loads homepage, clicks a fixture, and views translated probability simplex with Kelly recommendation', async ({
+test.describe('Match forecast truth-state smoke test', () => {
+  test('match page renders either a backend-computed forecast or an explicit withheld state, never fabricated values', async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -14,54 +14,36 @@ test.describe('Live Prediction Flow & Metric Translation Smoke Test', () => {
       consoleErrors.push(err.message);
     });
 
-    // 1. Load the homepage
     await page.goto('/');
-
-    // Verify Obsidian Nocturne Hero section rendered
     const hero = page.getByTestId('hero-section');
     await expect(hero).toBeVisible();
-    await expect(
-      page.getByRole('heading', {
-        name: /Edge-First Predictive Modeling & Live Football Intelligence/i,
-      })
-    ).toBeVisible();
 
-    // 2. Navigate to a live match fixture page
     await page.goto('/match/11662?league=SERIE_A&home=Inter&away=AC%20Milan');
 
-    // 3. Verify PredictionCard is rendered
-    const predictionCard = page.getByTestId('prediction-card');
-    await expect(predictionCard).toBeVisible({ timeout: 15000 });
+    const card = page.getByTestId('prediction-card');
+    await expect(card).toBeVisible({ timeout: 15000 });
 
-    // 4. Verify Translated Probability Simplex (Home: XX% | Draw: YY% | Away: ZZ%)
-    const probHeadline = page.getByTestId('translated-probabilities');
-    await expect(probHeadline).toBeVisible();
-    await expect(probHeadline).toHaveText(/Home: \d+% \| Draw: \d+% \| Away: \d+%/);
+    // A truth-state badge is always present.
+    await expect(page.getByTestId('truth-state-badge')).toBeVisible();
 
-    // 5. Verify Actionable Staking Recommendation ("Bet X%" OR "No Value: Skip")
-    const actionable = page.getByTestId('recommendation-actionable');
-    const muted = page.getByTestId('recommendation-muted');
+    const probabilities = page.getByTestId('translated-probabilities');
+    const withheld = page.getByTestId('withheld-message');
+    const hasProbabilities = await probabilities.isVisible().catch(() => false);
+    const hasWithheld = await withheld.isVisible().catch(() => false);
 
-    const isActionableVisible = await actionable.isVisible().catch(() => false);
-    const isMutedVisible = await muted.isVisible().catch(() => false);
+    // Exactly one: a forecast OR an explicit withheld message. Never both, never neither.
+    expect(hasProbabilities !== hasWithheld).toBe(true);
 
-    expect(isActionableVisible || isMutedVisible).toBe(true);
-
-    if (isActionableVisible) {
-      await expect(actionable).toContainText(/Actionable Edge: Bet \d+(\.\d+)?% of your bankroll/);
+    if (hasProbabilities) {
+      await expect(probabilities).toHaveText(/Home: \d+% \| Draw: \d+% \| Away: \d+%/);
     } else {
-      await expect(muted).toContainText('No Value: Skip this match.');
+      // Withheld states must not leak any probability, odds or stake figures.
+      await expect(card).not.toContainText(/Home: \d+%/);
+      await expect(card).toContainText(/No probabilities, odds or stakes are shown/);
     }
 
-    // 6. Verify Recent Attacking Form (Last 5 Matches) & Trend Indicator
-    await expect(page.getByText('Recent Attacking Form (Last 5 Matches)')).toBeVisible();
-    const trend = page.getByTestId('xg-trend-indicator');
-    await expect(trend).toBeVisible();
-    await expect(trend).toContainText(/xG momentum/);
-
-    // 7. Verify zero client-side console errors
     const fatalErrors = consoleErrors.filter(
-      (e) => !e.includes('favicon.ico') && !e.includes('hydration') && !e.includes('ResizeObserver')
+      (e) => !e.includes('favicon.ico') && !e.includes('hydration') && !e.includes('ResizeObserver'),
     );
     expect(fatalErrors).toEqual([]);
   });

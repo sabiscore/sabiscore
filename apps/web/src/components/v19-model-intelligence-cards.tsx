@@ -58,12 +58,12 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
   const market = data.market;
   const isOverroundExcessive = market != null && market.overround > 1.15;
   const marketState = !market
-    ? (data.odds_edge ? "UNVERIFIED" : "ILLIQUID")
+    // No snapshot is an absence of evidence, not a liquidity measurement.
+    ? (data.odds_edge ? "UNVERIFIED" : "UNAVAILABLE")
     : isOverroundExcessive
       ? "EXCESSIVE_MARGIN"
       : "VERIFIED";
 
-  const candidateStatus = data.feature_integration?.status ?? "WITHHELD";
   const certExplanation =
     CERTIFICATION_EXPLANATIONS[certification] ?? CERTIFICATION_EXPLANATIONS.UNVERIFIED;
 
@@ -120,7 +120,6 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
             {data.ensemble.prediction ?? "Forecast unavailable"}
             {data.probabilities_available ? ` · ${(data.ensemble.top_outcome_probability * 100).toFixed(1)}%` : ""}
           </p>
-          <p className="mt-2 text-[10px] text-slate-500">Candidate-M feature integration: {candidateStatus.toLowerCase()}.</p>
         </article>
 
         <article className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3.5">
@@ -151,11 +150,6 @@ export const ModelIntelligenceCards = memo(function ModelIntelligenceCards({
             <div className="flex justify-between"><dt>Advisory gaps</dt><dd>{advisory}</dd></div>
             <div className="flex justify-between"><dt>Conflicts</dt><dd>{conflicts}</dd></div>
           </dl>
-          {data.feature_integration?.reason && (
-            <p className="mt-2 line-clamp-2 text-[10px] text-slate-500" title={data.feature_integration.reason}>
-              Candidate evidence: {data.feature_integration.reason}
-            </p>
-          )}
         </article>
 
         <article className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3.5">

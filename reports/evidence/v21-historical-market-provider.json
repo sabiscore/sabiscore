@@ -5,7 +5,7 @@
     "Bet365"
   ],
   "closing_definition": "Last verified 1X2 quote strictly before kickoff_utc (quote_timestamp < kickoff_timestamp)",
-  "generated_at": "2026-10-01T10:17:26.558213+00:00",
+  "generated_at": "2026-10-03T09:41:56.140397+00:00",
   "historical_depth": "seasons 19/20-23/24 gap identified (65.4% missing in baseline corpus)",
   "league_coverage": [
     "EPL",
@@ -22,7 +22,7 @@
   "rate_limits": "30 req/min (free) / 100 req/min (paid tier)",
   "retention_rights": "Internal model training and point-in-time calibration permissible under enterprise license",
   "source_report": "reports/evidence/v20-historical-odds-recovery.json",
-  "source_report_sha256": "49177cfc78a91d636adc062395da00ab4f8ba36d1d97117d2c9f5ec3b5c5de3b",
+  "source_report_sha256": "6c841b65cd3e813fcceea5fb4c57b710d51a52b02dfe40f55fa1131bab9b49cc",
   "status": "UNVERIFIED",
   "timestamp_granularity": "1-minute snapshots pre-kickoff"
 }

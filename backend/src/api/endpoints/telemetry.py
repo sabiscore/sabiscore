@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.config import settings
 from ...db.models import MatchTelemetry
 from ...db.session import get_async_session
 from ...services.understat.formatter import UnderstatTensorFormatter
@@ -71,6 +72,9 @@ async def trigger_understat_ingestion(
 
     Idempotently upserts telemetry to PostgreSQL and invalidates Redis caches.
     """
+    # ponytail: on/off flag only; add operator auth if this ever needs to be on in prod.
+    if not settings.enable_understat_ingest_endpoint:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     logger.info("Scheduling telemetry ingestion for %d match IDs", len(payload.match_ids))
     background_tasks.add_task(ingest_understat_telemetry, payload.match_ids)
 

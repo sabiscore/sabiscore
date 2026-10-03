@@ -94,58 +94,96 @@ class UnderstatTensorFormatter:
         away_xa = _sum_assisted_xg(away_shots)
         return float(home_xa), float(away_xa)
 
+    @staticmethod
+    def _row_chronology_key(row: Mapping[str, Any]) -> Any:
+        """Return the row's kickoff/date value used for chronological validation."""
+        for key in ("kickoff_utc", "match_date", "date"):
+            value = row.get(key)
+            if value is not None:
+                return value
+        return None
+
     @classmethod
     def compute_rolling_averages(
         cls,
         records: Sequence[Mapping[str, Any]],
         window: int = 5,
         historical_team_xg: Mapping[str, Sequence[float]] | None = None,
-    ) -> list[tuple[float, float]]:
-        """Compute rolling xG averages for home and away teams.
+        min_history: int | None = None,
+    ) -> list[tuple[float | None, float | None]]:
+        """Compute point-in-time rolling xG averages for home and away teams.
 
-        Maintains team-specific historical xG queues to compute the preceding
-        `window`-match rolling mean.
+        For each record the value is the mean of that team's xG over its previous
+        ``window`` completed matches *strictly before* the record. The record's
+        own xG and every later record are never used.
+
+        Missing observations (``None``) are never counted as ``0.0``. When a team
+        has fewer than ``min_history`` prior observations (default: ``window``) the
+        value is ``None`` (unknown / data gap); there is no cold-start substitution.
 
         Args:
-            records: Chronologically ordered telemetry records.
+            records: Chronologically ordered telemetry records. If every record
+                carries ``kickoff_utc``/``match_date``/``date``, the order is
+                verified and a ``ValueError`` is raised on regression.
             window: Rolling window size (default: 5).
-            historical_team_xg: Optional pre-existing team xG series for cold-start.
+            historical_team_xg: Optional pre-existing completed-match xG series
+                per team (must pre-date ``records[0]``).
+            min_history: Minimum prior observations required (default: window).
 
         Returns:
-            List of (home_rolling_xg_5, away_rolling_xg_5) per record.
+            List of (home_rolling_xg_5, away_rolling_xg_5) per record; ``None``
+            marks an unknown value.
         """
+        required = window if min_history is None else min_history
         team_history: dict[str, list[float]] = defaultdict(list)
         if historical_team_xg:
             for team, values in historical_team_xg.items():
-                team_history[team] = list(values)
+                team_history[team] = [float(v) for v in values if v is not None]
 
-        rolling_results: list[tuple[float, float]] = []
+        previous_key: Any = None
+        rolling_results: list[tuple[float | None, float | None]] = []
 
         for row in records:
+            key = cls._row_chronology_key(row)
+            if key is not None and previous_key is not None:
+                try:
+                    out_of_order = key < previous_key
+                except TypeError as exc:
+                    raise ValueError(
+                        "Telemetry records carry non-comparable chronology keys"
+                    ) from exc
+                if out_of_order:
+                    raise ValueError(
+                        "Telemetry records must be in chronological order for "
+                        "point-in-time rolling xG"
+                    )
+            if key is not None:
+                previous_key = key
+
             home_team = str(row.get("home_team_slug", ""))
             away_team = str(row.get("away_team_slug", ""))
-            home_xg = float(row.get("home_xg") or 0.0)
-            away_xg = float(row.get("away_xg") or 0.0)
-
-            # Calculate rolling mean based on prior matches
             home_prior = team_history[home_team]
             away_prior = team_history[away_team]
 
-            if home_prior:
-                home_roll = float(np.mean(home_prior[-window:]))
-            else:
-                home_roll = home_xg  # fallback to current observed if no prior history
-
-            if away_prior:
-                away_roll = float(np.mean(away_prior[-window:]))
-            else:
-                away_roll = away_xg
-
+            home_roll: float | None = (
+                float(np.mean(home_prior[-window:]))
+                if len(home_prior) >= required
+                else None
+            )
+            away_roll: float | None = (
+                float(np.mean(away_prior[-window:]))
+                if len(away_prior) >= required
+                else None
+            )
             rolling_results.append((home_roll, away_roll))
 
-            # Update team histories
-            team_history[home_team].append(home_xg)
-            team_history[away_team].append(away_xg)
+            # Only after the prediction value is fixed does this match become history.
+            home_xg = row.get("home_xg")
+            away_xg = row.get("away_xg")
+            if home_xg is not None:
+                team_history[home_team].append(float(home_xg))
+            if away_xg is not None:
+                team_history[away_team].append(float(away_xg))
 
         return rolling_results
 
@@ -156,6 +194,11 @@ class UnderstatTensorFormatter:
         historical_team_xg: Mapping[str, Sequence[float]] | None = None,
     ) -> np.ndarray:
         """Transform telemetry records into a memory-contiguous float32 numpy array.
+
+        Columns 0-7 (``home_xg`` .. ``total_xa``) describe the record's *own*
+        completed match and are post-match evidence: they must never be used as
+        pre-match predictors for that same fixture. Columns 8-10 are the
+        point-in-time rolling features; unknown values are ``NaN``.
 
         Validates memory usage to strictly respect the 512MB RAM constraint,
         computes directional and aggregated metrics, and ensures C-contiguous
@@ -196,8 +239,10 @@ class UnderstatTensorFormatter:
         )
 
         for i, row in enumerate(records):
-            home_xg = float(row.get("home_xg") or 0.0)
-            away_xg = float(row.get("away_xg") or 0.0)
+            home_xg_raw = row.get("home_xg")
+            away_xg_raw = row.get("away_xg")
+            home_xg = float(home_xg_raw) if home_xg_raw is not None else float("nan")
+            away_xg = float(away_xg_raw) if away_xg_raw is not None else float("nan")
 
             # Directional metrics
             delta_xg = home_xg - away_xg
@@ -205,19 +250,26 @@ class UnderstatTensorFormatter:
 
             # Extract xA from shot_telemetry if not pre-computed or if verify required
             shot_telemetry = row.get("shot_telemetry")
+            # A missing stored xA is unknown (NaN), never 0.0. A 0.0 extracted from
+            # present shot telemetry is a measurement and is kept.
+            stored_home_xa = row.get("home_xa")
+            stored_away_xa = row.get("away_xa")
+            home_xa = float(stored_home_xa) if stored_home_xa is not None else float("nan")
+            away_xa = float(stored_away_xa) if stored_away_xa is not None else float("nan")
             if shot_telemetry is not None:
                 extracted_home_xa, extracted_away_xa = cls.extract_xa_from_shot_telemetry(shot_telemetry)
-                home_xa = extracted_home_xa if extracted_home_xa > 0.0 else float(row.get("home_xa") or 0.0)
-                away_xa = extracted_away_xa if extracted_away_xa > 0.0 else float(row.get("away_xa") or 0.0)
-            else:
-                home_xa = float(row.get("home_xa") or 0.0)
-                away_xa = float(row.get("away_xa") or 0.0)
+                if extracted_home_xa > 0.0 or stored_home_xa is None:
+                    home_xa = extracted_home_xa
+                if extracted_away_xa > 0.0 or stored_away_xa is None:
+                    away_xa = extracted_away_xa
 
             delta_xa = home_xa - away_xa
             total_xa = home_xa + away_xa
 
-            home_roll_5, away_roll_5 = rolling_values[i]
-            delta_rolling_xg_5 = home_roll_5 - away_roll_5
+            home_roll_5_raw, away_roll_5_raw = rolling_values[i]
+            home_roll_5 = float("nan") if home_roll_5_raw is None else home_roll_5_raw
+            away_roll_5 = float("nan") if away_roll_5_raw is None else away_roll_5_raw
+            delta_rolling_xg_5 = home_roll_5 - away_roll_5  # NaN when either side unknown
 
             features[i, 0] = home_xg
             features[i, 1] = away_xg

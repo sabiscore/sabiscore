@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "document": "SABISCORE_V21_1_REPORT_RECONCILIATION",
+  "verified_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+  "remote_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+  "working_tree_state": "MODIFIED_IN_PROGRESS",
+  "reconciled_at": "2026-10-03T13:11:08Z",
+  "assertions": [
+    {
+      "claim": "PRODUCTION READY",
+      "claim_source": "Historical V19/V20 agent narratives",
+      "current_evidence": "Incumbent model remains in ACTIVE_FAIL_CLOSED posture; live C6 N < 200; Gate 7 empirical market alpha not established on live data; anti-fabrication locks active",
+      "status": "CONTRADICTED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Retain ACTIVE_FAIL_CLOSED until machine-verifiable evidence satisfies all 60 gates and C6 live milestone"
+    },
+    {
+      "claim": "FULLY VERIFIED",
+      "claim_source": "Historical release summaries",
+      "current_evidence": "Unit test suites pass, but end-to-end live market validation and live C6 sample accumulation are incomplete",
+      "status": "CONTRADICTED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Execute 60-gate verification script verify-directive-v21.mjs and document exact gate outcomes"
+    },
+    {
+      "claim": "Vercel production deployment is serving active model",
+      "claim_source": "Historical deployment logs",
+      "current_evidence": "Production deployment URL not verified against current HEAD SHA; preview deployments do not equal production alias serving parity",
+      "status": "UNVERIFIED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Probe Vercel and Render endpoints for SHA and health parity"
+    },
+    {
+      "claim": "C6 validated",
+      "claim_source": "Historical milestone summaries",
+      "current_evidence": "C6 requires 200+ unique pre-kickoff live predictions with timestamped closing odds; N_replay contributes zero to live C6",
+      "status": "CONTRADICTED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Query live database ledger; report exact live_n count; enforce CERTIFICATION_BLOCKED if live_n < 200"
+    },
+    {
+      "claim": "model certified",
+      "claim_source": "Prior candidate evaluations",
+      "current_evidence": "Candidate-M out-of-sample RPS has not empirically beaten opening market RPS (Gate 7 FAIL historically; active_generation remains v5_phase7-20260922)",
+      "status": "CONTRADICTED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Maintain incumbent in ACTIVE_FAIL_CLOSED; enforce FeatureBridge hard contract"
+    },
+    {
+      "claim": "feature integration complete",
+      "claim_source": "V20 bridge audit notes",
+      "current_evidence": "The same commit's own generator reports feature_status BLOCKED (89 features with undeclared meaning/units/serving source). The Alembic 0016 migration had never applied anywhere: CI run 37114114794 failed at `alembic upgrade head` (revision id 35 chars > alembic_version VARCHAR(32)). Understat telemetry is not read by the serving full-analysis path.",
+      "status": "CONTRADICTED",
+      "current_head": "23dbd976754e3a79eacc8bb3b20dd3c0c6454d52",
+      "required_action": "Treat feature integration as BLOCKED until the FeatureBridge contract has declared semantics for every candidate feature."
+    },
+    {
+      "claim": "Vercel production alias serves verified master (activation report: LIVE-VERIFIED PARITY, PASS)",
+      "claim_source": "reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md (hardcoded in backend/scripts/v21_certification.py, no probe)",
+      "current_evidence": "Probe 2026-10-03T12:3xZ: https://sabiscore.vercel.app/api/health returned sha=eed0b35 (PR #266 branch, unmerged) with backendSha=23dbd97 (master). Production frontend was deployed from an unverified branch.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Merge PR #266 through review so master's production deploy replaces the branch build; never deploy a branch to the production alias."
+    },
+    {
+      "claim": "Legacy /predict/match endpoint permanently retired; zero synthetic data in production paths",
+      "claim_source": "reports/release/SABISCORE_V21_PRODUCTION_ACTIVATION_REPORT.md",
+      "current_evidence": "Probe 2026-10-03T12:4xZ: POST https://sabiscore-api-bav1.onrender.com/api/v1/predict/match returned 200 with action=ACTIONABLE, kelly_fraction=0.0366, bookmaker=consensus_sharp, odds 2.2/3.3/3.4, rolling_xg 1.35/1.15 source=fallback_estimate. On master (23dbd97) the model is fitted on np.random features and labels, and the odds/xG are hardcoded. Deleted on this branch only.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "P0: merge the removal; re-probe the endpoint for 404 after the Render deploy reports the merged sha."
+    },
+    {
+      "claim": "POST /api/v1/telemetry/understat/ingest is safe to expose",
+      "claim_source": "PR #265 (merged)",
+      "current_evidence": "Unauthenticated route on master; one request enqueues up to 500 outbound Understat scrapes with 5 retries each from the 512 MB web process.",
+      "status": "CONTRADICTED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Off by default behind ENABLE_UNDERSTAT_INGEST_ENDPOINT (this branch); add operator auth before enabling in production."
+    },
+    {
+      "claim": "Understat is an AUTHORIZED_PRODUCTION_SOURCE (authorized_by USER, decision_ref DECISION_Q2_CONFIRMED)",
+      "claim_source": "reports/evidence/v21-understat-governance.json",
+      "current_evidence": "Operator confirmed in session on 2026-10-03 (DECISION_Q2_CONFIRMED), bound by the V21.1 section 11 temporal contract: a fixture's own post-match xG/xA/shots never enter its own pre-match vector; Understat feeds only prior-match rolling features (rolling_xg_5). Code check: outside the understat package only models/stacked/data_staging.py reads it, via compute_rolling_averages (prior matches only).",
+      "status": "CONFIRMED",
+      "current_head": "eed0b3570550ef19cef4d5a160b6926a73d9a1b0",
+      "required_action": "Keep own-match telemetry out of pre-match vectors; keep the ingest route off until it has operator auth."
+    }
+  ]
+}

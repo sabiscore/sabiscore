@@ -62,6 +62,8 @@ interface FullAnalysisDashboardProps {
    * "Home vs Away" string — parseTeams() can't recover names from a bare ID. */
   homeTeam?: string;
   awayTeam?: string;
+  /** Server-fetched payload; seeds the query so the page makes one request. */
+  initialData?: FullMatchAnalysisResponse;
 }
 
 // ─── Verdict config ───────────────────────────────────────────────────────────
@@ -1659,12 +1661,14 @@ function FullAnalysisDashboardInner({
   league = "EPL",
   homeTeam,
   awayTeam,
+  initialData,
 }: FullAnalysisDashboardProps) {
   const prefersReduced = useReducedMotion();
   const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState(false);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["fullAnalysis", matchId, league],
     queryFn: () => getFullAnalysis(matchId, league),
+    initialData,
     staleTime: 55_000,
     enabled: Boolean(matchId),
     retry: false,

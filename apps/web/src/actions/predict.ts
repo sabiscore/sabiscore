@@ -1,81 +1,87 @@
 "use server";
 
 /**
- * Next.js 15 Server Action for Live Match Prediction.
+ * Next.js 15 server boundary for the match prediction summary.
  *
- * Securely calls FastAPI `POST /api/v1/predict/match` on the server runtime.
- * Never leaks backend infrastructure URLs or provider keys to the browser.
+ * Reads the canonical FastAPI full-analysis endpoint (the single authoritative
+ * prediction path: FeatureBridge -> PredictionEngine -> calibration -> decision
+ * engine) on the server runtime. It never calls a second inference route, never
+ * receives provider credentials, and never fabricates a value: any failure maps
+ * to an explicit WITHHELD/UNAVAILABLE result that carries no probabilities.
  */
 
-import { resolveBackendBaseUrl, isHtmlBody } from "@/lib/proxy-utils";
-import type { PredictionResponse, PredictMatchOptions } from "@/types/prediction";
+import { fullMatchAnalysisSchema } from "@/lib/full-analysis-contract";
+import { canonicalLeagueId } from "@/lib/league";
+import { isHtmlBody, proxyHeaders, resolveBackendBaseUrl } from "@/lib/proxy-utils";
+import {
+  summarizeAnalysis,
+  unavailable,
+  type AnalysisFetch,
+  type PredictionResult,
+} from "@/lib/prediction-truth";
+
+// Same budget as the /api/full-analysis proxy route.
+const REQUEST_TIMEOUT_MS = 25_000;
+
+/**
+ * The page's single full-analysis request. Its parsed payload feeds both the
+ * forecast card (as a summary) and the dashboard (as React Query initialData),
+ * so a match page costs one backend inference, not two.
+ */
+export async function getMatchAnalysis(
+  matchId: string,
+  options?: { league?: string },
+): Promise<AnalysisFetch> {
+  const id = matchId.trim();
+  const league = canonicalLeagueId(options?.league ?? "EPL");
+  if (!id || id.length > 240 || league === null) {
+    return unavailable("INVALID_REQUEST", "A valid fixture id and league are required.");
+  }
+
+  const url = `${resolveBackendBaseUrl()}/api/v1/matches/upcoming/${encodeURIComponent(id)}/full-analysis?league=${encodeURIComponent(league)}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: proxyHeaders(),
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut =
+      error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+    return timedOut
+      ? unavailable("BACKEND_TIMEOUT", "The backend did not respond in time.")
+      : unavailable("BACKEND_UNREACHABLE", "The backend could not be reached.");
+  }
+
+  const text = await res.text();
+  if (isHtmlBody(text)) {
+    return unavailable("BACKEND_UNAVAILABLE", "The backend service is unavailable.");
+  }
+  if (!res.ok) {
+    return unavailable(`BACKEND_HTTP_${res.status}`, "The backend declined to provide a forecast.");
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return unavailable("SCHEMA_DRIFT", "The backend response was not valid JSON.");
+  }
+
+  const parsed = fullMatchAnalysisSchema.safeParse(json);
+  if (!parsed.success) {
+    return unavailable("SCHEMA_DRIFT", "The backend response did not match the analysis contract.");
+  }
+
+  return { status: "OK", analysis: parsed.data };
+}
 
 export async function getMatchPrediction(
   matchId: string,
-  options?: PredictMatchOptions
-): Promise<PredictionResponse | null> {
-  const baseUrl = resolveBackendBaseUrl();
-  const url = `${baseUrl}/api/v1/predict/match`;
-
-  // Parse home / away names if matchId has format "Home vs Away"
-  let homeTeam = options?.home_team;
-  let awayTeam = options?.away_team;
-  if (!homeTeam || !awayTeam) {
-    if (matchId.includes(" vs ")) {
-      const parts = matchId.split(" vs ");
-      homeTeam = homeTeam || parts[0]?.trim();
-      awayTeam = awayTeam || parts[1]?.trim();
-    } else {
-      homeTeam = homeTeam || "Home Team";
-      awayTeam = awayTeam || "Away Team";
-    }
-  }
-
-  const payload = {
-    match_id: matchId,
-    home_team: homeTeam,
-    away_team: awayTeam,
-    competition: options?.competition || "SERIE_A",
-    home_odds: options?.home_odds ?? null,
-    draw_odds: options?.draw_odds ?? null,
-    away_odds: options?.away_odds ?? null,
-  };
-
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000), // 10s timeout
-    });
-
-    if (!res.ok) {
-      console.warn(`[getMatchPrediction] Backend returned status ${res.status}`);
-      return null;
-    }
-
-    const text = await res.text();
-    if (isHtmlBody(text)) {
-      console.error("[getMatchPrediction] Backend returned HTML instead of JSON");
-      return null;
-    }
-
-    const data: PredictionResponse = JSON.parse(text);
-
-    // Validate probability simplex
-    const sum = data.probabilities.home + data.probabilities.draw + data.probabilities.away;
-    if (Math.abs(sum - 1.0) > 1e-4) {
-      console.error(`[getMatchPrediction] Probability simplex invariant violated (sum=${sum})`);
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error("[getMatchPrediction] Failed to fetch match prediction:", error);
-    return null;
-  }
+  options?: { league?: string },
+): Promise<PredictionResult> {
+  const fetched = await getMatchAnalysis(matchId, options);
+  return fetched.status === "OK" ? summarizeAnalysis(fetched.analysis) : fetched;
 }

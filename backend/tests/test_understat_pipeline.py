@@ -292,6 +292,14 @@ async def test_ingest_single_match_upsert_and_invalidation() -> None:
     assert args[4] == "ac_milan"  # away_team_slug
     assert args[5] == 2.145  # home_xg
     assert args[6] == 1.320  # away_xg
+    assert abs(args[7] - 0.45) < 1e-5  # home_xa
+    assert abs(args[8] - 0.38) < 1e-5  # away_xa
+    assert args[10] is not None  # kickoff_utc
+    assert args[10].year == 2026
+    assert len(args[13]) == 64  # payload_sha256
+    assert args[14] == "AUTHORIZED_PRODUCTION_SOURCE"  # source_policy
+    assert result["payload_sha256"] == args[13]
+    assert result["source_policy"] == "AUTHORIZED_PRODUCTION_SOURCE"
 
 
 @pytest.mark.asyncio
@@ -400,6 +408,31 @@ def test_tensor_formatter_directional_metrics_and_shape() -> None:
     assert abs(tensor[0, 7] - 0.83) < 1e-4  # total_xa
 
 
+def test_tensor_formatter_missing_xg_and_xa_are_nan_not_zero() -> None:
+    """A missing measurement is unknown (NaN). Filling it with 0.0 would read
+    as a real, very low xG/xA and is a fabrication."""
+    records = [
+        {
+            "match_id": 1,
+            "home_team_slug": "inter_milan",
+            "away_team_slug": "ac_milan",
+            "home_xg": None,
+            "away_xg": 1.0,
+            "home_xa": None,
+            "away_xa": 0.7,
+            "shot_telemetry": None,
+        }
+    ]
+
+    tensor = UnderstatTensorFormatter.format_batch(records)
+
+    assert np.isnan(tensor[0, 0])  # home_xg
+    assert np.isnan(tensor[0, 2])  # delta_xg
+    assert np.isnan(tensor[0, 4])  # home_xa
+    assert abs(tensor[0, 5] - 0.7) < 1e-4  # away_xa kept
+    assert np.isnan(tensor[0, 6])  # delta_xa
+
+
 def test_tensor_formatter_rolling_xg_averages() -> None:
     """Verify rolling 5-match xG average across historical sequences."""
     records = []
@@ -448,14 +481,35 @@ def test_tensor_formatter_memory_safety_constraint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trigger_understat_ingestion_endpoint() -> None:
-    """FastAPI endpoint must enqueue ingest_understat_telemetry as BackgroundTask."""
+async def test_trigger_understat_ingestion_is_off_by_default() -> None:
+    """The route is unauthenticated and fans out to outbound scrapes, so it must
+    404 and enqueue nothing unless an operator explicitly enables it."""
+    from fastapi import HTTPException
+
+    from src.api.endpoints.telemetry import UnderstatIngestRequest, trigger_understat_ingestion
+    from src.core.config import settings
+
+    assert settings.enable_understat_ingest_endpoint is False
+    bg_tasks = MagicMock(spec=BackgroundTasks)
+    with pytest.raises(HTTPException) as exc:
+        await trigger_understat_ingestion(
+            payload=UnderstatIngestRequest(match_ids=[11662]), background_tasks=bg_tasks
+        )
+    assert exc.value.status_code == 404
+    bg_tasks.add_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_trigger_understat_ingestion_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When enabled, the endpoint enqueues ingest_understat_telemetry as a BackgroundTask."""
     from src.api.endpoints.telemetry import (
         UnderstatIngestRequest,
         get_features_schema,
         trigger_understat_ingestion,
     )
+    from src.core.config import settings
 
+    monkeypatch.setattr(settings, "enable_understat_ingest_endpoint", True)
     bg_tasks = MagicMock(spec=BackgroundTasks)
     req = UnderstatIngestRequest(match_ids=[11662, 11663])
     resp = await trigger_understat_ingestion(payload=req, background_tasks=bg_tasks)
