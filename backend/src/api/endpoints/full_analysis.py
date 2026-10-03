@@ -53,7 +53,7 @@ try:
         FeatureBridgeRejected,
         persisted_candidate_schema_hash,
     )
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover
     from backend.serving.feature_bridge import (
         FeatureBridge,
         FeatureBridgeRejected,
