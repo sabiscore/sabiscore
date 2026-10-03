@@ -27,7 +27,7 @@
     ],
     "input_market_features": null,
     "market_feature_exclusion_verified": false,
-    "rps": null
+    "rps": 0.20585063728117484
   },
   "candidate_m_evaluation": {
     "benchmarks": {
@@ -83,14 +83,14 @@
   "cohort_hashes": {},
   "gate_7": "FAIL",
   "gate_7_basis": "measured: reports/research/v21-candidate-m-evaluation.json (closing-quote holdout cohort only)",
-  "generated_at": "2026-10-03T15:43:28.963502+00:00",
+  "generated_at": "2026-10-03T16:06:09.906283+00:00",
   "inherited_protocol_sha256": {
     "reports/research/c6-served-generation-vs-close-protocol.json": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
     "reports/research/v19-evaluation-protocol.json": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"
   },
   "market_baselines": {
-    "closing": null,
-    "opening": null
+    "closing": 0.19746233942658706,
+    "opening": 0.1914546887032438
   },
   "prior_v20_report_values_unverified": {
     "candidate_rps_after_calibration": 0.1995,
@@ -102,5 +102,5 @@
     "certification_eligible": false,
     "rps": 0.1995
   },
-  "status": "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT"
+  "status": "MEASURED_RESEARCH_SINGLE_COHORT"
 }

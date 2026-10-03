@@ -1,7 +1,7 @@
 # SabiScore V21 Production Activation Report
 
-Generated: 2026-10-03T15:43:28.963502+00:00
-Base HEAD: b82b80e18177b5ee87d74b6cb724780941b86760
+Generated: 2026-10-03T16:06:09.906283+00:00
+Base HEAD: 845c3ff754efbb473930b601ebe052a4103f0d03
 Branch: fix/v21.2-evidence-truth
 Release Posture: ACTIVE_FAIL_CLOSED
 

@@ -179,7 +179,7 @@ def generate_reports() -> dict[str, Any]:
     measured_g7 = ((evaluation or {}).get("gate_7_research") or {}).get("status")
     old_metrics = v20_alpha.get("calibration") or {}
     market_report = {
-        "status": "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT",
+        "status": "MEASURED_RESEARCH_SINGLE_COHORT" if evaluation else "BLOCKED_NO_V21_EMPIRICAL_COHORT_ARTIFACT",
         "protocol_sha256": protocol_hash,
         "inherited_protocol_sha256": {item["path"]: item["sha256"] for item in PROTOCOL["inherited_protocols"]},
         "gate_7": "FAIL" if "FAIL" in (measured_g7, old_g7) else "UNVERIFIED",
@@ -199,14 +199,17 @@ def generate_reports() -> dict[str, Any]:
             else None
         ),
         "candidate_m": {
-            "rps": None,
+            "rps": (((evaluation or {}).get("benchmarks") or {}).get("closing") or {}).get("candidate_rps"),
             "input_market_features": None,
             "market_feature_exclusion_verified": False,
             "existing_apex_v1_89_market_features": market_inputs_in_schema,
         },
         "candidate_ma": {"rps": None, "certification_eligible_as_independent_alpha": False},
         "research_market_blend": {"rps": old_metrics.get("candidate_rps_after_calibration"), "certification_eligible": False},
-        "market_baselines": {"opening": None, "closing": None},
+        "market_baselines": {
+            side: (((evaluation or {}).get("benchmarks") or {}).get(side) or {}).get("market_rps")
+            for side in ("opening", "closing")
+        },
         "cohort_hashes": {},
         "prior_v20_report_values_unverified": {
             "candidate_rps_after_calibration": old_metrics.get("candidate_rps_after_calibration"),
