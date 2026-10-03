@@ -11,8 +11,21 @@ import {
   Sparkles,
   Trophy,
 } from "lucide-react";
+import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 import { ToastProvider } from "./toast-provider";
 import { ConsentProvider } from "../components/consent-banner";
 import { ErrorBoundary } from "../components/error-boundary";
@@ -97,8 +110,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-[var(--brand-nav)] text-slate-100 antialiased">
+    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <body className="min-h-screen bg-[#0E0E10] text-slate-100 antialiased font-sans">
         <a
           href="#main-content"
           className="sr-only fixed left-3 top-3 z-[100] min-h-11 items-center rounded-md bg-emerald-300 px-4 py-2 font-semibold text-slate-950 focus:not-sr-only focus:flex focus:outline-none focus:ring-2 focus:ring-white"

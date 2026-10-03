@@ -36,6 +36,8 @@ from .advanced_insights import router as advanced_insights_router  # noqa: E402
 from .developer import router as developer_router  # noqa: E402
 from .analytics import router as analytics_router  # noqa: E402
 from .notifications import router as notifications_router  # noqa: E402
+from .telemetry import router as telemetry_router  # noqa: E402
+from .predict_live import router as predict_live_router  # noqa: E402
 
 # Ultra predictions are optional - depends on catboost/xgboost/lightgbm.
 # Declared Optional up front so the ImportError branch's `None` is a legal value
@@ -80,6 +82,8 @@ router.include_router(fixtures_router)
 router.include_router(model_status_router)
 router.include_router(providers_router)
 router.include_router(advanced_insights_router)
+router.include_router(telemetry_router)
+router.include_router(predict_live_router)
 
 if _ultra_available and ultra_predictions_router is not None:
     router.include_router(ultra_predictions_router)

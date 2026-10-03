@@ -24,6 +24,7 @@ import { PlatformHealthPills } from "@/components/platform-health-pills";
 import { DecisionStateBadge } from "@/components/decision-state-badge";
 import { ResearchModeBanner } from "@/components/research-mode-banner";
 import { UpcomingMatchesPanel } from "@/components/upcoming-matches-panel";
+import { Hero } from "@/components/Hero";
 import { FeatureFlag, useFeatureFlag } from "@/lib/feature-flags";
 import { VERDICT_TOKENS, type Verdict } from "@/lib/verdict-tokens";
 
@@ -242,87 +243,7 @@ function PremiumHome() {
       </section>
 
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-3.5 text-left shadow-[0_20px_50px_rgba(2,6,23,0.5)] sm:px-5 sm:py-4">
-        <div className="relative grid items-center gap-3 lg:grid-cols-[1.2fr,0.8fr] lg:gap-4">
-          <div className="space-y-2.5 sm:space-y-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-100">
-              <Activity size={11} aria-hidden="true" />
-              Evidence-first intelligence
-            </span>
-            <h2 className="max-w-3xl text-xl font-black leading-tight text-white sm:text-2xl md:text-3xl">
-              Edge-first football intelligence for analysts
-            </h2>
-            <p className="max-w-2xl text-xs leading-relaxed text-slate-300">
-              Model forecasts, market context, and bankroll-aware decision support appear only
-              when the backend confirms the required evidence.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {TRUST_BADGES.map((badge) => (
-                <span
-                  key={badge}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-slate-900/70 px-2.5 py-0.5 text-[11px] text-slate-200"
-                >
-                  {badge}
-                </span>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2.5 pt-0.5">
-              <Link
-                href="#verified-fixtures"
-                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-[0_8px_25px_rgba(0,212,255,0.25)] motion-safe:transition motion-safe:hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-cyan-200"
-              >
-                Back to verified fixtures
-              </Link>
-              <Link
-                href="/docs"
-                className="inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              >
-                Explore Docs
-              </Link>
-            </div>
-
-            {/* The pillars are trust/positioning copy, so they belong with the
-                headline rather than in the diagnostics rail. Keeping them here
-                also stops the rail running ~2x the headline column's height,
-                which `items-center` could only split into two dead halves. */}
-            <div className="grid gap-1.5 pt-0.5 sm:grid-cols-3 lg:grid-cols-1">
-              {PREMIUM_PILLARS.map((pillar) => (
-                <div
-                  key={pillar.title}
-                  className="flex items-center gap-2 rounded-xl border border-white/5 bg-slate-900/60 px-2.5 py-1.5"
-                >
-                  <pillar.icon className="h-3.5 w-3.5 shrink-0 text-cyan-300" aria-hidden="true" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white">{pillar.title}</p>
-                    <p className="text-[10px] text-slate-400">{pillar.detail}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="lg:hidden">
-            <MobilePlatformSummary />
-          </div>
-
-          <div className="hidden flex-col gap-2 rounded-xl border border-white/10 bg-slate-950/70 p-3 shadow-[0_15px_40px_rgba(3,7,18,0.7)] sm:p-3.5 lg:flex">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-300">Model pulse</p>
-              <div className="mt-1.5"><ModelMetadataPanel /></div>
-            </div>
-
-            <div className="rounded-xl border border-white/5 bg-slate-900/60 px-2.5 py-1.5">
-              <p className="mb-1.5 text-[9px] uppercase tracking-[0.2em] text-slate-300">
-                Platform status
-              </p>
-              <div className="grid gap-1.5 sm:grid-cols-3">
-                <PlatformHealthPills />
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Manual matchups remain an explicit non-executable compatibility path. */}
       <section id="match-generator" className="scroll-mt-32">

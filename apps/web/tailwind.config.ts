@@ -12,7 +12,18 @@ const config: Config = {
   },
   theme: {
     extend: {
+      fontFamily: {
+        heading: ["var(--font-space-grotesk)", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "monospace"],
+      },
       colors: {
+        obsidian: {
+          bg: "#0E0E10",
+          surface: "#1B1B1D",
+          border: "#2A2A2E",
+          emerald: "#00FF66",
+          cyan: "#00F0FF",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
