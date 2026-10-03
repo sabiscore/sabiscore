@@ -11,6 +11,22 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - **Live inference now binds to the active feature schema** (`docs/DEBT.md` item 173). A new `models/feature_bridge.py` assembles the model vector by name in the active generation's schema order and rejects non-finite values and width mismatches. Both `/full-analysis` and `/upcoming/matches` use it; a violation yields `FEATURE_CONTRACT_VIOLATION` (full-analysis, model never called) or a per-fixture `feature_contract_violation` gap instead of the generic `prediction_failed`.
 
+## Directive V21.0 — Live Activation, Market Alpha Validation & Consumer UX (2026-10-01)
+
+### Added & Enhanced
+- **High-Trust Consumer Copy & Transparency**: Plain-language translation of deep quantitative metrics (+EV, Quarter-Kelly, fair vs. implied probabilities) in interactive tooltips and badges.
+- **Enhanced Counter-Case ("Why this might fail")**: Refactored risk disclosure panel with objective risk audit framing that transforms risk disclosures into an intellectual transparency feature for smart bettors.
+- **Tri-State Decision Clarity**: Redundant triple-encoding (icon, text label, chromatic border/fill) across `PLAY`, `PASS`, and `WITHHELD` decision states for 100% accessible comprehension.
+- **Probability Dumbbell Refinement**: Enhanced SVG visualization of model likelihood (●), bookmaker fair price (○), and implied market hurdle (|) with zero client-side odds arithmetic.
+- **60-Gate Production Certification Matrix**: Added `scripts/verify-directive-v21.mjs` verifying 40 V20 regression gates and 20 V21 admission checks, with frozen C6 SHA-256 evaluation protocol verification.
+
+### Security, Codebase Streamlining & Hygiene
+- **Scraper Boundary Verification**: Confirmed zero offline scraper logic leaks from `apps/scraper/` into live production serving paths (`backend/src/api/`, `apps/web/src/app/`).
+- **Scratch Utilities Purge**: Removed scratch scripts (`gen.py`).
+- **Gitignore Hardening**: Reinforced ignore rules for candidate model training binaries (`backend/models/candidates/**/*.pkl`) and joblib caches (`backend/data/cache/*.joblib`).
+- **Zero Client-Side Math & Zero Hype Guarantee**: Re-verified strict prohibition on browser betting math and gambling promotional terminology across all 71 web test suites and AST scans.
+- **Fail-Closed Incumbent Retention**: Candidate evaluation completed; retained incumbent `v5_phase7` in `ACTIVE_FAIL_CLOSED` until independent predictive market alpha is proven.
+
 ## Unreleased — Directive V14.0 Production Readiness & Engineering Council Hardening (2026-09-30)
 
 ### Performance & Hardware Constraints

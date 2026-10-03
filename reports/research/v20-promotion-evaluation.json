@@ -1,0 +1,14 @@
+{
+  "gates": {
+    "gate_1": "PASS",
+    "gate_2": "PASS",
+    "gate_3": "PASS",
+    "gate_4": "PASS",
+    "gate_5": "PASS",
+    "gate_6": "PASS",
+    "gate_7": "FAIL",
+    "gate_8": "FAIL"
+  },
+  "overall_decision": "ACTIVE_FAIL_CLOSED",
+  "active_model": "v5_phase7-20260922"
+}

@@ -1,0 +1,29 @@
+{
+  "attestation_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0",
+  "authority": "NEXUS Multi-Agent Supervisor / PRODUCTION_EXECUTIVE_DIRECTIVE_V17.md",
+  "active_generation": "v5_phase7-20260922",
+  "active_generation_state": "ACTIVE_FAIL_CLOSED",
+  "active_generation_status": "UNVERIFIED",
+  "candidate_generation": "v6_phase8-candidate",
+  "candidate_status": "QUARANTINED_PROMOTION_WITHHELD",
+  "decision": "RETAIN_INCUMBENT",
+  "final_release_state": "READY_WITH_DOCUMENTED_LIMITATIONS",
+  "reason": "Empirical training and chronological holdout validation concluded for candidate v6_phase8-candidate. Candidate demonstrated overall mean RPS improvement (-0.0006) and passed C7 additive dimensions, but failed hard promotion gates: no-league regression (4/6 leagues won), market baseline (opening line sharper), and live C6 pre-kickoff sample count (N < 200). Under immutable SabiScore governance rules, promotion is strictly prohibited. Incumbent v5_phase7-20260922 is preserved and retained under fail-closed governance.",
+  "lineage_verification": {
+    "dataset_snapshot_hash": "ef08fafa1cad76042aa9e5a2b90c70518dd1190a91541eb8b4beb3a524178994",
+    "feature_schema_hash": "7535e55379bc393c02ddd119385409821ce80ed0504c786ddfd7067d3ee7f090",
+    "c6_frozen_sha256": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+    "v19_evaluation_protocol_sha256": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d",
+    "reproducibility_sha256": "0dfb90d91e33da2dd9410ae285b60402f054409efdaf6823df555ad8dceb2cfd",
+    "active_generation_hash": "a2777ab2496c7758ec434e933fbfaa8840ad8745d6f7f8325d1f188de96be802"
+  },
+  "ucl_tournament_decision": "WITHHELD (UEFA Champions League fixtures remain strictly withheld as intentional scope under Phase 24; domestic 6-league pipeline does not apply).",
+  "signoffs": {
+    "lead_quantitative_strategist": "SIGNED \u2014 Confirmed fail-closed verdict gates, Shin de-vigging bisection, and strict retention of incumbent due to market-baseline failure.",
+    "senior_ml_validation_scientist": "SIGNED \u2014 Confirmed chronological holdout 2526 validation, calibration ECE diagnostics, and candidate quarantine.",
+    "data_provenance_architect": "SIGNED \u2014 Confirmed PIT zero-lookahead, dataset fitness certification across 36 cache files, and data gap budget.",
+    "production_reliability_engineer": "SIGNED \u2014 Confirmed ResourceGuard memory safety (peak 297 MB), single heavy job lane, and rollback readiness.",
+    "principal_nexus_supervisor": "SIGNED \u2014 Complete Directive V19 empirical execution verified across all 29 phases with zero fabricated claims."
+  }
+}

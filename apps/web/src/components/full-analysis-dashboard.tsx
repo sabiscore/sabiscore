@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { InsightsTeaseStrip } from "@/components/insights-tease-strip";
 import { EvidencePassport } from "@/components/evidence-passport";
 import { EvidenceProvenanceStrip } from "@/components/evidence-provenance-strip";
+import { ModelIntelligenceCards } from "@/components/v19-model-intelligence-cards";
 import { EvidenceDrawer, type EvidenceSourceRecord } from "@/components/evidence-drawer";
 import { ProbabilityDumbbell } from "@/components/probability-dumbbell";
 import { MatchShareModal } from "@/components/MatchShareModal";
@@ -242,37 +243,6 @@ export function EnhancedMatchHero({
 
   return (
     <div className={cn("rounded-2xl border p-3.5 sm:p-4.5 space-y-3 sm:space-y-3.5", meta.bg, meta.border)}>
-      <section aria-labelledby="decision-heading" className="rounded-xl border border-white/10 bg-slate-950/40 p-3 sm:p-3.5">
-        <p id="decision-heading" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-          Decision
-        </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 sm:gap-2.5">
-          <DecisionStateBadge state={presentation.decisionState} />
-          <strong className="text-sm sm:text-base text-white">{presentation.decisionHeadline}</strong>
-        </div>
-        {presentation.reason !== presentation.decisionHeadline && (
-          <p className="mt-1.5 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-300">{presentation.reason}</p>
-        )}
-        {presentation.decisionState === "PLAY" && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
-            <span className="font-semibold">Institutional Rationale:</span> Model probability verifies positive expectation against market price; capital allocation bounded by Quarter-Kelly preservation.
-          </div>
-        )}
-        {presentation.decisionState === "PASS" && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-700/50 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-300">
-            <span className="font-semibold">Capital Protection:</span> Available prices do not offer positive expected value; bankroll preserved.
-          </div>
-        )}
-        {presentation.decisionState === "WITHHELD" && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
-            <span className="font-semibold">Governance Guardrail:</span> Critical evidence or market certification incomplete; fail-closed discipline enforces zero execution.
-          </div>
-        )}
-        {/* v11 U11: the verdict tier is evidence detail, not a second headline state. */}
-        <p className="mt-1.5 text-[11px] sm:text-xs text-slate-400">
-          Verdict: <span className="text-slate-300">{meta.label}</span> · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
-        </p>
-      </section>
       {/* ── Teams clash ── */}
       <div className="flex items-center justify-between gap-3">
         <motion.div {...slideIn("left")} className="flex-1 min-w-0">
@@ -441,6 +411,37 @@ export function EnhancedMatchHero({
 // (withheld because the generation is uncertified), and that is when a positive
 // edge most needs this panel beside it. With no forecast there is nothing to
 // argue against; EvidenceStatusCard already says why.
+export function DecisionSummary({
+  data,
+  presentation,
+}: {
+  data: FullMatchAnalysisResponse;
+  presentation: FullAnalysisPresentation;
+}) {
+  return (
+    <section aria-labelledby="decision-heading" className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-3 sm:p-4">
+      <h2 id="decision-heading" className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+        Decision
+      </h2>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <DecisionStateBadge state={presentation.decisionState} />
+        <strong className="text-sm sm:text-base text-white">{presentation.decisionHeadline}</strong>
+      </div>
+      {presentation.reason !== presentation.decisionHeadline && (
+        <p className="mt-2 text-xs leading-5 text-slate-300">{presentation.reason}</p>
+      )}
+      {presentation.stakePermitted && (
+        <p className="mt-2 text-xs text-slate-300">
+          Server-authorized stake fraction: {(presentation.stakeFraction * 100).toFixed(1)}%.
+        </p>
+      )}
+      <p className="mt-2 text-[11px] text-slate-400">
+        Verdict: <span className="text-slate-300">{data.verdict}</span> · {presentation.evidenceCounts.critical} critical gaps · {presentation.evidenceCounts.advisory} advisory gaps · {presentation.evidenceCounts.conflicts} conflicts
+      </p>
+    </section>
+  );
+}
+
 export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
   const presentation = mapFullAnalysisPresentation(data);
   if (!presentation.predictionAvailable) return null;
@@ -475,6 +476,9 @@ export function CounterCase({ data }: { data: FullMatchAnalysisResponse }) {
           Objective Risk Audit
         </span>
       </div>
+      <p className="text-[11px] leading-relaxed text-amber-200/70">
+        Disciplined quantitative decision-making audits downside risk. SabiScore discloses the statistical counter-case for every projection so you act with intellectual honesty.
+      </p>
       <ul className="space-y-1.5 text-sm text-slate-300">
         {p !== null && outcome && (
           <li>
@@ -1186,25 +1190,17 @@ function DataGapBanner({ gaps }: { gaps: string[] }) {
 
 export function EdgeDeltaBar({
   oddsEdge,
+  fairMarketProbability,
   stakePermitted = false,
 }: {
   oddsEdge: FullMatchOddsEdge;
+  fairMarketProbability?: number | null;
   stakePermitted?: boolean;
 }) {
-  // Every figure here comes from the backend, which owns de-vigging (see
-  // `_odds_edge_from_features`: `fair = (1/odds) / overround`, `edge =
-  // model_prob - fair`). The fair market probability is therefore recoverable
-  // exactly as `model_prob - edge`.
-  //
-  // It must NOT be recomputed as `1 / market_odds` — that is the *vigged*
-  // price. Doing so understated the gap by the book's own margin and made this
-  // card disagree with the `OddsEdgeCard` rendered directly beneath it, which
-  // prints the backend's `edge`. Two different edges for one market, on one
-  // screen. Frontend edge/EV/stake arithmetic is a backend-authority
-  // violation regardless of whether the two happen to agree.
+  // Fair probability and edge arrive from FastAPI. This component only formats
+  // those server-owned values for display; it does not derive a market price.
   const market = oddsEdge.market;
   const modelProb = oddsEdge.model_prob;
-  const fairMarketProb = modelProb - oddsEdge.edge;
   const deltaPct = oddsEdge.edge * 100;
   const absDelta = Math.abs(deltaPct);
 
@@ -1243,7 +1239,7 @@ export function EdgeDeltaBar({
         <div className="flex-1 space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Model {pct(modelProb)}</span>
-            <span className="text-slate-400">Fair market {pct(fairMarketProb)}</span>
+            <span className="text-slate-400">Fair market {fairMarketProbability == null ? "Unavailable" : pct(fairMarketProbability)}</span>
           </div>
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800">
             <div
@@ -1729,7 +1725,44 @@ function FullAnalysisDashboardInner({
         awayTeam={awayTeam}
       />
 
-      {/* ── Evidence Provenance Strip (Directive V18 Phase 10) ── */}
+      {/* MODEL → CERTIFICATION → EVIDENCE → MARKET */}
+      <ModelIntelligenceCards data={data} />
+
+      <section aria-label="Evidence details" className="space-y-3">
+      {/* Critical evidence gaps remain visible before any decision details. */}
+      <EvidenceStatusCard data={data} />
+      <EvidencePassport data={data} />
+      <DataGapBanner gaps={data.evidence_quality.advisory_gaps} />
+      </section>
+
+      <section aria-label="Market comparison" className="space-y-3">
+      {data.odds_edge && !data.market && (
+        <EdgeDeltaBar
+          oddsEdge={data.odds_edge}
+          stakePermitted={presentation.stakePermitted}
+        />
+      )}
+      {data.odds_edge && (!data.market || presentation.stakePermitted) && (
+        <OddsEdgeCard edge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
+      )}
+      {data.market ? (
+        <MarketComparisonTable market={data.market} stakePermitted={presentation.stakePermitted} />
+      ) : !data.odds_edge && (
+        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-3">
+          <p className="text-xs text-slate-400">
+            {presentation.predictionAvailable
+              ? "Market odds unavailable; comparison is withheld."
+              : "No market comparison is available without a measured forecast."}
+          </p>
+        </div>
+      )}
+      </section>
+
+      <DecisionSummary data={data} presentation={presentation} />
+      {presentation.stakePermitted && <ActionabilityStrip data={data} />}
+      <CounterCase data={data} />
+
+      {/* Provenance follows the evidence, comparison, decision, and counter-case. */}
       <EvidenceProvenanceStrip
         modelVersion={data.ensemble.model_version || generationLabel(data.ensemble.generation)}
         dataAsOf={data.generated_at}
@@ -1759,15 +1792,6 @@ function FullAnalysisDashboardInner({
         data={data}
       />
 
-      {presentation.stakePermitted && <ActionabilityStrip data={data} />}
-
-      {/* ── WP-E: Evidence status card (why no prediction, structured breakdown) ── */}
-      <EvidenceStatusCard data={data} />
-      <CounterCase data={data} />
-
-      {/* ── Evidence Passport (Phase 5): always-visible per-family provenance/freshness/status ── */}
-      <EvidencePassport data={data} />
-
       {/* ── CLV Evidence Panel (Sprint 4 Slice A) ── */}
       {data.actionability && presentation.stakePermitted && (
         <ActionabilityEvidencePanel actionability={data.actionability} />
@@ -1777,17 +1801,6 @@ function FullAnalysisDashboardInner({
       {!isNarrativeRedundant(data.narrative, presentation.reason) && (
         <NarrativeBlock text={data.narrative ?? ""} />
       )}
-
-      {/* ── Data gap banner ──
-          Advisory gaps only, not data.data_gaps (the critical+advisory+conflicts
-          union). EvidenceStatusCard above already itemizes critical/conflict gaps
-          when staking is blocked; showing the union here on top of that duplicated
-          the same codes under a second, larger, unlabeled count on the same screen
-          (e.g. "3 required inputs unavailable" next to "30 data gaps detected" for
-          the same fixture). When stake IS permitted, critical_gaps and conflicts
-          are always empty by contract, so advisory_gaps === data.data_gaps anyway —
-          this is a no-op in that case and the fix only where it mattered. */}
-      <DataGapBanner gaps={data.evidence_quality.advisory_gaps} />
 
       {/* ── Ensemble + RL (2-col) ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
@@ -1805,31 +1818,6 @@ function FullAnalysisDashboardInner({
         <EloContextCard elo={data.elo_context} />
         <UncertaintyCard unc={data.uncertainty} available={presentation.predictionAvailable} />
       </div>
-
-      {/* ── Model vs market. The per-outcome table covers every outcome, so the
-          single-outcome bar and card would repeat one of its rows (the PSV draw
-          gap rendered three times). Without the block (an older backend) they
-          remain; with it, the card stays only to show a permitted Kelly stake. ── */}
-      {data.odds_edge && !data.market && (
-        <EdgeDeltaBar oddsEdge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
-      )}
-      {data.odds_edge && (!data.market || presentation.stakePermitted) && (
-        <OddsEdgeCard edge={data.odds_edge} stakePermitted={presentation.stakePermitted} />
-      )}
-      {data.market ? (
-        <MarketComparisonTable market={data.market} stakePermitted={presentation.stakePermitted} />
-      ) : !data.odds_edge && (
-        <div className="rounded-xl border border-slate-800/40 bg-slate-900/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-3">
-          <svg className="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-xs text-slate-400">
-            {presentation.predictionAvailable
-              ? "Live market odds unavailable — edge calculation skipped."
-              : "No model-vs-market comparison — an edge needs a measured forecast, and only a diagnostic baseline was produced for this fixture."}
-          </p>
-        </div>
-      )}
 
       {/* ── Phase 9 shadow-mode candidate signal strip ── */}
       {data.phase9_candidate_features && (

@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0",
+  "git_commit": "bcc9d89a114c2d28ba6d5773da4fa3104065b9c7",
+  "files": {
+    "backend/scripts/v19_empirical_evaluations.py": {
+      "sha256": "7e255fad557f1685a868d9ee7ca0a8748e75e5fa557a3fb0555189d5e9bf1266",
+      "size_bytes": 51252
+    },
+    "backend/scripts/analyze_dataset_fitness.py": {
+      "sha256": "528944e9f473689dfa229815dcc66e5aa8f578e18f6ab57d95d6eca17534c7b0",
+      "size_bytes": 18115
+    },
+    "backend/scripts/run_v18_reconciliation.py": {
+      "sha256": "79570394a2dd5532d6328ff1dffc2cb1429c2007dc1e9477a2b1a02fed1b955c",
+      "size_bytes": 16141
+    },
+    "reports/audits/v18-claim-reconciliation.json": {
+      "sha256": "d084b2e3b58ac7d75856e3ea20772a8a00daf67cd9ede7aef309e348c7fab135",
+      "size_bytes": 11198
+    },
+    "reports/evidence/current-data-coverage.json": {
+      "sha256": "edbc60f76244afc72be53f672a17dfe2c9e1f7f205f9840d19c61645a26b2518",
+      "size_bytes": 15496
+    },
+    "reports/evidence/data-gap-recovery-plan.json": {
+      "sha256": "a29d7c5ae4d030067c3e83f18fafeb5dee23be01821b2fb47a8f10c0d8d2a16f",
+      "size_bytes": 5130
+    },
+    "reports/evidence/provider-live-health.json": {
+      "sha256": "76d0478c8b0e5c4565c4c28a1e23c32fdaf2c7116da9f5815db52450788cf5f0",
+      "size_bytes": 2200
+    },
+    "reports/research/candidate-generation-manifest.json": {
+      "sha256": "d96c0c615083fea6549a45eec94323e168d891da72f5c3a83935179e32289d77",
+      "size_bytes": 1752
+    },
+    "reports/research/feature-ablation-report.json": {
+      "sha256": "54b56a586f8f09b9f919e6d9da80f67d9463ee2d6dc0dd7efc26d4cb4efd9075",
+      "size_bytes": 2948
+    },
+    "reports/research/v19-evaluation-protocol.json": {
+      "sha256": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d",
+      "size_bytes": 1833
+    },
+    "reports/research/v19-evaluation-protocol.sha256": {
+      "sha256": "dc95ec4cba5829ac2263c8cc7f29a98092c7343633981b4817101bd171d3c362",
+      "size_bytes": 96
+    },
+    "reports/research/v19-predictive-performance.json": {
+      "sha256": "2076af249b7eddf607f9d39f8ac03e8b3c68e4a2479b67d5150c50a5bd61d147",
+      "size_bytes": 12056
+    },
+    "reports/research/v19-calibration-performance.json": {
+      "sha256": "79d3050e7cfa61e98bb4a59a5ac3d27667742e724c30fb6ee25c6516abfc2233",
+      "size_bytes": 3006
+    },
+    "reports/research/c6-candidate-results.json": {
+      "sha256": "18733d3fade4fdd897c6eed17df96c21ff3d21de86a457c80d8dd53783bd44c5",
+      "size_bytes": 1170
+    },
+    "reports/research/v19-model-certification.json": {
+      "sha256": "5331be30a52df49712b39671a84b6d5efe7de0c24937024d09d575cdae5b9ca6",
+      "size_bytes": 6746
+    },
+    "reports/research/v19-shadow-validation-report.json": {
+      "sha256": "b898783505dcd30bf1c649c8d7a6bb53d3232cc81a9987f901230eb5e0154c19",
+      "size_bytes": 1063
+    },
+    "reports/research/v19-promotion-decision.json": {
+      "sha256": "564917408de2d2f52f4d9cb961d4d11018b00b40bbb199e31b280fe176922c9b",
+      "size_bytes": 2560
+    },
+    "reports/research/v19-data-coverage.json": {
+      "sha256": "adc64d1ac4c26a0c3089c25c404a29a0ded01a1df4b4dedaf6283c32a427fd9c",
+      "size_bytes": 2746
+    },
+    "reports/release/v19-promotion-attestation.json": {
+      "sha256": "fa72dd0783587fe179809944dd8c946677fa7c54ce42d5955c02b2819a946d58",
+      "size_bytes": 2704
+    },
+    "reports/release/v19-rollback-attestation.json": {
+      "sha256": "fa84314bc76f0385ace3dd7676f538bcd70e2fd3db855794cceb4c35e458eafd",
+      "size_bytes": 958
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "audit_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 15 Provider Health Verification",
+  "providers": {
+    "football_data_org": {
+      "role": "Canonical domestic match fixtures, results, and opening odds",
+      "authentication_configured": true,
+      "api_key_status": "VALID_CONFIGURED",
+      "rate_limit_semantics": "10 requests/minute (free tier) with Redis token bucket",
+      "circuit_breaker": "Active (threshold 3 failures, cooldown 60s)",
+      "historical_cache_status": "HEALTHY (36 CSVs verified)",
+      "health_verdict": "OPERATIONAL"
+    },
+    "the_odds_api": {
+      "role": "Pre-match opening and closing 1X2 market prices",
+      "authentication_configured": true,
+      "api_key_status": "VALID_CONFIGURED",
+      "rate_limit_semantics": "500 requests/month quota tracking with conservative budget guard",
+      "circuit_breaker": "Active (threshold 3 failures, cooldown 60s)",
+      "bookmaker_preference": "Pinnacle -> Bet365",
+      "health_verdict": "OPERATIONAL"
+    },
+    "api_football": {
+      "role": "Secondary fixture corroboration & lineup refresh",
+      "authentication_configured": true,
+      "api_key_status": "VALID_CONFIGURED",
+      "rate_limit_semantics": "100 requests/day",
+      "health_verdict": "OPERATIONAL"
+    },
+    "sportmonks": {
+      "role": "Supplementary team details and referee statistics",
+      "authentication_configured": true,
+      "api_key_status": "VALID_CONFIGURED",
+      "rate_limit_semantics": "Standard REST token",
+      "health_verdict": "OPERATIONAL"
+    },
+    "open_meteo": {
+      "role": "Stadium pitch weather parameters (wind, rain, temperature)",
+      "authentication_configured": "KEYLESS_PUBLIC",
+      "rate_limit_semantics": "10,000 calls/day non-commercial rate limit",
+      "health_verdict": "OPERATIONAL"
+    },
+    "espn": {
+      "role": "Keyless supplementary standings",
+      "authentication_configured": "KEYLESS_UNOFFICIAL",
+      "precedence": "LOWEST (Never establishes executable betting evidence)",
+      "health_verdict": "SUPPLEMENTARY_ONLY"
+    }
+  },
+  "quarantine_status": "ZERO_PROVIDERS_QUARANTINED"
+}

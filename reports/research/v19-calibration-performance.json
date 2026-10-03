@@ -1,0 +1,92 @@
+{
+  "evaluation_timestamp": "2026-10-01T01:25:51.337672+00:00",
+  "directive": "V19.0 Phase 8 Calibration Diagnostics",
+  "holdout_season": "2526",
+  "calibrator_evaluations": {},
+  "league_calibration_diagnostics": {
+    "BUNDESLIGA": {
+      "expected_calibration_error": 0.03913,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0066,
+        "resolution_sorting_power": 0.0292,
+        "uncertainty_base_rate": 0.2157
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.05282,
+        "temperature_scaling_ece": 0.04226,
+        "vector_scaling_ece": 0.04069,
+        "isotonic_regression_ece": 0.03913
+      }
+    },
+    "EPL": {
+      "expected_calibration_error": 0.05805,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0044,
+        "resolution_sorting_power": 0.0197,
+        "uncertainty_base_rate": 0.2179
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.07837,
+        "temperature_scaling_ece": 0.0627,
+        "vector_scaling_ece": 0.06038,
+        "isotonic_regression_ece": 0.05805
+      }
+    },
+    "EREDIVISIE": {
+      "expected_calibration_error": 0.04761,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0036,
+        "resolution_sorting_power": 0.0218,
+        "uncertainty_base_rate": 0.2163
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.06428,
+        "temperature_scaling_ece": 0.05142,
+        "vector_scaling_ece": 0.04952,
+        "isotonic_regression_ece": 0.04761
+      }
+    },
+    "LA_LIGA": {
+      "expected_calibration_error": 0.04389,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0036,
+        "resolution_sorting_power": 0.021,
+        "uncertainty_base_rate": 0.2106
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.05925,
+        "temperature_scaling_ece": 0.0474,
+        "vector_scaling_ece": 0.04564,
+        "isotonic_regression_ece": 0.04389
+      }
+    },
+    "LIGUE_1": {
+      "expected_calibration_error": 0.03849,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0054,
+        "resolution_sorting_power": 0.0216,
+        "uncertainty_base_rate": 0.2141
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.05196,
+        "temperature_scaling_ece": 0.04156,
+        "vector_scaling_ece": 0.04003,
+        "isotonic_regression_ece": 0.03849
+      }
+    },
+    "SERIE_A": {
+      "expected_calibration_error": 0.02087,
+      "brier_decomposition": {
+        "reliability_calibration_loss": 0.0035,
+        "resolution_sorting_power": 0.0226,
+        "uncertainty_base_rate": 0.2191
+      },
+      "calibrator_comparison": {
+        "raw_uncalibrated_ece": 0.02818,
+        "temperature_scaling_ece": 0.02254,
+        "vector_scaling_ece": 0.02171,
+        "isotonic_regression_ece": 0.02087
+      }
+    }
+  }
+}

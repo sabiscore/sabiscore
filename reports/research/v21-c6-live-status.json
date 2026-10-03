@@ -1,0 +1,21 @@
+{
+  "capture_trigger": "interactive_full_analysis",
+  "generated_at": "2026-10-01T10:17:26.558213+00:00",
+  "last_reported_v20_n": 0,
+  "live_count_source": "persisted settled MatchPredictionLog rows with a strict pre-kickoff close and the frozen capture_trigger filter",
+  "live_n": null,
+  "milestones": [
+    200,
+    500,
+    1000
+  ],
+  "pre_kickoff_filter": "prediction timestamp must be strictly before fixture kickoff",
+  "protocol_source_sha256": {
+    "reports/research/c6-served-generation-vs-close-protocol.json": "9d63da25324a79f4f08416d79991281bd45155064ec33fd8f67284b28be46ba7",
+    "reports/research/v19-evaluation-protocol.json": "7f106f21c3112b748b3a5312aff0d642fb9193588393d5ed7395c536a60cd16d"
+  },
+  "replay_included_in_live_n": false,
+  "replay_n": null,
+  "status": "UNVERIFIED_CURRENT_DATABASE_COUNT",
+  "target": 200
+}
